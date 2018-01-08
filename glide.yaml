@@ -1,0 +1,9 @@
+package: .
+import:
+- package: github.com/jedisct1/xsecretbox
+- package: github.com/miekg/dns
+  version: ^1.0.1
+- package: golang.org/x/crypto
+  subpackages:
+  - curve25519
+  - ed25519
