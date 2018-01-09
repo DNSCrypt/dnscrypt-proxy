@@ -21,16 +21,16 @@ type Proxy struct {
 
 func main() {
 	log.SetFlags(0)
-	NewProxy("127.0.0.1:5399", "212.47.228.136:443", "E801:B84E:A606:BFB0:BAC0:CE43:445B:B15E:BA64:B02F:A3C4:AA31:AE10:636A:0790:324D", "2.dnscrypt-cert.fr.dnscrypt.org")
+	NewProxy("127.0.0.1:5399", "dnscrypt.org-fr", "212.47.228.136:443", "E801:B84E:A606:BFB0:BAC0:CE43:445B:B15E:BA64:B02F:A3C4:AA31:AE10:636A:0790:324D", "2.dnscrypt-cert.fr.dnscrypt.org")
 }
 
-func NewProxy(listenAddrStr string, serverAddrStr string, serverPkStr string, providerName string) {
+func NewProxy(listenAddrStr string, serverName string, serverAddrStr string, serverPkStr string, providerName string) {
 	proxy := Proxy{questionSizeEstimator: NewQuestionSizeEstimator(), timeout: TimeoutMax}
 	if _, err := rand.Read(proxy.proxySecretKey[:]); err != nil {
 		log.Fatal(err)
 	}
 	curve25519.ScalarBaseMult(&proxy.proxyPublicKey, &proxy.proxySecretKey)
-	proxy.serversInfo.registerServer(&proxy, serverAddrStr, serverPkStr, providerName)
+	proxy.serversInfo.registerServer(&proxy, serverName, serverAddrStr, serverPkStr, providerName)
 	listenUDPAddr, err := net.ResolveUDPAddr("udp", listenAddrStr)
 	if err != nil {
 		log.Fatal(err)

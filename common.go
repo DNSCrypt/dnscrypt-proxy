@@ -1,7 +1,6 @@
 package main
 
 import (
-	"net"
 	"time"
 )
 
@@ -23,16 +22,6 @@ var (
 	TimeoutMin             = 1 * time.Second
 	TimeoutMax             = 5 * time.Second
 )
-
-type ServerInfo struct {
-	MagicQuery         [8]byte
-	ServerPk           [32]byte
-	SharedKey          [32]byte
-	CryptoConstruction CryptoConstruction
-	Timeout            time.Duration
-	UDPAddr            *net.UDPAddr
-	TCPAddr            *net.TCPAddr
-}
 
 func HasTCFlag(packet []byte) bool {
 	return packet[2]&2 == 2
