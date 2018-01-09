@@ -145,14 +145,11 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, serverProto str
 	var encryptedResponse []byte
 	if serverProto == "udp" {
 		encryptedResponse, err = proxy.exchangeWithUDPServer(serverInfo, encryptedQuery, clientNonce)
-		if err != nil {
-			return
-		}
 	} else {
 		encryptedResponse, err = proxy.exchangeWithTCPServer(serverInfo, encryptedQuery, clientNonce)
-		if err != nil {
-			return
-		}
+	}
+	if err != nil {
+		return
 	}
 	if clientAddr != nil {
 		clientPc.(net.PacketConn).WriteTo(encryptedResponse, *clientAddr)
