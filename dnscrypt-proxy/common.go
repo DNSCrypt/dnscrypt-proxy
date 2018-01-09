@@ -1,6 +1,9 @@
 package main
 
 import (
+	"encoding/binary"
+	"errors"
+	"net"
 	"time"
 )
 
@@ -26,6 +29,38 @@ var (
 
 func HasTCFlag(packet []byte) bool {
 	return packet[2]&2 == 2
+}
+
+func PrefixWithSize(packet []byte) ([]byte, error) {
+	packet_len := len(packet)
+	if packet_len > 0xffff {
+		return packet, errors.New("Packet too large")
+	}
+	packet = append(append(packet, 0), 0)
+	copy(packet[2:], packet[:len(packet)-2])
+	binary.BigEndian.PutUint16(packet[0:2], uint16(len(packet)-2))
+	return packet, nil
+}
+
+func ReadPrefixed(conn *net.TCPConn) ([]byte, error) {
+	buf := make([]byte, 2+MaxDNSPacketSize)
+	packetLength, pos := -1, 0
+	for {
+		readnb, err := (*conn).Read(buf[pos:])
+		if err != nil {
+			return buf, err
+		}
+		pos += readnb
+		if pos >= 2 && packetLength < 0 {
+			packetLength = int(binary.BigEndian.Uint16(buf[0:2]))
+			if packetLength > MaxDNSPacketSize-1 {
+				return buf, errors.New("Packet too large")
+			}
+		}
+		if pos >= 2+packetLength {
+			return buf[2:pos], nil
+		}
+	}
 }
 
 func Min(a, b int) int {
