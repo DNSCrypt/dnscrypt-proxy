@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/hex"
 	"log"
+	"math/rand"
 	"net"
 	"strings"
 	"sync"
@@ -64,7 +65,7 @@ func (serversInfo *ServersInfo) registerServer(proxy *Proxy, name string, server
 
 func (serversInfo *ServersInfo) getOne() *ServerInfo {
 	serversInfo.RLock()
-	serverInfo := &serversInfo.inner[0]
+	serverInfo := &serversInfo.inner[rand.Intn(len(serversInfo.inner))]
 	serversInfo.RUnlock()
 	return serverInfo
 }
