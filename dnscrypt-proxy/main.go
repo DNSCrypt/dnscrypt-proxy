@@ -17,16 +17,17 @@ type Proxy struct {
 	questionSizeEstimator QuestionSizeEstimator
 	serversInfo           ServersInfo
 	timeout               time.Duration
+	mainProto             string
 }
 
 func main() {
 	log.SetFlags(0)
 	stamp, _ := NewServerStampFromLegacy("212.47.228.136:443", "E801:B84E:A606:BFB0:BAC0:CE43:445B:B15E:BA64:B02F:A3C4:AA31:AE10:636A:0790:324D", "2.dnscrypt-cert.fr.dnscrypt.org")
-	NewProxy("127.0.0.1:5399", "dnscrypt.org-fr", stamp)
+	NewProxy("127.0.0.1:5399", "dnscrypt.org-fr", stamp, "udp")
 }
 
-func NewProxy(listenAddrStr string, serverName string, stamp ServerStamp) {
-	proxy := Proxy{questionSizeEstimator: NewQuestionSizeEstimator(), timeout: TimeoutMax}
+func NewProxy(listenAddrStr string, serverName string, stamp ServerStamp, mainProto string) {
+	proxy := Proxy{questionSizeEstimator: NewQuestionSizeEstimator(), timeout: TimeoutMax, mainProto: mainProto}
 	if _, err := rand.Read(proxy.proxySecretKey[:]); err != nil {
 		log.Fatal(err)
 	}
