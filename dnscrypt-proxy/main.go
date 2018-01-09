@@ -67,7 +67,7 @@ func (proxy *Proxy) udpListener(listenAddr *net.UDPAddr) error {
 		}
 		packet := buffer[:length]
 		go func() {
-			proxy.processIncomingQuery(proxy.serversInfo.getOne(), "udp", packet, &clientAddr, clientPc)
+			proxy.processIncomingQuery(proxy.serversInfo.getOne(), proxy.mainProto, packet, &clientAddr, clientPc)
 		}()
 	}
 }
