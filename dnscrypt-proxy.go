@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
@@ -10,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jedisct1/xsecretbox"
 	"golang.org/x/crypto/curve25519"
 	"golang.org/x/crypto/ed25519"
 )
@@ -18,7 +16,7 @@ import (
 type Proxy struct {
 	proxyPublicKey  [32]byte
 	proxySecretKey  [32]byte
-	minQuestionSize uint
+	minQuestionSize int
 	serversInfo     []ServerInfo
 }
 
@@ -88,14 +86,19 @@ type ServerInfo struct {
 	TCPAddr            *net.TCPAddr
 }
 
+func (proxy *Proxy) adjustMinQuestionSize() {
+	if MaxDNSPacketSize-proxy.minQuestionSize < proxy.minQuestionSize {
+		proxy.minQuestionSize = MaxDNSPacketSize
+	} else {
+		proxy.minQuestionSize *= 2
+	}
+}
+
 func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, packet []byte, clientAddr net.Addr, clientPc net.PacketConn) {
-	packet = Pad(packet, proxy.minQuestionSize)
-	nonce := make([]byte, xsecretbox.NonceSize)
-	rand.Read(nonce[0 : xsecretbox.NonceSize/2])
-	encrypted := serverInfo.MagicQuery[:]
-	encrypted = append(encrypted, proxy.proxyPublicKey[:]...)
-	encrypted = append(encrypted, nonce[:xsecretbox.NonceSize/2]...)
-	encrypted = xsecretbox.Seal(encrypted, nonce, packet, serverInfo.SharedKey[:])
+	if len(packet) < MinDNSPacketSize {
+		return
+	}
+	encrypted, clientNonce := proxy.Crypt(serverInfo, packet)
 	pc, err := net.DialUDP("udp", nil, serverInfo.UDPAddr)
 	if err != nil {
 		return
@@ -103,38 +106,21 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, packet []byte, 
 	defer pc.Close()
 	pc.SetDeadline(time.Now().Add(serverInfo.Timeout))
 	pc.Write(encrypted)
-	buffer := make([]byte, MaxDNSPacketSize)
-	length, err := pc.Read(buffer)
+
+	encrypted = make([]byte, MaxDNSPacketSize)
+	length, err := pc.Read(encrypted)
 	if err != nil {
 		return
 	}
-	buffer = buffer[:length]
-	serverMagicLen := len(ServerMagic)
-	responseHeaderLen := serverMagicLen + xsecretbox.NonceSize
-	if len(buffer) < responseHeaderLen+xsecretbox.TagSize ||
-		!bytes.Equal(buffer[:serverMagicLen], ServerMagic[:]) {
-		return
-	}
-	serverNonce := buffer[serverMagicLen:responseHeaderLen]
-	if !bytes.Equal(nonce[:xsecretbox.NonceSize/2], serverNonce[:xsecretbox.NonceSize/2]) {
-		return
-	}
-	decrypted, err := xsecretbox.Open(nil, serverNonce, buffer[responseHeaderLen:], serverInfo.SharedKey[:])
+	encrypted = encrypted[:length]
+	packet, err = proxy.Decrypt(serverInfo, encrypted, clientNonce)
 	if err != nil {
 		return
 	}
-	decrypted, err = Unpad(decrypted)
-	if err != nil || uint(len(decrypted)) < MinDNSPacketSize {
-		return
+	clientPc.WriteTo(packet, clientAddr)
+	if HasTCFlag(packet) {
+		proxy.adjustMinQuestionSize()
 	}
-	if HasTCFlag(decrypted) {
-		if MaxDNSPacketSize-proxy.minQuestionSize < proxy.minQuestionSize {
-			proxy.minQuestionSize = MaxDNSPacketSize
-		} else {
-			proxy.minQuestionSize *= 2
-		}
-	}
-	clientPc.WriteTo(decrypted, clientAddr)
 }
 
 func main() {
