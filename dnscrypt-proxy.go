@@ -97,10 +97,10 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, packet []byte, 
 	encrypted = append(encrypted, nonce[:xsecretbox.NonceSize/2]...)
 	encrypted = xsecretbox.Seal(encrypted, nonce, packet, serverInfo.SharedKey[:])
 	pc, err := net.DialUDP("udp", nil, serverInfo.UDPAddr)
-	defer pc.Close()
 	if err != nil {
 		return
 	}
+	defer pc.Close()
 	pc.SetDeadline(time.Now().Add(serverInfo.Timeout))
 	pc.Write(encrypted)
 	buffer := make([]byte, MaxDNSPacketSize)

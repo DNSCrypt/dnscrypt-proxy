@@ -1,10 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"log"
-	"reflect"
 	"strings"
 	"time"
 
@@ -24,7 +24,7 @@ func FetchCurrentCert(proxy *Proxy, pk ed25519.PublicKey, serverAddress string, 
 	if len(pk) != ed25519.PublicKeySize {
 		return CertInfo{}, errors.New("Invalid public key length")
 	}
-	if strings.HasSuffix(providerName, ".") == false {
+	if !strings.HasSuffix(providerName, ".") {
 		providerName = providerName + "."
 	}
 	query := new(dns.Msg)
@@ -45,7 +45,7 @@ func FetchCurrentCert(proxy *Proxy, pk ed25519.PublicKey, serverAddress string, 
 		if len(binCert) < 124 {
 			return certInfo, errors.New("Certificate too short")
 		}
-		if reflect.DeepEqual(binCert[:4], CertMagic[:4]) == false {
+		if !bytes.Equal(binCert[:4], CertMagic[:4]) {
 			return certInfo, errors.New("Invalid cert magic")
 		}
 		cryptoConstruction := CryptoConstruction(0)
@@ -59,7 +59,7 @@ func FetchCurrentCert(proxy *Proxy, pk ed25519.PublicKey, serverAddress string, 
 		}
 		signature := binCert[8:72]
 		signed := binCert[72:]
-		if ed25519.Verify(pk, signed, signature) == false {
+		if !ed25519.Verify(pk, signed, signature) {
 			log.Fatal("Incorrect signature")
 		}
 		serial := binary.BigEndian.Uint32(binCert[112:116])
