@@ -20,7 +20,7 @@ type CertInfo struct {
 	CryptoConstruction CryptoConstruction
 }
 
-func FetchCurrentCert(proxy *Proxy, pk ed25519.PublicKey, serverAddress string, providerName string) (CertInfo, error) {
+func FetchCurrentCert(proxy *Proxy, proto string, pk ed25519.PublicKey, serverAddress string, providerName string) (CertInfo, error) {
 	if len(pk) != ed25519.PublicKeySize {
 		return CertInfo{}, errors.New("Invalid public key length")
 	}
@@ -29,7 +29,7 @@ func FetchCurrentCert(proxy *Proxy, pk ed25519.PublicKey, serverAddress string, 
 	}
 	query := new(dns.Msg)
 	query.SetQuestion(providerName, dns.TypeTXT)
-	client := dns.Client{Net: "tcp", UDPSize: 1252}
+	client := dns.Client{Net: proto, UDPSize: uint16(MaxDNSUDPPacketSize)}
 	in, _, err := client.Exchange(query, serverAddress)
 	if err != nil {
 		log.Fatal(err)
