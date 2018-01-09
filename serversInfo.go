@@ -14,15 +14,18 @@ import (
 )
 
 type ServerStamp struct {
-	name          string
 	serverAddrStr string
 	serverPkStr   string
 	providerName  string
 }
 
-func NewServerStampFromLegacy(name string, serverAddrStr string, serverPkStr string, providerName string) (ServerStamp, error) {
+type RegisteredServer struct {
+	name  string
+	stamp ServerStamp
+}
+
+func NewServerStampFromLegacy(serverAddrStr string, serverPkStr string, providerName string) (ServerStamp, error) {
 	return ServerStamp{
-		name:          name,
 		serverAddrStr: serverAddrStr,
 		serverPkStr:   serverPkStr,
 		providerName:  providerName,
@@ -42,8 +45,8 @@ type ServerInfo struct {
 
 type ServersInfo struct {
 	sync.RWMutex
-	inner        []ServerInfo
-	serverStamps []ServerStamp
+	inner             []ServerInfo
+	registeredServers []RegisteredServer
 }
 
 func (serversInfo *ServersInfo) registerServer(proxy *Proxy, name string, stamp ServerStamp) error {
@@ -60,18 +63,17 @@ func (serversInfo *ServersInfo) registerServer(proxy *Proxy, name string, stamp 
 		}
 	}
 	serversInfo.inner = append(serversInfo.inner, newServer)
-	serversInfo.serverStamps = append(serversInfo.serverStamps, stamp)
+	serversInfo.registeredServers = append(serversInfo.registeredServers, RegisteredServer{name: name, stamp: stamp})
 	return nil
 }
 
 func (serversInfo *ServersInfo) refresh(proxy *Proxy) {
 	fmt.Println("Refreshing certificates")
 	serversInfo.RLock()
-	stamps := serversInfo.serverStamps
+	registeredServers := serversInfo.registeredServers
 	serversInfo.RUnlock()
-	for _, stamp := range stamps {
-		serversInfo.registerServer(proxy, stamp.name, stamp)
-		_ = stamp
+	for _, registeredServer := range registeredServers {
+		serversInfo.registerServer(proxy, registeredServer.name, registeredServer.stamp)
 	}
 }
 

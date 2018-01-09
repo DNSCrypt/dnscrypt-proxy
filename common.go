@@ -21,6 +21,7 @@ var (
 	InitialMinQuestionSize = 256
 	TimeoutMin             = 1 * time.Second
 	TimeoutMax             = 5 * time.Second
+	CertRefreshDelay       = 30 * time.Minute
 )
 
 func HasTCFlag(packet []byte) bool {
