@@ -3,22 +3,19 @@ package main
 import (
 	"crypto/rand"
 	"encoding/binary"
-	"encoding/hex"
 	"fmt"
 	"log"
 	"net"
-	"strings"
 	"time"
 
 	"golang.org/x/crypto/curve25519"
-	"golang.org/x/crypto/ed25519"
 )
 
 type Proxy struct {
 	proxyPublicKey        [32]byte
 	proxySecretKey        [32]byte
 	questionSizeEstimator QuestionSizeEstimator
-	serversInfo           []ServerInfo
+	serversInfo           ServersInfo
 	timeout               time.Duration
 }
 
@@ -33,7 +30,7 @@ func NewProxy(listenAddrStr string, serverAddrStr string, serverPkStr string, pr
 		log.Fatal(err)
 	}
 	curve25519.ScalarBaseMult(&proxy.proxyPublicKey, &proxy.proxySecretKey)
-	proxy.fetchServerInfo(serverAddrStr, serverPkStr, providerName)
+	proxy.serversInfo.registerServer(&proxy, serverAddrStr, serverPkStr, providerName)
 	listenUDPAddr, err := net.ResolveUDPAddr("udp", listenAddrStr)
 	if err != nil {
 		log.Fatal(err)
@@ -69,7 +66,7 @@ func (proxy *Proxy) udpListener(listenAddr *net.UDPAddr) error {
 		}
 		packet := buffer[:length]
 		go func() {
-			proxy.processIncomingQuery(&proxy.serversInfo[0], packet, &clientAddr, clientPc)
+			proxy.processIncomingQuery(proxy.serversInfo.getOne(), packet, &clientAddr, clientPc)
 		}()
 	}
 }
@@ -99,7 +96,7 @@ func (proxy *Proxy) tcpListener(listenAddr *net.TCPAddr) error {
 				return
 			}
 			packet := buffer[2:length]
-			proxy.processIncomingQuery(&proxy.serversInfo[0], packet, nil, clientPc)
+			proxy.processIncomingQuery(proxy.serversInfo.getOne(), packet, nil, clientPc)
 		}()
 	}
 }
@@ -141,33 +138,4 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, packet []byte, 
 	if HasTCFlag(packet) {
 		proxy.questionSizeEstimator.blindAdjust()
 	}
-}
-
-func (proxy *Proxy) fetchServerInfo(serverAddrStr string, serverPkStr string, providerName string) {
-	serverPublicKey, err := hex.DecodeString(strings.Replace(serverPkStr, ":", "", -1))
-	if err != nil || len(serverPublicKey) != ed25519.PublicKeySize {
-		log.Fatal("Invalid public key")
-	}
-	certInfo, err := FetchCurrentCert(proxy, serverPublicKey, serverAddrStr, providerName)
-	if err != nil {
-		log.Fatal(err)
-	}
-	remoteUDPAddr, err := net.ResolveUDPAddr("udp", serverAddrStr)
-	if err != nil {
-		log.Fatal(err)
-	}
-	remoteTCPAddr, err := net.ResolveTCPAddr("tcp", serverAddrStr)
-	if err != nil {
-		log.Fatal(err)
-	}
-	serverInfo := ServerInfo{
-		MagicQuery:         certInfo.MagicQuery,
-		ServerPk:           certInfo.ServerPk,
-		SharedKey:          certInfo.SharedKey,
-		CryptoConstruction: certInfo.CryptoConstruction,
-		Timeout:            TimeoutMin,
-		UDPAddr:            remoteUDPAddr,
-		TCPAddr:            remoteTCPAddr,
-	}
-	proxy.serversInfo = append(proxy.serversInfo, serverInfo)
 }
