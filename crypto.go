@@ -35,13 +35,27 @@ func unpad(packet []byte) ([]byte, error) {
 		}
 	}
 }
-func (proxy *Proxy) Crypt(serverInfo *ServerInfo, packet []byte) (encrypted []byte, clientNonce []byte) {
+
+func (proxy *Proxy) Encrypt(serverInfo *ServerInfo, packet []byte, proto string) (encrypted []byte, clientNonce []byte, err error) {
 	nonce, clientNonce := make([]byte, NonceSize), make([]byte, HalfNonceSize)
 	rand.Read(clientNonce)
 	copy(nonce, clientNonce)
+	minQuestionSize := len(packet)
+	if proto == "udp" {
+		minQuestionSize = proxy.questionSizeEstimator.MinQuestionSize()
+	} else {
+		var xpad [1]byte
+		rand.Read(xpad[:])
+		minQuestionSize += int(xpad[0])
+	}
+	paddedLength := Min((minQuestionSize+63)&^63, MaxDNSUDPPacketSize-1)
+	if paddedLength <= 0 || len(packet) >= paddedLength {
+		err = errors.New("Question too large; cannot be padded")
+		return
+	}
 	encrypted = append(serverInfo.MagicQuery[:], proxy.proxyPublicKey[:]...)
 	encrypted = append(encrypted, nonce[:HalfNonceSize]...)
-	encrypted = xsecretbox.Seal(encrypted, nonce, pad(packet, proxy.minQuestionSize), serverInfo.SharedKey[:])
+	encrypted = xsecretbox.Seal(encrypted, nonce, pad(packet, paddedLength), serverInfo.SharedKey[:])
 	return
 }
 
