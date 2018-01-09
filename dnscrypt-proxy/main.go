@@ -96,66 +96,74 @@ func (proxy *Proxy) tcpListener(listenAddr *net.TCPAddr) error {
 	}
 }
 
-func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, serverProto string, packet []byte, clientAddr *net.Addr, clientPc net.Conn) {
-	if len(packet) < MinDNSPacketSize {
+func (proxy *Proxy) exchangeWithUDPServer(serverInfo *ServerInfo, encryptedQuery []byte, clientNonce []byte) ([]byte, error) {
+	pc, err := net.DialUDP("udp", nil, serverInfo.UDPAddr)
+	if err != nil {
+		return nil, err
+	}
+	pc.SetDeadline(time.Now().Add(serverInfo.Timeout))
+	pc.Write(encryptedQuery)
+
+	encryptedResponse := make([]byte, MaxDNSPacketSize)
+	length, err := pc.Read(encryptedResponse)
+	pc.Close()
+	if err != nil {
+		return nil, err
+	}
+	encryptedResponse = encryptedResponse[:length]
+	return proxy.Decrypt(serverInfo, encryptedResponse, clientNonce)
+}
+
+func (proxy *Proxy) exchangeWithTCPServer(serverInfo *ServerInfo, encryptedQuery []byte, clientNonce []byte) ([]byte, error) {
+	pc, err := net.DialTCP("tcp", nil, serverInfo.TCPAddr)
+	if err != nil {
+		return nil, err
+	}
+	pc.SetDeadline(time.Now().Add(serverInfo.Timeout))
+	encryptedQuery, err = PrefixWithSize(encryptedQuery)
+	if err != nil {
+		return nil, err
+	}
+	pc.Write(encryptedQuery)
+
+	encryptedResponse, err := ReadPrefixed(pc)
+	pc.Close()
+	if err != nil {
+		return nil, err
+	}
+	return proxy.Decrypt(serverInfo, encryptedResponse, clientNonce)
+}
+
+func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, serverProto string, query []byte, clientAddr *net.Addr, clientPc net.Conn) {
+	if len(query) < MinDNSPacketSize {
 		return
 	}
-	encrypted, clientNonce, err := proxy.Encrypt(serverInfo, packet, serverProto)
+	encryptedQuery, clientNonce, err := proxy.Encrypt(serverInfo, query, serverProto)
 	if err != nil {
 		return
 	}
+	var encryptedResponse []byte
 	if serverProto == "udp" {
-		pc, err := net.DialUDP(serverProto, nil, serverInfo.UDPAddr)
-		if err != nil {
-			return
-		}
-		pc.SetDeadline(time.Now().Add(serverInfo.Timeout))
-		pc.Write(encrypted)
-
-		encrypted = make([]byte, MaxDNSPacketSize)
-		length, err := pc.Read(encrypted)
-		pc.Close()
-		if err != nil {
-			return
-		}
-		encrypted = encrypted[:length]
-		packet, err = proxy.Decrypt(serverInfo, encrypted, clientNonce)
+		encryptedResponse, err = proxy.exchangeWithUDPServer(serverInfo, encryptedQuery, clientNonce)
 		if err != nil {
 			return
 		}
 	} else {
-		pc, err := net.DialTCP(serverProto, nil, serverInfo.TCPAddr)
-		if err != nil {
-			return
-		}
-		pc.SetDeadline(time.Now().Add(serverInfo.Timeout))
-		encrypted, err = PrefixWithSize(encrypted)
-		if err != nil {
-			return
-		}
-		pc.Write(encrypted)
-
-		encrypted, err := ReadPrefixed(pc)
-		pc.Close()
-		if err != nil {
-			return
-		}
-		packet, err = proxy.Decrypt(serverInfo, encrypted, clientNonce)
+		encryptedResponse, err = proxy.exchangeWithTCPServer(serverInfo, encryptedQuery, clientNonce)
 		if err != nil {
 			return
 		}
 	}
-
 	if clientAddr != nil {
-		clientPc.(net.PacketConn).WriteTo(packet, *clientAddr)
+		clientPc.(net.PacketConn).WriteTo(encryptedResponse, *clientAddr)
+		if HasTCFlag(encryptedResponse) {
+			proxy.questionSizeEstimator.blindAdjust()
+		}
 	} else {
-		packet, err = PrefixWithSize(packet)
+		response, err := PrefixWithSize(encryptedResponse)
 		if err != nil {
 			return
 		}
-		clientPc.Write(packet)
-	}
-	if HasTCFlag(packet) {
-		proxy.questionSizeEstimator.blindAdjust()
+		clientPc.Write(response)
 	}
 }
