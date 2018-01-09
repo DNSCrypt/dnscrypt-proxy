@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/hex"
+	"fmt"
 	"log"
 	"math/rand"
 	"net"
@@ -45,22 +46,33 @@ type ServersInfo struct {
 	serverStamps []ServerStamp
 }
 
-func (serversInfo *ServersInfo) registerServer(proxy *Proxy, name string, serverAddrStr string, serverPkStr string, providerName string) error {
-	newServer, err := serversInfo.fetchServerInfo(proxy, name, serverAddrStr, serverPkStr, providerName)
+func (serversInfo *ServersInfo) registerServer(proxy *Proxy, name string, stamp ServerStamp) error {
+	serversInfo.Lock()
+	defer serversInfo.Unlock()
+	newServer, err := serversInfo.fetchServerInfo(proxy, name, stamp)
 	if err != nil {
 		return err
 	}
-	serversInfo.Lock()
 	for i, oldServer := range serversInfo.inner {
 		if oldServer.Name == newServer.Name {
 			serversInfo.inner[i] = newServer
-			serversInfo.Unlock()
 			return nil
 		}
 	}
 	serversInfo.inner = append(serversInfo.inner, newServer)
-	serversInfo.Unlock()
+	serversInfo.serverStamps = append(serversInfo.serverStamps, stamp)
 	return nil
+}
+
+func (serversInfo *ServersInfo) refresh(proxy *Proxy) {
+	fmt.Println("Refreshing certificates")
+	serversInfo.RLock()
+	stamps := serversInfo.serverStamps
+	serversInfo.RUnlock()
+	for _, stamp := range stamps {
+		serversInfo.registerServer(proxy, stamp.name, stamp)
+		_ = stamp
+	}
 }
 
 func (serversInfo *ServersInfo) getOne() *ServerInfo {
@@ -70,20 +82,20 @@ func (serversInfo *ServersInfo) getOne() *ServerInfo {
 	return serverInfo
 }
 
-func (serversInfo *ServersInfo) fetchServerInfo(proxy *Proxy, name string, serverAddrStr string, serverPkStr string, providerName string) (ServerInfo, error) {
-	serverPublicKey, err := hex.DecodeString(strings.Replace(serverPkStr, ":", "", -1))
-	if err != nil || len(serverPublicKey) != ed25519.PublicKeySize {
+func (serversInfo *ServersInfo) fetchServerInfo(proxy *Proxy, name string, stamp ServerStamp) (ServerInfo, error) {
+	serverPk, err := hex.DecodeString(strings.Replace(stamp.serverPkStr, ":", "", -1))
+	if err != nil || len(serverPk) != ed25519.PublicKeySize {
 		log.Fatal("Invalid public key")
 	}
-	certInfo, err := FetchCurrentCert(proxy, serverPublicKey, serverAddrStr, providerName)
+	certInfo, err := FetchCurrentCert(proxy, serverPk, stamp.serverAddrStr, stamp.providerName)
 	if err != nil {
 		return ServerInfo{}, err
 	}
-	remoteUDPAddr, err := net.ResolveUDPAddr("udp", serverAddrStr)
+	remoteUDPAddr, err := net.ResolveUDPAddr("udp", stamp.serverAddrStr)
 	if err != nil {
 		return ServerInfo{}, err
 	}
-	remoteTCPAddr, err := net.ResolveTCPAddr("tcp", serverAddrStr)
+	remoteTCPAddr, err := net.ResolveTCPAddr("tcp", stamp.serverAddrStr)
 	if err != nil {
 		return ServerInfo{}, err
 	}

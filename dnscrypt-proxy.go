@@ -30,7 +30,8 @@ func NewProxy(listenAddrStr string, serverName string, serverAddrStr string, ser
 		log.Fatal(err)
 	}
 	curve25519.ScalarBaseMult(&proxy.proxyPublicKey, &proxy.proxySecretKey)
-	proxy.serversInfo.registerServer(&proxy, serverName, serverAddrStr, serverPkStr, providerName)
+	stamp, _ := NewServerStampFromLegacy(serverName, serverAddrStr, serverPkStr, providerName)
+	proxy.serversInfo.registerServer(&proxy, serverName, stamp)
 	listenUDPAddr, err := net.ResolveUDPAddr("udp", listenAddrStr)
 	if err != nil {
 		log.Fatal(err)
@@ -47,7 +48,7 @@ func NewProxy(listenAddrStr string, serverName string, serverAddrStr string, ser
 	}()
 	for {
 		time.Sleep(30 * time.Minute)
-		// Refresh certificates
+		proxy.serversInfo.refresh(&proxy)
 	}
 }
 
