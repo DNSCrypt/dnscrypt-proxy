@@ -32,7 +32,7 @@ func FetchCurrentCert(proxy *Proxy, proto string, pk ed25519.PublicKey, serverAd
 	client := dns.Client{Net: proto, UDPSize: uint16(MaxDNSUDPPacketSize)}
 	in, _, err := client.Exchange(query, serverAddress)
 	if err != nil {
-		log.Fatal(err)
+		return CertInfo{}, err
 	}
 	now := uint32(time.Now().Unix())
 	certInfo := CertInfo{CryptoConstruction: UndefinedConstruction}
@@ -40,13 +40,16 @@ func FetchCurrentCert(proxy *Proxy, proto string, pk ed25519.PublicKey, serverAd
 	for _, answerRr := range in.Answer {
 		binCert, err := packTxtString(strings.Join(answerRr.(*dns.TXT).Txt, ""))
 		if err != nil {
-			return certInfo, err
+			log.Print("Unable to unpack the certificate")
+			continue
 		}
 		if len(binCert) < 124 {
-			return certInfo, errors.New("Certificate too short")
+			log.Print("Certificate too short")
+			continue
 		}
 		if !bytes.Equal(binCert[:4], CertMagic[:4]) {
-			return certInfo, errors.New("Invalid cert magic")
+			log.Print("Invalid cert magic")
+			continue
 		}
 		cryptoConstruction := CryptoConstruction(0)
 		switch esVersion := binary.BigEndian.Uint16(binCert[4:6]); esVersion {
@@ -55,12 +58,14 @@ func FetchCurrentCert(proxy *Proxy, proto string, pk ed25519.PublicKey, serverAd
 		case 0x0002:
 			cryptoConstruction = XChacha20Poly1305
 		default:
-			return certInfo, errors.New("Unsupported crypto construction")
+			log.Print("Unsupported crypto construction")
+			continue
 		}
 		signature := binCert[8:72]
 		signed := binCert[72:]
 		if !ed25519.Verify(pk, signed, signature) {
-			log.Fatal("Incorrect signature")
+			log.Print("Incorrect signature")
+			continue
 		}
 		serial := binary.BigEndian.Uint32(binCert[112:116])
 		tsBegin := binary.BigEndian.Uint32(binCert[116:120])
