@@ -38,3 +38,23 @@ A client implementation of the DNSCrypt protocol.
 * Windows support that doesn't suck
 * DNS-over-HTTP2
 * Some real documentation
+
+## Download
+
+Up-to-date, pre-built binaries are available for:
+
+* Dragonfly BSD
+* FreeBSD/x86
+* FreeBSD/x86_64
+* Linux/arm
+* Linux/x86
+* Linux/x86_64
+* MacOS X
+* NetBSD/x86
+* NetBSD/x86_64
+* OpenBSD/x86
+* OpenBSD/x86_64
+* Windows
+* Windows 64 bit
+
+## [Download dnscrypt-proxy 2.0.0alpha here](https://github.com/jedisct1/dnscrypt-proxy/releases)
