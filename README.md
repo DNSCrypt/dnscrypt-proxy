@@ -12,9 +12,10 @@ A client implementation of the DNSCrypt protocol.
 | Security                                | Written in C, using patched system libraries          | Written in standard and portable Go             |
 | Dependencies                            | Specific versions of libsodium, libldns and libtool   | None                                            |
 | Upstream connections using TCP          | Catastrophic, requires client retries                 | Implemented as anyone would expect              |
+| XChaCha20 support                       | Only if compiled with recent versions of libsodium    | Yes, always available                           |
 | Support of links with small MSS         | Unreliable due to completely broken padding           | Reliable, carefully implemented                 |
 | Support for multiple servers            | Nonexistent                                           | Yes, with automatic failover and load-balancing |
-| Custom additions                        | C API, requiers libldns for sanity                    | Clean Go structures using miekg/dns             |
+| Custom additions                        | C API, requires libldns for sanity                    | Simple Go structures using miekg/dns            |
 | AAAA blocking                           | Yes                                                   | Yes                                             |
 | DNS caching                             | Yes, with ugly hacks for DNSSEC support               | Yes, without ugly hacks                         |
 | EDNS support                            | Broken with custom records                            | Yes                                             |
