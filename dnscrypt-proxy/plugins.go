@@ -218,8 +218,7 @@ func (plugin *PluginCacheResponse) Description() string {
 
 func (plugin *PluginCacheResponse) Eval(pluginsState *PluginsState, msg *dns.Msg) error {
 	plugin.cachedResponses = &cachedResponses
-
-	if msg.Rcode != dns.RcodeSuccess && msg.Rcode != dns.RcodeNXRrset {
+	if msg.Rcode == dns.RcodeServerFailure {
 		return nil
 	}
 	cacheKey, err := computeCacheKey(pluginsState, msg)

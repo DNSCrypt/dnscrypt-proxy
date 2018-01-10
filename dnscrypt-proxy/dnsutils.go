@@ -42,7 +42,7 @@ func NormalizeName(name *[]byte) {
 }
 
 func getMinTTL(msg *dns.Msg, minTTL uint32, maxTTL uint32, negCacheMinTTL uint32) time.Duration {
-	if len(msg.Answer) <= 0 {
+	if msg.Rcode != dns.RcodeSuccess || len(msg.Answer) <= 0 {
 		return time.Duration(negCacheMinTTL) * time.Second
 	}
 	ttl := uint32(maxTTL)
