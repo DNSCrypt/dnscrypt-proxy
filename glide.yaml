@@ -1,8 +1,13 @@
 package: .
 import:
+- package: github.com/BurntSushi/toml
+  version: ^0.3.0
+- package: github.com/VividCortex/ewma
+  version: ^1.1.1
+- package: github.com/VividCortex/godaemon
 - package: github.com/jedisct1/xsecretbox
 - package: github.com/miekg/dns
-  version: ^1.0.1
+  version: ^1.0.3
 - package: golang.org/x/crypto
   subpackages:
   - curve25519
