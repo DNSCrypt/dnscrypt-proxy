@@ -1,3 +1,11 @@
+# Backups, etc.
+*~
+#*#
+*.swp
+
+# Vendor directory
+vendor
+
 # Binaries for programs and plugins
 *.exe
 *.dll
@@ -12,3 +20,7 @@
 
 # Project-local glide cache, RE: https://github.com/Masterminds/glide/issues/736
 .glide/
+
+# Binaries
+dnscrypt-proxy
+dnscrypt-proxy2
