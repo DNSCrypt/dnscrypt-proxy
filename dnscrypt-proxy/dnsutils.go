@@ -18,6 +18,15 @@ func TruncatedResponse(packet []byte) ([]byte, error) {
 	return dstMsg.Pack()
 }
 
+func EmptyResponseFromMessage(srcMsg *dns.Msg) (*dns.Msg, error) {
+	dstMsg := srcMsg
+	dstMsg.Response = true
+	dstMsg.Answer = make([]dns.RR, 0)
+	dstMsg.Ns = make([]dns.RR, 0)
+	dstMsg.Extra = make([]dns.RR, 0)
+	return dstMsg, nil
+}
+
 func HasTCFlag(packet []byte) bool {
 	return packet[2]&2 == 2
 }

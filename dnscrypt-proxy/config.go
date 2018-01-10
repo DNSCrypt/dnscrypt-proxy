@@ -17,6 +17,7 @@ type Config struct {
 	ForceTCP         bool                    `toml:"force_tcp"`
 	Timeout          int                     `toml:"timeout_ms"`
 	CertRefreshDelay int                     `toml:"cert_refresh_delay"`
+	BlockIPv6        bool                    `toml:"block_ipv6"`
 	ServersConfig    map[string]ServerConfig `toml:"servers"`
 }
 
@@ -56,6 +57,7 @@ func ConfigLoad(proxy *Proxy, config_file string) error {
 	}
 	proxy.listenAddresses = config.ListenAddresses
 	proxy.daemonize = config.Daemonize
+	proxy.pluginBlockIPv6 = config.BlockIPv6
 	if len(config.ServerNames) == 0 {
 		for serverName := range config.ServersConfig {
 			config.ServerNames = append(config.ServerNames, serverName)

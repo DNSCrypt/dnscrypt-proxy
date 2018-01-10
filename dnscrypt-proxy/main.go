@@ -23,6 +23,7 @@ type Proxy struct {
 	listenAddresses       []string
 	daemonize             bool
 	registeredServers     []RegisteredServer
+	pluginBlockIPv6       bool
 }
 
 func main() {
@@ -163,22 +164,33 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, serverProto str
 	if clientAddr == nil {
 		clientProto = "tcp"
 	}
-	pluginsState := NewPluginsState(clientProto)
+	pluginsState := NewPluginsState(proxy, clientProto)
 	query, _ = pluginsState.ApplyQueryPlugins(query)
-	encryptedQuery, clientNonce, err := proxy.Encrypt(serverInfo, query, serverProto)
-	if err != nil {
-		return
-	}
-	serverInfo.noticeBegin(proxy)
 	var response []byte
-	if serverProto == "udp" {
-		response, err = proxy.exchangeWithUDPServer(serverInfo, encryptedQuery, clientNonce)
-	} else {
-		response, err = proxy.exchangeWithTCPServer(serverInfo, encryptedQuery, clientNonce)
+	var err error
+	if pluginsState.action != PluginsActionForward {
+		if pluginsState.synthResponse != nil {
+			response, err = pluginsState.synthResponse.PackBuffer(response)
+			if err != nil {
+				return
+			}
+		}
 	}
-	if err != nil {
-		serverInfo.noticeFailure(proxy)
-		return
+	if len(response) == 0 {
+		encryptedQuery, clientNonce, err := proxy.Encrypt(serverInfo, query, serverProto)
+		if err != nil {
+			return
+		}
+		serverInfo.noticeBegin(proxy)
+		if serverProto == "udp" {
+			response, err = proxy.exchangeWithUDPServer(serverInfo, encryptedQuery, clientNonce)
+		} else {
+			response, err = proxy.exchangeWithTCPServer(serverInfo, encryptedQuery, clientNonce)
+		}
+		if err != nil {
+			serverInfo.noticeFailure(proxy)
+			return
+		}
 	}
 	if clientAddr != nil {
 		if len(response) > MaxDNSUDPPacketSize {

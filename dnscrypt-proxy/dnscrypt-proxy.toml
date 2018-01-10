@@ -40,6 +40,13 @@ timeout = 2500
 cert_refresh_delay = 30
 
 
+############## Filters ##############
+
+## Immediately respond to IPv6-related queries with an empty response
+## This makes things faster when there is no IPv6 connectivity
+
+block_ipv6 = false
+
 
 ############## Servers ##############
 
