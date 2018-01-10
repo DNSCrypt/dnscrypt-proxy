@@ -1,6 +1,6 @@
 # dnscrypt-proxy 2
 
-A client implementation of the DNSCrypt protocol.
+A modern client implementation of the DNSCrypt v2 protocol.
 
 ## Current status/features
 
