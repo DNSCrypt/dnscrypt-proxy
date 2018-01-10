@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"flag"
 	"fmt"
 	"log"
 	"time"
@@ -37,8 +38,10 @@ type ServerConfig struct {
 }
 
 func ConfigLoad(proxy *Proxy, config_file string) error {
+	configFile := flag.String("config", "/etc/dnscrypt-proxy/dnscrypt-proxy.toml", "path to the configuration file")
+	flag.Parse()
 	config := newConfig()
-	if _, err := toml.DecodeFile(config_file, &config); err != nil {
+	if _, err := toml.DecodeFile(*configFile, &config); err != nil {
 		log.Println(err)
 		return err
 	}
