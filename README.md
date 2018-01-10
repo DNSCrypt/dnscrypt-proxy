@@ -1,3 +1,7 @@
+[![Build Status](https://travis-ci.org/jedisct1/dnscrypt-proxy.svg?branch=master)](https://travis-ci.org/jedisct1/dnscrypt-proxy?branch=master)
+
+![dnscrypt-proxy 2](https://raw.github.com/jedisct1/dnscrypt-proxy/master/logo.png)
+
 # dnscrypt-proxy 2
 
 A modern client implementation of the DNSCrypt v2 protocol.
@@ -10,9 +14,9 @@ A modern client implementation of the DNSCrypt v2 protocol.
 | Code quality                                    | Big ugly mess                                                                | Readable, easy to work on                               |
 | Reliability                                     | Poor, due to completely broken handling of edge cases                        | Excellent                                               |
 | Security                                        | Written in C, bundles patched versions from old branches of system libraries | Written in standard and portable Go                     |
-| Dependencies                                    | Specific versions of libsodium, libldns and libtool                          | None                                                    |
+| Dependencies                                    | Specific versions of dnscrypt-proxy, libldns and libtool                     | None                                                    |
 | Upstream connections using TCP                  | Catastrophic, requires client retries                                        | Implemented as anyone would expect, works well with TOR |
-| XChaCha20 support                               | Only if compiled with recent versions of libsodium                           | Yes, always available                                   |
+| XChaCha20 support                               | Only if compiled with recent versions of dnscrypt-proxy                      | Yes, always available                                   |
 | Support of links with small MTU                 | Unreliable due to completely broken padding                                  | Reliable, properly implemented                          |
 | Support for multiple servers                    | Nonexistent                                                                  | Yes, with automatic failover and load-balancing         |
 | Custom additions                                | C API, requires libldns for sanity                                           | Simple Go structures using miekg/dns                    |
