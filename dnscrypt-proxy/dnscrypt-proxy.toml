@@ -19,8 +19,8 @@ server_names = ["dnscrypt.org-fr"]
 listen_addresses = ["127.0.0.1:53", "[::1]:53"]
 
 
-## Whether to the server as a background process
-## Do not set to true if you are using systemd.
+## Whether to the server as a background process (linux only)
+## Do not set to true if you are using systemd
 
 daemonize = false
 
