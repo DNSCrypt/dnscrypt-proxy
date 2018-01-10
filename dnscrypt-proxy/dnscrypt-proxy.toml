@@ -1,0 +1,27 @@
+#  dnscrypt-proxy configuration
+
+# List of servers to use
+# If this line is commented, all registered servers will be used
+server_names = ["dnscrypt.org-fr"]
+
+# List of local addresses and ports to listen to. Can be IPv4 and/or IPv6.
+listen_addresses = ["127.0.0.1:53", "[::1]:53"]
+
+# Run the server as a background process
+daemonize = false
+
+# Always use TCP to connect to upstream servers
+force_tcp = false
+
+# Timeout, in milliseconds
+timeout = 2500
+
+# Delay, in minutes, after which certificates are reloaded
+cert_refresh_delay = 30
+
+# Static list of available servers
+[servers]
+  [servers."dnscrypt.org-fr"]
+  provider_name = "2.dnscrypt-cert.fr.dnscrypt.org"
+  address = "212.47.228.136:443"
+  public_key = "E801:B84E:A606:BFB0:BAC0:CE43:445B:B15E:BA64:B02F:A3C4:AA31:AE10:636A:0790:324D"

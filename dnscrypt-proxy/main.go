@@ -16,39 +16,50 @@ type Proxy struct {
 	questionSizeEstimator QuestionSizeEstimator
 	serversInfo           ServersInfo
 	timeout               time.Duration
+	certRefreshDelay      time.Duration
 	mainProto             string
+	listenAddresses       []string
+	daemonize             bool
+	registeredServers     []RegisteredServer
 }
 
 func main() {
 	log.SetFlags(0)
-	stamp, _ := NewServerStampFromLegacy("212.47.228.136:443", "E801:B84E:A606:BFB0:BAC0:CE43:445B:B15E:BA64:B02F:A3C4:AA31:AE10:636A:0790:324D", "2.dnscrypt-cert.fr.dnscrypt.org")
-	NewProxy("127.0.0.1:5399", "dnscrypt.org-fr", stamp, "udp")
+	proxy := Proxy{}
+	if err := ConfigLoad(&proxy, "dnscrypt-proxy.toml"); err != nil {
+		panic(err)
+	}
+	proxy.StartProxy()
 }
 
-func NewProxy(listenAddrStr string, serverName string, stamp ServerStamp, mainProto string) {
-	proxy := Proxy{questionSizeEstimator: NewQuestionSizeEstimator(), timeout: TimeoutMax, mainProto: mainProto}
+func (proxy *Proxy) StartProxy() {
+	proxy.questionSizeEstimator = NewQuestionSizeEstimator()
 	if _, err := rand.Read(proxy.proxySecretKey[:]); err != nil {
 		log.Fatal(err)
 	}
 	curve25519.ScalarBaseMult(&proxy.proxyPublicKey, &proxy.proxySecretKey)
-	proxy.serversInfo.registerServer(&proxy, serverName, stamp)
-	listenUDPAddr, err := net.ResolveUDPAddr("udp", listenAddrStr)
-	if err != nil {
-		log.Fatal(err)
+	for _, registeredServer := range proxy.registeredServers {
+		proxy.serversInfo.registerServer(proxy, registeredServer.name, registeredServer.stamp)
 	}
-	listenTCPAddr, err := net.ResolveTCPAddr("tcp", listenAddrStr)
-	if err != nil {
-		log.Fatal(err)
+	for _, listenAddrStr := range proxy.listenAddresses {
+		listenUDPAddr, err := net.ResolveUDPAddr("udp", listenAddrStr)
+		if err != nil {
+			log.Fatal(err)
+		}
+		listenTCPAddr, err := net.ResolveTCPAddr("tcp", listenAddrStr)
+		if err != nil {
+			log.Fatal(err)
+		}
+		if err := proxy.udpListener(listenUDPAddr); err != nil {
+			log.Fatal(err)
+		}
+		if err := proxy.tcpListener(listenTCPAddr); err != nil {
+			log.Fatal(err)
+		}
 	}
-	go func() {
-		proxy.udpListener(listenUDPAddr)
-	}()
-	go func() {
-		proxy.tcpListener(listenTCPAddr)
-	}()
 	for {
 		time.Sleep(CertRefreshDelay)
-		proxy.serversInfo.refresh(&proxy)
+		proxy.serversInfo.refresh(proxy)
 	}
 }
 
@@ -57,19 +68,22 @@ func (proxy *Proxy) udpListener(listenAddr *net.UDPAddr) error {
 	if err != nil {
 		return err
 	}
-	defer clientPc.Close()
-	fmt.Printf("Now listening to %v [UDP]\n", listenAddr)
-	for {
-		buffer := make([]byte, MaxDNSPacketSize-1)
-		length, clientAddr, err := clientPc.ReadFrom(buffer)
-		if err != nil {
-			return err
+	go func() {
+		defer clientPc.Close()
+		fmt.Printf("Now listening to %v [UDP]\n", listenAddr)
+		for {
+			buffer := make([]byte, MaxDNSPacketSize-1)
+			length, clientAddr, err := clientPc.ReadFrom(buffer)
+			if err != nil {
+				return
+			}
+			packet := buffer[:length]
+			go func() {
+				proxy.processIncomingQuery(proxy.serversInfo.getOne(), proxy.mainProto, packet, &clientAddr, clientPc)
+			}()
 		}
-		packet := buffer[:length]
-		go func() {
-			proxy.processIncomingQuery(proxy.serversInfo.getOne(), proxy.mainProto, packet, &clientAddr, clientPc)
-		}()
-	}
+	}()
+	return nil
 }
 
 func (proxy *Proxy) tcpListener(listenAddr *net.TCPAddr) error {
@@ -77,23 +91,26 @@ func (proxy *Proxy) tcpListener(listenAddr *net.TCPAddr) error {
 	if err != nil {
 		return err
 	}
-	defer acceptPc.Close()
-	fmt.Printf("Now listening to %v [TCP]\n", listenAddr)
-	for {
-		clientPc, err := acceptPc.Accept()
-		if err != nil {
-			continue
-		}
-		go func() {
-			defer clientPc.Close()
-			clientPc.SetDeadline(time.Now().Add(proxy.timeout))
-			packet, err := ReadPrefixed(clientPc.(*net.TCPConn))
-			if err != nil || len(packet) < MinDNSPacketSize {
-				return
+	go func() {
+		defer acceptPc.Close()
+		fmt.Printf("Now listening to %v [TCP]\n", listenAddr)
+		for {
+			clientPc, err := acceptPc.Accept()
+			if err != nil {
+				continue
 			}
-			proxy.processIncomingQuery(proxy.serversInfo.getOne(), "tcp", packet, nil, clientPc)
-		}()
-	}
+			go func() {
+				defer clientPc.Close()
+				clientPc.SetDeadline(time.Now().Add(proxy.timeout))
+				packet, err := ReadPrefixed(clientPc.(*net.TCPConn))
+				if err != nil || len(packet) < MinDNSPacketSize {
+					return
+				}
+				proxy.processIncomingQuery(proxy.serversInfo.getOne(), "tcp", packet, nil, clientPc)
+			}()
+		}
+	}()
+	return nil
 }
 
 func (proxy *Proxy) exchangeWithUDPServer(serverInfo *ServerInfo, encryptedQuery []byte, clientNonce []byte) ([]byte, error) {
