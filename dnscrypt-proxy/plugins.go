@@ -1,6 +1,13 @@
 package main
 
 import (
+	"crypto/sha512"
+	"encoding/binary"
+	"errors"
+	"math/rand"
+	"sync"
+	"time"
+
 	"github.com/miekg/dns"
 )
 
@@ -23,6 +30,7 @@ type PluginsState struct {
 	queryPlugins           *[]Plugin
 	responsePlugins        *[]Plugin
 	synthResponse          *dns.Msg
+	dnssec                 bool
 }
 
 type Plugin interface {
@@ -39,12 +47,25 @@ func NewPluginsState(proxy *Proxy, proto string) PluginsState {
 	*queryPlugins = append(*queryPlugins, Plugin(new(PluginGetSetPayloadSize)))
 
 	responsePlugins := &[]Plugin{}
+	if proxy.cache {
+		*responsePlugins = append(*responsePlugins, Plugin(new(PluginCache)))
+	}
 
-	return PluginsState{action: PluginsActionForward, maxPayloadSize: MaxDNSUDPPacketSize - ResponseOverhead,
-		queryPlugins: queryPlugins, responsePlugins: responsePlugins, proto: proto}
+	return PluginsState{
+		action:          PluginsActionForward,
+		maxPayloadSize:  MaxDNSUDPPacketSize - ResponseOverhead,
+		queryPlugins:    queryPlugins,
+		responsePlugins: responsePlugins,
+		proto:           proto,
+	}
 }
 
+// ---------------- Query plugins ----------------
+
 func (pluginsState *PluginsState) ApplyQueryPlugins(packet []byte) ([]byte, error) {
+	if len(*pluginsState.queryPlugins) == 0 {
+		return packet, nil
+	}
 	pluginsState.action = PluginsActionForward
 	msg := dns.Msg{}
 	if err := msg.Unpack(packet); err != nil {
@@ -86,6 +107,7 @@ func (plugin *PluginGetSetPayloadSize) Eval(pluginsState *PluginsState, msg *dns
 		pluginsState.originalMaxPayloadSize = Min(int(opt.UDPSize())-ResponseOverhead, pluginsState.originalMaxPayloadSize)
 		dnssec = opt.Do()
 	}
+	pluginsState.dnssec = dnssec
 	pluginsState.maxPayloadSize = Min(MaxDNSUDPPacketSize-ResponseOverhead, Max(pluginsState.originalMaxPayloadSize, pluginsState.maxPayloadSize))
 	if pluginsState.maxPayloadSize > 512 {
 		extra2 := []dns.RR{}
@@ -128,4 +150,109 @@ func (plugin *PluginBlockIPv6) Eval(pluginsState *PluginsState, msg *dns.Msg) er
 	pluginsState.synthResponse = synth
 	pluginsState.action = PluginsActionSynth
 	return nil
+}
+
+// ---------------- Response plugins ----------------
+
+func (pluginsState *PluginsState) ApplyResponsePlugins(packet []byte) ([]byte, error) {
+	if len(*pluginsState.responsePlugins) == 0 {
+		return packet, nil
+	}
+	pluginsState.action = PluginsActionForward
+	msg := dns.Msg{}
+	if err := msg.Unpack(packet); err != nil {
+		return packet, err
+	}
+	for _, plugin := range *pluginsState.responsePlugins {
+		if ret := plugin.Eval(pluginsState, &msg); ret != nil {
+			pluginsState.action = PluginsActionDrop
+			return packet, ret
+		}
+		if pluginsState.action != PluginsActionForward {
+			break
+		}
+	}
+	packet2, err := msg.PackBuffer(packet)
+	if err != nil {
+		return packet, err
+	}
+	return packet2, nil
+}
+
+// -------- cache plugin --------
+
+type CachedResponse struct {
+	expiration time.Time
+	msg        dns.Msg
+}
+
+type CachedResponses struct {
+	sync.RWMutex
+	cache map[[32]byte]CachedResponse
+}
+
+var cachedResponses CachedResponses
+
+type PluginCache struct {
+	cachedResponses *CachedResponses
+}
+
+func (plugin *PluginCache) Name() string {
+	return "cache"
+}
+
+func (plugin *PluginCache) Description() string {
+	return "DNS cache."
+}
+
+func (plugin *PluginCache) Eval(pluginsState *PluginsState, msg *dns.Msg) error {
+	plugin.cachedResponses = &cachedResponses
+
+	cacheKey, err := computeCacheKey(pluginsState, msg)
+	if err != nil {
+		return nil
+	}
+	ttl := getMinTTL(msg, 60, 86400, 60)
+	cachedResponse := CachedResponse{
+		expiration: time.Now().Add(ttl),
+		msg:        *msg,
+	}
+	plugin.cachedResponses.Lock()
+	defer plugin.cachedResponses.Unlock()
+	if plugin.cachedResponses.cache == nil {
+		plugin.cachedResponses.cache = make(map[[32]byte]CachedResponse)
+	}
+	if len(plugin.cachedResponses.cache) > 1000 {
+		z := byte(rand.Uint32())
+		for k := range plugin.cachedResponses.cache {
+			delete(plugin.cachedResponses.cache, k)
+			if k[0] == z {
+				break
+			}
+		}
+	}
+	plugin.cachedResponses.cache[cacheKey] = cachedResponse
+	return nil
+}
+
+func computeCacheKey(pluginsState *PluginsState, msg *dns.Msg) ([32]byte, error) {
+	questions := msg.Question
+	if len(questions) != 1 {
+		return [32]byte{}, errors.New("No question present")
+	}
+	question := questions[0]
+	h := sha512.New512_256()
+	var tmp [5]byte
+	binary.LittleEndian.PutUint16(tmp[0:2], question.Qtype)
+	binary.LittleEndian.PutUint16(tmp[2:4], question.Qclass)
+	if pluginsState.dnssec {
+		tmp[4] = 1
+	}
+	h.Write(tmp[:])
+	normalizedName := []byte(question.Name)
+	NormalizeName(&normalizedName)
+	h.Write(normalizedName)
+	var sum [32]byte
+	h.Sum(sum[:])
+	return sum, nil
 }

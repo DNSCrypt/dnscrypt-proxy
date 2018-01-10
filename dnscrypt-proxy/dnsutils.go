@@ -1,6 +1,8 @@
 package main
 
 import (
+	"time"
+
 	"github.com/miekg/dns"
 )
 
@@ -29,4 +31,28 @@ func EmptyResponseFromMessage(srcMsg *dns.Msg) (*dns.Msg, error) {
 
 func HasTCFlag(packet []byte) bool {
 	return packet[2]&2 == 2
+}
+
+func NormalizeName(name *[]byte) {
+	for i, c := range *name {
+		if c >= 65 && c <= 90 {
+			(*name)[i] = c + 32
+		}
+	}
+}
+
+func getMinTTL(msg *dns.Msg, minTTL uint32, maxTTL uint32, negCacheMinTTL uint32) time.Duration {
+	if len(msg.Answer) <= 0 {
+		return time.Duration(negCacheMinTTL) * time.Second
+	}
+	ttl := uint32(maxTTL)
+	for _, rr := range msg.Answer {
+		if rr.Header().Ttl < ttl {
+			ttl = rr.Header().Ttl
+		}
+	}
+	if ttl < minTTL {
+		ttl = minTTL
+	}
+	return time.Duration(ttl) * time.Second
 }

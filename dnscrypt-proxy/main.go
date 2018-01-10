@@ -24,6 +24,10 @@ type Proxy struct {
 	daemonize             bool
 	registeredServers     []RegisteredServer
 	pluginBlockIPv6       bool
+	cache                 bool
+	negCacheMinTTL        uint32
+	minTTL                uint32
+	maxTTL                uint32
 }
 
 func main() {
@@ -191,6 +195,7 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, serverProto str
 			serverInfo.noticeFailure(proxy)
 			return
 		}
+		response, _ = pluginsState.ApplyResponsePlugins(response)
 	}
 	if clientAddr != nil {
 		if len(response) > MaxDNSUDPPacketSize {

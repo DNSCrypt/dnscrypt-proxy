@@ -48,6 +48,13 @@ cert_refresh_delay = 30
 block_ipv6 = false
 
 
+############## DNS Cache ##############
+
+## Enable a basic DNS cache to reduce outgoing traffic
+
+cache = true
+
+
 ############## Servers ##############
 
 ## Static list of available servers
