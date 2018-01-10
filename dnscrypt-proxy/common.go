@@ -27,10 +27,6 @@ var (
 	CertRefreshDelay       = 30 * time.Minute
 )
 
-func HasTCFlag(packet []byte) bool {
-	return packet[2]&2 == 2
-}
-
 func PrefixWithSize(packet []byte) ([]byte, error) {
 	packet_len := len(packet)
 	if packet_len > 0xffff {

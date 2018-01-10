@@ -20,7 +20,7 @@ func (questionSizeEstimator *QuestionSizeEstimator) MinQuestionSize() int {
 
 func (questionSizeEstimator *QuestionSizeEstimator) blindAdjust() {
 	questionSizeEstimator.Lock()
-	if MaxDNSPacketSize-questionSizeEstimator.minQuestionSize < questionSizeEstimator.minQuestionSize {
+	if MaxDNSUDPPacketSize-questionSizeEstimator.minQuestionSize < questionSizeEstimator.minQuestionSize {
 		questionSizeEstimator.minQuestionSize = MaxDNSUDPPacketSize
 	} else {
 		questionSizeEstimator.minQuestionSize *= 2

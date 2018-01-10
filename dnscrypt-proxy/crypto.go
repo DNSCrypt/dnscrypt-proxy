@@ -9,9 +9,10 @@ import (
 )
 
 const (
-	NonceSize     = xsecretbox.NonceSize
-	HalfNonceSize = xsecretbox.NonceSize / 2
-	TagSize       = xsecretbox.TagSize
+	NonceSize        = xsecretbox.NonceSize
+	HalfNonceSize    = xsecretbox.NonceSize / 2
+	TagSize          = xsecretbox.TagSize
+	ResponseOverhead = len(ServerMagic) + NonceSize + TagSize
 )
 
 func pad(packet []byte, minSize int) []byte {
@@ -40,22 +41,22 @@ func (proxy *Proxy) Encrypt(serverInfo *ServerInfo, packet []byte, proto string)
 	nonce, clientNonce := make([]byte, NonceSize), make([]byte, HalfNonceSize)
 	rand.Read(clientNonce)
 	copy(nonce, clientNonce)
-	minQuestionSize := len(packet)
+	minQuestionSize := ResponseOverhead + len(packet)
 	if proto == "udp" {
-		minQuestionSize = proxy.questionSizeEstimator.MinQuestionSize()
+		minQuestionSize = Max(proxy.questionSizeEstimator.MinQuestionSize(), minQuestionSize)
 	} else {
 		var xpad [1]byte
 		rand.Read(xpad[:])
 		minQuestionSize += int(xpad[0])
 	}
-	paddedLength := Min((minQuestionSize+63)&^63, MaxDNSUDPPacketSize-1)
-	if paddedLength <= 0 || len(packet) >= paddedLength {
+	paddedLength := Min(MaxDNSUDPPacketSize, (Max(minQuestionSize, ResponseOverhead)+63) & ^63)
+	if ResponseOverhead+len(packet)+1 > paddedLength {
 		err = errors.New("Question too large; cannot be padded")
 		return
 	}
 	encrypted = append(serverInfo.MagicQuery[:], proxy.proxyPublicKey[:]...)
 	encrypted = append(encrypted, nonce[:HalfNonceSize]...)
-	encrypted = xsecretbox.Seal(encrypted, nonce, pad(packet, paddedLength), serverInfo.SharedKey[:])
+	encrypted = xsecretbox.Seal(encrypted, nonce, pad(packet, paddedLength-ResponseOverhead), serverInfo.SharedKey[:])
 	return
 }
 
@@ -63,8 +64,9 @@ func (proxy *Proxy) Decrypt(serverInfo *ServerInfo, encrypted []byte, nonce []by
 	serverMagicLen := len(ServerMagic)
 	responseHeaderLen := serverMagicLen + NonceSize
 	if len(encrypted) < responseHeaderLen+TagSize+int(MinDNSPacketSize) ||
+		len(encrypted) > responseHeaderLen+TagSize+int(MaxDNSPacketSize) ||
 		!bytes.Equal(encrypted[:serverMagicLen], ServerMagic[:]) {
-		return encrypted, errors.New("Short message")
+		return encrypted, errors.New("Invalid message size or prefix")
 	}
 	serverNonce := encrypted[serverMagicLen:responseHeaderLen]
 	if !bytes.Equal(nonce[:HalfNonceSize], serverNonce[:HalfNonceSize]) {

@@ -142,22 +142,28 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, serverProto str
 	if err != nil {
 		return
 	}
-	var encryptedResponse []byte
+	var response []byte
 	if serverProto == "udp" {
-		encryptedResponse, err = proxy.exchangeWithUDPServer(serverInfo, encryptedQuery, clientNonce)
+		response, err = proxy.exchangeWithUDPServer(serverInfo, encryptedQuery, clientNonce)
 	} else {
-		encryptedResponse, err = proxy.exchangeWithTCPServer(serverInfo, encryptedQuery, clientNonce)
+		response, err = proxy.exchangeWithTCPServer(serverInfo, encryptedQuery, clientNonce)
 	}
 	if err != nil {
 		return
 	}
 	if clientAddr != nil {
-		clientPc.(net.PacketConn).WriteTo(encryptedResponse, *clientAddr)
-		if HasTCFlag(encryptedResponse) {
+		if len(response) > MaxDNSUDPPacketSize {
+			response, err = TruncatedResponse(response)
+			if err != nil {
+				return
+			}
+		}
+		clientPc.(net.PacketConn).WriteTo(response, *clientAddr)
+		if HasTCFlag(response) {
 			proxy.questionSizeEstimator.blindAdjust()
 		}
 	} else {
-		response, err := PrefixWithSize(encryptedResponse)
+		response, err = PrefixWithSize(response)
 		if err != nil {
 			return
 		}
