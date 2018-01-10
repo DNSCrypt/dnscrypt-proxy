@@ -18,7 +18,7 @@ const (
 var (
 	CertMagic              = [4]byte{0x44, 0x4e, 0x53, 0x43}
 	ServerMagic            = [8]byte{0x72, 0x36, 0x66, 0x6e, 0x76, 0x57, 0x6a, 0x38}
-	MinDNSPacketSize       = 12
+	MinDNSPacketSize       = 12 + 5
 	MaxDNSPacketSize       = 4096
 	MaxDNSUDPPacketSize    = 1252
 	InitialMinQuestionSize = 256
