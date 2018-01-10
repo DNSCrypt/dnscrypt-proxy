@@ -45,10 +45,13 @@ func NewPluginsState(proxy *Proxy, proto string) PluginsState {
 		*queryPlugins = append(*queryPlugins, Plugin(new(PluginBlockIPv6)))
 	}
 	*queryPlugins = append(*queryPlugins, Plugin(new(PluginGetSetPayloadSize)))
+	if proxy.cache {
+		*queryPlugins = append(*queryPlugins, Plugin(new(PluginCache)))
+	}
 
 	responsePlugins := &[]Plugin{}
 	if proxy.cache {
-		*responsePlugins = append(*responsePlugins, Plugin(new(PluginCache)))
+		*responsePlugins = append(*responsePlugins, Plugin(new(PluginCacheResponse)))
 	}
 
 	return PluginsState{
@@ -193,21 +196,24 @@ type CachedResponses struct {
 
 var cachedResponses CachedResponses
 
-type PluginCache struct {
+type PluginCacheResponse struct {
 	cachedResponses *CachedResponses
 }
 
-func (plugin *PluginCache) Name() string {
-	return "cache"
+func (plugin *PluginCacheResponse) Name() string {
+	return "cache_response"
 }
 
-func (plugin *PluginCache) Description() string {
-	return "DNS cache."
+func (plugin *PluginCacheResponse) Description() string {
+	return "DNS cache (writer)."
 }
 
-func (plugin *PluginCache) Eval(pluginsState *PluginsState, msg *dns.Msg) error {
+func (plugin *PluginCacheResponse) Eval(pluginsState *PluginsState, msg *dns.Msg) error {
 	plugin.cachedResponses = &cachedResponses
 
+	if msg.Rcode != dns.RcodeSuccess && msg.Rcode != dns.RcodeNXRrset {
+		return nil
+	}
 	cacheKey, err := computeCacheKey(pluginsState, msg)
 	if err != nil {
 		return nil
@@ -235,6 +241,45 @@ func (plugin *PluginCache) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 	return nil
 }
 
+type PluginCache struct {
+	cachedResponses *CachedResponses
+}
+
+func (plugin *PluginCache) Name() string {
+	return "cache"
+}
+
+func (plugin *PluginCache) Description() string {
+	return "DNS cache (reader)."
+}
+
+func (plugin *PluginCache) Eval(pluginsState *PluginsState, msg *dns.Msg) error {
+	plugin.cachedResponses = &cachedResponses
+
+	cacheKey, err := computeCacheKey(pluginsState, msg)
+	if err != nil {
+		return nil
+	}
+	plugin.cachedResponses.RLock()
+	defer plugin.cachedResponses.RUnlock()
+	if plugin.cachedResponses.cache == nil {
+		return nil
+	}
+	cached, ok := plugin.cachedResponses.cache[cacheKey]
+	if !ok {
+		return nil
+	}
+	if time.Now().After(cached.expiration) {
+		return nil
+	}
+	synth := cached.msg
+	synth.MsgHdr = msg.MsgHdr
+	synth.Question = msg.Question
+	pluginsState.synthResponse = &synth
+	pluginsState.action = PluginsActionSynth
+	return nil
+}
+
 func computeCacheKey(pluginsState *PluginsState, msg *dns.Msg) ([32]byte, error) {
 	questions := msg.Question
 	if len(questions) != 1 {
@@ -253,6 +298,6 @@ func computeCacheKey(pluginsState *PluginsState, msg *dns.Msg) ([32]byte, error)
 	NormalizeName(&normalizedName)
 	h.Write(normalizedName)
 	var sum [32]byte
-	h.Sum(sum[:])
+	h.Sum(sum[:0])
 	return sum, nil
 }
