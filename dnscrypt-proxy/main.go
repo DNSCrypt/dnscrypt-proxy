@@ -7,8 +7,6 @@ import (
 	"net"
 	"time"
 
-	"github.com/VividCortex/godaemon"
-
 	"golang.org/x/crypto/curve25519"
 )
 
@@ -38,7 +36,7 @@ func main() {
 		panic(err)
 	}
 	if proxy.daemonize {
-		godaemon.MakeDaemon(&godaemon.DaemonAttr{})
+		Daemonize()
 	}
 	proxy.StartProxy()
 }
