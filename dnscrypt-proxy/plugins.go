@@ -31,6 +31,10 @@ type PluginsState struct {
 	responsePlugins        *[]Plugin
 	synthResponse          *dns.Msg
 	dnssec                 bool
+	cacheSize              int
+	cacheNegTTL            uint32
+	cacheMinTTL            uint32
+	cacheMaxTTL            uint32
 }
 
 type Plugin interface {
@@ -60,6 +64,10 @@ func NewPluginsState(proxy *Proxy, proto string) PluginsState {
 		queryPlugins:    queryPlugins,
 		responsePlugins: responsePlugins,
 		proto:           proto,
+		cacheSize:       proxy.cacheSize,
+		cacheNegTTL:     proxy.cacheNegTTL,
+		cacheMinTTL:     proxy.cacheMinTTL,
+		cacheMaxTTL:     proxy.cacheMaxTTL,
 	}
 }
 

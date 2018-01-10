@@ -55,6 +55,26 @@ block_ipv6 = false
 cache = true
 
 
+## Cache size
+
+cache_size = 256
+
+
+## Minimum TTL for cached entries
+
+cache_min_ttl = 60
+
+
+## Maxmimum TTL for cached entries
+
+cache_max_ttl = 86400
+
+
+## TTL for negatively cached entries
+
+cache_neg_ttl = 60
+
+
 ############## Servers ##############
 
 ## Static list of available servers

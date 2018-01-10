@@ -19,6 +19,10 @@ type Config struct {
 	CertRefreshDelay int  `toml:"cert_refresh_delay"`
 	BlockIPv6        bool `toml:"block_ipv6"`
 	Cache            bool
+	CacheSize        int                     `toml:"cache_size"`
+	CacheNegTTL      uint32                  `toml:"cache_neg_ttl"`
+	CacheMinTTL      uint32                  `toml:"cache_min_ttl"`
+	CacheMaxTTL      uint32                  `toml:"cache_max_ttl"`
 	ServersConfig    map[string]ServerConfig `toml:"servers"`
 }
 
@@ -27,6 +31,11 @@ func newConfig() Config {
 		ListenAddresses:  []string{"127.0.0.1:53"},
 		Timeout:          2500,
 		CertRefreshDelay: 30,
+		Cache:            true,
+		CacheSize:        256,
+		CacheNegTTL:      60,
+		CacheMinTTL:      60,
+		CacheMaxTTL:      8600,
 	}
 }
 
@@ -60,9 +69,10 @@ func ConfigLoad(proxy *Proxy, config_file string) error {
 	proxy.daemonize = config.Daemonize
 	proxy.pluginBlockIPv6 = config.BlockIPv6
 	proxy.cache = config.Cache
-	proxy.negCacheMinTTL = 60
-	proxy.minTTL = 60
-	proxy.maxTTL = 86400
+	proxy.cacheSize = config.CacheSize
+	proxy.cacheNegTTL = config.CacheNegTTL
+	proxy.cacheMinTTL = config.CacheMinTTL
+	proxy.cacheMaxTTL = config.CacheMaxTTL
 	if len(config.ServerNames) == 0 {
 		for serverName := range config.ServersConfig {
 			config.ServerNames = append(config.ServerNames, serverName)

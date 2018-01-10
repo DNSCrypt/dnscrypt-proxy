@@ -25,9 +25,10 @@ type Proxy struct {
 	registeredServers     []RegisteredServer
 	pluginBlockIPv6       bool
 	cache                 bool
-	negCacheMinTTL        uint32
-	minTTL                uint32
-	maxTTL                uint32
+	cacheSize             int
+	cacheNegTTL           uint32
+	cacheMinTTL           uint32
+	cacheMaxTTL           uint32
 }
 
 func main() {
