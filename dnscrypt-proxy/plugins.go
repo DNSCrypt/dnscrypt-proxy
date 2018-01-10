@@ -9,6 +9,8 @@ type PluginsAction int
 const (
 	PluginsActionNone    = 0
 	PluginsActionForward = 1
+	PluginsActionDrop    = 2
+	PluginsActionReject  = 3
 )
 
 type PluginsState struct {
@@ -17,22 +19,35 @@ type PluginsState struct {
 	originalMaxPayloadSize int
 	maxPayloadSize         int
 	proto                  string
+	queryPlugins           *[]Plugin
+	responsePlugins        *[]Plugin
+}
+
+type Plugin interface {
+	Name() string
+	Description() string
+	Eval(pluginsState *PluginsState, msg *dns.Msg) error
 }
 
 func NewPluginsState() PluginsState {
-	return PluginsState{action: PluginsActionForward, maxPayloadSize: MaxDNSUDPPacketSize - ResponseOverhead}
+	queryPlugins := &[]Plugin{Plugin(new(PluginGetSetPayloadSize))}
+	responsePlugins := &[]Plugin{}
+	return PluginsState{action: PluginsActionForward, maxPayloadSize: MaxDNSUDPPacketSize - ResponseOverhead,
+		queryPlugins: queryPlugins, responsePlugins: responsePlugins}
 }
 
 func (pluginsState *PluginsState) ApplyQueryPlugins(packet []byte) ([]byte, error) {
+	pluginsState.action = PluginsActionForward
 	msg := dns.Msg{}
 	if err := msg.Unpack(packet); err != nil {
 		return packet, err
 	}
-
-	if ret := pluginsState.BuiltinPluginsGetSetPayloadSize(&msg); ret != nil {
-		return packet, ret
+	for _, plugin := range *pluginsState.queryPlugins {
+		if ret := plugin.Eval(pluginsState, &msg); ret != nil {
+			pluginsState.action = PluginsActionDrop
+			return packet, ret
+		}
 	}
-
 	packet2, err := msg.PackBuffer(packet)
 	if err != nil {
 		return packet, err
@@ -40,7 +55,17 @@ func (pluginsState *PluginsState) ApplyQueryPlugins(packet []byte) ([]byte, erro
 	return packet2, nil
 }
 
-func (pluginsState *PluginsState) BuiltinPluginsGetSetPayloadSize(msg *dns.Msg) error {
+type PluginGetSetPayloadSize struct{}
+
+func (plugin *PluginGetSetPayloadSize) Name() string {
+	return "get_set_payload_size"
+}
+
+func (plugin *PluginGetSetPayloadSize) Description() string {
+	return "Adjusts the maximum payload size advertised in queries sent to upstream servers."
+}
+
+func (plugin *PluginGetSetPayloadSize) Eval(pluginsState *PluginsState, msg *dns.Msg) error {
 	pluginsState.originalMaxPayloadSize = 512 - ResponseOverhead
 	opt := msg.IsEdns0()
 	dnssec := false
