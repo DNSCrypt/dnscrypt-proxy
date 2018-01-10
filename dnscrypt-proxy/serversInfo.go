@@ -10,7 +10,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/VividCortex/ewma"
 	"golang.org/x/crypto/ed25519"
+)
+
+const (
+	RTTEwmaDecay = 10.0
 )
 
 type ServerStamp struct {
@@ -33,6 +38,7 @@ func NewServerStampFromLegacy(serverAddrStr string, serverPkStr string, provider
 }
 
 type ServerInfo struct {
+	sync.RWMutex
 	MagicQuery         [8]byte
 	ServerPk           [32]byte
 	SharedKey          [32]byte
@@ -41,6 +47,8 @@ type ServerInfo struct {
 	Timeout            time.Duration
 	UDPAddr            *net.UDPAddr
 	TCPAddr            *net.TCPAddr
+	lastActionTS       time.Time
+	rtt                ewma.MovingAverage
 }
 
 type ServersInfo struct {
@@ -56,6 +64,7 @@ func (serversInfo *ServersInfo) registerServer(proxy *Proxy, name string, stamp 
 	if err != nil {
 		return err
 	}
+	newServer.rtt = ewma.NewMovingAverage(RTTEwmaDecay)
 	for i, oldServer := range serversInfo.inner {
 		if oldServer.Name == newServer.Name {
 			serversInfo.inner[i] = newServer
@@ -78,14 +87,21 @@ func (serversInfo *ServersInfo) refresh(proxy *Proxy) {
 }
 
 func (serversInfo *ServersInfo) getOne() *ServerInfo {
-	serversInfo.RLock()
+	serversInfo.Lock()
+	defer serversInfo.Unlock()
 	serversCount := len(serversInfo.inner)
 	if serversCount <= 0 {
-		serversInfo.RUnlock()
 		return nil
 	}
-	serverInfo := &serversInfo.inner[rand.Intn(serversCount)]
-	serversInfo.RUnlock()
+	candidate := rand.Intn(serversCount)
+	if candidate == 0 {
+		return &serversInfo.inner[candidate]
+	}
+	if serversInfo.inner[candidate].rtt.Value() < serversInfo.inner[0].rtt.Value() {
+		serversInfo.inner[candidate], serversInfo.inner[0] = serversInfo.inner[0], serversInfo.inner[candidate]
+	}
+	candidate = Min(serversCount, 2)
+	serverInfo := &serversInfo.inner[candidate]
 	return serverInfo
 }
 
@@ -119,5 +135,24 @@ func (serversInfo *ServersInfo) fetchServerInfo(proxy *Proxy, name string, stamp
 	return serverInfo, nil
 }
 
-func (serverInfo *ServerInfo) noticeFailure() {
+func (serverInfo *ServerInfo) noticeFailure(proxy *Proxy) {
+	serverInfo.Lock()
+	serverInfo.rtt.Set(float64(proxy.timeout.Nanoseconds()))
+	serverInfo.Unlock()
+}
+
+func (serverInfo *ServerInfo) noticeBegin(proxy *Proxy) {
+	serverInfo.Lock()
+	serverInfo.lastActionTS = time.Now()
+	serverInfo.Unlock()
+}
+
+func (serverInfo *ServerInfo) noticeSuccess(proxy *Proxy) {
+	now := time.Now()
+	serverInfo.Lock()
+	elapsed := now.Sub(serverInfo.lastActionTS) / 1024
+	if elapsed > 0 {
+		serverInfo.rtt.Add(float64(elapsed))
+	}
+	serverInfo.Unlock()
 }

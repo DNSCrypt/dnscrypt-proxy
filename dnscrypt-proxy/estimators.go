@@ -7,7 +7,7 @@ import (
 )
 
 const (
-	EwmaDecay = 100.0
+	SizeEstimatorEwmaDecay = 100.0
 )
 
 type QuestionSizeEstimator struct {
@@ -17,7 +17,7 @@ type QuestionSizeEstimator struct {
 }
 
 func NewQuestionSizeEstimator() QuestionSizeEstimator {
-	return QuestionSizeEstimator{minQuestionSize: InitialMinQuestionSize, ewma: ewma.NewMovingAverage(EwmaDecay)}
+	return QuestionSizeEstimator{minQuestionSize: InitialMinQuestionSize, ewma: ewma.NewMovingAverage(SizeEstimatorEwmaDecay)}
 }
 
 func (questionSizeEstimator *QuestionSizeEstimator) MinQuestionSize() int {

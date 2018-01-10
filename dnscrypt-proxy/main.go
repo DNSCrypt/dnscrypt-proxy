@@ -169,6 +169,7 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, serverProto str
 	if err != nil {
 		return
 	}
+	serverInfo.noticeBegin(proxy)
 	var response []byte
 	if serverProto == "udp" {
 		response, err = proxy.exchangeWithUDPServer(serverInfo, encryptedQuery, clientNonce)
@@ -176,7 +177,7 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, serverProto str
 		response, err = proxy.exchangeWithTCPServer(serverInfo, encryptedQuery, clientNonce)
 	}
 	if err != nil {
-		serverInfo.noticeFailure()
+		serverInfo.noticeFailure(proxy)
 		return
 	}
 	if clientAddr != nil {
@@ -195,9 +196,10 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, serverProto str
 	} else {
 		response, err = PrefixWithSize(response)
 		if err != nil {
-			serverInfo.noticeFailure()
+			serverInfo.noticeFailure(proxy)
 			return
 		}
 		clientPc.Write(response)
 	}
+	serverInfo.noticeSuccess(proxy)
 }
