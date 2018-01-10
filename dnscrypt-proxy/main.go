@@ -163,6 +163,8 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, serverProto str
 		clientPc.(net.PacketConn).WriteTo(response, *clientAddr)
 		if HasTCFlag(response) {
 			proxy.questionSizeEstimator.blindAdjust()
+		} else {
+			proxy.questionSizeEstimator.adjust(len(response))
 		}
 	} else {
 		response, err = PrefixWithSize(response)

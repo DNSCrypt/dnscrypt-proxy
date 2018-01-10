@@ -1,14 +1,23 @@
 package main
 
-import "sync"
+import (
+	"sync"
+
+	"github.com/VividCortex/ewma"
+)
+
+const (
+	EwmaDecay = 100.0
+)
 
 type QuestionSizeEstimator struct {
 	sync.RWMutex
 	minQuestionSize int
+	ewma            ewma.MovingAverage
 }
 
 func NewQuestionSizeEstimator() QuestionSizeEstimator {
-	return QuestionSizeEstimator{minQuestionSize: InitialMinQuestionSize}
+	return QuestionSizeEstimator{minQuestionSize: InitialMinQuestionSize, ewma: ewma.NewMovingAverage(EwmaDecay)}
 }
 
 func (questionSizeEstimator *QuestionSizeEstimator) MinQuestionSize() int {
@@ -24,6 +33,17 @@ func (questionSizeEstimator *QuestionSizeEstimator) blindAdjust() {
 		questionSizeEstimator.minQuestionSize = MaxDNSUDPPacketSize
 	} else {
 		questionSizeEstimator.minQuestionSize *= 2
+	}
+	questionSizeEstimator.ewma.Set(float64(questionSizeEstimator.minQuestionSize))
+	questionSizeEstimator.Unlock()
+}
+
+func (questionSizeEstimator *QuestionSizeEstimator) adjust(packetSize int) {
+	questionSizeEstimator.Lock()
+	questionSizeEstimator.ewma.Add(float64(packetSize))
+	ma, minQuestionSize := int(questionSizeEstimator.ewma.Value()), questionSizeEstimator.minQuestionSize
+	if ma > InitialMinQuestionSize && ma < minQuestionSize/2 {
+		questionSizeEstimator.minQuestionSize = Max(InitialMinQuestionSize, minQuestionSize/2)
 	}
 	questionSizeEstimator.Unlock()
 }
