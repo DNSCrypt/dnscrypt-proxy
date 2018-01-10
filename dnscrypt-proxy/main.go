@@ -138,6 +138,8 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, serverProto str
 	if len(query) < MinDNSPacketSize {
 		return
 	}
+	pluginsState := NewPluginsState()
+	query, _ = pluginsState.ApplyQueryPlugins(query)
 	encryptedQuery, clientNonce, err := proxy.Encrypt(serverInfo, query, serverProto)
 	if err != nil {
 		return
