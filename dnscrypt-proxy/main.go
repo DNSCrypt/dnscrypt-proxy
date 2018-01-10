@@ -58,7 +58,7 @@ func (proxy *Proxy) StartProxy() {
 		}
 	}
 	for {
-		time.Sleep(CertRefreshDelay)
+		time.Sleep(proxy.certRefreshDelay)
 		proxy.serversInfo.refresh(proxy)
 	}
 }
@@ -155,7 +155,11 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, serverProto str
 	if len(query) < MinDNSPacketSize {
 		return
 	}
-	pluginsState := NewPluginsState()
+	clientProto := "udp"
+	if clientAddr == nil {
+		clientProto = "tcp"
+	}
+	pluginsState := NewPluginsState(clientProto)
 	query, _ = pluginsState.ApplyQueryPlugins(query)
 	encryptedQuery, clientNonce, err := proxy.Encrypt(serverInfo, query, serverProto)
 	if err != nil {

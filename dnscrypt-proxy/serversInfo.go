@@ -107,7 +107,7 @@ func (serversInfo *ServersInfo) fetchServerInfo(proxy *Proxy, name string, stamp
 		SharedKey:          certInfo.SharedKey,
 		CryptoConstruction: certInfo.CryptoConstruction,
 		Name:               name,
-		Timeout:            TimeoutMin,
+		Timeout:            proxy.timeout,
 		UDPAddr:            remoteUDPAddr,
 		TCPAddr:            remoteTCPAddr,
 	}

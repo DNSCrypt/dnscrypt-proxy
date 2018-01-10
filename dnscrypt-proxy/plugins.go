@@ -29,11 +29,11 @@ type Plugin interface {
 	Eval(pluginsState *PluginsState, msg *dns.Msg) error
 }
 
-func NewPluginsState() PluginsState {
+func NewPluginsState(proto string) PluginsState {
 	queryPlugins := &[]Plugin{Plugin(new(PluginGetSetPayloadSize))}
 	responsePlugins := &[]Plugin{}
 	return PluginsState{action: PluginsActionForward, maxPayloadSize: MaxDNSUDPPacketSize - ResponseOverhead,
-		queryPlugins: queryPlugins, responsePlugins: responsePlugins}
+		queryPlugins: queryPlugins, responsePlugins: responsePlugins, proto: proto}
 }
 
 func (pluginsState *PluginsState) ApplyQueryPlugins(packet []byte) ([]byte, error) {

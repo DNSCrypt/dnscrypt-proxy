@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"net"
-	"time"
 )
 
 type CryptoConstruction uint16
@@ -22,9 +21,6 @@ var (
 	MaxDNSPacketSize       = 4096
 	MaxDNSUDPPacketSize    = 1252
 	InitialMinQuestionSize = 256
-	TimeoutMin             = 1 * time.Second
-	TimeoutMax             = 5 * time.Second
-	CertRefreshDelay       = 30 * time.Minute
 )
 
 func PrefixWithSize(packet []byte) ([]byte, error) {
