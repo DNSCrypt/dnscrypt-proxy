@@ -79,7 +79,12 @@ func (serversInfo *ServersInfo) refresh(proxy *Proxy) {
 
 func (serversInfo *ServersInfo) getOne() *ServerInfo {
 	serversInfo.RLock()
-	serverInfo := &serversInfo.inner[rand.Intn(len(serversInfo.inner))]
+	serversCount := len(serversInfo.inner)
+	if serversCount <= 0 {
+		serversInfo.RUnlock()
+		return nil
+	}
+	serverInfo := &serversInfo.inner[rand.Intn(serversCount)]
 	serversInfo.RUnlock()
 	return serverInfo
 }
@@ -112,4 +117,7 @@ func (serversInfo *ServersInfo) fetchServerInfo(proxy *Proxy, name string, stamp
 		TCPAddr:            remoteTCPAddr,
 	}
 	return serverInfo, nil
+}
+
+func (serverInfo *ServerInfo) noticeFailure() {
 }

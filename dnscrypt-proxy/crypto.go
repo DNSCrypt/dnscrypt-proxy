@@ -6,12 +6,15 @@ import (
 	"errors"
 
 	"github.com/jedisct1/xsecretbox"
+	"golang.org/x/crypto/nacl/secretbox"
 )
 
 const (
 	NonceSize        = xsecretbox.NonceSize
 	HalfNonceSize    = xsecretbox.NonceSize / 2
 	TagSize          = xsecretbox.TagSize
+	PublicKeySize    = 32
+	QueryOverhead    = ClientMagicLen + PublicKeySize + HalfNonceSize + TagSize
 	ResponseOverhead = len(ServerMagic) + NonceSize + TagSize
 )
 
@@ -41,7 +44,7 @@ func (proxy *Proxy) Encrypt(serverInfo *ServerInfo, packet []byte, proto string)
 	nonce, clientNonce := make([]byte, NonceSize), make([]byte, HalfNonceSize)
 	rand.Read(clientNonce)
 	copy(nonce, clientNonce)
-	minQuestionSize := ResponseOverhead + len(packet)
+	minQuestionSize := QueryOverhead + len(packet)
 	if proto == "udp" {
 		minQuestionSize = Max(proxy.questionSizeEstimator.MinQuestionSize(), minQuestionSize)
 	} else {
@@ -49,14 +52,21 @@ func (proxy *Proxy) Encrypt(serverInfo *ServerInfo, packet []byte, proto string)
 		rand.Read(xpad[:])
 		minQuestionSize += int(xpad[0])
 	}
-	paddedLength := Min(MaxDNSUDPPacketSize, (Max(minQuestionSize, ResponseOverhead)+63) & ^63)
-	if ResponseOverhead+len(packet)+1 > paddedLength {
+	paddedLength := Min(MaxDNSUDPPacketSize, (Max(minQuestionSize, QueryOverhead)+63) & ^63)
+	if QueryOverhead+len(packet)+1 > paddedLength {
 		err = errors.New("Question too large; cannot be padded")
 		return
 	}
 	encrypted = append(serverInfo.MagicQuery[:], proxy.proxyPublicKey[:]...)
 	encrypted = append(encrypted, nonce[:HalfNonceSize]...)
-	encrypted = xsecretbox.Seal(encrypted, nonce, pad(packet, paddedLength-ResponseOverhead), serverInfo.SharedKey[:])
+	padded := pad(packet, paddedLength-QueryOverhead)
+	if serverInfo.CryptoConstruction == XChacha20Poly1305 {
+		encrypted = xsecretbox.Seal(encrypted, nonce, padded, serverInfo.SharedKey[:])
+	} else {
+		var xsalsaNonce [24]byte
+		copy(xsalsaNonce[:], nonce)
+		encrypted = secretbox.Seal(encrypted, padded, &xsalsaNonce, &serverInfo.SharedKey)
+	}
 	return
 }
 
@@ -72,9 +82,21 @@ func (proxy *Proxy) Decrypt(serverInfo *ServerInfo, encrypted []byte, nonce []by
 	if !bytes.Equal(nonce[:HalfNonceSize], serverNonce[:HalfNonceSize]) {
 		return encrypted, errors.New("Unexpected nonce")
 	}
-	packet, err := xsecretbox.Open(nil, serverNonce, encrypted[responseHeaderLen:], serverInfo.SharedKey[:])
+	var packet []byte
+	var err error
+	if serverInfo.CryptoConstruction == XChacha20Poly1305 {
+		packet, err = xsecretbox.Open(nil, serverNonce, encrypted[responseHeaderLen:], serverInfo.SharedKey[:])
+	} else {
+		var xsalsaServerNonce [24]byte
+		copy(xsalsaServerNonce[:], serverNonce)
+		var ok bool
+		packet, ok = secretbox.Open(nil, encrypted[responseHeaderLen:], &xsalsaServerNonce, &serverInfo.SharedKey)
+		if !ok {
+			err = errors.New("Incorrect tag")
+		}
+	}
 	if err != nil {
-		return encrypted, errors.New("Incorrect tag")
+		return encrypted, err
 	}
 	packet, err = unpad(packet)
 	if err != nil || len(packet) < MinDNSPacketSize {

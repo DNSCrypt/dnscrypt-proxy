@@ -11,12 +11,13 @@ import (
 	"github.com/jedisct1/xsecretbox"
 	"github.com/miekg/dns"
 	"golang.org/x/crypto/ed25519"
+	"golang.org/x/crypto/nacl/box"
 )
 
 type CertInfo struct {
 	ServerPk           [32]byte
 	SharedKey          [32]byte
-	MagicQuery         [8]byte
+	MagicQuery         [ClientMagicLen]byte
 	CryptoConstruction CryptoConstruction
 }
 
@@ -40,15 +41,15 @@ func FetchCurrentCert(proxy *Proxy, proto string, pk ed25519.PublicKey, serverAd
 	for _, answerRr := range in.Answer {
 		binCert, err := packTxtString(strings.Join(answerRr.(*dns.TXT).Txt, ""))
 		if err != nil {
-			log.Print("Unable to unpack the certificate")
+			log.Printf("[%v] Unable to unpack the certificate\n", providerName)
 			continue
 		}
 		if len(binCert) < 124 {
-			log.Print("Certificate too short")
+			log.Printf("[%v] Certificate too short\n", providerName)
 			continue
 		}
 		if !bytes.Equal(binCert[:4], CertMagic[:4]) {
-			log.Print("Invalid cert magic")
+			log.Printf("[%v] Invalid cert magic\n", providerName)
 			continue
 		}
 		cryptoConstruction := CryptoConstruction(0)
@@ -58,47 +59,56 @@ func FetchCurrentCert(proxy *Proxy, proto string, pk ed25519.PublicKey, serverAd
 		case 0x0002:
 			cryptoConstruction = XChacha20Poly1305
 		default:
-			log.Print("Unsupported crypto construction")
+			log.Printf("[%v] Unsupported crypto construction\n", providerName)
 			continue
 		}
 		signature := binCert[8:72]
 		signed := binCert[72:]
 		if !ed25519.Verify(pk, signed, signature) {
-			log.Print("Incorrect signature")
+			log.Printf("[%v] Incorrect signature\n", providerName)
 			continue
 		}
 		serial := binary.BigEndian.Uint32(binCert[112:116])
 		tsBegin := binary.BigEndian.Uint32(binCert[116:120])
 		tsEnd := binary.BigEndian.Uint32(binCert[120:124])
 		if now > tsEnd || now < tsBegin {
-			log.Print("Certificate not valid at the current date")
+			log.Printf("[%v] Certificate not valid at the current date\n", providerName)
 			continue
 		}
 		if serial < highestSerial {
-			log.Print("Superseded by a previous certificate")
+			log.Printf("[%v] Superseded by a previous certificate\n", providerName)
 			continue
 		}
-		if serial == highestSerial && cryptoConstruction < certInfo.CryptoConstruction {
-			log.Print("Keeping the previous, preferred crypto construction")
-			continue
+		if serial == highestSerial {
+			if cryptoConstruction < certInfo.CryptoConstruction {
+				log.Printf("[%v] Keeping the previous, preferred crypto construction", providerName)
+				continue
+			} else {
+				log.Printf("[%v] Upgrading the construction from %v to %v\n", providerName, certInfo.CryptoConstruction, cryptoConstruction)
+			}
 		}
-		if cryptoConstruction != XChacha20Poly1305 {
-			log.Printf("Cryptographic construction %v not supported\n", cryptoConstruction)
+		if cryptoConstruction != XChacha20Poly1305 && cryptoConstruction != XSalsa20Poly1305 {
+			log.Printf("[%v] Cryptographic construction %v not supported\n", providerName, cryptoConstruction)
 			continue
 		}
 		var serverPk [32]byte
 		copy(serverPk[:], binCert[72:104])
-		sharedKey, err := xsecretbox.SharedKey(proxy.proxySecretKey, serverPk)
-		if err != nil {
-			log.Print("Weak public key")
-			continue
+		var sharedKey [32]byte
+		if cryptoConstruction == XChacha20Poly1305 {
+			sharedKey, err = xsecretbox.SharedKey(proxy.proxySecretKey, serverPk)
+			if err != nil {
+				log.Printf("[%v] Weak public key\n", providerName)
+				continue
+			}
+		} else {
+			box.Precompute(&sharedKey, &serverPk, &proxy.proxySecretKey)
 		}
 		certInfo.SharedKey = sharedKey
 		highestSerial = serial
 		certInfo.CryptoConstruction = cryptoConstruction
 		copy(certInfo.ServerPk[:], serverPk[:])
 		copy(certInfo.MagicQuery[:], binCert[104:112])
-		log.Printf("Valid cert found: %x\n", certInfo.ServerPk)
+		log.Printf("[%v] Valid cert found: %x\n", providerName, certInfo.ServerPk)
 	}
 	if certInfo.CryptoConstruction == UndefinedConstruction {
 		return certInfo, errors.New("No useable certificate found")

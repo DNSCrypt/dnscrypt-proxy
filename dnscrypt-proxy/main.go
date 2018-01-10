@@ -125,7 +125,6 @@ func (proxy *Proxy) exchangeWithUDPServer(serverInfo *ServerInfo, encryptedQuery
 	}
 	pc.SetDeadline(time.Now().Add(serverInfo.Timeout))
 	pc.Write(encryptedQuery)
-
 	encryptedResponse := make([]byte, MaxDNSPacketSize)
 	length, err := pc.Read(encryptedResponse)
 	pc.Close()
@@ -157,7 +156,7 @@ func (proxy *Proxy) exchangeWithTCPServer(serverInfo *ServerInfo, encryptedQuery
 }
 
 func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, serverProto string, query []byte, clientAddr *net.Addr, clientPc net.Conn) {
-	if len(query) < MinDNSPacketSize {
+	if len(query) < MinDNSPacketSize || serverInfo == nil {
 		return
 	}
 	clientProto := "udp"
@@ -177,6 +176,7 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, serverProto str
 		response, err = proxy.exchangeWithTCPServer(serverInfo, encryptedQuery, clientNonce)
 	}
 	if err != nil {
+		serverInfo.noticeFailure()
 		return
 	}
 	if clientAddr != nil {
@@ -190,11 +190,12 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, serverProto str
 		if HasTCFlag(response) {
 			proxy.questionSizeEstimator.blindAdjust()
 		} else {
-			proxy.questionSizeEstimator.adjust(len(response))
+			proxy.questionSizeEstimator.adjust(ResponseOverhead + len(response))
 		}
 	} else {
 		response, err = PrefixWithSize(response)
 		if err != nil {
+			serverInfo.noticeFailure()
 			return
 		}
 		clientPc.Write(response)
