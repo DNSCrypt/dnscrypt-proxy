@@ -216,7 +216,7 @@ func (plugin *PluginCacheResponse) Eval(pluginsState *PluginsState, msg *dns.Msg
 	}
 	cacheKey, err := computeCacheKey(pluginsState, msg)
 	if err != nil {
-		return nil
+		return err
 	}
 	ttl := getMinTTL(msg, 60, 86400, 60)
 	cachedResponse := CachedResponse{
