@@ -5,6 +5,7 @@ import:
 - package: github.com/VividCortex/ewma
   version: ^1.1.1
 - package: github.com/VividCortex/godaemon
+- package: github.com/hashicorp/golang-lru
 - package: github.com/jedisct1/xsecretbox
 - package: github.com/miekg/dns
   version: ^1.0.3
@@ -12,3 +13,5 @@ import:
   subpackages:
   - curve25519
   - ed25519
+  - nacl/box
+  - nacl/secretbox
