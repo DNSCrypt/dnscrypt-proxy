@@ -123,10 +123,10 @@ deploy:
     - dnscrypt-proxy-*.zip
   file_glob: true
   skip_cleanup: true
-  tags: true
   on:
     repo: jedisct1/dnscrypt-proxy
     condition: "${TRAVIS_GO_VERSION} == 1.9.2"
+    tags: true
 
 after_deploy:
   - ls -l dnscrypt-proxy-*.tar.gz
