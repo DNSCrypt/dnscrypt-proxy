@@ -226,7 +226,7 @@ func (plugin *PluginCacheResponse) Eval(pluginsState *PluginsState, msg *dns.Msg
 	if err != nil {
 		return err
 	}
-	ttl := getMinTTL(msg, 60, 86400, 60)
+	ttl := getMinTTL(msg, pluginsState.cacheMinTTL, pluginsState.cacheMaxTTL, pluginsState.cacheNegTTL)
 	cachedResponse := CachedResponse{
 		expiration: time.Now().Add(ttl),
 		msg:        *msg,
@@ -234,7 +234,7 @@ func (plugin *PluginCacheResponse) Eval(pluginsState *PluginsState, msg *dns.Msg
 	plugin.cachedResponses.Lock()
 	defer plugin.cachedResponses.Unlock()
 	if plugin.cachedResponses.cache == nil {
-		plugin.cachedResponses.cache, err = lru.NewARC(1000)
+		plugin.cachedResponses.cache, err = lru.NewARC(pluginsState.cacheSize)
 		if err != nil {
 			return err
 		}
@@ -276,7 +276,9 @@ func (plugin *PluginCache) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 		return nil
 	}
 	synth := cached.msg
-	synth.MsgHdr = msg.MsgHdr
+	synth.Id = msg.Id
+	synth.Response = true
+	synth.Compress = true
 	synth.Question = msg.Question
 	pluginsState.synthResponse = &synth
 	pluginsState.action = PluginsActionSynth
