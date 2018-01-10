@@ -4,10 +4,10 @@ import (
 	"crypto/sha512"
 	"encoding/binary"
 	"errors"
-	"math/rand"
 	"sync"
 	"time"
 
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/miekg/dns"
 )
 
@@ -191,7 +191,7 @@ type CachedResponse struct {
 
 type CachedResponses struct {
 	sync.RWMutex
-	cache map[[32]byte]CachedResponse
+	cache *lru.ARCCache
 }
 
 var cachedResponses CachedResponses
@@ -226,18 +226,12 @@ func (plugin *PluginCacheResponse) Eval(pluginsState *PluginsState, msg *dns.Msg
 	plugin.cachedResponses.Lock()
 	defer plugin.cachedResponses.Unlock()
 	if plugin.cachedResponses.cache == nil {
-		plugin.cachedResponses.cache = make(map[[32]byte]CachedResponse)
-	}
-	if len(plugin.cachedResponses.cache) > 1000 {
-		z := byte(rand.Uint32())
-		for k := range plugin.cachedResponses.cache {
-			delete(plugin.cachedResponses.cache, k)
-			if k[0] == z {
-				break
-			}
+		plugin.cachedResponses.cache, err = lru.NewARC(1000)
+		if err != nil {
+			return err
 		}
 	}
-	plugin.cachedResponses.cache[cacheKey] = cachedResponse
+	plugin.cachedResponses.cache.Add(cacheKey, cachedResponse)
 	return nil
 }
 
@@ -265,10 +259,11 @@ func (plugin *PluginCache) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 	if plugin.cachedResponses.cache == nil {
 		return nil
 	}
-	cached, ok := plugin.cachedResponses.cache[cacheKey]
+	cached_any, ok := plugin.cachedResponses.cache.Get(cacheKey)
 	if !ok {
 		return nil
 	}
+	cached := cached_any.(CachedResponse)
 	if time.Now().After(cached.expiration) {
 		return nil
 	}
