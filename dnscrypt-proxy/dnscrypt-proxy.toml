@@ -1,25 +1,50 @@
-#  dnscrypt-proxy configuration
 
-# List of servers to use
-# If this line is commented, all registered servers will be used
+####################################
+#                                  #
+#   dnscrypt-proxy configuration   #
+#                                  #
+####################################
+
+
+############## Global settings ##############
+
+## List of servers to use
+## If this line is commented, all registered servers will be used
+
 server_names = ["dnscrypt.org-fr"]
 
-# List of local addresses and ports to listen to. Can be IPv4 and/or IPv6.
+
+## List of local addresses and ports to listen to. Can be IPv4 and/or IPv6.
+
 listen_addresses = ["127.0.0.1:53", "[::1]:53"]
 
-# Run the server as a background process
+
+## Whether to the server as a background process
+## Do not set to true if you are using systemd.
+
 daemonize = false
 
-# Always use TCP to connect to upstream servers
+
+## Always use TCP to connect to upstream servers
+
 force_tcp = false
 
-# Timeout, in milliseconds
+
+## Timeout, in milliseconds
+
 timeout = 2500
 
-# Delay, in minutes, after which certificates are reloaded
+
+## Delay, in minutes, after which certificates are reloaded
+
 cert_refresh_delay = 30
 
-# Static list of available servers
+
+
+############## Servers ##############
+
+## Static list of available servers
+
 [servers]
   [servers."dnscrypt.org-fr"]
   provider_name = "2.dnscrypt-cert.fr.dnscrypt.org"

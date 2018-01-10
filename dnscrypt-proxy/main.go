@@ -7,6 +7,8 @@ import (
 	"net"
 	"time"
 
+	"github.com/VividCortex/godaemon"
+
 	"golang.org/x/crypto/curve25519"
 )
 
@@ -28,6 +30,9 @@ func main() {
 	proxy := Proxy{}
 	if err := ConfigLoad(&proxy, "dnscrypt-proxy.toml"); err != nil {
 		panic(err)
+	}
+	if proxy.daemonize {
+		godaemon.MakeDaemon(&godaemon.DaemonAttr{})
 	}
 	proxy.StartProxy()
 }
