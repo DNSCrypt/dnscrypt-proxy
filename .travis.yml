@@ -7,7 +7,6 @@ os:
 
 go:
 - 1.9.2
-- tip
 
 script:
   - echo $TRAVIS_GO_VERSION
