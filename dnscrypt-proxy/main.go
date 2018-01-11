@@ -5,7 +5,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/golang/glog"
+	"github.com/jedisct1/dlog"
 	"golang.org/x/crypto/curve25519"
 )
 
@@ -29,9 +29,10 @@ type Proxy struct {
 }
 
 func main() {
+	dlog.Init("dnscrypt-proxy", dlog.SeverityNotice)
 	proxy := Proxy{}
 	if err := ConfigLoad(&proxy, "dnscrypt-proxy.toml"); err != nil {
-		panic(err)
+		dlog.Fatal(err)
 	}
 	if proxy.daemonize {
 		Daemonize()
@@ -42,7 +43,7 @@ func main() {
 func (proxy *Proxy) StartProxy() {
 	proxy.questionSizeEstimator = NewQuestionSizeEstimator()
 	if _, err := rand.Read(proxy.proxySecretKey[:]); err != nil {
-		glog.Fatal(err)
+		dlog.Fatal(err)
 	}
 	curve25519.ScalarBaseMult(&proxy.proxyPublicKey, &proxy.proxySecretKey)
 	for _, registeredServer := range proxy.registeredServers {
@@ -51,19 +52,20 @@ func (proxy *Proxy) StartProxy() {
 	for _, listenAddrStr := range proxy.listenAddresses {
 		listenUDPAddr, err := net.ResolveUDPAddr("udp", listenAddrStr)
 		if err != nil {
-			glog.Fatal(err)
+			dlog.Fatal(err)
 		}
 		listenTCPAddr, err := net.ResolveTCPAddr("tcp", listenAddrStr)
 		if err != nil {
-			glog.Fatal(err)
+			dlog.Fatal(err)
 		}
 		if err := proxy.udpListener(listenUDPAddr); err != nil {
-			glog.Fatal(err)
+			dlog.Fatal(err)
 		}
 		if err := proxy.tcpListener(listenTCPAddr); err != nil {
-			glog.Fatal(err)
+			dlog.Fatal(err)
 		}
 	}
+	dlog.Notice("dnscrypt-proxy is ready")
 	for {
 		time.Sleep(proxy.certRefreshDelay)
 		proxy.serversInfo.refresh(proxy)
@@ -77,7 +79,7 @@ func (proxy *Proxy) udpListener(listenAddr *net.UDPAddr) error {
 	}
 	go func() {
 		defer clientPc.Close()
-		glog.Infof("Now listening to %v [UDP]", listenAddr)
+		dlog.Noticef("Now listening to %v [UDP]", listenAddr)
 		for {
 			buffer := make([]byte, MaxDNSPacketSize-1)
 			length, clientAddr, err := clientPc.ReadFrom(buffer)
@@ -100,7 +102,7 @@ func (proxy *Proxy) tcpListener(listenAddr *net.TCPAddr) error {
 	}
 	go func() {
 		defer acceptPc.Close()
-		glog.Infof("Now listening to %v [TCP]", listenAddr)
+		dlog.Noticef("Now listening to %v [TCP]", listenAddr)
 		for {
 			clientPc, err := acceptPc.Accept()
 			if err != nil {

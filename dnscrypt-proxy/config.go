@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/BurntSushi/toml"
-	"github.com/golang/glog"
+	"github.com/jedisct1/dlog"
 )
 
 type Config struct {
@@ -53,7 +53,6 @@ func ConfigLoad(proxy *Proxy, config_file string) error {
 	flag.Parse()
 	config := newConfig()
 	if _, err := toml.DecodeFile(*configFile, &config); err != nil {
-		glog.Error(err)
 		return err
 	}
 	proxy.timeout = time.Duration(config.Timeout) * time.Millisecond
@@ -89,7 +88,7 @@ func ConfigLoad(proxy *Proxy, config_file string) error {
 		var stamp ServerStamp
 		var err error
 		if len(serverConfig.Stamp) > 0 {
-			panic("Stamps are not implemented yet")
+			dlog.Fatal("Stamps are not implemented yet")
 		} else {
 			stamp, err = NewServerStampFromLegacy(serverConfig.Address, serverConfig.PublicKey, serverConfig.ProviderName)
 			if err != nil {

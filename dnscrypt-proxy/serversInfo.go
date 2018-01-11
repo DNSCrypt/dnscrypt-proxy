@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/VividCortex/ewma"
-	"github.com/golang/glog"
+	"github.com/jedisct1/dlog"
 	"golang.org/x/crypto/ed25519"
 )
 
@@ -76,7 +76,7 @@ func (serversInfo *ServersInfo) registerServer(proxy *Proxy, name string, stamp 
 }
 
 func (serversInfo *ServersInfo) refresh(proxy *Proxy) {
-	glog.Infof("Refreshing certificates")
+	dlog.Infof("Refreshing certificates")
 	serversInfo.RLock()
 	registeredServers := serversInfo.registeredServers
 	serversInfo.RUnlock()
@@ -107,7 +107,7 @@ func (serversInfo *ServersInfo) getOne() *ServerInfo {
 func (serversInfo *ServersInfo) fetchServerInfo(proxy *Proxy, name string, stamp ServerStamp) (ServerInfo, error) {
 	serverPk, err := hex.DecodeString(strings.Replace(stamp.serverPkStr, ":", "", -1))
 	if err != nil || len(serverPk) != ed25519.PublicKeySize {
-		glog.Fatal("Unsupported public key: [%v]", serverPk)
+		dlog.Fatalf("Unsupported public key: [%v]", serverPk)
 	}
 	certInfo, err := FetchCurrentCert(proxy, proxy.mainProto, serverPk, stamp.serverAddrStr, stamp.providerName)
 	if err != nil {
