@@ -1,0 +1,6 @@
+package: .
+import:
+- package: github.com/aead/chacha20
+  subpackages:
+  - chacha
+- package: github.com/aead/poly1305

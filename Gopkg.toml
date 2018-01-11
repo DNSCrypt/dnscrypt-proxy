@@ -1,0 +1,31 @@
+[[constraint]]
+  name = "github.com/BurntSushi/toml"
+  version = "~0.3.0"
+
+[[constraint]]
+  name = "github.com/VividCortex/ewma"
+  version = "~1.1.0"
+
+[[constraint]]
+  branch = "master"
+  name = "github.com/VividCortex/godaemon"
+
+[[constraint]]
+  branch = "master"
+  name = "github.com/hashicorp/golang-lru"
+
+[[constraint]]
+  branch = "master"
+  name = "github.com/jedisct1/dlog"
+
+[[constraint]]
+  branch = "master"
+  name = "github.com/jedisct1/xsecretbox"
+
+[[constraint]]
+  name = "github.com/miekg/dns"
+  version = "~1.0.0"
+
+[[constraint]]
+  branch = "master"
+  name = "golang.org/x/crypto"
