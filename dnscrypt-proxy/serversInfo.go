@@ -2,8 +2,6 @@ package main
 
 import (
 	"encoding/hex"
-	"fmt"
-	"log"
 	"math/rand"
 	"net"
 	"strings"
@@ -11,6 +9,7 @@ import (
 	"time"
 
 	"github.com/VividCortex/ewma"
+	"github.com/golang/glog"
 	"golang.org/x/crypto/ed25519"
 )
 
@@ -77,7 +76,7 @@ func (serversInfo *ServersInfo) registerServer(proxy *Proxy, name string, stamp 
 }
 
 func (serversInfo *ServersInfo) refresh(proxy *Proxy) {
-	fmt.Println("Refreshing certificates")
+	glog.Infof("Refreshing certificates")
 	serversInfo.RLock()
 	registeredServers := serversInfo.registeredServers
 	serversInfo.RUnlock()
@@ -108,7 +107,7 @@ func (serversInfo *ServersInfo) getOne() *ServerInfo {
 func (serversInfo *ServersInfo) fetchServerInfo(proxy *Proxy, name string, stamp ServerStamp) (ServerInfo, error) {
 	serverPk, err := hex.DecodeString(strings.Replace(stamp.serverPkStr, ":", "", -1))
 	if err != nil || len(serverPk) != ed25519.PublicKeySize {
-		log.Fatal("Invalid public key")
+		glog.Fatal("Unsupported public key: [%v]", serverPk)
 	}
 	certInfo, err := FetchCurrentCert(proxy, proxy.mainProto, serverPk, stamp.serverAddrStr, stamp.providerName)
 	if err != nil {

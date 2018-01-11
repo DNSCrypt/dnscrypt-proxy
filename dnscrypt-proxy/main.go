@@ -2,11 +2,10 @@ package main
 
 import (
 	"crypto/rand"
-	"fmt"
-	"log"
 	"net"
 	"time"
 
+	"github.com/golang/glog"
 	"golang.org/x/crypto/curve25519"
 )
 
@@ -30,7 +29,6 @@ type Proxy struct {
 }
 
 func main() {
-	log.SetFlags(0)
 	proxy := Proxy{}
 	if err := ConfigLoad(&proxy, "dnscrypt-proxy.toml"); err != nil {
 		panic(err)
@@ -44,7 +42,7 @@ func main() {
 func (proxy *Proxy) StartProxy() {
 	proxy.questionSizeEstimator = NewQuestionSizeEstimator()
 	if _, err := rand.Read(proxy.proxySecretKey[:]); err != nil {
-		log.Fatal(err)
+		glog.Fatal(err)
 	}
 	curve25519.ScalarBaseMult(&proxy.proxyPublicKey, &proxy.proxySecretKey)
 	for _, registeredServer := range proxy.registeredServers {
@@ -53,17 +51,17 @@ func (proxy *Proxy) StartProxy() {
 	for _, listenAddrStr := range proxy.listenAddresses {
 		listenUDPAddr, err := net.ResolveUDPAddr("udp", listenAddrStr)
 		if err != nil {
-			log.Fatal(err)
+			glog.Fatal(err)
 		}
 		listenTCPAddr, err := net.ResolveTCPAddr("tcp", listenAddrStr)
 		if err != nil {
-			log.Fatal(err)
+			glog.Fatal(err)
 		}
 		if err := proxy.udpListener(listenUDPAddr); err != nil {
-			log.Fatal(err)
+			glog.Fatal(err)
 		}
 		if err := proxy.tcpListener(listenTCPAddr); err != nil {
-			log.Fatal(err)
+			glog.Fatal(err)
 		}
 	}
 	for {
@@ -79,7 +77,7 @@ func (proxy *Proxy) udpListener(listenAddr *net.UDPAddr) error {
 	}
 	go func() {
 		defer clientPc.Close()
-		fmt.Printf("Now listening to %v [UDP]\n", listenAddr)
+		glog.Infof("Now listening to %v [UDP]", listenAddr)
 		for {
 			buffer := make([]byte, MaxDNSPacketSize-1)
 			length, clientAddr, err := clientPc.ReadFrom(buffer)
@@ -102,7 +100,7 @@ func (proxy *Proxy) tcpListener(listenAddr *net.TCPAddr) error {
 	}
 	go func() {
 		defer acceptPc.Close()
-		fmt.Printf("Now listening to %v [TCP]\n", listenAddr)
+		glog.Infof("Now listening to %v [TCP]", listenAddr)
 		for {
 			clientPc, err := acceptPc.Accept()
 			if err != nil {

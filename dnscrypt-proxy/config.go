@@ -4,10 +4,10 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/BurntSushi/toml"
+	"github.com/golang/glog"
 )
 
 type Config struct {
@@ -53,7 +53,7 @@ func ConfigLoad(proxy *Proxy, config_file string) error {
 	flag.Parse()
 	config := newConfig()
 	if _, err := toml.DecodeFile(*configFile, &config); err != nil {
-		log.Println(err)
+		glog.Error(err)
 		return err
 	}
 	proxy.timeout = time.Duration(config.Timeout) * time.Millisecond
