@@ -2,7 +2,7 @@
 
 # ![dnscrypt-proxy 2](https://raw.github.com/jedisct1/dnscrypt-proxy/master/logo.png?2)
 
-A modern client implementation of the DNSCrypt v2 protocol.
+A modern client implementation of the DNSCrypt protocol.
 
 ## Current status/features
 
