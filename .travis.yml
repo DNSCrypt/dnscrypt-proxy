@@ -3,15 +3,13 @@ sudo: false
 language: go
 
 os:
- - linux
+  - linux
 
 go:
-- 1.9.2
+  - 1.9.2
 
 script:
   - echo $TRAVIS_GO_VERSION
-  - go get -v github.com/Masterminds/glide
-  - glide install
   - cd dnscrypt-proxy
 
   - go clean
@@ -87,14 +85,14 @@ script:
   - env GOOS=linux GOARCH=386 go build
   - mkdir linux-i386
   - ln dnscrypt-proxy linux-i386/
-  - ln dnscrypt-proxy.toml linux-i386/  
+  - ln dnscrypt-proxy.toml linux-i386/
   - tar czpvf dnscrypt-proxy-linux_i386-${TRAVIS_TAG:-dev}.tar.gz linux-i386
 
   - go clean
   - env GOOS=linux GOARCH=amd64 go build
   - mkdir linux-x86_64
   - ln dnscrypt-proxy linux-x86_64/
-  - ln dnscrypt-proxy.toml linux-x86_64/  
+  - ln dnscrypt-proxy.toml linux-x86_64/
   - tar czpvf dnscrypt-proxy-linux_x86_64-${TRAVIS_TAG:-dev}.tar.gz linux-x86_64
 
   - go clean
@@ -108,7 +106,7 @@ script:
   - env GOOS=darwin GOARCH=amd64 go build
   - mkdir macos
   - ln dnscrypt-proxy macos/
-  - ln dnscrypt-proxy.toml macos/  
+  - ln dnscrypt-proxy.toml macos/
   - tar czpvf dnscrypt-proxy-macos-${TRAVIS_TAG:-dev}.tar.gz macos
 
   - ls -l dnscrypt-proxy-*.tar.gz dnscrypt-proxy-*.zip

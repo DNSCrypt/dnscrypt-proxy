@@ -3,9 +3,6 @@
 #*#
 *.swp
 
-# Vendor directory
-vendor
-
 # Binaries for programs and plugins
 *.exe
 *.dll
@@ -18,10 +15,6 @@ vendor
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out
 
-# Project-local glide cache, RE: https://github.com/Masterminds/glide/issues/736
-.glide/
-
 # Binaries
 dnscrypt-proxy/dnscrypt-proxy2
 dnscrypt-proxy/dnscrypt-proxy
-
