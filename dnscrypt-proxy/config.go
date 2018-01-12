@@ -49,7 +49,7 @@ type ServerConfig struct {
 }
 
 func ConfigLoad(proxy *Proxy, config_file string) error {
-	configFile := flag.String("config", "/etc/dnscrypt-proxy/dnscrypt-proxy.toml", "path to the configuration file")
+	configFile := flag.String("config", "dnscrypt-proxy.toml", "path to the configuration file")
 	flag.Parse()
 	config := newConfig()
 	if _, err := toml.DecodeFile(*configFile, &config); err != nil {
