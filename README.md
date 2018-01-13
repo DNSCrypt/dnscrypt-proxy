@@ -43,7 +43,7 @@ A modern client implementation of the DNSCrypt protocol.
 * DNS-over-HTTP2
 * Some real documentation
 
-## Download
+## Pre-built binaries
 
 Up-to-date, pre-built binaries are available for:
 
@@ -60,5 +60,3 @@ Up-to-date, pre-built binaries are available for:
 * OpenBSD/x86_64
 * Windows
 * Windows 64 bit
-
-
