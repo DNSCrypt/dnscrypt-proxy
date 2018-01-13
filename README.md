@@ -59,4 +59,4 @@ Up-to-date, pre-built binaries are available for:
 * Windows
 * Windows 64 bit
 
-## [Download dnscrypt-proxy 2.0.0alpha here](https://github.com/jedisct1/dnscrypt-proxy/releases/latest)
+## [Download dnscrypt-proxy 2.0.0alpha5 here](https://github.com/jedisct1/dnscrypt-proxy/releases/latest)
