@@ -28,11 +28,11 @@ A modern client implementation of the DNSCrypt protocol.
 | Multiple local sockets                          | Impossible                                                                   | Of course. IPv4, IPv6, as many as you like              |
 | Automatically picks the fastest servers         | Lol, it supports only one at a time, anyway                                  | Yes, out of the box                                     |
 | Official, always up-to-date pre-built libraries | None                                                                         | Yes, for many platforms. See below.                     |
+| Automatically fetch and verifies servers lists  | No. Requires custom scripts, cron jobs and dependencies (minisign)           | Yes, built-in, including signature verification         |
 
 ## Planned features
 
 * New super simple (to copy&paste), extensible format for servers parameters: "stamps"
-* Automatic updates
 * Filtering with regexes
 * Offline responses
 * Local DNSSEC validation
