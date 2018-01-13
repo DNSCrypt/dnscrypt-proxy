@@ -32,7 +32,7 @@ type RegisteredServer struct {
 
 func NewServerStampFromLegacy(serverAddrStr string, serverPkStr string, providerName string) (ServerStamp, error) {
 	if net.ParseIP(serverAddrStr) != nil {
-		serverAddrStr = fmt.Sprintf("%s:d", serverAddrStr, DefaultPort)
+		serverAddrStr = fmt.Sprintf("%s:%d", serverAddrStr, DefaultPort)
 	}
 	return ServerStamp{
 		serverAddrStr: serverAddrStr,
