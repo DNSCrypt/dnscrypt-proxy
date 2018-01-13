@@ -43,6 +43,8 @@ A modern client implementation of the DNSCrypt protocol.
 
 ## Download
 
+### [Download dnscrypt-proxy 2.0.0alpha5 here](https://github.com/jedisct1/dnscrypt-proxy/releases/latest)
+
 Up-to-date, pre-built binaries are available for:
 
 * Dragonfly BSD
@@ -59,4 +61,4 @@ Up-to-date, pre-built binaries are available for:
 * Windows
 * Windows 64 bit
 
-## [Download dnscrypt-proxy 2.0.0alpha5 here](https://github.com/jedisct1/dnscrypt-proxy/releases/latest)
+
