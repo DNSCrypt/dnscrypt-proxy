@@ -4,7 +4,7 @@
 
 A modern client implementation of the DNSCrypt protocol.
 
-## [Download dnscrypt-proxy 2.0.0alpha5 here](https://github.com/jedisct1/dnscrypt-proxy/releases/latest)
+## [dnscrypt-proxy 2.0.0alpha5 is available for download!](https://github.com/jedisct1/dnscrypt-proxy/releases/latest)
 
 ## Current status/features
 
