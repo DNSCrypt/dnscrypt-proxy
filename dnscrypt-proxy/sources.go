@@ -44,10 +44,11 @@ func fetchWithCache(url string, cacheFile string, refreshDelay time.Duration) (i
 	}
 	if usableCache {
 		bin, err = fetchFromCache(cacheFile)
-		if err != nil {
-			return
+		if err == nil {
+			cached = true
 		}
-	} else {
+	}
+	if !cached {
 		var resp *http.Response
 		dlog.Infof("Loading source information from URL [%s]", url)
 		resp, err = http.Get(url)
@@ -69,7 +70,6 @@ func fetchWithCache(url string, cacheFile string, refreshDelay time.Duration) (i
 				return
 			}
 		}
-		cached = true
 	}
 	in = string(bin)
 	return
