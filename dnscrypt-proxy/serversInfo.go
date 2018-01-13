@@ -104,7 +104,7 @@ func (serversInfo *ServersInfo) getOne() *ServerInfo {
 	if serversInfo.inner[candidate].rtt.Value() < serversInfo.inner[0].rtt.Value() {
 		serversInfo.inner[candidate], serversInfo.inner[0] = serversInfo.inner[0], serversInfo.inner[candidate]
 	}
-	candidate = Min(serversCount, 2)
+	candidate = rand.Intn(Max(Min(serversCount, 2), len(serversInfo.inner)))
 	serverInfo := &serversInfo.inner[candidate]
 	return serverInfo
 }
