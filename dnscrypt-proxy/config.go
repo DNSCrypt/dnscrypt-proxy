@@ -24,6 +24,7 @@ type Config struct {
 	CacheMinTTL      uint32                  `toml:"cache_min_ttl"`
 	CacheMaxTTL      uint32                  `toml:"cache_max_ttl"`
 	ServersConfig    map[string]ServerConfig `toml:"servers"`
+	SourcesConfig    map[string]SourceConfig `toml:"sources"`
 }
 
 func newConfig() Config {
@@ -46,6 +47,14 @@ type ServerConfig struct {
 	PublicKey    string `toml:"public_key"`
 	NoLog        bool   `toml:"no_log"`
 	DNSSEC       bool   `toml:"dnssec"`
+}
+
+type SourceConfig struct {
+	URL            string
+	MinisignKeyStr string `toml:"minisign_key"`
+	CacheFile      string `toml:"cache_file"`
+	FormatStr      string `toml:"format"`
+	RefreshDelay   int    `toml:"refresh_delay"`
 }
 
 func ConfigLoad(proxy *Proxy, config_file string) error {
@@ -77,8 +86,33 @@ func ConfigLoad(proxy *Proxy, config_file string) error {
 			config.ServerNames = append(config.ServerNames, serverName)
 		}
 	}
-	if len(config.ServerNames) == 0 {
-		return errors.New("No servers configured")
+	for sourceName, source := range config.SourcesConfig {
+		if source.URL == "" {
+			return fmt.Errorf("Missing URL for source [%s]", sourceName)
+		}
+		if source.MinisignKeyStr == "" {
+			return fmt.Errorf("Missing Minisign key for source [%s]", sourceName)
+		}
+		if source.CacheFile == "" {
+			return fmt.Errorf("Missing cache file for source [%s]", sourceName)
+		}
+		if source.FormatStr == "" {
+			return fmt.Errorf("Missing format for source [%s]", sourceName)
+		}
+		if source.RefreshDelay <= 0 {
+			source.RefreshDelay = 24
+		}
+		source, err := NewSource(source.URL, source.MinisignKeyStr, source.CacheFile, source.FormatStr, time.Duration(source.RefreshDelay)*time.Hour)
+		if err != nil {
+			dlog.Criticalf("Unable use source [%s]: [%s]", sourceName, err)
+			continue
+		}
+		registeredServers, err := source.Parse()
+		if err != nil {
+			dlog.Criticalf("Unable use source [%s]: [%s]", sourceName, err)
+			continue
+		}
+		proxy.registeredServers = append(proxy.registeredServers, registeredServers...)
 	}
 	for _, serverName := range config.ServerNames {
 		serverConfig, ok := config.ServersConfig[serverName]
@@ -97,6 +131,9 @@ func ConfigLoad(proxy *Proxy, config_file string) error {
 		}
 		proxy.registeredServers = append(proxy.registeredServers,
 			RegisteredServer{name: serverName, stamp: stamp})
+	}
+	if len(proxy.registeredServers) == 0 {
+		return errors.New("No servers configured")
 	}
 	return nil
 }

@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/hex"
+	"fmt"
 	"math/rand"
 	"net"
 	"strings"
@@ -15,6 +16,7 @@ import (
 
 const (
 	RTTEwmaDecay = 10.0
+	DefaultPort  = 443
 )
 
 type ServerStamp struct {
@@ -29,6 +31,9 @@ type RegisteredServer struct {
 }
 
 func NewServerStampFromLegacy(serverAddrStr string, serverPkStr string, providerName string) (ServerStamp, error) {
+	if strings.Contains(serverAddrStr, "]") && !strings.Contains(serverAddrStr, ":") {
+		serverAddrStr = fmt.Sprintf("%s:d", serverAddrStr, DefaultPort)
+	}
 	return ServerStamp{
 		serverAddrStr: serverAddrStr,
 		serverPkStr:   serverPkStr,

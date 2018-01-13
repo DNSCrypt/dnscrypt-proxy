@@ -33,6 +33,12 @@
 
 [[projects]]
   branch = "master"
+  name = "github.com/dchest/safefile"
+  packages = ["."]
+  revision = "855e8d98f1852d48dde521e0522408d1fe7e836a"
+
+[[projects]]
+  branch = "master"
   name = "github.com/hashicorp/golang-lru"
   packages = [
     ".",
@@ -45,6 +51,12 @@
   name = "github.com/jedisct1/dlog"
   packages = ["."]
   revision = "8c253f4161c5b23a5fedd1d1ccee28d7ea312c6c"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/jedisct1/go-minisign"
+  packages = ["."]
+  revision = "f404c079ea5f0d4669fe617c553651f75167494e"
 
 [[projects]]
   branch = "master"
@@ -87,6 +99,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "03812a1a34033c2d39a6812a33e222c54aaa2f91d01e09072d71b7bd38dceaa3"
+  inputs-digest = "9946fe30a0b048dbe5b8a10b28e8bffd7ec6dac56380db345cbd868862fe7f08"
   solver-name = "gps-cdcl"
   solver-version = 1

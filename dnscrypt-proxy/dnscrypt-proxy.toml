@@ -62,7 +62,7 @@ cache_size = 256
 
 ## Minimum TTL for cached entries
 
-cache_min_ttl = 60
+cache_min_ttl = 600
 
 
 ## Maxmimum TTL for cached entries
@@ -76,6 +76,15 @@ cache_neg_ttl = 60
 
 
 ############## Servers ##############
+
+## Server sources
+[sources]
+  [sources."github-csv"]
+  url = "https://raw.githubusercontent.com/DNSCrypt/dnscrypt-resolvers/master/v1/dnscrypt-resolvers.csv"
+  minisign_key = "RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3"
+  cache_file = "/tmp/dnscrypt-resolvers.csv"
+  format = "v1"
+  refresh_delay = 24
 
 ## Static list of available servers
 
