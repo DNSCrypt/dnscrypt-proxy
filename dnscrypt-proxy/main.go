@@ -3,6 +3,8 @@ package main
 import (
 	"crypto/rand"
 	"net"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/jedisct1/dlog"
@@ -30,6 +32,7 @@ type Proxy struct {
 
 func main() {
 	dlog.Init("dnscrypt-proxy", dlog.SeverityNotice)
+	cdLocal()
 	proxy := Proxy{}
 	if err := ConfigLoad(&proxy, "dnscrypt-proxy.toml"); err != nil {
 		dlog.Fatal(err)
@@ -38,6 +41,16 @@ func main() {
 		Daemonize()
 	}
 	proxy.StartProxy()
+}
+
+func cdLocal() {
+	ex, err := os.Executable()
+	if err != nil {
+		dlog.Critical(err)
+		return
+	}
+	exPath := filepath.Dir(ex)
+	os.Chdir(exPath)
 }
 
 func (proxy *Proxy) StartProxy() {
