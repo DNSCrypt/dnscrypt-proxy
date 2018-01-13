@@ -108,7 +108,7 @@ func FetchCurrentCert(proxy *Proxy, proto string, pk ed25519.PublicKey, serverAd
 		certInfo.CryptoConstruction = cryptoConstruction
 		copy(certInfo.ServerPk[:], serverPk[:])
 		copy(certInfo.MagicQuery[:], binCert[104:112])
-		dlog.Noticef("[%v] Valid cert found: [%x]", providerName, certInfo.ServerPk)
+		dlog.Noticef("[%v] Valid cert found", providerName)
 	}
 	if certInfo.CryptoConstruction == UndefinedConstruction {
 		return certInfo, errors.New("No useable certificate found")
