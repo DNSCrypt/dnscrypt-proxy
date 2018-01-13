@@ -77,16 +77,19 @@ cache_neg_ttl = 60
 
 ############## Servers ##############
 
-## Server sources
+## Remote lists of available servers
+## Recommended: change the cache_file location to an absolute path
+
 [sources]
   [sources."github-csv"]
   url = "https://raw.githubusercontent.com/DNSCrypt/dnscrypt-resolvers/master/v1/dnscrypt-resolvers.csv"
   minisign_key = "RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3"
-  cache_file = "/tmp/dnscrypt-resolvers.csv"
+  cache_file = "dnscrypt-resolvers.csv"
   format = "v1"
   refresh_delay = 24
 
-## Static list of available servers
+
+## Local, static list of available servers
 
 [servers]
   [servers."dnscrypt.org-fr"]
