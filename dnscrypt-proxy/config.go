@@ -4,6 +4,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/BurntSushi/toml"
@@ -112,12 +113,18 @@ func ConfigLoad(proxy *Proxy, config_file string) error {
 			dlog.Criticalf("Unable use source [%s]: [%s]", sourceName, err)
 			continue
 		}
-		proxy.registeredServers = append(proxy.registeredServers, registeredServers...)
+		for _, registeredServer := range registeredServers {
+			if !includesName(config.ServerNames, registeredServer.name) {
+				continue
+			}
+			dlog.Infof("Adding [%s] to the set of wanted resolvers", registeredServer.name)
+			proxy.registeredServers = append(proxy.registeredServers, registeredServer)
+		}
 	}
 	for _, serverName := range config.ServerNames {
 		serverConfig, ok := config.ServersConfig[serverName]
 		if !ok {
-			return fmt.Errorf("No definitions found for server [%v]", serverName)
+			continue
 		}
 		var stamp ServerStamp
 		var err error
@@ -136,4 +143,13 @@ func ConfigLoad(proxy *Proxy, config_file string) error {
 		return errors.New("No servers configured")
 	}
 	return nil
+}
+
+func includesName(names []string, name string) bool {
+	for _, found := range names {
+		if strings.EqualFold(found, name) {
+			return true
+		}
+	}
+	return false
 }
