@@ -31,7 +31,7 @@ type RegisteredServer struct {
 }
 
 func NewServerStampFromLegacy(serverAddrStr string, serverPkStr string, providerName string) (ServerStamp, error) {
-	if strings.Contains(serverAddrStr, "]") && !strings.Contains(serverAddrStr, ":") {
+	if net.ParseIP(serverAddrStr) != nil {
 		serverAddrStr = fmt.Sprintf("%s:d", serverAddrStr, DefaultPort)
 	}
 	return ServerStamp{
