@@ -101,7 +101,7 @@ func (proxy *Proxy) udpListener(listenAddr *net.UDPAddr) error {
 			}
 			packet := buffer[:length]
 			go func() {
-				proxy.processIncomingQuery(proxy.serversInfo.getOne(), proxy.mainProto, packet, &clientAddr, clientPc)
+				proxy.processIncomingQuery(proxy.serversInfo.getOne(), "udp", proxy.mainProto, packet, &clientAddr, clientPc)
 			}()
 		}
 	}()
@@ -128,7 +128,7 @@ func (proxy *Proxy) tcpListener(listenAddr *net.TCPAddr) error {
 				if err != nil || len(packet) < MinDNSPacketSize {
 					return
 				}
-				proxy.processIncomingQuery(proxy.serversInfo.getOne(), "tcp", packet, nil, clientPc)
+				proxy.processIncomingQuery(proxy.serversInfo.getOne(), "tcp", "tcp", packet, nil, clientPc)
 			}()
 		}
 	}()
@@ -172,13 +172,9 @@ func (proxy *Proxy) exchangeWithTCPServer(serverInfo *ServerInfo, encryptedQuery
 	return proxy.Decrypt(serverInfo, encryptedResponse, clientNonce)
 }
 
-func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, serverProto string, query []byte, clientAddr *net.Addr, clientPc net.Conn) {
+func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto string, serverProto string, query []byte, clientAddr *net.Addr, clientPc net.Conn) {
 	if len(query) < MinDNSPacketSize || serverInfo == nil {
 		return
-	}
-	clientProto := "udp"
-	if clientAddr == nil {
-		clientProto = "tcp"
 	}
 	pluginsState := NewPluginsState(proxy, clientProto)
 	query, _ = pluginsState.ApplyQueryPlugins(query)
@@ -209,7 +205,7 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, serverProto str
 		}
 		response, _ = pluginsState.ApplyResponsePlugins(response)
 	}
-	if clientAddr != nil {
+	if clientProto == "udp" {
 		if len(response) > MaxDNSUDPPacketSize {
 			response, err = TruncatedResponse(response)
 			if err != nil {
