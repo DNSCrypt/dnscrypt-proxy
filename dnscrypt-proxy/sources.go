@@ -37,7 +37,7 @@ func fetchWithCache(url string, cacheFile string, refreshDelay time.Duration) (i
 	cached, usableCache := false, false
 	fi, err := os.Stat(cacheFile)
 	if err == nil {
-		elapsed := time.Now().Sub(fi.ModTime())
+		elapsed := time.Since(fi.ModTime())
 		if elapsed < refreshDelay && elapsed >= 0 {
 			usableCache = true
 		}
