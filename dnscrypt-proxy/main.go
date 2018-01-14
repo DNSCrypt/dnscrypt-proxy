@@ -128,7 +128,8 @@ func (proxy *Proxy) tcpListener(listenAddr *net.TCPAddr) error {
 				if err != nil || len(packet) < MinDNSPacketSize {
 					return
 				}
-				proxy.processIncomingQuery(proxy.serversInfo.getOne(), "tcp", "tcp", packet, nil, clientPc)
+				clientAddr := clientPc.RemoteAddr()
+				proxy.processIncomingQuery(proxy.serversInfo.getOne(), "tcp", "tcp", packet, &clientAddr, clientPc)
 			}()
 		}
 	}()
@@ -176,7 +177,7 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 	if len(query) < MinDNSPacketSize || serverInfo == nil {
 		return
 	}
-	pluginsState := NewPluginsState(proxy, clientProto)
+	pluginsState := NewPluginsState(proxy, clientProto, clientAddr)
 	query, _ = pluginsState.ApplyQueryPlugins(query)
 	var response []byte
 	var err error

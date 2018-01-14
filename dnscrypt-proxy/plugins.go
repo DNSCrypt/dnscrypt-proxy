@@ -4,6 +4,7 @@ import (
 	"crypto/sha512"
 	"encoding/binary"
 	"errors"
+	"net"
 	"sync"
 	"time"
 
@@ -26,7 +27,8 @@ type PluginsState struct {
 	action                 PluginsAction
 	originalMaxPayloadSize int
 	maxPayloadSize         int
-	proto                  string
+	clientProto            string
+	clientAddr             *net.Addr
 	queryPlugins           *[]Plugin
 	responsePlugins        *[]Plugin
 	synthResponse          *dns.Msg
@@ -43,7 +45,7 @@ type Plugin interface {
 	Eval(pluginsState *PluginsState, msg *dns.Msg) error
 }
 
-func NewPluginsState(proxy *Proxy, proto string) PluginsState {
+func NewPluginsState(proxy *Proxy, clientProto string, clientAddr *net.Addr) PluginsState {
 	queryPlugins := &[]Plugin{}
 	if proxy.pluginBlockIPv6 {
 		*queryPlugins = append(*queryPlugins, Plugin(new(PluginBlockIPv6)))
@@ -63,7 +65,8 @@ func NewPluginsState(proxy *Proxy, proto string) PluginsState {
 		maxPayloadSize:  MaxDNSUDPPacketSize - ResponseOverhead,
 		queryPlugins:    queryPlugins,
 		responsePlugins: responsePlugins,
-		proto:           proto,
+		clientProto:     clientProto,
+		clientAddr:      clientAddr,
 		cacheSize:       proxy.cacheSize,
 		cacheNegTTL:     proxy.cacheNegTTL,
 		cacheMinTTL:     proxy.cacheMinTTL,
