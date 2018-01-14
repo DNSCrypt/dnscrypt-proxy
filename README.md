@@ -23,7 +23,7 @@ A modern client implementation of the DNSCrypt protocol.
 | AAAA blocking for IPv4-only networks               | Yes                                                                          | Yes                                                     |
 | DNS caching                                        | Yes, with ugly hacks for DNSSEC support                                      | Yes, without ugly hacks                                 |
 | EDNS support                                       | Broken with custom records                                                   | Yes                                                     |
-| Asynchronous filters                               | Lol, no filters block everything                                             | Of course, thanks to Go                                 |
+| Asynchronous filters                               | Lol, no, filters block everything                                            | Of course, thanks to Go                                 |
 | Session-local storage for extensions               | Impossible                                                                   | Yes                                                     |
 | Multicore support                                  | Nonexistent                                                                  | Yes, thanks to Go                                       |
 | Efficient padding of queries                       | Couldn't be any worse                                                        | Yes                                                     |
