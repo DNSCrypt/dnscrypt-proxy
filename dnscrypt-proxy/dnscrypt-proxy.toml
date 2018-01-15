@@ -11,7 +11,7 @@
 ## List of servers to use
 ## If this line is commented, all registered servers will be used
 
-server_names = ["dnscrypt.org-fr", "adguard-dns", "fvz-anyone"]
+server_names = ["dnscrypt.org-fr"]
 
 
 ## List of local addresses and ports to listen to. Can be IPv4 and/or IPv6.
@@ -46,6 +46,18 @@ cert_refresh_delay = 30
 ## This makes things faster when there is no IPv6 connectivity
 
 block_ipv6 = false
+
+
+############## Query logging ##############
+
+## Log client queries to a file
+
+[query_log]
+### Full path to the query log file
+file = "/tmp/query.log"
+
+### Query log format (currently supported: tsv)
+format = "tsv"
 
 
 ############## DNS Cache ##############

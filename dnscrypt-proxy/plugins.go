@@ -4,7 +4,10 @@ import (
 	"crypto/sha512"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"net"
+	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -47,6 +50,9 @@ type PluginsState struct {
 
 func InitPluginsGlobals(pluginsGlobals *PluginsGlobals, proxy *Proxy) error {
 	queryPlugins := &[]Plugin{}
+	if len(proxy.queryLogFile) != 0 {
+		*queryPlugins = append(*queryPlugins, Plugin(new(PluginQueryLog)))
+	}
 	if proxy.pluginBlockIPv6 {
 		*queryPlugins = append(*queryPlugins, Plugin(new(PluginBlockIPv6)))
 	}
@@ -184,7 +190,7 @@ func (plugin *PluginBlockIPv6) Name() string {
 }
 
 func (plugin *PluginBlockIPv6) Description() string {
-	return "Immediately return a synthetic response to AAAA queries"
+	return "Immediately return a synthetic response to AAAA queries."
 }
 
 func (plugin *PluginBlockIPv6) Init(proxy *Proxy) error {
@@ -219,17 +225,28 @@ func (plugin *PluginBlockIPv6) Eval(pluginsState *PluginsState, msg *dns.Msg) er
 
 // -------- querylog plugin --------
 
-type PluginQueryLog struct{}
+type PluginQueryLog struct {
+	sync.Mutex
+	outFd *os.File
+}
 
 func (plugin *PluginQueryLog) Name() string {
 	return "querylog"
 }
 
 func (plugin *PluginQueryLog) Description() string {
-	return "Log DNS queries"
+	return "Log DNS queries."
 }
 
 func (plugin *PluginQueryLog) Init(proxy *Proxy) error {
+	plugin.Lock()
+	defer plugin.Unlock()
+	outFd, err := os.OpenFile(proxy.queryLogFile, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644)
+	if err != nil {
+		return err
+	}
+	plugin.outFd = outFd
+
 	return nil
 }
 
@@ -242,6 +259,36 @@ func (plugin *PluginQueryLog) Reload() error {
 }
 
 func (plugin *PluginQueryLog) Eval(pluginsState *PluginsState, msg *dns.Msg) error {
+	questions := msg.Question
+	if len(questions) == 0 {
+		return nil
+	}
+	question := questions[0]
+	now := time.Now()
+	year, month, day := now.Date()
+	hour, minute, second := now.Clock()
+	tsStr := fmt.Sprintf("[%d-%02d-%02d %02d:%02d:%02d]", year, int(month), day, hour, minute, second)
+	var clientIPStr string
+	if pluginsState.clientProto == "udp" {
+		clientIPStr = (*pluginsState.clientAddr).(*net.UDPAddr).IP.String()
+	} else {
+		clientIPStr = (*pluginsState.clientAddr).(*net.TCPAddr).IP.String()
+	}
+	qName := question.Name
+	if len(qName) > 1 && strings.HasSuffix(qName, ".") {
+		qName = qName[0 : len(qName)-1]
+	}
+	qType, ok := dns.TypeToString[question.Qtype]
+	if !ok {
+		qType = string(qType)
+	}
+	line := fmt.Sprintf("%s\t%s\t%s\t%s\n", tsStr, clientIPStr, qName, qType)
+	plugin.Lock()
+	if plugin.outFd == nil {
+		return errors.New("Log file not initialized")
+	}
+	plugin.outFd.WriteString(line)
+	defer plugin.Unlock()
 	return nil
 }
 

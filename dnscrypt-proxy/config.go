@@ -24,6 +24,7 @@ type Config struct {
 	CacheNegTTL      uint32                  `toml:"cache_neg_ttl"`
 	CacheMinTTL      uint32                  `toml:"cache_min_ttl"`
 	CacheMaxTTL      uint32                  `toml:"cache_max_ttl"`
+	QueryLog         QueryLogConfig          `toml:"query_log"`
 	ServersConfig    map[string]ServerConfig `toml:"servers"`
 	SourcesConfig    map[string]SourceConfig `toml:"sources"`
 }
@@ -58,6 +59,11 @@ type SourceConfig struct {
 	RefreshDelay   int    `toml:"refresh_delay"`
 }
 
+type QueryLogConfig struct {
+	File   string
+	Format string
+}
+
 func ConfigLoad(proxy *Proxy, config_file string) error {
 	configFile := flag.String("config", "dnscrypt-proxy.toml", "path to the configuration file")
 	flag.Parse()
@@ -82,6 +88,16 @@ func ConfigLoad(proxy *Proxy, config_file string) error {
 	proxy.cacheNegTTL = config.CacheNegTTL
 	proxy.cacheMinTTL = config.CacheMinTTL
 	proxy.cacheMaxTTL = config.CacheMaxTTL
+	if len(config.QueryLog.Format) == 0 {
+		config.QueryLog.Format = "tsv"
+	} else {
+		config.QueryLog.Format = strings.ToLower(config.QueryLog.Format)
+	}
+	if config.QueryLog.Format != "tsv" {
+		return errors.New("Unsupported query log format")
+	}
+	proxy.queryLogFile = config.QueryLog.File
+	proxy.queryLogFormat = config.QueryLog.Format
 	if len(config.ServerNames) == 0 {
 		for serverName := range config.ServersConfig {
 			config.ServerNames = append(config.ServerNames, serverName)

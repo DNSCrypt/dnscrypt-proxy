@@ -28,6 +28,8 @@ type Proxy struct {
 	cacheNegTTL           uint32
 	cacheMinTTL           uint32
 	cacheMaxTTL           uint32
+	queryLogFile          string
+	queryLogFormat        string
 	pluginsGlobals        PluginsGlobals
 }
 
