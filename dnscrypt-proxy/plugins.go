@@ -31,8 +31,6 @@ type PluginsGlobals struct {
 	responsePlugins *[]Plugin
 }
 
-var pluginsGlobals PluginsGlobals
-
 type PluginsState struct {
 	sessionData            map[string]interface{}
 	action                 PluginsAction

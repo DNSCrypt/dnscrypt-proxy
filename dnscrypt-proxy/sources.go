@@ -59,15 +59,16 @@ func fetchWithCache(url string, cacheFile string, refreshDelay time.Duration) (i
 			if err != nil {
 				return
 			}
-		}
-		defer resp.Body.Close()
-		bin, err = ioutil.ReadAll(resp.Body)
-		if err != nil {
-			if usableCache {
-				bin, err = fetchFromCache(cacheFile)
-			}
+		} else {
+			bin, err = ioutil.ReadAll(resp.Body)
+			resp.Body.Close()
 			if err != nil {
-				return
+				if usableCache {
+					bin, err = fetchFromCache(cacheFile)
+				}
+				if err != nil {
+					return
+				}
 			}
 		}
 	}
