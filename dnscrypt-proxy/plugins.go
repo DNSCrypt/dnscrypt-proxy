@@ -22,6 +22,14 @@ const (
 	PluginsActionSynth   = 4
 )
 
+type PluginsGlobals struct {
+	sync.RWMutex
+	queryPlugins    *[]Plugin
+	responsePlugins *[]Plugin
+}
+
+var pluginsGlobals PluginsGlobals
+
 type PluginsState struct {
 	sessionData            map[string]interface{}
 	action                 PluginsAction
@@ -29,8 +37,6 @@ type PluginsState struct {
 	maxPayloadSize         int
 	clientProto            string
 	clientAddr             *net.Addr
-	queryPlugins           *[]Plugin
-	responsePlugins        *[]Plugin
 	synthResponse          *dns.Msg
 	dnssec                 bool
 	cacheSize              int
@@ -39,13 +45,7 @@ type PluginsState struct {
 	cacheMaxTTL            uint32
 }
 
-type Plugin interface {
-	Name() string
-	Description() string
-	Eval(pluginsState *PluginsState, msg *dns.Msg) error
-}
-
-func NewPluginsState(proxy *Proxy, clientProto string, clientAddr *net.Addr) PluginsState {
+func InitPluginsGlobals(pluginsGlobals *PluginsGlobals, proxy *Proxy) error {
 	queryPlugins := &[]Plugin{}
 	if proxy.pluginBlockIPv6 {
 		*queryPlugins = append(*queryPlugins, Plugin(new(PluginBlockIPv6)))
@@ -60,24 +60,48 @@ func NewPluginsState(proxy *Proxy, clientProto string, clientAddr *net.Addr) Plu
 		*responsePlugins = append(*responsePlugins, Plugin(new(PluginCacheResponse)))
 	}
 
+	for _, plugin := range *queryPlugins {
+		if err := plugin.Init(proxy); err != nil {
+			return err
+		}
+	}
+	for _, plugin := range *responsePlugins {
+		if err := plugin.Init(proxy); err != nil {
+			return err
+		}
+	}
+
+	(*pluginsGlobals).queryPlugins = queryPlugins
+	(*pluginsGlobals).responsePlugins = responsePlugins
+	return nil
+}
+
+type Plugin interface {
+	Name() string
+	Description() string
+	Init(proxy *Proxy) error
+	Drop() error
+	Reload() error
+	Eval(pluginsState *PluginsState, msg *dns.Msg) error
+}
+
+func NewPluginsState(proxy *Proxy, clientProto string, clientAddr *net.Addr) PluginsState {
 	return PluginsState{
-		action:          PluginsActionForward,
-		maxPayloadSize:  MaxDNSUDPPacketSize - ResponseOverhead,
-		queryPlugins:    queryPlugins,
-		responsePlugins: responsePlugins,
-		clientProto:     clientProto,
-		clientAddr:      clientAddr,
-		cacheSize:       proxy.cacheSize,
-		cacheNegTTL:     proxy.cacheNegTTL,
-		cacheMinTTL:     proxy.cacheMinTTL,
-		cacheMaxTTL:     proxy.cacheMaxTTL,
+		action:         PluginsActionForward,
+		maxPayloadSize: MaxDNSUDPPacketSize - ResponseOverhead,
+		clientProto:    clientProto,
+		clientAddr:     clientAddr,
+		cacheSize:      proxy.cacheSize,
+		cacheNegTTL:    proxy.cacheNegTTL,
+		cacheMinTTL:    proxy.cacheMinTTL,
+		cacheMaxTTL:    proxy.cacheMaxTTL,
 	}
 }
 
 // ---------------- Query plugins ----------------
 
-func (pluginsState *PluginsState) ApplyQueryPlugins(packet []byte) ([]byte, error) {
-	if len(*pluginsState.queryPlugins) == 0 {
+func (pluginsState *PluginsState) ApplyQueryPlugins(pluginsGlobals *PluginsGlobals, packet []byte) ([]byte, error) {
+	if len(*pluginsGlobals.queryPlugins) == 0 {
 		return packet, nil
 	}
 	pluginsState.action = PluginsActionForward
@@ -85,8 +109,10 @@ func (pluginsState *PluginsState) ApplyQueryPlugins(packet []byte) ([]byte, erro
 	if err := msg.Unpack(packet); err != nil {
 		return packet, err
 	}
-	for _, plugin := range *pluginsState.queryPlugins {
+	pluginsGlobals.RLock()
+	for _, plugin := range *pluginsGlobals.queryPlugins {
 		if ret := plugin.Eval(pluginsState, &msg); ret != nil {
+			pluginsGlobals.RUnlock()
 			pluginsState.action = PluginsActionDrop
 			return packet, ret
 		}
@@ -94,6 +120,7 @@ func (pluginsState *PluginsState) ApplyQueryPlugins(packet []byte) ([]byte, erro
 			break
 		}
 	}
+	pluginsGlobals.RUnlock()
 	packet2, err := msg.PackBuffer(packet)
 	if err != nil {
 		return packet, err
@@ -111,6 +138,18 @@ func (plugin *PluginGetSetPayloadSize) Name() string {
 
 func (plugin *PluginGetSetPayloadSize) Description() string {
 	return "Adjusts the maximum payload size advertised in queries sent to upstream servers."
+}
+
+func (plugin *PluginGetSetPayloadSize) Init(proxy *Proxy) error {
+	return nil
+}
+
+func (plugin *PluginGetSetPayloadSize) Drop() error {
+	return nil
+}
+
+func (plugin *PluginGetSetPayloadSize) Reload() error {
+	return nil
 }
 
 func (plugin *PluginGetSetPayloadSize) Eval(pluginsState *PluginsState, msg *dns.Msg) error {
@@ -148,6 +187,18 @@ func (plugin *PluginBlockIPv6) Description() string {
 	return "Immediately return a synthetic response to AAAA queries"
 }
 
+func (plugin *PluginBlockIPv6) Init(proxy *Proxy) error {
+	return nil
+}
+
+func (plugin *PluginBlockIPv6) Drop() error {
+	return nil
+}
+
+func (plugin *PluginBlockIPv6) Reload() error {
+	return nil
+}
+
 func (plugin *PluginBlockIPv6) Eval(pluginsState *PluginsState, msg *dns.Msg) error {
 	questions := msg.Question
 	if len(questions) != 1 {
@@ -166,10 +217,38 @@ func (plugin *PluginBlockIPv6) Eval(pluginsState *PluginsState, msg *dns.Msg) er
 	return nil
 }
 
+// -------- querylog plugin --------
+
+type PluginQueryLog struct{}
+
+func (plugin *PluginQueryLog) Name() string {
+	return "querylog"
+}
+
+func (plugin *PluginQueryLog) Description() string {
+	return "Log DNS queries"
+}
+
+func (plugin *PluginQueryLog) Init(proxy *Proxy) error {
+	return nil
+}
+
+func (plugin *PluginQueryLog) Drop() error {
+	return nil
+}
+
+func (plugin *PluginQueryLog) Reload() error {
+	return nil
+}
+
+func (plugin *PluginQueryLog) Eval(pluginsState *PluginsState, msg *dns.Msg) error {
+	return nil
+}
+
 // ---------------- Response plugins ----------------
 
-func (pluginsState *PluginsState) ApplyResponsePlugins(packet []byte) ([]byte, error) {
-	if len(*pluginsState.responsePlugins) == 0 {
+func (pluginsState *PluginsState) ApplyResponsePlugins(pluginsGlobals *PluginsGlobals, packet []byte) ([]byte, error) {
+	if len(*pluginsGlobals.responsePlugins) == 0 {
 		return packet, nil
 	}
 	pluginsState.action = PluginsActionForward
@@ -177,8 +256,10 @@ func (pluginsState *PluginsState) ApplyResponsePlugins(packet []byte) ([]byte, e
 	if err := msg.Unpack(packet); err != nil {
 		return packet, err
 	}
-	for _, plugin := range *pluginsState.responsePlugins {
+	pluginsGlobals.RLock()
+	for _, plugin := range *pluginsGlobals.responsePlugins {
 		if ret := plugin.Eval(pluginsState, &msg); ret != nil {
+			pluginsGlobals.RUnlock()
 			pluginsState.action = PluginsActionDrop
 			return packet, ret
 		}
@@ -186,6 +267,7 @@ func (pluginsState *PluginsState) ApplyResponsePlugins(packet []byte) ([]byte, e
 			break
 		}
 	}
+	pluginsGlobals.RUnlock()
 	packet2, err := msg.PackBuffer(packet)
 	if err != nil {
 		return packet, err
@@ -217,6 +299,18 @@ func (plugin *PluginCacheResponse) Name() string {
 
 func (plugin *PluginCacheResponse) Description() string {
 	return "DNS cache (writer)."
+}
+
+func (plugin *PluginCacheResponse) Init(proxy *Proxy) error {
+	return nil
+}
+
+func (plugin *PluginCacheResponse) Drop() error {
+	return nil
+}
+
+func (plugin *PluginCacheResponse) Reload() error {
+	return nil
 }
 
 func (plugin *PluginCacheResponse) Eval(pluginsState *PluginsState, msg *dns.Msg) error {
@@ -255,6 +349,18 @@ func (plugin *PluginCache) Name() string {
 
 func (plugin *PluginCache) Description() string {
 	return "DNS cache (reader)."
+}
+
+func (plugin *PluginCache) Init(proxy *Proxy) error {
+	return nil
+}
+
+func (plugin *PluginCache) Drop() error {
+	return nil
+}
+
+func (plugin *PluginCache) Reload() error {
+	return nil
 }
 
 func (plugin *PluginCache) Eval(pluginsState *PluginsState, msg *dns.Msg) error {

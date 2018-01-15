@@ -28,6 +28,7 @@ type Proxy struct {
 	cacheNegTTL           uint32
 	cacheMinTTL           uint32
 	cacheMaxTTL           uint32
+	pluginsGlobals        PluginsGlobals
 }
 
 func main() {
@@ -35,6 +36,9 @@ func main() {
 	cdLocal()
 	proxy := Proxy{}
 	if err := ConfigLoad(&proxy, "dnscrypt-proxy.toml"); err != nil {
+		dlog.Fatal(err)
+	}
+	if err := InitPluginsGlobals(&proxy.pluginsGlobals, &proxy); err != nil {
 		dlog.Fatal(err)
 	}
 	if proxy.daemonize {
@@ -178,7 +182,7 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 		return
 	}
 	pluginsState := NewPluginsState(proxy, clientProto, clientAddr)
-	query, _ = pluginsState.ApplyQueryPlugins(query)
+	query, _ = pluginsState.ApplyQueryPlugins(&proxy.pluginsGlobals, query)
 	var response []byte
 	var err error
 	if pluginsState.action != PluginsActionForward {
@@ -204,7 +208,7 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 			serverInfo.noticeFailure(proxy)
 			return
 		}
-		response, _ = pluginsState.ApplyResponsePlugins(response)
+		response, _ = pluginsState.ApplyResponsePlugins(&proxy.pluginsGlobals, response)
 	}
 	if clientProto == "udp" {
 		if len(response) > MaxDNSUDPPacketSize {
