@@ -56,7 +56,7 @@ block_ipv6 = false
 ### Full path to the query log file
 file = "/tmp/query.log"
 
-### Query log format (currently supported: tsv)
+### Query log format (currently supported: tsv and ltsv)
 format = "tsv"
 
 

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	lru "github.com/hashicorp/golang-lru"
+	"github.com/jedisct1/dlog"
 	"github.com/miekg/dns"
 )
 
@@ -225,7 +226,8 @@ func (plugin *PluginBlockIPv6) Eval(pluginsState *PluginsState, msg *dns.Msg) er
 
 type PluginQueryLog struct {
 	sync.Mutex
-	outFd *os.File
+	outFd  *os.File
+	format string
 }
 
 func (plugin *PluginQueryLog) Name() string {
@@ -244,6 +246,7 @@ func (plugin *PluginQueryLog) Init(proxy *Proxy) error {
 		return err
 	}
 	plugin.outFd = outFd
+	plugin.format = proxy.queryLogFormat
 
 	return nil
 }
@@ -262,10 +265,6 @@ func (plugin *PluginQueryLog) Eval(pluginsState *PluginsState, msg *dns.Msg) err
 		return nil
 	}
 	question := questions[0]
-	now := time.Now()
-	year, month, day := now.Date()
-	hour, minute, second := now.Clock()
-	tsStr := fmt.Sprintf("[%d-%02d-%02d %02d:%02d:%02d]", year, int(month), day, hour, minute, second)
 	var clientIPStr string
 	if pluginsState.clientProto == "udp" {
 		clientIPStr = (*pluginsState.clientAddr).(*net.UDPAddr).IP.String()
@@ -280,7 +279,19 @@ func (plugin *PluginQueryLog) Eval(pluginsState *PluginsState, msg *dns.Msg) err
 	if !ok {
 		qType = string(qType)
 	}
-	line := fmt.Sprintf("%s\t%s\t%s\t%s\n", tsStr, clientIPStr, qName, qType)
+	var line string
+	if plugin.format == "tsv" {
+		now := time.Now()
+		year, month, day := now.Date()
+		hour, minute, second := now.Clock()
+		tsStr := fmt.Sprintf("[%d-%02d-%02d %02d:%02d:%02d]", year, int(month), day, hour, minute, second)
+		line = fmt.Sprintf("%s\t%s\t%s\t%s\n", tsStr, clientIPStr, qName, qType)
+	} else if plugin.format == "ltsv" {
+		line = fmt.Sprintf("time:%d\thost:%s\tmessage:%s\ttype:%s\n",
+			time.Now().Unix(), clientIPStr, qName, qType)
+	} else {
+		dlog.Fatalf("Unexpected log format: [%s]", plugin.format)
+	}
 	plugin.Lock()
 	if plugin.outFd == nil {
 		return errors.New("Log file not initialized")

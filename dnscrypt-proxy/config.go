@@ -93,7 +93,7 @@ func ConfigLoad(proxy *Proxy, config_file string) error {
 	} else {
 		config.QueryLog.Format = strings.ToLower(config.QueryLog.Format)
 	}
-	if config.QueryLog.Format != "tsv" {
+	if config.QueryLog.Format != "tsv" && config.QueryLog.Format != "ltsv" {
 		return errors.New("Unsupported query log format")
 	}
 	proxy.queryLogFile = config.QueryLog.File
