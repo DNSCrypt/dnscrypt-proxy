@@ -53,6 +53,7 @@ type ServerInfo struct {
 	TCPAddr            *net.TCPAddr
 	lastActionTS       time.Time
 	rtt                ewma.MovingAverage
+	initialRtt         int
 }
 
 type ServersInfo struct {
@@ -106,6 +107,21 @@ func (serversInfo *ServersInfo) refresh(proxy *Proxy) (int, error) {
 			liveServers++
 		}
 	}
+	serversInfo.Lock()
+	inner := serversInfo.inner
+	innerLen := len(inner)
+	for i := 0; i < innerLen; i++ {
+		for j := i + 1; j < innerLen; j++ {
+			if inner[j].initialRtt < inner[i].initialRtt {
+				inner[j], inner[i] = inner[i], inner[j]
+			}
+		}
+	}
+	serversInfo.inner = inner
+	if innerLen > 1 {
+		dlog.Noticef("Server with the lowest initial latency: %s (rtt: %dms)", inner[0].Name, inner[0].initialRtt)
+	}
+	serversInfo.Unlock()
 	return liveServers, err
 }
 
@@ -140,7 +156,7 @@ func (serversInfo *ServersInfo) fetchServerInfo(proxy *Proxy, name string, stamp
 	if err != nil || len(serverPk) != ed25519.PublicKeySize {
 		dlog.Fatalf("Unsupported public key: [%v]", serverPk)
 	}
-	certInfo, err := FetchCurrentCert(proxy, proxy.mainProto, serverPk, stamp.serverAddrStr, stamp.providerName)
+	certInfo, rtt, err := FetchCurrentCert(proxy, proxy.mainProto, serverPk, stamp.serverAddrStr, stamp.providerName)
 	if err != nil {
 		return ServerInfo{}, err
 	}
@@ -161,6 +177,7 @@ func (serversInfo *ServersInfo) fetchServerInfo(proxy *Proxy, name string, stamp
 		Timeout:            proxy.timeout,
 		UDPAddr:            remoteUDPAddr,
 		TCPAddr:            remoteTCPAddr,
+		initialRtt:         rtt,
 	}
 	return serverInfo, nil
 }

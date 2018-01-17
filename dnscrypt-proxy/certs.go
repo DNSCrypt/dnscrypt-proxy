@@ -21,9 +21,9 @@ type CertInfo struct {
 	CryptoConstruction CryptoConstruction
 }
 
-func FetchCurrentCert(proxy *Proxy, proto string, pk ed25519.PublicKey, serverAddress string, providerName string) (CertInfo, error) {
+func FetchCurrentCert(proxy *Proxy, proto string, pk ed25519.PublicKey, serverAddress string, providerName string) (CertInfo, int, error) {
 	if len(pk) != ed25519.PublicKeySize {
-		return CertInfo{}, errors.New("Invalid public key length")
+		return CertInfo{}, 0, errors.New("Invalid public key length")
 	}
 	if !strings.HasSuffix(providerName, ".") {
 		providerName = providerName + "."
@@ -31,9 +31,9 @@ func FetchCurrentCert(proxy *Proxy, proto string, pk ed25519.PublicKey, serverAd
 	query := new(dns.Msg)
 	query.SetQuestion(providerName, dns.TypeTXT)
 	client := dns.Client{Net: proto, UDPSize: uint16(MaxDNSUDPPacketSize)}
-	in, _, err := client.Exchange(query, serverAddress)
+	in, rtt, err := client.Exchange(query, serverAddress)
 	if err != nil {
-		return CertInfo{}, err
+		return CertInfo{}, 0, err
 	}
 	now := uint32(time.Now().Unix())
 	certInfo := CertInfo{CryptoConstruction: UndefinedConstruction}
@@ -108,12 +108,12 @@ func FetchCurrentCert(proxy *Proxy, proto string, pk ed25519.PublicKey, serverAd
 		certInfo.CryptoConstruction = cryptoConstruction
 		copy(certInfo.ServerPk[:], serverPk[:])
 		copy(certInfo.MagicQuery[:], binCert[104:112])
-		dlog.Noticef("[%v] Valid cert (crypto version %d) found", providerName, cryptoConstruction)
+		dlog.Noticef("[%v] Valid cert (crypto version %d) found - rtt: %dms", providerName, cryptoConstruction, rtt.Nanoseconds()/1000000)
 	}
 	if certInfo.CryptoConstruction == UndefinedConstruction {
-		return certInfo, errors.New("No useable certificate found")
+		return certInfo, 0, errors.New("No useable certificate found")
 	}
-	return certInfo, nil
+	return certInfo, int(rtt.Nanoseconds() / 1000000), nil
 }
 
 func isDigit(b byte) bool { return b >= '0' && b <= '9' }
