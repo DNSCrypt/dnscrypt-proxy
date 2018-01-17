@@ -14,7 +14,7 @@
 ## List of servers to use
 ## If this line is commented, all registered servers will be used
 
-server_names = ["dnscrypt.org-fr"]
+# server_names = ["dnscrypt.org-fr"]
 
 
 ## List of local addresses and ports to listen to. Can be IPv4 and/or IPv6.

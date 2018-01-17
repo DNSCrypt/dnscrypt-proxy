@@ -125,11 +125,6 @@ func ConfigLoad(proxy *Proxy, svcFlag *string, config_file string) error {
 	proxy.blockNameLogFile = config.BlockName.LogFile
 
 	proxy.forwardFile = config.ForwardFile
-	if len(config.ServerNames) == 0 {
-		for serverName := range config.ServersConfig {
-			config.ServerNames = append(config.ServerNames, serverName)
-		}
-	}
 	for sourceName, source := range config.SourcesConfig {
 		if source.URL == "" {
 			return fmt.Errorf("Missing URL for source [%s]", sourceName)
@@ -157,11 +152,16 @@ func ConfigLoad(proxy *Proxy, svcFlag *string, config_file string) error {
 			continue
 		}
 		for _, registeredServer := range registeredServers {
-			if !includesName(config.ServerNames, registeredServer.name) {
+			if len(config.ServerNames) > 0 && !includesName(config.ServerNames, registeredServer.name) {
 				continue
 			}
 			dlog.Infof("Adding [%s] to the set of wanted resolvers", registeredServer.name)
 			proxy.registeredServers = append(proxy.registeredServers, registeredServer)
+		}
+	}
+	if len(config.ServerNames) == 0 {
+		for serverName := range config.ServersConfig {
+			config.ServerNames = append(config.ServerNames, serverName)
 		}
 	}
 	for _, serverName := range config.ServerNames {
