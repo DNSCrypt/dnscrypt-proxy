@@ -2,12 +2,15 @@ package main
 
 import (
 	"crypto/rand"
+	"log"
 	"net"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/jedisct1/dlog"
+	"github.com/judwhite/go-svc/svc"
 	"golang.org/x/crypto/curve25519"
 )
 
@@ -35,9 +38,26 @@ type Proxy struct {
 	pluginsGlobals        PluginsGlobals
 }
 
+type App struct {
+	wg   sync.WaitGroup
+	quit chan struct{}
+}
+
 func main() {
 	dlog.Init("dnscrypt-proxy", dlog.SeverityNotice)
 	cdLocal()
+	app := &App{}
+	if err := svc.Run(app); err != nil {
+		dlog.Fatal(err)
+	}
+}
+
+func (app *App) Init(env svc.Environment) error {
+	log.Printf("is win service? %v\n", env.IsWindowsService())
+	return nil
+}
+
+func (app *App) Start() error {
 	proxy := Proxy{}
 	if err := ConfigLoad(&proxy, "dnscrypt-proxy.toml"); err != nil {
 		dlog.Fatal(err)
@@ -48,17 +68,23 @@ func main() {
 	if proxy.daemonize {
 		Daemonize()
 	}
-	proxy.StartProxy()
+	app.quit = make(chan struct{})
+	app.wg.Add(1)
+	go func() {
+		proxy.StartProxy()
+		<-app.quit
+		dlog.Notice("Quit signal received...")
+		app.wg.Done()
+	}()
+	return nil
 }
 
-func cdLocal() {
-	ex, err := os.Executable()
-	if err != nil {
-		dlog.Critical(err)
-		return
-	}
-	exPath := filepath.Dir(ex)
-	os.Chdir(exPath)
+func (app *App) Stop() error {
+	dlog.Notice("Stopping...")
+	close(app.quit)
+	app.wg.Wait()
+	dlog.Notice("Stopped.")
+	return nil
 }
 
 func (proxy *Proxy) StartProxy() {
@@ -87,10 +113,12 @@ func (proxy *Proxy) StartProxy() {
 		}
 	}
 	dlog.Notice("dnscrypt-proxy is ready")
-	for {
-		time.Sleep(proxy.certRefreshDelay)
-		proxy.serversInfo.refresh(proxy)
-	}
+	go func() {
+		for {
+			time.Sleep(proxy.certRefreshDelay)
+			proxy.serversInfo.refresh(proxy)
+		}
+	}()
 }
 
 func (proxy *Proxy) udpListener(listenAddr *net.UDPAddr) error {
@@ -239,4 +267,14 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 		clientPc.Write(response)
 	}
 	serverInfo.noticeSuccess(proxy)
+}
+
+func cdLocal() {
+	ex, err := os.Executable()
+	if err != nil {
+		dlog.Critical(err)
+		return
+	}
+	exPath := filepath.Dir(ex)
+	os.Chdir(exPath)
 }

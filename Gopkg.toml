@@ -41,3 +41,7 @@
 [[constraint]]
   branch = "master"
   name = "github.com/hashicorp/go-immutable-radix"
+
+[[constraint]]
+  name = "github.com/judwhite/go-svc"
+  version = "1.0.0"

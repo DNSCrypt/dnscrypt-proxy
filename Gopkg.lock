@@ -71,6 +71,12 @@
   revision = "13d65f1d301904c28ff6c3256169cc60dd99c9dd"
 
 [[projects]]
+  name = "github.com/judwhite/go-svc"
+  packages = ["svc"]
+  revision = "63c12402f579f0bdf022653c821a1aa5d7544f01"
+  version = "v1.0.0"
+
+[[projects]]
   name = "github.com/miekg/dns"
   packages = ["."]
   revision = "5ec25f2a5044291b6c8abf43ed8a201da241e69e"
@@ -102,9 +108,18 @@
   ]
   revision = "5ccada7d0a7ba9aeb5d3aca8d3501b4c2a509fec"
 
+[[projects]]
+  branch = "master"
+  name = "golang.org/x/sys"
+  packages = [
+    "windows",
+    "windows/svc"
+  ]
+  revision = "fff93fa7cd278d84afc205751523809c464168ab"
+
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "01e41ba3f8bb51f155fbca27baa1f94d4bc8e8d21d094b531941d78e01945fe2"
+  inputs-digest = "f55cf27bd0cdf3a812cf059cadae3be13f9760e19b311628b76498ab4e5c2d58"
   solver-name = "gps-cdcl"
   solver-version = 1
