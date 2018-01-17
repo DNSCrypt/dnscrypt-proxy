@@ -4,7 +4,7 @@
 
 A modern client implementation of the [DNSCrypt](https://github.com/DNSCrypt/dnscrypt-protocol/blob/master/DNSCRYPT-V2-PROTOCOL.txt) protocol.
 
-## [dnscrypt-proxy 2.0.0alpha10 is available for download!](https://github.com/jedisct1/dnscrypt-proxy/releases/latest)
+## [dnscrypt-proxy 2.0.0beta1 is available for download!](https://github.com/jedisct1/dnscrypt-proxy/releases/latest)
 
 ## Installation
 
@@ -34,7 +34,7 @@ Other commands include `stop`, `restart` (useful after a configuration change) a
 
 ## Current status/features
 
-The current 2.0.0 alpha version includes all the major features from dnscrypt-proxy 1.9.5 (support for dnscrypt v2, synthetic IPv6 responses, logging, blocking, forwarding and caching), with improved reliability, flexbility, usability and performance.
+The current 2.0.0 beta version includes all the major features from dnscrypt-proxy 1.9.5 (support for dnscrypt v2, synthetic IPv6 responses, logging, blocking, forwarding and caching), with improved reliability, flexbility, usability and performance.
 
 | Features                                                    | dnscrypt-proxy 1.x                                                           | dnscrypt-proxy 2.x                                                                                            |
 | ----------------------------------------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
@@ -70,10 +70,9 @@ The current 2.0.0 alpha version includes all the major features from dnscrypt-pr
 * Offline responses
 * Local DNSSEC validation
 * Flexible logging
-* Windows support that doesn't suck
 * [DNS-over-HTTPS (DoH)](https://datatracker.ietf.org/wg/doh/about/), the successor to DNS-over-TLS
 * Support for the V1 plugin API
-* Some real documentation
+* Real documentation
 
 ## Pre-built binaries
 
