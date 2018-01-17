@@ -20,7 +20,7 @@ import (
 type PluginBlockType int
 
 const (
-	PluginBlockTypeNone = iota
+	PluginBlockTypeNone PluginBlockType = iota
 	PluginBlockTypePrefix
 	PluginBlockTypeSuffix
 	PluginBlockTypeSubstring
@@ -87,9 +87,7 @@ func (plugin *PluginBlockName) Init(proxy *Proxy) error {
 			if leadingStar {
 				line = line[1:]
 			}
-			if strings.HasPrefix(line, ".") {
-				line = line[1:]
-			}
+			line = strings.TrimPrefix(line, ".")
 		}
 		if len(line) == 0 {
 			dlog.Errorf("Syntax error in block rule at line %d", 1+lineNo)
