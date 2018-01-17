@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"io/ioutil"
 	"path/filepath"
 	"strings"
@@ -54,23 +53,22 @@ func (plugin *PluginBlockName) Init(proxy *Proxy) error {
 		blockType := PluginBlockTypeNone
 		if isGlobCandidate(line) {
 			blockType = PluginBlockTypePattern
-			fmt.Println(line)
 			_, err := filepath.Match(line, "example.com")
 			if len(line) < 2 || err != nil {
-				dlog.Errorf("Syntax error in block rules at line %d", lineNo)
+				dlog.Errorf("Syntax error in block rules at line %d", 1+lineNo)
 				continue
 			}
 		} else if leadingStar && trailingStar {
 			blockType = PluginBlockTypeSubstring
 			if len(line) < 3 {
-				dlog.Errorf("Syntax error in block rules at line %d", lineNo)
+				dlog.Errorf("Syntax error in block rules at line %d", 1+lineNo)
 				continue
 			}
 			line = line[1 : len(line)-1]
 		} else if trailingStar {
 			blockType = PluginBlockTypePrefix
 			if len(line) < 2 {
-				dlog.Errorf("Syntax error in block rules at line %d", lineNo)
+				dlog.Errorf("Syntax error in block rules at line %d", 1+lineNo)
 				continue
 			}
 			line = line[:len(line)-1]
@@ -84,7 +82,7 @@ func (plugin *PluginBlockName) Init(proxy *Proxy) error {
 			}
 		}
 		if len(line) == 0 {
-			dlog.Errorf("Syntax error in block rule at line %d", lineNo)
+			dlog.Errorf("Syntax error in block rule at line %d", 1+lineNo)
 			continue
 		}
 		line = strings.ToLower(line)

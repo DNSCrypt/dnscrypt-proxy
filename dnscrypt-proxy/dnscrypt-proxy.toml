@@ -48,28 +48,12 @@ cert_refresh_delay = 30
 block_ipv6 = false
 
 
-############## Query logging ##############
+############## Route queries for specific domains to a dedicated set of servers ##############
+# Example map entries (one entry per line):
+# example.com: 9.9.9.9
+# example.net: 9.9.9.9,8.8.8.8
 
-## Log client queries to a file
-
-[query_log]
-### Full path to the query log file
-# file = "query.log"
-
-### Query log format (currently supported: tsv and ltsv)
-format = "tsv"
-
-
-############## Pattern-based blocking (blacklists) ##############
-# Blacklists are made of one pattern per line. Example of valid patterns:
-#   example.com
-#   *sex*
-#   ads.*
-#   ads*.example.*
-#   ads*.example[0-9]*.com
-[block_name]
-## Full path to the file of blocking rules
-file = "blacklist.txt"
+forwarding_rules = "forwarding-rules.txt"
 
 
 ############## DNS Cache ##############
@@ -97,6 +81,30 @@ cache_max_ttl = 86400
 ## TTL for negatively cached entries
 
 cache_neg_ttl = 60
+
+
+############## Query logging ##############
+# Log client queries to a file
+
+[query_log]
+### Full path to the query log file
+# file = "query.log"
+
+### Query log format (currently supported: tsv and ltsv)
+format = "tsv"
+
+
+############## Pattern-based blocking (blacklists) ##############
+# Blacklists are made of one pattern per line. Example of valid patterns:
+#   example.com
+#   *sex*
+#   ads.*
+#   ads*.example.*
+#   ads*.example[0-9]*.com
+
+[block_name]
+## Full path to the file of blocking rules
+file = "blacklist.txt"
 
 
 ############## Servers ##############

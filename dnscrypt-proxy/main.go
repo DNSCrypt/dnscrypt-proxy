@@ -31,6 +31,7 @@ type Proxy struct {
 	queryLogFile          string
 	queryLogFormat        string
 	blockNameFile         string
+	forwardFile           string
 	pluginsGlobals        PluginsGlobals
 }
 

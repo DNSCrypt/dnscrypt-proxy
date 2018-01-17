@@ -136,7 +136,7 @@ func (source *Source) Parse() ([]RegisteredServer, error) {
 			continue
 		}
 		if len(record) < 14 {
-			return registeredServers, fmt.Errorf("Parse error at line %d", lineNo)
+			return registeredServers, fmt.Errorf("Parse error at line %d", 1+lineNo)
 		}
 		if lineNo == 0 {
 			continue

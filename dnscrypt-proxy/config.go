@@ -26,6 +26,7 @@ type Config struct {
 	CacheMaxTTL      uint32                  `toml:"cache_max_ttl"`
 	QueryLog         QueryLogConfig          `toml:"query_log"`
 	BlockName        BlockNameConfig         `toml:"block_name"`
+	ForwardFile      string                  `toml:"forwarding_rules"`
 	ServersConfig    map[string]ServerConfig `toml:"servers"`
 	SourcesConfig    map[string]SourceConfig `toml:"sources"`
 }
@@ -104,6 +105,7 @@ func ConfigLoad(proxy *Proxy, config_file string) error {
 	proxy.queryLogFile = config.QueryLog.File
 	proxy.queryLogFormat = config.QueryLog.Format
 	proxy.blockNameFile = config.BlockName.File
+	proxy.forwardFile = config.ForwardFile
 	if len(config.ServerNames) == 0 {
 		for serverName := range config.ServersConfig {
 			config.ServerNames = append(config.ServerNames, serverName)
