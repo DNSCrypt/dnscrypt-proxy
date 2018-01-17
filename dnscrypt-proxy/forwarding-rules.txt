@@ -10,4 +10,3 @@
 ## be set to that file name in the main configuration file.
 
 example.com     9.9.9.9,8.8.8.8
-
