@@ -25,6 +25,7 @@ type Config struct {
 	CacheMinTTL      uint32                  `toml:"cache_min_ttl"`
 	CacheMaxTTL      uint32                  `toml:"cache_max_ttl"`
 	QueryLog         QueryLogConfig          `toml:"query_log"`
+	BlockName        BlockNameConfig         `toml:"block_name"`
 	ServersConfig    map[string]ServerConfig `toml:"servers"`
 	SourcesConfig    map[string]SourceConfig `toml:"sources"`
 }
@@ -64,6 +65,10 @@ type QueryLogConfig struct {
 	Format string
 }
 
+type BlockNameConfig struct {
+	File string
+}
+
 func ConfigLoad(proxy *Proxy, config_file string) error {
 	configFile := flag.String("config", "dnscrypt-proxy.toml", "path to the configuration file")
 	flag.Parse()
@@ -98,6 +103,7 @@ func ConfigLoad(proxy *Proxy, config_file string) error {
 	}
 	proxy.queryLogFile = config.QueryLog.File
 	proxy.queryLogFormat = config.QueryLog.Format
+	proxy.blockNameFile = config.BlockName.File
 	if len(config.ServerNames) == 0 {
 		for serverName := range config.ServersConfig {
 			config.ServerNames = append(config.ServerNames, serverName)

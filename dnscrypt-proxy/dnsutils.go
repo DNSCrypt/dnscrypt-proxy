@@ -1,6 +1,7 @@
 package main
 
 import (
+	"strings"
 	"time"
 
 	"github.com/miekg/dns"
@@ -29,6 +30,15 @@ func EmptyResponseFromMessage(srcMsg *dns.Msg) (*dns.Msg, error) {
 	return dstMsg, nil
 }
 
+func RefusedResponseFromMessage(srcMsg *dns.Msg) (*dns.Msg, error) {
+	dstMsg, err := EmptyResponseFromMessage(srcMsg)
+	if err != nil {
+		return dstMsg, err
+	}
+	dstMsg.Rcode = dns.RcodeRefused
+	return dstMsg, nil
+}
+
 func HasTCFlag(packet []byte) bool {
 	return packet[2]&2 == 2
 }
@@ -39,6 +49,13 @@ func NormalizeName(name *[]byte) {
 			(*name)[i] = c + 32
 		}
 	}
+}
+
+func StripTrailingDot(str string) string {
+	if strings.HasSuffix(str, ".") {
+		str = str[:len(str)-1]
+	}
+	return str
 }
 
 func getMinTTL(msg *dns.Msg, minTTL uint32, maxTTL uint32, negCacheMinTTL uint32) time.Duration {

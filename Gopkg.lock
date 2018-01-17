@@ -39,6 +39,12 @@
 
 [[projects]]
   branch = "master"
+  name = "github.com/hashicorp/go-immutable-radix"
+  packages = ["."]
+  revision = "59b67882ec612f43b9d4c4fd97cebd507be4b3ee"
+
+[[projects]]
+  branch = "master"
   name = "github.com/hashicorp/golang-lru"
   packages = [
     ".",
@@ -99,6 +105,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "9946fe30a0b048dbe5b8a10b28e8bffd7ec6dac56380db345cbd868862fe7f08"
+  inputs-digest = "01e41ba3f8bb51f155fbca27baa1f94d4bc8e8d21d094b531941d78e01945fe2"
   solver-name = "gps-cdcl"
   solver-version = 1

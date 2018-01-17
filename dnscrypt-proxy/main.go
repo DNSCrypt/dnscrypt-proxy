@@ -30,6 +30,7 @@ type Proxy struct {
 	cacheMaxTTL           uint32
 	queryLogFile          string
 	queryLogFormat        string
+	blockNameFile         string
 	pluginsGlobals        PluginsGlobals
 }
 
@@ -193,6 +194,9 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 			if err != nil {
 				return
 			}
+		}
+		if pluginsState.action == PluginsActionDrop {
+			return
 		}
 	}
 	if len(response) == 0 {

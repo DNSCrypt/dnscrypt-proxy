@@ -1,9 +1,11 @@
 package main
 
 import (
+	"errors"
 	"net"
 	"sync"
 
+	"github.com/jedisct1/dlog"
 	"github.com/miekg/dns"
 )
 
@@ -42,6 +44,9 @@ func InitPluginsGlobals(pluginsGlobals *PluginsGlobals, proxy *Proxy) error {
 	queryPlugins := &[]Plugin{}
 	if len(proxy.queryLogFile) != 0 {
 		*queryPlugins = append(*queryPlugins, Plugin(new(PluginQueryLog)))
+	}
+	if len(proxy.blockNameFile) != 0 {
+		*queryPlugins = append(*queryPlugins, Plugin(new(PluginBlockName)))
 	}
 	if proxy.pluginBlockIPv6 {
 		*queryPlugins = append(*queryPlugins, Plugin(new(PluginBlockIPv6)))
@@ -103,12 +108,22 @@ func (pluginsState *PluginsState) ApplyQueryPlugins(pluginsGlobals *PluginsGloba
 	if err := msg.Unpack(packet); err != nil {
 		return packet, err
 	}
+	if len(msg.Question) > 1 {
+		return packet, errors.New("Unexpected number of questions")
+	}
 	pluginsGlobals.RLock()
 	for _, plugin := range *pluginsGlobals.queryPlugins {
 		if ret := plugin.Eval(pluginsState, &msg); ret != nil {
 			pluginsGlobals.RUnlock()
 			pluginsState.action = PluginsActionDrop
 			return packet, ret
+		}
+		if pluginsState.action == PluginsActionReject {
+			synth, err := RefusedResponseFromMessage(&msg)
+			if err != nil {
+				return nil, err
+			}
+			pluginsState.synthResponse = synth
 		}
 		if pluginsState.action != PluginsActionForward {
 			break
@@ -137,6 +152,14 @@ func (pluginsState *PluginsState) ApplyResponsePlugins(pluginsGlobals *PluginsGl
 			pluginsGlobals.RUnlock()
 			pluginsState.action = PluginsActionDrop
 			return packet, ret
+		}
+		if pluginsState.action == PluginsActionReject {
+			synth, err := RefusedResponseFromMessage(&msg)
+			if err != nil {
+				return nil, err
+			}
+			dlog.Infof("Blocking [%s]", synth.Question[0].Name)
+			pluginsState.synthResponse = synth
 		}
 		if pluginsState.action != PluginsActionForward {
 			break
