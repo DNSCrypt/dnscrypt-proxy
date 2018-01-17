@@ -16,29 +16,30 @@ import (
 )
 
 type Proxy struct {
-	proxyPublicKey        [32]byte
-	proxySecretKey        [32]byte
-	questionSizeEstimator QuestionSizeEstimator
-	serversInfo           ServersInfo
-	timeout               time.Duration
-	certRefreshDelay      time.Duration
-	mainProto             string
-	listenAddresses       []string
-	daemonize             bool
-	registeredServers     []RegisteredServer
-	pluginBlockIPv6       bool
-	cache                 bool
-	cacheSize             int
-	cacheNegTTL           uint32
-	cacheMinTTL           uint32
-	cacheMaxTTL           uint32
-	queryLogFile          string
-	queryLogFormat        string
-	blockNameFile         string
-	blockNameLogFile      string
-	blockNameFormat       string
-	forwardFile           string
-	pluginsGlobals        PluginsGlobals
+	proxyPublicKey               [32]byte
+	proxySecretKey               [32]byte
+	questionSizeEstimator        QuestionSizeEstimator
+	serversInfo                  ServersInfo
+	timeout                      time.Duration
+	certRefreshDelay             time.Duration
+	certRefreshDelayAfterFailure time.Duration
+	mainProto                    string
+	listenAddresses              []string
+	daemonize                    bool
+	registeredServers            []RegisteredServer
+	pluginBlockIPv6              bool
+	cache                        bool
+	cacheSize                    int
+	cacheNegTTL                  uint32
+	cacheMinTTL                  uint32
+	cacheMaxTTL                  uint32
+	queryLogFile                 string
+	queryLogFormat               string
+	blockNameFile                string
+	blockNameLogFile             string
+	blockNameFormat              string
+	forwardFile                  string
+	pluginsGlobals               PluginsGlobals
 }
 
 type App struct {
@@ -140,7 +141,11 @@ func (proxy *Proxy) StartProxy() {
 	dlog.Notice("dnscrypt-proxy is ready")
 	go func() {
 		for {
-			time.Sleep(proxy.certRefreshDelay)
+			delay := proxy.certRefreshDelay
+			if proxy.serversInfo.liveServers() == 0 {
+				delay = proxy.certRefreshDelayAfterFailure
+			}
+			time.Sleep(delay)
 			proxy.serversInfo.refresh(proxy)
 		}
 	}()

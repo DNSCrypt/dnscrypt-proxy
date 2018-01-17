@@ -88,6 +88,7 @@ func ConfigLoad(proxy *Proxy, svcFlag *string, config_file string) error {
 		proxy.mainProto = "tcp"
 	}
 	proxy.certRefreshDelay = time.Duration(config.CertRefreshDelay) * time.Minute
+	proxy.certRefreshDelayAfterFailure = time.Duration(10 * time.Second)
 	if len(config.ListenAddresses) == 0 {
 		return errors.New("No local IP/port configured")
 	}

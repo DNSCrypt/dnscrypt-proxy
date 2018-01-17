@@ -80,14 +80,26 @@ func (serversInfo *ServersInfo) registerServer(proxy *Proxy, name string, stamp 
 	return nil
 }
 
-func (serversInfo *ServersInfo) refresh(proxy *Proxy) {
+func (serversInfo *ServersInfo) refresh(proxy *Proxy) (int, error) {
 	dlog.Infof("Refreshing certificates")
 	serversInfo.RLock()
 	registeredServers := serversInfo.registeredServers
 	serversInfo.RUnlock()
+	liveServers := 0
+	var err error
 	for _, registeredServer := range registeredServers {
-		serversInfo.registerServer(proxy, registeredServer.name, registeredServer.stamp)
+		if err = serversInfo.registerServer(proxy, registeredServer.name, registeredServer.stamp); err == nil {
+			liveServers++
+		}
 	}
+	return liveServers, err
+}
+
+func (serversInfo *ServersInfo) liveServers() int {
+	serversInfo.RLock()
+	liveServers := len(serversInfo.registeredServers)
+	serversInfo.RUnlock()
+	return liveServers
 }
 
 func (serversInfo *ServersInfo) getOne() *ServerInfo {
