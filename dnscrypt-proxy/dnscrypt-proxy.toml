@@ -127,11 +127,21 @@ format = "tsv"
 ##   ads*.example.*
 ##   ads*.example[0-9]*.com
 
-[block_name]
+[blacklist]
 
 ## Full path to the file of blocking rules
 
-# file = "blacklist.txt"
+# blacklist_file = "blacklist.txt"
+
+
+## Optional path to a file logging blocked queries
+
+# log_file = "blocked.log"
+
+
+## Optional log format: tsv or ltsv (default: tsv)
+
+# log_format = "tsv"
 
 
 

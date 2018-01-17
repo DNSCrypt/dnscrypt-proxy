@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"strings"
 	"sync"
 	"time"
 
@@ -60,10 +59,7 @@ func (plugin *PluginQueryLog) Eval(pluginsState *PluginsState, msg *dns.Msg) err
 	} else {
 		clientIPStr = (*pluginsState.clientAddr).(*net.TCPAddr).IP.String()
 	}
-	qName := question.Name
-	if len(qName) > 1 && strings.HasSuffix(qName, ".") {
-		qName = qName[0 : len(qName)-1]
-	}
+	qName := StripTrailingDot(question.Name)
 	qType, ok := dns.TypeToString[question.Qtype]
 	if !ok {
 		qType = string(qType)
@@ -74,10 +70,10 @@ func (plugin *PluginQueryLog) Eval(pluginsState *PluginsState, msg *dns.Msg) err
 		year, month, day := now.Date()
 		hour, minute, second := now.Clock()
 		tsStr := fmt.Sprintf("[%d-%02d-%02d %02d:%02d:%02d]", year, int(month), day, hour, minute, second)
-		line = fmt.Sprintf("%s\t%s\t%s\t%s\n", tsStr, clientIPStr, qName, qType)
+		line = fmt.Sprintf("%s\t%s\t%s\t%s\n", tsStr, clientIPStr, StringQuote(qName), qType)
 	} else if plugin.format == "ltsv" {
 		line = fmt.Sprintf("time:%d\thost:%s\tmessage:%s\ttype:%s\n",
-			time.Now().Unix(), clientIPStr, qName, qType)
+			time.Now().Unix(), clientIPStr, StringQuote(qName), qType)
 	} else {
 		dlog.Fatalf("Unexpected log format: [%s]", plugin.format)
 	}

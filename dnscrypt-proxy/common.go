@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"net"
+	"strconv"
 	"strings"
 	"unicode"
 )
@@ -96,4 +97,9 @@ func StringTwoFields(str string) (string, string, bool) {
 		return a, b, false
 	}
 	return a, b, true
+}
+
+func StringQuote(str string) string {
+	str = strconv.QuoteToGraphic(str)
+	return str[1 : len(str)-1]
 }

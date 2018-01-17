@@ -25,7 +25,7 @@ type Config struct {
 	CacheMinTTL      uint32                  `toml:"cache_min_ttl"`
 	CacheMaxTTL      uint32                  `toml:"cache_max_ttl"`
 	QueryLog         QueryLogConfig          `toml:"query_log"`
-	BlockName        BlockNameConfig         `toml:"block_name"`
+	BlockName        BlockNameConfig         `toml:"blacklist"`
 	ForwardFile      string                  `toml:"forwarding_rules"`
 	ServersConfig    map[string]ServerConfig `toml:"servers"`
 	SourcesConfig    map[string]SourceConfig `toml:"sources"`
@@ -67,7 +67,9 @@ type QueryLogConfig struct {
 }
 
 type BlockNameConfig struct {
-	File string
+	File    string `toml:"blacklist_file"`
+	LogFile string `toml:"log_file"`
+	Format  string `toml:"log_format"`
 }
 
 func ConfigLoad(proxy *Proxy, svcFlag *string, config_file string) error {
@@ -97,6 +99,7 @@ func ConfigLoad(proxy *Proxy, svcFlag *string, config_file string) error {
 	proxy.cacheNegTTL = config.CacheNegTTL
 	proxy.cacheMinTTL = config.CacheMinTTL
 	proxy.cacheMaxTTL = config.CacheMaxTTL
+
 	if len(config.QueryLog.Format) == 0 {
 		config.QueryLog.Format = "tsv"
 	} else {
@@ -107,7 +110,19 @@ func ConfigLoad(proxy *Proxy, svcFlag *string, config_file string) error {
 	}
 	proxy.queryLogFile = config.QueryLog.File
 	proxy.queryLogFormat = config.QueryLog.Format
+
+	if len(config.BlockName.Format) == 0 {
+		config.BlockName.Format = "tsv"
+	} else {
+		config.BlockName.Format = strings.ToLower(config.BlockName.Format)
+	}
+	if config.BlockName.Format != "tsv" && config.BlockName.Format != "ltsv" {
+		return errors.New("Unsupported block log format")
+	}
 	proxy.blockNameFile = config.BlockName.File
+	proxy.blockNameFormat = config.BlockName.Format
+	proxy.blockNameLogFile = config.BlockName.LogFile
+
 	proxy.forwardFile = config.ForwardFile
 	if len(config.ServerNames) == 0 {
 		for serverName := range config.ServersConfig {

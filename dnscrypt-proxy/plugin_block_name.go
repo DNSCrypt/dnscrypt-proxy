@@ -1,9 +1,15 @@
 package main
 
 import (
+	"errors"
+	"fmt"
 	"io/ioutil"
+	"net"
+	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"time"
 	"unicode"
 
 	"github.com/hashicorp/go-immutable-radix"
@@ -22,10 +28,13 @@ const (
 )
 
 type PluginBlockName struct {
+	sync.Mutex
 	blockedPrefixes   *iradix.Tree
 	blockedSuffixes   *iradix.Tree
 	blockedSubstrings []string
 	blockedPatterns   []string
+	outFd             *os.File
+	format            string
 }
 
 func (plugin *PluginBlockName) Name() string {
@@ -100,6 +109,17 @@ func (plugin *PluginBlockName) Init(proxy *Proxy) error {
 			dlog.Fatal("Unexpected block type")
 		}
 	}
+	if len(proxy.blockNameLogFile) == 0 {
+		return nil
+	}
+	plugin.Lock()
+	defer plugin.Unlock()
+	outFd, err := os.OpenFile(proxy.blockNameLogFile, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644)
+	if err != nil {
+		return err
+	}
+	plugin.outFd = outFd
+	plugin.format = proxy.blockNameFormat
 	return nil
 }
 
@@ -116,30 +136,66 @@ func (plugin *PluginBlockName) Eval(pluginsState *PluginsState, msg *dns.Msg) er
 	if len(questions) != 1 {
 		return nil
 	}
-	question := strings.ToLower(StripTrailingDot(questions[0].Name))
-	revQuestion := StringReverse(question)
-	match, _, found := plugin.blockedSuffixes.Root().LongestPrefix([]byte(revQuestion))
-	if found {
-		if len(match) == len(question) || question[len(match)] == '.' {
-			pluginsState.action = PluginsActionReject
-			return nil
+	qName := strings.ToLower(StripTrailingDot(questions[0].Name))
+	revQname := StringReverse(qName)
+	reject, reason := false, ""
+	if !reject {
+		match, _, found := plugin.blockedSuffixes.Root().LongestPrefix([]byte(revQname))
+		if found {
+			if len(match) == len(qName) || qName[len(match)] == '.' {
+				reject, reason = true, "*"+string(match)
+			}
 		}
 	}
-	_, _, found = plugin.blockedPrefixes.Root().LongestPrefix([]byte(question))
-	if found {
+	if !reject {
+		match, _, found := plugin.blockedPrefixes.Root().LongestPrefix([]byte(qName))
+		if found {
+			reject, reason = true, string(match)+"*"
+		}
+	}
+	if !reject {
+		for _, substring := range plugin.blockedSubstrings {
+			if strings.Contains(substring, qName) {
+				reject, reason = true, "*"+substring+"*"
+				break
+			}
+		}
+	}
+	if !reject {
+		for _, pattern := range plugin.blockedPatterns {
+			if found, _ := filepath.Match(pattern, qName); found {
+				reject, reason = true, pattern
+				break
+			}
+		}
+	}
+	if reject {
 		pluginsState.action = PluginsActionReject
-		return nil
-	}
-	for _, substring := range plugin.blockedSubstrings {
-		if strings.Contains(substring, question) {
-			pluginsState.action = PluginsActionReject
-			return nil
-		}
-	}
-	for _, pattern := range plugin.blockedPatterns {
-		if found, _ := filepath.Match(pattern, question); found {
-			pluginsState.action = PluginsActionReject
-			return nil
+		if plugin.outFd != nil {
+			var clientIPStr string
+			if pluginsState.clientProto == "udp" {
+				clientIPStr = (*pluginsState.clientAddr).(*net.UDPAddr).IP.String()
+			} else {
+				clientIPStr = (*pluginsState.clientAddr).(*net.TCPAddr).IP.String()
+			}
+			var line string
+			if plugin.format == "tsv" {
+				now := time.Now()
+				year, month, day := now.Date()
+				hour, minute, second := now.Clock()
+				tsStr := fmt.Sprintf("[%d-%02d-%02d %02d:%02d:%02d]", year, int(month), day, hour, minute, second)
+				line = fmt.Sprintf("%s\t%s\t%s\t%s\n", tsStr, clientIPStr, StringQuote(qName), StringQuote(reason))
+			} else if plugin.format == "ltsv" {
+				line = fmt.Sprintf("time:%d\thost:%s\tqname:%s\tmessage:%s\n", time.Now().Unix(), clientIPStr, StringQuote(qName), StringQuote(reason))
+			} else {
+				dlog.Fatalf("Unexpected log format: [%s]", plugin.format)
+			}
+			plugin.Lock()
+			if plugin.outFd == nil {
+				return errors.New("Log file not initialized")
+			}
+			plugin.outFd.WriteString(line)
+			defer plugin.Unlock()
 		}
 	}
 	return nil
