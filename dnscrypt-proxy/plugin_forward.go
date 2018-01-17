@@ -35,8 +35,12 @@ func (plugin *PluginForward) Init(proxy *Proxy) error {
 		return err
 	}
 	for lineNo, line := range strings.Split(string(bin), "\n") {
+		line = strings.Trim(line, " \t\r")
+		if len(line) == 0 || strings.HasPrefix(line, "#") {
+			continue
+		}
 		parts := strings.SplitN(line, ":", 2)
-		if len(parts) == 0 || len(strings.Trim(parts[0], " \t\r")) == 0 {
+		if len(parts) == 0 {
 			continue
 		}
 		if len(parts) != 2 {
