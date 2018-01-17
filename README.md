@@ -8,13 +8,13 @@ A modern client implementation of the [DNSCrypt](https://github.com/DNSCrypt/dns
 
 ## Installation
 
-### Initial configuration
+### Installation
 
 1) Modify the [`dnscrypt-proxy.toml`](https://raw.githubusercontent.com/jedisct1/dnscrypt-proxy/master/dnscrypt-proxy/dnscrypt-proxy.toml) configuration file according to your needs.
 2) Make sure that nothing else is already listening to port 53 on your system and run (in a console with elevated privileges on Windows) the `dnscrypt-proxy` application. Change your DNS settings to the configured IP address and check that everything works as expected. A DNS query for `resolver.00f.net` should return one of the chosen DNS servers instead of your ISP's resolver.
 3) Register as a system service (see below).
 
-### Installation as a system service (Windows, Linux, MacOS)
+### Installing as a system service (Windows, Linux, MacOS)
 
 Type `dnscrypt-proxy -service install` to register dnscrypt-proxy as a system service, and `dnscrypt-proxy -service start` to start it.
 
