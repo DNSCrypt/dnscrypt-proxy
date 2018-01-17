@@ -138,7 +138,13 @@ func (proxy *Proxy) StartProxy() {
 			dlog.Fatal(err)
 		}
 	}
-	dlog.Notice("dnscrypt-proxy is ready")
+	liveServers, err := proxy.serversInfo.refresh(proxy)
+	if liveServers > 0 {
+		dlog.Noticef("dnscrypt-proxy is ready - live servers: %d", liveServers)
+	} else if err != nil {
+		dlog.Error(err)
+		dlog.Notice("dnscrypt-proxy is waiting for at least one server to be reachable")
+	}
 	go func() {
 		for {
 			delay := proxy.certRefreshDelay

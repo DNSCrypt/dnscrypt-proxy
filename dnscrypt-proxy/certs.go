@@ -72,19 +72,19 @@ func FetchCurrentCert(proxy *Proxy, proto string, pk ed25519.PublicKey, serverAd
 		tsBegin := binary.BigEndian.Uint32(binCert[116:120])
 		tsEnd := binary.BigEndian.Uint32(binCert[120:124])
 		if now > tsEnd || now < tsBegin {
-			dlog.Infof("[%v] Certificate not valid at the current date", providerName)
+			dlog.Debugf("[%v] Certificate not valid at the current date", providerName)
 			continue
 		}
 		if serial < highestSerial {
-			dlog.Infof("[%v] Superseded by a previous certificate", providerName)
+			dlog.Debugf("[%v] Superseded by a previous certificate", providerName)
 			continue
 		}
 		if serial == highestSerial {
 			if cryptoConstruction < certInfo.CryptoConstruction {
-				dlog.Infof("[%v] Keeping the previous, preferred crypto construction", providerName)
+				dlog.Debugf("[%v] Keeping the previous, preferred crypto construction", providerName)
 				continue
 			} else {
-				dlog.Infof("[%v] Upgrading the construction from %v to %v", providerName, certInfo.CryptoConstruction, cryptoConstruction)
+				dlog.Debugf("[%v] Upgrading the construction from %v to %v", providerName, certInfo.CryptoConstruction, cryptoConstruction)
 			}
 		}
 		if cryptoConstruction != XChacha20Poly1305 && cryptoConstruction != XSalsa20Poly1305 {
@@ -108,7 +108,7 @@ func FetchCurrentCert(proxy *Proxy, proto string, pk ed25519.PublicKey, serverAd
 		certInfo.CryptoConstruction = cryptoConstruction
 		copy(certInfo.ServerPk[:], serverPk[:])
 		copy(certInfo.MagicQuery[:], binCert[104:112])
-		dlog.Noticef("[%v] Valid cert found", providerName)
+		dlog.Noticef("[%v] Valid cert (crypto version %d) found", providerName, cryptoConstruction)
 	}
 	if certInfo.CryptoConstruction == UndefinedConstruction {
 		return certInfo, errors.New("No useable certificate found")

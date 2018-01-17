@@ -62,6 +62,20 @@ type ServersInfo struct {
 }
 
 func (serversInfo *ServersInfo) registerServer(proxy *Proxy, name string, stamp ServerStamp) error {
+	newRegisteredServer := RegisteredServer{name: name, stamp: stamp}
+	serversInfo.Lock()
+	defer serversInfo.Unlock()
+	for i, oldRegisteredServer := range serversInfo.registeredServers {
+		if oldRegisteredServer.name == name {
+			serversInfo.registeredServers[i] = newRegisteredServer
+			return nil
+		}
+	}
+	serversInfo.registeredServers = append(serversInfo.registeredServers, newRegisteredServer)
+	return nil
+}
+
+func (serversInfo *ServersInfo) refreshServer(proxy *Proxy, name string, stamp ServerStamp) error {
 	serversInfo.Lock()
 	defer serversInfo.Unlock()
 	newServer, err := serversInfo.fetchServerInfo(proxy, name, stamp)
@@ -88,7 +102,7 @@ func (serversInfo *ServersInfo) refresh(proxy *Proxy) (int, error) {
 	liveServers := 0
 	var err error
 	for _, registeredServer := range registeredServers {
-		if err = serversInfo.registerServer(proxy, registeredServer.name, registeredServer.stamp); err == nil {
+		if err = serversInfo.refreshServer(proxy, registeredServer.name, registeredServer.stamp); err == nil {
 			liveServers++
 		}
 	}
@@ -97,7 +111,7 @@ func (serversInfo *ServersInfo) refresh(proxy *Proxy) (int, error) {
 
 func (serversInfo *ServersInfo) liveServers() int {
 	serversInfo.RLock()
-	liveServers := len(serversInfo.registeredServers)
+	liveServers := len(serversInfo.inner)
 	serversInfo.RUnlock()
 	return liveServers
 }
