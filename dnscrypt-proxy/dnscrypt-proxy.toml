@@ -60,7 +60,7 @@ block_ipv6 = false
 format = "tsv"
 
 
-############## Pattern-based blocking ##############
+############## Pattern-based blocking (fully compatible with dnscrypt-proxy 1.x) ##############
 
 [block_name]
 ## Full path to the file of blocking rules
