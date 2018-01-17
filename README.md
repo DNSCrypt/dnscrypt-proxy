@@ -8,7 +8,15 @@ A modern client implementation of the [DNSCrypt](https://github.com/DNSCrypt/dns
 
 ## Installation
 
-### Installation
+### How do I install DNSCrypt?
+
+You can't. Because [DNSCrypt](https://github.com/DNSCrypt/dnscrypt-protocol/blob/master/DNSCRYPT-V2-PROTOCOL.txt) is just a specification.
+
+That specification has been implemented in software such as [unbound](https://www.unbound.net/), [dnsdist](https://dnsdist.org/), [dnscrypt-wrapper](https://github.com/cofyc/dnscrypt-wrapper) and [dnscrypt-proxy](https://github.com/jedisct1/dnscrypt-proxy).
+
+dnscrypt-proxy is a flexible DNS proxy. It runs on your computer or your router, and can locally block unwanted content, reveal where your devices are silently sending data to, make applications feel faster by caching DNS responses, and improve security and confidentiality by communicating to upstream DNS servers using secure channels.
+
+### Setting up dnscrypt-proxy
 
 1) Modify the [`dnscrypt-proxy.toml`](https://raw.githubusercontent.com/jedisct1/dnscrypt-proxy/master/dnscrypt-proxy/dnscrypt-proxy.toml) configuration file according to your needs.
 2) Make sure that nothing else is already listening to port 53 on your system and run (in a console with elevated privileges on Windows) the `dnscrypt-proxy` application. Change your DNS settings to the configured IP address and check that everything works as expected. A DNS query for `resolver.00f.net` should return one of the chosen DNS servers instead of your ISP's resolver.
