@@ -1,0 +1,29 @@
+
+# Local set of patterns to block
+
+ad.*
+ads.*
+banner.*
+banners.*
+creatives.*
+oas.*
+oascentral.*
+stats.*
+tag.*
+telemetry.*
+tracker.*
+
+# My Macbook constantly sends a lot of useless queries to *.local,
+# so I block them. *.lan is apparently another common one, and
+# *.localdomain and *.workgroup are common on Windows.
+
+*.lan
+*.local
+*.localdomain
+*.workgroup
+
+# eth0.me is hardcoded in tools such as Archey, but is not available any
+# more, causing issues such as terminal sessions taking a long time to
+# start.
+
+eth0.me
