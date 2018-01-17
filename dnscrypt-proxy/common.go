@@ -4,6 +4,8 @@ import (
 	"encoding/binary"
 	"errors"
 	"net"
+	"strings"
+	"unicode"
 )
 
 type CryptoConstruction uint16
@@ -79,4 +81,19 @@ func StringReverse(s string) string {
 		r[i], r[j] = r[j], r[i]
 	}
 	return string(r)
+}
+
+func StringTwoFields(str string) (string, string, bool) {
+	if len(str) < 3 {
+		return "", "", false
+	}
+	pos := strings.IndexFunc(str, unicode.IsSpace)
+	if pos == -1 {
+		return "", "", false
+	}
+	a, b := strings.TrimFunc(str[:pos], unicode.IsSpace), strings.TrimFunc(str[pos+1:], unicode.IsSpace)
+	if len(a) == 0 || len(b) == 0 {
+		return a, b, false
+	}
+	return a, b, true
 }

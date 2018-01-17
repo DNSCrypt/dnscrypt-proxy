@@ -4,6 +4,7 @@ import (
 	"io/ioutil"
 	"path/filepath"
 	"strings"
+	"unicode"
 
 	"github.com/hashicorp/go-immutable-radix"
 	"github.com/jedisct1/dlog"
@@ -44,7 +45,7 @@ func (plugin *PluginBlockName) Init(proxy *Proxy) error {
 	plugin.blockedPrefixes = iradix.New()
 	plugin.blockedSuffixes = iradix.New()
 	for lineNo, line := range strings.Split(string(bin), "\n") {
-		line = strings.Trim(line, " \t\r\n")
+		line = strings.TrimFunc(line, unicode.IsSpace)
 		if len(line) == 0 || strings.HasPrefix(line, "#") {
 			continue
 		}

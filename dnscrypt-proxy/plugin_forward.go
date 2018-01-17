@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"net"
 	"strings"
+	"unicode"
 
 	"github.com/jedisct1/dlog"
 	"github.com/miekg/dns"
@@ -35,25 +36,18 @@ func (plugin *PluginForward) Init(proxy *Proxy) error {
 		return err
 	}
 	for lineNo, line := range strings.Split(string(bin), "\n") {
-		line = strings.Trim(line, " \t\r")
+		line = strings.TrimFunc(line, unicode.IsSpace)
 		if len(line) == 0 || strings.HasPrefix(line, "#") {
 			continue
 		}
-		parts := strings.SplitN(line, ":", 2)
-		if len(parts) == 0 {
-			continue
-		}
-		if len(parts) != 2 {
+		domain, serversStr, ok := StringTwoFields(line)
+		if !ok {
 			return fmt.Errorf("Syntax error for a forwarding rule at line %d. Expected syntax: example.com: 9.9.9.9,8.8.8.8", 1+lineNo)
 		}
-		domain := strings.ToLower(strings.Trim(parts[0], " \t\r"))
-		serversStr := strings.Trim(parts[1], " \t\r")
-		if len(domain) == 0 || len(serversStr) == 0 {
-			continue
-		}
+		domain = strings.ToLower(domain)
 		var servers []string
 		for _, server := range strings.Split(serversStr, ",") {
-			server = strings.Trim(server, " \t\r")
+			server = strings.TrimFunc(server, unicode.IsSpace)
 			if net.ParseIP(server) != nil {
 				server = fmt.Sprintf("%s:%d", server, 53)
 			}
