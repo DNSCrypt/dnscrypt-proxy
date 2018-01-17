@@ -42,7 +42,7 @@ A modern client implementation of the [DNSCrypt](https://github.com/DNSCrypt/dns
 * Local DNSSEC validation
 * Flexible logging
 * Windows support that doesn't suck
-* [DNS-over-HTTPS (DoH)](https://datatracker.ietf.org/wg/doh/about/)
+* [DNS-over-HTTPS (DoH)](https://datatracker.ietf.org/wg/doh/about/), the successor to DNS-over-TLS
 * Support for the V1 plugin API
 * Some real documentation
 
