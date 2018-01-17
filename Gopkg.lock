@@ -124,7 +124,7 @@
     "windows/svc/eventlog",
     "windows/svc/mgr"
   ]
-  revision = "fff93fa7cd278d84afc205751523809c464168ab"
+  revision = "2c42eef0765b9837fbdab12011af7830f55f88f0"
 
 [solve-meta]
   analyzer-name = "dep"

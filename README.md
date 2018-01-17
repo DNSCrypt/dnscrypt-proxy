@@ -62,6 +62,7 @@ The current 2.0.0 alpha version includes all the major features from dnscrypt-pr
 | Advanced expressions in blacklists (ads*.example[0-9]*.com) | No                                                                           | Yes                                                                                                           |
 | Forwarding with load balancing                              | No                                                                           | Yes                                                                                                           |
 | Built-in system installer                                   | Only on Windows                                                              | Install/uninstall/start/stop/restart as a service on Windows, Linux/(systemd,Upstart,SysV), and macOS/launchd |
+| Built-in servers latency benchmark                          | No                                                                           | Yes                                                                                                           |
 
 ## Planned features
 
