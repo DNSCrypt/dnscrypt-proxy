@@ -52,6 +52,10 @@ Up-to-date, pre-built binaries are available for:
 * FreeBSD/x86
 * FreeBSD/x86_64
 * Linux/arm
+* Linux/arm64
+* Linux/mips
+* Linux/mips64
+* Linux/mips64le
 * Linux/x86
 * Linux/x86_64
 * MacOS X

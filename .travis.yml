@@ -103,6 +103,34 @@ script:
   - tar czpvf dnscrypt-proxy-linux_arm-${TRAVIS_TAG:-dev}.tar.gz linux-arm
 
   - go clean
+  - env GOOS=linux GOARCH=arm64 go build
+  - mkdir linux-arm64
+  - ln dnscrypt-proxy linux-arm64/
+  - ln dnscrypt-proxy.toml linux-arm64/
+  - tar czpvf dnscrypt-proxy-linux_arm64-${TRAVIS_TAG:-dev}.tar.gz linux-arm64
+
+  - go clean
+  - env GOOS=linux GOARCH=mips go build
+  - mkdir linux-mips
+  - ln dnscrypt-proxy linux-mips/
+  - ln dnscrypt-proxy.toml linux-mips/
+  - tar czpvf dnscrypt-proxy-linux_mips-${TRAVIS_TAG:-dev}.tar.gz linux-mips
+
+  - go clean
+  - env GOOS=linux GOARCH=mips64 go build
+  - mkdir linux-mips64
+  - ln dnscrypt-proxy linux-mips64/
+  - ln dnscrypt-proxy.toml linux-mips64/
+  - tar czpvf dnscrypt-proxy-linux_mips64-${TRAVIS_TAG:-dev}.tar.gz linux-mips64
+
+  - go clean
+  - env GOOS=linux GOARCH=mips64le go build
+  - mkdir linux-mips64le
+  - ln dnscrypt-proxy linux-mips64le/
+  - ln dnscrypt-proxy.toml linux-mips64le/
+  - tar czpvf dnscrypt-proxy-linux_mips64le-${TRAVIS_TAG:-dev}.tar.gz linux-mips64le
+
+  - go clean
   - env GOOS=darwin GOARCH=amd64 go build
   - mkdir macos
   - ln dnscrypt-proxy macos/
