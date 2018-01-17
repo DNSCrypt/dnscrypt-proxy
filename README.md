@@ -6,7 +6,26 @@ A modern client implementation of the [DNSCrypt](https://github.com/DNSCrypt/dns
 
 ## [dnscrypt-proxy 2.0.0alpha10 is available for download!](https://github.com/jedisct1/dnscrypt-proxy/releases/latest)
 
+## Installation
+
+### Initial configuration
+
+1) Modify the `dnscrypt-proxy.toml` configuration file according to your needs.
+2) Make sure that nothing else is already listening to port 53 on your system and run (in a console with elevated privileges on Windows) the `dnscrypt-proxy` application. Change your DNS settings to the configured IP address and check that everything works as expected. A DNS query for `resolver.00f.net` should return one of the chosen DNS servers instead of your ISP's resolver.
+
+### Installation as a system service (Windows, Linux, MacOS)
+
+Type `dnscrypt-proxy -service install` to register dnscrypt-proxy as a system service, and `dnscrypt-proxy -service start` to start it.
+
+Done. It will automatically start at boot.
+
+This setup procedure is compatible with Windows, Linux (systemd, Upstart, SysV), and macOS (launchd).
+
+Other commands include `stop`, `restart` (useful after a configuration change) and `uninstall`.
+
 ## Current status/features
+
+The current 2.0.0 alpha version includes all the major features from dnscrypt-proxy 1.9.5 (support for dnscrypt v2, synthetic IPv6 responses, logging, blocking, forwarding and caching), with improved reliability, flexbility, usability and performance.
 
 | Features                                                    | dnscrypt-proxy 1.x                                                           | dnscrypt-proxy 2.x                                                                                            |
 | ----------------------------------------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
