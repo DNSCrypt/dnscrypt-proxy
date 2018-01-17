@@ -59,11 +59,11 @@ block_ipv6 = false
 #        Route queries for specific domains to a dedicated set of servers        #
 ##################################################################################
 
-# Example map entries (one entry per line):
-# example.com: 9.9.9.9
-# example.net: 9.9.9.9,8.8.8.8
+## Example map entries (one entry per line):
+## example.com: 9.9.9.9
+## example.net: 9.9.9.9,8.8.8.8
 
-forwarding_rules = "forwarding-rules.txt"
+# forwarding_rules = "forwarding-rules.txt"
 
 
 
