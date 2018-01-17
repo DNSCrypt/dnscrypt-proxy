@@ -14,7 +14,7 @@ You can't. Because [DNSCrypt](https://github.com/DNSCrypt/dnscrypt-protocol/blob
 
 That specification has been implemented in software such as [unbound](https://www.unbound.net/), [dnsdist](https://dnsdist.org/), [dnscrypt-wrapper](https://github.com/cofyc/dnscrypt-wrapper) and [dnscrypt-proxy](https://github.com/jedisct1/dnscrypt-proxy).
 
-dnscrypt-proxy is a flexible DNS proxy. It runs on your computer or your router, and can locally block unwanted content, reveal where your devices are silently sending data to, make applications feel faster by caching DNS responses, and improve security and confidentiality by communicating to upstream DNS servers using secure channels.
+dnscrypt-proxy is a flexible DNS proxy. It runs on your computer or router, and can locally block unwanted content, reveal where your devices are silently sending data to, make applications feel faster by caching DNS responses, and improve security and confidentiality by communicating to upstream DNS servers over secure channels.
 
 ### Setting up dnscrypt-proxy
 
