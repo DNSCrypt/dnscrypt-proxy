@@ -1,7 +1,9 @@
 package main
 
 import (
+	"fmt"
 	"io/ioutil"
+	"path/filepath"
 	"strings"
 
 	"github.com/hashicorp/go-immutable-radix"
@@ -50,7 +52,15 @@ func (plugin *PluginBlockName) Init(proxy *Proxy) error {
 		leadingStar := strings.HasPrefix(line, "*")
 		trailingStar := strings.HasSuffix(line, "*")
 		blockType := PluginBlockTypeNone
-		if leadingStar && trailingStar {
+		if isGlobCandidate(line) {
+			blockType = PluginBlockTypePattern
+			fmt.Println(line)
+			_, err := filepath.Match(line, "example.com")
+			if len(line) < 2 || err != nil {
+				dlog.Errorf("Syntax error in block rules at line %d", lineNo)
+				continue
+			}
+		} else if leadingStar && trailingStar {
 			blockType = PluginBlockTypeSubstring
 			if len(line) < 3 {
 				dlog.Errorf("Syntax error in block rules at line %d", lineNo)
@@ -81,6 +91,8 @@ func (plugin *PluginBlockName) Init(proxy *Proxy) error {
 		switch blockType {
 		case PluginBlockTypeSubstring:
 			plugin.blockedSubstrings = append(plugin.blockedSubstrings, line)
+		case PluginBlockTypePattern:
+			plugin.blockedPatterns = append(plugin.blockedPatterns, line)
 		case PluginBlockTypePrefix:
 			plugin.blockedPrefixes, _, _ = plugin.blockedPrefixes.Insert([]byte(line), 0)
 		case PluginBlockTypeSuffix:
@@ -125,5 +137,22 @@ func (plugin *PluginBlockName) Eval(pluginsState *PluginsState, msg *dns.Msg) er
 			return nil
 		}
 	}
+	for _, pattern := range plugin.blockedPatterns {
+		if found, _ := filepath.Match(pattern, question); found {
+			pluginsState.action = PluginsActionReject
+			return nil
+		}
+	}
 	return nil
+}
+
+func isGlobCandidate(str string) bool {
+	for i, c := range str {
+		if c == '?' || c == '[' {
+			return true
+		} else if c == '*' && i != 0 && i != len(str)-1 {
+			return true
+		}
+	}
+	return false
 }

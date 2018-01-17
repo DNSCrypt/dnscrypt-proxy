@@ -54,17 +54,21 @@ block_ipv6 = false
 
 [query_log]
 ### Full path to the query log file
-# file = "/tmp/query.log"
+# file = "query.log"
 
 ### Query log format (currently supported: tsv and ltsv)
 format = "tsv"
 
 
-############## Pattern-based blocking (fully compatible with dnscrypt-proxy 1.x) ##############
-
+############## Pattern-based blocking (blacklists) ##############
+# Blacklists are made of one pattern per line. Example of valid patterns:
+#   example.com
+#   *sex*
+#   ads.*
+#   ads*.example.*
 [block_name]
 ## Full path to the file of blocking rules
-# file = "/tmp/mybase.txt"
+file = "blacklist.txt"
 
 
 ############## DNS Cache ##############
