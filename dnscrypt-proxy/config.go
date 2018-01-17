@@ -70,9 +70,12 @@ type BlockNameConfig struct {
 	File string
 }
 
-func ConfigLoad(proxy *Proxy, config_file string) error {
+func ConfigLoad(proxy *Proxy, svcFlag *string, config_file string) error {
 	configFile := flag.String("config", "dnscrypt-proxy.toml", "path to the configuration file")
 	flag.Parse()
+	if *svcFlag == "stop" || *svcFlag == "uninstall" {
+		return nil
+	}
 	config := newConfig()
 	if _, err := toml.DecodeFile(*configFile, &config); err != nil {
 		return err

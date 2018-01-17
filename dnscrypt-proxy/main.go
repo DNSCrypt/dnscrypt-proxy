@@ -2,7 +2,8 @@ package main
 
 import (
 	"crypto/rand"
-	"log"
+	"flag"
+	"fmt"
 	"net"
 	"os"
 	"path/filepath"
@@ -10,7 +11,7 @@ import (
 	"time"
 
 	"github.com/jedisct1/dlog"
-	"github.com/judwhite/go-svc/svc"
+	"github.com/kardianos/service"
 	"golang.org/x/crypto/curve25519"
 )
 
@@ -39,29 +40,54 @@ type Proxy struct {
 }
 
 type App struct {
-	wg   sync.WaitGroup
-	quit chan struct{}
+	wg    sync.WaitGroup
+	quit  chan struct{}
+	proxy Proxy
 }
 
 func main() {
 	dlog.Init("dnscrypt-proxy", dlog.SeverityNotice)
 	cdLocal()
+
+	svcConfig := &service.Config{
+		Name:        "dnscrypt-proxy",
+		DisplayName: "DNSCrypt client proxy",
+		Description: "Encrypted/authenticated DNS proxy",
+	}
+	svcFlag := flag.String("service", "", fmt.Sprintf("Control the system service: %q", service.ControlAction))
 	app := &App{}
-	if err := svc.Run(app); err != nil {
+	svc, err := service.New(app, svcConfig)
+	if err != nil {
+		dlog.Fatal(err)
+	}
+	app.proxy = Proxy{}
+	if err := ConfigLoad(&app.proxy, svcFlag, "dnscrypt-proxy.toml"); err != nil {
+		dlog.Fatal(err)
+	}
+	if len(*svcFlag) != 0 {
+		if err := service.Control(svc, *svcFlag); err != nil {
+			dlog.Fatal(err)
+		}
+		if *svcFlag == "install" {
+			dlog.Notice("Installed as a service. Use `-service start` to start")
+		} else if *svcFlag == "uninstall" {
+			dlog.Notice("Service uninstalled")
+		} else if *svcFlag == "start" {
+			dlog.Notice("Service started")
+		} else if *svcFlag == "stop" {
+			dlog.Notice("Service stopped")
+		} else if *svcFlag == "restart" {
+			dlog.Notice("Service restarted")
+		}
+		return
+	}
+	if err = svc.Run(); err != nil {
 		dlog.Fatal(err)
 	}
 }
 
-func (app *App) Init(env svc.Environment) error {
-	log.Printf("is win service? %v\n", env.IsWindowsService())
-	return nil
-}
-
-func (app *App) Start() error {
-	proxy := Proxy{}
-	if err := ConfigLoad(&proxy, "dnscrypt-proxy.toml"); err != nil {
-		dlog.Fatal(err)
-	}
+func (app *App) Start(service service.Service) error {
+	proxy := app.proxy
 	if err := InitPluginsGlobals(&proxy.pluginsGlobals, &proxy); err != nil {
 		dlog.Fatal(err)
 	}
@@ -79,10 +105,7 @@ func (app *App) Start() error {
 	return nil
 }
 
-func (app *App) Stop() error {
-	dlog.Notice("Stopping...")
-	close(app.quit)
-	app.wg.Wait()
+func (app *App) Stop(service service.Service) error {
 	dlog.Notice("Stopped.")
 	return nil
 }

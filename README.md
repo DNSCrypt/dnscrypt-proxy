@@ -8,31 +8,32 @@ A modern client implementation of the [DNSCrypt](https://github.com/DNSCrypt/dns
 
 ## Current status/features
 
-| Features                                                    | dnscrypt-proxy 1.x                                                           | dnscrypt-proxy 2.x                                      |
-| ----------------------------------------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------- |
-| Status                                                      | Old PoC, barely maintained any more                                          | Very new, but quickly evolving                          |
-| Code quality                                                | Big ugly mess                                                                | Readable, easy to work on                               |
-| Reliability                                                 | Poor, due to completely broken handling of edge cases                        | Excellent                                               |
-| Security                                                    | Written in C, bundles patched versions from old branches of system libraries | Written in standard and portable Go                     |
-| Dependencies                                                | Specific versions of dnscrypt-proxy, libldns and libtool                     | None                                                    |
-| Upstream connections using TCP                              | Catastrophic, requires client retries                                        | Implemented as anyone would expect, works well with TOR |
-| XChaCha20 support                                           | Only if compiled with recent versions of libsodium                           | Yes, always available                                   |
-| Support of links with small MTU                             | Unreliable due to completely broken padding                                  | Reliable, properly implemented                          |
-| Support for multiple servers                                | Nonexistent                                                                  | Yes, with automatic failover and load-balancing         |
-| Custom additions                                            | C API, requires libldns for sanity                                           | Simple Go structures using miekg/dns                    |
-| AAAA blocking for IPv4-only networks                        | Yes                                                                          | Yes                                                     |
-| DNS caching                                                 | Yes, with ugly hacks for DNSSEC support                                      | Yes, without ugly hacks                                 |
-| EDNS support                                                | Broken with custom records                                                   | Yes                                                     |
-| Asynchronous filters                                        | Lol, no, filters block everything                                            | Of course, thanks to Go                                 |
-| Session-local storage for extensions                        | Impossible                                                                   | Yes                                                     |
-| Multicore support                                           | Nonexistent                                                                  | Yes, thanks to Go                                       |
-| Efficient padding of queries                                | Couldn't be any worse                                                        | Yes                                                     |
-| Multiple local sockets                                      | Impossible                                                                   | Of course. IPv4, IPv6, as many as you like              |
-| Automatically picks the fastest servers                     | Lol, it supports only one at a time, anyway                                  | Yes, out of the box                                     |
-| Official, always up-to-date pre-built libraries             | None                                                                         | Yes, for many platforms. See below.                     |
-| Automatically downloads and verifies servers lists          | No. Requires custom scripts, cron jobs and dependencies (minisign)           | Yes, built-in, including signature verification         |
-| Advanced expressions in blacklists (ads*.example[0-9]*.com) | No                                                                           | Yes                                                     |
-| Forwarding with load balancing                              | No                                                                           | Yes                                                     |
+| Features                                                    | dnscrypt-proxy 1.x                                                           | dnscrypt-proxy 2.x                                                   |
+| ----------------------------------------------------------- | ---------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| Status                                                      | Old PoC, barely maintained any more                                          | Very new, but quickly evolving                                       |
+| Code quality                                                | Big ugly mess                                                                | Readable, easy to work on                                            |
+| Reliability                                                 | Poor, due to completely broken handling of edge cases                        | Excellent                                                            |
+| Security                                                    | Written in C, bundles patched versions from old branches of system libraries | Written in standard and portable Go                                  |
+| Dependencies                                                | Specific versions of dnscrypt-proxy, libldns and libtool                     | None                                                                 |
+| Upstream connections using TCP                              | Catastrophic, requires client retries                                        | Implemented as anyone would expect, works well with TOR              |
+| XChaCha20 support                                           | Only if compiled with recent versions of libsodium                           | Yes, always available                                                |
+| Support of links with small MTU                             | Unreliable due to completely broken padding                                  | Reliable, properly implemented                                       |
+| Support for multiple servers                                | Nonexistent                                                                  | Yes, with automatic failover and load-balancing                      |
+| Custom additions                                            | C API, requires libldns for sanity                                           | Simple Go structures using miekg/dns                                 |
+| AAAA blocking for IPv4-only networks                        | Yes                                                                          | Yes                                                                  |
+| DNS caching                                                 | Yes, with ugly hacks for DNSSEC support                                      | Yes, without ugly hacks                                              |
+| EDNS support                                                | Broken with custom records                                                   | Yes                                                                  |
+| Asynchronous filters                                        | Lol, no, filters block everything                                            | Of course, thanks to Go                                              |
+| Session-local storage for extensions                        | Impossible                                                                   | Yes                                                                  |
+| Multicore support                                           | Nonexistent                                                                  | Yes, thanks to Go                                                    |
+| Efficient padding of queries                                | Couldn't be any worse                                                        | Yes                                                                  |
+| Multiple local sockets                                      | Impossible                                                                   | Of course. IPv4, IPv6, as many as you like                           |
+| Automatically picks the fastest servers                     | Lol, it supports only one at a time, anyway                                  | Yes, out of the box                                                  |
+| Official, always up-to-date pre-built libraries             | None                                                                         | Yes, for many platforms. See below.                                  |
+| Automatically downloads and verifies servers lists          | No. Requires custom scripts, cron jobs and dependencies (minisign)           | Yes, built-in, including signature verification                      |
+| Advanced expressions in blacklists (ads*.example[0-9]*.com) | No                                                                           | Yes                                                                  |
+| Forwarding with load balancing                              | No                                                                           | Yes                                                                  |
+| Built-in system installation                                | Only on Windows                                                              | Install/uninstall/start/stop as a service on Windows, Linux/(systemd | Upstart | SysV), and macOS/Launchd |
 
 ## Planned features
 

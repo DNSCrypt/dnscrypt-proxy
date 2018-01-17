@@ -71,10 +71,16 @@
   revision = "13d65f1d301904c28ff6c3256169cc60dd99c9dd"
 
 [[projects]]
-  name = "github.com/judwhite/go-svc"
-  packages = ["svc"]
-  revision = "63c12402f579f0bdf022653c821a1aa5d7544f01"
-  version = "v1.0.0"
+  branch = "master"
+  name = "github.com/kardianos/osext"
+  packages = ["."]
+  revision = "ae77be60afb1dcacde03767a8c37337fad28ac14"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/kardianos/service"
+  packages = ["."]
+  revision = "89346fbadecfd8c0ca98cfd31523f8eba9b4abbf"
 
 [[projects]]
   name = "github.com/miekg/dns"
@@ -113,13 +119,16 @@
   name = "golang.org/x/sys"
   packages = [
     "windows",
-    "windows/svc"
+    "windows/registry",
+    "windows/svc",
+    "windows/svc/eventlog",
+    "windows/svc/mgr"
   ]
   revision = "fff93fa7cd278d84afc205751523809c464168ab"
 
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "f55cf27bd0cdf3a812cf059cadae3be13f9760e19b311628b76498ab4e5c2d58"
+  inputs-digest = "37c01e4336c75cb683760092743ea0e2419b43ad0775db39a46795d8a7a865aa"
   solver-name = "gps-cdcl"
   solver-version = 1

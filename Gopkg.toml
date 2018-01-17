@@ -45,3 +45,7 @@
 [[constraint]]
   name = "github.com/judwhite/go-svc"
   version = "1.0.0"
+
+[[constraint]]
+  branch = "master"
+  name = "github.com/kardianos/service"
