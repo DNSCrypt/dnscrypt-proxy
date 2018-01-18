@@ -21,6 +21,10 @@ const (
 	SourceFormatV1 = iota
 )
 
+const (
+	SourcesUpdateDelayAfterFailure = time.Duration(1) * time.Minute
+)
+
 type Source struct {
 	url    string
 	format SourceFormat
@@ -32,13 +36,16 @@ func fetchFromCache(cacheFile string) ([]byte, error) {
 	return ioutil.ReadFile(cacheFile)
 }
 
-func fetchWithCache(url string, cacheFile string, refreshDelay time.Duration) (in string, cached bool, err error) {
+func fetchWithCache(url string, cacheFile string, refreshDelay time.Duration) (in string, cached bool, delayTillNextUpdate time.Duration, err error) {
 	var bin []byte
 	cached, usableCache, hotCache := false, false, false
+	delayTillNextUpdate = refreshDelay
 	fi, err := os.Stat(cacheFile)
+	var elapsed time.Duration
 	if err == nil {
 		usableCache = true
-		elapsed := time.Since(fi.ModTime())
+		dlog.Debugf("Cache file present for [%s]", url)
+		elapsed = time.Since(fi.ModTime())
 		if elapsed < refreshDelay && elapsed >= 0 {
 			hotCache = true
 		}
@@ -46,7 +53,9 @@ func fetchWithCache(url string, cacheFile string, refreshDelay time.Duration) (i
 	if hotCache {
 		bin, err = fetchFromCache(cacheFile)
 		if err == nil {
+			dlog.Debugf("Cache is still fresh for [%s]", url)
 			cached = true
+			delayTillNextUpdate = refreshDelay - elapsed
 		}
 	}
 	if !cached {
@@ -54,7 +63,9 @@ func fetchWithCache(url string, cacheFile string, refreshDelay time.Duration) (i
 		dlog.Infof("Loading source information from URL [%s]", url)
 		resp, err = http.Get(url)
 		if err != nil {
+			delayTillNextUpdate = SourcesUpdateDelayAfterFailure
 			if usableCache {
+				dlog.Debugf("Falling back to cached version of [%s]", url)
 				bin, err = fetchFromCache(cacheFile)
 			}
 			if err != nil {
@@ -64,6 +75,7 @@ func fetchWithCache(url string, cacheFile string, refreshDelay time.Duration) (i
 			bin, err = ioutil.ReadAll(resp.Body)
 			resp.Body.Close()
 			if err != nil {
+				delayTillNextUpdate = SourcesUpdateDelayAfterFailure
 				if usableCache {
 					bin, err = fetchFromCache(cacheFile)
 				}
@@ -81,47 +93,66 @@ func AtomicFileWrite(file string, data []byte) error {
 	return safefile.WriteFile(file, data, 0644)
 }
 
-func NewSource(url string, minisignKeyStr string, cacheFile string, formatStr string, refreshDelay time.Duration) (Source, error) {
+type URLToPrefetch struct {
+	url       string
+	cacheFile string
+	when      time.Time
+}
+
+func NewSource(url string, minisignKeyStr string, cacheFile string, formatStr string, refreshDelay time.Duration) (Source, []URLToPrefetch, error) {
 	source := Source{url: url}
 	if formatStr != "v1" {
-		return source, fmt.Errorf("Unsupported source format: [%s]", formatStr)
+		return source, []URLToPrefetch{}, fmt.Errorf("Unsupported source format: [%s]", formatStr)
 	}
 	source.format = SourceFormatV1
 	minisignKey, err := minisign.NewPublicKey(minisignKeyStr)
 	if err != nil {
-		return source, err
+		return source, []URLToPrefetch{}, err
 	}
-	in, cached, err := fetchWithCache(url, cacheFile, refreshDelay)
+	sigURL := url + ".minisig"
+	when := time.Now().Add(SourcesUpdateDelayAfterFailure)
+	urlsToPrefetch := []URLToPrefetch{
+		URLToPrefetch{url: url, cacheFile: cacheFile, when: when},
+		URLToPrefetch{url: sigURL, cacheFile: cacheFile, when: when},
+	}
+	in, cached, delayTillNextUpdate, err := fetchWithCache(url, cacheFile, refreshDelay)
 	if err != nil {
-		return source, err
+		return source, urlsToPrefetch, err
 	}
 	sigCacheFile := cacheFile + ".minisig"
-	sigURL := url + ".minisig"
-	sigStr, sigCached, err := fetchWithCache(sigURL, sigCacheFile, refreshDelay)
+	sigStr, sigCached, sigDelayTillNextUpdate, err := fetchWithCache(sigURL, sigCacheFile, refreshDelay)
 	if err != nil {
-		return source, err
+		return source, urlsToPrefetch, err
 	}
 	signature, err := minisign.DecodeSignature(sigStr)
 	if err != nil {
-		return source, err
+		return source, urlsToPrefetch, err
 	}
 	res, err := minisignKey.Verify([]byte(in), signature)
 	if err != nil || !res {
-		return source, err
+		return source, urlsToPrefetch, err
 	}
 	if !cached {
 		if err = AtomicFileWrite(cacheFile, []byte(in)); err != nil {
-			return source, err
+			return source, urlsToPrefetch, err
 		}
 	}
 	if !sigCached {
 		if err = AtomicFileWrite(sigCacheFile, []byte(sigStr)); err != nil {
-			return source, err
+			return source, urlsToPrefetch, err
 		}
 	}
 	dlog.Noticef("Source [%s] loaded", url)
 	source.in = in
-	return source, nil
+	if sigDelayTillNextUpdate < delayTillNextUpdate {
+		delayTillNextUpdate = sigDelayTillNextUpdate
+	}
+	if delayTillNextUpdate < SourcesUpdateDelayAfterFailure {
+		delayTillNextUpdate = SourcesUpdateDelayAfterFailure
+	}
+	when = time.Now().Add(delayTillNextUpdate)
+	urlsToPrefetch = []URLToPrefetch{}
+	return source, urlsToPrefetch, nil
 }
 
 func (source *Source) Parse() ([]RegisteredServer, error) {
@@ -163,4 +194,16 @@ func (source *Source) Parse() ([]RegisteredServer, error) {
 		registeredServers = append(registeredServers, registeredServer)
 	}
 	return registeredServers, nil
+}
+
+func PrefetchSourceURLs(urlsToPrefetch []URLToPrefetch) {
+	if len(urlsToPrefetch) <= 0 {
+		return
+	}
+	dlog.Infof("Prefetching %d source URLs", len(urlsToPrefetch))
+	for _, urlToPrefetch := range urlsToPrefetch {
+		if _, _, _, err := fetchWithCache(urlToPrefetch.url, urlToPrefetch.cacheFile, time.Duration(0)); err != nil {
+			dlog.Debugf("[%s]: %s", urlToPrefetch.url, err)
+		}
+	}
 }

@@ -159,11 +159,12 @@ func ConfigLoad(proxy *Proxy, svcFlag *string, config_file string) error {
 		if source.RefreshDelay <= 0 {
 			source.RefreshDelay = 24
 		}
-		source, err := NewSource(source.URL, source.MinisignKeyStr, source.CacheFile, source.FormatStr, time.Duration(source.RefreshDelay)*time.Hour)
+		source, sourceUrlsToPrefetch, err := NewSource(source.URL, source.MinisignKeyStr, source.CacheFile, source.FormatStr, time.Duration(source.RefreshDelay)*time.Hour)
 		if err != nil {
 			dlog.Criticalf("Unable use source [%s]: [%s]", sourceName, err)
 			continue
 		}
+		proxy.urlsToPrefetch = append(proxy.urlsToPrefetch, sourceUrlsToPrefetch...)
 		registeredServers, err := source.Parse()
 		if err != nil {
 			dlog.Criticalf("Unable use source [%s]: [%s]", sourceName, err)

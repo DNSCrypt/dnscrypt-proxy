@@ -43,6 +43,7 @@ type Proxy struct {
 	blockNameFormat              string
 	forwardFile                  string
 	pluginsGlobals               PluginsGlobals
+	urlsToPrefetch               []URLToPrefetch
 }
 
 type App struct {
@@ -158,6 +159,7 @@ func (proxy *Proxy) StartProxy() {
 	if liveServers > 0 {
 		dlog.Noticef("dnscrypt-proxy %s is ready - live servers: %d", AppVersion, liveServers)
 		daemon.SdNotify(false, "READY=1")
+		PrefetchSourceURLs(proxy.urlsToPrefetch)
 	} else if err != nil {
 		dlog.Error(err)
 		dlog.Notice("dnscrypt-proxy is waiting for at least one server to be reachable")
