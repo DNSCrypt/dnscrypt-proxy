@@ -123,11 +123,13 @@ func NewSource(url string, minisignKeyStr string, cacheFile string, formatStr st
 	}
 	in, cached, fromBackup, delayTillNextUpdate, err := fetchWithCache(url, cacheFile, refreshDelay)
 	if err != nil {
+		dlog.Debugf("Scheduling [%s] for prefetch", url)
 		return source, urlsToPrefetch, err
 	}
 	sigCacheFile := cacheFile + ".minisig"
 	sigStr, sigCached, sigFromBackup, sigDelayTillNextUpdate, err := fetchWithCache(sigURL, sigCacheFile, refreshDelay)
 	if err != nil {
+		dlog.Debugf("Scheduling [%s] for prefetch", sigURL)
 		return source, urlsToPrefetch, err
 	}
 	signature, err := minisign.DecodeSignature(sigStr)

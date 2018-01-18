@@ -54,6 +54,8 @@ type App struct {
 
 func main() {
 	dlog.Init("dnscrypt-proxy", dlog.SeverityNotice, "DAEMON")
+	dlog.Noticef("Starting dnscrypt-proxy %s", AppVersion)
+
 	cdLocal()
 
 	svcConfig := &service.Config{
@@ -99,7 +101,6 @@ func main() {
 }
 
 func (app *App) Start(service service.Service) error {
-	dlog.Noticef("Starting dnscrypt-proxy %s", AppVersion)
 	proxy := app.proxy
 	if err := InitPluginsGlobals(&proxy.pluginsGlobals, &proxy); err != nil {
 		dlog.Fatal(err)
