@@ -51,7 +51,7 @@ type App struct {
 }
 
 func main() {
-	dlog.Init("dnscrypt-proxy", dlog.SeverityNotice)
+	dlog.Init("dnscrypt-proxy", dlog.SeverityNotice, "DAEMON")
 	cdLocal()
 
 	svcConfig := &service.Config{

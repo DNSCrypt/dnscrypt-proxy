@@ -45,6 +45,12 @@
 
 [[projects]]
   branch = "master"
+  name = "github.com/hashicorp/go-syslog"
+  packages = ["."]
+  revision = "326bf4a7f709d263f964a6a96558676b103f3534"
+
+[[projects]]
+  branch = "master"
   name = "github.com/hashicorp/golang-lru"
   packages = [
     ".",
@@ -56,7 +62,7 @@
   branch = "master"
   name = "github.com/jedisct1/dlog"
   packages = ["."]
-  revision = "8c253f4161c5b23a5fedd1d1ccee28d7ea312c6c"
+  revision = "fcbcc457e6a2b4eab2325a0902fd3d0a7d17e548"
 
 [[projects]]
   branch = "master"

@@ -69,7 +69,6 @@ The current 2.0.0 beta version includes all the major features from dnscrypt-pro
 * New super simple (to copy&paste), extensible format for servers parameters: "stamps"
 * Offline responses
 * Local DNSSEC validation
-* Flexible logging
 * [DNS-over-HTTP2 (DoH)](https://datatracker.ietf.org/wg/doh/about/), the successor to DNS-over-TLS
 * Support for the V1 plugin API
 * Real documentation

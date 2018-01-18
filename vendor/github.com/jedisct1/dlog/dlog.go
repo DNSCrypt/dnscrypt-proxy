@@ -9,14 +9,21 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/hashicorp/go-syslog"
 )
 
 type Severity int32
 
 type globals struct {
 	sync.Mutex
-	logLevel Severity
-	appName  string
+	logLevel       Severity
+	useSyslog      *bool
+	appName        string
+	syslogFacility string
+	syslogger      *gsyslog.Syslogger
+	fileName       *string
+	outFd          *os.File
 }
 
 var (
@@ -45,6 +52,16 @@ var SeverityName = []string{
 	SeverityError:    "ERROR",
 	SeverityCritical: "CRITICAL",
 	SeverityFatal:    "FATAL",
+}
+
+var severityToSyslogPriority = []gsyslog.Priority{
+	SeverityDebug:    gsyslog.LOG_DEBUG,
+	SeverityInfo:     gsyslog.LOG_INFO,
+	SeverityNotice:   gsyslog.LOG_NOTICE,
+	SeverityWarning:  gsyslog.LOG_WARNING,
+	SeverityError:    gsyslog.LOG_ERR,
+	SeverityCritical: gsyslog.LOG_CRIT,
+	SeverityFatal:    gsyslog.LOG_ALERT,
 }
 
 func Debugf(format string, args ...interface{}) {
@@ -125,9 +142,18 @@ func (s *Severity) Set(strVal string) error {
 	return nil
 }
 
-func Init(appName string, logLevel Severity) {
+func Init(appName string, logLevel Severity, syslogFacility string) error {
 	_globals.logLevel.set(logLevel)
+
+	if len(syslogFacility) == 0 {
+		syslogFacility = "DAEMON"
+	}
+	_globals.appName = appName
+	_globals.syslogFacility = syslogFacility
+	_globals.useSyslog = flag.Bool("syslog", false, "Send logs to the local system logger")
+	_globals.fileName = flag.String("logfile", "", "Write logs to file")
 	flag.Var(&_globals.logLevel, "loglevel", fmt.Sprintf("Log level (%d-%d)", SeverityDebug, SeverityFatal))
+	return nil
 }
 
 func logf(severity Severity, format string, args ...interface{}) {
@@ -142,10 +168,33 @@ func logf(severity Severity, format string, args ...interface{}) {
 	if len(message) <= 0 {
 		return
 	}
-	line := fmt.Sprintf("[%d-%02d-%02d %02d:%02d:%02d] [%s] [%s] %s\n", year, int(month), day, hour, minute, second, _globals.appName, SeverityName[severity], message)
 	_globals.Lock()
-	os.Stderr.WriteString(line)
-	_globals.Unlock()
+	defer _globals.Unlock()
+	if *_globals.useSyslog && _globals.syslogger == nil {
+		syslogger, err := gsyslog.NewLogger(gsyslog.LOG_INFO, _globals.syslogFacility, _globals.appName)
+		if err != nil {
+			panic(err)
+		}
+		_globals.syslogger = &syslogger
+	}
+	if _globals.fileName != nil && len(*_globals.fileName) > 0 && _globals.outFd == nil {
+		outFd, err := os.OpenFile(*_globals.fileName, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644)
+		if err != nil {
+			panic(err)
+		}
+		_globals.outFd = outFd
+	}
+	if _globals.syslogger != nil {
+		(*_globals.syslogger).WriteLevel(severityToSyslogPriority[severity], []byte(message))
+	} else {
+		line := fmt.Sprintf("[%d-%02d-%02d %02d:%02d:%02d] [%s] [%s] %s\n", year, int(month), day, hour, minute, second, _globals.appName, SeverityName[severity], message)
+		if _globals.outFd != nil {
+			_globals.outFd.WriteString(line)
+			_globals.outFd.Sync()
+		} else {
+			os.Stderr.WriteString(line)
+		}
+	}
 	if severity >= SeverityFatal {
 		os.Exit(255)
 	}
