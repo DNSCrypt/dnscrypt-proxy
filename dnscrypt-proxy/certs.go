@@ -71,6 +71,14 @@ func FetchCurrentCert(proxy *Proxy, proto string, pk ed25519.PublicKey, serverAd
 		serial := binary.BigEndian.Uint32(binCert[112:116])
 		tsBegin := binary.BigEndian.Uint32(binCert[116:120])
 		tsEnd := binary.BigEndian.Uint32(binCert[120:124])
+		if tsBegin >= tsEnd {
+			dlog.Warnf("[%v] certificate ends before it starts")
+			continue
+		}
+		ttl := tsEnd - tsBegin
+		if ttl > 86400 {
+			dlog.Warnf("[%v] the key validity period for this server is excessively long (%d days), significantly reducing reliability and forward security.", providerName, ttl/86400)
+		}
 		if now > tsEnd || now < tsBegin {
 			dlog.Debugf("[%v] Certificate not valid at the current date", providerName)
 			continue
@@ -108,7 +116,7 @@ func FetchCurrentCert(proxy *Proxy, proto string, pk ed25519.PublicKey, serverAd
 		certInfo.CryptoConstruction = cryptoConstruction
 		copy(certInfo.ServerPk[:], serverPk[:])
 		copy(certInfo.MagicQuery[:], binCert[104:112])
-		dlog.Noticef("[%v] Valid cert (crypto version %d) found - rtt: %dms", providerName, cryptoConstruction, rtt.Nanoseconds()/1000000)
+		dlog.Noticef("[%v] OK (crypto v%d) - rtt: %dms", providerName, cryptoConstruction, rtt.Nanoseconds()/1000000)
 	}
 	if certInfo.CryptoConstruction == UndefinedConstruction {
 		return certInfo, 0, errors.New("No useable certificate found")

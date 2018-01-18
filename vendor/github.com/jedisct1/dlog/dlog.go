@@ -187,7 +187,7 @@ func logf(severity Severity, format string, args ...interface{}) {
 	if _globals.syslogger != nil {
 		(*_globals.syslogger).WriteLevel(severityToSyslogPriority[severity], []byte(message))
 	} else {
-		line := fmt.Sprintf("[%d-%02d-%02d %02d:%02d:%02d] [%s] [%s] %s\n", year, int(month), day, hour, minute, second, _globals.appName, SeverityName[severity], message)
+		line := fmt.Sprintf("[%d-%02d-%02d %02d:%02d:%02d] [%s] %s\n", year, int(month), day, hour, minute, second, SeverityName[severity], message)
 		if _globals.outFd != nil {
 			_globals.outFd.WriteString(line)
 			_globals.outFd.Sync()
