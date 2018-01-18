@@ -19,6 +19,7 @@ type CertInfo struct {
 	SharedKey          [32]byte
 	MagicQuery         [ClientMagicLen]byte
 	CryptoConstruction CryptoConstruction
+	ForwardSecurity    bool
 }
 
 func FetchCurrentCert(proxy *Proxy, proto string, pk ed25519.PublicKey, serverAddress string, providerName string) (CertInfo, int, error) {
@@ -77,7 +78,10 @@ func FetchCurrentCert(proxy *Proxy, proto string, pk ed25519.PublicKey, serverAd
 		}
 		ttl := tsEnd - tsBegin
 		if ttl > 86400*7 {
-			dlog.Warnf("[%v] the key validity period for this server is excessively long (%d days), significantly reducing reliability and forward security.", providerName, ttl/86400)
+			dlog.Infof("[%v] the key validity period for this server is excessively long (%d days), significantly reducing reliability and forward security.", providerName, ttl/86400)
+			certInfo.ForwardSecurity = false
+		} else {
+			certInfo.ForwardSecurity = true
 		}
 		if now > tsEnd || now < tsBegin {
 			dlog.Debugf("[%v] Certificate not valid at the current date", providerName)
