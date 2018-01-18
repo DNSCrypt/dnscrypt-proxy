@@ -61,7 +61,8 @@ func main() {
 	app := &App{}
 	svc, err := service.New(app, svcConfig)
 	if err != nil {
-		dlog.Fatal(err)
+		svc = nil
+		dlog.Debug(err)
 	}
 	app.proxy = Proxy{}
 	if err := ConfigLoad(&app.proxy, svcFlag, "dnscrypt-proxy.toml"); err != nil {
@@ -84,8 +85,12 @@ func main() {
 		}
 		return
 	}
-	if err = svc.Run(); err != nil {
-		dlog.Fatal(err)
+	if svc != nil {
+		if err = svc.Run(); err != nil {
+			dlog.Fatal(err)
+		}
+	} else {
+		app.Start(nil)
 	}
 }
 
@@ -99,13 +104,21 @@ func (app *App) Start(service service.Service) error {
 	}
 	app.quit = make(chan struct{})
 	app.wg.Add(1)
-	go func() {
-		proxy.StartProxy()
-		<-app.quit
-		dlog.Notice("Quit signal received...")
-		app.wg.Done()
-	}()
+	if service != nil {
+		go func() {
+			app.AppMain(&proxy)
+		}()
+	} else {
+		app.AppMain(&proxy)
+	}
 	return nil
+}
+
+func (app *App) AppMain(proxy *Proxy) {
+	proxy.StartProxy()
+	<-app.quit
+	dlog.Notice("Quit signal received...")
+	app.wg.Done()
 }
 
 func (app *App) Stop(service service.Service) error {

@@ -33,7 +33,7 @@ script:
   - zip -9 -r dnscrypt-proxy-win64-${TRAVIS_TAG:-dev}.zip win64
 
   - go clean
-  - env GOOS=openbsd GOARCH=386 go build -ldflags="-s -w"
+  - env GO386=387 GOOS=openbsd GOARCH=386 go build -ldflags="-s -w"
   - mkdir openbsd-i386
   - ln dnscrypt-proxy openbsd-i386/
   - ln ../LICENSE dnscrypt-proxy.toml forwarding-rules.txt blacklist.txt openbsd-i386/
