@@ -76,7 +76,7 @@ func FetchCurrentCert(proxy *Proxy, proto string, pk ed25519.PublicKey, serverAd
 			continue
 		}
 		ttl := tsEnd - tsBegin
-		if ttl > 86400 {
+		if ttl > 86400*7 {
 			dlog.Warnf("[%v] the key validity period for this server is excessively long (%d days), significantly reducing reliability and forward security.", providerName, ttl/86400)
 		}
 		if now > tsEnd || now < tsBegin {
