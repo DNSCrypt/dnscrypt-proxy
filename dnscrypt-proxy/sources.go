@@ -105,15 +105,15 @@ func NewSource(url string, minisignKeyStr string, cacheFile string, formatStr st
 		return source, err
 	}
 	res, err := minisignKey.Verify([]byte(in), signature)
-	if err != nil || res != true {
+	if err != nil || !res {
 		return source, err
 	}
-	if cached == false {
+	if !cached {
 		if err = AtomicFileWrite(cacheFile, []byte(in)); err != nil {
 			return source, err
 		}
 	}
-	if sigCached == false {
+	if !sigCached {
 		if err = AtomicFileWrite(sigCacheFile, []byte(sigStr)); err != nil {
 			return source, err
 		}
