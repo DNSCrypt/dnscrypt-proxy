@@ -32,6 +32,12 @@
   revision = "6cf43fdfd7a228cf3003ae23d10ddbf65e85997b"
 
 [[projects]]
+  name = "github.com/coreos/go-systemd"
+  packages = ["daemon"]
+  revision = "d2196463941895ee908e13531a23a39feb9e1243"
+  version = "v15"
+
+[[projects]]
   branch = "master"
   name = "github.com/dchest/safefile"
   packages = ["."]
@@ -135,6 +141,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "37c01e4336c75cb683760092743ea0e2419b43ad0775db39a46795d8a7a865aa"
+  inputs-digest = "bd47db362365a135ccf6bee5bcfcc4732b9e1aa6911e01c76de008dc3faf3844"
   solver-name = "gps-cdcl"
   solver-version = 1

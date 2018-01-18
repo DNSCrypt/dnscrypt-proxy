@@ -49,3 +49,7 @@
 [[constraint]]
   branch = "master"
   name = "github.com/kardianos/service"
+
+[[constraint]]
+  name = "github.com/coreos/go-systemd"
+  version = "15.0.0"

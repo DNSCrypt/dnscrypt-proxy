@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/coreos/go-systemd/daemon"
 	"github.com/jedisct1/dlog"
 	"github.com/kardianos/service"
 	"golang.org/x/crypto/curve25519"
@@ -156,6 +157,7 @@ func (proxy *Proxy) StartProxy() {
 	liveServers, err := proxy.serversInfo.refresh(proxy)
 	if liveServers > 0 {
 		dlog.Noticef("dnscrypt-proxy %s is ready - live servers: %d", AppVersion, liveServers)
+		daemon.SdNotify(false, "READY=1")
 	} else if err != nil {
 		dlog.Error(err)
 		dlog.Notice("dnscrypt-proxy is waiting for at least one server to be reachable")
