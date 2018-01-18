@@ -99,6 +99,7 @@ func main() {
 }
 
 func (app *App) Start(service service.Service) error {
+	dlog.Noticef("Starting dnscrypt-proxy %s", AppVersion)
 	proxy := app.proxy
 	if err := InitPluginsGlobals(&proxy.pluginsGlobals, &proxy); err != nil {
 		dlog.Fatal(err)
@@ -157,7 +158,7 @@ func (proxy *Proxy) StartProxy() {
 	}
 	liveServers, err := proxy.serversInfo.refresh(proxy)
 	if liveServers > 0 {
-		dlog.Noticef("dnscrypt-proxy %s is ready - live servers: %d", AppVersion, liveServers)
+		dlog.Noticef("dnscrypt-proxy is ready - live servers: %d", liveServers)
 		daemon.SdNotify(false, "READY=1")
 		PrefetchSourceURLs(proxy.urlsToPrefetch)
 	} else if err != nil {

@@ -36,9 +36,9 @@ func fetchFromCache(cacheFile string) ([]byte, error) {
 	return ioutil.ReadFile(cacheFile)
 }
 
-func fetchWithCache(url string, cacheFile string, refreshDelay time.Duration) (in string, cached bool, delayTillNextUpdate time.Duration, err error) {
+func fetchWithCache(url string, cacheFile string, refreshDelay time.Duration) (in string, cached bool, fromBackup bool, delayTillNextUpdate time.Duration, err error) {
 	var bin []byte
-	cached, usableCache, hotCache := false, false, false
+	cached, fromBackup, usableCache, hotCache := false, false, false, false
 	delayTillNextUpdate = refreshDelay
 	fi, err := os.Stat(cacheFile)
 	var elapsed time.Duration
@@ -62,7 +62,7 @@ func fetchWithCache(url string, cacheFile string, refreshDelay time.Duration) (i
 		var resp *http.Response
 		dlog.Infof("Loading source information from URL [%s]", url)
 		resp, err = http.Get(url)
-		if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		if err == nil && resp != nil && (resp.StatusCode < 200 || resp.StatusCode > 299) {
 			err = fmt.Errorf("Webserver returned code %d", resp.StatusCode)
 		}
 		if err != nil {
@@ -74,6 +74,7 @@ func fetchWithCache(url string, cacheFile string, refreshDelay time.Duration) (i
 			if err != nil {
 				return
 			}
+			fromBackup = true
 		} else {
 			bin, err = ioutil.ReadAll(resp.Body)
 			resp.Body.Close()
@@ -85,6 +86,7 @@ func fetchWithCache(url string, cacheFile string, refreshDelay time.Duration) (i
 				if err != nil {
 					return
 				}
+				fromBackup = true
 			}
 		}
 	}
@@ -119,12 +121,12 @@ func NewSource(url string, minisignKeyStr string, cacheFile string, formatStr st
 		URLToPrefetch{url: url, cacheFile: cacheFile, when: when},
 		URLToPrefetch{url: sigURL, cacheFile: cacheFile, when: when},
 	}
-	in, cached, delayTillNextUpdate, err := fetchWithCache(url, cacheFile, refreshDelay)
+	in, cached, fromBackup, delayTillNextUpdate, err := fetchWithCache(url, cacheFile, refreshDelay)
 	if err != nil {
 		return source, urlsToPrefetch, err
 	}
 	sigCacheFile := cacheFile + ".minisig"
-	sigStr, sigCached, sigDelayTillNextUpdate, err := fetchWithCache(sigURL, sigCacheFile, refreshDelay)
+	sigStr, sigCached, sigFromBackup, sigDelayTillNextUpdate, err := fetchWithCache(sigURL, sigCacheFile, refreshDelay)
 	if err != nil {
 		return source, urlsToPrefetch, err
 	}
@@ -159,7 +161,9 @@ func NewSource(url string, minisignKeyStr string, cacheFile string, formatStr st
 		delayTillNextUpdate = SourcesUpdateDelayAfterFailure
 	}
 	when = time.Now().Add(delayTillNextUpdate)
-	urlsToPrefetch = []URLToPrefetch{}
+	if !fromBackup && !sigFromBackup {
+		urlsToPrefetch = []URLToPrefetch{}
+	}
 	return source, urlsToPrefetch, nil
 }
 
@@ -210,7 +214,7 @@ func PrefetchSourceURLs(urlsToPrefetch []URLToPrefetch) {
 	}
 	dlog.Infof("Prefetching %d source URLs", len(urlsToPrefetch))
 	for _, urlToPrefetch := range urlsToPrefetch {
-		if _, _, _, err := fetchWithCache(urlToPrefetch.url, urlToPrefetch.cacheFile, time.Duration(0)); err != nil {
+		if _, _, _, _, err := fetchWithCache(urlToPrefetch.url, urlToPrefetch.cacheFile, time.Duration(0)); err != nil {
 			dlog.Debugf("[%s]: %s", urlToPrefetch.url, err)
 		}
 	}
