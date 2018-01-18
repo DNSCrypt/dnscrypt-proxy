@@ -62,6 +62,9 @@ func fetchWithCache(url string, cacheFile string, refreshDelay time.Duration) (i
 		var resp *http.Response
 		dlog.Infof("Loading source information from URL [%s]", url)
 		resp, err = http.Get(url)
+		if resp.StatusCode < 200 || resp.StatusCode > 299 {
+			err = fmt.Errorf("Webserver returned code %d", resp.StatusCode)
+		}
 		if err != nil {
 			delayTillNextUpdate = SourcesUpdateDelayAfterFailure
 			if usableCache {
@@ -85,6 +88,7 @@ func fetchWithCache(url string, cacheFile string, refreshDelay time.Duration) (i
 			}
 		}
 	}
+	err = nil
 	in = string(bin)
 	return
 }
