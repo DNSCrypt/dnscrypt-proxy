@@ -13,35 +13,38 @@ import (
 )
 
 type Config struct {
-	ServerNames      []string `toml:"server_names"`
-	ListenAddresses  []string `toml:"listen_addresses"`
-	Daemonize        bool
-	ForceTCP         bool `toml:"force_tcp"`
-	Timeout          int  `toml:"timeout_ms"`
-	CertRefreshDelay int  `toml:"cert_refresh_delay"`
-	BlockIPv6        bool `toml:"block_ipv6"`
-	Cache            bool
-	CacheSize        int                     `toml:"cache_size"`
-	CacheNegTTL      uint32                  `toml:"cache_neg_ttl"`
-	CacheMinTTL      uint32                  `toml:"cache_min_ttl"`
-	CacheMaxTTL      uint32                  `toml:"cache_max_ttl"`
-	QueryLog         QueryLogConfig          `toml:"query_log"`
-	BlockName        BlockNameConfig         `toml:"blacklist"`
-	ForwardFile      string                  `toml:"forwarding_rules"`
-	ServersConfig    map[string]ServerConfig `toml:"servers"`
-	SourcesConfig    map[string]SourceConfig `toml:"sources"`
+	ServerNames         []string `toml:"server_names"`
+	ListenAddresses     []string `toml:"listen_addresses"`
+	Daemonize           bool
+	ForceTCP            bool `toml:"force_tcp"`
+	Timeout             int  `toml:"timeout_ms"`
+	CertRefreshDelay    int  `toml:"cert_refresh_delay"`
+	BlockIPv6           bool `toml:"block_ipv6"`
+	Cache               bool
+	CacheSize           int                     `toml:"cache_size"`
+	CacheNegTTL         uint32                  `toml:"cache_neg_ttl"`
+	CacheMinTTL         uint32                  `toml:"cache_min_ttl"`
+	CacheMaxTTL         uint32                  `toml:"cache_max_ttl"`
+	QueryLog            QueryLogConfig          `toml:"query_log"`
+	BlockName           BlockNameConfig         `toml:"blacklist"`
+	ForwardFile         string                  `toml:"forwarding_rules"`
+	ServersConfig       map[string]ServerConfig `toml:"servers"`
+	SourcesConfig       map[string]SourceConfig `toml:"sources"`
+	SourceRequireDNSSEC bool                    `toml:"require_dnssec"`
+	SourceRequireNoLog  bool                    `toml:"require_nolog"`
 }
 
 func newConfig() Config {
 	return Config{
-		ListenAddresses:  []string{"127.0.0.1:53"},
-		Timeout:          2500,
-		CertRefreshDelay: 30,
-		Cache:            true,
-		CacheSize:        256,
-		CacheNegTTL:      60,
-		CacheMinTTL:      60,
-		CacheMaxTTL:      8600,
+		ListenAddresses:    []string{"127.0.0.1:53"},
+		Timeout:            2500,
+		CertRefreshDelay:   30,
+		Cache:              true,
+		CacheSize:          256,
+		CacheNegTTL:        60,
+		CacheMinTTL:        60,
+		CacheMaxTTL:        8600,
+		SourceRequireNoLog: true,
 	}
 }
 
@@ -50,8 +53,8 @@ type ServerConfig struct {
 	ProviderName string `toml:"provider_name"`
 	Address      string
 	PublicKey    string `toml:"public_key"`
-	NoLog        bool   `toml:"no_log"`
 	DNSSEC       bool   `toml:"dnssec"`
+	NoLog        bool   `toml:"no_log"`
 }
 
 type SourceConfig struct {
@@ -131,6 +134,15 @@ func ConfigLoad(proxy *Proxy, svcFlag *string, config_file string) error {
 	proxy.blockNameLogFile = config.BlockName.LogFile
 
 	proxy.forwardFile = config.ForwardFile
+
+	requiredProps := ServerInformalProperties(0)
+	if config.SourceRequireDNSSEC {
+		requiredProps |= ServerInformalPropertyDNSSEC
+	}
+	if config.SourceRequireNoLog {
+		requiredProps |= ServerInformalPropertyNoLog
+	}
+
 	for sourceName, source := range config.SourcesConfig {
 		if source.URL == "" {
 			return fmt.Errorf("Missing URL for source [%s]", sourceName)
@@ -158,7 +170,11 @@ func ConfigLoad(proxy *Proxy, svcFlag *string, config_file string) error {
 			continue
 		}
 		for _, registeredServer := range registeredServers {
-			if len(config.ServerNames) > 0 && !includesName(config.ServerNames, registeredServer.name) {
+			if len(config.ServerNames) > 0 {
+				if !includesName(config.ServerNames, registeredServer.name) {
+					continue
+				}
+			} else if registeredServer.stamp.props&requiredProps != requiredProps {
 				continue
 			}
 			dlog.Infof("Adding [%s] to the set of wanted resolvers", registeredServer.name)
@@ -180,7 +196,14 @@ func ConfigLoad(proxy *Proxy, svcFlag *string, config_file string) error {
 		if len(serverConfig.Stamp) > 0 {
 			dlog.Fatal("Stamps are not implemented yet")
 		} else {
-			stamp, err = NewServerStampFromLegacy(serverConfig.Address, serverConfig.PublicKey, serverConfig.ProviderName)
+			props := ServerInformalProperties(0)
+			if serverConfig.DNSSEC {
+				props |= ServerInformalPropertyDNSSEC
+			}
+			if serverConfig.NoLog {
+				props |= ServerInformalPropertyNoLog
+			}
+			stamp, err = NewServerStampFromLegacy(serverConfig.Address, serverConfig.PublicKey, serverConfig.ProviderName, props)
 			if err != nil {
 				return err
 			}

@@ -22,6 +22,15 @@
 listen_addresses = ["127.0.0.1:53", "[::1]:53"]
 
 
+## Require servers defined by remote sources to satisfy specific properties
+
+# Server must support DNS security extensions
+require_dnssec = false
+
+# Server must not log user queries
+require_nolog  = true
+
+
 ## Whether to the server as a background process (linux only)
 ## Do not set to true if you are using systemd
 

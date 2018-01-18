@@ -145,7 +145,14 @@ func (source *Source) Parse() ([]RegisteredServer, error) {
 		serverAddrStr := record[10]
 		providerName := record[11]
 		serverPkStr := record[12]
-		stamp, err := NewServerStampFromLegacy(serverAddrStr, serverPkStr, providerName)
+		props := ServerInformalProperties(0)
+		if strings.EqualFold(record[7], "yes") {
+			props |= ServerInformalPropertyDNSSEC
+		}
+		if strings.EqualFold(record[8], "yes") {
+			props |= ServerInformalPropertyNoLog
+		}
+		stamp, err := NewServerStampFromLegacy(serverAddrStr, serverPkStr, providerName, props)
 		if err != nil {
 			return registeredServers, err
 		}
