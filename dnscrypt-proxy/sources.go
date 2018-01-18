@@ -130,10 +130,14 @@ func NewSource(url string, minisignKeyStr string, cacheFile string, formatStr st
 	}
 	signature, err := minisign.DecodeSignature(sigStr)
 	if err != nil {
+		os.Remove(cacheFile)
+		os.Remove(sigCacheFile)
 		return source, urlsToPrefetch, err
 	}
 	res, err := minisignKey.Verify([]byte(in), signature)
 	if err != nil || !res {
+		os.Remove(cacheFile)
+		os.Remove(sigCacheFile)
 		return source, urlsToPrefetch, err
 	}
 	if !cached {
