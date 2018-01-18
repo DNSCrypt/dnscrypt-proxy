@@ -34,15 +34,16 @@ func fetchFromCache(cacheFile string) ([]byte, error) {
 
 func fetchWithCache(url string, cacheFile string, refreshDelay time.Duration) (in string, cached bool, err error) {
 	var bin []byte
-	cached, usableCache := false, false
+	cached, usableCache, hotCache := false, false, false
 	fi, err := os.Stat(cacheFile)
 	if err == nil {
+		usableCache = true
 		elapsed := time.Since(fi.ModTime())
 		if elapsed < refreshDelay && elapsed >= 0 {
-			usableCache = true
+			hotCache = true
 		}
 	}
-	if usableCache {
+	if hotCache {
 		bin, err = fetchFromCache(cacheFile)
 		if err == nil {
 			cached = true
