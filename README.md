@@ -4,7 +4,7 @@
 
 A modern client implementation of the [DNSCrypt](https://github.com/DNSCrypt/dnscrypt-protocol/blob/master/DNSCRYPT-V2-PROTOCOL.txt) protocol.
 
-## [dnscrypt-proxy 2.0.0beta1 is available for download!](https://github.com/jedisct1/dnscrypt-proxy/releases/latest)
+## [dnscrypt-proxy 2.0.0beta2 is available for download!](https://github.com/jedisct1/dnscrypt-proxy/releases/latest)
 
 ## Installation
 
