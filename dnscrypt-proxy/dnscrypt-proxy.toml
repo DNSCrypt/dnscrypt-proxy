@@ -28,7 +28,10 @@ listen_addresses = ["127.0.0.1:53", "[::1]:53"]
 require_dnssec = false
 
 # Server must not log user queries
-require_nolog  = true
+require_nolog = true
+
+# Server must not enforce its own blacklist (for parental control, ads blocking...)
+require_nofilter = true
 
 
 ## Whether to the server as a background process (linux only)
