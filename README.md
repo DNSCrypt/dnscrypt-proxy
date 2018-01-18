@@ -24,7 +24,7 @@ dnscrypt-proxy is a flexible DNS proxy. It runs on your computer or router, and 
 
 ### Installing as a system service (Windows, Linux, MacOS)
 
-Type `dnscrypt-proxy -service install` to register dnscrypt-proxy as a system service, and `dnscrypt-proxy -service start` to start it.
+With administrator privileges, type `dnscrypt-proxy -service install` to register dnscrypt-proxy as a system service, and `dnscrypt-proxy -service start` to start it.
 
 Done. It will automatically start at boot.
 
@@ -70,7 +70,7 @@ The current 2.0.0 beta version includes all the major features from dnscrypt-pro
 * Offline responses
 * Local DNSSEC validation
 * Flexible logging
-* [DNS-over-HTTPS (DoH)](https://datatracker.ietf.org/wg/doh/about/), the successor to DNS-over-TLS
+* [DNS-over-HTTP2 (DoH)](https://datatracker.ietf.org/wg/doh/about/), the successor to DNS-over-TLS
 * Support for the V1 plugin API
 * Real documentation
 
