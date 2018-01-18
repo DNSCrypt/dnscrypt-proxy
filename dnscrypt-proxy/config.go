@@ -4,6 +4,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -73,10 +74,15 @@ type BlockNameConfig struct {
 }
 
 func ConfigLoad(proxy *Proxy, svcFlag *string, config_file string) error {
+	version := flag.Bool("version", false, "prints current proxy version")
 	configFile := flag.String("config", "dnscrypt-proxy.toml", "path to the configuration file")
 	flag.Parse()
 	if *svcFlag == "stop" || *svcFlag == "uninstall" {
 		return nil
+	}
+	if *version {
+		fmt.Println(AppVersion)
+		os.Exit(0)
 	}
 	config := newConfig()
 	if _, err := toml.DecodeFile(*configFile, &config); err != nil {

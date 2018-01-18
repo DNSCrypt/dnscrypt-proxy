@@ -15,6 +15,8 @@ import (
 	"golang.org/x/crypto/curve25519"
 )
 
+const AppVersion = "2.0.0beta2"
+
 type Proxy struct {
 	proxyPublicKey               [32]byte
 	proxySecretKey               [32]byte
@@ -153,7 +155,7 @@ func (proxy *Proxy) StartProxy() {
 	}
 	liveServers, err := proxy.serversInfo.refresh(proxy)
 	if liveServers > 0 {
-		dlog.Noticef("dnscrypt-proxy is ready - live servers: %d", liveServers)
+		dlog.Noticef("dnscrypt-proxy %s is ready - live servers: %d", AppVersion, liveServers)
 	} else if err != nil {
 		dlog.Error(err)
 		dlog.Notice("dnscrypt-proxy is waiting for at least one server to be reachable")
