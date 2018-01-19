@@ -29,11 +29,15 @@ func FetchCurrentCert(proxy *Proxy, serverName *string, proto string, pk ed25519
 	if !strings.HasSuffix(providerName, ".") {
 		providerName = providerName + "."
 	}
+	if serverName == nil {
+		serverName = &providerName
+	}
 	query := new(dns.Msg)
 	query.SetQuestion(providerName, dns.TypeTXT)
 	client := dns.Client{Net: proto, UDPSize: uint16(MaxDNSUDPPacketSize)}
 	in, rtt, err := client.Exchange(query, serverAddress)
 	if err != nil {
+		dlog.Noticef("[%s] UNREACHABLE", *serverName)
 		return CertInfo{}, 0, err
 	}
 	now := uint32(time.Now().Unix())
@@ -120,9 +124,6 @@ func FetchCurrentCert(proxy *Proxy, serverName *string, proto string, pk ed25519
 		certInfo.CryptoConstruction = cryptoConstruction
 		copy(certInfo.ServerPk[:], serverPk[:])
 		copy(certInfo.MagicQuery[:], binCert[104:112])
-		if serverName == nil {
-			serverName = &providerName
-		}
 		dlog.Noticef("[%s] OK (crypto v%d) - rtt: %dms", *serverName, cryptoConstruction, rtt.Nanoseconds()/1000000)
 	}
 	if certInfo.CryptoConstruction == UndefinedConstruction {

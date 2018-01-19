@@ -32,6 +32,8 @@ type Config struct {
 	SourcesConfig       map[string]SourceConfig `toml:"sources"`
 	SourceRequireDNSSEC bool                    `toml:"require_dnssec"`
 	SourceRequireNoLog  bool                    `toml:"require_nolog"`
+	SourceIPv4          bool                    `toml:"ipv4_servers"`
+	SourceIPv6          bool                    `toml:"ipv6_servers"`
 }
 
 func newConfig() Config {
@@ -45,6 +47,8 @@ func newConfig() Config {
 		CacheMinTTL:        60,
 		CacheMaxTTL:        8600,
 		SourceRequireNoLog: true,
+		SourceIPv4:         true,
+		SourceIPv6:         false,
 	}
 }
 
@@ -55,6 +59,8 @@ type ServerConfig struct {
 	PublicKey    string `toml:"public_key"`
 	DNSSEC       bool   `toml:"dnssec"`
 	NoLog        bool   `toml:"no_log"`
+	IPv4         bool   `toml:"ipv4"`
+	IPv6         bool   `toml:"ipv6"`
 }
 
 type SourceConfig struct {
@@ -179,6 +185,15 @@ func ConfigLoad(proxy *Proxy, svcFlag *string, config_file string) error {
 				}
 			} else if registeredServer.stamp.props&requiredProps != requiredProps {
 				continue
+			}
+			if config.SourceIPv4 || config.SourceIPv6 {
+				isIPv4, isIPv6 := true, false
+				if strings.HasPrefix(registeredServer.stamp.serverAddrStr, "[") {
+					isIPv4, isIPv6 = false, true
+				}
+				if !(config.SourceIPv4 == isIPv4 || config.SourceIPv6 == isIPv6) {
+					continue
+				}
 			}
 			dlog.Infof("Adding [%s] to the set of wanted resolvers", registeredServer.name)
 			proxy.registeredServers = append(proxy.registeredServers, registeredServer)

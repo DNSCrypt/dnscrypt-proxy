@@ -22,6 +22,15 @@
 listen_addresses = ['127.0.0.1:53', '[::1]:53']
 
 
+## Require servers (from static definitions and from remote sources) to satisfy specific properties
+
+# Use servers reachable over IPv4
+ipv4_servers = true
+
+# Use servers reachable over IPv6 -- Do not enable if you don't have IPv6 connectivity
+ipv6_servers = false
+
+
 ## Require servers defined by remote sources to satisfy specific properties
 
 # Server must support DNS security extensions
