@@ -68,7 +68,7 @@
   branch = "master"
   name = "github.com/jedisct1/dlog"
   packages = ["."]
-  revision = "b53fa44bbfb62dc284a052d828390b21f50d61f9"
+  revision = "c395a1da3e92d73b41c42bad89e8e14dadede3b8"
 
 [[projects]]
   branch = "master"
@@ -112,7 +112,7 @@
     "poly1305",
     "salsa20/salsa"
   ]
-  revision = "13931e22f9e72ea58bb73048bc752b48c6d4d4ac"
+  revision = "a6600008915114d9c087fad9f03d75087b1a74df"
 
 [[projects]]
   branch = "master"
