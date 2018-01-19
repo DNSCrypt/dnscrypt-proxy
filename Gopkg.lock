@@ -68,7 +68,7 @@
   branch = "master"
   name = "github.com/jedisct1/dlog"
   packages = ["."]
-  revision = "c395a1da3e92d73b41c42bad89e8e14dadede3b8"
+  revision = "b9f8973c5e799516c1f20a25c2da985a4e86bf0a"
 
 [[projects]]
   branch = "master"
