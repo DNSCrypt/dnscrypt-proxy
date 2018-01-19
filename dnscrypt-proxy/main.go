@@ -162,11 +162,11 @@ func (proxy *Proxy) StartProxy() {
 	if liveServers > 0 {
 		dlog.Noticef("dnscrypt-proxy is ready - live servers: %d", liveServers)
 		daemon.SdNotify(false, "READY=1")
-		PrefetchSourceURLs(proxy.urlsToPrefetch)
 	} else if err != nil {
 		dlog.Error(err)
 		dlog.Notice("dnscrypt-proxy is waiting for at least one server to be reachable")
 	}
+	proxy.prefetcher(&proxy.urlsToPrefetch)
 	go func() {
 		for {
 			delay := proxy.certRefreshDelay
@@ -175,6 +175,22 @@ func (proxy *Proxy) StartProxy() {
 			}
 			time.Sleep(delay)
 			proxy.serversInfo.refresh(proxy)
+		}
+	}()
+}
+
+func (proxy *Proxy) prefetcher(urlsToPrefetch *[]URLToPrefetch) {
+	go func() {
+		for {
+			now := time.Now()
+			for i := range *urlsToPrefetch {
+				urlToPrefetch := &(*urlsToPrefetch)[i]
+				if now.After(urlToPrefetch.when) {
+					dlog.Debugf("Prefetching [%s]", urlToPrefetch.url)
+					PrefetchSourceURL(urlToPrefetch)
+				}
+			}
+			time.Sleep(60 * time.Second)
 		}
 	}()
 }
