@@ -165,7 +165,7 @@ func (serversInfo *ServersInfo) fetchServerInfo(proxy *Proxy, name string, stamp
 	if err != nil || len(serverPk) != ed25519.PublicKeySize {
 		dlog.Fatalf("Unsupported public key: [%v]", serverPk)
 	}
-	certInfo, rtt, err := FetchCurrentCert(proxy, proxy.mainProto, serverPk, stamp.serverAddrStr, stamp.providerName)
+	certInfo, rtt, err := FetchCurrentCert(proxy, &name, proxy.mainProto, serverPk, stamp.serverAddrStr, stamp.providerName)
 	if err != nil {
 		return ServerInfo{}, err
 	}

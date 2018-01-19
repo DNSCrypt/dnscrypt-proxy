@@ -22,7 +22,7 @@ type CertInfo struct {
 	ForwardSecurity    bool
 }
 
-func FetchCurrentCert(proxy *Proxy, proto string, pk ed25519.PublicKey, serverAddress string, providerName string) (CertInfo, int, error) {
+func FetchCurrentCert(proxy *Proxy, serverName *string, proto string, pk ed25519.PublicKey, serverAddress string, providerName string) (CertInfo, int, error) {
 	if len(pk) != ed25519.PublicKeySize {
 		return CertInfo{}, 0, errors.New("Invalid public key length")
 	}
@@ -120,7 +120,10 @@ func FetchCurrentCert(proxy *Proxy, proto string, pk ed25519.PublicKey, serverAd
 		certInfo.CryptoConstruction = cryptoConstruction
 		copy(certInfo.ServerPk[:], serverPk[:])
 		copy(certInfo.MagicQuery[:], binCert[104:112])
-		dlog.Noticef("[%v] OK (crypto v%d) - rtt: %dms", providerName, cryptoConstruction, rtt.Nanoseconds()/1000000)
+		if serverName == nil {
+			serverName = &providerName
+		}
+		dlog.Noticef("[%s] OK (crypto v%d) - rtt: %dms", *serverName, cryptoConstruction, rtt.Nanoseconds()/1000000)
 	}
 	if certInfo.CryptoConstruction == UndefinedConstruction {
 		return certInfo, 0, errors.New("No useable certificate found")
