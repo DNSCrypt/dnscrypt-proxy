@@ -126,6 +126,10 @@ cache_neg_ttl = 60
 format = 'tsv'
 
 
+## Only log these query types, to reduce verbosity. Keep empty to log everything.
+
+# logged_qtypes = ['A', 'MX']
+
 
 ######################################################
 #        Pattern-based blocking (blacklists)        #

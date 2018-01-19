@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -14,8 +15,9 @@ import (
 
 type PluginQueryLog struct {
 	sync.Mutex
-	outFd  *os.File
-	format string
+	outFd        *os.File
+	format       string
+	loggedQTypes []string
 }
 
 func (plugin *PluginQueryLog) Name() string {
@@ -35,6 +37,7 @@ func (plugin *PluginQueryLog) Init(proxy *Proxy) error {
 	}
 	plugin.outFd = outFd
 	plugin.format = proxy.queryLogFormat
+	plugin.loggedQTypes = proxy.queryLogLoggedQtypes
 
 	return nil
 }
@@ -53,6 +56,22 @@ func (plugin *PluginQueryLog) Eval(pluginsState *PluginsState, msg *dns.Msg) err
 		return nil
 	}
 	question := questions[0]
+	qType, ok := dns.TypeToString[question.Qtype]
+	if !ok {
+		qType = string(qType)
+	}
+	if len(plugin.loggedQTypes) > 0 {
+		found := false
+		for _, loggedQtype := range plugin.loggedQTypes {
+			if strings.EqualFold(loggedQtype, qType) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return nil
+		}
+	}
 	var clientIPStr string
 	if pluginsState.clientProto == "udp" {
 		clientIPStr = (*pluginsState.clientAddr).(*net.UDPAddr).IP.String()
@@ -60,10 +79,7 @@ func (plugin *PluginQueryLog) Eval(pluginsState *PluginsState, msg *dns.Msg) err
 		clientIPStr = (*pluginsState.clientAddr).(*net.TCPAddr).IP.String()
 	}
 	qName := StripTrailingDot(question.Name)
-	qType, ok := dns.TypeToString[question.Qtype]
-	if !ok {
-		qType = string(qType)
-	}
+
 	var line string
 	if plugin.format == "tsv" {
 		now := time.Now()
