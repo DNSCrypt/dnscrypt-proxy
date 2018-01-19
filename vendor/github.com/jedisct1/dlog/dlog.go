@@ -185,17 +185,15 @@ func logf(severity Severity, format string, args ...interface{}) {
 	defer _globals.Unlock()
 	if *_globals.useSyslog && _globals.systemLogger == nil {
 		systemLogger, err := newSystemLogger(_globals.appName, _globals.syslogFacility)
-		if err != nil {
-			panic(err)
+		if err == nil {
+			_globals.systemLogger = systemLogger
 		}
-		_globals.systemLogger = systemLogger
 	}
 	if _globals.fileName != nil && len(*_globals.fileName) > 0 && _globals.outFd == nil {
 		outFd, err := os.OpenFile(*_globals.fileName, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644)
-		if err != nil {
-			panic(err)
+		if err == nil {
+			_globals.outFd = outFd
 		}
-		_globals.outFd = outFd
 	}
 	if _globals.systemLogger != nil {
 		(*_globals.systemLogger).writeString(severity, message)

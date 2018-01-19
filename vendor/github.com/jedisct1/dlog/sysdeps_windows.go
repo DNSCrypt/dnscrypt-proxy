@@ -7,11 +7,9 @@ type systemLogger struct {
 }
 
 func newSystemLogger(appName string, facility string) (*systemLogger, error) {
-	err := eventlog.InstallAsEventCreate(appName, eventlog.Error|eventlog.Warning|eventlog.Info)
-	if err != nil {
-		return nil, err
-	}
+	eventlog.InstallAsEventCreate(appName, eventlog.Error|eventlog.Warning|eventlog.Info)
 	var eventLogger *eventlog.Log
+    var err error
 	if eventLogger, err = eventlog.Open(appName); err != nil {
 		return nil, err
 	}

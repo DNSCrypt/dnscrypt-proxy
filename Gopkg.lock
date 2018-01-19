@@ -65,10 +65,10 @@
   revision = "0a025b7e63adc15a622f29b0b2c4c3848243bbf6"
 
 [[projects]]
-  branch = "master"
   name = "github.com/jedisct1/dlog"
   packages = ["."]
-  revision = "b9f8973c5e799516c1f20a25c2da985a4e86bf0a"
+  revision = "b4b1aa34ca8400126287cfab55c7931e8f37f7de"
+  version = "0.1"
 
 [[projects]]
   branch = "master"
