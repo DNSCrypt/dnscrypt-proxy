@@ -67,7 +67,7 @@
 [[projects]]
   name = "github.com/jedisct1/dlog"
   packages = ["."]
-  revision = "b4b1aa34ca8400126287cfab55c7931e8f37f7de"
+  revision = "0d0a83a16acaa8b0ef7bc59ede730ef3581d5b7b"
   version = "0.1"
 
 [[projects]]
