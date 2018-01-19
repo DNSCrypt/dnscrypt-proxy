@@ -63,6 +63,7 @@ The current 2.0.0 beta version includes all the major features from dnscrypt-pro
 | Forwarding with load balancing                              | No                                                                           | Yes                                                                                                           |
 | Built-in system installer                                   | Only on Windows                                                              | Install/uninstall/start/stop/restart as a service on Windows, Linux/(systemd,Upstart,SysV), and macOS/launchd |
 | Built-in servers latency benchmark                          | No                                                                           | Yes                                                                                                           |
+| Query type filter: only log a relevant set of query types   | No                                                                           | Yes                                                                                                           |
 
 ## Planned features
 
