@@ -59,6 +59,21 @@ force_tcp = false
 timeout = 2500
 
 
+# Log level (0-6, default: 2 - 0 is very verbose, 6 only contains fatal errors)
+
+# log_level = 2
+
+
+# log file for the application
+
+# log_file = "dnscrypt-proxy.log"
+
+
+# Use the system logger (syslog on Unix, Event Log on Windows)
+
+# use_syslog = true
+
+
 ## Delay, in minutes, after which certificates are reloaded
 
 cert_refresh_delay = 30

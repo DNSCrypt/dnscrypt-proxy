@@ -13,6 +13,9 @@ import (
 )
 
 type Config struct {
+	LogLevel            int      `toml:"log_level"`
+	LogFile             *string  `toml:"log_file"`
+	UseSyslog           bool     `toml:"use_syslog"`
 	ServerNames         []string `toml:"server_names"`
 	ListenAddresses     []string `toml:"listen_addresses"`
 	Daemonize           bool
@@ -38,6 +41,7 @@ type Config struct {
 
 func newConfig() Config {
 	return Config{
+		LogLevel:           int(dlog.LogLevel()),
 		ListenAddresses:    []string{"127.0.0.1:53"},
 		Timeout:            2500,
 		CertRefreshDelay:   30,
@@ -97,6 +101,14 @@ func ConfigLoad(proxy *Proxy, svcFlag *string, config_file string) error {
 	config := newConfig()
 	if _, err := toml.DecodeFile(*configFile, &config); err != nil {
 		return err
+	}
+	if config.LogLevel >= 0 && config.LogLevel < int(dlog.SeverityLast) {
+		dlog.SetLogLevel(dlog.Severity(config.LogLevel))
+	}
+	if config.UseSyslog {
+		dlog.UseSyslog(true)
+	} else if config.LogFile != nil {
+		dlog.UseLogFile(*config.LogFile)
 	}
 	proxy.timeout = time.Duration(config.Timeout) * time.Millisecond
 	proxy.mainProto = "udp"

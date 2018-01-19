@@ -18,9 +18,9 @@ dnscrypt-proxy is a flexible DNS proxy. It runs on your computer or router, and 
 
 ### Setting up dnscrypt-proxy
 
-1) Modify the [`dnscrypt-proxy.toml`](https://raw.githubusercontent.com/jedisct1/dnscrypt-proxy/master/dnscrypt-proxy/dnscrypt-proxy.toml) configuration file according to your needs.
-2) Make sure that nothing else is already listening to port 53 on your system and run (in a console with elevated privileges on Windows) the `dnscrypt-proxy` application. Change your DNS settings to the configured IP address and check that everything works as expected. A DNS query for `resolver.00f.net` should return one of the chosen DNS servers instead of your ISP's resolver.
-3) Register as a system service (see below).
+1. Modify the [`dnscrypt-proxy.toml`](https://raw.githubusercontent.com/jedisct1/dnscrypt-proxy/master/dnscrypt-proxy/dnscrypt-proxy.toml) configuration file according to your needs.
+2. Make sure that nothing else is already listening to port 53 on your system and run (in a console with elevated privileges on Windows) the `dnscrypt-proxy` application. Change your DNS settings to the configured IP address and check that everything works as expected. A DNS query for `resolver.00f.net` should return one of the chosen DNS servers instead of your ISP's resolver.
+3. Register as a system service (see below).
 
 ### Installing as a system service (Windows, Linux, MacOS)
 
@@ -64,6 +64,7 @@ The current 2.0.0 beta version includes all the major features from dnscrypt-pro
 | Built-in system installer                                   | Only on Windows                                                              | Install/uninstall/start/stop/restart as a service on Windows, Linux/(systemd,Upstart,SysV), and macOS/launchd |
 | Built-in servers latency benchmark                          | No                                                                           | Yes                                                                                                           |
 | Query type filter: only log a relevant set of query types   | No                                                                           | Yes                                                                                                           |
+| Support for the Windows Event Log                           | No                                                                           | Yes                                                                                                           |
 
 ## Planned features
 
