@@ -207,7 +207,7 @@ func ConfigLoad(proxy *Proxy, svcFlag *string, config_file string) error {
 					continue
 				}
 			}
-			dlog.Infof("Adding [%s] to the set of wanted resolvers", registeredServer.name)
+			dlog.Debugf("Adding [%s] to the set of wanted resolvers", registeredServer.name)
 			proxy.registeredServers = append(proxy.registeredServers, registeredServer)
 		}
 	}
