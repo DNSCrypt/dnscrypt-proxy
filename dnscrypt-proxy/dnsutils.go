@@ -52,7 +52,7 @@ func NormalizeName(name *[]byte) {
 }
 
 func StripTrailingDot(str string) string {
-	if strings.HasSuffix(str, ".") {
+	if len(str) > 1 && strings.HasSuffix(str, ".") {
 		str = str[:len(str)-1]
 	}
 	return str
