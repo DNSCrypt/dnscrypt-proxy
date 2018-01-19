@@ -187,10 +187,14 @@ func (proxy *Proxy) prefetcher(urlsToPrefetch *[]URLToPrefetch) {
 				urlToPrefetch := &(*urlsToPrefetch)[i]
 				if now.After(urlToPrefetch.when) {
 					dlog.Debugf("Prefetching [%s]", urlToPrefetch.url)
-					PrefetchSourceURL(urlToPrefetch)
+					if err := PrefetchSourceURL(urlToPrefetch); err != nil {
+						dlog.Debugf("Prefetching [%s] failed: %s", err)
+					} else {
+						dlog.Debugf("Prefetching [%s] succeeded. Next refresh scheduled for %v", urlToPrefetch.url, urlToPrefetch.when)
+					}
 				}
 			}
-			time.Sleep(60 * time.Second)
+			time.Sleep(5 * time.Second)
 		}
 	}()
 }
