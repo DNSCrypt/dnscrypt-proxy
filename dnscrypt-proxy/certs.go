@@ -37,7 +37,7 @@ func FetchCurrentCert(proxy *Proxy, serverName *string, proto string, pk ed25519
 	client := dns.Client{Net: proto, UDPSize: uint16(MaxDNSUDPPacketSize)}
 	in, rtt, err := client.Exchange(query, serverAddress)
 	if err != nil {
-		dlog.Noticef("[%s] UNREACHABLE", *serverName)
+		dlog.Noticef("[%s] TIMEOUT", *serverName)
 		return CertInfo{}, 0, err
 	}
 	now := uint32(time.Now().Unix())
