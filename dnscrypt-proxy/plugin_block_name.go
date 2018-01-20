@@ -140,7 +140,7 @@ func (plugin *PluginBlockName) Eval(pluginsState *PluginsState, msg *dns.Msg) er
 	if !reject {
 		match, _, found := plugin.blockedSuffixes.Root().LongestPrefix([]byte(revQname))
 		if found {
-			if len(match) == len(qName) || qName[len(match)] == '.' {
+			if len(match) == len(qName) || revQname[len(match)] == '.' {
 				reject, reason = true, "*"+string(match)
 			}
 		}
