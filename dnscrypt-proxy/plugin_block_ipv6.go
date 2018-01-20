@@ -33,11 +33,6 @@ func (plugin *PluginBlockIPv6) Eval(pluginsState *PluginsState, msg *dns.Msg) er
 	if question.Qclass != dns.ClassINET || question.Qtype != dns.TypeAAAA {
 		return nil
 	}
-	synth, err := EmptyResponseFromMessage(msg)
-	if err != nil {
-		return err
-	}
-	pluginsState.synthResponse = synth
-	pluginsState.action = PluginsActionSynth
+	pluginsState.action = PluginsActionReject
 	return nil
 }
