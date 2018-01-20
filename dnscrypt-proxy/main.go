@@ -39,6 +39,8 @@ type Proxy struct {
 	queryLogFile                 string
 	queryLogFormat               string
 	queryLogIgnoredQtypes        []string
+	nxLogFile                    string
+	nxLogFormat                  string
 	blockNameFile                string
 	blockNameLogFile             string
 	blockNameFormat              string

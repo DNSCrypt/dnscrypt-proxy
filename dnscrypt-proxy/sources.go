@@ -151,7 +151,7 @@ func NewSource(url string, minisignKeyStr string, cacheFile string, formatStr st
 	return source, urlsToPrefetch, nil
 }
 
-func (source *Source) Parse() ([]RegisteredServer, error) {
+func (source *Source) Parse(prefix string) ([]RegisteredServer, error) {
 	var registeredServers []RegisteredServer
 
 	csvReader := csv.NewReader(strings.NewReader(source.in))
@@ -169,7 +169,7 @@ func (source *Source) Parse() ([]RegisteredServer, error) {
 		if lineNo == 0 {
 			continue
 		}
-		name := record[0]
+		name := prefix + record[0]
 		serverAddrStr := record[10]
 		providerName := record[11]
 		serverPkStr := record[12]

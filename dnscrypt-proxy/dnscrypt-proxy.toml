@@ -14,7 +14,7 @@
 ## List of servers to use
 ## If this line is commented, all registered servers will be used
 
-# server_names = ['dnscrypt.org-fr']
+# server_names = ['scaleway-fr']
 
 
 ## List of local addresses and ports to listen to. Can be IPv4 and/or IPv6.
@@ -155,6 +155,24 @@ format = 'tsv'
 # ignored_qtypes = ['DNSKEY', 'NS']
 
 
+############################################
+#        Suspicious queries logging        #
+############################################
+
+## Log queries for nonexistent zones
+
+[nx_log]
+
+## Path to the query log file (absolute, or relative to the same directory as the executable file)
+
+# file = 'nx.log'
+
+
+## Query log format (currently supported: tsv and ltsv)
+
+format = 'tsv'
+
+
 ######################################################
 #        Pattern-based blocking (blacklists)        #
 ######################################################
@@ -199,10 +217,11 @@ format = 'tsv'
   cache_file = 'dnscrypt-resolvers.csv'
   format = 'v1'
   refresh_delay = 168
+  prefix = ''
 
 
 ## Local, static list of available servers
 
 [servers]
-  [servers.'dnscrypt.org-fr']
+  [servers.'scaleway-fr']
   stamp = 'dnsc://AQMAAAAAAAAAEjIxMi40Ny4yMjguMTM2OjQ0M09FODAxOkI4NEU6QTYwNjpCRkIwOkJBQzA6Q0U0Mzo0NDVCOkIxNUU6QkE2NDpCMDJGOkEzQzQ6QUEzMTpBRTEwOjYzNkE6MDc5MDozMjREHzIuZG5zY3J5cHQtY2VydC5mci5kbnNjcnlwdC5vcmc'

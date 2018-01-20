@@ -29,6 +29,7 @@ type Config struct {
 	CacheMinTTL         uint32                  `toml:"cache_min_ttl"`
 	CacheMaxTTL         uint32                  `toml:"cache_max_ttl"`
 	QueryLog            QueryLogConfig          `toml:"query_log"`
+	NxLog               NxLogConfig             `toml:"nx_log"`
 	BlockName           BlockNameConfig         `toml:"blacklist"`
 	ForwardFile         string                  `toml:"forwarding_rules"`
 	ServersConfig       map[string]ServerConfig `toml:"servers"`
@@ -73,12 +74,18 @@ type SourceConfig struct {
 	CacheFile      string `toml:"cache_file"`
 	FormatStr      string `toml:"format"`
 	RefreshDelay   int    `toml:"refresh_delay"`
+	Prefix         string
 }
 
 type QueryLogConfig struct {
 	File          string
 	Format        string
 	IgnoredQtypes []string `toml:"ignored_qtypes"`
+}
+
+type NxLogConfig struct {
+	File   string
+	Format string
 }
 
 type BlockNameConfig struct {
@@ -144,6 +151,17 @@ func ConfigLoad(proxy *Proxy, svcFlag *string, config_file string) error {
 	proxy.queryLogFormat = config.QueryLog.Format
 	proxy.queryLogIgnoredQtypes = config.QueryLog.IgnoredQtypes
 
+	if len(config.NxLog.Format) == 0 {
+		config.NxLog.Format = "tsv"
+	} else {
+		config.NxLog.Format = strings.ToLower(config.NxLog.Format)
+	}
+	if config.NxLog.Format != "tsv" && config.NxLog.Format != "ltsv" {
+		return errors.New("Unsupported NX log format")
+	}
+	proxy.nxLogFile = config.NxLog.File
+	proxy.nxLogFormat = config.NxLog.Format
+
 	if len(config.BlockName.Format) == 0 {
 		config.BlockName.Format = "tsv"
 	} else {
@@ -166,31 +184,31 @@ func ConfigLoad(proxy *Proxy, svcFlag *string, config_file string) error {
 		requiredProps |= ServerInformalPropertyNoLog
 	}
 
-	for sourceName, source := range config.SourcesConfig {
-		if source.URL == "" {
-			return fmt.Errorf("Missing URL for source [%s]", sourceName)
+	for cfgSourceName, cfgSource := range config.SourcesConfig {
+		if cfgSource.URL == "" {
+			return fmt.Errorf("Missing URL for source [%s]", cfgSourceName)
 		}
-		if source.MinisignKeyStr == "" {
-			return fmt.Errorf("Missing Minisign key for source [%s]", sourceName)
+		if cfgSource.MinisignKeyStr == "" {
+			return fmt.Errorf("Missing Minisign key for source [%s]", cfgSourceName)
 		}
-		if source.CacheFile == "" {
-			return fmt.Errorf("Missing cache file for source [%s]", sourceName)
+		if cfgSource.CacheFile == "" {
+			return fmt.Errorf("Missing cache file for source [%s]", cfgSourceName)
 		}
-		if source.FormatStr == "" {
-			return fmt.Errorf("Missing format for source [%s]", sourceName)
+		if cfgSource.FormatStr == "" {
+			return fmt.Errorf("Missing format for source [%s]", cfgSourceName)
 		}
-		if source.RefreshDelay <= 0 {
-			source.RefreshDelay = 24
+		if cfgSource.RefreshDelay <= 0 {
+			cfgSource.RefreshDelay = 24
 		}
-		source, sourceUrlsToPrefetch, err := NewSource(source.URL, source.MinisignKeyStr, source.CacheFile, source.FormatStr, time.Duration(source.RefreshDelay)*time.Hour)
+		source, sourceUrlsToPrefetch, err := NewSource(cfgSource.URL, cfgSource.MinisignKeyStr, cfgSource.CacheFile, cfgSource.FormatStr, time.Duration(cfgSource.RefreshDelay)*time.Hour)
 		proxy.urlsToPrefetch = append(proxy.urlsToPrefetch, sourceUrlsToPrefetch...)
 		if err != nil {
-			dlog.Criticalf("Unable use source [%s]: [%s]", sourceName, err)
+			dlog.Criticalf("Unable use source [%s]: [%s]", cfgSourceName, err)
 			continue
 		}
-		registeredServers, err := source.Parse()
+		registeredServers, err := source.Parse(cfgSource.Prefix)
 		if err != nil {
-			dlog.Criticalf("Unable use source [%s]: [%s]", sourceName, err)
+			dlog.Criticalf("Unable use source [%s]: [%s]", cfgSourceName, err)
 			continue
 		}
 		for _, registeredServer := range registeredServers {

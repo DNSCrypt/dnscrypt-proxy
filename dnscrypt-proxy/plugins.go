@@ -58,9 +58,13 @@ func InitPluginsGlobals(pluginsGlobals *PluginsGlobals, proxy *Proxy) error {
 	if len(proxy.forwardFile) != 0 {
 		*queryPlugins = append(*queryPlugins, Plugin(new(PluginForward)))
 	}
+
 	responsePlugins := &[]Plugin{}
 	if proxy.cache {
 		*responsePlugins = append(*responsePlugins, Plugin(new(PluginCacheResponse)))
+	}
+	if len(proxy.nxLogFile) != 0 {
+		*responsePlugins = append(*responsePlugins, Plugin(new(PluginNxLog)))
 	}
 
 	for _, plugin := range *queryPlugins {
