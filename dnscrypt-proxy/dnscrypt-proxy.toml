@@ -85,7 +85,9 @@ cert_refresh_delay = 30
 #########################
 
 ## Immediately respond to IPv6-related queries with an empty response
-## This makes things faster when there is no IPv6 connectivity
+## This makes things faster when there is no IPv6 connectivity, but can
+## also cause reliability issues with some stub resolvers. In
+## particular, enabling this on macOS is not recommended.
 
 block_ipv6 = false
 
