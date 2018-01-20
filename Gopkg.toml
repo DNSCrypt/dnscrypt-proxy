@@ -11,16 +11,24 @@
   name = "github.com/VividCortex/godaemon"
 
 [[constraint]]
+  name = "github.com/coreos/go-systemd"
+  version = "15.0.0"
+
+[[constraint]]
   branch = "master"
   name = "github.com/dchest/safefile"
+
+[[constraint]]
+  branch = "master"
+  name = "github.com/hashicorp/go-immutable-radix"
 
 [[constraint]]
   branch = "master"
   name = "github.com/hashicorp/golang-lru"
 
 [[constraint]]
-  branch = "master"
   name = "github.com/jedisct1/dlog"
+  version = "0.1.0"
 
 [[constraint]]
   branch = "master"
@@ -31,25 +39,13 @@
   name = "github.com/jedisct1/xsecretbox"
 
 [[constraint]]
+  branch = "master"
+  name = "github.com/kardianos/service"
+
+[[constraint]]
   name = "github.com/miekg/dns"
   version = "1.0.3"
 
 [[constraint]]
   branch = "master"
   name = "golang.org/x/crypto"
-
-[[constraint]]
-  branch = "master"
-  name = "github.com/hashicorp/go-immutable-radix"
-
-[[constraint]]
-  name = "github.com/judwhite/go-svc"
-  version = "1.0.0"
-
-[[constraint]]
-  branch = "master"
-  name = "github.com/kardianos/service"
-
-[[constraint]]
-  name = "github.com/coreos/go-systemd"
-  version = "15.0.0"
