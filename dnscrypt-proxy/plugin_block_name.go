@@ -135,6 +135,9 @@ func (plugin *PluginBlockName) Eval(pluginsState *PluginsState, msg *dns.Msg) er
 		return nil
 	}
 	qName := strings.ToLower(StripTrailingDot(questions[0].Name))
+	if len(qName) < 2 {
+		return nil
+	}
 	revQname := StringReverse(qName)
 	reject, reason := false, ""
 	if !reject {
