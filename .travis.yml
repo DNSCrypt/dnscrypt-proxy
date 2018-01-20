@@ -110,7 +110,7 @@ script:
   - tar czpvf dnscrypt-proxy-linux_arm64-${TRAVIS_TAG:-dev}.tar.gz linux-arm64
 
   - go clean
-  - env GOOS=linux GOARCH=mips go build -ldflags="-s -w"
+  - env GOOS=linux GOARCH=mips GOMIPS=softfloat go build -ldflags="-s -w"
   - mkdir linux-mips
   - ln dnscrypt-proxy linux-mips/
   - ln ../LICENSE dnscrypt-proxy.toml forwarding-rules.txt blacklist.txt linux-mips/
