@@ -37,6 +37,12 @@ func (plugin *PluginBlockIPv6) Eval(pluginsState *PluginsState, msg *dns.Msg) er
 	if err != nil {
 		return err
 	}
+	hinfo := new(dns.HINFO)
+	hinfo.Hdr = dns.RR_Header{Name: question.Name, Rrtype: dns.TypeHINFO,
+		Class: dns.ClassINET, Ttl: 86400}
+	hinfo.Cpu = "AAAA queries have been locally blocked by dnscrypt-proxy"
+	hinfo.Os = "Set block_ipv6 to false to disable this feature"
+	synth.Answer = []dns.RR{hinfo}
 	pluginsState.synthResponse = synth
 	pluginsState.action = PluginsActionSynth
 	return nil
