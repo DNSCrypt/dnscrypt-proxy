@@ -23,8 +23,7 @@ const (
 )
 
 const (
-	SourcesUpdateDelayAfterFailure = time.Duration(1) * time.Minute
-	SourcesUpdateDelay             = time.Duration(24) * time.Hour
+	SourcesUpdateDelay = time.Duration(24) * time.Hour
 )
 
 type Source struct {
@@ -118,8 +117,12 @@ func NewSource(url string, minisignKeyStr string, cacheFile string, formatStr st
 	urlsToPrefetch = append(urlsToPrefetch, URLToPrefetch{url: url, cacheFile: cacheFile, when: now.Add(delayTillNextUpdate)})
 
 	sigCacheFile := cacheFile + ".minisig"
-	sigStr, sigCached, sigDelayTillNextUpdate, err := fetchWithCache(sigURL, sigCacheFile)
+	sigStr, sigCached, sigDelayTillNextUpdate, sigErr := fetchWithCache(sigURL, sigCacheFile)
 	urlsToPrefetch = append(urlsToPrefetch, URLToPrefetch{url: sigURL, cacheFile: sigCacheFile, when: now.Add(sigDelayTillNextUpdate)})
+
+	if err != nil || sigErr != nil {
+		return source, urlsToPrefetch, nil
+	}
 
 	signature, err := minisign.DecodeSignature(sigStr)
 	if err != nil {
