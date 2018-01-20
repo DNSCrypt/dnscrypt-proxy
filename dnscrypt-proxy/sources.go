@@ -187,6 +187,7 @@ func (source *Source) Parse() ([]RegisteredServer, error) {
 		registeredServer := RegisteredServer{
 			name: name, stamp: stamp,
 		}
+		dlog.Debugf("Registered [%s] with stamp [%s]", name, stamp.String())
 		registeredServers = append(registeredServers, registeredServer)
 	}
 	return registeredServers, nil

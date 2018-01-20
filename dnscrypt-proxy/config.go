@@ -105,6 +105,9 @@ func ConfigLoad(proxy *Proxy, svcFlag *string, config_file string) error {
 	if config.LogLevel >= 0 && config.LogLevel < int(dlog.SeverityLast) {
 		dlog.SetLogLevel(dlog.Severity(config.LogLevel))
 	}
+	if dlog.LogLevel() <= dlog.SeverityDebug && os.Getenv("DEBUG") == "" {
+		dlog.SetLogLevel(dlog.SeverityInfo)
+	}
 	if config.UseSyslog {
 		dlog.UseSyslog(true)
 	} else if config.LogFile != nil {

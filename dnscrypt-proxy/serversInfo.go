@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/hex"
-	"fmt"
 	"math/rand"
 	"net"
 	"strings"
@@ -26,28 +25,9 @@ const (
 	ServerInformalPropertyNoLog  = ServerInformalProperties(1) << 1
 )
 
-type ServerStamp struct {
-	serverAddrStr string
-	serverPkStr   string
-	providerName  string
-	props         ServerInformalProperties
-}
-
 type RegisteredServer struct {
 	name  string
 	stamp ServerStamp
-}
-
-func NewServerStampFromLegacy(serverAddrStr string, serverPkStr string, providerName string, props ServerInformalProperties) (ServerStamp, error) {
-	if net.ParseIP(serverAddrStr) != nil {
-		serverAddrStr = fmt.Sprintf("%s:%d", serverAddrStr, DefaultPort)
-	}
-	return ServerStamp{
-		serverAddrStr: serverAddrStr,
-		serverPkStr:   serverPkStr,
-		providerName:  providerName,
-		props:         props,
-	}, nil
 }
 
 type ServerInfo struct {
