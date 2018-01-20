@@ -205,6 +205,4 @@ format = 'tsv'
 
 [servers]
   [servers.'dnscrypt.org-fr']
-  provider_name = '2.dnscrypt-cert.fr.dnscrypt.org'
-  address = '212.47.228.136:443'
-  public_key = 'E801:B84E:A606:BFB0:BAC0:CE43:445B:B15E:BA64:B02F:A3C4:AA31:AE10:636A:0790:324D'
+  stamp = 'dnsc://AQMAAAAAAAAAEjIxMi40Ny4yMjguMTM2OjQ0M09FODAxOkI4NEU6QTYwNjpCRkIwOkJBQzA6Q0U0Mzo0NDVCOkIxNUU6QkE2NDpCMDJGOkEzQzQ6QUEzMTpBRTEwOjYzNkE6MDc5MDozMjREHzIuZG5zY3J5cHQtY2VydC5mci5kbnNjcnlwdC5vcmc'

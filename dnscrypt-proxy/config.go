@@ -227,7 +227,7 @@ func ConfigLoad(proxy *Proxy, svcFlag *string, config_file string) error {
 		var stamp ServerStamp
 		var err error
 		if len(serverConfig.Stamp) > 0 {
-			dlog.Fatal("Stamps are not implemented yet")
+			stamp, err = NewServerStampFromString(serverConfig.Stamp)
 		} else {
 			props := ServerInformalProperties(0)
 			if serverConfig.DNSSEC {
@@ -237,9 +237,9 @@ func ConfigLoad(proxy *Proxy, svcFlag *string, config_file string) error {
 				props |= ServerInformalPropertyNoLog
 			}
 			stamp, err = NewServerStampFromLegacy(serverConfig.Address, serverConfig.PublicKey, serverConfig.ProviderName, props)
-			if err != nil {
-				return err
-			}
+		}
+		if err != nil {
+			return err
 		}
 		proxy.registeredServers = append(proxy.registeredServers,
 			RegisteredServer{name: serverName, stamp: stamp})

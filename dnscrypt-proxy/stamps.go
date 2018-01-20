@@ -3,8 +3,10 @@ package main
 import (
 	"encoding/base64"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"net"
+	"strings"
 )
 
 type ServerStamp struct {
@@ -30,6 +32,50 @@ func NewServerStampFromLegacy(serverAddrStr string, serverPkStr string, provider
 
 func NewServerStampFromString(stampStr string) (ServerStamp, error) {
 	stamp := ServerStamp{}
+	if !strings.HasPrefix(stampStr, "dnsc://") {
+		return stamp, errors.New("Stamps are expected to start with dnsc://")
+	}
+	bin, err := base64.RawURLEncoding.DecodeString(stampStr[7:])
+	if err != nil {
+		return stamp, err
+	}
+	if len(bin) < 24 {
+		return stamp, errors.New("Stamp is too short")
+	}
+	if bin[0] != 0x01 {
+		return stamp, errors.New("Unsupported stamp version")
+	}
+	stamp.props = ServerInformalProperties(binary.LittleEndian.Uint64(bin[1:9]))
+	binLen := len(bin)
+	pos := 9
+
+	len := int(bin[pos])
+	if len >= binLen-pos {
+		return stamp, errors.New("Invalid stamp")
+	}
+	pos++
+	stamp.serverAddrStr = string(bin[pos : pos+len])
+	pos += len
+
+	len = int(bin[pos])
+	if len >= binLen-pos {
+		return stamp, errors.New("Invalid stamp")
+	}
+	pos++
+	stamp.serverPkStr = string(bin[pos : pos+len])
+	pos += len
+
+	len = int(bin[pos])
+	if len >= binLen-pos {
+		return stamp, errors.New("Invalid stamp")
+	}
+	pos++
+	stamp.providerName = string(bin[pos : pos+len])
+	pos += len
+
+	if pos != binLen {
+		return stamp, errors.New("Invalid stamp (garbage after end)")
+	}
 	return stamp, nil
 }
 
