@@ -65,6 +65,7 @@ The current 2.0.0 beta version includes all the major features from dnscrypt-pro
 | Built-in servers latency benchmark                          | No                                                                           | Yes                                                                                                           |
 | Query type filter: only log a relevant set of query types   | No                                                                           | Yes                                                                                                           |
 | Support for the Windows Event Log                           | No                                                                           | Yes                                                                                                           |
+| Log suspicious queries (leading to NXDOMAIN)                | No                                                                           | Yes                                                                                                           |
 
 ## Planned features
 
