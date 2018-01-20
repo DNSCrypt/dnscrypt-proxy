@@ -156,7 +156,7 @@ func (plugin *PluginBlockName) Eval(pluginsState *PluginsState, msg *dns.Msg) er
 	}
 	if !reject {
 		for _, substring := range plugin.blockedSubstrings {
-			if strings.Contains(substring, qName) {
+			if strings.Contains(qName, substring) {
 				reject, reason = true, "*"+substring+"*"
 				break
 			}
