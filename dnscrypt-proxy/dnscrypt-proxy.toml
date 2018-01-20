@@ -150,9 +150,9 @@ cache_neg_ttl = 60
 format = 'tsv'
 
 
-## Only log these query types, to reduce verbosity. Keep empty to log everything.
+## Do not log these query types, to reduce verbosity. Keep empty to log everything.
 
-# logged_qtypes = ['A', 'MX']
+# ignored_qtypes = ['DNSKEY', 'NS']
 
 
 ######################################################

@@ -15,9 +15,9 @@ import (
 
 type PluginQueryLog struct {
 	sync.Mutex
-	outFd        *os.File
-	format       string
-	loggedQTypes []string
+	outFd         *os.File
+	format        string
+	ignoredQtypes []string
 }
 
 func (plugin *PluginQueryLog) Name() string {
@@ -37,7 +37,7 @@ func (plugin *PluginQueryLog) Init(proxy *Proxy) error {
 	}
 	plugin.outFd = outFd
 	plugin.format = proxy.queryLogFormat
-	plugin.loggedQTypes = proxy.queryLogLoggedQtypes
+	plugin.ignoredQtypes = proxy.queryLogIgnoredQtypes
 
 	return nil
 }
@@ -60,16 +60,11 @@ func (plugin *PluginQueryLog) Eval(pluginsState *PluginsState, msg *dns.Msg) err
 	if !ok {
 		qType = string(qType)
 	}
-	if len(plugin.loggedQTypes) > 0 {
-		found := false
-		for _, loggedQtype := range plugin.loggedQTypes {
-			if strings.EqualFold(loggedQtype, qType) {
-				found = true
-				break
+	if len(plugin.ignoredQtypes) > 0 {
+		for _, ignoredQtype := range plugin.ignoredQtypes {
+			if strings.EqualFold(ignoredQtype, qType) {
+				return nil
 			}
-		}
-		if !found {
-			return nil
 		}
 	}
 	var clientIPStr string

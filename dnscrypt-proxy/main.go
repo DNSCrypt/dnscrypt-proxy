@@ -38,7 +38,7 @@ type Proxy struct {
 	cacheMaxTTL                  uint32
 	queryLogFile                 string
 	queryLogFormat               string
-	queryLogLoggedQtypes         []string
+	queryLogIgnoredQtypes        []string
 	blockNameFile                string
 	blockNameLogFile             string
 	blockNameFormat              string

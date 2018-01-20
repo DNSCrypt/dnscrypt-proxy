@@ -76,9 +76,9 @@ type SourceConfig struct {
 }
 
 type QueryLogConfig struct {
-	File         string
-	Format       string
-	LoggedQtypes []string `toml:"logged_qtypes"`
+	File          string
+	Format        string
+	IgnoredQtypes []string `toml:"ignored_qtypes"`
 }
 
 type BlockNameConfig struct {
@@ -139,7 +139,7 @@ func ConfigLoad(proxy *Proxy, svcFlag *string, config_file string) error {
 	}
 	proxy.queryLogFile = config.QueryLog.File
 	proxy.queryLogFormat = config.QueryLog.Format
-	proxy.queryLogLoggedQtypes = config.QueryLog.LoggedQtypes
+	proxy.queryLogIgnoredQtypes = config.QueryLog.IgnoredQtypes
 
 	if len(config.BlockName.Format) == 0 {
 		config.BlockName.Format = "tsv"
