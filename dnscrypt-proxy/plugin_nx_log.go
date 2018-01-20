@@ -16,7 +16,6 @@ type PluginNxLog struct {
 	sync.Mutex
 	outFd         *os.File
 	format        string
-	ignoredQtypes []string
 }
 
 func (plugin *PluginNxLog) Name() string {
