@@ -109,6 +109,7 @@ func (serversInfo *ServersInfo) refresh(proxy *Proxy) (int, error) {
 	serversInfo.inner = inner
 	if innerLen > 1 {
 		dlog.Noticef("Server with the lowest initial latency: %s (rtt: %dms)", inner[0].Name, inner[0].initialRtt)
+		proxy.certIgnoreTimestamp = false
 	}
 	serversInfo.Unlock()
 	return liveServers, err
