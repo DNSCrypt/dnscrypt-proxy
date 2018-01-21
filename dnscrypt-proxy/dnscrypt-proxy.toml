@@ -205,6 +205,34 @@ format = 'tsv'
 
 
 
+###########################################################
+#        Pattern-based IP blocking (IP blacklists)        #
+###########################################################
+
+## IP blacklists are made of one pattern per line. Example of valid patterns:
+##
+##   127.*
+##   fe80:abcd:*
+##   192.168.1.4
+
+[ip_blacklist]
+
+## Path to the file of blocking rules (absolute, or relative to the same directory as the executable file)
+
+# blacklist_file = 'ip-blacklist.txt'
+
+
+## Optional path to a file logging blocked queries
+
+# log_file = 'ip-blocked.log'
+
+
+## Optional log format: tsv or ltsv (default: tsv)
+
+# log_format = 'tsv'
+
+
+
 #########################
 #        Servers        #
 #########################

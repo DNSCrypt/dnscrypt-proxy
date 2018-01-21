@@ -60,13 +60,15 @@ func InitPluginsGlobals(pluginsGlobals *PluginsGlobals, proxy *Proxy) error {
 	}
 
 	responsePlugins := &[]Plugin{}
-	if proxy.cache {
-		*responsePlugins = append(*responsePlugins, Plugin(new(PluginCacheResponse)))
-	}
 	if len(proxy.nxLogFile) != 0 {
 		*responsePlugins = append(*responsePlugins, Plugin(new(PluginNxLog)))
 	}
-
+	if len(proxy.blockIPFile) != 0 {
+		*responsePlugins = append(*responsePlugins, Plugin(new(PluginBlockIP)))
+	}
+	if proxy.cache {
+		*responsePlugins = append(*responsePlugins, Plugin(new(PluginCacheResponse)))
+	}
 	for _, plugin := range *queryPlugins {
 		if err := plugin.Init(proxy); err != nil {
 			return err

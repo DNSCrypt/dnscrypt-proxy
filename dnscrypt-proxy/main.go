@@ -44,6 +44,9 @@ type Proxy struct {
 	blockNameFile                string
 	blockNameLogFile             string
 	blockNameFormat              string
+	blockIPFile                  string
+	blockIPLogFile               string
+	blockIPFormat                string
 	forwardFile                  string
 	pluginsGlobals               PluginsGlobals
 	urlsToPrefetch               []URLToPrefetch

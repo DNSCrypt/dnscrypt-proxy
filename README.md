@@ -2,7 +2,7 @@
 
 # ![dnscrypt-proxy 2](https://raw.github.com/jedisct1/dnscrypt-proxy/master/logo.png?2)
 
-A modern client implementation of the [DNSCrypt](https://github.com/DNSCrypt/dnscrypt-protocol/blob/master/DNSCRYPT-V2-PROTOCOL.txt) protocol.
+A flexible DNS proxy, with support for encrypted DNS protocols such as [DNSCrypt](https://github.com/DNSCrypt/dnscrypt-protocol/blob/master/DNSCRYPT-V2-PROTOCOL.txt).
 
 ## [dnscrypt-proxy 2.0.0beta6 is available for download!](https://github.com/jedisct1/dnscrypt-proxy/releases/latest)
 

@@ -31,6 +31,7 @@ type Config struct {
 	QueryLog            QueryLogConfig          `toml:"query_log"`
 	NxLog               NxLogConfig             `toml:"nx_log"`
 	BlockName           BlockNameConfig         `toml:"blacklist"`
+	BlockIP             BlockIPConfig           `toml:"ip_blacklist"`
 	ForwardFile         string                  `toml:"forwarding_rules"`
 	ServersConfig       map[string]ServerConfig `toml:"servers"`
 	SourcesConfig       map[string]SourceConfig `toml:"sources"`
@@ -89,6 +90,12 @@ type NxLogConfig struct {
 }
 
 type BlockNameConfig struct {
+	File    string `toml:"blacklist_file"`
+	LogFile string `toml:"log_file"`
+	Format  string `toml:"log_format"`
+}
+
+type BlockIPConfig struct {
 	File    string `toml:"blacklist_file"`
 	LogFile string `toml:"log_file"`
 	Format  string `toml:"log_format"`
@@ -173,6 +180,18 @@ func ConfigLoad(proxy *Proxy, svcFlag *string, config_file string) error {
 	proxy.blockNameFile = config.BlockName.File
 	proxy.blockNameFormat = config.BlockName.Format
 	proxy.blockNameLogFile = config.BlockName.LogFile
+
+	if len(config.BlockIP.Format) == 0 {
+		config.BlockIP.Format = "tsv"
+	} else {
+		config.BlockIP.Format = strings.ToLower(config.BlockIP.Format)
+	}
+	if config.BlockIP.Format != "tsv" && config.BlockIP.Format != "ltsv" {
+		return errors.New("Unsupported IP block log format")
+	}
+	proxy.blockIPFile = config.BlockIP.File
+	proxy.blockIPFormat = config.BlockIP.Format
+	proxy.blockIPLogFile = config.BlockIP.LogFile
 
 	proxy.forwardFile = config.ForwardFile
 

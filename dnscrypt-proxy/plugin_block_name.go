@@ -118,6 +118,7 @@ func (plugin *PluginBlockName) Init(proxy *Proxy) error {
 	}
 	plugin.outFd = outFd
 	plugin.format = proxy.blockNameFormat
+
 	return nil
 }
 
