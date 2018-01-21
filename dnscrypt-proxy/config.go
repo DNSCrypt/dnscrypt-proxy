@@ -104,8 +104,8 @@ type BlockIPConfig struct {
 }
 
 func ConfigLoad(proxy *Proxy, svcFlag *string, config_file string) error {
-	version := flag.Bool("version", false, "prints current proxy version")
-	configFile := flag.String("config", "dnscrypt-proxy.toml", "path to the configuration file")
+	version := flag.Bool("version", false, "Prints current proxy version")
+	configFile := flag.String("config", "dnscrypt-proxy.toml", "Path to the configuration file")
 	resolve := flag.String("resolve", "", "resolve a name using system libraries")
 	flag.Parse()
 	if *svcFlag == "stop" || *svcFlag == "uninstall" {
