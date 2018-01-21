@@ -142,10 +142,18 @@ func (plugin *PluginBlockName) Eval(pluginsState *PluginsState, msg *dns.Msg) er
 	revQname := StringReverse(qName)
 	reject, reason := false, ""
 	if !reject {
-		match, _, found := plugin.blockedSuffixes.Root().LongestPrefix([]byte(revQname))
-		if found {
+		if match, _, found := plugin.blockedSuffixes.Root().LongestPrefix([]byte(revQname)); found {
 			if len(match) == len(qName) || revQname[len(match)] == '.' {
 				reject, reason = true, "*."+StringReverse(string(match))
+			} else if len(match) < len(revQname) && len(revQname) > 0 {
+				if i := strings.LastIndex(revQname, "."); i > 0 {
+					pName := revQname[:i]
+					if match, _, found := plugin.blockedSuffixes.Root().LongestPrefix([]byte(pName)); found {
+						if len(match) == len(pName) || pName[len(match)] == '.' {
+							reject, reason = true, "*."+StringReverse(string(match))
+						}
+					}
+				}
 			}
 		}
 	}
