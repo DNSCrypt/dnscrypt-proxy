@@ -16,7 +16,7 @@ import (
 	"golang.org/x/crypto/curve25519"
 )
 
-const AppVersion = "2.0.0beta7"
+const AppVersion = "2.0.0beta8"
 
 type Proxy struct {
 	proxyPublicKey               [32]byte
