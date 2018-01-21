@@ -60,7 +60,6 @@ type App struct {
 
 func main() {
 	dlog.Init("dnscrypt-proxy", dlog.SeverityNotice, "DAEMON")
-	dlog.Noticef("Starting dnscrypt-proxy %s", AppVersion)
 
 	cdLocal()
 
@@ -80,6 +79,8 @@ func main() {
 	if err := ConfigLoad(&app.proxy, svcFlag, "dnscrypt-proxy.toml"); err != nil {
 		dlog.Fatal(err)
 	}
+	dlog.Noticef("Starting dnscrypt-proxy %s", AppVersion)
+
 	if len(*svcFlag) != 0 {
 		if err := service.Control(svc, *svcFlag); err != nil {
 			dlog.Fatal(err)
