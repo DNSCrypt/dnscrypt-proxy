@@ -87,9 +87,11 @@ func FetchCurrentCert(proxy *Proxy, serverName *string, proto string, pk ed25519
 		} else {
 			certInfo.ForwardSecurity = true
 		}
-		if now > tsEnd || now < tsBegin {
-			dlog.Debugf("[%v] Certificate not valid at the current date", providerName)
-			continue
+		if !proxy.certIgnoreTimestamp {
+			if now > tsEnd || now < tsBegin {
+				dlog.Debugf("[%v] Certificate not valid at the current date", providerName)
+				continue
+			}
 		}
 		if serial < highestSerial {
 			dlog.Debugf("[%v] Superseded by a previous certificate", providerName)

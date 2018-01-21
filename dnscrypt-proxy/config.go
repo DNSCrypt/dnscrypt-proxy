@@ -22,6 +22,7 @@ type Config struct {
 	ForceTCP            bool `toml:"force_tcp"`
 	Timeout             int  `toml:"timeout_ms"`
 	CertRefreshDelay    int  `toml:"cert_refresh_delay"`
+	CertIgnoreTimestamp bool `toml:"cert_ignore_timestamp"`
 	BlockIPv6           bool `toml:"block_ipv6"`
 	Cache               bool
 	CacheSize           int                     `toml:"cache_size"`
@@ -43,18 +44,19 @@ type Config struct {
 
 func newConfig() Config {
 	return Config{
-		LogLevel:           int(dlog.LogLevel()),
-		ListenAddresses:    []string{"127.0.0.1:53"},
-		Timeout:            2500,
-		CertRefreshDelay:   30,
-		Cache:              true,
-		CacheSize:          256,
-		CacheNegTTL:        60,
-		CacheMinTTL:        60,
-		CacheMaxTTL:        8600,
-		SourceRequireNoLog: true,
-		SourceIPv4:         true,
-		SourceIPv6:         false,
+		LogLevel:            int(dlog.LogLevel()),
+		ListenAddresses:     []string{"127.0.0.1:53"},
+		Timeout:             2500,
+		CertRefreshDelay:    30,
+		CertIgnoreTimestamp: false,
+		Cache:               true,
+		CacheSize:           256,
+		CacheNegTTL:         60,
+		CacheMinTTL:         60,
+		CacheMaxTTL:         8600,
+		SourceRequireNoLog:  true,
+		SourceIPv4:          true,
+		SourceIPv6:          false,
 	}
 }
 
@@ -139,6 +141,7 @@ func ConfigLoad(proxy *Proxy, svcFlag *string, config_file string) error {
 	}
 	proxy.certRefreshDelay = time.Duration(config.CertRefreshDelay) * time.Minute
 	proxy.certRefreshDelayAfterFailure = time.Duration(10 * time.Second)
+	proxy.certIgnoreTimestamp = config.CertIgnoreTimestamp
 	if len(config.ListenAddresses) == 0 {
 		return errors.New("No local IP/port configured")
 	}

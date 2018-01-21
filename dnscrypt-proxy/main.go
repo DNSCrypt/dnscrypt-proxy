@@ -16,7 +16,7 @@ import (
 	"golang.org/x/crypto/curve25519"
 )
 
-const AppVersion = "2.0.0beta6"
+const AppVersion = "2.0.0beta7"
 
 type Proxy struct {
 	proxyPublicKey               [32]byte
@@ -26,6 +26,7 @@ type Proxy struct {
 	timeout                      time.Duration
 	certRefreshDelay             time.Duration
 	certRefreshDelayAfterFailure time.Duration
+	certIgnoreTimestamp          bool
 	mainProto                    string
 	listenAddresses              []string
 	daemonize                    bool
