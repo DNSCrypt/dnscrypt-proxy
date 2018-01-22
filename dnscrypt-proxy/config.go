@@ -61,14 +61,7 @@ func newConfig() Config {
 }
 
 type ServerConfig struct {
-	Stamp        string
-	ProviderName string `toml:"provider_name"`
-	Address      string
-	PublicKey    string `toml:"public_key"`
-	DNSSEC       bool   `toml:"dnssec"`
-	NoLog        bool   `toml:"no_log"`
-	IPv4         bool   `toml:"ipv4"`
-	IPv6         bool   `toml:"ipv6"`
+	Stamp string
 }
 
 type SourceConfig struct {
@@ -274,14 +267,7 @@ func ConfigLoad(proxy *Proxy, svcFlag *string, config_file string) error {
 		if len(serverConfig.Stamp) > 0 {
 			stamp, err = NewServerStampFromString(serverConfig.Stamp)
 		} else {
-			props := ServerInformalProperties(0)
-			if serverConfig.DNSSEC {
-				props |= ServerInformalPropertyDNSSEC
-			}
-			if serverConfig.NoLog {
-				props |= ServerInformalPropertyNoLog
-			}
-			stamp, err = NewServerStampFromLegacy(serverConfig.Address, serverConfig.PublicKey, serverConfig.ProviderName, props)
+			dlog.Fatalf("Missing stamp for the static [%s] definition", serverName)
 		}
 		if err != nil {
 			return err
