@@ -264,11 +264,10 @@ func ConfigLoad(proxy *Proxy, svcFlag *string, config_file string) error {
 		}
 		var stamp ServerStamp
 		var err error
-		if len(serverConfig.Stamp) > 0 {
-			stamp, err = NewServerStampFromString(serverConfig.Stamp)
-		} else {
+		if len(serverConfig.Stamp) == 0 {
 			dlog.Fatalf("Missing stamp for the static [%s] definition", serverName)
 		}
+		stamp, err = NewServerStampFromString(serverConfig.Stamp)
 		if err != nil {
 			return err
 		}
