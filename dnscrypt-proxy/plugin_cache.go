@@ -49,7 +49,7 @@ func (plugin *PluginCacheResponse) Reload() error {
 
 func (plugin *PluginCacheResponse) Eval(pluginsState *PluginsState, msg *dns.Msg) error {
 	plugin.cachedResponses = &cachedResponses
-	if msg.Rcode == dns.RcodeServerFailure {
+	if msg.Rcode != dns.RcodeSuccess && msg.Rcode != dns.RcodeNameError && msg.Rcode != dns.RcodeNotAuth {
 		return nil
 	}
 	cacheKey, err := computeCacheKey(pluginsState, msg)
