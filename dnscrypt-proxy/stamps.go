@@ -32,8 +32,8 @@ func NewServerStampFromLegacy(serverAddrStr string, serverPkStr string, provider
 
 func NewServerStampFromString(stampStr string) (ServerStamp, error) {
 	stamp := ServerStamp{}
-	if !strings.HasPrefix(stampStr, "dnsc://") {
-		return stamp, errors.New("Stamps are expected to start with dnsc://")
+	if !strings.HasPrefix(stampStr, "sdns://") && !strings.HasPrefix(stampStr, "dnsc://") {
+		return stamp, errors.New("Stamps are expected to start with sdns://")
 	}
 	bin, err := base64.RawURLEncoding.DecodeString(stampStr[7:])
 	if err != nil {
