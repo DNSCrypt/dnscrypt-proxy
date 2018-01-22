@@ -32,6 +32,14 @@ This setup procedure is compatible with Windows, Linux (systemd, Upstart, SysV),
 
 Other commands include `stop`, `restart` (useful after a configuration change) and `uninstall`.
 
+### Running it as a non-root user on Linux
+
+The following command adds the required attributes to the dnscrypt-proxy file so that it can run as a non-root user:
+
+```sh
+sudo setcap cap_net_bind_service=+pe dnscrypt-proxy
+```
+
 ## Current status/features
 
 The current 2.0.0 beta version includes all the major features from dnscrypt-proxy 1.9.5 (support for dnscrypt v2, synthetic IPv6 responses, logging, blocking, forwarding and caching), with improved reliability, flexbility, usability and performance.
