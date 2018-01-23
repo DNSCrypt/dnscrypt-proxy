@@ -254,4 +254,4 @@ format = 'tsv'
 
 [servers]
   [servers.'scaleway-fr']
-  stamp = 'sdns://AQMAAAAAAAAAEjIxMi40Ny4yMjguMTM2OjQ0M09FODAxOkI4NEU6QTYwNjpCRkIwOkJBQzA6Q0U0Mzo0NDVCOkIxNUU6QkE2NDpCMDJGOkEzQzQ6QUEzMTpBRTEwOjYzNkE6MDc5MDozMjREHzIuZG5zY3J5cHQtY2VydC5mci5kbnNjcnlwdC5vcmc'
+  stamp = 'dnsc://AQMAAAAAAAAAEjIxMi40Ny4yMjguMTM2OjQ0MyDoAbhOpga_sLrAzkNEW7FeumSwL6PEqjGuEGNqB5AyTR8yLmRuc2NyeXB0LWNlcnQuZnIuZG5zY3J5cHQub3Jn'

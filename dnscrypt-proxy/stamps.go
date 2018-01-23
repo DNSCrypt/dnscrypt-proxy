@@ -3,10 +3,14 @@ package main
 import (
 	"encoding/base64"
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net"
 	"strings"
+
+	"github.com/jedisct1/dlog"
+	"golang.org/x/crypto/ed25519"
 )
 
 type ServerStamp struct {
@@ -62,7 +66,11 @@ func NewServerStampFromString(stampStr string) (ServerStamp, error) {
 		return stamp, errors.New("Invalid stamp")
 	}
 	pos++
-	stamp.serverPkStr = string(bin[pos : pos+len])
+	if len == ed25519.PublicKeySize {
+		stamp.serverPkStr = hex.EncodeToString(bin[pos : pos+len])
+	} else {
+		stamp.serverPkStr = string(bin[pos : pos+len])
+	}
 	pos += len
 
 	len = int(bin[pos])
@@ -87,8 +95,12 @@ func (stamp *ServerStamp) String() string {
 	bin = append(bin, uint8(len(stamp.serverAddrStr)))
 	bin = append(bin, []uint8(stamp.serverAddrStr)...)
 
-	bin = append(bin, uint8(len(stamp.serverPkStr)))
-	bin = append(bin, []uint8(stamp.serverPkStr)...)
+	serverPk, err := hex.DecodeString(strings.Replace(stamp.serverPkStr, ":", "", -1))
+	if err != nil || len(serverPk) != ed25519.PublicKeySize {
+		dlog.Fatalf("Unsupported public key: [%s]", stamp.serverPkStr)
+	}
+	bin = append(bin, uint8(len(serverPk)))
+	bin = append(bin, serverPk...)
 
 	bin = append(bin, uint8(len(stamp.providerName)))
 	bin = append(bin, []uint8(stamp.providerName)...)
