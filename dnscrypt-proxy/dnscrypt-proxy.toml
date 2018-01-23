@@ -54,7 +54,7 @@ daemonize = false
 force_tcp = false
 
 
-## Timeout, in milliseconds
+## How long a DNS query will wait for a response, in milliseconds
 
 timeout = 2500
 
@@ -109,7 +109,7 @@ block_ipv6 = false
 #        DNS cache        #
 ###########################
 
-## Enable a basic DNS cache to reduce outgoing traffic
+## Enable a DNS cache to reduce latency and outgoing traffic
 
 cache = true
 
@@ -238,11 +238,10 @@ format = 'tsv'
 #########################
 
 ## Remote lists of available servers
-## Recommended: change the cache_file location to an absolute path
 
 [sources]
-  [sources.'proxy v1 list from github']
-  url = 'https://raw.githubusercontent.com/DNSCrypt/dnscrypt-resolvers/master/v1/dnscrypt-resolvers.csv'
+  [sources.'legacy resolvers list for dnscrypt-proxy v1']
+  url = 'https://download.dnscrypt.info/resolvers-list/v1/dnscrypt-resolvers.csv'
   minisign_key = 'RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3'
   cache_file = 'dnscrypt-resolvers.csv'
   format = 'v1'
@@ -250,7 +249,7 @@ format = 'tsv'
   prefix = ''
 
 
-## Local, static list of available servers
+## Optional, local, static list of additional servers
 
 [servers]
   [servers.'scaleway-fr']

@@ -112,7 +112,7 @@
     "poly1305",
     "salsa20/salsa"
   ]
-  revision = "a6600008915114d9c087fad9f03d75087b1a74df"
+  revision = "3d37316aaa6bd9929127ac9a527abf408178ea7b"
 
 [[projects]]
   branch = "master"
@@ -136,7 +136,7 @@
     "windows/svc/eventlog",
     "windows/svc/mgr"
   ]
-  revision = "2c42eef0765b9837fbdab12011af7830f55f88f0"
+  revision = "af50095a40f9041b3b38960738837185c26e9419"
 
 [solve-meta]
   analyzer-name = "dep"
