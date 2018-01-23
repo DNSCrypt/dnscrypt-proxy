@@ -142,11 +142,15 @@ func (serversInfo *ServersInfo) getOne() *ServerInfo {
 }
 
 func (serversInfo *ServersInfo) fetchServerInfo(proxy *Proxy, name string, stamp ServerStamp) (ServerInfo, error) {
-	serverPk, err := hex.DecodeString(strings.Replace(stamp.serverPkStr, ":", "", -1))
-	if err != nil || len(serverPk) != ed25519.PublicKeySize {
-		dlog.Fatalf("Unsupported public key: [%v]", stamp.serverPkStr)
+	if len(stamp.serverPk) != ed25519.PublicKeySize {
+		serverPk, err := hex.DecodeString(strings.Replace(string(stamp.serverPk), ":", "", -1))
+		if err != nil || len(serverPk) != ed25519.PublicKeySize {
+			dlog.Fatalf("Unsupported public key for [%s]: [%s]", name, stamp.serverPk)
+		}
+		dlog.Warnf("Public key [%s] shouldn't be hex-encoded any more", string(stamp.serverPk))
+		stamp.serverPk = serverPk
 	}
-	certInfo, rtt, err := FetchCurrentCert(proxy, &name, proxy.mainProto, serverPk, stamp.serverAddrStr, stamp.providerName)
+	certInfo, rtt, err := FetchCurrentCert(proxy, &name, proxy.mainProto, stamp.serverPk, stamp.serverAddrStr, stamp.providerName)
 	if err != nil {
 		return ServerInfo{}, err
 	}
