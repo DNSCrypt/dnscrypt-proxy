@@ -64,6 +64,22 @@ func fetchWithCache(url string, cacheFile string) (in string, cached bool, delay
 		cached = true
 		return
 	}
+
+	_, err = os.Stat(url)
+	if err == nil {
+		var bin []byte
+		bin, err = ioutil.ReadFile(url)
+		if err != nil {
+			err = errors.New("Unable to read source file")
+			return
+		}
+		in = string(bin)
+		cached = true //prevent caching & minisign checks
+		return
+	} else {
+		err = nil
+	}
+
 	var resp *http.Response
 	dlog.Infof("Loading source information from URL [%s]", url)
 	resp, err = http.Get(url)
