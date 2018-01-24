@@ -81,56 +81,56 @@ script:
   - tar czpvf dnscrypt-proxy-netbsd_amd64-${TRAVIS_TAG:-dev}.tar.gz netbsd-amd64
 
   - go clean
-  - env GOOS=linux GOARCH=386 go build -ldflags="-s -w" && ./upx --lzma --brute --best dnscrypt-proxy
+  - env GOOS=linux GOARCH=386 go build -ldflags="-s -w" && ./upx --lzma --best dnscrypt-proxy
   - mkdir linux-i386
   - ln dnscrypt-proxy linux-i386/
   - ln ../LICENSE ../systemd/* dnscrypt-proxy.toml forwarding-rules.txt blacklist.txt linux-i386/
   - tar czpvf dnscrypt-proxy-linux_i386-${TRAVIS_TAG:-dev}.tar.gz linux-i386
 
   - go clean
-  - env GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" && ./upx --lzma --brute --best dnscrypt-proxy
+  - env GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" && ./upx --lzma --best dnscrypt-proxy
   - mkdir linux-x86_64
   - ln dnscrypt-proxy linux-x86_64/
   - ln ../LICENSE ../systemd/* dnscrypt-proxy.toml forwarding-rules.txt blacklist.txt linux-x86_64/
   - tar czpvf dnscrypt-proxy-linux_x86_64-${TRAVIS_TAG:-dev}.tar.gz linux-x86_64
 
   - go clean
-  - env GOOS=linux GOARCH=arm go build -ldflags="-s -w" && ./upx --lzma --brute --best dnscrypt-proxy
+  - env GOOS=linux GOARCH=arm go build -ldflags="-s -w" && ./upx --lzma --best dnscrypt-proxy
   - mkdir linux-arm
   - ln dnscrypt-proxy linux-arm/
   - ln ../LICENSE dnscrypt-proxy.toml forwarding-rules.txt blacklist.txt linux-arm/
   - tar czpvf dnscrypt-proxy-linux_arm-${TRAVIS_TAG:-dev}.tar.gz linux-arm
 
   - go clean
-  - env GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" && ./upx --lzma --brute --best dnscrypt-proxy
+  - env GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" && ./upx --lzma --best dnscrypt-proxy
   - mkdir linux-arm64
   - ln dnscrypt-proxy linux-arm64/
   - ln ../LICENSE dnscrypt-proxy.toml forwarding-rules.txt blacklist.txt linux-arm64/
   - tar czpvf dnscrypt-proxy-linux_arm64-${TRAVIS_TAG:-dev}.tar.gz linux-arm64
 
   - go clean
-  - env GOOS=linux GOARCH=mips GOMIPS=softfloat go build -ldflags="-s -w" && ./upx --lzma --brute --best dnscrypt-proxy
+  - env GOOS=linux GOARCH=mips GOMIPS=softfloat go build -ldflags="-s -w" && ./upx --lzma --best dnscrypt-proxy
   - mkdir linux-mips
   - ln dnscrypt-proxy linux-mips/
   - ln ../LICENSE dnscrypt-proxy.toml forwarding-rules.txt blacklist.txt linux-mips/
   - tar czpvf dnscrypt-proxy-linux_mips-${TRAVIS_TAG:-dev}.tar.gz linux-mips
 
   - go clean
-  - env GOOS=linux GOARCH=mips64 go build -ldflags="-s -w" && ./upx --lzma --brute --best dnscrypt-proxy
+  - env GOOS=linux GOARCH=mips64 go build -ldflags="-s -w" && ./upx --lzma --best dnscrypt-proxy
   - mkdir linux-mips64
   - ln dnscrypt-proxy linux-mips64/
   - ln ../LICENSE dnscrypt-proxy.toml forwarding-rules.txt blacklist.txt linux-mips64/
   - tar czpvf dnscrypt-proxy-linux_mips64-${TRAVIS_TAG:-dev}.tar.gz linux-mips64
 
   - go clean
-  - env GOOS=linux GOARCH=mips64le go build -ldflags="-s -w" && ./upx --lzma --brute --best dnscrypt-proxy
+  - env GOOS=linux GOARCH=mips64le go build -ldflags="-s -w" && ./upx --lzma --best dnscrypt-proxy
   - mkdir linux-mips64le
   - ln dnscrypt-proxy linux-mips64le/
   - ln ../LICENSE dnscrypt-proxy.toml forwarding-rules.txt blacklist.txt linux-mips64le/
   - tar czpvf dnscrypt-proxy-linux_mips64le-${TRAVIS_TAG:-dev}.tar.gz linux-mips64le
 
   - go clean
-  - env GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" && ./upx --lzma --brute --best dnscrypt-proxy
+  - env GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" && ./upx --lzma --best dnscrypt-proxy
   - mkdir macos
   - ln dnscrypt-proxy macos/
   - ln ../LICENSE dnscrypt-proxy.toml forwarding-rules.txt blacklist.txt macos/
