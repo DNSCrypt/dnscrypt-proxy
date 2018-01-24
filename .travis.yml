@@ -15,9 +15,6 @@ script:
   - chmod +x upx
 
   - go clean
-  - env GOOS=plan9 go build -ldflags="-s -w" && ./upx --lzma --best dnscrypt-proxy
-
-  - go clean
   - env GOOS=solaris go build -ldflags="-s -w" && ./upx --lzma --best dnscrypt-proxy
 
   - go clean
