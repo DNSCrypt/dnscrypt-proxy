@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/coreos/go-systemd/activation"
 	"github.com/coreos/go-systemd/daemon"
 	"github.com/jedisct1/dlog"
 	"github.com/kardianos/service"
@@ -165,6 +166,9 @@ func (proxy *Proxy) StartProxy() {
 			dlog.Fatal(err)
 		}
 	}
+	if err := proxy.systemDListeners(); err != nil {
+		dlog.Fatal(err)
+	}
 	liveServers, err := proxy.serversInfo.refresh(proxy)
 	if liveServers > 0 {
 		dlog.Noticef("dnscrypt-proxy is ready - live servers: %d", liveServers)
@@ -258,6 +262,24 @@ func (proxy *Proxy) tcpListenerFromAddr(listenAddr *net.TCPAddr) error {
 	}
 	dlog.Noticef("Now listening to %v [TCP]", listenAddr)
 	go proxy.tcpListener(acceptPc)
+	return nil
+}
+
+func (proxy *Proxy) systemDListeners() error {
+	listeners, err := activation.Listeners(true)
+	if err != nil && len(listeners) > 0 {
+		for i, listener := range listeners {
+			dlog.Noticef("Wiring systemd TCP socket #%d", i)
+			proxy.tcpListener(listener.(*net.TCPListener))
+		}
+	}
+	packetConns, err := activation.PacketConns(true)
+	if err != nil && len(packetConns) > 0 {
+		for i, packetConn := range packetConns {
+			dlog.Noticef("Wiring systemd UDP socket #%d", i)
+			proxy.udpListener(packetConn.(*net.UDPConn))
+		}
+	}
 	return nil
 }
 
