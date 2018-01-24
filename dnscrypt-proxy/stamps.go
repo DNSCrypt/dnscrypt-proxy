@@ -102,5 +102,5 @@ func (stamp *ServerStamp) String() string {
 
 	str := base64.RawURLEncoding.EncodeToString(bin)
 
-	return "dnsc://" + str
+	return "sdns://" + str
 }
