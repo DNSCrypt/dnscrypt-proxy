@@ -33,7 +33,10 @@
 
 [[projects]]
   name = "github.com/coreos/go-systemd"
-  packages = ["daemon"]
+  packages = [
+    "activation",
+    "daemon"
+  ]
   revision = "d2196463941895ee908e13531a23a39feb9e1243"
   version = "v15"
 
@@ -141,6 +144,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "4c7e1d2b74731ad21efcbeae73986fac23885310d0b2127c67da020abef49721"
+  inputs-digest = "bc1445a5fcbd79fa69be22317b6ae0e801d20dd67b39223ce25a2ee5f75ab49e"
   solver-name = "gps-cdcl"
   solver-version = 1
