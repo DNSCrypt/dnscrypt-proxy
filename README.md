@@ -74,10 +74,12 @@ The current 2.0.0 beta version includes all the major features from dnscrypt-pro
 | Query type filter: only log a relevant set of query types   | No                                                                           | Yes                                                                                                           |
 | Support for the Windows Event Log                           | No                                                                           | Yes                                                                                                           |
 | Log suspicious queries (leading to NXDOMAIN)                | No                                                                           | Yes                                                                                                           |
+| IP filtering                                                | Yes, but can be bypassed due to a vulnerability                              | Yes, doesn't have the vulnerability from v1                                                                   |
+| Systemd support                                             | Yes, but don't complain about it                                             | Yes, but don't complain about it either                                                                       |
+| Stamps, as a simple way to provide server parameters        | No                                                                           | Yes                                                                                                           |
 
 ## Planned features
 
-* New super simple (to copy&paste), extensible format for servers parameters: "stamps"
 * Offline responses
 * Local DNSSEC validation
 * [DNS-over-HTTP2 (DoH)](https://datatracker.ietf.org/wg/doh/about/), the successor to DNS-over-TLS
