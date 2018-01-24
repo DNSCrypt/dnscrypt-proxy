@@ -116,14 +116,14 @@ script:
   - tar czpvf dnscrypt-proxy-linux_mips-${TRAVIS_TAG:-dev}.tar.gz linux-mips
 
   - go clean
-  - env GOOS=linux GOARCH=mips64 go build -ldflags="-s -w" && ./upx --lzma --best dnscrypt-proxy
+  - env GOOS=linux GOARCH=mips64 go build -ldflags="-s -w"
   - mkdir linux-mips64
   - ln dnscrypt-proxy linux-mips64/
   - ln ../LICENSE dnscrypt-proxy.toml forwarding-rules.txt blacklist.txt linux-mips64/
   - tar czpvf dnscrypt-proxy-linux_mips64-${TRAVIS_TAG:-dev}.tar.gz linux-mips64
 
   - go clean
-  - env GOOS=linux GOARCH=mips64le go build -ldflags="-s -w" && ./upx --lzma --best dnscrypt-proxy
+  - env GOOS=linux GOARCH=mips64le go build -ldflags="-s -w"
   - mkdir linux-mips64le
   - ln dnscrypt-proxy linux-mips64le/
   - ln ../LICENSE dnscrypt-proxy.toml forwarding-rules.txt blacklist.txt linux-mips64le/
