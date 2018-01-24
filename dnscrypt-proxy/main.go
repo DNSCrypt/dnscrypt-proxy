@@ -396,7 +396,7 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 func cdLocal() {
 	ex, err := os.Executable()
 	if err != nil {
-		dlog.Critical(err)
+		dlog.Warnf("Unable to determine the executable directory: [%s] -- You will need to specify absolute paths in the configuration file", err)
 		return
 	}
 	exPath := filepath.Dir(ex)
