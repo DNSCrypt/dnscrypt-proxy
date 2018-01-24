@@ -158,10 +158,10 @@ func (proxy *Proxy) StartProxy() {
 		if err != nil {
 			dlog.Fatal(err)
 		}
-		if err := proxy.udpListener(listenUDPAddr); err != nil {
+		if err := proxy.udpListenerFromAddr(listenUDPAddr); err != nil {
 			dlog.Fatal(err)
 		}
-		if err := proxy.tcpListener(listenTCPAddr); err != nil {
+		if err := proxy.tcpListenerFromAddr(listenTCPAddr); err != nil {
 			dlog.Fatal(err)
 		}
 	}
@@ -206,54 +206,58 @@ func (proxy *Proxy) prefetcher(urlsToPrefetch *[]URLToPrefetch) {
 	}()
 }
 
-func (proxy *Proxy) udpListener(listenAddr *net.UDPAddr) error {
+func (proxy *Proxy) udpListener(clientPc *net.UDPConn) {
+	defer clientPc.Close()
+	for {
+		buffer := make([]byte, MaxDNSPacketSize-1)
+		length, clientAddr, err := clientPc.ReadFrom(buffer)
+		if err != nil {
+			return
+		}
+		packet := buffer[:length]
+		go func() {
+			proxy.processIncomingQuery(proxy.serversInfo.getOne(), "udp", proxy.mainProto, packet, &clientAddr, clientPc)
+		}()
+	}
+}
+
+func (proxy *Proxy) udpListenerFromAddr(listenAddr *net.UDPAddr) error {
 	clientPc, err := net.ListenUDP("udp", listenAddr)
 	if err != nil {
 		return err
 	}
-	go func() {
-		defer clientPc.Close()
-		dlog.Noticef("Now listening to %v [UDP]", listenAddr)
-		for {
-			buffer := make([]byte, MaxDNSPacketSize-1)
-			length, clientAddr, err := clientPc.ReadFrom(buffer)
-			if err != nil {
-				return
-			}
-			packet := buffer[:length]
-			go func() {
-				proxy.processIncomingQuery(proxy.serversInfo.getOne(), "udp", proxy.mainProto, packet, &clientAddr, clientPc)
-			}()
-		}
-	}()
+	dlog.Noticef("Now listening to %v [UDP]", listenAddr)
+	go proxy.udpListener(clientPc)
 	return nil
 }
 
-func (proxy *Proxy) tcpListener(listenAddr *net.TCPAddr) error {
+func (proxy *Proxy) tcpListener(acceptPc *net.TCPListener) {
+	defer acceptPc.Close()
+	for {
+		clientPc, err := acceptPc.Accept()
+		if err != nil {
+			continue
+		}
+		go func() {
+			defer clientPc.Close()
+			clientPc.SetDeadline(time.Now().Add(proxy.timeout))
+			packet, err := ReadPrefixed(clientPc.(*net.TCPConn))
+			if err != nil || len(packet) < MinDNSPacketSize {
+				return
+			}
+			clientAddr := clientPc.RemoteAddr()
+			proxy.processIncomingQuery(proxy.serversInfo.getOne(), "tcp", "tcp", packet, &clientAddr, clientPc)
+		}()
+	}
+}
+
+func (proxy *Proxy) tcpListenerFromAddr(listenAddr *net.TCPAddr) error {
 	acceptPc, err := net.ListenTCP("tcp", listenAddr)
 	if err != nil {
 		return err
 	}
-	go func() {
-		defer acceptPc.Close()
-		dlog.Noticef("Now listening to %v [TCP]", listenAddr)
-		for {
-			clientPc, err := acceptPc.Accept()
-			if err != nil {
-				continue
-			}
-			go func() {
-				defer clientPc.Close()
-				clientPc.SetDeadline(time.Now().Add(proxy.timeout))
-				packet, err := ReadPrefixed(clientPc.(*net.TCPConn))
-				if err != nil || len(packet) < MinDNSPacketSize {
-					return
-				}
-				clientAddr := clientPc.RemoteAddr()
-				proxy.processIncomingQuery(proxy.serversInfo.getOne(), "tcp", "tcp", packet, &clientAddr, clientPc)
-			}()
-		}
-	}()
+	dlog.Noticef("Now listening to %v [TCP]", listenAddr)
+	go proxy.tcpListener(acceptPc)
 	return nil
 }
 
