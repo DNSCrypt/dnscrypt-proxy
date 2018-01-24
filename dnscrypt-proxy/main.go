@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/jedisct1/dlog"
@@ -50,6 +51,8 @@ type Proxy struct {
 	forwardFile                  string
 	pluginsGlobals               PluginsGlobals
 	urlsToPrefetch               []URLToPrefetch
+	clientsCount                 uint32
+	maxClients                   uint32
 }
 
 type App struct {
@@ -218,6 +221,11 @@ func (proxy *Proxy) udpListener(clientPc *net.UDPConn) {
 		}
 		packet := buffer[:length]
 		go func() {
+			if !proxy.clientsCountInc() {
+				dlog.Warnf("Too many connections (max=%d)", proxy.maxClients)
+				return
+			}
+			defer proxy.clientsCountDec()
 			proxy.processIncomingQuery(proxy.serversInfo.getOne(), "udp", proxy.mainProto, packet, &clientAddr, clientPc)
 		}()
 	}
@@ -242,6 +250,11 @@ func (proxy *Proxy) tcpListener(acceptPc *net.TCPListener) {
 		}
 		go func() {
 			defer clientPc.Close()
+			if !proxy.clientsCountInc() {
+				dlog.Warnf("Too many connections (max=%d)", proxy.maxClients)
+				return
+			}
+			defer proxy.clientsCountDec()
 			clientPc.SetDeadline(time.Now().Add(proxy.timeout))
 			packet, err := ReadPrefixed(clientPc.(*net.TCPConn))
 			if err != nil || len(packet) < MinDNSPacketSize {
@@ -298,6 +311,26 @@ func (proxy *Proxy) exchangeWithTCPServer(serverInfo *ServerInfo, encryptedQuery
 		return nil, err
 	}
 	return proxy.Decrypt(serverInfo, encryptedResponse, clientNonce)
+}
+
+func (proxy *Proxy) clientsCountInc() bool {
+	for {
+		count := proxy.clientsCount
+		if count >= proxy.maxClients {
+			return false
+		}
+		if atomic.CompareAndSwapUint32(&proxy.clientsCount, count, count+1) {
+			return true
+		}
+	}
+}
+
+func (proxy *Proxy) clientsCountDec() {
+	for {
+		if count := proxy.clientsCount; count == 0 || atomic.CompareAndSwapUint32(&proxy.clientsCount, count, count-1) {
+			break
+		}
+	}
 }
 
 func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto string, serverProto string, query []byte, clientAddr *net.Addr, clientPc net.Conn) {

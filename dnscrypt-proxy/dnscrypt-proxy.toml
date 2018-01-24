@@ -23,6 +23,11 @@
 listen_addresses = ['127.0.0.1:53', '[::1]:53']
 
 
+## Maximum number of simultaneous client connections to accept
+
+max_clients = 100
+
+
 ## Require servers (from static definitions and from remote sources) to satisfy specific properties
 
 # Use servers reachable over IPv4

@@ -40,6 +40,7 @@ type Config struct {
 	SourceRequireNoLog  bool                    `toml:"require_nolog"`
 	SourceIPv4          bool                    `toml:"ipv4_servers"`
 	SourceIPv6          bool                    `toml:"ipv6_servers"`
+	MaxClients          uint32                  `toml:"max_clients"`
 }
 
 func newConfig() Config {
@@ -57,6 +58,7 @@ func newConfig() Config {
 		SourceRequireNoLog:  true,
 		SourceIPv4:          true,
 		SourceIPv6:          false,
+		MaxClients:          100,
 	}
 }
 
@@ -128,6 +130,7 @@ func ConfigLoad(proxy *Proxy, svcFlag *string, config_file string) error {
 		dlog.UseLogFile(*config.LogFile)
 	}
 	proxy.timeout = time.Duration(config.Timeout) * time.Millisecond
+	proxy.maxClients = config.MaxClients
 	proxy.mainProto = "udp"
 	if config.ForceTCP {
 		proxy.mainProto = "tcp"
