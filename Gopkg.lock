@@ -100,8 +100,8 @@
 [[projects]]
   name = "github.com/miekg/dns"
   packages = ["."]
-  revision = "5ec25f2a5044291b6c8abf43ed8a201da241e69e"
-  version = "v1.0.3"
+  revision = "5364553f1ee9cddc7ac8b62dce148309c386695b"
+  version = "v1.0.4"
 
 [[projects]]
   branch = "master"
@@ -139,7 +139,7 @@
     "windows/svc/eventlog",
     "windows/svc/mgr"
   ]
-  revision = "af50095a40f9041b3b38960738837185c26e9419"
+  revision = "ef802241c90f84d84d644a2d8d0de8ee96038c9c"
 
 [solve-meta]
   analyzer-name = "dep"

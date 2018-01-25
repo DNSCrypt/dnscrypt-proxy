@@ -4,7 +4,7 @@
 
 A flexible DNS proxy, with support for encrypted DNS protocols such as [DNSCrypt](https://github.com/DNSCrypt/dnscrypt-protocol/blob/master/DNSCRYPT-V2-PROTOCOL.txt).
 
-## [dnscrypt-proxy 2.0.0beta9 is available for download!](https://github.com/jedisct1/dnscrypt-proxy/releases/latest)
+## [dnscrypt-proxy 2.0.0beta10 is available for download!](https://github.com/jedisct1/dnscrypt-proxy/releases/latest)
 
 ## Installation
 
@@ -25,6 +25,8 @@ dnscrypt-proxy is a flexible DNS proxy. It runs on your computer or router, and 
 ### Installing as a system service (Windows, Linux, MacOS)
 
 With administrator privileges, type `dnscrypt-proxy -service install` to register dnscrypt-proxy as a system service, and `dnscrypt-proxy -service start` to start it.
+
+On Windows, this is not even required: you can just double-click on `server-install.bat` to install the service.
 
 Done. It will automatically start at boot.
 

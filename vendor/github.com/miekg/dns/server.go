@@ -460,13 +460,6 @@ func (srv *Server) serveTCP(l net.Listener) error {
 	// deadline is not used here
 	for {
 		rw, err := l.Accept()
-		if err != nil {
-			if neterr, ok := err.(net.Error); ok && neterr.Temporary() {
-				continue
-			}
-			return err
-		}
-		m, err := reader.ReadTCP(rw, rtimeout)
 		srv.lock.RLock()
 		if !srv.started {
 			srv.lock.RUnlock()
@@ -474,9 +467,19 @@ func (srv *Server) serveTCP(l net.Listener) error {
 		}
 		srv.lock.RUnlock()
 		if err != nil {
-			continue
+			if neterr, ok := err.(net.Error); ok && neterr.Temporary() {
+				continue
+			}
+			return err
 		}
-		go srv.serve(rw.RemoteAddr(), handler, m, nil, nil, rw)
+		go func() {
+			m, err := reader.ReadTCP(rw, rtimeout)
+			if err != nil {
+				rw.Close()
+				return
+			}
+			srv.serve(rw.RemoteAddr(), handler, m, nil, nil, rw)
+		}()
 	}
 }
 
