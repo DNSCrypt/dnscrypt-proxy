@@ -257,6 +257,6 @@ format = 'tsv'
 
 ## Optional, local, static list of additional servers
 
-[servers]
-  [servers.'scaleway-fr']
-  stamp = 'sdns://AQMAAAAAAAAAEjIxMi40Ny4yMjguMTM2OjQ0MyDoAbhOpga_sLrAzkNEW7FeumSwL6PEqjGuEGNqB5AyTR8yLmRuc2NyeXB0LWNlcnQuZnIuZG5zY3J5cHQub3Jn'
+# [servers]
+#   [servers.'scaleway-fr']
+#   stamp = 'sdns://AQMAAAAAAAAAEjIxMi40Ny4yMjguMTM2OjQ0MyDoAbhOpga_sLrAzkNEW7FeumSwL6PEqjGuEGNqB5AyTR8yLmRuc2NyeXB0LWNlcnQuZnIuZG5zY3J5cHQub3Jn'
