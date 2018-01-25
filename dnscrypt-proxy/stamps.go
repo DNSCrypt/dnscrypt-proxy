@@ -12,6 +12,14 @@ import (
 	"golang.org/x/crypto/ed25519"
 )
 
+type StampProtoType uint8
+
+const (
+	StampProtoTypePlain    = StampProtoType(0x00)
+	StampProtoTypeDNSCrypt = StampProtoType(0x01)
+	StampProtoTypeDoH      = StampProtoType(0x02)
+)
+
 type ServerStamp struct {
 	serverAddrStr string
 	serverPk      []uint8
@@ -49,7 +57,7 @@ func NewServerStampFromString(stampStr string) (ServerStamp, error) {
 	if len(bin) < 24 {
 		return stamp, errors.New("Stamp is too short")
 	}
-	if bin[0] != 0x01 {
+	if bin[0] != uint8(StampProtoTypeDNSCrypt) {
 		return stamp, errors.New("Unsupported stamp version")
 	}
 	stamp.props = ServerInformalProperties(binary.LittleEndian.Uint64(bin[1:9]))
@@ -88,7 +96,7 @@ func NewServerStampFromString(stampStr string) (ServerStamp, error) {
 
 func (stamp *ServerStamp) String() string {
 	bin := make([]uint8, 9)
-	bin[0] = 0x01
+	bin[0] = uint8(StampProtoTypeDNSCrypt)
 	binary.LittleEndian.PutUint64(bin[1:9], uint64(stamp.props))
 
 	bin = append(bin, uint8(len(stamp.serverAddrStr)))
