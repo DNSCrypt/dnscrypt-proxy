@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/dchest/safefile"
 
@@ -20,6 +21,7 @@ type SourceFormat int
 
 const (
 	SourceFormatV1 = iota
+	SourceFormatV2
 )
 
 const (
@@ -101,10 +103,13 @@ type URLToPrefetch struct {
 func NewSource(url string, minisignKeyStr string, cacheFile string, formatStr string, refreshDelay time.Duration) (Source, []URLToPrefetch, error) {
 	_ = refreshDelay
 	source := Source{url: url}
-	if formatStr != "v1" {
+	if formatStr == "v1" {
+		source.format = SourceFormatV1
+	} else if formatStr == "v2" {
+		source.format = SourceFormatV2
+	} else {
 		return source, []URLToPrefetch{}, fmt.Errorf("Unsupported source format: [%s]", formatStr)
 	}
-	source.format = SourceFormatV1
 	minisignKey, err := minisign.NewPublicKey(minisignKeyStr)
 	if err != nil {
 		return source, []URLToPrefetch{}, err
@@ -121,7 +126,10 @@ func NewSource(url string, minisignKeyStr string, cacheFile string, formatStr st
 	urlsToPrefetch = append(urlsToPrefetch, URLToPrefetch{url: sigURL, cacheFile: sigCacheFile, when: now.Add(sigDelayTillNextUpdate)})
 
 	if err != nil || sigErr != nil {
-		return source, urlsToPrefetch, nil
+		if err == nil {
+			err = sigErr
+		}
+		return source, urlsToPrefetch, err
 	}
 
 	signature, err := minisign.DecodeSignature(sigStr)
@@ -152,6 +160,16 @@ func NewSource(url string, minisignKeyStr string, cacheFile string, formatStr st
 }
 
 func (source *Source) Parse(prefix string) ([]RegisteredServer, error) {
+	if source.format == SourceFormatV1 {
+		return source.parseV1(prefix)
+	} else if source.format == SourceFormatV2 {
+		return source.parseV2(prefix)
+	}
+	dlog.Fatal("Unexpected source format")
+	return []RegisteredServer{}, nil
+}
+
+func (source *Source) parseV1(prefix string) ([]RegisteredServer, error) {
 	var registeredServers []RegisteredServer
 
 	csvReader := csv.NewReader(strings.NewReader(source.in))
@@ -181,6 +199,48 @@ func (source *Source) Parse(prefix string) ([]RegisteredServer, error) {
 			props |= ServerInformalPropertyNoLog
 		}
 		stamp, err := NewServerStampFromLegacy(serverAddrStr, serverPkStr, providerName, props)
+		if err != nil {
+			return registeredServers, err
+		}
+		registeredServer := RegisteredServer{
+			name: name, stamp: stamp,
+		}
+		dlog.Debugf("Registered [%s] with stamp [%s]", name, stamp.String())
+		registeredServers = append(registeredServers, registeredServer)
+	}
+	return registeredServers, nil
+}
+
+func (source *Source) parseV2(prefix string) ([]RegisteredServer, error) {
+	var registeredServers []RegisteredServer
+	in := string(source.in)
+	parts := strings.Split(in, "## ")
+	if len(parts) < 2 {
+		return registeredServers, fmt.Errorf("Invalid format for source at [%s]", source.url)
+	}
+	parts = parts[1:]
+	for _, part := range parts {
+		part = strings.TrimFunc(part, unicode.IsSpace)
+		subparts := strings.Split(part, "\n")
+		if len(subparts) < 2 {
+			return registeredServers, fmt.Errorf("Invalid format for source at [%s]", source.url)
+		}
+		name := strings.TrimFunc(subparts[0], unicode.IsSpace)
+		if len(name) == 0 {
+			return registeredServers, fmt.Errorf("Invalid format for source at [%s]", source.url)
+		}
+		var stampStr string
+		for _, subpart := range subparts {
+			subpart = strings.TrimFunc(subpart, unicode.IsSpace)
+			if strings.HasPrefix(subpart, "sdns://") {
+				stampStr = subpart
+				break
+			}
+		}
+		if len(stampStr) < 8 {
+			return registeredServers, fmt.Errorf("Missing stamp for server [%s] in source from [%s]", name, source.url)
+		}
+		stamp, err := NewServerStampFromString(stampStr)
 		if err != nil {
 			return registeredServers, err
 		}
