@@ -247,7 +247,7 @@ format = 'tsv'
 
 [sources]
   [sources.'legacy resolvers list for dnscrypt-proxy v1']
-  url = 'https://download.dnscrypt.info/resolvers-list/v1/dnscrypt-resolvers.csv'
+  url = 'http://download.dnscrypt.info/resolvers-list/v1/dnscrypt-resolvers.csv'
   minisign_key = 'RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3'
   cache_file = 'dnscrypt-resolvers.csv'
   format = 'v1'
