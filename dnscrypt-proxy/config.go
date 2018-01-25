@@ -34,7 +34,7 @@ type Config struct {
 	BlockName           BlockNameConfig         `toml:"blacklist"`
 	BlockIP             BlockIPConfig           `toml:"ip_blacklist"`
 	ForwardFile         string                  `toml:"forwarding_rules"`
-	ServersConfig       map[string]ServerConfig `toml:"servers"`
+	ServersConfig       map[string]ServerConfig `toml:"static"`
 	SourcesConfig       map[string]SourceConfig `toml:"sources"`
 	SourceRequireDNSSEC bool                    `toml:"require_dnssec"`
 	SourceRequireNoLog  bool                    `toml:"require_nolog"`
