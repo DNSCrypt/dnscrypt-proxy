@@ -24,10 +24,12 @@ type ServerStamp struct {
 	serverAddrStr string
 	serverPk      []uint8
 	providerName  string
+	path          string
 	props         ServerInformalProperties
+	proto         StampProtoType
 }
 
-func NewServerStampFromLegacy(serverAddrStr string, serverPkStr string, providerName string, props ServerInformalProperties) (ServerStamp, error) {
+func NewServerStampFromDNSCryptLegacy(serverAddrStr string, serverPkStr string, providerName string, props ServerInformalProperties) (ServerStamp, error) {
 	if net.ParseIP(serverAddrStr) != nil {
 		serverAddrStr = fmt.Sprintf("%s:%d", serverAddrStr, DefaultPort)
 	}
@@ -40,6 +42,7 @@ func NewServerStampFromLegacy(serverAddrStr string, serverPkStr string, provider
 		serverPk:      serverPk,
 		providerName:  providerName,
 		props:         props,
+		proto:         StampProtoTypeDNSCrypt,
 	}, nil
 }
 
