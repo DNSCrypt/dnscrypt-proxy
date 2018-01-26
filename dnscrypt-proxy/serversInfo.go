@@ -150,7 +150,7 @@ func (serversInfo *ServersInfo) fetchServerInfo(proxy *Proxy, name string, stamp
 		dlog.Warnf("Public key [%s] shouldn't be hex-encoded any more", string(stamp.serverPk))
 		stamp.serverPk = serverPk
 	}
-	certInfo, rtt, err := FetchCurrentCert(proxy, &name, proxy.mainProto, stamp.serverPk, stamp.serverAddrStr, stamp.providerName)
+	certInfo, rtt, err := FetchCurrentDNSCryptCert(proxy, &name, proxy.mainProto, stamp.serverPk, stamp.serverAddrStr, stamp.providerName)
 	if err != nil {
 		return ServerInfo{}, err
 	}
