@@ -59,8 +59,10 @@ func NewServerStampFromString(stampStr string) (ServerStamp, error) {
 	if len(bin) < 1 {
 		return ServerStamp{}, errors.New("Stamp is too short")
 	}
-	if bin[0] != uint8(StampProtoTypeDNSCrypt) {
+	if bin[0] == uint8(StampProtoTypeDNSCrypt) {
 		return newDNSCryptServerStamp(bin)
+	} else if bin[0] == uint8(StampProtoTypeDoH) {
+		return newDoHServerStamp(bin)
 	}
 	return ServerStamp{}, errors.New("Unsupported stamp version or protocol")
 }
@@ -68,7 +70,7 @@ func NewServerStampFromString(stampStr string) (ServerStamp, error) {
 // id(u8)=0x02 props addrLen(1) serverAddr pkStrlen(1) pkStr providerNameLen(1) providerName
 
 func newDNSCryptServerStamp(bin []byte) (ServerStamp, error) {
-	stamp := ServerStamp{}
+	stamp := ServerStamp{proto:StampProtoTypeDNSCrypt}
 	if len(bin) < 24 {
 		return stamp, errors.New("Stamp is too short")
 	}
@@ -109,7 +111,7 @@ func newDNSCryptServerStamp(bin []byte) (ServerStamp, error) {
 // id(u8)=0x02 props addrLen(1) serverAddr hashLen(1) hash providerNameLen(1) providerName pathLen(1) path
 
 func newDoHServerStamp(bin []byte) (ServerStamp, error) {
-	stamp := ServerStamp{}
+	stamp := ServerStamp{proto:StampProtoTypeDoH}
 
 	stamp.props = ServerInformalProperties(binary.LittleEndian.Uint64(bin[1:9]))
 	binLen := len(bin)
