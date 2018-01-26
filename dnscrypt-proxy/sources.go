@@ -198,7 +198,7 @@ func (source *Source) parseV1(prefix string) ([]RegisteredServer, error) {
 		if strings.EqualFold(record[8], "yes") {
 			props |= ServerInformalPropertyNoLog
 		}
-		stamp, err := NewServerStampFromDNSCryptLegacy(serverAddrStr, serverPkStr, providerName, props)
+		stamp, err := NewDNSCryptServerStampFromLegacy(serverAddrStr, serverPkStr, providerName, props)
 		if err != nil {
 			return registeredServers, err
 		}
