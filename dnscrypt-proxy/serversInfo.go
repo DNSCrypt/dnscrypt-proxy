@@ -201,6 +201,19 @@ func (serversInfo *ServersInfo) fetchDoHServerInfo(proxy *Proxy, name string, st
 		Host:   stamp.providerName,
 		Path:   stamp.path,
 	}
+	client := http.Client{
+		Transport: proxy.httpTransport,
+		Timeout:   proxy.timeout,
+	}
+	preReq := &http.Request{
+		Method: "HEAD",
+		URL:    url,
+		Close:  false,
+		Host:   stamp.providerName,
+	}
+	if _, err := client.Do(preReq); err != nil {
+		return ServerInfo{}, err
+	}
 	body := ioutil.NopCloser(bytes.NewReader([]byte{
 		0x00, 0x00, 0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01,
 	}))
@@ -216,13 +229,9 @@ func (serversInfo *ServersInfo) fetchDoHServerInfo(proxy *Proxy, name string, st
 		Host:  stamp.providerName,
 		Body:  body,
 	}
-	client := http.Client{
-		Transport: proxy.httpTransport,
-		Timeout:   proxy.timeout,
-	}
 	start := time.Now()
 	resp, err := client.Do(req)
-	elapsed := time.Since(start)
+	rtt := time.Since(start)
 	if err == nil && resp != nil && (resp.StatusCode < 200 || resp.StatusCode > 299) {
 		return ServerInfo{}, fmt.Errorf("Webserver returned code %d", resp.StatusCode)
 	} else if err != nil {
@@ -237,13 +246,15 @@ func (serversInfo *ServersInfo) fetchDoHServerInfo(proxy *Proxy, name string, st
 	if len(respBody) < MinDNSPacketSize || len(respBody) > MaxDNSPacketSize {
 		return ServerInfo{}, errors.New("Webserver returned an unexpected response")
 	}
+	dlog.Noticef("[%s] OK (DoH) - rtt: %dms", name, rtt.Nanoseconds()/1000000)
+
 	serverInfo := ServerInfo{
 		Proto:      StampProtoTypeDoH,
 		Name:       name,
 		Timeout:    proxy.timeout,
 		URL:        url,
 		HostName:   stamp.providerName,
-		initialRtt: int(elapsed.Nanoseconds() / 1000000),
+		initialRtt: int(rtt.Nanoseconds() / 1000000),
 	}
 	return serverInfo, nil
 }

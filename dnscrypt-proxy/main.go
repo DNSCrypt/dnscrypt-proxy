@@ -399,9 +399,8 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 				Timeout:   proxy.timeout,
 			}
 			resp, err := client.Do(req)
-			if err == nil && resp != nil && (resp.StatusCode < 200 || resp.StatusCode > 299) {
-				return
-			} else if err != nil || resp == nil {
+			if (err == nil && resp != nil && (resp.StatusCode < 200 || resp.StatusCode > 299)) ||
+				err != nil || resp == nil {
 				return
 			}
 			response, err = ioutil.ReadAll(resp.Body)
