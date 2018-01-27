@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -208,8 +209,11 @@ func (serversInfo *ServersInfo) fetchDoHServerInfo(proxy *Proxy, name string, st
 	preReq := &http.Request{
 		Method: "HEAD",
 		URL:    url,
-		Close:  false,
-		Host:   stamp.providerName,
+		Header: map[string][]string{
+			"User-Agent": {"dnscrypt-proxy"},
+		},
+		Close: false,
+		Host:  stamp.providerName,
 	}
 	if _, err := client.Do(preReq); err != nil {
 		return ServerInfo{}, err
@@ -238,6 +242,27 @@ func (serversInfo *ServersInfo) fetchDoHServerInfo(proxy *Proxy, name string, st
 		return ServerInfo{}, err
 	} else if resp == nil {
 		return ServerInfo{}, errors.New("Webserver returned an error")
+	}
+	tls := resp.TLS
+	if tls == nil || !tls.HandshakeComplete {
+		return ServerInfo{}, errors.New("TLS handshake failed")
+	}
+	if len(stamp.hash) > 0 && len(stamp.hash) != 32 {
+		dlog.Criticalf("Unsupported certificate hash for [%s]: [%x]", name, stamp.hash)
+	}
+	found := false
+	var wantedHash [32]byte
+	copy(wantedHash[:], stamp.hash)
+	for _, cert := range tls.PeerCertificates {
+		h := sha256.Sum256(cert.RawTBSCertificate)
+		dlog.Debugf("Advertised cert: [%s] [%x]", cert.Subject, h)
+		if len(stamp.hash) == 32 && h == wantedHash {
+			found = true
+			break
+		}
+	}
+	if len(stamp.hash) == 32 && !found {
+		return ServerInfo{}, fmt.Errorf("Certificate hash [%x] not found for [%s]", wantedHash, name)
 	}
 	respBody, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
