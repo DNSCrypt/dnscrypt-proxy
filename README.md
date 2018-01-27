@@ -80,11 +80,14 @@ The current 2.0.0 beta version includes all the major features from dnscrypt-pro
 | Systemd support                                             | Yes, but don't complain about it                                             | Yes, but don't complain about it either                                                                       |
 | Stamps, as a simple way to provide server parameters        | No                                                                           | Yes                                                                                                           |
 
+## Experimental
+
+* [DNS-over-HTTP2 (DoH)](https://datatracker.ietf.org/wg/doh/about/), the successor to DNS-over-TLS
+
 ## Planned features
 
 * Offline responses
 * Local DNSSEC validation
-* [DNS-over-HTTP2 (DoH)](https://datatracker.ietf.org/wg/doh/about/), the successor to DNS-over-TLS
 * Support for the V1 plugin API
 * Real documentation
 
