@@ -1,10 +1,13 @@
 package main
 
 import (
+	"bytes"
 	"crypto/rand"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"sync"
@@ -53,6 +56,7 @@ type Proxy struct {
 	urlsToPrefetch               []URLToPrefetch
 	clientsCount                 uint32
 	maxClients                   uint32
+	httpTransport                *http.Transport
 }
 
 type App struct {
@@ -150,6 +154,15 @@ func (proxy *Proxy) StartProxy() {
 	curve25519.ScalarBaseMult(&proxy.proxyPublicKey, &proxy.proxySecretKey)
 	for _, registeredServer := range proxy.registeredServers {
 		proxy.serversInfo.registerServer(proxy, registeredServer.name, registeredServer.stamp)
+	}
+	proxy.httpTransport = &http.Transport{
+		DisableKeepAlives:      false,
+		DisableCompression:     true,
+		MaxIdleConns:           1,
+		IdleConnTimeout:        proxy.timeout,
+		ResponseHeaderTimeout:  proxy.timeout,
+		ExpectContinueTimeout:  proxy.timeout,
+		MaxResponseHeaderBytes: 4096,
 	}
 	for _, listenAddrStr := range proxy.listenAddresses {
 		listenUDPAddr, err := net.ResolveUDPAddr("udp", listenAddrStr)
@@ -353,21 +366,60 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 		}
 	}
 	if len(response) == 0 {
-		encryptedQuery, clientNonce, err := proxy.Encrypt(serverInfo, query, serverProto)
-		if err != nil {
-			return
-		}
-		serverInfo.noticeBegin(proxy)
-		if serverProto == "udp" {
-			response, err = proxy.exchangeWithUDPServer(serverInfo, encryptedQuery, clientNonce)
+		if serverInfo.Proto == StampProtoTypeDNSCrypt {
+			encryptedQuery, clientNonce, err := proxy.Encrypt(serverInfo, query, serverProto)
+			if err != nil {
+				return
+			}
+			serverInfo.noticeBegin(proxy)
+			if serverProto == "udp" {
+				response, err = proxy.exchangeWithUDPServer(serverInfo, encryptedQuery, clientNonce)
+			} else {
+				response, err = proxy.exchangeWithTCPServer(serverInfo, encryptedQuery, clientNonce)
+			}
+			if err != nil {
+				serverInfo.noticeFailure(proxy)
+				return
+			}
+		} else if serverInfo.Proto == StampProtoTypeDoH {
+			req := &http.Request{
+				Method: "POST",
+				URL:    serverInfo.URL,
+				Host:   serverInfo.HostName,
+				Header: map[string][]string{
+					"Accept":       {"application/dns-udpwireformat"},
+					"Content-Type": {"application/dns-udpwireformat"},
+					"User-Agent":   {"dnscrypt-proxy"},
+				},
+				Close: false,
+				Body:  ioutil.NopCloser(bytes.NewReader(query)),
+			}
+			client := http.Client{
+				Transport: proxy.httpTransport,
+				Timeout:   proxy.timeout,
+			}
+			resp, err := client.Do(req)
+			if err == nil && resp != nil && (resp.StatusCode < 200 || resp.StatusCode > 299) {
+				return
+			} else if err != nil || resp == nil {
+				return
+			}
+			response, err = ioutil.ReadAll(resp.Body)
+			if err != nil {
+				return
+			}
 		} else {
-			response, err = proxy.exchangeWithTCPServer(serverInfo, encryptedQuery, clientNonce)
+			dlog.Fatal("Unsupported protocol")
 		}
 		if err != nil {
 			serverInfo.noticeFailure(proxy)
 			return
 		}
 		response, _ = pluginsState.ApplyResponsePlugins(&proxy.pluginsGlobals, response)
+	}
+	if len(response) < MinDNSPacketSize || len(response) > MaxDNSPacketSize {
+		serverInfo.noticeFailure(proxy)
+		return
 	}
 	if clientProto == "udp" {
 		if len(response) > MaxDNSUDPPacketSize {

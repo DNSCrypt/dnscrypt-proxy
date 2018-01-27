@@ -1,9 +1,15 @@
 package main
 
 import (
+	"bytes"
 	"encoding/hex"
+	"errors"
+	"fmt"
+	"io/ioutil"
 	"math/rand"
 	"net"
+	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -32,12 +38,15 @@ type RegisteredServer struct {
 
 type ServerInfo struct {
 	sync.RWMutex
+	Proto              StampProtoType
 	MagicQuery         [8]byte
 	ServerPk           [32]byte
 	SharedKey          [32]byte
 	CryptoConstruction CryptoConstruction
 	Name               string
 	Timeout            time.Duration
+	URL                *url.URL
+	HostName           string
 	UDPAddr            *net.UDPAddr
 	TCPAddr            *net.TCPAddr
 	lastActionTS       time.Time
@@ -142,6 +151,15 @@ func (serversInfo *ServersInfo) getOne() *ServerInfo {
 }
 
 func (serversInfo *ServersInfo) fetchServerInfo(proxy *Proxy, name string, stamp ServerStamp) (ServerInfo, error) {
+	if stamp.proto == StampProtoTypeDNSCrypt {
+		return serversInfo.fetchDNSCryptServerInfo(proxy, name, stamp)
+	} else if stamp.proto == StampProtoTypeDoH {
+		return serversInfo.fetchDoHServerInfo(proxy, name, stamp)
+	}
+	return ServerInfo{}, errors.New("Unsupported protocol")
+}
+
+func (serversInfo *ServersInfo) fetchDNSCryptServerInfo(proxy *Proxy, name string, stamp ServerStamp) (ServerInfo, error) {
 	if len(stamp.serverPk) != ed25519.PublicKeySize {
 		serverPk, err := hex.DecodeString(strings.Replace(string(stamp.serverPk), ":", "", -1))
 		if err != nil || len(serverPk) != ed25519.PublicKeySize {
@@ -163,6 +181,7 @@ func (serversInfo *ServersInfo) fetchServerInfo(proxy *Proxy, name string, stamp
 		return ServerInfo{}, err
 	}
 	serverInfo := ServerInfo{
+		Proto:              StampProtoTypeDNSCrypt,
 		MagicQuery:         certInfo.MagicQuery,
 		ServerPk:           certInfo.ServerPk,
 		SharedKey:          certInfo.SharedKey,
@@ -172,6 +191,59 @@ func (serversInfo *ServersInfo) fetchServerInfo(proxy *Proxy, name string, stamp
 		UDPAddr:            remoteUDPAddr,
 		TCPAddr:            remoteTCPAddr,
 		initialRtt:         rtt,
+	}
+	return serverInfo, nil
+}
+
+func (serversInfo *ServersInfo) fetchDoHServerInfo(proxy *Proxy, name string, stamp ServerStamp) (ServerInfo, error) {
+	url := &url.URL{
+		Scheme: "https",
+		Host:   stamp.providerName,
+		Path:   stamp.path,
+	}
+	body := ioutil.NopCloser(bytes.NewReader([]byte{
+		0x00, 0x00, 0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01,
+	}))
+	req := &http.Request{
+		Method: "POST",
+		URL:    url,
+		Header: map[string][]string{
+			"Accept":       {"application/dns-udpwireformat"},
+			"Content-Type": {"application/dns-udpwireformat"},
+			"User-Agent":   {"dnscrypt-proxy"},
+		},
+		Close: false,
+		Host:  stamp.providerName,
+		Body:  body,
+	}
+	client := http.Client{
+		Transport: proxy.httpTransport,
+		Timeout:   proxy.timeout,
+	}
+	start := time.Now()
+	resp, err := client.Do(req)
+	elapsed := time.Since(start)
+	if err == nil && resp != nil && (resp.StatusCode < 200 || resp.StatusCode > 299) {
+		return ServerInfo{}, fmt.Errorf("Webserver returned code %d", resp.StatusCode)
+	} else if err != nil {
+		return ServerInfo{}, err
+	} else if resp == nil {
+		return ServerInfo{}, errors.New("Webserver returned an error")
+	}
+	respBody, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return ServerInfo{}, err
+	}
+	if len(respBody) < MinDNSPacketSize || len(respBody) > MaxDNSPacketSize {
+		return ServerInfo{}, errors.New("Webserver returned an unexpected response")
+	}
+	serverInfo := ServerInfo{
+		Proto:      StampProtoTypeDoH,
+		Name:       name,
+		Timeout:    proxy.timeout,
+		URL:        url,
+		HostName:   stamp.providerName,
+		initialRtt: int(elapsed.Nanoseconds() / 1000000),
 	}
 	return serverInfo, nil
 }
