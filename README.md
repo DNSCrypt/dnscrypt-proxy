@@ -104,6 +104,7 @@ Up-to-date, pre-built binaries are available for:
 * Linux/arm
 * Linux/arm64
 * Linux/mips
+* Linux/mipsle
 * Linux/mips64
 * Linux/mips64le
 * Linux/x86
