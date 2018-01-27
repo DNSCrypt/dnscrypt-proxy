@@ -260,4 +260,4 @@ format = 'tsv'
 
  [static]
    [static.'google']
-   stamp = 'sdns://AgAAAAAAAAAADjIxNi41OC4yMDQuMTQyAA5kbnMuZ29vZ2xlLmNvbQ0vZXhwZXJpbWVudGFs'
+   stamp = 'sdns://AgEAAAAAAAAADjIxNi41OC4yMDQuMTQyAA5kbnMuZ29vZ2xlLmNvbQ0vZXhwZXJpbWVudGFs'
