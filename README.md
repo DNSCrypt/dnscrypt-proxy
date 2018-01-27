@@ -2,7 +2,7 @@
 
 # ![dnscrypt-proxy 2](https://raw.github.com/jedisct1/dnscrypt-proxy/master/logo.png?2)
 
-A flexible DNS proxy, with support for modern encrypted DNS protocols such as [DNSCrypt v2](https://github.com/DNSCrypt/dnscrypt-protocol/blob/master/DNSCRYPT-V2-PROTOCOL.txt) and DNS-over-HTTP2.
+A flexible DNS proxy, with support for modern encrypted DNS protocols such as [DNSCrypt v2](https://github.com/DNSCrypt/dnscrypt-protocol/blob/master/DNSCRYPT-V2-PROTOCOL.txt) and DNS-over-HTTP/2.
 
 ## [dnscrypt-proxy 2.0.0beta10 is available for download!](https://github.com/jedisct1/dnscrypt-proxy/releases/latest)
 
@@ -79,11 +79,11 @@ The current 2.0.0 beta version includes all the major features from dnscrypt-pro
 | IP filtering                                                | Yes, but can be bypassed due to a vulnerability                              | Yes, doesn't have the vulnerability from v1                                                                   |
 | Systemd support                                             | Yes, but don't complain about it                                             | Yes, but don't complain about it either                                                                       |
 | Stamps, as a simple way to provide server parameters        | No                                                                           | Yes                                                                                                           |
-| Supported protocols                                         | DNSCrypt v1, DNSCrypt v2                                                     | DNSCrypt v1, DNSCrypt v2, DNS-over-HTTP2                                                                      |
+| Supported protocols                                         | DNSCrypt v1, DNSCrypt v2                                                     | DNSCrypt v1, DNSCrypt v2, DNS-over-HTTP/2                                                                     |
 
 ## Experimental
 
-* [DNS-over-HTTP2 (DoH)](https://datatracker.ietf.org/wg/doh/about/), the successor to DNS-over-TLS
+* [DNS-over-HTTP/2 (DoH)](https://datatracker.ietf.org/wg/doh/about/), the successor to DNS-over-TLS
 
 Using DoH currently requires a working DNS configuration on the proxy host (DNS server host names have to be resolved).
 
