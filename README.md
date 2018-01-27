@@ -86,6 +86,7 @@ The current 2.0.0 beta version includes all the major features from dnscrypt-pro
 * [DNS-over-HTTP/2 (DoH)](https://datatracker.ietf.org/wg/doh/about/), the successor to DNS-over-TLS
 
 Using DoH currently requires a working DNS configuration on the proxy host (DNS server host names have to be resolved).
+If you use DoH, add the IP address of the servers to your `hosts` file or equivalent.
 
 ## Planned features
 
