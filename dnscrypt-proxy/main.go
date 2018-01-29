@@ -185,9 +185,8 @@ func (proxy *Proxy) StartProxy() {
 			proxy.cachedIPs.RUnlock()
 			if len(cachedIP) > 0 {
 				ipOnly = cachedIP
-				dlog.Infof("[%s] IP address was cached: [%s]", host, ipOnly)
 			} else {
-				dlog.Infof("[%s] IP address was not cached", host)
+				dlog.Debugf("[%s] IP address was not cached", host)
 			}
 			addrStr = ipOnly + addrStr[strings.LastIndex(addrStr, ":"):]
 			return dialer.DialContext(ctx, network, addrStr)
