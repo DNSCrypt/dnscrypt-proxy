@@ -11,7 +11,10 @@ import (
 	"github.com/kardianos/service"
 )
 
-const AppVersion = "2.0.0beta11"
+const (
+	AppVersion     = "2.0.0beta11"
+	ConfigFileName = "dnscrypt-proxy.toml"
+)
 
 type App struct {
 	wg    sync.WaitGroup
@@ -37,7 +40,9 @@ func main() {
 		dlog.Debug(err)
 	}
 	app.proxy = Proxy{}
-	if err := ConfigLoad(&app.proxy, svcFlag, "dnscrypt-proxy.toml"); err != nil {
+
+	cdFileDir(ConfigFileName)
+	if err := ConfigLoad(&app.proxy, svcFlag, ConfigFileName); err != nil {
 		dlog.Fatal(err)
 	}
 	dlog.Noticef("Starting dnscrypt-proxy %s", AppVersion)
@@ -101,12 +106,15 @@ func (app *App) Stop(service service.Service) error {
 	return nil
 }
 
+func cdFileDir(fileName string) {
+	os.Chdir(filepath.Dir(fileName))
+}
+
 func cdLocal() {
-	ex, err := os.Executable()
+	exeFileName, err := os.Executable()
 	if err != nil {
 		dlog.Warnf("Unable to determine the executable directory: [%s] -- You will need to specify absolute paths in the configuration file", err)
 		return
 	}
-	exPath := filepath.Dir(ex)
-	os.Chdir(exPath)
+	os.Chdir(filepath.Dir(exeFileName))
 }
