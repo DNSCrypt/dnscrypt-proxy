@@ -197,6 +197,13 @@ func (serversInfo *ServersInfo) fetchDNSCryptServerInfo(proxy *Proxy, name strin
 }
 
 func (serversInfo *ServersInfo) fetchDoHServerInfo(proxy *Proxy, name string, stamp ServerStamp) (ServerInfo, error) {
+	if len(stamp.serverAddrStr) > 0 {
+		addrStr := stamp.serverAddrStr
+		ipOnly := addrStr[:strings.LastIndex(addrStr, ":")]
+		proxy.cachedIPs.Lock()
+		proxy.cachedIPs.cache[stamp.providerName] = ipOnly
+		proxy.cachedIPs.Unlock()
+	}
 	url := &url.URL{
 		Scheme: "https",
 		Host:   stamp.providerName,

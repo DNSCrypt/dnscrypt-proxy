@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"flag"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -20,6 +22,11 @@ import (
 )
 
 const AppVersion = "2.0.0beta11"
+
+type CachedIPs struct {
+	sync.RWMutex
+	cache map[string]string
+}
 
 type Proxy struct {
 	proxyPublicKey               [32]byte
@@ -57,6 +64,7 @@ type Proxy struct {
 	clientsCount                 uint32
 	maxClients                   uint32
 	httpTransport                *http.Transport
+	cachedIPs                    CachedIPs
 }
 
 type App struct {
@@ -116,6 +124,7 @@ func main() {
 
 func (app *App) Start(service service.Service) error {
 	proxy := app.proxy
+	proxy.cachedIPs.cache = make(map[string]string)
 	if err := InitPluginsGlobals(&proxy.pluginsGlobals, &proxy); err != nil {
 		dlog.Fatal(err)
 	}
@@ -155,6 +164,11 @@ func (proxy *Proxy) StartProxy() {
 	for _, registeredServer := range proxy.registeredServers {
 		proxy.serversInfo.registerServer(proxy, registeredServer.name, registeredServer.stamp)
 	}
+	dialer := &net.Dialer{
+		Timeout:   proxy.timeout,
+		KeepAlive: proxy.timeout,
+		DualStack: true,
+	}
 	proxy.httpTransport = &http.Transport{
 		DisableKeepAlives:      false,
 		DisableCompression:     true,
@@ -163,6 +177,21 @@ func (proxy *Proxy) StartProxy() {
 		ResponseHeaderTimeout:  proxy.timeout,
 		ExpectContinueTimeout:  proxy.timeout,
 		MaxResponseHeaderBytes: 4096,
+		DialContext: func(ctx context.Context, network, addrStr string) (net.Conn, error) {
+			host := addrStr[:strings.LastIndex(addrStr, ":")]
+			ipOnly := host
+			proxy.cachedIPs.RLock()
+			cachedIP := proxy.cachedIPs.cache[host]
+			proxy.cachedIPs.RUnlock()
+			if len(cachedIP) > 0 {
+				ipOnly = cachedIP
+				dlog.Infof("[%s] IP address was cached: [%s]", host, ipOnly)
+			} else {
+				dlog.Infof("[%s] IP address was not cached", host)
+			}
+			addrStr = ipOnly + addrStr[strings.LastIndex(addrStr, ":"):]
+			return dialer.DialContext(ctx, network, addrStr)
+		},
 	}
 	for _, listenAddrStr := range proxy.listenAddresses {
 		listenUDPAddr, err := net.ResolveUDPAddr("udp", listenAddrStr)
