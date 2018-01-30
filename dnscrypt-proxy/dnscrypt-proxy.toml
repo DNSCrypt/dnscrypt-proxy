@@ -76,7 +76,7 @@ timeout = 2500
 
 ## Delay, in minutes, after which certificates are reloaded
 
-cert_refresh_delay = 360
+cert_refresh_delay = 240
 
 
 ## Fallback resolver

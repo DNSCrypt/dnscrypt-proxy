@@ -51,7 +51,7 @@ func newConfig() Config {
 		LogLevel:              int(dlog.LogLevel()),
 		ListenAddresses:       []string{"127.0.0.1:53"},
 		Timeout:               2500,
-		CertRefreshDelay:      360,
+		CertRefreshDelay:      240,
 		CertIgnoreTimestamp:   false,
 		Cache:                 true,
 		CacheSize:             256,
