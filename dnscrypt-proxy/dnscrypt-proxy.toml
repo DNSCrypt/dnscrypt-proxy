@@ -16,6 +16,7 @@
 
 # server_names = ['scaleway-fr', 'google', 'yandex']
 
+
 ## List of local addresses and ports to listen to. Can be IPv4 and/or IPv6.
 ## To only use systemd activation sockets, use an empty set: []
 
@@ -24,7 +25,7 @@ listen_addresses = ['127.0.0.1:53', '[::1]:53']
 
 ## Maximum number of simultaneous client connections to accept
 
-max_clients = 100
+max_clients = 250
 
 
 ## Require servers (from static definitions and from remote sources) to satisfy specific properties
@@ -85,16 +86,18 @@ cert_refresh_delay = 30
 
 
 ## Fallback resolver
-## This is a normal, non-encrypted resolver, that will be only used
+## This is a normal, non-encrypted DNS resolver, that will be only used
 ## for one-shot queries when retrieving the initial resolvers list, and
 ## only if the system DNS configuration doesn't work.
 ## No user application queries will ever be leaked through this resolver,
 ## and it will not be used after IP addresses of resolvers URLs have been found.
-## It will never be used at all if lists have already been cached, and if
-## stamps don't include host names without IP addresses.
+## It will never be used if lists have already been cached, and if stamps
+## don't include host names without IP addresses.
+## It will not be used if the configured system DNS works.
 ## A resolver supporting DNSSEC is recommended. This may become mandatory.
 
 fallback_resolver = "9.9.9.9:53"
+
 
 
 #########################
@@ -151,6 +154,7 @@ cache_max_ttl = 86400
 cache_neg_ttl = 60
 
 
+
 ###############################
 #        Query logging        #
 ###############################
@@ -190,6 +194,7 @@ format = 'tsv'
 ## Query log format (currently supported: tsv and ltsv)
 
 format = 'tsv'
+
 
 
 ######################################################
