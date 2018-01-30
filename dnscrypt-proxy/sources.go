@@ -235,6 +235,7 @@ func (source *Source) parseV2(prefix string) ([]RegisteredServer, error) {
 		if len(name) == 0 {
 			return registeredServers, fmt.Errorf("Invalid format for source at [%s]", source.url)
 		}
+		name = prefix + name
 		var stampStr string
 		for _, subpart := range subparts {
 			subpart = strings.TrimFunc(subpart, unicode.IsSpace)
