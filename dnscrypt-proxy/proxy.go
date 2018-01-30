@@ -2,24 +2,16 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"io/ioutil"
 	"math/rand"
 	"net"
 	"net/http"
-	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/jedisct1/dlog"
 	"golang.org/x/crypto/curve25519"
 )
-
-type CachedIPs struct {
-	sync.RWMutex
-	cache map[string]string
-}
 
 type Proxy struct {
 	proxyPublicKey               [32]byte
@@ -56,8 +48,7 @@ type Proxy struct {
 	urlsToPrefetch               []URLToPrefetch
 	clientsCount                 uint32
 	maxClients                   uint32
-	httpTransport                *http.Transport
-	cachedIPs                    CachedIPs
+	xTransport                   *XTransport
 }
 
 func (proxy *Proxy) StartProxy() {
@@ -68,34 +59,6 @@ func (proxy *Proxy) StartProxy() {
 	curve25519.ScalarBaseMult(&proxy.proxyPublicKey, &proxy.proxySecretKey)
 	for _, registeredServer := range proxy.registeredServers {
 		proxy.serversInfo.registerServer(proxy, registeredServer.name, registeredServer.stamp)
-	}
-	dialer := &net.Dialer{
-		Timeout:   proxy.timeout,
-		KeepAlive: proxy.timeout,
-		DualStack: true,
-	}
-	proxy.httpTransport = &http.Transport{
-		DisableKeepAlives:      false,
-		DisableCompression:     true,
-		MaxIdleConns:           1,
-		IdleConnTimeout:        proxy.timeout,
-		ResponseHeaderTimeout:  proxy.timeout,
-		ExpectContinueTimeout:  proxy.timeout,
-		MaxResponseHeaderBytes: 4096,
-		DialContext: func(ctx context.Context, network, addrStr string) (net.Conn, error) {
-			host := addrStr[:strings.LastIndex(addrStr, ":")]
-			ipOnly := host
-			proxy.cachedIPs.RLock()
-			cachedIP := proxy.cachedIPs.cache[host]
-			proxy.cachedIPs.RUnlock()
-			if len(cachedIP) > 0 {
-				ipOnly = cachedIP
-			} else {
-				dlog.Debugf("[%s] IP address was not cached", host)
-			}
-			addrStr = ipOnly + addrStr[strings.LastIndex(addrStr, ":"):]
-			return dialer.DialContext(ctx, network, addrStr)
-		},
 	}
 	for _, listenAddrStr := range proxy.listenAddresses {
 		listenUDPAddr, err := net.ResolveUDPAddr("udp", listenAddrStr)
@@ -328,7 +291,7 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 				Body:  ioutil.NopCloser(bytes.NewReader(query)),
 			}
 			client := http.Client{
-				Transport: proxy.httpTransport,
+				Transport: proxy.xTransport.transport,
 				Timeout:   proxy.timeout,
 			}
 			resp, err := client.Do(req)

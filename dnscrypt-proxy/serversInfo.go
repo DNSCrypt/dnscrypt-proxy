@@ -200,9 +200,9 @@ func (serversInfo *ServersInfo) fetchDoHServerInfo(proxy *Proxy, name string, st
 	if len(stamp.serverAddrStr) > 0 {
 		addrStr := stamp.serverAddrStr
 		ipOnly := addrStr[:strings.LastIndex(addrStr, ":")]
-		proxy.cachedIPs.Lock()
-		proxy.cachedIPs.cache[stamp.providerName] = ipOnly
-		proxy.cachedIPs.Unlock()
+		proxy.xTransport.cachedIPs.Lock()
+		proxy.xTransport.cachedIPs.cache[stamp.providerName] = ipOnly
+		proxy.xTransport.cachedIPs.Unlock()
 	}
 	url := &url.URL{
 		Scheme: "https",
@@ -210,7 +210,7 @@ func (serversInfo *ServersInfo) fetchDoHServerInfo(proxy *Proxy, name string, st
 		Path:   stamp.path,
 	}
 	client := http.Client{
-		Transport: proxy.httpTransport,
+		Transport: proxy.xTransport.transport,
 		Timeout:   proxy.timeout,
 	}
 	preReq := &http.Request{

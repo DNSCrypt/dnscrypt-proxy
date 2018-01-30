@@ -45,6 +45,7 @@ func main() {
 	if err := ConfigLoad(&app.proxy, svcFlag, ConfigFileName); err != nil {
 		dlog.Fatal(err)
 	}
+	app.proxy.xTransport = NewXTransport(app.proxy.timeout)
 	dlog.Noticef("Starting dnscrypt-proxy %s", AppVersion)
 
 	if len(*svcFlag) != 0 {
@@ -75,7 +76,6 @@ func main() {
 
 func (app *App) Start(service service.Service) error {
 	proxy := app.proxy
-	proxy.cachedIPs.cache = make(map[string]string)
 	if err := InitPluginsGlobals(&proxy.pluginsGlobals, &proxy); err != nil {
 		dlog.Fatal(err)
 	}
