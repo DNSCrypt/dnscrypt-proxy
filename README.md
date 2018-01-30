@@ -2,7 +2,7 @@
 
 # ![dnscrypt-proxy 2](https://raw.github.com/jedisct1/dnscrypt-proxy/master/logo.png?2)
 
-A flexible DNS proxy, with support for modern encrypted DNS protocols such as [DNSCrypt v2](https://github.com/DNSCrypt/dnscrypt-protocol/blob/master/DNSCRYPT-V2-PROTOCOL.txt) and DNS-over-HTTP/2.
+A flexible DNS proxy, with support for modern encrypted DNS protocols such as [DNSCrypt v2](https://github.com/DNSCrypt/dnscrypt-protocol/blob/master/DNSCRYPT-V2-PROTOCOL.txt) and [DNS-over-HTTP/2](https://datatracker.ietf.org/wg/doh/about/).
 
 ## [dnscrypt-proxy 2.0.0beta12 is available for download!](https://github.com/jedisct1/dnscrypt-proxy/releases/latest)
 
@@ -46,51 +46,7 @@ sudo setcap cap_net_bind_service=+pe dnscrypt-proxy
 
 The current 2.0.0 beta version includes all the major features from dnscrypt-proxy 1.9.5 (support for dnscrypt v2, synthetic IPv6 responses, logging, blocking, forwarding and caching), with improved reliability, flexbility, usability and performance.
 
-| Features                                                    | dnscrypt-proxy 1.x                                                           | dnscrypt-proxy 2.x                                                                                            |
-| ----------------------------------------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| Status                                                      | Old PoC, barely maintained any more                                          | Very new, but quickly evolving                                                                                |
-| Code quality                                                | Big ugly mess                                                                | Readable, easy to work on                                                                                     |
-| Reliability                                                 | Poor, due to completely broken handling of edge cases                        | Excellent                                                                                                     |
-| Security                                                    | Written in C, bundles patched versions from old branches of system libraries | Written in standard and portable Go                                                                           |
-| Dependencies                                                | Specific versions of dnscrypt-proxy, libldns and libtool                     | None                                                                                                          |
-| Upstream connections using TCP                              | Catastrophic, requires client retries                                        | Implemented as anyone would expect, works well with TOR                                                       |
-| XChaCha20 support                                           | Only if compiled with recent versions of libsodium                           | Yes, always available                                                                                         |
-| Support of links with small MTU                             | Unreliable due to completely broken padding                                  | Reliable, properly implemented                                                                                |
-| Support for multiple servers                                | Nonexistent                                                                  | Yes, with automatic failover and load-balancing                                                               |
-| Custom additions                                            | C API, requires libldns for sanity                                           | Simple Go structures using miekg/dns                                                                          |
-| AAAA blocking for IPv4-only networks                        | Yes                                                                          | Yes                                                                                                           |
-| DNS caching                                                 | Yes, with ugly hacks for DNSSEC support                                      | Yes, without ugly hacks                                                                                       |
-| EDNS support                                                | Broken with custom records                                                   | Yes                                                                                                           |
-| Asynchronous filters                                        | Lol, no, filters block everything                                            | Of course, thanks to Go                                                                                       |
-| Session-local storage for extensions                        | Impossible                                                                   | Yes                                                                                                           |
-| Multicore support                                           | Nonexistent                                                                  | Yes, thanks to Go                                                                                             |
-| Efficient padding of queries                                | Couldn't be any worse                                                        | Yes                                                                                                           |
-| Multiple local sockets                                      | Impossible                                                                   | Of course. IPv4, IPv6, as many as you like                                                                    |
-| Automatically picks the fastest servers                     | Lol, it supports only one at a time, anyway                                  | Yes, out of the box                                                                                           |
-| Official, always up-to-date pre-built libraries             | None                                                                         | Yes, for many platforms. See below.                                                                           |
-| Automatically downloads and verifies servers lists          | No. Requires custom scripts, cron jobs and dependencies (minisign)           | Yes, built-in, including signature verification                                                               |
-| Advanced expressions in blacklists (ads*.example[0-9]*.com) | No                                                                           | Yes                                                                                                           |
-| Forwarding with load balancing                              | No                                                                           | Yes                                                                                                           |
-| Built-in system installer                                   | Only on Windows                                                              | Install/uninstall/start/stop/restart as a service on Windows, Linux/(systemd,Upstart,SysV), and macOS/launchd |
-| Built-in servers latency benchmark                          | No                                                                           | Yes                                                                                                           |
-| Query type filter: only log a relevant set of query types   | No                                                                           | Yes                                                                                                           |
-| Support for the Windows Event Log                           | No                                                                           | Yes                                                                                                           |
-| Log suspicious queries (leading to NXDOMAIN)                | No                                                                           | Yes                                                                                                           |
-| IP filtering                                                | Yes, but can be bypassed due to a vulnerability                              | Yes, doesn't have the vulnerability from v1                                                                   |
-| Systemd support                                             | Yes, but don't complain about it                                             | Yes, but don't complain about it either                                                                       |
-| Stamps, as a simple way to provide server parameters        | No                                                                           | Yes                                                                                                           |
-| Supported protocols                                         | DNSCrypt v1, DNSCrypt v2                                                     | DNSCrypt v1, DNSCrypt v2, DNS-over-HTTP/2                                                                     |
-
-## Experimental
-
-* [DNS-over-HTTP/2 (DoH)](https://datatracker.ietf.org/wg/doh/about/), the successor to DNS-over-TLS
-
-## Planned features
-
-* Offline responses
-* Local DNSSEC validation
-* Support for the V1 plugin API
-* Real documentation
+It includes support for DNS-over-HTTP/2 (DoH), the successor to DNS-over-TLS.
 
 ## Pre-built binaries
 
