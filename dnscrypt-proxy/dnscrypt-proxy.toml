@@ -14,7 +14,7 @@
 ## List of servers to use
 ## If this line is commented, all registered servers will be used
 
-# server_names = ['scaleway-fr', 'google', 'yandex']
+#server_names = ['scaleway-fr', 'google', 'yandex']
 
 
 ## List of local addresses and ports to listen to. Can be IPv4 and/or IPv6.
@@ -92,6 +92,11 @@ cert_refresh_delay = 30
 
 fallback_resolver = "9.9.9.9:53"
 
+
+## Never try to use the system DNS settings; unconditionally use the
+## fallback resolver.
+
+ignore_system_dns = false
 
 
 #########################

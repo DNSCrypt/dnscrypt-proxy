@@ -42,6 +42,7 @@ type Config struct {
 	SourceIPv6          bool                    `toml:"ipv6_servers"`
 	MaxClients          uint32                  `toml:"max_clients"`
 	FallbackResolver    string                  `toml:"fallback_resolver"`
+	IgnoreSystemDNS     bool                    `toml:"ignore_system_dns"`
 }
 
 func newConfig() Config {
@@ -61,6 +62,7 @@ func newConfig() Config {
 		SourceIPv6:          false,
 		MaxClients:          100,
 		FallbackResolver:    DefaultFallbackResolver,
+		IgnoreSystemDNS:     false,
 	}
 }
 
@@ -132,6 +134,9 @@ func ConfigLoad(proxy *Proxy, svcFlag *string, config_file string) error {
 		dlog.UseLogFile(*config.LogFile)
 	}
 	proxy.xTransport.fallbackResolver = config.FallbackResolver
+	if len(config.FallbackResolver) > 0 {
+		proxy.xTransport.ignoreSystemDNS = config.IgnoreSystemDNS
+	}
 	proxy.timeout = time.Duration(config.Timeout) * time.Millisecond
 	proxy.maxClients = config.MaxClients
 	proxy.mainProto = "udp"

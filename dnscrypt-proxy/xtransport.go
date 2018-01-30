@@ -30,6 +30,7 @@ type XTransport struct {
 	timeout          time.Duration
 	cachedIPs        CachedIPs
 	fallbackResolver string
+	ignoreSystemDNS  bool
 }
 
 func NewXTransport(timeout time.Duration) *XTransport {
@@ -37,6 +38,7 @@ func NewXTransport(timeout time.Duration) *XTransport {
 		cachedIPs:        CachedIPs{cache: make(map[string]string)},
 		timeout:          timeout,
 		fallbackResolver: DefaultFallbackResolver,
+		ignoreSystemDNS:  false,
 	}
 	dialer := &net.Dialer{Timeout: timeout, KeepAlive: timeout, DualStack: true}
 	transport := &http.Transport{
@@ -87,6 +89,49 @@ func (xTransport *XTransport) Fetch(method string, url *url.URL, accept string, 
 	if body != nil {
 		req.Body = *body
 	}
+	var err error
+	host := url.Host
+	xTransport.cachedIPs.RLock()
+	cachedIP := xTransport.cachedIPs.cache[host]
+	xTransport.cachedIPs.RUnlock()
+	if !xTransport.ignoreSystemDNS || len(cachedIP) > 0 {
+		start := time.Now()
+		resp, err := client.Do(req)
+		rtt := time.Since(start)
+		if err == nil {
+			if resp == nil {
+				err = errors.New("Webserver returned an error")
+			} else if resp.StatusCode < 200 || resp.StatusCode > 299 {
+				err = fmt.Errorf("Webserver returned code %d", resp.StatusCode)
+			}
+			return resp, rtt, err
+		}
+		dlog.Debugf("[%s]: [%s]", req.URL, err)
+	} else {
+		dlog.Debug("Ignoring system DNS")
+	}
+	if len(cachedIP) > 0 && err != nil {
+		dlog.Debugf("IP for [%s] was cached to [%s], but connection failed: [%s]", host, cachedIP, err)
+		return nil, 0, err
+	}
+	dnsClient := new(dns.Client)
+	msg := new(dns.Msg)
+	msg.SetQuestion(dns.Fqdn(host), dns.TypeA)
+	msg.SetEdns0(4096, true)
+	dlog.Noticef("System DNS configuration not usable yet, exceptionally resolving [%s] using fallback resolver [%s]", host, xTransport.fallbackResolver)
+	in, _, err := dnsClient.Exchange(msg, xTransport.fallbackResolver)
+	if err != nil {
+		return nil, 0, err
+	}
+	if len(in.Answer) <= 0 {
+		return nil, 0, fmt.Errorf("No IP found for [%s]", host)
+	}
+	foundIP := in.Answer[0].(*dns.A).A.String()
+	xTransport.cachedIPs.Lock()
+	xTransport.cachedIPs.cache[host] = foundIP
+	xTransport.cachedIPs.Unlock()
+	dlog.Debugf("[%s] IP address [%s] added to the cache", host, foundIP)
+
 	start := time.Now()
 	resp, err := client.Do(req)
 	rtt := time.Since(start)
@@ -96,43 +141,9 @@ func (xTransport *XTransport) Fetch(method string, url *url.URL, accept string, 
 		} else if resp.StatusCode < 200 || resp.StatusCode > 299 {
 			err = fmt.Errorf("Webserver returned code %d", resp.StatusCode)
 		}
-		return resp, rtt, err
 	}
-	host := url.Host
-	xTransport.cachedIPs.RLock()
-	cachedIP := xTransport.cachedIPs.cache[host]
-	xTransport.cachedIPs.RUnlock()
-	if len(cachedIP) > 0 {
-		dlog.Debugf("IP for [%s] was cached to [%s], but connection failed: [%s]", host, cachedIP, err)
-		return resp, rtt, err
-	}
-	dnsClient := new(dns.Client)
-	msg := new(dns.Msg)
-	msg.SetQuestion(dns.Fqdn(host), dns.TypeA)
-	msg.SetEdns0(4096, true)
-	dlog.Noticef("System DNS configuration not usable yet, exceptionally resolving [%s] using fallback resolver [%s]", host, xTransport.fallbackResolver)
-	in, _, err := dnsClient.Exchange(msg, xTransport.fallbackResolver)
 	if err != nil {
-		return resp, rtt, err
-	}
-	if len(in.Answer) <= 0 {
-		return resp, rtt, fmt.Errorf("No IP found for [%s]", host)
-	}
-	foundIP := in.Answer[0].(*dns.A).A.String()
-	xTransport.cachedIPs.Lock()
-	xTransport.cachedIPs.cache[host] = foundIP
-	xTransport.cachedIPs.Unlock()
-	dlog.Debugf("[%s] IP address [%s] added to the cache", host, foundIP)
-
-	start = time.Now()
-	resp, err = client.Do(req)
-	rtt = time.Since(start)
-	if err == nil {
-		if resp == nil {
-			err = errors.New("Webserver returned an error")
-		} else if resp.StatusCode < 200 || resp.StatusCode > 299 {
-			err = fmt.Errorf("Webserver returned code %d", resp.StatusCode)
-		}
+		dlog.Debugf("[%s]: [%s]", req.URL, err)
 	}
 	return resp, rtt, err
 }
