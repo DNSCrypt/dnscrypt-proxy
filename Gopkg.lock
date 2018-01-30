@@ -50,7 +50,7 @@
   branch = "master"
   name = "github.com/hashicorp/go-immutable-radix"
   packages = ["."]
-  revision = "59b67882ec612f43b9d4c4fd97cebd507be4b3ee"
+  revision = "7f3cd4390caab3250a57f30efdb2a65dd7649ecf"
 
 [[projects]]
   branch = "master"
@@ -115,7 +115,7 @@
     "poly1305",
     "salsa20/salsa"
   ]
-  revision = "3d37316aaa6bd9929127ac9a527abf408178ea7b"
+  revision = "1875d0a70c90e57f11972aefd42276df65e895b9"
 
 [[projects]]
   branch = "master"
@@ -139,7 +139,7 @@
     "windows/svc/eventlog",
     "windows/svc/mgr"
   ]
-  revision = "ef802241c90f84d84d644a2d8d0de8ee96038c9c"
+  revision = "3dbebcf8efb6a5011a60c2b4591c1022a759af8a"
 
 [solve-meta]
   analyzer-name = "dep"
