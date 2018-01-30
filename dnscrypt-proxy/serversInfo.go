@@ -26,8 +26,9 @@ const (
 type ServerInformalProperties uint64
 
 const (
-	ServerInformalPropertyDNSSEC = ServerInformalProperties(1) << 0
-	ServerInformalPropertyNoLog  = ServerInformalProperties(1) << 1
+	ServerInformalPropertyDNSSEC   = ServerInformalProperties(1) << 0
+	ServerInformalPropertyNoLog    = ServerInformalProperties(1) << 1
+	ServerInformalPropertyNoFilter = ServerInformalProperties(1) << 2
 )
 
 type RegisteredServer struct {

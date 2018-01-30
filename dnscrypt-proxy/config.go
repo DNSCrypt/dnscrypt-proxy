@@ -13,56 +13,58 @@ import (
 )
 
 type Config struct {
-	LogLevel            int      `toml:"log_level"`
-	LogFile             *string  `toml:"log_file"`
-	UseSyslog           bool     `toml:"use_syslog"`
-	ServerNames         []string `toml:"server_names"`
-	ListenAddresses     []string `toml:"listen_addresses"`
-	Daemonize           bool
-	ForceTCP            bool `toml:"force_tcp"`
-	Timeout             int  `toml:"timeout_ms"`
-	CertRefreshDelay    int  `toml:"cert_refresh_delay"`
-	CertIgnoreTimestamp bool `toml:"cert_ignore_timestamp"`
-	BlockIPv6           bool `toml:"block_ipv6"`
-	Cache               bool
-	CacheSize           int                     `toml:"cache_size"`
-	CacheNegTTL         uint32                  `toml:"cache_neg_ttl"`
-	CacheMinTTL         uint32                  `toml:"cache_min_ttl"`
-	CacheMaxTTL         uint32                  `toml:"cache_max_ttl"`
-	QueryLog            QueryLogConfig          `toml:"query_log"`
-	NxLog               NxLogConfig             `toml:"nx_log"`
-	BlockName           BlockNameConfig         `toml:"blacklist"`
-	BlockIP             BlockIPConfig           `toml:"ip_blacklist"`
-	ForwardFile         string                  `toml:"forwarding_rules"`
-	ServersConfig       map[string]ServerConfig `toml:"static"`
-	SourcesConfig       map[string]SourceConfig `toml:"sources"`
-	SourceRequireDNSSEC bool                    `toml:"require_dnssec"`
-	SourceRequireNoLog  bool                    `toml:"require_nolog"`
-	SourceIPv4          bool                    `toml:"ipv4_servers"`
-	SourceIPv6          bool                    `toml:"ipv6_servers"`
-	MaxClients          uint32                  `toml:"max_clients"`
-	FallbackResolver    string                  `toml:"fallback_resolver"`
-	IgnoreSystemDNS     bool                    `toml:"ignore_system_dns"`
+	LogLevel              int      `toml:"log_level"`
+	LogFile               *string  `toml:"log_file"`
+	UseSyslog             bool     `toml:"use_syslog"`
+	ServerNames           []string `toml:"server_names"`
+	ListenAddresses       []string `toml:"listen_addresses"`
+	Daemonize             bool
+	ForceTCP              bool `toml:"force_tcp"`
+	Timeout               int  `toml:"timeout_ms"`
+	CertRefreshDelay      int  `toml:"cert_refresh_delay"`
+	CertIgnoreTimestamp   bool `toml:"cert_ignore_timestamp"`
+	BlockIPv6             bool `toml:"block_ipv6"`
+	Cache                 bool
+	CacheSize             int                     `toml:"cache_size"`
+	CacheNegTTL           uint32                  `toml:"cache_neg_ttl"`
+	CacheMinTTL           uint32                  `toml:"cache_min_ttl"`
+	CacheMaxTTL           uint32                  `toml:"cache_max_ttl"`
+	QueryLog              QueryLogConfig          `toml:"query_log"`
+	NxLog                 NxLogConfig             `toml:"nx_log"`
+	BlockName             BlockNameConfig         `toml:"blacklist"`
+	BlockIP               BlockIPConfig           `toml:"ip_blacklist"`
+	ForwardFile           string                  `toml:"forwarding_rules"`
+	ServersConfig         map[string]ServerConfig `toml:"static"`
+	SourcesConfig         map[string]SourceConfig `toml:"sources"`
+	SourceRequireDNSSEC   bool                    `toml:"require_dnssec"`
+	SourceRequireNoLog    bool                    `toml:"require_nolog"`
+	SourceRequireNoFilter bool                    `toml:"require_nofilter"`
+	SourceIPv4            bool                    `toml:"ipv4_servers"`
+	SourceIPv6            bool                    `toml:"ipv6_servers"`
+	MaxClients            uint32                  `toml:"max_clients"`
+	FallbackResolver      string                  `toml:"fallback_resolver"`
+	IgnoreSystemDNS       bool                    `toml:"ignore_system_dns"`
 }
 
 func newConfig() Config {
 	return Config{
-		LogLevel:            int(dlog.LogLevel()),
-		ListenAddresses:     []string{"127.0.0.1:53"},
-		Timeout:             2500,
-		CertRefreshDelay:    30,
-		CertIgnoreTimestamp: false,
-		Cache:               true,
-		CacheSize:           256,
-		CacheNegTTL:         60,
-		CacheMinTTL:         60,
-		CacheMaxTTL:         8600,
-		SourceRequireNoLog:  true,
-		SourceIPv4:          true,
-		SourceIPv6:          false,
-		MaxClients:          100,
-		FallbackResolver:    DefaultFallbackResolver,
-		IgnoreSystemDNS:     false,
+		LogLevel:              int(dlog.LogLevel()),
+		ListenAddresses:       []string{"127.0.0.1:53"},
+		Timeout:               2500,
+		CertRefreshDelay:      30,
+		CertIgnoreTimestamp:   false,
+		Cache:                 true,
+		CacheSize:             256,
+		CacheNegTTL:           60,
+		CacheMinTTL:           60,
+		CacheMaxTTL:           8600,
+		SourceRequireNoLog:    true,
+		SourceRequireNoFilter: true,
+		SourceIPv4:            true,
+		SourceIPv6:            false,
+		MaxClients:            100,
+		FallbackResolver:      DefaultFallbackResolver,
+		IgnoreSystemDNS:       false,
 	}
 }
 
@@ -214,6 +216,9 @@ func ConfigLoad(proxy *Proxy, svcFlag *string, config_file string) error {
 	}
 	if config.SourceRequireNoLog {
 		requiredProps |= ServerInformalPropertyNoLog
+	}
+	if config.SourceRequireNoFilter {
+		requiredProps |= ServerInformalPropertyNoFilter
 	}
 
 	for cfgSourceName, cfgSource := range config.SourcesConfig {
