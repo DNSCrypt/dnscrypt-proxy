@@ -106,6 +106,7 @@ func ConfigLoad(proxy *Proxy, svcFlag *string, config_file string) error {
 	version := flag.Bool("version", false, "Prints current proxy version")
 	configFile := flag.String("config", "dnscrypt-proxy.toml", "Path to the configuration file")
 	resolve := flag.String("resolve", "", "resolve a name using system libraries")
+	list := flag.Bool("list", false, "print the list of available resolvers")
 	flag.Parse()
 	if *svcFlag == "stop" || *svcFlag == "uninstall" {
 		return nil
@@ -287,6 +288,12 @@ func ConfigLoad(proxy *Proxy, svcFlag *string, config_file string) error {
 	}
 	if len(proxy.registeredServers) == 0 {
 		return errors.New("No servers configured")
+	}
+	if *list {
+		for _, registeredServer := range proxy.registeredServers {
+			fmt.Println(registeredServer.name)
+		}
+		os.Exit(0)
 	}
 	return nil
 }
