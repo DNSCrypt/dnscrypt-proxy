@@ -49,12 +49,6 @@ require_nolog = true
 require_nofilter = true
 
 
-## Whether to the server as a background process (linux only)
-## Do not set to true if you are using systemd
-
-daemonize = false
-
-
 ## Always use TCP to connect to upstream servers
 
 force_tcp = false
