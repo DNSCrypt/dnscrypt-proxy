@@ -51,7 +51,7 @@ func newConfig() Config {
 		LogLevel:              int(dlog.LogLevel()),
 		ListenAddresses:       []string{"127.0.0.1:53"},
 		Timeout:               2500,
-		CertRefreshDelay:      30,
+		CertRefreshDelay:      360,
 		CertIgnoreTimestamp:   false,
 		Cache:                 true,
 		CacheSize:             256,
@@ -150,7 +150,7 @@ func ConfigLoad(proxy *Proxy, svcFlag *string, config_file string) error {
 	proxy.certRefreshDelayAfterFailure = time.Duration(10 * time.Second)
 	proxy.certIgnoreTimestamp = config.CertIgnoreTimestamp
 	if len(config.ListenAddresses) == 0 {
-		dlog.Debugf("No local IP/port configured")
+		dlog.Errorf("No local IP/port configured")
 	}
 	proxy.listenAddresses = config.ListenAddresses
 	proxy.daemonize = config.Daemonize
