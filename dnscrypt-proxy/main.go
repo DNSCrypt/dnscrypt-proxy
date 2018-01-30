@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/jedisct1/dlog"
 	"github.com/kardianos/service"
@@ -40,12 +41,12 @@ func main() {
 		dlog.Debug(err)
 	}
 	app.proxy = Proxy{}
+	app.proxy.xTransport = NewXTransport(30 * time.Second)
 
 	cdFileDir(ConfigFileName)
 	if err := ConfigLoad(&app.proxy, svcFlag, ConfigFileName); err != nil {
 		dlog.Fatal(err)
 	}
-	app.proxy.xTransport = NewXTransport(app.proxy.timeout)
 	dlog.Noticef("Starting dnscrypt-proxy %s", AppVersion)
 
 	if len(*svcFlag) != 0 {

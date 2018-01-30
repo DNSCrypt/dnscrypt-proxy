@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -9,7 +8,6 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"net"
-	"net/http"
 	"net/url"
 	"strings"
 	"sync"
@@ -209,46 +207,16 @@ func (serversInfo *ServersInfo) fetchDoHServerInfo(proxy *Proxy, name string, st
 		Host:   stamp.providerName,
 		Path:   stamp.path,
 	}
-	client := http.Client{
-		Transport: proxy.xTransport.transport,
-		Timeout:   proxy.timeout,
-	}
-	preReq := &http.Request{
-		Method: "HEAD",
-		URL:    url,
-		Header: map[string][]string{
-			"User-Agent": {"dnscrypt-proxy"},
-		},
-		Close: false,
-		Host:  stamp.providerName,
-	}
-	if _, err := client.Do(preReq); err != nil {
-		return ServerInfo{}, err
-	}
-	body := ioutil.NopCloser(bytes.NewReader([]byte{
+	body := []byte{
 		0xca, 0xfe, 0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x02, 0x00, 0x01, 0x00, 0x00, 0x29, 0x10, 0x00, 0x00, 0x00, 0x80, 0x00, 0x00, 0x00,
-	}))
-	req := &http.Request{
-		Method: "POST",
-		URL:    url,
-		Header: map[string][]string{
-			"Accept":       {"application/dns-udpwireformat"},
-			"Content-Type": {"application/dns-udpwireformat"},
-			"User-Agent":   {"dnscrypt-proxy"},
-		},
-		Close: false,
-		Host:  stamp.providerName,
-		Body:  body,
 	}
-	start := time.Now()
-	resp, err := client.Do(req)
-	rtt := time.Since(start)
-	if err == nil && resp != nil && (resp.StatusCode < 200 || resp.StatusCode > 299) {
-		return ServerInfo{}, fmt.Errorf("Webserver returned code %d", resp.StatusCode)
-	} else if err != nil {
+	_, _, err := proxy.xTransport.Post(url, "application/dns-udpwireformat", "application/dns-udpwireformat", body, proxy.timeout)
+	if err != nil {
 		return ServerInfo{}, err
-	} else if resp == nil {
-		return ServerInfo{}, errors.New("Webserver returned an error")
+	}
+	resp, rtt, err := proxy.xTransport.Post(url, "application/dns-udpwireformat", "application/dns-udpwireformat", body, proxy.timeout)
+	if err != nil {
+		return ServerInfo{}, err
 	}
 	tls := resp.TLS
 	if tls == nil || !tls.HandshakeComplete {

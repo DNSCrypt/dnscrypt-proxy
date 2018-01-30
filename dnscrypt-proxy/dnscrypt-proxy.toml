@@ -15,7 +15,6 @@
 ## If this line is commented, all registered servers will be used
 
 # server_names = ['scaleway-fr', 'google', 'yandex']
-server_names =['google']
 
 ## List of local addresses and ports to listen to. Can be IPv4 and/or IPv6.
 ## To only use systemd activation sockets, use an empty set: []
@@ -65,17 +64,17 @@ force_tcp = false
 timeout = 2500
 
 
-# Log level (0-6, default: 2 - 0 is very verbose, 6 only contains fatal errors)
+## Log level (0-6, default: 2 - 0 is very verbose, 6 only contains fatal errors)
 
 # log_level = 2
 
 
-# log file for the application
+## log file for the application
 
 # log_file = 'dnscrypt-proxy.log'
 
 
-# Use the system logger (syslog on Unix, Event Log on Windows)
+## Use the system logger (syslog on Unix, Event Log on Windows)
 
 # use_syslog = true
 
@@ -84,6 +83,18 @@ timeout = 2500
 
 cert_refresh_delay = 30
 
+
+## Fallback resolver
+## This is a normal, non-encrypted resolver, that will be only used
+## for one-shot queries when retrieving the initial resolvers list, and
+## only if the system DNS configuration doesn't work.
+## No user application queries will ever be leaked through this resolver,
+## and it will not be used after IP addresses of resolvers URLs have been found.
+## It will never be used at all if lists have already been cached, and if
+## stamps don't include host names without IP addresses.
+## A resolver supporting DNSSEC is recommended. This may become mandatory.
+
+fallback_resolver = "9.9.9.9:53"
 
 
 #########################

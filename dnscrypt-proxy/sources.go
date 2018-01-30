@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -58,7 +59,7 @@ func fetchFromCache(cacheFile string) (in string, delayTillNextUpdate time.Durat
 	return
 }
 
-func fetchWithCache(url string, cacheFile string) (in string, cached bool, delayTillNextUpdate time.Duration, err error) {
+func fetchWithCache(xTransport *XTransport, urlStr string, cacheFile string) (in string, cached bool, delayTillNextUpdate time.Duration, err error) {
 	cached = false
 	in, delayTillNextUpdate, err = fetchFromCache(cacheFile)
 	if err == nil {
@@ -67,8 +68,13 @@ func fetchWithCache(url string, cacheFile string) (in string, cached bool, delay
 		return
 	}
 	var resp *http.Response
-	dlog.Infof("Loading source information from URL [%s]", url)
-	resp, err = http.Get(url)
+	dlog.Infof("Loading source information from URL [%s]", urlStr)
+
+	url, err := url.Parse(urlStr)
+	if err != nil {
+		return
+	}
+	resp, _, err = xTransport.Get(url, 30*time.Second)
 	if err == nil && resp != nil && (resp.StatusCode < 200 || resp.StatusCode > 299) {
 		err = fmt.Errorf("Webserver returned code %d", resp.StatusCode)
 		return
@@ -100,7 +106,7 @@ type URLToPrefetch struct {
 	when      time.Time
 }
 
-func NewSource(url string, minisignKeyStr string, cacheFile string, formatStr string, refreshDelay time.Duration) (Source, []URLToPrefetch, error) {
+func NewSource(xTransport *XTransport, url string, minisignKeyStr string, cacheFile string, formatStr string, refreshDelay time.Duration) (Source, []URLToPrefetch, error) {
 	_ = refreshDelay
 	source := Source{url: url}
 	if formatStr == "v1" {
@@ -118,11 +124,11 @@ func NewSource(url string, minisignKeyStr string, cacheFile string, formatStr st
 	urlsToPrefetch := []URLToPrefetch{}
 
 	sigURL := url + ".minisig"
-	in, cached, delayTillNextUpdate, err := fetchWithCache(url, cacheFile)
+	in, cached, delayTillNextUpdate, err := fetchWithCache(xTransport, url, cacheFile)
 	urlsToPrefetch = append(urlsToPrefetch, URLToPrefetch{url: url, cacheFile: cacheFile, when: now.Add(delayTillNextUpdate)})
 
 	sigCacheFile := cacheFile + ".minisig"
-	sigStr, sigCached, sigDelayTillNextUpdate, sigErr := fetchWithCache(sigURL, sigCacheFile)
+	sigStr, sigCached, sigDelayTillNextUpdate, sigErr := fetchWithCache(xTransport, sigURL, sigCacheFile)
 	urlsToPrefetch = append(urlsToPrefetch, URLToPrefetch{url: sigURL, cacheFile: sigCacheFile, when: now.Add(sigDelayTillNextUpdate)})
 
 	if err != nil || sigErr != nil {
@@ -253,8 +259,8 @@ func (source *Source) parseV2(prefix string) ([]RegisteredServer, error) {
 	return registeredServers, nil
 }
 
-func PrefetchSourceURL(urlToPrefetch *URLToPrefetch) error {
-	in, _, delayTillNextUpdate, err := fetchWithCache(urlToPrefetch.url, urlToPrefetch.cacheFile)
+func PrefetchSourceURL(xTransport *XTransport, urlToPrefetch *URLToPrefetch) error {
+	in, _, delayTillNextUpdate, err := fetchWithCache(xTransport, urlToPrefetch.url, urlToPrefetch.cacheFile)
 	if err == nil {
 		AtomicFileWrite(urlToPrefetch.cacheFile, []byte(in))
 	}

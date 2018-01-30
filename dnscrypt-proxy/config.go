@@ -41,6 +41,7 @@ type Config struct {
 	SourceIPv4          bool                    `toml:"ipv4_servers"`
 	SourceIPv6          bool                    `toml:"ipv6_servers"`
 	MaxClients          uint32                  `toml:"max_clients"`
+	FallbackResolver    string                  `toml:"fallback_resolver"`
 }
 
 func newConfig() Config {
@@ -59,6 +60,7 @@ func newConfig() Config {
 		SourceIPv4:          true,
 		SourceIPv6:          false,
 		MaxClients:          100,
+		FallbackResolver:    DefaultFallbackResolver,
 	}
 }
 
@@ -129,6 +131,7 @@ func ConfigLoad(proxy *Proxy, svcFlag *string, config_file string) error {
 	} else if config.LogFile != nil {
 		dlog.UseLogFile(*config.LogFile)
 	}
+	proxy.xTransport.fallbackResolver = config.FallbackResolver
 	proxy.timeout = time.Duration(config.Timeout) * time.Millisecond
 	proxy.maxClients = config.MaxClients
 	proxy.mainProto = "udp"
@@ -223,7 +226,7 @@ func ConfigLoad(proxy *Proxy, svcFlag *string, config_file string) error {
 		if cfgSource.RefreshDelay <= 0 {
 			cfgSource.RefreshDelay = 24
 		}
-		source, sourceUrlsToPrefetch, err := NewSource(cfgSource.URL, cfgSource.MinisignKeyStr, cfgSource.CacheFile, cfgSource.FormatStr, time.Duration(cfgSource.RefreshDelay)*time.Hour)
+		source, sourceUrlsToPrefetch, err := NewSource(proxy.xTransport, cfgSource.URL, cfgSource.MinisignKeyStr, cfgSource.CacheFile, cfgSource.FormatStr, time.Duration(cfgSource.RefreshDelay)*time.Hour)
 		proxy.urlsToPrefetch = append(proxy.urlsToPrefetch, sourceUrlsToPrefetch...)
 		if err != nil {
 			dlog.Criticalf("Unable use source [%s]: [%s]", cfgSourceName, err)

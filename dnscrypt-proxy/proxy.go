@@ -1,11 +1,9 @@
 package main
 
 import (
-	"bytes"
 	"io/ioutil"
 	"math/rand"
 	"net"
-	"net/http"
 	"sync/atomic"
 	"time"
 
@@ -108,8 +106,8 @@ func (proxy *Proxy) prefetcher(urlsToPrefetch *[]URLToPrefetch) {
 				urlToPrefetch := &(*urlsToPrefetch)[i]
 				if now.After(urlToPrefetch.when) {
 					dlog.Debugf("Prefetching [%s]", urlToPrefetch.url)
-					if err := PrefetchSourceURL(urlToPrefetch); err != nil {
-						dlog.Debugf("Prefetching [%s] failed: %s", err)
+					if err := PrefetchSourceURL(proxy.xTransport, urlToPrefetch); err != nil {
+						dlog.Debugf("Prefetching [%s] failed: %s", urlToPrefetch.url, err)
 					} else {
 						dlog.Debugf("Prefetching [%s] succeeded. Next refresh scheduled for %v", urlToPrefetch.url, urlToPrefetch.when)
 					}
@@ -278,25 +276,8 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 				return
 			}
 		} else if serverInfo.Proto == StampProtoTypeDoH {
-			req := &http.Request{
-				Method: "POST",
-				URL:    serverInfo.URL,
-				Host:   serverInfo.HostName,
-				Header: map[string][]string{
-					"Accept":       {"application/dns-udpwireformat"},
-					"Content-Type": {"application/dns-udpwireformat"},
-					"User-Agent":   {"dnscrypt-proxy"},
-				},
-				Close: false,
-				Body:  ioutil.NopCloser(bytes.NewReader(query)),
-			}
-			client := http.Client{
-				Transport: proxy.xTransport.transport,
-				Timeout:   proxy.timeout,
-			}
-			resp, err := client.Do(req)
-			if (err == nil && resp != nil && (resp.StatusCode < 200 || resp.StatusCode > 299)) ||
-				err != nil || resp == nil {
+			resp, _, err := proxy.xTransport.Post(serverInfo.URL, "application/dns-udpwireformat", "application/dns-udpwireformat", query, proxy.timeout)
+			if err != nil {
 				return
 			}
 			response, err = ioutil.ReadAll(resp.Body)
