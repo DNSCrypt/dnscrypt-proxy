@@ -274,6 +274,6 @@ format = 'tsv'
 ## Optional, local, static list of additional servers
 ## Mostly useful for testing your own servers.
 
-[static]
-  [static.'google']
-  stamp = 'sdns://AgEAAAAAAAAADTIxNi41OC4yMDUuNzgg8lxq3HOXjXnCfJ6JiQifqungi0xJ-mx4nNIVhlMGEGgOZG5zLmdvb2dsZS5jb20NL2V4cGVyaW1lbnRhbA'
+# [static]
+#   [static.'google']
+#   stamp = 'sdns://AgEAAAAAAAAAACDyXGrcc5eNecJ8nomJCJ-q6eCLTEn6bHic0hWGUwYQaA5kbnMuZ29vZ2xlLmNvbQ0vZXhwZXJpbWVudGFs'

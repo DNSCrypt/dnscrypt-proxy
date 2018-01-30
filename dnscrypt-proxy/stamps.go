@@ -176,8 +176,12 @@ func (stamp *ServerStamp) dnsCryptString() string {
 	bin[0] = uint8(StampProtoTypeDNSCrypt)
 	binary.LittleEndian.PutUint64(bin[1:9], uint64(stamp.props))
 
-	bin = append(bin, uint8(len(stamp.serverAddrStr)))
-	bin = append(bin, []uint8(stamp.serverAddrStr)...)
+	serverAddrStr := stamp.serverAddrStr
+	if strings.HasSuffix(serverAddrStr, ":"+string(DefaultPort)) {
+		serverAddrStr = serverAddrStr[:1+len(string(DefaultPort))]
+	}
+	bin = append(bin, uint8(len(serverAddrStr)))
+	bin = append(bin, []uint8(serverAddrStr)...)
 
 	bin = append(bin, uint8(len(stamp.serverPk)))
 	bin = append(bin, stamp.serverPk...)
@@ -195,8 +199,12 @@ func (stamp *ServerStamp) dohString() string {
 	bin[0] = uint8(StampProtoTypeDoH)
 	binary.LittleEndian.PutUint64(bin[1:9], uint64(stamp.props))
 
-	bin = append(bin, uint8(len(stamp.serverAddrStr)))
-	bin = append(bin, []uint8(stamp.serverAddrStr)...)
+	serverAddrStr := stamp.serverAddrStr
+	if strings.HasSuffix(serverAddrStr, ":"+string(DefaultPort)) {
+		serverAddrStr = serverAddrStr[:1+len(string(DefaultPort))]
+	}
+	bin = append(bin, uint8(len(serverAddrStr)))
+	bin = append(bin, []uint8(serverAddrStr)...)
 
 	bin = append(bin, uint8(len(stamp.hash)))
 	bin = append(bin, []uint8(stamp.hash)...)
