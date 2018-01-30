@@ -77,16 +77,24 @@ func (serversInfo *ServersInfo) registerServer(proxy *Proxy, name string, stamp 
 func (serversInfo *ServersInfo) refreshServer(proxy *Proxy, name string, stamp ServerStamp) error {
 	serversInfo.Lock()
 	defer serversInfo.Unlock()
-	newServer, err := serversInfo.fetchServerInfo(proxy, name, stamp)
+	previousIndex := -1
+	for i, oldServer := range serversInfo.inner {
+		if oldServer.Name == name {
+			previousIndex = i
+			break
+		}
+	}
+	newServer, err := serversInfo.fetchServerInfo(proxy, name, stamp, previousIndex < 0)
 	if err != nil {
 		return err
 	}
+	if name != newServer.Name {
+		dlog.Fatalf("[%s] != [%s]", name, newServer.Name)
+	}
 	newServer.rtt = ewma.NewMovingAverage(RTTEwmaDecay)
-	for i, oldServer := range serversInfo.inner {
-		if oldServer.Name == newServer.Name {
-			serversInfo.inner[i] = newServer
-			return nil
-		}
+	if previousIndex >= 0 {
+		serversInfo.inner[previousIndex] = newServer
+		return nil
 	}
 	serversInfo.inner = append(serversInfo.inner, newServer)
 	serversInfo.registeredServers = append(serversInfo.registeredServers, RegisteredServer{name: name, stamp: stamp})
@@ -150,16 +158,16 @@ func (serversInfo *ServersInfo) getOne() *ServerInfo {
 	return serverInfo
 }
 
-func (serversInfo *ServersInfo) fetchServerInfo(proxy *Proxy, name string, stamp ServerStamp) (ServerInfo, error) {
+func (serversInfo *ServersInfo) fetchServerInfo(proxy *Proxy, name string, stamp ServerStamp, isNew bool) (ServerInfo, error) {
 	if stamp.proto == StampProtoTypeDNSCrypt {
-		return serversInfo.fetchDNSCryptServerInfo(proxy, name, stamp)
+		return serversInfo.fetchDNSCryptServerInfo(proxy, name, stamp, isNew)
 	} else if stamp.proto == StampProtoTypeDoH {
-		return serversInfo.fetchDoHServerInfo(proxy, name, stamp)
+		return serversInfo.fetchDoHServerInfo(proxy, name, stamp, isNew)
 	}
 	return ServerInfo{}, errors.New("Unsupported protocol")
 }
 
-func (serversInfo *ServersInfo) fetchDNSCryptServerInfo(proxy *Proxy, name string, stamp ServerStamp) (ServerInfo, error) {
+func (serversInfo *ServersInfo) fetchDNSCryptServerInfo(proxy *Proxy, name string, stamp ServerStamp, isNew bool) (ServerInfo, error) {
 	if len(stamp.serverPk) != ed25519.PublicKeySize {
 		serverPk, err := hex.DecodeString(strings.Replace(string(stamp.serverPk), ":", "", -1))
 		if err != nil || len(serverPk) != ed25519.PublicKeySize {
@@ -168,7 +176,7 @@ func (serversInfo *ServersInfo) fetchDNSCryptServerInfo(proxy *Proxy, name strin
 		dlog.Warnf("Public key [%s] shouldn't be hex-encoded any more", string(stamp.serverPk))
 		stamp.serverPk = serverPk
 	}
-	certInfo, rtt, err := FetchCurrentDNSCryptCert(proxy, &name, proxy.mainProto, stamp.serverPk, stamp.serverAddrStr, stamp.providerName)
+	certInfo, rtt, err := FetchCurrentDNSCryptCert(proxy, &name, proxy.mainProto, stamp.serverPk, stamp.serverAddrStr, stamp.providerName, isNew)
 	if err != nil {
 		return ServerInfo{}, err
 	}
@@ -195,7 +203,7 @@ func (serversInfo *ServersInfo) fetchDNSCryptServerInfo(proxy *Proxy, name strin
 	return serverInfo, nil
 }
 
-func (serversInfo *ServersInfo) fetchDoHServerInfo(proxy *Proxy, name string, stamp ServerStamp) (ServerInfo, error) {
+func (serversInfo *ServersInfo) fetchDoHServerInfo(proxy *Proxy, name string, stamp ServerStamp, isNew bool) (ServerInfo, error) {
 	if len(stamp.serverAddrStr) > 0 {
 		addrStr := stamp.serverAddrStr
 		ipOnly := addrStr[:strings.LastIndex(addrStr, ":")]
@@ -248,7 +256,11 @@ func (serversInfo *ServersInfo) fetchDoHServerInfo(proxy *Proxy, name string, st
 		respBody[0] != 0xca || respBody[1] != 0xfe || respBody[4] != 0x00 || respBody[5] != 0x01 {
 		return ServerInfo{}, errors.New("Webserver returned an unexpected response")
 	}
-	dlog.Noticef("[%s] OK (DoH) - rtt: %dms", name, rtt.Nanoseconds()/1000000)
+	if isNew {
+		dlog.Noticef("[%s] OK (DoH) - rtt: %dms", name, rtt.Nanoseconds()/1000000)
+	} else {
+		dlog.Infof("[%s] OK (DoH) - rtt: %dms", name, rtt.Nanoseconds()/1000000)
+	}
 
 	serverInfo := ServerInfo{
 		Proto:      StampProtoTypeDoH,

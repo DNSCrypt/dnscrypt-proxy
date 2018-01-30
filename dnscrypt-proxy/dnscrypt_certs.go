@@ -22,7 +22,7 @@ type CertInfo struct {
 	ForwardSecurity    bool
 }
 
-func FetchCurrentDNSCryptCert(proxy *Proxy, serverName *string, proto string, pk ed25519.PublicKey, serverAddress string, providerName string) (CertInfo, int, error) {
+func FetchCurrentDNSCryptCert(proxy *Proxy, serverName *string, proto string, pk ed25519.PublicKey, serverAddress string, providerName string, isNew bool) (CertInfo, int, error) {
 	if len(pk) != ed25519.PublicKeySize {
 		return CertInfo{}, 0, errors.New("Invalid public key length")
 	}
@@ -64,7 +64,7 @@ func FetchCurrentDNSCryptCert(proxy *Proxy, serverName *string, proto string, pk
 		case 0x0002:
 			cryptoConstruction = XChacha20Poly1305
 		default:
-			dlog.Infof("[%v] Unsupported crypto construction", providerName)
+			dlog.Noticef("[%v] Unsupported crypto construction", providerName)
 			continue
 		}
 		signature := binCert[8:72]
@@ -106,7 +106,7 @@ func FetchCurrentDNSCryptCert(proxy *Proxy, serverName *string, proto string, pk
 			}
 		}
 		if cryptoConstruction != XChacha20Poly1305 && cryptoConstruction != XSalsa20Poly1305 {
-			dlog.Warnf("[%v] Cryptographic construction %v not supported", providerName, cryptoConstruction)
+			dlog.Noticef("[%v] Cryptographic construction %v not supported", providerName, cryptoConstruction)
 			continue
 		}
 		var serverPk [32]byte
@@ -115,7 +115,7 @@ func FetchCurrentDNSCryptCert(proxy *Proxy, serverName *string, proto string, pk
 		if cryptoConstruction == XChacha20Poly1305 {
 			sharedKey, err = xsecretbox.SharedKey(proxy.proxySecretKey, serverPk)
 			if err != nil {
-				dlog.Errorf("[%v] Weak public key", providerName)
+				dlog.Criticalf("[%v] Weak public key", providerName)
 				continue
 			}
 		} else {
@@ -126,7 +126,11 @@ func FetchCurrentDNSCryptCert(proxy *Proxy, serverName *string, proto string, pk
 		certInfo.CryptoConstruction = cryptoConstruction
 		copy(certInfo.ServerPk[:], serverPk[:])
 		copy(certInfo.MagicQuery[:], binCert[104:112])
-		dlog.Noticef("[%s] OK (crypto v%d) - rtt: %dms", *serverName, cryptoConstruction, rtt.Nanoseconds()/1000000)
+		if isNew {
+			dlog.Noticef("[%s] OK (crypto v%d) - rtt: %dms", *serverName, cryptoConstruction, rtt.Nanoseconds()/1000000)
+		} else {
+			dlog.Infof("[%s] OK (crypto v%d) - rtt: %dms", *serverName, cryptoConstruction, rtt.Nanoseconds()/1000000)
+		}
 	}
 	if certInfo.CryptoConstruction == UndefinedConstruction {
 		return certInfo, 0, errors.New("No useable certificate found")
