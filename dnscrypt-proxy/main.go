@@ -13,8 +13,8 @@ import (
 )
 
 const (
-	AppVersion     = "2.0.0beta12"
-	ConfigFileName = "dnscrypt-proxy.toml"
+	AppVersion            = "2.0.0beta12"
+	DefaultConfigFileName = "dnscrypt-proxy.toml"
 )
 
 type App struct {
@@ -43,8 +43,8 @@ func main() {
 	app.proxy = Proxy{}
 	app.proxy.xTransport = NewXTransport(30 * time.Second)
 
-	cdFileDir(ConfigFileName)
-	if err := ConfigLoad(&app.proxy, svcFlag, ConfigFileName); err != nil {
+	cdFileDir(DefaultConfigFileName)
+	if err := ConfigLoad(&app.proxy, svcFlag); err != nil {
 		dlog.Fatal(err)
 	}
 	dlog.Noticef("Starting dnscrypt-proxy %s", AppVersion)

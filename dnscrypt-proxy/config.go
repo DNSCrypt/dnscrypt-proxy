@@ -104,7 +104,7 @@ type BlockIPConfig struct {
 	Format  string `toml:"log_format"`
 }
 
-func ConfigLoad(proxy *Proxy, svcFlag *string, config_file string) error {
+func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 	version := flag.Bool("version", false, "Prints current proxy version")
 	configFile := flag.String("config", "dnscrypt-proxy.toml", "Path to the configuration file")
 	resolve := flag.String("resolve", "", "resolve a name using system libraries")
@@ -237,7 +237,7 @@ func (config *Config) loadSources(proxy *Proxy) error {
 		requiredProps |= ServerInformalPropertyNoFilter
 	}
 	for cfgSourceName, cfgSource := range config.SourcesConfig {
-		if err := config.loadSource(proxy, requiredProps, &cfgSourceName, &cfgSource); err != nil {
+		if err := config.loadSource(proxy, requiredProps, cfgSourceName, &cfgSource); err != nil {
 			return err
 		}
 	}
@@ -265,7 +265,7 @@ func (config *Config) loadSources(proxy *Proxy) error {
 	return nil
 }
 
-func (config *Config) loadSource(proxy *Proxy, requiredProps ServerInformalProperties, cfgSourceName *string, cfgSource *SourceConfig) error {
+func (config *Config) loadSource(proxy *Proxy, requiredProps ServerInformalProperties, cfgSourceName string, cfgSource *SourceConfig) error {
 	if cfgSource.URL == "" {
 		return fmt.Errorf("Missing URL for source [%s]", cfgSourceName)
 	}

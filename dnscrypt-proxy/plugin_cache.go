@@ -109,11 +109,11 @@ func (plugin *PluginCache) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 	if plugin.cachedResponses.cache == nil {
 		return nil
 	}
-	cached_any, ok := plugin.cachedResponses.cache.Get(cacheKey)
+	cachedAny, ok := plugin.cachedResponses.cache.Get(cacheKey)
 	if !ok {
 		return nil
 	}
-	cached := cached_any.(CachedResponse)
+	cached := cachedAny.(CachedResponse)
 	if time.Now().After(cached.expiration) {
 		return nil
 	}

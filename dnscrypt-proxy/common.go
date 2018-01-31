@@ -31,8 +31,8 @@ var (
 )
 
 func PrefixWithSize(packet []byte) ([]byte, error) {
-	packet_len := len(packet)
-	if packet_len > 0xffff {
+	packetLen := len(packet)
+	if packetLen > 0xffff {
 		return packet, errors.New("Packet too large")
 	}
 	packet = append(append(packet, 0), 0)
