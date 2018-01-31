@@ -70,8 +70,8 @@
 [[projects]]
   name = "github.com/jedisct1/dlog"
   packages = ["."]
-  revision = "0d0a83a16acaa8b0ef7bc59ede730ef3581d5b7b"
-  version = "0.1"
+  revision = "2318da0182ccf19c77f0dab8a97c5eacd111cb84"
+  version = "0.2"
 
 [[projects]]
   branch = "master"
@@ -144,6 +144,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "bc1445a5fcbd79fa69be22317b6ae0e801d20dd67b39223ce25a2ee5f75ab49e"
+  inputs-digest = "7b78a3bd9d050e52892939c38491c43a50dcbd851b990fa570439be12a1bd8d2"
   solver-name = "gps-cdcl"
   solver-version = 1

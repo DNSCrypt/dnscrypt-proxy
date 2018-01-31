@@ -173,7 +173,7 @@ func logf(severity Severity, format string, args ...interface{}) {
 	if severity < _globals.logLevel.get() {
 		return
 	}
-	now := time.Now()
+	now := time.Now().Local()
 	year, month, day := now.Date()
 	hour, minute, second := now.Clock()
 	message := fmt.Sprintf(format, args...)
