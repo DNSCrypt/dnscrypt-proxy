@@ -32,8 +32,9 @@ const (
 )
 
 type RegisteredServer struct {
-	name  string
-	stamp ServerStamp
+	name        string
+	stamp       ServerStamp
+	description string
 }
 
 type ServerInfo struct {

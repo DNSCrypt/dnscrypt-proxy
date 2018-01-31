@@ -235,14 +235,24 @@ func (source *Source) parseV2(prefix string) ([]RegisteredServer, error) {
 		if len(name) == 0 {
 			return registeredServers, fmt.Errorf("Invalid format for source at [%s]", source.url)
 		}
+		subparts = subparts[1:]
 		name = prefix + name
-		var stampStr string
+		var stampStr, description string
 		for _, subpart := range subparts {
 			subpart = strings.TrimFunc(subpart, unicode.IsSpace)
 			if strings.HasPrefix(subpart, "sdns://") {
+				if len(stampStr) > 0 {
+					return registeredServers, fmt.Errorf("Multiple stamps for server [%s] in source from [%s]", name, source.url)
+				}
 				stampStr = subpart
-				break
+				continue
+			} else if len(subpart) == 0 || strings.HasPrefix(subpart, "//") {
+				continue
 			}
+			if len(description) > 0 {
+				description += "\n"
+			}
+			description += subpart
 		}
 		if len(stampStr) < 8 {
 			return registeredServers, fmt.Errorf("Missing stamp for server [%s] in source from [%s]", name, source.url)
@@ -252,7 +262,7 @@ func (source *Source) parseV2(prefix string) ([]RegisteredServer, error) {
 			return registeredServers, err
 		}
 		registeredServer := RegisteredServer{
-			name: name, stamp: stamp,
+			name: name, stamp: stamp, description: description,
 		}
 		dlog.Debugf("Registered [%s] with stamp [%s]", name, stamp.String())
 		registeredServers = append(registeredServers, registeredServer)

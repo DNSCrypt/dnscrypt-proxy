@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -104,11 +105,21 @@ type BlockIPConfig struct {
 	Format  string `toml:"log_format"`
 }
 
+type ServerSummary struct {
+	Name        string `json:"name"`
+	Proto       string `json:"proto"`
+	DNSSEC      bool   `json:"dnssec"`
+	NoLog       bool   `json:"nolog"`
+	NoFilter    bool   `json:"nofilter"`
+	Description string `json:"description,omitempty"`
+}
+
 func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 	version := flag.Bool("version", false, "Prints current proxy version")
 	configFile := flag.String("config", DefaultConfigFileName, "Path to the configuration file")
 	resolve := flag.String("resolve", "", "resolve a name using system libraries")
 	list := flag.Bool("list", false, "print the list of available resolvers for the enabled filters")
+	jsonOutput := flag.Bool("json", false, "output list as JSON")
 	flag.Parse()
 	if *svcFlag == "stop" || *svcFlag == "uninstall" {
 		return nil
@@ -217,12 +228,36 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 		return errors.New("No servers configured")
 	}
 	if *list {
-		for _, registeredServer := range proxy.registeredServers {
-			fmt.Println(registeredServer.name)
-		}
+		config.printRegisteredServers(proxy, *jsonOutput)
 		os.Exit(0)
 	}
 	return nil
+}
+
+func (config *Config) printRegisteredServers(proxy *Proxy, jsonOutput bool) {
+	var summary []ServerSummary
+	for _, registeredServer := range proxy.registeredServers {
+		serverSummary := ServerSummary{
+			Name:        registeredServer.name,
+			Proto:       registeredServer.stamp.proto.String(),
+			DNSSEC:      registeredServer.stamp.props&ServerInformalPropertyDNSSEC != 0,
+			NoLog:       registeredServer.stamp.props&ServerInformalPropertyNoLog != 0,
+			NoFilter:    registeredServer.stamp.props&ServerInformalPropertyNoFilter != 0,
+			Description: registeredServer.description,
+		}
+		if jsonOutput {
+			summary = append(summary, serverSummary)
+		} else {
+			fmt.Println(serverSummary.Name)
+		}
+	}
+	if jsonOutput {
+		jsonStr, err := json.MarshalIndent(summary, "", " ")
+		if err != nil {
+			dlog.Fatal(err)
+		}
+		fmt.Print(string(jsonStr))
+	}
 }
 
 func (config *Config) loadSources(proxy *Proxy) error {
@@ -296,7 +331,7 @@ func (config *Config) loadSource(proxy *Proxy, requiredProps ServerInformalPrope
 				continue
 			}
 		} else if registeredServer.stamp.props&requiredProps != requiredProps {
-			return nil
+			continue
 		}
 		if config.SourceIPv4 || config.SourceIPv6 {
 			isIPv4, isIPv6 := true, false

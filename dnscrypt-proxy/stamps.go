@@ -21,6 +21,19 @@ const (
 	StampProtoTypeDoH      = StampProtoType(0x02)
 )
 
+func (stampProtoType *StampProtoType) String() string {
+	switch *stampProtoType {
+	case StampProtoTypePlain:
+		return "Plain"
+	case StampProtoTypeDNSCrypt:
+		return "DNSCrypt"
+	case StampProtoTypeDoH:
+		return "DoH"
+	default:
+		panic("Unexpected protocol")
+	}
+}
+
 type ServerStamp struct {
 	serverAddrStr string
 	serverPk      []uint8
