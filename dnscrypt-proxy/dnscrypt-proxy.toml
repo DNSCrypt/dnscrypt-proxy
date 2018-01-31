@@ -12,7 +12,8 @@
 ##################################
 
 ## List of servers to use
-## If this line is commented, all registered servers will be used
+## If this line is commented, all registered servers matching the require_* filters
+## will be used
 
 # server_names = ['scaleway-fr', 'google', 'yandex']
 
@@ -28,7 +29,7 @@ listen_addresses = ['127.0.0.1:53', '[::1]:53']
 max_clients = 250
 
 
-## Require servers (from static definitions and from remote sources) to satisfy specific properties
+## Require servers (from static + remote sources) to satisfy specific properties
 
 # Use servers reachable over IPv4
 ipv4_servers = true
@@ -42,7 +43,7 @@ ipv6_servers = false
 # Server must support DNS security extensions
 require_dnssec = false
 
-# Server must not log user queries
+# Server must not log user queries (declarative)
 require_nolog = true
 
 # Server must not enforce its own blacklist (for parental control, ads blocking...)
@@ -178,11 +179,14 @@ format = 'tsv'
 # ignored_qtypes = ['DNSKEY', 'NS']
 
 
+
 ############################################
 #        Suspicious queries logging        #
 ############################################
 
 ## Log queries for nonexistent zones
+## These queries can reveal the presence of malware, broken/obsolete applications,
+## and devices signaling their presence to 3rd parties.
 
 [nx_log]
 
@@ -208,6 +212,10 @@ format = 'tsv'
 ##   ads.*
 ##   ads*.example.*
 ##   ads*.example[0-9]*.com
+##
+## Example blacklist files can be found at https://download.dnscrypt.info/blacklists/
+## A script to build blacklists from public feeds can be found in the
+## `utils/generate-domains-blacklists` directory of the dnscrypt-proxy source code.
 
 [blacklist]
 
@@ -260,8 +268,17 @@ format = 'tsv'
 #########################
 
 ## Remote lists of available servers
+## Multiple sources can be used simultaneously, but every source
+## requires a dedicated cache file
+##
+## A prefix can be prepended toserver names in order to
+## avoid collisions if different sources share the same for
+## different servers. In that case, names listed in `server_names`
+## must include the prefixes.
 
 [sources]
+
+## An example of a remote source
 
   [sources.'public-resolvers']
   url = 'http://download.dnscrypt.info/resolvers-list/v2/public-resolvers.md'
@@ -271,6 +288,16 @@ format = 'tsv'
   refresh_delay = 168
   prefix = ''
 
+## Another example source, with resolvers censoring some websites not approriate for children
+## This is a subset of the `public-resolvers` list, so enabling both is useless
+
+#  [sources.'parental-control']
+#  url = 'http://download.dnscrypt.info/resolvers-list/v2/parental-control.md'
+#  cache_file = 'parental-control.md'
+#  format = 'v2'
+#  minisign_key = 'RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3'
+#  refresh_delay = 168
+#  prefix = ''
 
 ## Optional, local, static list of additional servers
 ## Mostly useful for testing your own servers.
