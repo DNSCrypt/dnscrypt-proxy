@@ -14,6 +14,7 @@
 ## List of servers to use
 ## If this line is commented, all registered servers matching the require_* filters
 ## will be used
+## The proxy will automatically pick the fastest, working servers from the list.
 
 # server_names = ['scaleway-fr', 'google', 'yandex']
 
@@ -40,7 +41,7 @@ ipv6_servers = false
 
 ## Require servers defined by remote sources to satisfy specific properties
 
-# Server must support DNS security extensions
+# Server must support DNS security extensions (DNSSEC)
 require_dnssec = false
 
 # Server must not log user queries (declarative)
@@ -275,6 +276,12 @@ format = 'tsv'
 ## avoid collisions if different sources share the same for
 ## different servers. In that case, names listed in `server_names`
 ## must include the prefixes.
+##
+## A cache file can be specified without a URL in order to maintain lists
+## locally.
+##
+## The default format is "v2".
+## format='v1' loads CSV files from dnscrypt-proxy 1.x instead.
 
 [sources]
 

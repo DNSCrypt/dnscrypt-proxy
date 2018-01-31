@@ -80,7 +80,7 @@ func NewServerStampFromString(stampStr string) (ServerStamp, error) {
 	return ServerStamp{}, errors.New("Unsupported stamp version or protocol")
 }
 
-// id(u8)=0x02 props addrLen(1) serverAddr pkStrlen(1) pkStr providerNameLen(1) providerName
+// id(u8)=0x01 props addrLen(1) serverAddr pkStrlen(1) pkStr providerNameLen(1) providerName
 
 func newDNSCryptServerStamp(bin []byte) (ServerStamp, error) {
 	stamp := ServerStamp{proto: StampProtoTypeDNSCrypt}
