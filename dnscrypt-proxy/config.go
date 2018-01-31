@@ -210,6 +210,22 @@ func ConfigLoad(proxy *Proxy, svcFlag *string, config_file string) error {
 
 	proxy.forwardFile = config.ForwardFile
 
+	if err := config.loadSources(proxy); err != nil {
+		return err
+	}
+	if len(proxy.registeredServers) == 0 {
+		return errors.New("No servers configured")
+	}
+	if *list {
+		for _, registeredServer := range proxy.registeredServers {
+			fmt.Println(registeredServer.name)
+		}
+		os.Exit(0)
+	}
+	return nil
+}
+
+func (config *Config) loadSources(proxy *Proxy) error {
 	requiredProps := ServerInformalProperties(0)
 	if config.SourceRequireDNSSEC {
 		requiredProps |= ServerInformalPropertyDNSSEC
@@ -220,7 +236,6 @@ func ConfigLoad(proxy *Proxy, svcFlag *string, config_file string) error {
 	if config.SourceRequireNoFilter {
 		requiredProps |= ServerInformalPropertyNoFilter
 	}
-
 	for cfgSourceName, cfgSource := range config.SourcesConfig {
 		if cfgSource.URL == "" {
 			return fmt.Errorf("Missing URL for source [%s]", cfgSourceName)
@@ -288,17 +303,7 @@ func ConfigLoad(proxy *Proxy, svcFlag *string, config_file string) error {
 		if err != nil {
 			return err
 		}
-		proxy.registeredServers = append(proxy.registeredServers,
-			RegisteredServer{name: serverName, stamp: stamp})
-	}
-	if len(proxy.registeredServers) == 0 {
-		return errors.New("No servers configured")
-	}
-	if *list {
-		for _, registeredServer := range proxy.registeredServers {
-			fmt.Println(registeredServer.name)
-		}
-		os.Exit(0)
+		proxy.registeredServers = append(proxy.registeredServers, RegisteredServer{name: serverName, stamp: stamp})
 	}
 	return nil
 }
