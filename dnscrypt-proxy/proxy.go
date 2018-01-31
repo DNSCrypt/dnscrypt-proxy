@@ -47,6 +47,7 @@ type Proxy struct {
 	clientsCount                 uint32
 	maxClients                   uint32
 	xTransport                   *XTransport
+	allWeeklyRanges              *map[string]WeeklyRanges
 }
 
 func (proxy *Proxy) StartProxy() {

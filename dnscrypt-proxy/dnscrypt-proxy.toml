@@ -318,13 +318,15 @@ format = 'tsv'
 
 
 
+## Time access restrictions (WIP)
+
 [time_ranges]
 
-  [time_ranges.'timetosleep']
-  mon = [{after="22:00", before="07:00"}]
-  tue = [{after="22:00", before="07:00"}]
-  wed = [{after="22:00", before="07:00"}]
-  thu = [{after="22:00", before="07:00"}]
-  fri = [{after="22:00", before="07:00"}]
-  sat = [{after="22:00", before="07:00"}]
+  [time_ranges.'time-to-sleep']
+  mon = [{after="21:00", before="07:00"}]
+  tue = [{after="21:00", before="07:00"}]
+  wed = [{after="21:00", before="07:00"}]
+  thu = [{after="21:00", before="07:00"}]
+  fri = [{after="23:00", before="07:00"}]
+  sat = [{after="23:00", before="07:00"}]
   sun = [{after="22:00", before="07:00"}]

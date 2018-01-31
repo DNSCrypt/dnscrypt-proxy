@@ -222,9 +222,11 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 
 	proxy.forwardFile = config.ForwardFile
 
-	if err := parseAllWeeklyRanges(config.AllWeeklyRanges); err != nil {
+	allWeeklyRanges, err := ParseAllWeeklyRanges(config.AllWeeklyRanges)
+	if err != nil {
 		return err
 	}
+	proxy.allWeeklyRanges = allWeeklyRanges
 
 	if err := config.loadSources(proxy); err != nil {
 		return err

@@ -28,3 +28,9 @@ tracker.*
 *.local
 eth0.me
 *.workgroup
+
+
+
+## Time-based rules
+
+youtube.* @time-to-sleep
