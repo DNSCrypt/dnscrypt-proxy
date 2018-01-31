@@ -34,7 +34,7 @@ type Config struct {
 	BlockName             BlockNameConfig         `toml:"blacklist"`
 	BlockIP               BlockIPConfig           `toml:"ip_blacklist"`
 	ForwardFile           string                  `toml:"forwarding_rules"`
-	ServersConfig         map[string]ServerConfig `toml:"static"`
+	ServersConfig         map[string]StaticConfig `toml:"static"`
 	SourcesConfig         map[string]SourceConfig `toml:"sources"`
 	SourceRequireDNSSEC   bool                    `toml:"require_dnssec"`
 	SourceRequireNoLog    bool                    `toml:"require_nolog"`
@@ -68,7 +68,7 @@ func newConfig() Config {
 	}
 }
 
-type ServerConfig struct {
+type StaticConfig struct {
 	Stamp string
 }
 
@@ -247,14 +247,14 @@ func (config *Config) loadSources(proxy *Proxy) error {
 		}
 	}
 	for _, serverName := range config.ServerNames {
-		serverConfig, ok := config.ServersConfig[serverName]
+		staticConfig, ok := config.ServersConfig[serverName]
 		if !ok {
 			continue
 		}
-		if len(serverConfig.Stamp) == 0 {
+		if len(staticConfig.Stamp) == 0 {
 			dlog.Fatalf("Missing stamp for the static [%s] definition", serverName)
 		}
-		stamp, err := NewServerStampFromString(serverConfig.Stamp)
+		stamp, err := NewServerStampFromString(staticConfig.Stamp)
 		if err != nil {
 			return err
 		}
