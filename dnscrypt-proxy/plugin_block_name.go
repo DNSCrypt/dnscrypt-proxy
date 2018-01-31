@@ -40,8 +40,8 @@ type PluginBlockName struct {
 }
 
 type TimeRange struct {
-	start int
-	end   int
+	after  int
+	before int
 }
 
 type WeeklyRanges struct {
@@ -51,6 +51,10 @@ type WeeklyRanges struct {
 type TimeRangeStr struct {
 	After  string
 	Before string
+}
+
+type WeeklyRangesStr struct {
+	Sun, Mon, Tue, Wed, Thu, Fri, Sat []TimeRangeStr
 }
 
 func daySecsFromStr(str string) (int, error) {
@@ -83,25 +87,34 @@ func parseTimeRanges(timeRangesStr []TimeRangeStr) ([]TimeRange, error) {
 		if after == before {
 			after, before = -1, 86402
 		}
+		timeRanges = append(timeRanges, TimeRange{after: after, before: before})
 	}
 	return timeRanges, nil
 }
 
-func parseWeeklyRanges(weeklyRangeStr map[string][]TimeRangeStr) (WeeklyRanges, error) {
+func parseWeeklyRanges(weeklyRangesStr WeeklyRangesStr) (WeeklyRanges, error) {
 	weeklyRanges := WeeklyRanges{}
-	daysStr := []string{"sun", "mon", "tue", "wed", "thu", "fri", "sat"}
-	for day, dayStr := range daysStr {
-		timeRangesStr, ok := weeklyRangeStr[dayStr]
-		if !ok {
-			continue
-		}
-		timeRanges, err := parseTimeRanges(timeRangesStr)
+	weeklyRangesStrX := [7][]TimeRangeStr{weeklyRangesStr.Sun, weeklyRangesStr.Mon, weeklyRangesStr.Tue, weeklyRangesStr.Wed, weeklyRangesStr.Thu, weeklyRangesStr.Fri, weeklyRangesStr.Sat}
+	for day, weeklyRangeStrX := range weeklyRangesStrX {
+		timeRanges, err := parseTimeRanges(weeklyRangeStrX)
 		if err != nil {
 			return weeklyRanges, err
 		}
 		weeklyRanges.ranges[day] = timeRanges
 	}
 	return weeklyRanges, nil
+}
+
+func parseAllWeeklyRanges(allWeeklyRangesStr map[string]WeeklyRangesStr) error {
+	allWeeklyRanges := make(map[string]WeeklyRanges)
+	for weeklyRangesName, weeklyRangesStr := range allWeeklyRangesStr {
+		weeklyRanges, err := parseWeeklyRanges(weeklyRangesStr)
+		if err != nil {
+			return err
+		}
+		allWeeklyRanges[weeklyRangesName] = weeklyRanges
+	}
+	return nil
 }
 
 func (plugin *PluginBlockName) Name() string {
