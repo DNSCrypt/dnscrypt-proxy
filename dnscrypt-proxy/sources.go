@@ -67,6 +67,11 @@ func fetchWithCache(xTransport *XTransport, urlStr string, cacheFile string) (in
 		cached = true
 		return
 	}
+	if len(urlStr) == 0 {
+		err = fmt.Errorf("Cache file [%s] not present and no URL given to retrieve it", cacheFile)
+		return
+	}
+
 	var resp *http.Response
 	dlog.Infof("Loading source information from URL [%s]", urlStr)
 

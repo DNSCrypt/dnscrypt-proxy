@@ -300,7 +300,7 @@ func (config *Config) loadSources(proxy *Proxy) error {
 
 func (config *Config) loadSource(proxy *Proxy, requiredProps ServerInformalProperties, cfgSourceName string, cfgSource *SourceConfig) error {
 	if cfgSource.URL == "" {
-		return fmt.Errorf("Missing URL for source [%s]", cfgSourceName)
+		dlog.Debugf("Missing URL for source [%s]", cfgSourceName)
 	}
 	if cfgSource.MinisignKeyStr == "" {
 		return fmt.Errorf("Missing Minisign key for source [%s]", cfgSourceName)
@@ -309,7 +309,7 @@ func (config *Config) loadSource(proxy *Proxy, requiredProps ServerInformalPrope
 		return fmt.Errorf("Missing cache file for source [%s]", cfgSourceName)
 	}
 	if cfgSource.FormatStr == "" {
-		return fmt.Errorf("Missing format for source [%s]", cfgSourceName)
+		cfgSource.FormatStr = "v2"
 	}
 	if cfgSource.RefreshDelay <= 0 {
 		cfgSource.RefreshDelay = 24
