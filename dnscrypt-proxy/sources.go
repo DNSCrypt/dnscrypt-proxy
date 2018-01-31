@@ -194,6 +194,7 @@ func (source *Source) parseV1(prefix string) ([]RegisteredServer, error) {
 			continue
 		}
 		name := prefix + record[0]
+		description := record[2]
 		serverAddrStr := record[10]
 		providerName := record[11]
 		serverPkStr := record[12]
@@ -209,7 +210,7 @@ func (source *Source) parseV1(prefix string) ([]RegisteredServer, error) {
 			return registeredServers, err
 		}
 		registeredServer := RegisteredServer{
-			name: name, stamp: stamp,
+			name: name, stamp: stamp, description: description,
 		}
 		dlog.Debugf("Registered [%s] with stamp [%s]", name, stamp.String())
 		registeredServers = append(registeredServers, registeredServer)
