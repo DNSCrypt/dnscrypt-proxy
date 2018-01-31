@@ -232,21 +232,25 @@ func (serversInfo *ServersInfo) fetchDoHServerInfo(proxy *Proxy, name string, st
 	if tls == nil || !tls.HandshakeComplete {
 		return ServerInfo{}, errors.New("TLS handshake failed")
 	}
-	if len(stamp.hash) > 0 && len(stamp.hash) != 32 {
-		dlog.Criticalf("Unsupported certificate hash for [%s]: [%x]", name, stamp.hash)
-	}
 	found := false
 	var wantedHash [32]byte
-	copy(wantedHash[:], stamp.hash)
 	for _, cert := range tls.PeerCertificates {
 		h := sha256.Sum256(cert.RawTBSCertificate)
 		dlog.Debugf("Advertised cert: [%s] [%x]", cert.Subject, h)
-		if len(stamp.hash) == 32 && h == wantedHash {
-			found = true
+		for _, hash := range stamp.hashes {
+			if len(hash) == len(wantedHash) {
+				copy(wantedHash[:], hash)
+				if h == wantedHash {
+					found = true
+					break
+				}
+			}
+		}
+		if found {
 			break
 		}
 	}
-	if len(stamp.hash) == 32 && !found {
+	if !found && len(stamp.hashes) > 0 {
 		return ServerInfo{}, fmt.Errorf("Certificate hash [%x] not found for [%s]", wantedHash, name)
 	}
 	respBody, err := ioutil.ReadAll(resp.Body)

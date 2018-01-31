@@ -37,7 +37,7 @@ func (stampProtoType *StampProtoType) String() string {
 type ServerStamp struct {
 	serverAddrStr string
 	serverPk      []uint8
-	hash          []uint8
+	hashes        [][]uint8
 	providerName  string
 	path          string
 	props         ServerInformalProperties
@@ -127,7 +127,7 @@ func newDNSCryptServerStamp(bin []byte) (ServerStamp, error) {
 // id(u8)=0x02 props addrLen(1) serverAddr hashLen(1) hash providerNameLen(1) providerName pathLen(1) path
 
 func newDoHServerStamp(bin []byte) (ServerStamp, error) {
-	stamp := ServerStamp{proto: StampProtoTypeDoH}
+	stamp := ServerStamp{proto: StampProtoTypeDoH, hashes: [][]byte{}}
 
 	stamp.props = ServerInformalProperties(binary.LittleEndian.Uint64(bin[1:9]))
 	binLen := len(bin)
@@ -144,13 +144,19 @@ func newDoHServerStamp(bin []byte) (ServerStamp, error) {
 		stamp.serverAddrStr = fmt.Sprintf("%s:%d", stamp.serverAddrStr, DefaultPort)
 	}
 
-	len = int(bin[pos])
-	if len >= binLen-pos {
-		return stamp, errors.New("Invalid stamp")
+	for {
+		vlen := int(bin[pos])
+		len = vlen & ^0x80
+		if len >= binLen-pos {
+			return stamp, errors.New("Invalid stamp")
+		}
+		pos++
+		stamp.hashes = append(stamp.hashes, bin[pos:pos+len])
+		pos += len
+		if vlen&0x80 != 0x80 {
+			break
+		}
 	}
-	pos++
-	stamp.hash = bin[pos : pos+len]
-	pos += len
 
 	len = int(bin[pos])
 	if len >= binLen-pos {
@@ -219,8 +225,15 @@ func (stamp *ServerStamp) dohString() string {
 	bin = append(bin, uint8(len(serverAddrStr)))
 	bin = append(bin, []uint8(serverAddrStr)...)
 
-	bin = append(bin, uint8(len(stamp.hash)))
-	bin = append(bin, []uint8(stamp.hash)...)
+	last := len(stamp.hashes) - 1
+	for i, hash := range stamp.hashes {
+		vlen := len(hash)
+		if i < last {
+			vlen |= 0x80
+		}
+		bin = append(bin, uint8(vlen))
+		bin = append(bin, hash...)
+	}
 
 	bin = append(bin, uint8(len(stamp.providerName)))
 	bin = append(bin, []uint8(stamp.providerName)...)
