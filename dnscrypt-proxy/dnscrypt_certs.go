@@ -84,12 +84,12 @@ func FetchCurrentDNSCryptCert(proxy *Proxy, serverName *string, proto string, pk
 		if ttl > 86400*7 {
 			dlog.Infof("[%v] the key validity period for this server is excessively long (%d days), significantly reducing reliability and forward security.", providerName, ttl/86400)
 			daysLeft := (tsEnd - now) / 86400
-			if daysLeft <= 30 {
-				dlog.Infof("[%v] certificate will expire in %d days", providerName, daysLeft)
+			if daysLeft < 1 {
+				dlog.Criticalf("[%v] certificate will expire today -- Switch to a different resolver as soon as possible", providerName)
 			} else if daysLeft <= 7 {
 				dlog.Warnf("[%v] certificate is about to expire -- if you don't manage this server, tell the server operator about it", providerName)
-			} else if daysLeft < 1 {
-				dlog.Criticalf("[%v] certificate will expire today -- Switch to a different resolver as soon as possible", providerName)
+			} else if daysLeft <= 30 {
+				dlog.Infof("[%v] certificate will expire in %d days", providerName, daysLeft)
 			}
 			certInfo.ForwardSecurity = false
 		} else {
