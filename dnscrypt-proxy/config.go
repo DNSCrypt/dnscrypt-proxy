@@ -237,51 +237,8 @@ func (config *Config) loadSources(proxy *Proxy) error {
 		requiredProps |= ServerInformalPropertyNoFilter
 	}
 	for cfgSourceName, cfgSource := range config.SourcesConfig {
-		if cfgSource.URL == "" {
-			return fmt.Errorf("Missing URL for source [%s]", cfgSourceName)
-		}
-		if cfgSource.MinisignKeyStr == "" {
-			return fmt.Errorf("Missing Minisign key for source [%s]", cfgSourceName)
-		}
-		if cfgSource.CacheFile == "" {
-			return fmt.Errorf("Missing cache file for source [%s]", cfgSourceName)
-		}
-		if cfgSource.FormatStr == "" {
-			return fmt.Errorf("Missing format for source [%s]", cfgSourceName)
-		}
-		if cfgSource.RefreshDelay <= 0 {
-			cfgSource.RefreshDelay = 24
-		}
-		source, sourceUrlsToPrefetch, err := NewSource(proxy.xTransport, cfgSource.URL, cfgSource.MinisignKeyStr, cfgSource.CacheFile, cfgSource.FormatStr, time.Duration(cfgSource.RefreshDelay)*time.Hour)
-		proxy.urlsToPrefetch = append(proxy.urlsToPrefetch, sourceUrlsToPrefetch...)
-		if err != nil {
-			dlog.Criticalf("Unable use source [%s]: [%s]", cfgSourceName, err)
-			continue
-		}
-		registeredServers, err := source.Parse(cfgSource.Prefix)
-		if err != nil {
-			dlog.Criticalf("Unable use source [%s]: [%s]", cfgSourceName, err)
-			continue
-		}
-		for _, registeredServer := range registeredServers {
-			if len(config.ServerNames) > 0 {
-				if !includesName(config.ServerNames, registeredServer.name) {
-					continue
-				}
-			} else if registeredServer.stamp.props&requiredProps != requiredProps {
-				continue
-			}
-			if config.SourceIPv4 || config.SourceIPv6 {
-				isIPv4, isIPv6 := true, false
-				if strings.HasPrefix(registeredServer.stamp.serverAddrStr, "[") {
-					isIPv4, isIPv6 = false, true
-				}
-				if !(config.SourceIPv4 == isIPv4 || config.SourceIPv6 == isIPv6) {
-					continue
-				}
-			}
-			dlog.Debugf("Adding [%s] to the set of wanted resolvers", registeredServer.name)
-			proxy.registeredServers = append(proxy.registeredServers, registeredServer)
+		if err := config.loadSource(proxy, requiredProps, &cfgSourceName, &cfgSource); err != nil {
+			return err
 		}
 	}
 	if len(config.ServerNames) == 0 {
@@ -304,6 +261,56 @@ func (config *Config) loadSources(proxy *Proxy) error {
 			return err
 		}
 		proxy.registeredServers = append(proxy.registeredServers, RegisteredServer{name: serverName, stamp: stamp})
+	}
+	return nil
+}
+
+func (config *Config) loadSource(proxy *Proxy, requiredProps ServerInformalProperties, cfgSourceName *string, cfgSource *SourceConfig) error {
+	if cfgSource.URL == "" {
+		return fmt.Errorf("Missing URL for source [%s]", cfgSourceName)
+	}
+	if cfgSource.MinisignKeyStr == "" {
+		return fmt.Errorf("Missing Minisign key for source [%s]", cfgSourceName)
+	}
+	if cfgSource.CacheFile == "" {
+		return fmt.Errorf("Missing cache file for source [%s]", cfgSourceName)
+	}
+	if cfgSource.FormatStr == "" {
+		return fmt.Errorf("Missing format for source [%s]", cfgSourceName)
+	}
+	if cfgSource.RefreshDelay <= 0 {
+		cfgSource.RefreshDelay = 24
+	}
+	source, sourceUrlsToPrefetch, err := NewSource(proxy.xTransport, cfgSource.URL, cfgSource.MinisignKeyStr, cfgSource.CacheFile, cfgSource.FormatStr, time.Duration(cfgSource.RefreshDelay)*time.Hour)
+	proxy.urlsToPrefetch = append(proxy.urlsToPrefetch, sourceUrlsToPrefetch...)
+	if err != nil {
+		dlog.Criticalf("Unable use source [%s]: [%s]", cfgSourceName, err)
+		return nil
+	}
+	registeredServers, err := source.Parse(cfgSource.Prefix)
+	if err != nil {
+		dlog.Criticalf("Unable use source [%s]: [%s]", cfgSourceName, err)
+		return nil
+	}
+	for _, registeredServer := range registeredServers {
+		if len(config.ServerNames) > 0 {
+			if !includesName(config.ServerNames, registeredServer.name) {
+				continue
+			}
+		} else if registeredServer.stamp.props&requiredProps != requiredProps {
+			return nil
+		}
+		if config.SourceIPv4 || config.SourceIPv6 {
+			isIPv4, isIPv6 := true, false
+			if strings.HasPrefix(registeredServer.stamp.serverAddrStr, "[") {
+				isIPv4, isIPv6 = false, true
+			}
+			if !(config.SourceIPv4 == isIPv4 || config.SourceIPv6 == isIPv6) {
+				continue
+			}
+		}
+		dlog.Debugf("Adding [%s] to the set of wanted resolvers", registeredServer.name)
+		proxy.registeredServers = append(proxy.registeredServers, registeredServer)
 	}
 	return nil
 }
