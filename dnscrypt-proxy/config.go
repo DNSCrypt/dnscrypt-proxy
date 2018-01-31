@@ -106,7 +106,7 @@ type BlockIPConfig struct {
 
 func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 	version := flag.Bool("version", false, "Prints current proxy version")
-	configFile := flag.String("config", "dnscrypt-proxy.toml", "Path to the configuration file")
+	configFile := flag.String("config", DefaultConfigFileName, "Path to the configuration file")
 	resolve := flag.String("resolve", "", "resolve a name using system libraries")
 	list := flag.Bool("list", false, "print the list of available resolvers for the enabled filters")
 	flag.Parse()
@@ -251,12 +251,10 @@ func (config *Config) loadSources(proxy *Proxy) error {
 		if !ok {
 			continue
 		}
-		var stamp ServerStamp
-		var err error
 		if len(serverConfig.Stamp) == 0 {
 			dlog.Fatalf("Missing stamp for the static [%s] definition", serverName)
 		}
-		stamp, err = NewServerStampFromString(serverConfig.Stamp)
+		stamp, err := NewServerStampFromString(serverConfig.Stamp)
 		if err != nil {
 			return err
 		}
