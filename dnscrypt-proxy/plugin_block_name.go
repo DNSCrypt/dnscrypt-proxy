@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -35,6 +36,72 @@ type PluginBlockName struct {
 	blockedPatterns   []string
 	outFd             *os.File
 	format            string
+	timeRanges        map[string]*WeeklyRanges
+}
+
+type TimeRange struct {
+	start int
+	end   int
+}
+
+type WeeklyRanges struct {
+	ranges [7][]TimeRange
+}
+
+type TimeRangeStr struct {
+	After  string
+	Before string
+}
+
+func daySecsFromStr(str string) (int, error) {
+	parts := strings.Split(str, ":")
+	if len(parts) != 2 {
+		return -1, fmt.Errorf("Syntax error in a time expression: [%s]", str)
+	}
+	hours, err := strconv.Atoi(parts[0])
+	if err != nil || hours < 0 || hours > 23 {
+		return -1, fmt.Errorf("Syntax error in a time expression: [%s]", str)
+	}
+	minutes, err := strconv.Atoi(parts[1])
+	if err != nil || minutes < 0 || minutes > 59 {
+		return -1, fmt.Errorf("Syntax error in a time expression: [%s]", str)
+	}
+	return (hours*60 + minutes) * 60, nil
+}
+
+func parseTimeRanges(timeRangesStr []TimeRangeStr) ([]TimeRange, error) {
+	timeRanges := []TimeRange{}
+	for _, timeRangeStr := range timeRangesStr {
+		after, err := daySecsFromStr(timeRangeStr.After)
+		if err != nil {
+			return timeRanges, err
+		}
+		before, err := daySecsFromStr(timeRangeStr.Before)
+		if err != nil {
+			return timeRanges, err
+		}
+		if after == before {
+			after, before = -1, 86402
+		}
+	}
+	return timeRanges, nil
+}
+
+func parseWeeklyRanges(weeklyRangeStr map[string][]TimeRangeStr) (WeeklyRanges, error) {
+	weeklyRanges := WeeklyRanges{}
+	daysStr := []string{"sun", "mon", "tue", "wed", "thu", "fri", "sat"}
+	for day, dayStr := range daysStr {
+		timeRangesStr, ok := weeklyRangeStr[dayStr]
+		if !ok {
+			continue
+		}
+		timeRanges, err := parseTimeRanges(timeRangesStr)
+		if err != nil {
+			return weeklyRanges, err
+		}
+		weeklyRanges.ranges[day] = timeRanges
+	}
+	return weeklyRanges, nil
 }
 
 func (plugin *PluginBlockName) Name() string {
@@ -56,6 +123,15 @@ func (plugin *PluginBlockName) Init(proxy *Proxy) error {
 	for lineNo, line := range strings.Split(string(bin), "\n") {
 		line = strings.TrimFunc(line, unicode.IsSpace)
 		if len(line) == 0 || strings.HasPrefix(line, "#") {
+			continue
+		}
+		parts := strings.Split(line, "@")
+		timeRangeName := ""
+		if len(parts) == 2 {
+			line = strings.TrimFunc(parts[0], unicode.IsSpace)
+			timeRangeName = strings.TrimFunc(parts[1], unicode.IsSpace)
+		} else if len(parts) > 2 {
+			dlog.Errorf("Syntax error in block rules at line %d -- Unexpected @ character", 1+lineNo)
 			continue
 		}
 		leadingStar := strings.HasPrefix(line, "*")
@@ -93,6 +169,15 @@ func (plugin *PluginBlockName) Init(proxy *Proxy) error {
 			dlog.Errorf("Syntax error in block rule at line %d", 1+lineNo)
 			continue
 		}
+		var timeRange *TimeRange
+		if len(timeRangeName) > 0 {
+			timeRange, ok := plugin.timeRanges[timeRangeName]
+			if !ok {
+				dlog.Errorf("Time range [%s] not found at line %d", timeRangeName, 1+lineNo)
+				timeRange = nil
+			}
+			_ = timeRange
+		}
 		line = strings.ToLower(line)
 		switch blockType {
 		case PluginBlockTypeSubstring:
@@ -100,9 +185,9 @@ func (plugin *PluginBlockName) Init(proxy *Proxy) error {
 		case PluginBlockTypePattern:
 			plugin.blockedPatterns = append(plugin.blockedPatterns, line)
 		case PluginBlockTypePrefix:
-			plugin.blockedPrefixes, _, _ = plugin.blockedPrefixes.Insert([]byte(line), 0)
+			plugin.blockedPrefixes, _, _ = plugin.blockedPrefixes.Insert([]byte(line), timeRange)
 		case PluginBlockTypeSuffix:
-			plugin.blockedSuffixes, _, _ = plugin.blockedSuffixes.Insert([]byte(StringReverse(line)), 0)
+			plugin.blockedSuffixes, _, _ = plugin.blockedSuffixes.Insert([]byte(StringReverse(line)), timeRange)
 		default:
 			dlog.Fatal("Unexpected block type")
 		}

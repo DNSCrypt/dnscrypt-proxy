@@ -26,25 +26,26 @@ type Config struct {
 	CertIgnoreTimestamp   bool `toml:"cert_ignore_timestamp"`
 	BlockIPv6             bool `toml:"block_ipv6"`
 	Cache                 bool
-	CacheSize             int                     `toml:"cache_size"`
-	CacheNegTTL           uint32                  `toml:"cache_neg_ttl"`
-	CacheMinTTL           uint32                  `toml:"cache_min_ttl"`
-	CacheMaxTTL           uint32                  `toml:"cache_max_ttl"`
-	QueryLog              QueryLogConfig          `toml:"query_log"`
-	NxLog                 NxLogConfig             `toml:"nx_log"`
-	BlockName             BlockNameConfig         `toml:"blacklist"`
-	BlockIP               BlockIPConfig           `toml:"ip_blacklist"`
-	ForwardFile           string                  `toml:"forwarding_rules"`
-	ServersConfig         map[string]StaticConfig `toml:"static"`
-	SourcesConfig         map[string]SourceConfig `toml:"sources"`
-	SourceRequireDNSSEC   bool                    `toml:"require_dnssec"`
-	SourceRequireNoLog    bool                    `toml:"require_nolog"`
-	SourceRequireNoFilter bool                    `toml:"require_nofilter"`
-	SourceIPv4            bool                    `toml:"ipv4_servers"`
-	SourceIPv6            bool                    `toml:"ipv6_servers"`
-	MaxClients            uint32                  `toml:"max_clients"`
-	FallbackResolver      string                  `toml:"fallback_resolver"`
-	IgnoreSystemDNS       bool                    `toml:"ignore_system_dns"`
+	CacheSize             int                       `toml:"cache_size"`
+	CacheNegTTL           uint32                    `toml:"cache_neg_ttl"`
+	CacheMinTTL           uint32                    `toml:"cache_min_ttl"`
+	CacheMaxTTL           uint32                    `toml:"cache_max_ttl"`
+	QueryLog              QueryLogConfig            `toml:"query_log"`
+	NxLog                 NxLogConfig               `toml:"nx_log"`
+	BlockName             BlockNameConfig           `toml:"blacklist"`
+	BlockIP               BlockIPConfig             `toml:"ip_blacklist"`
+	ForwardFile           string                    `toml:"forwarding_rules"`
+	ServersConfig         map[string]StaticConfig   `toml:"static"`
+	SourcesConfig         map[string]SourceConfig   `toml:"sources"`
+	SourceRequireDNSSEC   bool                      `toml:"require_dnssec"`
+	SourceRequireNoLog    bool                      `toml:"require_nolog"`
+	SourceRequireNoFilter bool                      `toml:"require_nofilter"`
+	SourceIPv4            bool                      `toml:"ipv4_servers"`
+	SourceIPv6            bool                      `toml:"ipv6_servers"`
+	MaxClients            uint32                    `toml:"max_clients"`
+	FallbackResolver      string                    `toml:"fallback_resolver"`
+	IgnoreSystemDNS       bool                      `toml:"ignore_system_dns"`
+	TimeRanges            map[string][]TimeRangeStr `toml:"time_ranges"`
 }
 
 func newConfig() Config {
@@ -220,6 +221,8 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 	proxy.blockIPLogFile = config.BlockIP.LogFile
 
 	proxy.forwardFile = config.ForwardFile
+
+	parseWeeklyRanges(config.TimeRanges)
 
 	if err := config.loadSources(proxy); err != nil {
 		return err
