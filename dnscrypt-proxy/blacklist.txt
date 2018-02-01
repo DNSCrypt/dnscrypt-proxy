@@ -33,4 +33,5 @@ eth0.me
 
 ## Time-based rules
 
-youtube.* @time-to-sleep
+# *.youtube.*  @time-to-sleep
+# facebook.com @work
