@@ -131,7 +131,6 @@ func (plugin *PluginBlockName) Init(proxy *Proxy) error {
 			} else {
 				weeklyRanges = &weeklyRangesX
 			}
-			_ = weeklyRanges
 		}
 		line = strings.ToLower(line)
 		switch blockType {
@@ -181,16 +180,17 @@ func (plugin *PluginBlockName) Eval(pluginsState *PluginsState, msg *dns.Msg) er
 	}
 	revQname := StringReverse(qName)
 	reject, reason := false, ""
+	var weeklyRanges *WeeklyRanges
 	if !reject {
-		if match, _, found := plugin.blockedSuffixes.Root().LongestPrefix([]byte(revQname)); found {
+		if match, weeklyRangesX, found := plugin.blockedSuffixes.Root().LongestPrefix([]byte(revQname)); found {
 			if len(match) == len(qName) || revQname[len(match)] == '.' {
-				reject, reason = true, "*."+StringReverse(string(match))
+				reject, reason, weeklyRanges = true, "*."+StringReverse(string(match)), weeklyRangesX.(*WeeklyRanges)
 			} else if len(match) < len(revQname) && len(revQname) > 0 {
 				if i := strings.LastIndex(revQname, "."); i > 0 {
 					pName := revQname[:i]
 					if match, _, found := plugin.blockedSuffixes.Root().LongestPrefix([]byte(pName)); found {
 						if len(match) == len(pName) || pName[len(match)] == '.' {
-							reject, reason = true, "*."+StringReverse(string(match))
+							reject, reason, weeklyRanges = true, "*."+StringReverse(string(match)), weeklyRangesX.(*WeeklyRanges)
 						}
 					}
 				}
@@ -198,9 +198,9 @@ func (plugin *PluginBlockName) Eval(pluginsState *PluginsState, msg *dns.Msg) er
 		}
 	}
 	if !reject {
-		match, _, found := plugin.blockedPrefixes.Root().LongestPrefix([]byte(qName))
+		match, weeklyRangesX, found := plugin.blockedPrefixes.Root().LongestPrefix([]byte(qName))
 		if found {
-			reject, reason = true, string(match)+"*"
+			reject, reason, weeklyRanges = true, string(match)+"*", weeklyRangesX.(*WeeklyRanges)
 		}
 	}
 	if !reject {
@@ -217,6 +217,11 @@ func (plugin *PluginBlockName) Eval(pluginsState *PluginsState, msg *dns.Msg) er
 				reject, reason = true, pattern
 				break
 			}
+		}
+	}
+	if reject {
+		if weeklyRanges != nil && !weeklyRanges.Match() {
+			reject = false
 		}
 	}
 	if reject {
@@ -320,4 +325,25 @@ func ParseAllWeeklyRanges(allWeeklyRangesStr map[string]WeeklyRangesStr) (*map[s
 		allWeeklyRanges[weeklyRangesName] = weeklyRanges
 	}
 	return &allWeeklyRanges, nil
+}
+
+func (weeklyRanges *WeeklyRanges) Match() bool {
+	now := time.Now().Local()
+	day := now.Weekday()
+	weeklyRange := weeklyRanges.ranges[day]
+	if len(weeklyRange) == 0 {
+		return false
+	}
+	hour, min, _ := now.Clock()
+	nowX := (hour*60 + min) * 60
+	for _, timeRange := range weeklyRange {
+		if timeRange.after > timeRange.before {
+			if nowX >= timeRange.after || nowX <= timeRange.before {
+				return true
+			}
+		} else if nowX >= timeRange.after && nowX <= timeRange.before {
+			return true
+		}
+	}
+	return false
 }
