@@ -165,19 +165,19 @@ cache_neg_ttl = 60
 
 [query_log]
 
-## Path to the query log file (absolute, or relative to the same directory as the executable file)
+  ## Path to the query log file (absolute, or relative to the same directory as the executable file)
 
-# file = 'query.log'
-
-
-## Query log format (currently supported: tsv and ltsv)
-
-format = 'tsv'
+  # file = 'query.log'
 
 
-## Do not log these query types, to reduce verbosity. Keep empty to log everything.
+  ## Query log format (currently supported: tsv and ltsv)
 
-# ignored_qtypes = ['DNSKEY', 'NS']
+  format = 'tsv'
+
+
+  ## Do not log these query types, to reduce verbosity. Keep empty to log everything.
+
+  # ignored_qtypes = ['DNSKEY', 'NS']
 
 
 
@@ -191,14 +191,14 @@ format = 'tsv'
 
 [nx_log]
 
-## Path to the query log file (absolute, or relative to the same directory as the executable file)
+  ## Path to the query log file (absolute, or relative to the same directory as the executable file)
 
-# file = 'nx.log'
+  # file = 'nx.log'
 
 
-## Query log format (currently supported: tsv and ltsv)
+  ## Query log format (currently supported: tsv and ltsv)
 
-format = 'tsv'
+  format = 'tsv'
 
 
 
@@ -220,19 +220,19 @@ format = 'tsv'
 
 [blacklist]
 
-## Path to the file of blocking rules (absolute, or relative to the same directory as the executable file)
+  ## Path to the file of blocking rules (absolute, or relative to the same directory as the executable file)
 
-# blacklist_file = 'blacklist.txt'
-
-
-## Optional path to a file logging blocked queries
-
-# log_file = 'blocked.log'
+  # blacklist_file = 'blacklist.txt'
 
 
-## Optional log format: tsv or ltsv (default: tsv)
+  ## Optional path to a file logging blocked queries
 
-# log_format = 'tsv'
+  # log_file = 'blocked.log'
+
+
+  ## Optional log format: tsv or ltsv (default: tsv)
+
+  # log_format = 'tsv'
 
 
 
@@ -248,19 +248,19 @@ format = 'tsv'
 
 [ip_blacklist]
 
-## Path to the file of blocking rules (absolute, or relative to the same directory as the executable file)
+  ## Path to the file of blocking rules (absolute, or relative to the same directory as the executable file)
 
-# blacklist_file = 'ip-blacklist.txt'
-
-
-## Optional path to a file logging blocked queries
-
-# log_file = 'ip-blocked.log'
+  # blacklist_file = 'ip-blacklist.txt'
 
 
-## Optional log format: tsv or ltsv (default: tsv)
+  ## Optional path to a file logging blocked queries
 
-# log_format = 'tsv'
+  # log_file = 'ip-blocked.log'
+
+
+  ## Optional log format: tsv or ltsv (default: tsv)
+
+  # log_format = 'tsv'
 
 
 
@@ -285,7 +285,7 @@ format = 'tsv'
 
 [sources]
 
-## An example of a remote source
+  ## An example of a remote source
 
   [sources.'public-resolvers']
   url = 'http://download.dnscrypt.info/resolvers-list/v2/public-resolvers.md'
@@ -295,16 +295,13 @@ format = 'tsv'
   refresh_delay = 168
   prefix = ''
 
-## Another example source, with resolvers censoring some websites not approriate for children
-## This is a subset of the `public-resolvers` list, so enabling both is useless
+  ## Another example source, with resolvers censoring some websites not approriate for children
+  ## This is a subset of the `public-resolvers` list, so enabling both is useless
 
-#  [sources.'parental-control']
-#  url = 'http://download.dnscrypt.info/resolvers-list/v2/parental-control.md'
-#  cache_file = 'parental-control.md'
-#  format = 'v2'
-#  minisign_key = 'RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3'
-#  refresh_delay = 168
-#  prefix = ''
+  #  [sources.'parental-control']
+  #  url = 'http://download.dnscrypt.info/resolvers-list/v2/parental-control.md'
+  #  cache_file = 'parental-control.md'
+  #  minisign_key = 'RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3'
 
 
 
@@ -313,8 +310,8 @@ format = 'tsv'
 
 [static]
 
-#   [static.'google']
-#   stamp = 'sdns://AgEAAAAAAAAAACDyXGrcc5eNecJ8nomJCJ-q6eCLTEn6bHic0hWGUwYQaA5kbnMuZ29vZ2xlLmNvbQ0vZXhwZXJpbWVudGFs'
+  # [static.'google']
+  # stamp = 'sdns://AgEAAAAAAAAAACDyXGrcc5eNecJ8nomJCJ-q6eCLTEn6bHic0hWGUwYQaA5kbnMuZ29vZ2xlLmNvbQ0vZXhwZXJpbWVudGFs'
 
 
 
