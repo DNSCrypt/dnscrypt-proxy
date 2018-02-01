@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -109,6 +110,8 @@ type BlockIPConfig struct {
 type ServerSummary struct {
 	Name        string `json:"name"`
 	Proto       string `json:"proto"`
+	IPv6        bool   `json:"ipv6"`
+	Ports       []int  `json:"ports"`
 	DNSSEC      bool   `json:"dnssec"`
 	NoLog       bool   `json:"nolog"`
 	NoFilter    bool   `json:"nofilter"`
@@ -120,6 +123,7 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 	configFile := flag.String("config", DefaultConfigFileName, "Path to the configuration file")
 	resolve := flag.String("resolve", "", "resolve a name using system libraries")
 	list := flag.Bool("list", false, "print the list of available resolvers for the enabled filters")
+	listAll := flag.Bool("list-all", false, "print the complete list of available resolvers, ignoring filters")
 	jsonOutput := flag.Bool("json", false, "output list as JSON")
 	flag.Parse()
 	if *svcFlag == "stop" || *svcFlag == "uninstall" {
@@ -228,13 +232,21 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 	}
 	proxy.allWeeklyRanges = allWeeklyRanges
 
+	if *listAll {
+		config.SourceRequireDNSSEC = false
+		config.SourceRequireNoFilter = false
+		config.SourceRequireNoLog = false
+		config.SourceIPv4 = true
+		config.SourceIPv6 = true
+	}
+
 	if err := config.loadSources(proxy); err != nil {
 		return err
 	}
 	if len(proxy.registeredServers) == 0 {
 		return errors.New("No servers configured")
 	}
-	if *list {
+	if *list || *listAll {
 		config.printRegisteredServers(proxy, *jsonOutput)
 		os.Exit(0)
 	}
@@ -244,9 +256,17 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 func (config *Config) printRegisteredServers(proxy *Proxy, jsonOutput bool) {
 	var summary []ServerSummary
 	for _, registeredServer := range proxy.registeredServers {
+		addrStr, port := registeredServer.stamp.serverAddrStr, DefaultPort
+		if idx := strings.LastIndex(addrStr, ":"); idx >= 0 && idx < len(addrStr)-1 {
+			if portX, err := strconv.Atoi(addrStr[idx+1:]); err == nil {
+				port = portX
+			}
+		}
 		serverSummary := ServerSummary{
 			Name:        registeredServer.name,
 			Proto:       registeredServer.stamp.proto.String(),
+			IPv6:        strings.HasPrefix(addrStr, "["),
+			Ports:       []int{port},
 			DNSSEC:      registeredServer.stamp.props&ServerInformalPropertyDNSSEC != 0,
 			NoLog:       registeredServer.stamp.props&ServerInformalPropertyNoLog != 0,
 			NoFilter:    registeredServer.stamp.props&ServerInformalPropertyNoFilter != 0,
