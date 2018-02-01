@@ -4,7 +4,7 @@
 
 A flexible DNS proxy, with support for modern encrypted DNS protocols such as [DNSCrypt v2](https://github.com/DNSCrypt/dnscrypt-protocol/blob/master/DNSCRYPT-V2-PROTOCOL.txt) and [DNS-over-HTTP/2](https://datatracker.ietf.org/wg/doh/about/).
 
-## [dnscrypt-proxy 2.0.0beta12 is available for download!](https://github.com/jedisct1/dnscrypt-proxy/releases/latest)
+## [dnscrypt-proxy 2.0.0rc is available for download!](https://github.com/jedisct1/dnscrypt-proxy/releases/latest)
 
 ## Installation
 
@@ -44,7 +44,7 @@ sudo setcap cap_net_bind_service=+pe dnscrypt-proxy
 
 ## Current status/features
 
-The current 2.0.0 beta version includes all the major features from dnscrypt-proxy 1.9.5 (support for dnscrypt v2, synthetic IPv6 responses, logging, blocking, forwarding and caching), with improved reliability, flexbility, usability and performance.
+The current 2.0.0 release candidate includes all the major features from dnscrypt-proxy 1.9.5 (support for dnscrypt v2, synthetic IPv6 responses, logging, blocking, forwarding and caching), with improved reliability, flexbility, usability and performance.
 
 It includes support for DNS-over-HTTP/2 (DoH), the successor to DNS-over-TLS.
 
