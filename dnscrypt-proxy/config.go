@@ -162,7 +162,7 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 	proxy.certRefreshDelayAfterFailure = time.Duration(10 * time.Second)
 	proxy.certIgnoreTimestamp = config.CertIgnoreTimestamp
 	if len(config.ListenAddresses) == 0 {
-		dlog.Errorf("No local IP/port configured")
+		dlog.Debug("No local IP/port configured")
 	}
 	proxy.listenAddresses = config.ListenAddresses
 	proxy.daemonize = config.Daemonize
