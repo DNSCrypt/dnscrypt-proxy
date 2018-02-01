@@ -5,6 +5,9 @@
 #                                            #
 ##############################################
 
+## This is an example configuration file.
+## You should adjust it to your needs, and save it as "dnscrypt-proxy.toml"
+
 
 
 ##################################
