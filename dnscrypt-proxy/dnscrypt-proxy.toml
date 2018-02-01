@@ -317,13 +317,13 @@ cache_neg_ttl = 60
 
 ## Time access restrictions (WIP)
 
-[time_ranges]
+[schedules]
 
-  [time_ranges.'time-to-sleep']
+  [schedules.'time-to-sleep']
   mon = [{after='21:00', before='07:00'}]
   tue = [{after='21:00', before='07:00'}]
   wed = [{after='21:00', before='07:00'}]
   thu = [{after='21:00', before='07:00'}]
   fri = [{after='23:00', before='07:00'}]
   sat = [{after='23:00', before='07:00'}]
-  sun = [{after='22:00', before='07:00'}]
+  sun = [{after='21:00', before='07:00'}]

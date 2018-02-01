@@ -45,7 +45,7 @@ type Config struct {
 	MaxClients            uint32                     `toml:"max_clients"`
 	FallbackResolver      string                     `toml:"fallback_resolver"`
 	IgnoreSystemDNS       bool                       `toml:"ignore_system_dns"`
-	AllWeeklyRanges       map[string]WeeklyRangesStr `toml:"time_ranges"`
+	AllWeeklyRanges       map[string]WeeklyRangesStr `toml:"schedules"`
 }
 
 func newConfig() Config {
