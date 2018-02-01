@@ -48,24 +48,6 @@ type WeeklyRanges struct {
 	ranges [7][]TimeRange
 }
 
-func (weeklyRanges *WeeklyRanges) Match() bool {
-	now := time.Now().Local()
-	day := now.Weekday()
-	weeklyRange := weeklyRanges.ranges[day]
-	if len(weeklyRange) == 0 {
-		return false
-	}
-	hour, min, _ := now.Clock()
-	nowX := (hour*60 + min) * 60
-	for _, timeRange := range weeklyRange {
-		if (timeRange.after > timeRange.before && (nowX >= timeRange.after || nowX <= timeRange.before)) ||
-			(nowX >= timeRange.after && nowX <= timeRange.before) {
-			return true
-		}
-	}
-	return false
-}
-
 type TimeRangeStr struct {
 	After  string
 	Before string
@@ -343,4 +325,25 @@ func ParseAllWeeklyRanges(allWeeklyRangesStr map[string]WeeklyRangesStr) (*map[s
 		allWeeklyRanges[weeklyRangesName] = weeklyRanges
 	}
 	return &allWeeklyRanges, nil
+}
+
+func (weeklyRanges *WeeklyRanges) Match() bool {
+	now := time.Now().Local()
+	day := now.Weekday()
+	weeklyRange := weeklyRanges.ranges[day]
+	if len(weeklyRange) == 0 {
+		return false
+	}
+	hour, min, _ := now.Clock()
+	nowX := (hour*60 + min) * 60
+	for _, timeRange := range weeklyRange {
+		if timeRange.after > timeRange.before {
+			if nowX >= timeRange.after || nowX <= timeRange.before {
+				return true
+			}
+		} else if nowX >= timeRange.after && nowX <= timeRange.before {
+			return true
+		}
+	}
+	return false
 }
