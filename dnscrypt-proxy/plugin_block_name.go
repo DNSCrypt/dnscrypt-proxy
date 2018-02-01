@@ -30,13 +30,14 @@ const (
 
 type PluginBlockName struct {
 	sync.Mutex
-	blockedPrefixes   *iradix.Tree
-	blockedSuffixes   *iradix.Tree
-	blockedSubstrings []string
-	blockedPatterns   []string
-	outFd             *os.File
-	format            string
-	allWeeklyRanges   *map[string]WeeklyRanges
+	blockedPrefixes      *iradix.Tree
+	blockedSuffixes      *iradix.Tree
+	allWeeklyRanges      *map[string]WeeklyRanges
+	weeklyRangesIndirect map[string]*WeeklyRanges
+	blockedSubstrings    []string
+	blockedPatterns      []string
+	outFd                *os.File
+	format               string
 }
 
 type TimeRange struct {
@@ -72,6 +73,7 @@ func (plugin *PluginBlockName) Init(proxy *Proxy) error {
 		return err
 	}
 	plugin.allWeeklyRanges = proxy.allWeeklyRanges
+	plugin.weeklyRangesIndirect = make(map[string]*WeeklyRanges)
 	plugin.blockedPrefixes = iradix.New()
 	plugin.blockedSuffixes = iradix.New()
 	for lineNo, line := range strings.Split(string(bin), "\n") {
@@ -136,8 +138,14 @@ func (plugin *PluginBlockName) Init(proxy *Proxy) error {
 		switch blockType {
 		case PluginBlockTypeSubstring:
 			plugin.blockedSubstrings = append(plugin.blockedSubstrings, line)
+			if weeklyRanges != nil {
+				plugin.weeklyRangesIndirect[line] = weeklyRanges
+			}
 		case PluginBlockTypePattern:
 			plugin.blockedPatterns = append(plugin.blockedPatterns, line)
+			if weeklyRanges != nil {
+				plugin.weeklyRangesIndirect[line] = weeklyRanges
+			}
 		case PluginBlockTypePrefix:
 			plugin.blockedPrefixes, _, _ = plugin.blockedPrefixes.Insert([]byte(line), weeklyRanges)
 		case PluginBlockTypeSuffix:
@@ -207,6 +215,7 @@ func (plugin *PluginBlockName) Eval(pluginsState *PluginsState, msg *dns.Msg) er
 		for _, substring := range plugin.blockedSubstrings {
 			if strings.Contains(qName, substring) {
 				reject, reason = true, "*"+substring+"*"
+				weeklyRanges = plugin.weeklyRangesIndirect[substring]
 				break
 			}
 		}
@@ -215,6 +224,7 @@ func (plugin *PluginBlockName) Eval(pluginsState *PluginsState, msg *dns.Msg) er
 		for _, pattern := range plugin.blockedPatterns {
 			if found, _ := filepath.Match(pattern, qName); found {
 				reject, reason = true, pattern
+				weeklyRanges = plugin.weeklyRangesIndirect[pattern]
 				break
 			}
 		}
