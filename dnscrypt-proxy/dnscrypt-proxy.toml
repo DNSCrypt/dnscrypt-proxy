@@ -92,7 +92,7 @@ cert_refresh_delay = 240
 ## It will not be used if the configured system DNS works.
 ## A resolver supporting DNSSEC is recommended. This may become mandatory.
 
-fallback_resolver = "9.9.9.9:53"
+fallback_resolver = '9.9.9.9:53'
 
 
 ## Never try to use the system DNS settings; unconditionally use the
@@ -272,7 +272,7 @@ format = 'tsv'
 ## Multiple sources can be used simultaneously, but every source
 ## requires a dedicated cache file
 ##
-## A prefix can be prepended toserver names in order to
+## A prefix can be prepended to server names in order to
 ## avoid collisions if different sources share the same for
 ## different servers. In that case, names listed in `server_names`
 ## must include the prefixes.
@@ -323,10 +323,10 @@ format = 'tsv'
 [time_ranges]
 
   [time_ranges.'time-to-sleep']
-  mon = [{after="21:00", before="07:00"}]
-  tue = [{after="21:00", before="07:00"}]
-  wed = [{after="21:00", before="07:00"}]
-  thu = [{after="21:00", before="07:00"}]
-  fri = [{after="23:00", before="07:00"}]
-  sat = [{after="23:00", before="07:00"}]
-  sun = [{after="22:00", before="07:00"}]
+  mon = [{after='21:00', before='07:00'}]
+  tue = [{after='21:00', before='07:00'}]
+  wed = [{after='21:00', before='07:00'}]
+  thu = [{after='21:00', before='07:00'}]
+  fri = [{after='23:00', before='07:00'}]
+  sat = [{after='23:00', before='07:00'}]
+  sun = [{after='22:00', before='07:00'}]
