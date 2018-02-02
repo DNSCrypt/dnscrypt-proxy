@@ -225,7 +225,7 @@ cache_neg_ttl = 60
 
   ## Path to the file of blocking rules (absolute, or relative to the same directory as the executable file)
 
-  # blacklist_file = 'blacklist.txt'
+  # blacklist_file = 'dnscrypt-blacklist-domains.txt'
 
 
   ## Optional path to a file logging blocked queries
