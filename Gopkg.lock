@@ -65,7 +65,7 @@
     ".",
     "simplelru"
   ]
-  revision = "0a025b7e63adc15a622f29b0b2c4c3848243bbf6"
+  revision = "0fb14efe8c47ae851c0034ed7a448854d3d34cf3"
 
 [[projects]]
   name = "github.com/jedisct1/dlog"
@@ -127,7 +127,7 @@
     "ipv4",
     "ipv6"
   ]
-  revision = "0ed95abb35c445290478a5348a7b38bb154135fd"
+  revision = "b417086c80e91bfa321ef761574721644b8b9f61"
 
 [[projects]]
   branch = "master"
@@ -139,7 +139,7 @@
     "windows/svc/eventlog",
     "windows/svc/mgr"
   ]
-  revision = "3dbebcf8efb6a5011a60c2b4591c1022a759af8a"
+  revision = "37707fdb30a5b38865cfb95e5aab41707daec7fd"
 
 [solve-meta]
   analyzer-name = "dep"
