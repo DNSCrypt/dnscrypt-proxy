@@ -4,6 +4,7 @@ Documentation=man:dnscrypt-proxy(8)
 Requires=dnscrypt-proxy.socket
 After=network.target
 Before=nss-lookup.target
+Wants=nss-lookup.target
 
 [Install]
 Also=dnscrypt-proxy.socket
