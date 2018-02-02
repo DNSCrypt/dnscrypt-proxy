@@ -10,7 +10,7 @@ A flexible DNS proxy, with support for modern encrypted DNS protocols such as [D
 
 ## Current status/features
 
-The current 2.0.0 release candidate includes all the major features from dnscrypt-proxy 1.9.5 (support for dnscrypt v2, synthetic IPv6 responses, logging, blocking, forwarding and caching), with improved reliability, flexbility, usability and performance.
+The current 2.0.0 release candidate includes all the major features from dnscrypt-proxy 1.9.5 (support for dnscrypt v2, synthetic IPv6 responses, logging, blocking, forwarding and caching), with improved reliability, flexibility, usability and performance.
 
 ## Pre-built binaries
 
