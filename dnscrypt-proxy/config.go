@@ -233,6 +233,7 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 	proxy.allWeeklyRanges = allWeeklyRanges
 
 	if *listAll {
+		config.ServerNames = nil
 		config.SourceRequireDNSSEC = false
 		config.SourceRequireNoFilter = false
 		config.SourceRequireNoLog = false
