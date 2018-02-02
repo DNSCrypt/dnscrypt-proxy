@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"strconv"
 	"strings"
 
 	"github.com/jedisct1/dlog"
@@ -196,8 +197,8 @@ func (stamp *ServerStamp) dnsCryptString() string {
 	binary.LittleEndian.PutUint64(bin[1:9], uint64(stamp.props))
 
 	serverAddrStr := stamp.serverAddrStr
-	if strings.HasSuffix(serverAddrStr, ":"+string(DefaultPort)) {
-		serverAddrStr = serverAddrStr[:1+len(string(DefaultPort))]
+	if strings.HasSuffix(serverAddrStr, ":"+strconv.Itoa(DefaultPort)) {
+		serverAddrStr = serverAddrStr[:len(serverAddrStr)-1-len(strconv.Itoa(DefaultPort))]
 	}
 	bin = append(bin, uint8(len(serverAddrStr)))
 	bin = append(bin, []uint8(serverAddrStr)...)
@@ -219,8 +220,8 @@ func (stamp *ServerStamp) dohString() string {
 	binary.LittleEndian.PutUint64(bin[1:9], uint64(stamp.props))
 
 	serverAddrStr := stamp.serverAddrStr
-	if strings.HasSuffix(serverAddrStr, ":"+string(DefaultPort)) {
-		serverAddrStr = serverAddrStr[:1+len(string(DefaultPort))]
+	if strings.HasSuffix(serverAddrStr, ":"+strconv.Itoa(DefaultPort)) {
+		serverAddrStr = serverAddrStr[:len(serverAddrStr)-1-len(strconv.Itoa(DefaultPort))]
 	}
 	bin = append(bin, uint8(len(serverAddrStr)))
 	bin = append(bin, []uint8(serverAddrStr)...)
