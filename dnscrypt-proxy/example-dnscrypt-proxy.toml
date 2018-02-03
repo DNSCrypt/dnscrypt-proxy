@@ -295,7 +295,7 @@ cache_neg_ttl = 60
   cache_file = 'public-resolvers.md'
   format = 'v2'
   minisign_key = 'RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3'
-  refresh_delay = 168
+  refresh_delay = 72
   prefix = ''
 
   ## Another example source, with resolvers censoring some websites not approriate for children

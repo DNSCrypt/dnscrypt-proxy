@@ -345,7 +345,7 @@ func (config *Config) loadSource(proxy *Proxy, requiredProps ServerInformalPrope
 		cfgSource.FormatStr = "v2"
 	}
 	if cfgSource.RefreshDelay <= 0 {
-		cfgSource.RefreshDelay = 24
+		cfgSource.RefreshDelay = 72
 	}
 	source, sourceUrlsToPrefetch, err := NewSource(proxy.xTransport, cfgSource.URL, cfgSource.MinisignKeyStr, cfgSource.CacheFile, cfgSource.FormatStr, time.Duration(cfgSource.RefreshDelay)*time.Hour)
 	proxy.urlsToPrefetch = append(proxy.urlsToPrefetch, sourceUrlsToPrefetch...)
