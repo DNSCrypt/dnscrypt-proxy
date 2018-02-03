@@ -118,7 +118,11 @@ func (xTransport *XTransport) Fetch(method string, url *url.URL, accept string, 
 	msg := new(dns.Msg)
 	msg.SetQuestion(dns.Fqdn(host), dns.TypeA)
 	msg.SetEdns0(4096, true)
-	dlog.Noticef("System DNS configuration not usable yet, exceptionally resolving [%s] using fallback resolver [%s]", host, xTransport.fallbackResolver)
+	if !xTransport.ignoreSystemDNS {
+		dlog.Noticef("System DNS configuration not usable yet, exceptionally resolving [%s] using fallback resolver [%s]", host, xTransport.fallbackResolver)
+	} else {
+		dlog.Debugf("Resolving [%s] using fallback resolver [%s]", host, xTransport.fallbackResolver)
+	}
 	in, _, err := dnsClient.Exchange(msg, xTransport.fallbackResolver)
 	if err != nil {
 		return nil, 0, err
