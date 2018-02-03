@@ -4,7 +4,7 @@
 
 A flexible DNS proxy, with support for modern encrypted DNS protocols such as [DNSCrypt v2](https://github.com/DNSCrypt/dnscrypt-protocol/blob/master/DNSCRYPT-V2-PROTOCOL.txt) and [DNS-over-HTTP/2](https://datatracker.ietf.org/wg/doh/about/).
 
-## [dnscrypt-proxy 2.0.0rc is available for download!](https://github.com/jedisct1/dnscrypt-proxy/releases/latest)
+## [dnscrypt-proxy 2.0.0rc2 is available for download!](https://github.com/jedisct1/dnscrypt-proxy/releases/latest)
 
 ## [Documentation](https://github.com/jedisct1/dnscrypt-proxy/wiki/)
 
