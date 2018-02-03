@@ -3,8 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"os"
-	"path/filepath"
 	"sync"
 	"time"
 
@@ -25,9 +23,6 @@ type App struct {
 
 func main() {
 	dlog.Init("dnscrypt-proxy", dlog.SeverityNotice, "DAEMON")
-
-	cdLocal()
-
 	svcConfig := &service.Config{
 		Name:        "dnscrypt-proxy",
 		DisplayName: "DNSCrypt client proxy",
@@ -43,7 +38,6 @@ func main() {
 	app.proxy = Proxy{}
 	app.proxy.xTransport = NewXTransport(30 * time.Second)
 
-	cdFileDir(DefaultConfigFileName)
 	if err := ConfigLoad(&app.proxy, svcFlag); err != nil {
 		dlog.Fatal(err)
 	}
@@ -105,17 +99,4 @@ func (app *App) AppMain(proxy *Proxy) {
 func (app *App) Stop(service service.Service) error {
 	dlog.Notice("Stopped.")
 	return nil
-}
-
-func cdFileDir(fileName string) {
-	os.Chdir(filepath.Dir(fileName))
-}
-
-func cdLocal() {
-	exeFileName, err := os.Executable()
-	if err != nil {
-		dlog.Warnf("Unable to determine the executable directory: [%s] -- You will need to specify absolute paths in the configuration file", err)
-		return
-	}
-	os.Chdir(filepath.Dir(exeFileName))
 }

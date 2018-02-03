@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -119,8 +120,11 @@ type ServerSummary struct {
 }
 
 func ConfigLoad(proxy *Proxy, svcFlag *string) error {
-	version := flag.Bool("version", false, "Prints current proxy version")
 	configFile := flag.String("config", DefaultConfigFileName, "Path to the configuration file")
+	if _, err := os.Stat(*configFile); os.IsNotExist(err) {
+		cdLocal()
+	}
+	version := flag.Bool("version", false, "Prints current proxy version")
 	resolve := flag.String("resolve", "", "resolve a name using system libraries")
 	list := flag.Bool("list", false, "print the list of available resolvers for the enabled filters")
 	listAll := flag.Bool("list-all", false, "print the complete list of available resolvers, ignoring filters")
@@ -141,6 +145,7 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 	if _, err := toml.DecodeFile(*configFile, &config); err != nil {
 		return err
 	}
+	cdFileDir(*configFile)
 	if config.LogLevel >= 0 && config.LogLevel < int(dlog.SeverityLast) {
 		dlog.SetLogLevel(dlog.Severity(config.LogLevel))
 	}
@@ -383,4 +388,17 @@ func includesName(names []string, name string) bool {
 		}
 	}
 	return false
+}
+
+func cdFileDir(fileName string) {
+	os.Chdir(filepath.Dir(fileName))
+}
+
+func cdLocal() {
+	exeFileName, err := os.Executable()
+	if err != nil {
+		dlog.Warnf("Unable to determine the executable directory: [%s] -- You will need to specify absolute paths in the configuration file", err)
+		return
+	}
+	os.Chdir(filepath.Dir(exeFileName))
 }
