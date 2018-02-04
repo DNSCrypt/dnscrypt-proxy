@@ -85,15 +85,15 @@ func NewServerStampFromString(stampStr string) (ServerStamp, error) {
 
 func newDNSCryptServerStamp(bin []byte) (ServerStamp, error) {
 	stamp := ServerStamp{proto: StampProtoTypeDNSCrypt}
-	if len(bin) < 24 {
-		return stamp, errors.New("Stamp is too short")
+	if len(bin) < 66 {
+		return stamp, fmt.Errorf("Stamp is too short", bin)
 	}
 	stamp.props = ServerInformalProperties(binary.LittleEndian.Uint64(bin[1:9]))
 	binLen := len(bin)
 	pos := 9
 
 	len := int(bin[pos])
-	if len >= binLen-pos {
+	if 1+len >= binLen-pos {
 		return stamp, errors.New("Invalid stamp")
 	}
 	pos++
@@ -104,7 +104,7 @@ func newDNSCryptServerStamp(bin []byte) (ServerStamp, error) {
 	}
 
 	len = int(bin[pos])
-	if len >= binLen-pos {
+	if 1+len >= binLen-pos {
 		return stamp, errors.New("Invalid stamp")
 	}
 	pos++
@@ -129,13 +129,15 @@ func newDNSCryptServerStamp(bin []byte) (ServerStamp, error) {
 
 func newDoHServerStamp(bin []byte) (ServerStamp, error) {
 	stamp := ServerStamp{proto: StampProtoTypeDoH, hashes: [][]byte{}}
-
+	if len(bin) < 22 {
+		return stamp, fmt.Errorf("Stamp is too short", bin)
+	}
 	stamp.props = ServerInformalProperties(binary.LittleEndian.Uint64(bin[1:9]))
 	binLen := len(bin)
 	pos := 9
 
 	len := int(bin[pos])
-	if len >= binLen-pos {
+	if 1+len >= binLen-pos {
 		return stamp, errors.New("Invalid stamp")
 	}
 	pos++
@@ -148,7 +150,7 @@ func newDoHServerStamp(bin []byte) (ServerStamp, error) {
 	for {
 		vlen := int(bin[pos])
 		len = vlen & ^0x80
-		if len >= binLen-pos {
+		if 1+len >= binLen-pos {
 			return stamp, errors.New("Invalid stamp")
 		}
 		pos++
@@ -160,7 +162,7 @@ func newDoHServerStamp(bin []byte) (ServerStamp, error) {
 	}
 
 	len = int(bin[pos])
-	if len >= binLen-pos {
+	if 1+len >= binLen-pos {
 		return stamp, errors.New("Invalid stamp")
 	}
 	pos++
