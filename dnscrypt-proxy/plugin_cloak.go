@@ -23,6 +23,7 @@ type CloakedName struct {
 type PluginCloak struct {
 	sync.RWMutex
 	cloakedNames map[string]*CloakedName
+	ttl          uint32
 }
 
 func (plugin *PluginCloak) Name() string {
@@ -39,6 +40,7 @@ func (plugin *PluginCloak) Init(proxy *Proxy) error {
 	if err != nil {
 		return err
 	}
+	plugin.ttl = proxy.cacheMinTTL
 	plugin.cloakedNames = make(map[string]*CloakedName)
 	for lineNo, line := range strings.Split(string(bin), "\n") {
 		line = strings.TrimFunc(line, unicode.IsSpace)
@@ -99,18 +101,30 @@ func (plugin *PluginCloak) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 	if len(qName) < 2 {
 		return nil
 	}
+	now := time.Now()
 	plugin.RLock()
 	cloakedName, _ := plugin.cloakedNames[qName]
-	plugin.RUnlock()
 	if cloakedName == nil {
+		plugin.RUnlock()
 		return nil
 	}
-	if cloakedName.ipv4 == nil && cloakedName.ipv6 == nil && !cloakedName.isIP {
-		foundIPs, err := net.LookupIP(cloakedName.target)
+	ttl, expired := plugin.ttl, false
+	if cloakedName.lastUpdate != nil {
+		if elapsed := uint32(now.Sub(*cloakedName.lastUpdate).Seconds()); elapsed < ttl {
+			ttl -= elapsed
+		} else {
+			expired = true
+		}
+	}
+	if !cloakedName.isIP && ((cloakedName.ipv4 == nil && cloakedName.ipv6 == nil) || expired) {
+		target := cloakedName.target
+		plugin.RUnlock()
+		foundIPs, err := net.LookupIP(target)
 		if err != nil {
 			return nil
 		}
 		plugin.Lock()
+		cloakedName.lastUpdate = &now
 		for _, foundIP := range foundIPs {
 			if ipv4 := foundIP.To4(); ipv4 != nil {
 				cloakedName.ipv4 = &ipv4
@@ -122,6 +136,8 @@ func (plugin *PluginCloak) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 			}
 		}
 		plugin.Unlock()
+	} else {
+		plugin.RUnlock()
 	}
 	var ip *net.IP
 	if question.Qtype == dns.TypeA {
@@ -137,12 +153,12 @@ func (plugin *PluginCloak) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 		synth.Answer = []dns.RR{}
 	} else if question.Qtype == dns.TypeA {
 		rr := new(dns.A)
-		rr.Hdr = dns.RR_Header{Name: question.Name, Rrtype: dns.TypeA, Class: dns.ClassINET, Ttl: 1}
+		rr.Hdr = dns.RR_Header{Name: question.Name, Rrtype: dns.TypeA, Class: dns.ClassINET, Ttl: ttl}
 		rr.A = *ip
 		synth.Answer = []dns.RR{rr}
 	} else {
 		rr := new(dns.AAAA)
-		rr.Hdr = dns.RR_Header{Name: question.Name, Rrtype: dns.TypeAAAA, Class: dns.ClassINET, Ttl: 1}
+		rr.Hdr = dns.RR_Header{Name: question.Name, Rrtype: dns.TypeAAAA, Class: dns.ClassINET, Ttl: ttl}
 		rr.AAAA = *ip
 		synth.Answer = []dns.RR{rr}
 	}
