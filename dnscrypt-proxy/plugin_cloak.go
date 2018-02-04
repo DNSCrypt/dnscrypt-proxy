@@ -111,7 +111,7 @@ func (plugin *PluginCloak) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 	} else {
 		ip = cloakedName.ipv6
 	}
-	if !cloakedName.isIP {
+	if ip == nil && !cloakedName.isIP {
 		foundIPs, err := net.LookupIP(cloakedName.target)
 		if err != nil {
 			return nil
