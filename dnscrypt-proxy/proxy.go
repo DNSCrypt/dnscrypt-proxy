@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/jedisct1/dlog"
+	"github.com/pquerna/cachecontrol/cacheobject"
 	"golang.org/x/crypto/curve25519"
 )
 
@@ -334,23 +335,16 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 }
 
 func ttlFromHTTPResponse(proxy *Proxy, resp *http.Response) *uint32 {
-	expiresStr, dateStr := resp.Header.Get("Expires"), resp.Header.Get("Date")
-	if len(expiresStr) == 0 || len(dateStr) == 0 {
+	cacheControlStr := resp.Header.Get("Cache-Control")
+	if len(cacheControlStr) == 0 {
 		return nil
 	}
-	expires, err := http.ParseTime(expiresStr)
+	cacheControl, err := cacheobject.ParseResponseCacheControl(cacheControlStr)
 	if err != nil {
 		return nil
 	}
-	date, err := http.ParseTime(dateStr)
-	if err != nil {
-		return nil
-	}
-	if !expires.After(date) {
-		return nil
-	}
-	foundTTL := uint32(expires.Sub(date).Seconds())
-	if foundTTL < proxy.cacheMaxTTL {
+	foundTTL := uint32(cacheControl.MaxAge)
+	if foundTTL < proxy.cacheMinTTL {
 		foundTTL = proxy.cacheMinTTL
 	}
 	if foundTTL > proxy.cacheMaxTTL {
