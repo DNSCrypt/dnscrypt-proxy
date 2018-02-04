@@ -1,6 +1,7 @@
 package main
 
 import (
+	"io"
 	"io/ioutil"
 	"math/rand"
 	"net"
@@ -282,7 +283,7 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 			if err != nil {
 				return
 			}
-			response, err = ioutil.ReadAll(resp.Body)
+			response, err = ioutil.ReadAll(io.LimitReader(resp.Body, int64(MaxDNSPacketSize)))
 			if err != nil {
 				return
 			}

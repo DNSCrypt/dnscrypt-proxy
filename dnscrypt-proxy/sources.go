@@ -4,6 +4,7 @@ import (
 	"encoding/csv"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -90,7 +91,7 @@ func fetchWithCache(xTransport *XTransport, urlStr string, cacheFile string) (in
 		return
 	}
 	var bin []byte
-	bin, err = ioutil.ReadAll(resp.Body)
+	bin, err = ioutil.ReadAll(io.LimitReader(resp.Body, MaxHTTPBodyLength))
 	resp.Body.Close()
 	if err != nil {
 		return
