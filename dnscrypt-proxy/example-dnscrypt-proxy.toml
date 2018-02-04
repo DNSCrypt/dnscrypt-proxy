@@ -134,12 +134,13 @@ block_ipv6 = false
 #        Cloaking rules       #
 ###############################
 
-## Cloaking returns a predefined IP address for a specific name
-## It can also resolve a different name, and return the address found for that other name
+## Cloaking returns a predefined address for a specific name.
+## In addition to acting as a HOSTS file, it can also return the IP address
+## of a different name. It will also do CNAME flattening.
 ##
 ## Example map entries (one entry per line)
-## example.com 1.1.1.1
-## google.com  forcesafesearch.google.com
+## example.com     10.1.1.1
+## www.google.com  forcesafesearch.google.com
 
 # cloaking_rules = 'cloaking-rules.txt'
 
