@@ -148,7 +148,7 @@ func (pluginsState *PluginsState) ApplyQueryPlugins(pluginsGlobals *PluginsGloba
 	return packet2, nil
 }
 
-func (pluginsState *PluginsState) ApplyResponsePlugins(pluginsGlobals *PluginsGlobals, packet []byte) ([]byte, error) {
+func (pluginsState *PluginsState) ApplyResponsePlugins(pluginsGlobals *PluginsGlobals, packet []byte, ttl *uint32) ([]byte, error) {
 	if len(*pluginsGlobals.responsePlugins) == 0 {
 		return packet, nil
 	}
@@ -177,6 +177,9 @@ func (pluginsState *PluginsState) ApplyResponsePlugins(pluginsGlobals *PluginsGl
 		}
 	}
 	pluginsGlobals.RUnlock()
+	if ttl != nil {
+		setMaxTTL(&msg, *ttl)
+	}
 	packet2, err := msg.PackBuffer(packet)
 	if err != nil {
 		return packet, err

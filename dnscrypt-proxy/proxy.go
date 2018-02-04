@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"net"
+	"net/http"
 	"sync/atomic"
 	"time"
 
@@ -263,6 +264,7 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 		}
 	}
 	if len(response) == 0 {
+		var ttl *uint32
 		if serverInfo.Proto == StampProtoTypeDNSCrypt {
 			encryptedQuery, clientNonce, err := proxy.Encrypt(serverInfo, query, serverProto)
 			if err != nil {
@@ -293,6 +295,7 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 			if len(response) >= MinDNSPacketSize {
 				SetTransactionID(response, tid)
 			}
+			ttl = ttlFromHTTPResponse(proxy, resp)
 		} else {
 			dlog.Fatal("Unsupported protocol")
 		}
@@ -300,7 +303,7 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 			serverInfo.noticeFailure(proxy)
 			return
 		}
-		response, _ = pluginsState.ApplyResponsePlugins(&proxy.pluginsGlobals, response)
+		response, _ = pluginsState.ApplyResponsePlugins(&proxy.pluginsGlobals, response, ttl)
 	}
 	if len(response) < MinDNSPacketSize || len(response) > MaxDNSPacketSize {
 		serverInfo.noticeFailure(proxy)
@@ -328,4 +331,30 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 		clientPc.Write(response)
 	}
 	serverInfo.noticeSuccess(proxy)
+}
+
+func ttlFromHTTPResponse(proxy *Proxy, resp *http.Response) *uint32 {
+	expiresStr, dateStr := resp.Header.Get("Expires"), resp.Header.Get("Date")
+	if len(expiresStr) == 0 || len(dateStr) == 0 {
+		return nil
+	}
+	expires, err := http.ParseTime(expiresStr)
+	if err != nil {
+		return nil
+	}
+	date, err := http.ParseTime(dateStr)
+	if err != nil {
+		return nil
+	}
+	if !expires.After(date) {
+		return nil
+	}
+	foundTTL := uint32(expires.Sub(date).Seconds())
+	if foundTTL < proxy.cacheMaxTTL {
+		foundTTL = proxy.cacheMinTTL
+	}
+	if foundTTL > proxy.cacheMaxTTL {
+		foundTTL = proxy.cacheMaxTTL
+	}
+	return &foundTTL
 }
