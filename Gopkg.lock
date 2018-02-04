@@ -32,13 +32,22 @@
   revision = "6cf43fdfd7a228cf3003ae23d10ddbf65e85997b"
 
 [[projects]]
+  branch = "master"
+  name = "github.com/agl/ed25519"
+  packages = [
+    ".",
+    "edwards25519"
+  ]
+  revision = "5312a61534124124185d41f09206b9fef1d88403"
+
+[[projects]]
   name = "github.com/coreos/go-systemd"
   packages = [
     "activation",
     "daemon"
   ]
-  revision = "d2196463941895ee908e13531a23a39feb9e1243"
-  version = "v15"
+  revision = "40e2722dffead74698ca12a750f64ef313ddce05"
+  version = "v16"
 
 [[projects]]
   branch = "master"
@@ -105,6 +114,12 @@
 
 [[projects]]
   branch = "master"
+  name = "github.com/pquerna/cachecontrol"
+  packages = ["cacheobject"]
+  revision = "0dec1b30a0215bb68605dfc568e8855066c9202d"
+
+[[projects]]
+  branch = "master"
   name = "golang.org/x/crypto"
   packages = [
     "curve25519",
@@ -144,6 +159,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "7b78a3bd9d050e52892939c38491c43a50dcbd851b990fa570439be12a1bd8d2"
+  inputs-digest = "8cae66c7ccdf2b62925b458f82a9c9855db9106c0ffe6d022b65fa0e4387a0c9"
   solver-name = "gps-cdcl"
   solver-version = 1

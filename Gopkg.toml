@@ -11,8 +11,12 @@
   name = "github.com/VividCortex/godaemon"
 
 [[constraint]]
+  branch = "master"
+  name = "github.com/agl/ed25519"
+
+[[constraint]]
   name = "github.com/coreos/go-systemd"
-  version = "15.0.0"
+  version = "16.0.0"
 
 [[constraint]]
   branch = "master"
@@ -45,6 +49,10 @@
 [[constraint]]
   name = "github.com/miekg/dns"
   version = "1.0.4"
+
+[[constraint]]
+  branch = "master"
+  name = "github.com/pquerna/cachecontrol"
 
 [[constraint]]
   branch = "master"
