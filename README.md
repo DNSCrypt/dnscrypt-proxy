@@ -4,13 +4,26 @@
 
 A flexible DNS proxy, with support for modern encrypted DNS protocols such as [DNSCrypt v2](https://github.com/DNSCrypt/dnscrypt-protocol/blob/master/DNSCRYPT-V2-PROTOCOL.txt) and [DNS-over-HTTP/2](https://datatracker.ietf.org/wg/doh/about/).
 
-## [dnscrypt-proxy 2.0.0rc2 is available for download!](https://github.com/jedisct1/dnscrypt-proxy/releases/latest)
+## [dnscrypt-proxy 2.0.0rc3 is available for download!](https://github.com/jedisct1/dnscrypt-proxy/releases/latest)
 
 ## [Documentation](https://github.com/jedisct1/dnscrypt-proxy/wiki/)
 
-## Current status/features
+## Features
 
-The current 2.0.0 release candidate includes all the major features from dnscrypt-proxy 1.9.5 (support for dnscrypt v2, synthetic IPv6 responses, logging, blocking, forwarding and caching), with improved reliability, flexibility, usability and performance.
+* DNS traffic encryption and authentication. Supports DNS-over-HTTPS (DoH) and DNSCrypt.
+* DNSSEC compatible
+* DNS query monitoring, with separate log files for regular and suspicious queries
+* Pattern-based local blocking of DNS names and IP addresses
+* Time-based filtering, with a flexible weekly schedule
+* Transparent redirection of specific domains to specific resolvers
+* DNS caching, to reduce latency and improve privacy
+* Local IPv6 blocking to reduce latency on IPv4-only networks
+* Load balancing: pick a set of resolvers, dnscrypt-proxy will automatically measure and keep track of their speed, and balance the traffic across the fastest available ones.
+* Cloaking: like a `HOSTS` file on steroids, that can return preconfigured addresses for specific names, or resolve and return the IP address of other names. This can be used for local development as well as to enforce safe search results on Google, Yahoo and Bing.
+* Automatic background updates of resolvers lists
+* Can force outgoing connections to use TCP; useful with tunnels such as Tor.
+
+It includes all the major features from dnscrypt-proxy 1.9.5, with improved reliability, flexibility, usability and performance.
 
 ## Pre-built binaries
 
