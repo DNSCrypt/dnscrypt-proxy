@@ -105,13 +105,7 @@ func (plugin *PluginCloak) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 	if cloakedName == nil {
 		return nil
 	}
-	var ip *net.IP
-	if question.Qtype == dns.TypeA {
-		ip = cloakedName.ipv4
-	} else {
-		ip = cloakedName.ipv6
-	}
-	if ip == nil && !cloakedName.isIP {
+	if cloakedName.ipv4 == nil && cloakedName.ipv6 == nil && !cloakedName.isIP {
 		foundIPs, err := net.LookupIP(cloakedName.target)
 		if err != nil {
 			return nil
@@ -128,20 +122,20 @@ func (plugin *PluginCloak) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 			}
 		}
 		plugin.Unlock()
-		if question.Qtype == dns.TypeA {
-			ip = cloakedName.ipv4
-		} else {
-			ip = cloakedName.ipv6
-		}
 	}
-	if ip == nil {
-		return nil
+	var ip *net.IP
+	if question.Qtype == dns.TypeA {
+		ip = cloakedName.ipv4
+	} else {
+		ip = cloakedName.ipv6
 	}
 	synth, err := EmptyResponseFromMessage(msg)
 	if err != nil {
 		return err
 	}
-	if question.Qtype == dns.TypeA {
+	if ip == nil {
+		synth.Answer = []dns.RR{}
+	} else if question.Qtype == dns.TypeA {
 		rr := new(dns.A)
 		rr.Hdr = dns.RR_Header{Name: question.Name, Rrtype: dns.TypeA, Class: dns.ClassINET, Ttl: 1}
 		rr.A = *ip
