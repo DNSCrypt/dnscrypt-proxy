@@ -352,3 +352,9 @@ func ttlFromHTTPResponse(proxy *Proxy, resp *http.Response) *uint32 {
 	}
 	return &foundTTL
 }
+
+func NewProxy() Proxy {
+	return Proxy{
+		serversInfo: ServersInfo{lbStrategy: DefaultLBStrategy},
+	}
+}

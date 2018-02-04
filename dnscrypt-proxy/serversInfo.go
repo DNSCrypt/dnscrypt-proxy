@@ -56,10 +56,23 @@ type ServerInfo struct {
 	initialRtt         int
 }
 
+type LBStrategy int
+
+const (
+	LBStrategyNone = LBStrategy(iota)
+	LBStrategyP2
+	LBStrategyPH
+	LBStrategyFastest
+	LBStrategyRandom
+)
+
+const DefaultLBStrategy = LBStrategyP2
+
 type ServersInfo struct {
 	sync.RWMutex
 	inner             []ServerInfo
 	registeredServers []RegisteredServer
+	lbStrategy        LBStrategy
 }
 
 func (serversInfo *ServersInfo) registerServer(proxy *Proxy, name string, stamp ServerStamp) error {
@@ -155,7 +168,16 @@ func (serversInfo *ServersInfo) getOne() *ServerInfo {
 	if serversInfo.inner[candidate].rtt.Value() < serversInfo.inner[0].rtt.Value() {
 		serversInfo.inner[candidate], serversInfo.inner[0] = serversInfo.inner[0], serversInfo.inner[candidate]
 	}
-	candidate = rand.Intn(Max(Min(serversCount, 2), len(serversInfo.inner)))
+	switch serversInfo.lbStrategy {
+	case LBStrategyFastest:
+		candidate = 0
+	case LBStrategyPH:
+		candidate = rand.Intn(Min(Min(serversCount, 2), len(serversInfo.inner)/2))
+	case LBStrategyRandom:
+		candidate = rand.Intn(len(serversInfo.inner))
+	default:
+		candidate = rand.Intn(Min(Min(serversCount, 2), len(serversInfo.inner)))
+	}
 	serverInfo := &serversInfo.inner[candidate]
 	return serverInfo
 }
