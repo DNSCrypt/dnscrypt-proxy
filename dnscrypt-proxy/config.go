@@ -22,11 +22,12 @@ type Config struct {
 	ServerNames           []string `toml:"server_names"`
 	ListenAddresses       []string `toml:"listen_addresses"`
 	Daemonize             bool
-	ForceTCP              bool `toml:"force_tcp"`
-	Timeout               int  `toml:"timeout_ms"`
-	CertRefreshDelay      int  `toml:"cert_refresh_delay"`
-	CertIgnoreTimestamp   bool `toml:"cert_ignore_timestamp"`
-	BlockIPv6             bool `toml:"block_ipv6"`
+	ForceTCP              bool   `toml:"force_tcp"`
+	Timeout               int    `toml:"timeout_ms"`
+	CertRefreshDelay      int    `toml:"cert_refresh_delay"`
+	CertIgnoreTimestamp   bool   `toml:"cert_ignore_timestamp"`
+	LBStrategy            string `toml:"lb_strategy"`
+	BlockIPv6             bool   `toml:"block_ipv6"`
 	Cache                 bool
 	CacheSize             int                        `toml:"cache_size"`
 	CacheNegTTL           uint32                     `toml:"cache_neg_ttl"`
@@ -174,6 +175,22 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 	if len(config.ListenAddresses) == 0 {
 		dlog.Debug("No local IP/port configured")
 	}
+
+	lbStrategy := DefaultLBStrategy
+	switch strings.ToLower(config.LBStrategy) {
+	case "p2":
+		lbStrategy = LBStrategyP2
+	case "ph":
+		lbStrategy = LBStrategyPH
+	case "fastest":
+		lbStrategy = LBStrategyFastest
+	case "random":
+		lbStrategy = LBStrategyRandom
+	default:
+		dlog.Warnf("Unknown load balancing strategy: [%s]", config.LBStrategy)
+	}
+	proxy.serversInfo.lbStrategy = lbStrategy
+
 	proxy.listenAddresses = config.ListenAddresses
 	proxy.daemonize = config.Daemonize
 	proxy.pluginBlockIPv6 = config.BlockIPv6

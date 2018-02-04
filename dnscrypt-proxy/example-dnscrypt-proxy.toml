@@ -64,6 +64,15 @@ force_tcp = false
 timeout = 2500
 
 
+## Load-balancing strategy
+## 'p2' = power of two choices (default)
+## 'ph' = power of half the choices
+## 'fastest' = only use the fastest server
+## 'random' = uniform distribution across all available resolvers
+
+# lb_strategy = 'p2'
+
+
 ## Log level (0-6, default: 2 - 0 is very verbose, 6 only contains fatal errors)
 
 # log_level = 2
