@@ -37,6 +37,7 @@ type Config struct {
 	BlockName             BlockNameConfig            `toml:"blacklist"`
 	BlockIP               BlockIPConfig              `toml:"ip_blacklist"`
 	ForwardFile           string                     `toml:"forwarding_rules"`
+	CloakFile             string                     `toml:"cloaking_rules"`
 	ServersConfig         map[string]StaticConfig    `toml:"static"`
 	SourcesConfig         map[string]SourceConfig    `toml:"sources"`
 	SourceRequireDNSSEC   bool                       `toml:"require_dnssec"`
@@ -230,6 +231,7 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 	proxy.blockIPLogFile = config.BlockIP.LogFile
 
 	proxy.forwardFile = config.ForwardFile
+	proxy.cloakFile = config.CloakFile
 
 	allWeeklyRanges, err := ParseAllWeeklyRanges(config.AllWeeklyRanges)
 	if err != nil {

@@ -130,6 +130,21 @@ block_ipv6 = false
 
 
 
+###############################
+#        Cloaking rules       #
+###############################
+
+## Cloaking returns a predefined IP address for a specific name
+## It can also resolve a different name, and return the address found for that other name
+##
+## Example map entries (one entry per line)
+## example.com 1.1.1.1
+## google.com  forcesafesearch.google.com
+
+# cloaking_rules = 'cloaking-rules.txt'
+
+
+
 ###########################
 #        DNS cache        #
 ###########################

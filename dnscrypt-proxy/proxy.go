@@ -42,6 +42,7 @@ type Proxy struct {
 	blockIPLogFile               string
 	blockIPFormat                string
 	forwardFile                  string
+	cloakFile                    string
 	pluginsGlobals               PluginsGlobals
 	urlsToPrefetch               []URLToPrefetch
 	clientsCount                 uint32
