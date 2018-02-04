@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/binary"
 	"strings"
 	"time"
 
@@ -41,6 +42,14 @@ func RefusedResponseFromMessage(srcMsg *dns.Msg) (*dns.Msg, error) {
 
 func HasTCFlag(packet []byte) bool {
 	return packet[2]&2 == 2
+}
+
+func TransactionID(packet []byte) uint16 {
+	return binary.BigEndian.Uint16(packet[0:2])
+}
+
+func SetTransactionID(packet []byte, tid uint16) {
+	binary.BigEndian.PutUint16(packet[0:2], tid)
 }
 
 func NormalizeName(name *[]byte) {

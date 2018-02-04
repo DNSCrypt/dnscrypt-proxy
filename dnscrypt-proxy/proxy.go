@@ -279,13 +279,19 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 				return
 			}
 		} else if serverInfo.Proto == StampProtoTypeDoH {
+			tid := TransactionID(query)
+			SetTransactionID(query, 0)
 			resp, _, err := proxy.xTransport.Post(serverInfo.URL, "application/dns-udpwireformat", "application/dns-udpwireformat", query, proxy.timeout)
+			SetTransactionID(query, tid)
 			if err != nil {
 				return
 			}
 			response, err = ioutil.ReadAll(io.LimitReader(resp.Body, int64(MaxDNSPacketSize)))
 			if err != nil {
 				return
+			}
+			if len(response) >= MinDNSPacketSize {
+				SetTransactionID(response, tid)
 			}
 		} else {
 			dlog.Fatal("Unsupported protocol")

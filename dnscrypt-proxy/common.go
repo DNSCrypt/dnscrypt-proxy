@@ -59,6 +59,9 @@ func ReadPrefixed(conn *net.TCPConn) ([]byte, error) {
 			if packetLength > MaxDNSPacketSize-1 {
 				return buf, errors.New("Packet too large")
 			}
+			if packetLength < MinDNSPacketSize {
+				return buf, errors.New("Packet too short")
+			}
 		}
 		if pos >= 2+packetLength {
 			return buf[2:pos], nil
