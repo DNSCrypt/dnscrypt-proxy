@@ -232,6 +232,7 @@ func (proxy *Proxy) clientsCountInc() bool {
 			return false
 		}
 		if atomic.CompareAndSwapUint32(&proxy.clientsCount, count, count+1) {
+			dlog.Debugf("clients count: %d", count+1)
 			return true
 		}
 	}

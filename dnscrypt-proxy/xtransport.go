@@ -34,6 +34,8 @@ type XTransport struct {
 	ignoreSystemDNS  bool
 }
 
+var IdleConnTimeout = 5 * time.Second
+
 func NewXTransport(timeout time.Duration) *XTransport {
 	xTransport := XTransport{
 		cachedIPs:        CachedIPs{cache: make(map[string]string)},
@@ -41,12 +43,22 @@ func NewXTransport(timeout time.Duration) *XTransport {
 		fallbackResolver: DefaultFallbackResolver,
 		ignoreSystemDNS:  false,
 	}
+	xTransport.rebuildTransport()
+	return &xTransport
+}
+
+func (xTransport *XTransport) rebuildTransport() {
+	dlog.Debug("Rebuilding transport")
+	if xTransport.transport != nil {
+		(*xTransport.transport).CloseIdleConnections()
+	}
+	timeout := xTransport.timeout
 	dialer := &net.Dialer{Timeout: timeout, KeepAlive: timeout, DualStack: true}
 	transport := &http.Transport{
 		DisableKeepAlives:      false,
 		DisableCompression:     true,
 		MaxIdleConns:           1,
-		IdleConnTimeout:        timeout,
+		IdleConnTimeout:        IdleConnTimeout,
 		ResponseHeaderTimeout:  timeout,
 		ExpectContinueTimeout:  timeout,
 		MaxResponseHeaderBytes: 4096,
@@ -66,7 +78,6 @@ func NewXTransport(timeout time.Duration) *XTransport {
 		},
 	}
 	xTransport.transport = transport
-	return &xTransport
 }
 
 func (xTransport *XTransport) Fetch(method string, url *url.URL, accept string, contentType string, body *io.ReadCloser, timeout time.Duration) (*http.Response, time.Duration, error) {
@@ -96,8 +107,9 @@ func (xTransport *XTransport) Fetch(method string, url *url.URL, accept string, 
 	cachedIP := xTransport.cachedIPs.cache[host]
 	xTransport.cachedIPs.RUnlock()
 	if !xTransport.ignoreSystemDNS || len(cachedIP) > 0 {
+		var resp *http.Response
 		start := time.Now()
-		resp, err := client.Do(req)
+		resp, err = client.Do(req)
 		rtt := time.Since(start)
 		if err == nil {
 			if resp == nil {
@@ -106,6 +118,8 @@ func (xTransport *XTransport) Fetch(method string, url *url.URL, accept string, 
 				err = fmt.Errorf("Webserver returned code %d", resp.StatusCode)
 			}
 			return resp, rtt, err
+		} else {
+			(*xTransport.transport).CloseIdleConnections()
 		}
 		dlog.Debugf("[%s]: [%s]", req.URL, err)
 	} else {
@@ -146,6 +160,8 @@ func (xTransport *XTransport) Fetch(method string, url *url.URL, accept string, 
 		} else if resp.StatusCode < 200 || resp.StatusCode > 299 {
 			err = fmt.Errorf("Webserver returned code %d", resp.StatusCode)
 		}
+	} else {
+		(*xTransport.transport).CloseIdleConnections()
 	}
 	if err != nil {
 		dlog.Debugf("[%s]: [%s]", req.URL, err)
