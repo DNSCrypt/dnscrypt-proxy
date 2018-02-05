@@ -178,6 +178,8 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 
 	lbStrategy := DefaultLBStrategy
 	switch strings.ToLower(config.LBStrategy) {
+	case "":
+		// default
 	case "p2":
 		lbStrategy = LBStrategyP2
 	case "ph":
