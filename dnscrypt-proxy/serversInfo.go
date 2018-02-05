@@ -10,6 +10,7 @@ import (
 	"math/rand"
 	"net"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -260,11 +261,16 @@ func (serversInfo *ServersInfo) fetchDoHServerInfo(proxy *Proxy, name string, st
 	if tls == nil || !tls.HandshakeComplete {
 		return ServerInfo{}, errors.New("TLS handshake failed")
 	}
+	showCerts := len(os.Getenv("SHOW_CERTS")) > 0
 	found := false
 	var wantedHash [32]byte
 	for _, cert := range tls.PeerCertificates {
 		h := sha256.Sum256(cert.RawTBSCertificate)
-		dlog.Debugf("Advertised cert: [%s] [%x]", cert.Subject, h)
+		if showCerts {
+			dlog.Infof("Advertised cert: [%s] [%x]", cert.Subject, h)
+		} else {
+			dlog.Debugf("Advertised cert: [%s] [%x]", cert.Subject, h)
+		}
 		for _, hash := range stamp.hashes {
 			if len(hash) == len(wantedHash) {
 				copy(wantedHash[:], hash)
