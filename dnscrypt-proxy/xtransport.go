@@ -166,7 +166,9 @@ func (xTransport *XTransport) DoHQuery(useGet bool, url *url.URL, body []byte, t
 	if useGet {
 		qs := url.Query()
 		qs.Add("ct", "")
-		qs.Add("body", base64.RawURLEncoding.EncodeToString(body))
+		encBody := base64.RawURLEncoding.EncodeToString(body)
+		qs.Add("body", encBody)
+		qs.Add("dns", encBody)
 		url2 := *url
 		url2.RawQuery = qs.Encode()
 		return xTransport.Get(&url2, dataType, timeout)
