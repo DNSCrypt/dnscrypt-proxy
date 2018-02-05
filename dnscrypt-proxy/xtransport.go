@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -152,11 +153,23 @@ func (xTransport *XTransport) Fetch(method string, url *url.URL, accept string, 
 	return resp, rtt, err
 }
 
-func (xTransport *XTransport) Get(url *url.URL, timeout time.Duration) (*http.Response, time.Duration, error) {
+func (xTransport *XTransport) Get(url *url.URL, accept string, timeout time.Duration) (*http.Response, time.Duration, error) {
 	return xTransport.Fetch("GET", url, "", "", nil, timeout)
 }
 
 func (xTransport *XTransport) Post(url *url.URL, accept string, contentType string, body []byte, timeout time.Duration) (*http.Response, time.Duration, error) {
 	bc := ioutil.NopCloser(bytes.NewReader(body))
 	return xTransport.Fetch("POST", url, accept, contentType, &bc, timeout)
+}
+func (xTransport *XTransport) DoHQuery(useGet bool, url *url.URL, body []byte, timeout time.Duration) (*http.Response, time.Duration, error) {
+	dataType := "application/dns-udpwireformat"
+	if useGet {
+		qs := url.Query()
+		qs.Add("ct", "")
+		qs.Add("body", base64.RawURLEncoding.EncodeToString(body))
+		url2 := *url
+		url2.RawQuery = qs.Encode()
+		return xTransport.Get(&url2, dataType, timeout)
+	}
+	return xTransport.Post(url, dataType, dataType, body, timeout)
 }

@@ -54,6 +54,7 @@ type ServerInfo struct {
 	lastActionTS       time.Time
 	rtt                ewma.MovingAverage
 	initialRtt         int
+	useGet             bool
 }
 
 type LBStrategy int
@@ -243,11 +244,15 @@ func (serversInfo *ServersInfo) fetchDoHServerInfo(proxy *Proxy, name string, st
 	body := []byte{
 		0xca, 0xfe, 0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x02, 0x00, 0x01, 0x00, 0x00, 0x29, 0x10, 0x00, 0x00, 0x00, 0x80, 0x00, 0x00, 0x00,
 	}
-	_, _, err := proxy.xTransport.Post(url, "application/dns-udpwireformat", "application/dns-udpwireformat", body, proxy.timeout)
-	if err != nil {
-		return ServerInfo{}, err
+	useGet := false
+	if _, _, err := proxy.xTransport.DoHQuery(useGet, url, body, proxy.timeout); err != nil {
+		useGet = true
+		if _, _, err := proxy.xTransport.DoHQuery(useGet, url, body, proxy.timeout); err != nil {
+			return ServerInfo{}, err
+		}
+		dlog.Debugf("Server [%s] doesn't appear to support POST; falling back to GET requests", name)
 	}
-	resp, rtt, err := proxy.xTransport.Post(url, "application/dns-udpwireformat", "application/dns-udpwireformat", body, proxy.timeout)
+	resp, rtt, err := proxy.xTransport.DoHQuery(useGet, url, body, proxy.timeout)
 	if err != nil {
 		return ServerInfo{}, err
 	}
@@ -297,6 +302,7 @@ func (serversInfo *ServersInfo) fetchDoHServerInfo(proxy *Proxy, name string, st
 		URL:        url,
 		HostName:   stamp.providerName,
 		initialRtt: int(rtt.Nanoseconds() / 1000000),
+		useGet:     useGet,
 	}
 	return serverInfo, nil
 }

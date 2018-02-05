@@ -284,7 +284,7 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 		} else if serverInfo.Proto == StampProtoTypeDoH {
 			tid := TransactionID(query)
 			SetTransactionID(query, 0)
-			resp, _, err := proxy.xTransport.Post(serverInfo.URL, "application/dns-udpwireformat", "application/dns-udpwireformat", query, proxy.timeout)
+			resp, _, err := proxy.xTransport.DoHQuery(serverInfo.useGet, serverInfo.URL, query, proxy.timeout)
 			SetTransactionID(query, tid)
 			if err != nil {
 				return

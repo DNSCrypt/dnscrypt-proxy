@@ -154,7 +154,9 @@ func newDoHServerStamp(bin []byte) (ServerStamp, error) {
 			return stamp, errors.New("Invalid stamp")
 		}
 		pos++
-		stamp.hashes = append(stamp.hashes, bin[pos:pos+len])
+		if len > 0 {
+			stamp.hashes = append(stamp.hashes, bin[pos:pos+len])
+		}
 		pos += len
 		if vlen&0x80 != 0x80 {
 			break
