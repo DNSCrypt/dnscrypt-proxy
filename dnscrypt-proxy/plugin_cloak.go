@@ -103,7 +103,7 @@ func (plugin *PluginCloak) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 	}
 	now := time.Now()
 	plugin.RLock()
-	cloakedName, _ := plugin.cloakedNames[qName]
+	cloakedName := plugin.cloakedNames[qName]
 	if cloakedName == nil {
 		plugin.RUnlock()
 		return nil
