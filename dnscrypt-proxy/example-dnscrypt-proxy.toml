@@ -41,6 +41,12 @@ ipv4_servers = true
 # Use servers reachable over IPv6 -- Do not enable if you don't have IPv6 connectivity
 ipv6_servers = false
 
+# Use servers implementing the DNSCrypt protocol
+dnscrypt_servers = true
+
+# Use servers implementing the DNS-over-HTTPS protocol
+doh_servers = true
+
 
 ## Require servers defined by remote sources to satisfy specific properties
 
@@ -52,6 +58,7 @@ require_nolog = true
 
 # Server must not enforce its own blacklist (for parental control, ads blocking...)
 require_nofilter = true
+
 
 
 ## Always use TCP to connect to upstream servers
