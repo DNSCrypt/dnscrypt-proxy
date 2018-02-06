@@ -41,7 +41,7 @@ func main() {
 	if err := ConfigLoad(&app.proxy, svcFlag); err != nil {
 		dlog.Fatal(err)
 	}
-	dlog.Noticef("Starting dnscrypt-proxy %s", AppVersion)
+	dlog.Noticef("dnscrypt-proxy %s", AppVersion)
 
 	if len(*svcFlag) != 0 {
 		if err := service.Control(svc, *svcFlag); err != nil {
