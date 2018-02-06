@@ -22,12 +22,18 @@ type globals struct {
 	systemLogger   *systemLogger
 	fileName       *string
 	outFd          *os.File
+	lastMessage    string
+	lastOccurrence time.Time
+	occurrences    uint64
 }
 
 var (
 	_globals = globals{
-		logLevel: SeverityLast,
-		appName:  "-",
+		logLevel:       SeverityLast,
+		appName:        "-",
+		lastMessage:    "",
+		lastOccurrence: time.Now(),
+		occurrences:    0,
 	}
 )
 
@@ -40,6 +46,11 @@ const (
 	SeverityCritical
 	SeverityFatal
 	SeverityLast
+)
+
+const (
+	FloodDelay      = 5 * time.Second
+	FloodMinRepeats = 3
 )
 
 var SeverityName = []string{
@@ -183,6 +194,18 @@ func logf(severity Severity, format string, args ...interface{}) {
 	}
 	_globals.Lock()
 	defer _globals.Unlock()
+	if _globals.lastMessage == message {
+		if time.Since(_globals.lastOccurrence) < FloodDelay {
+			_globals.occurrences++
+			if _globals.occurrences > FloodMinRepeats {
+				return
+			}
+		}
+	} else {
+		_globals.occurrences = 0
+		_globals.lastMessage = message
+	}
+	_globals.lastOccurrence = now
 	if *_globals.useSyslog && _globals.systemLogger == nil {
 		systemLogger, err := newSystemLogger(_globals.appName, _globals.syslogFacility)
 		if err == nil {

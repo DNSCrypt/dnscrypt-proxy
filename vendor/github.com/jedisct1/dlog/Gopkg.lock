@@ -15,11 +15,11 @@
     "windows/registry",
     "windows/svc/eventlog"
   ]
-  revision = "2c42eef0765b9837fbdab12011af7830f55f88f0"
+  revision = "37707fdb30a5b38865cfb95e5aab41707daec7fd"
 
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "7dd24393da8db7d16249fa8f14426fb6418a2cefca2045da212cf4f299a5a1f0"
+  inputs-digest = "328c0e201a8f9b84770fc7b0efb002f50e64da384499776e57cc1edb38b26a51"
   solver-name = "gps-cdcl"
   solver-version = 1
