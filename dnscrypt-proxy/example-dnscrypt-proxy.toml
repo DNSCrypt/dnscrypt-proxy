@@ -347,9 +347,6 @@ cache_neg_ttl = 60
 ## avoid collisions if different sources share the same for
 ## different servers. In that case, names listed in `server_names`
 ## must include the prefixes.
-##
-## A cache file can be specified without a URL in order to maintain lists
-## locally.
 
 [sources]
 
