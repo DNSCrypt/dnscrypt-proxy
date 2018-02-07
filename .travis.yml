@@ -13,9 +13,6 @@ script:
   - cd dnscrypt-proxy
 
   - go clean
-  - env GOOS=solaris go build -ldflags="-s -w"
-
-  - go clean
   - env GOOS=windows GOARCH=386 go build -ldflags="-s -w"
   - mkdir win32
   - ln dnscrypt-proxy.exe win32/
