@@ -70,6 +70,8 @@ func (plugin *PluginCacheResponse) Eval(pluginsState *PluginsState, msg *dns.Msg
 		}
 	}
 	plugin.cachedResponses.cache.Add(cacheKey, cachedResponse)
+
+	updateTTL(msg, cachedResponse.expiration)
 	return nil
 }
 
@@ -117,6 +119,9 @@ func (plugin *PluginCache) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 	if time.Now().After(cached.expiration) {
 		return nil
 	}
+
+	updateTTL(&cached.msg, cached.expiration)
+
 	synth := cached.msg
 	synth.Id = msg.Id
 	synth.Response = true
