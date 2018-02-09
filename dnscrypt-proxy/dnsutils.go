@@ -102,7 +102,6 @@ func setMaxTTL(msg *dns.Msg, ttl uint32) {
 }
 
 func updateTTL(msg *dns.Msg, expiration time.Time) {
-
 	ttl := uint32(time.Until(expiration) / time.Second)
 
 	for _, rr := range msg.Answer {
