@@ -83,7 +83,7 @@ func getMinTTL(msg *dns.Msg, minTTL uint32, maxTTL uint32, negCacheMinTTL uint32
 	return time.Duration(ttl) * time.Second
 }
 
-func setMaxTTL(msg *dns.Msg, ttl uint32, force bool) {
+func setMaxTTL(msg *dns.Msg, ttl uint32) {
 	for _, rr := range msg.Answer {
 		if ttl < rr.Header().Ttl {
 			rr.Header().Ttl = ttl
