@@ -70,8 +70,8 @@ func (plugin *PluginCacheResponse) Eval(pluginsState *PluginsState, msg *dns.Msg
 		}
 	}
 	plugin.cachedResponses.cache.Add(cacheKey, cachedResponse)
-
 	updateTTL(msg, cachedResponse.expiration)
+
 	return nil
 }
 
