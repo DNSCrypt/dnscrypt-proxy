@@ -178,7 +178,7 @@ func (pluginsState *PluginsState) ApplyResponsePlugins(pluginsGlobals *PluginsGl
 	}
 	pluginsGlobals.RUnlock()
 	if ttl != nil {
-		setMaxTTL(&msg, *ttl, false)
+		setMaxTTL(&msg, *ttl)
 	}
 	packet2, err := msg.PackBuffer(packet)
 	if err != nil {

@@ -85,22 +85,33 @@ func getMinTTL(msg *dns.Msg, minTTL uint32, maxTTL uint32, negCacheMinTTL uint32
 
 func setMaxTTL(msg *dns.Msg, ttl uint32, force bool) {
 	for _, rr := range msg.Answer {
-		if (ttl < rr.Header().Ttl) || force {
+		if ttl < rr.Header().Ttl {
 			rr.Header().Ttl = ttl
 		}
 	}
 	for _, rr := range msg.Ns {
-    if (ttl < rr.Header().Ttl) || force {
+	  if ttl < rr.Header().Ttl {
 			rr.Header().Ttl = ttl
 		}
 	}
 	for _, rr := range msg.Extra {
-    if (ttl < rr.Header().Ttl) || force {
+	  if ttl < rr.Header().Ttl {
 			rr.Header().Ttl = ttl
 		}
 	}
 }
 
 func updateTTL(msg *dns.Msg, expiration time.Time) {
-  setMaxTTL(msg, uint32(time.Until(expiration) / time.Second), true)
+
+	ttl := uint32(time.Until(expiration) / time.Second)
+
+	for _, rr := range msg.Answer {
+	    rr.Header().Ttl = ttl
+	}
+	for _, rr := range msg.Ns {
+	    rr.Header().Ttl = ttl
+	}
+	for _, rr := range msg.Extra {
+	    rr.Header().Ttl = ttl
+	}
 }
