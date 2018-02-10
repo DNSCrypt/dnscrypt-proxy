@@ -23,7 +23,7 @@ type Config struct {
 	ListenAddresses       []string `toml:"listen_addresses"`
 	Daemonize             bool
 	ForceTCP              bool   `toml:"force_tcp"`
-	Timeout               int    `toml:"timeout_ms"`
+	Timeout               int    `toml:"timeout"`
 	CertRefreshDelay      int    `toml:"cert_refresh_delay"`
 	CertIgnoreTimestamp   bool   `toml:"cert_ignore_timestamp"`
 	LBStrategy            string `toml:"lb_strategy"`
@@ -148,8 +148,13 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 		os.Exit(0)
 	}
 	config := newConfig()
-	if _, err := toml.DecodeFile(*configFile, &config); err != nil {
+	md, err := toml.DecodeFile(*configFile, &config)
+	if err != nil {
 		return err
+	}
+	undecoded := md.Undecoded()
+	if len(undecoded) > 0 {
+		return fmt.Errorf("Unsupported key in configuration file: [%s]", undecoded[0])
 	}
 	cdFileDir(*configFile)
 	if config.LogLevel >= 0 && config.LogLevel < int(dlog.SeverityLast) {
