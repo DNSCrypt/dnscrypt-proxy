@@ -44,7 +44,7 @@ def list_from_url(url):
         trusted = True
     response = None
     try:
-        response = urllib2.urlopen(req, timeout=10)
+        response = urllib2.urlopen(req, timeout=int(args.timeout))
     except urllib2.URLError as err:
         raise Exception("[{}] could not be loaded: {}\n".format(url, err))
     if trusted is False and response.getcode() != 200:
@@ -131,6 +131,8 @@ argp.add_argument("-w", "--whitelist", default="domains-whitelist.txt",
     help="file containing a set of names to exclude from the blacklist")
 argp.add_argument("-i", "--ignore-retrieval-failure", action='store_true',
     help="generate list even if some urls couldn't be retrieved")
+argp.add_argument("-t", "--timeout", default=10,
+    help="URL open timeout")
 args = argp.parse_args()
 
 conf = args.config
