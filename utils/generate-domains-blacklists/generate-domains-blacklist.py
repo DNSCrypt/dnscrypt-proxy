@@ -131,7 +131,7 @@ argp.add_argument("-w", "--whitelist", default="domains-whitelist.txt",
     help="file containing a set of names to exclude from the blacklist")
 argp.add_argument("-i", "--ignore-retrieval-failure", action='store_true',
     help="generate list even if some urls couldn't be retrieved")
-argp.add_argument("-t", "--timeout", default=10,
+argp.add_argument("-t", "--timeout", default=30,
     help="URL open timeout")
 args = argp.parse_args()
 
