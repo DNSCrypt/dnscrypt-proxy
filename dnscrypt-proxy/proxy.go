@@ -1,14 +1,15 @@
 package main
 
 import (
+	"crypto/rand"
 	"io"
 	"io/ioutil"
-	"math/rand"
 	"net"
 	"net/http"
 	"sync/atomic"
 	"time"
 
+	"github.com/cloudflare/p751sidh"
 	"github.com/jedisct1/dlog"
 	"github.com/pquerna/cachecontrol/cacheobject"
 	"golang.org/x/crypto/curve25519"
@@ -17,6 +18,8 @@ import (
 type Proxy struct {
 	proxyPublicKey               [32]byte
 	proxySecretKey               [32]byte
+	proxySIDHSecretKey           *p751sidh.SIDHSecretKeyAlice
+	proxySIDHPublicKey           [564]byte
 	questionSizeEstimator        QuestionSizeEstimator
 	serversInfo                  ServersInfo
 	timeout                      time.Duration
@@ -60,6 +63,9 @@ func (proxy *Proxy) StartProxy() {
 		dlog.Fatal(err)
 	}
 	curve25519.ScalarBaseMult(&proxy.proxyPublicKey, &proxy.proxySecretKey)
+	proxySIDHPublicKeyX, proxySIDHSecretKey, _ := p751sidh.GenerateAliceKeypair(rand.Reader)
+	proxy.proxySIDHSecretKey = proxySIDHSecretKey
+	proxySIDHPublicKeyX.ToBytes(proxy.proxySIDHPublicKey[:])
 	for _, registeredServer := range proxy.registeredServers {
 		proxy.serversInfo.registerServer(proxy, registeredServer.name, registeredServer.stamp)
 	}

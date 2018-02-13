@@ -57,3 +57,7 @@
 [[constraint]]
   branch = "master"
   name = "golang.org/x/crypto"
+
+[[constraint]]
+  name = "github.com/cloudflare/p751sidh"
+  version = "0.1.0"

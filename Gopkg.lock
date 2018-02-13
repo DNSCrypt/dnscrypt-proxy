@@ -41,6 +41,15 @@
   revision = "5312a61534124124185d41f09206b9fef1d88403"
 
 [[projects]]
+  name = "github.com/cloudflare/p751sidh"
+  packages = [
+    ".",
+    "p751toolbox"
+  ]
+  revision = "e730a9e871a31cefd3bef50915c5721f1c5d5319"
+  version = "0.1"
+
+[[projects]]
   name = "github.com/coreos/go-systemd"
   packages = [
     "activation",
@@ -159,6 +168,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "8cae66c7ccdf2b62925b458f82a9c9855db9106c0ffe6d022b65fa0e4387a0c9"
+  inputs-digest = "e2dc5bdef0a183bdd23fca263d0bab8575cd104c404e661bc7cd18e5e0942100"
   solver-name = "gps-cdcl"
   solver-version = 1

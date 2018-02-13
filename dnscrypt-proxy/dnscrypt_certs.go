@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cloudflare/p751sidh"
 	"github.com/jedisct1/dlog"
 	"github.com/jedisct1/xsecretbox"
 	"github.com/miekg/dns"
@@ -63,6 +64,8 @@ func FetchCurrentDNSCryptCert(proxy *Proxy, serverName *string, proto string, pk
 			cryptoConstruction = XSalsa20Poly1305
 		case 0x0002:
 			cryptoConstruction = XChacha20Poly1305
+		case 0x0003:
+			cryptoConstruction = SIDHXChacha20Poly1305
 		default:
 			dlog.Noticef("[%v] Unsupported crypto construction", providerName)
 			continue
@@ -117,22 +120,37 @@ func FetchCurrentDNSCryptCert(proxy *Proxy, serverName *string, proto string, pk
 			dlog.Noticef("[%v] Cryptographic construction %v not supported", providerName, cryptoConstruction)
 			continue
 		}
-		var serverPk [32]byte
-		copy(serverPk[:], binCert[72:104])
 		var sharedKey [32]byte
-		if cryptoConstruction == XChacha20Poly1305 {
-			sharedKey, err = xsecretbox.SharedKey(proxy.proxySecretKey, serverPk)
-			if err != nil {
-				dlog.Criticalf("[%v] Weak public key", providerName)
+		if cryptoConstruction == SIDHXChacha20Poly1305 {
+			if len(binCert) < 656 {
+				dlog.Warnf("[%v] Certificate too short", providerName)
 				continue
 			}
+			var serverPk [564]byte
+			copy(serverPk[:], binCert[72:636])
+			if cryptoConstruction == XChacha20Poly1305 {
+				var serverPkX p751sidh.SIDHPublicKeyBob
+				serverPkX.FromBytes(serverPk[:])
+				sharedKeyX := proxy.proxySIDHSecretKey.SharedSecret(&serverPkX)
+				copy(sharedKey[:], sharedKeyX[:32])
+			}
 		} else {
-			box.Precompute(&sharedKey, &serverPk, &proxy.proxySecretKey)
+			var serverPk [32]byte
+			copy(serverPk[:], binCert[72:104])
+			if cryptoConstruction == XChacha20Poly1305 {
+				sharedKey, err = xsecretbox.SharedKey(proxy.proxySecretKey, serverPk)
+				if err != nil {
+					dlog.Criticalf("[%v] Weak public key", providerName)
+					continue
+				}
+			} else {
+				box.Precompute(&sharedKey, &serverPk, &proxy.proxySecretKey)
+			}
+			copy(certInfo.ServerPk[:], serverPk[:])
 		}
 		certInfo.SharedKey = sharedKey
 		highestSerial = serial
 		certInfo.CryptoConstruction = cryptoConstruction
-		copy(certInfo.ServerPk[:], serverPk[:])
 		copy(certInfo.MagicQuery[:], binCert[104:112])
 		if isNew {
 			dlog.Noticef("[%s] OK (crypto v%d) - rtt: %dms", *serverName, cryptoConstruction, rtt.Nanoseconds()/1000000)

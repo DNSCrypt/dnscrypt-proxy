@@ -15,6 +15,7 @@ const (
 	UndefinedConstruction CryptoConstruction = iota
 	XSalsa20Poly1305
 	XChacha20Poly1305
+	SIDHXChacha20Poly1305    
 )
 
 const (

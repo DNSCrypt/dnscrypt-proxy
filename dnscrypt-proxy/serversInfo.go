@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/VividCortex/ewma"
+	"github.com/cloudflare/p751sidh"
 	"github.com/jedisct1/dlog"
 	"golang.org/x/crypto/ed25519"
 )
@@ -44,6 +45,7 @@ type ServerInfo struct {
 	Proto              StampProtoType
 	MagicQuery         [8]byte
 	ServerPk           [32]byte
+	ServerSIDHPk       *p751sidh.SIDHPublicKeyBob
 	SharedKey          [32]byte
 	CryptoConstruction CryptoConstruction
 	Name               string

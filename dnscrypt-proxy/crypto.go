@@ -57,10 +57,14 @@ func (proxy *Proxy) Encrypt(serverInfo *ServerInfo, packet []byte, proto string)
 		err = errors.New("Question too large; cannot be padded")
 		return
 	}
-	encrypted = append(serverInfo.MagicQuery[:], proxy.proxyPublicKey[:]...)
+	if serverInfo.CryptoConstruction == SIDHXChacha20Poly1305 {
+		encrypted = append(serverInfo.MagicQuery[:], proxy.proxySIDHPublicKey[:]...)
+	} else {
+		encrypted = append(serverInfo.MagicQuery[:], proxy.proxyPublicKey[:]...)
+	}
 	encrypted = append(encrypted, nonce[:HalfNonceSize]...)
 	padded := pad(packet, paddedLength-QueryOverhead)
-	if serverInfo.CryptoConstruction == XChacha20Poly1305 {
+	if serverInfo.CryptoConstruction == XChacha20Poly1305 || serverInfo.CryptoConstruction == SIDHXChacha20Poly1305 {
 		encrypted = xsecretbox.Seal(encrypted, nonce, padded, serverInfo.SharedKey[:])
 	} else {
 		var xsalsaNonce [24]byte
