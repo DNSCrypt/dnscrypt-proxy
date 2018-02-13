@@ -8,8 +8,6 @@ A flexible DNS proxy, with support for modern encrypted DNS protocols such as [D
 
 This branch implements an experimental version of the DNSCrypt protocol that adds support for post-quantum key exchange using Supersingular isogeny Diffie–Hellman.
 
-## [dnscrypt-proxy 2.0.0 final is available for download!](https://github.com/jedisct1/dnscrypt-proxy/releases/latest)
-
 ## [Documentation](https://dnscrypt.info/doc)
 
 ## Features
@@ -28,26 +26,3 @@ This branch implements an experimental version of the DNSCrypt protocol that add
 * Can force outgoing connections to use TCP; useful with tunnels such as Tor.
 
 It includes all the major features from dnscrypt-proxy 1.9.5, with improved reliability, flexibility, usability and performance.
-
-## Pre-built binaries
-
-Up-to-date, pre-built binaries are available for:
-
-* Dragonfly BSD
-* FreeBSD/x86
-* FreeBSD/x86_64
-* Linux/arm
-* Linux/arm64
-* Linux/mips
-* Linux/mipsle
-* Linux/mips64
-* Linux/mips64le
-* Linux/x86
-* Linux/x86_64
-* MacOS X
-* NetBSD/x86
-* NetBSD/x86_64
-* OpenBSD/x86
-* OpenBSD/x86_64
-* Windows
-* Windows 64 bit
