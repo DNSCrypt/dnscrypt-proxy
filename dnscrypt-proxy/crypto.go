@@ -88,7 +88,7 @@ func (proxy *Proxy) Decrypt(serverInfo *ServerInfo, encrypted []byte, nonce []by
 	}
 	var packet []byte
 	var err error
-	if serverInfo.CryptoConstruction == XChacha20Poly1305 {
+	if serverInfo.CryptoConstruction == XChacha20Poly1305 || serverInfo.CryptoConstruction == SIDHXChacha20Poly1305 {
 		packet, err = xsecretbox.Open(nil, serverNonce, encrypted[responseHeaderLen:], serverInfo.SharedKey[:])
 	} else {
 		var xsalsaServerNonce [24]byte

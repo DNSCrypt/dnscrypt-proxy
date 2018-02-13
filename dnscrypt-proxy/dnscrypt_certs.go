@@ -151,7 +151,11 @@ func FetchCurrentDNSCryptCert(proxy *Proxy, serverName *string, proto string, pk
 		certInfo.SharedKey = sharedKey
 		highestSerial = serial
 		certInfo.CryptoConstruction = cryptoConstruction
-		copy(certInfo.MagicQuery[:], binCert[104:112])
+		if cryptoConstruction == SIDHXChacha20Poly1305 {
+			copy(certInfo.MagicQuery[:], binCert[636:644])
+		} else {
+			copy(certInfo.MagicQuery[:], binCert[104:112])
+		}
 		if isNew {
 			dlog.Noticef("[%s] OK (crypto v%d) - rtt: %dms", *serverName, cryptoConstruction, rtt.Nanoseconds()/1000000)
 		} else {
