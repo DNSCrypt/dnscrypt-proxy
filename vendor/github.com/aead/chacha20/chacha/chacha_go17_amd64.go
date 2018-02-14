@@ -9,7 +9,7 @@ package chacha
 func init() {
 	useSSE2 = true
 	useSSSE3 = supportsSSSE3()
-	useAVX2 = supportsAVX2()
+	useAVX2 = supportsAVX2() && false // disable until #16 is fixed
 }
 
 // This function is implemented in chacha_amd64.s
@@ -53,7 +53,7 @@ func hChaCha20(out *[32]byte, nonce *[16]byte, key *[32]byte) {
 		hChaCha20AVX(out, nonce, key)
 	} else if useSSSE3 {
 		hChaCha20SSSE3(out, nonce, key)
-	} else if useSSE2 { // on amd64 this is  always true - neccessary for testing generic on amd64
+	} else if useSSE2 { // on amd64 this is  always true - necessary for testing generic on amd64
 		hChaCha20SSE2(out, nonce, key)
 	} else {
 		hChaCha20Generic(out, nonce, key)
@@ -65,7 +65,7 @@ func xorKeyStream(dst, src []byte, block, state *[64]byte, rounds int) int {
 		return xorKeyStreamAVX2(dst, src, block, state, rounds)
 	} else if useSSSE3 {
 		return xorKeyStreamSSSE3(dst, src, block, state, rounds)
-	} else if useSSE2 { // on amd64 this is  always true - neccessary for testing generic on amd64
+	} else if useSSE2 { // on amd64 this is  always true - necessary for testing generic on amd64
 		return xorKeyStreamSSE2(dst, src, block, state, rounds)
 	}
 	return xorKeyStreamGeneric(dst, src, block, state, rounds)

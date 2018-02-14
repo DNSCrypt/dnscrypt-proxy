@@ -49,8 +49,8 @@ const (
 )
 
 const (
-	FloodDelay      = 5 * time.Second
-	FloodMinRepeats = 3
+	floodDelay      = 5 * time.Second
+	floodMinRepeats = 3
 )
 
 var SeverityName = []string{
@@ -195,9 +195,9 @@ func logf(severity Severity, format string, args ...interface{}) {
 	_globals.Lock()
 	defer _globals.Unlock()
 	if _globals.lastMessage == message {
-		if time.Since(_globals.lastOccurrence) < FloodDelay {
+		if time.Since(_globals.lastOccurrence) < floodDelay {
 			_globals.occurrences++
-			if _globals.occurrences > FloodMinRepeats {
+			if _globals.occurrences > floodMinRepeats {
 				return
 			}
 		}

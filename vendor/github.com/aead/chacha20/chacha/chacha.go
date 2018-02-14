@@ -55,7 +55,7 @@ func setup(state *[64]byte, nonce, key []byte) (err error) {
 
 		copy(hNonce[:], nonce[:16])
 		copy(tmpKey[:], key)
-		hChaCha20(&tmpKey, &hNonce, &tmpKey)
+		HChaCha20(&tmpKey, &hNonce, &tmpKey)
 		copy(Nonce[8:], nonce[16:])
 		initialize(state, tmpKey[:], &Nonce)
 
@@ -174,3 +174,7 @@ func (c *Cipher) SetCounter(ctr uint64) {
 	}
 	c.off = 0
 }
+
+// HChaCha20 generates 32 pseudo-random bytes from a 128 bit nonce and a 256 bit secret key.
+// It can be used as a key-derivation-function (KDF).
+func HChaCha20(out *[32]byte, nonce *[16]byte, key *[32]byte) { hChaCha20(out, nonce, key) }

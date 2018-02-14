@@ -23,7 +23,7 @@
   branch = "master"
   name = "github.com/aead/chacha20"
   packages = ["chacha"]
-  revision = "8d6ce0550041f9d97e7f15ec27ed489f8bbbb0fb"
+  revision = "c8d29375923a8e1d2a0f0dc0fc1d8a0aba5b97ba"
 
 [[projects]]
   branch = "master"
@@ -80,7 +80,7 @@
   branch = "master"
   name = "github.com/jedisct1/dlog"
   packages = ["."]
-  revision = "9025b39d3d9a4e268e01f536c71c6177518fc461"
+  revision = "52c32ac39e436cd9295a4629a91f0613ce67052f"
 
 [[projects]]
   branch = "master"
@@ -92,7 +92,7 @@
   branch = "master"
   name = "github.com/jedisct1/xsecretbox"
   packages = ["."]
-  revision = "13d65f1d301904c28ff6c3256169cc60dd99c9dd"
+  revision = "88b1956e8d9a013c98dda528d3a5b77f168b057f"
 
 [[projects]]
   branch = "master"
@@ -130,7 +130,7 @@
     "poly1305",
     "salsa20/salsa"
   ]
-  revision = "1875d0a70c90e57f11972aefd42276df65e895b9"
+  revision = "650f4a345ab4e5b245a3034b110ebc7299e68186"
 
 [[projects]]
   branch = "master"
@@ -142,7 +142,7 @@
     "ipv4",
     "ipv6"
   ]
-  revision = "2fb46b16b8dda405028c50f7c7f0f9dd1fa6bfb1"
+  revision = "f5dfe339be1d06f81b22525fe34671ee7d2c8904"
 
 [[projects]]
   branch = "master"
