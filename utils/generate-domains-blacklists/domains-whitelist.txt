@@ -6,6 +6,8 @@ cdnetworks.com
 cloudapp.net
 edgekey.net
 elasticbeanstalk.com
+github.com
+github.io
 invalid
 j.mp
 l-msedge.net
