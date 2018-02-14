@@ -77,7 +77,7 @@ func FetchCurrentDNSCryptCert(proxy *Proxy, serverName *string, proto string, pk
 		tsBegin := binary.BigEndian.Uint32(binCert[116:120])
 		tsEnd := binary.BigEndian.Uint32(binCert[120:124])
 		if tsBegin >= tsEnd {
-			dlog.Warnf("[%v] certificate ends before it starts")
+			dlog.Warnf("[%v] certificate ends before it starts (%v >= %v)", providerName, tsBegin, tsEnd)
 			continue
 		}
 		ttl := tsEnd - tsBegin
