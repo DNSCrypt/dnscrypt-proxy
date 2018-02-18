@@ -16,7 +16,8 @@ script:
   - env GOOS=windows GOARCH=386 go build -ldflags="-s -w"
   - mkdir win32
   - ln dnscrypt-proxy.exe win32/
-  - ln ../LICENSE example-dnscrypt-proxy.toml example-*.txt win32/
+  - cp ../LICENSE example-dnscrypt-proxy.toml example-*.txt win32/
+  - for i in win32/LICENSE win32/*.toml win32/*.txt; do ex -bsc '%!awk "{sub(/$/,\"\r\")}1"' -cx "$i"; done
   - ln ../windows/* win32/
   - zip -9 -r dnscrypt-proxy-win32-${TRAVIS_TAG:-dev}.zip win32
 
@@ -24,7 +25,8 @@ script:
   - env GOOS=windows GOARCH=amd64 go build -ldflags="-s -w"
   - mkdir win64
   - ln dnscrypt-proxy.exe win64/
-  - ln ../LICENSE example-dnscrypt-proxy.toml example-*.txt win64/
+  - cp ../LICENSE example-dnscrypt-proxy.toml example-*.txt win64/
+  - for i in win64/LICENSE win64/*.toml win64/*.txt; do ex -bsc '%!awk "{sub(/$/,\"\r\")}1"' -cx "$i"; done
   - ln ../windows/* win64/
   - zip -9 -r dnscrypt-proxy-win64-${TRAVIS_TAG:-dev}.zip win64
 
