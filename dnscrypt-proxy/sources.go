@@ -36,9 +36,11 @@ type Source struct {
 	in     string
 }
 
-func fetchFromCache(cacheFile string) (in string, delayTillNextUpdate time.Duration, err error) {
+func fetchFromCache(cacheFile string) (in string, expired bool, delayTillNextUpdate time.Duration, err error) {
+	expired = false
 	fi, err := os.Stat(cacheFile)
 	if err != nil {
+		dlog.Debugf("Cache file [%s] not present", cacheFile)
 		delayTillNextUpdate = time.Duration(0)
 		return
 	}
@@ -49,8 +51,6 @@ func fetchFromCache(cacheFile string) (in string, delayTillNextUpdate time.Durat
 	} else {
 		dlog.Debugf("Cache file [%s] needs to be refreshed", cacheFile)
 		delayTillNextUpdate = time.Duration(0)
-		err = errors.New("cached entry has expired")
-		return
 	}
 	var bin []byte
 	bin, err = ioutil.ReadFile(cacheFile)
@@ -59,19 +59,28 @@ func fetchFromCache(cacheFile string) (in string, delayTillNextUpdate time.Durat
 		return
 	}
 	in = string(bin)
+	if delayTillNextUpdate <= time.Duration(0) {
+		expired = true
+	}
 	return
 }
 
 func fetchWithCache(xTransport *XTransport, urlStr string, cacheFile string) (in string, cached bool, delayTillNextUpdate time.Duration, err error) {
 	cached = false
-	in, delayTillNextUpdate, err = fetchFromCache(cacheFile)
-	if err == nil {
+	expired := false
+	in, expired, delayTillNextUpdate, err = fetchFromCache(cacheFile)
+	if err == nil && !expired {
 		dlog.Debugf("Delay till next update: %v", delayTillNextUpdate)
 		cached = true
 		return
 	}
+	if expired {
+		cached = true
+	}
 	if len(urlStr) == 0 {
-		err = fmt.Errorf("Cache file [%s] not present and no URL given to retrieve it", cacheFile)
+		if !expired {
+			err = fmt.Errorf("Cache file [%s] not present and no URL given to retrieve it", cacheFile)
+		}
 		return
 	}
 
@@ -99,6 +108,7 @@ func fetchWithCache(xTransport *XTransport, urlStr string, cacheFile string) (in
 		return
 	}
 	err = nil
+	cached = false
 	in = string(bin)
 	delayTillNextUpdate = SourcesUpdateDelay
 	return
