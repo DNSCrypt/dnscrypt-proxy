@@ -2,6 +2,9 @@
 * Version 2.0.1
  - Cached source data were not redownloaded if the proxy was used
 without interruption. This has been fixed.
+ - If the network is down at startup time, fall back to cached source
+data, even if is it out of date, and schedule an immediate update
+after the networks is back.
  - RTT estimation for DNS-over-HTTP/2 servers was off. This has been
 fixed.
  - The generate-domains-blacklist script now has a configurable
