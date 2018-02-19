@@ -1,0 +1,4 @@
+## Time schedules in dnscrypt-proxy.toml
+# twitter.com @work
+# facebook.com @work
+# *.youtube.*  @time-to-sleep
