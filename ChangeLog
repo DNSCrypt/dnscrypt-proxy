@@ -1,0 +1,11 @@
+
+* Version 2.0.1
+ - Cached source data were not redownloaded if the proxy was used
+without interruption. This has been fixed.
+ - RTT estimation for DNS-over-HTTP/2 servers was off. This has been
+fixed.
+ - The generate-domains-blacklist script now has a configurable
+timeout value, and can produce time-based rules.
+ - The timeout parameter in the example configuration file didn't had
+the correct name; this has been fixed.
+ - Cache: TTLs are now decreasing.
