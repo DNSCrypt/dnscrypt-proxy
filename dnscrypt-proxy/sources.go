@@ -291,7 +291,7 @@ func (source *Source) parseV2(prefix string) ([]RegisteredServer, error) {
 
 func PrefetchSourceURL(xTransport *XTransport, urlToPrefetch *URLToPrefetch) error {
 	in, cached, delayTillNextUpdate, err := fetchWithCache(xTransport, urlToPrefetch.url, urlToPrefetch.cacheFile)
-	if err == nil && cached == false {
+	if err == nil && !cached {
 		AtomicFileWrite(urlToPrefetch.cacheFile, []byte(in))
 	}
 	urlToPrefetch.when = time.Now().Add(delayTillNextUpdate)
