@@ -8,7 +8,7 @@ import sys
 import urllib2
 
 
-def parse_blacklist(content, trusted=False):
+def parse_list(content, trusted=False):
     rx_comment = re.compile(r'^(#|$)')
     rx_inline_comment = re.compile(r'\s*#\s*[a-z0-9-].*$')
     rx_u = re.compile(r'^@*\|\|([a-z0-9.-]+[.][a-z]{2,})\^?(\$(popup|third-party))?$')
@@ -73,33 +73,16 @@ def has_suffix(names, name):
 def whitelist_from_url(url):
     if not url:
         return set()
+    content, trusted = load_from_url(url)
 
-    return parse_blacklist(*load_from_url(url))
+    return parse_list(content, trusted)
 
 
-def blacklists_from_config_file(file, whitelist, time_restricted, ignore_retrieval_failure):
+def blacklists_from_config_file(file, whitelist, time_restricted_url, ignore_retrieval_failure):
     blacklists = {}
     whitelisted_names = set()
     all_names = set()
     unique_names = set()
-
-    # Load time-based blacklist
-    if time_restricted and not re.match(r'^[a-z0-9]+:', time_restricted):
-        time_restricted = "file:" + time_restricted
-
-    time_restricted_fetched = load_from_url(time_restricted)
-
-    print("########## Time-based blacklist ##########\n")
-    print(time_restricted_fetched[0].replace('\r', '')) # Comments are not removed from output ; remove \r not removed by urllib2
-
-    # Time restricted names are supposed to be whitelisted, or that's useless
-    whitelisted_names |= parse_blacklist(*time_restricted_fetched)
-
-    # Whitelist
-    if whitelist and not re.match(r'^[a-z0-9]+:', whitelist):
-        whitelist = "file:" + whitelist
-
-    whitelisted_names |= whitelist_from_url(whitelist)
 
     # Load conf & blacklists
     with open(file) as fd:
@@ -109,13 +92,36 @@ def blacklists_from_config_file(file, whitelist, time_restricted, ignore_retriev
                 continue
             url = line
             try:
-                names = parse_blacklist(*load_from_url(url))
+                content, trusted = load_from_url(url)
+                names = parse_list(content, trusted)
                 blacklists[url] = names
                 all_names |= names
             except Exception as e:
                 sys.stderr.write(e.message)
                 if not ignore_retrieval_failure:
                     exit(1)
+
+    # Time-based blacklist
+    if time_restricted_url and not re.match(r'^[a-z0-9]+:', time_restricted_url):
+        time_restricted_url = "file:" + time_restricted_url
+
+    if time_restricted_url:
+        time_restricted_content, trusted = load_from_url(time_restricted_url)
+        time_restricted_names = parse_list(time_restricted_content)
+
+        if time_restricted_names:
+            print("########## Time-based blacklist ##########\n")
+            for name in time_restricted_names:
+                print(name)
+
+        # Time restricted names should be whitelisted, or they could be always blocked
+        whitelisted_names |= time_restricted_names
+
+    # Whitelist
+    if whitelist and not re.match(r'^[a-z0-9]+:', whitelist):
+        whitelist = "file:" + whitelist
+
+    whitelisted_names |= whitelist_from_url(whitelist)
 
     # Process blacklists
     for url, names in blacklists.items():

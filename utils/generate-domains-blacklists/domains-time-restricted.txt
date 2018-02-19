@@ -1,4 +1,8 @@
-## Time schedules in dnscrypt-proxy.toml
-# twitter.com @work
-# facebook.com @work
-# *.youtube.*  @time-to-sleep
+## Rules to be applied at specific times
+##
+## This requires a time schedule to be defined in the
+## dnscrypt-proxy.toml configuration file.
+
+# twitter.com       @work
+# facebook.com      @work
+# *.youtube.*       @time-to-sleep
