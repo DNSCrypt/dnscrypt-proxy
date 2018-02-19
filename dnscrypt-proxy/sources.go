@@ -49,6 +49,8 @@ func fetchFromCache(cacheFile string) (in string, delayTillNextUpdate time.Durat
 	} else {
 		dlog.Debugf("Cache file [%s] needs to be refreshed", cacheFile)
 		delayTillNextUpdate = time.Duration(0)
+		err = errors.New("cached entry has expired")
+		return
 	}
 	var bin []byte
 	bin, err = ioutil.ReadFile(cacheFile)
@@ -278,8 +280,8 @@ func (source *Source) parseV2(prefix string) ([]RegisteredServer, error) {
 }
 
 func PrefetchSourceURL(xTransport *XTransport, urlToPrefetch *URLToPrefetch) error {
-	in, _, delayTillNextUpdate, err := fetchWithCache(xTransport, urlToPrefetch.url, urlToPrefetch.cacheFile)
-	if err == nil {
+	in, cached, delayTillNextUpdate, err := fetchWithCache(xTransport, urlToPrefetch.url, urlToPrefetch.cacheFile)
+	if err == nil && cached == false {
 		AtomicFileWrite(urlToPrefetch.cacheFile, []byte(in))
 	}
 	urlToPrefetch.when = time.Now().Add(delayTillNextUpdate)
