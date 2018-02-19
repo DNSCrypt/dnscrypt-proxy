@@ -130,11 +130,12 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 	if _, err := os.Stat(*configFile); os.IsNotExist(err) {
 		cdLocal()
 	}
-	version := flag.Bool("version", false, "Prints current proxy version")
+	version := flag.Bool("version", false, "print current proxy version")
 	resolve := flag.String("resolve", "", "resolve a name using system libraries")
 	list := flag.Bool("list", false, "print the list of available resolvers for the enabled filters")
 	listAll := flag.Bool("list-all", false, "print the complete list of available resolvers, ignoring filters")
 	jsonOutput := flag.Bool("json", false, "output list as JSON")
+	check := flag.Bool("check", false, "check the configuration file and exit")
 	flag.Parse()
 	if *svcFlag == "stop" || *svcFlag == "uninstall" {
 		return nil
@@ -286,6 +287,10 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 	}
 	if *list || *listAll {
 		config.printRegisteredServers(proxy, *jsonOutput)
+		os.Exit(0)
+	}
+	if *check {
+		dlog.Notice("Configuration successfully checked")
 		os.Exit(0)
 	}
 	return nil
