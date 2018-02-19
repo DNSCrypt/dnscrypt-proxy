@@ -36,7 +36,7 @@ def parse_blacklist(content, trusted=False):
     return names
 
 
-def list_from_url(url):
+def load_from_url(url):
     sys.stderr.write("Loading data from [{}]\n".format(url))
     req = urllib2.Request(url)
     trusted = False
@@ -51,7 +51,7 @@ def list_from_url(url):
         raise Exception("[{}] returned HTTP code {}\n".format(url, response.getcode()))
     content = response.read()
 
-    return parse_blacklist(content, trusted)
+    return (content, trusted)
 
 
 def name_cmp(name):
@@ -74,19 +74,34 @@ def whitelist_from_url(url):
     if not url:
         return set()
 
-    return list_from_url(url)
+    return parse_blacklist(*load_from_url(url))
 
 
-def blacklists_from_config_file(file, whitelist, ignore_retrieval_failure):
+def blacklists_from_config_file(file, whitelist, time_restricted, ignore_retrieval_failure):
     blacklists = {}
+    whitelisted_names = set()
     all_names = set()
     unique_names = set()
 
+    # Load time-based blacklist
+    if time_restricted and not re.match(r'^[a-z0-9]+:', time_restricted):
+        time_restricted = "file:" + time_restricted
+
+    time_restricted_fetched = load_from_url(time_restricted)
+
+    print("########## Time-based blacklist ##########\n")
+    print(time_restricted_fetched[0].replace('\r', '')) # Comments are not removed from output ; remove \r not removed by urllib2
+
+    # Time restricted names are supposed to be whitelisted, or that's useless
+    whitelisted_names |= parse_blacklist(*time_restricted_fetched)
+
+    # Whitelist
     if whitelist and not re.match(r'^[a-z0-9]+:', whitelist):
         whitelist = "file:" + whitelist
 
-    whitelisted_names = whitelist_from_url(whitelist)
+    whitelisted_names |= whitelist_from_url(whitelist)
 
+    # Load conf & blacklists
     with open(file) as fd:
         for line in fd:
             line = str.strip(line)
@@ -94,7 +109,7 @@ def blacklists_from_config_file(file, whitelist, ignore_retrieval_failure):
                 continue
             url = line
             try:
-                names = list_from_url(url)
+                names = parse_blacklist(*load_from_url(url))
                 blacklists[url] = names
                 all_names |= names
             except Exception as e:
@@ -102,6 +117,7 @@ def blacklists_from_config_file(file, whitelist, ignore_retrieval_failure):
                 if not ignore_retrieval_failure:
                     exit(1)
 
+    # Process blacklists
     for url, names in blacklists.items():
         print("\n\n########## Blacklist from {} ##########\n".format(url))
         ignored, whitelisted = 0, 0
@@ -129,6 +145,8 @@ argp.add_argument("-c", "--config", default="domains-blacklist.conf",
     help="file containing blacklist sources")
 argp.add_argument("-w", "--whitelist", default="domains-whitelist.txt",
     help="file containing a set of names to exclude from the blacklist")
+argp.add_argument("-r", "--time-restricted", default="domains-time-restricted.txt",
+    help="file containing a set of names to be time restricted")
 argp.add_argument("-i", "--ignore-retrieval-failure", action='store_true',
     help="generate list even if some urls couldn't be retrieved")
 argp.add_argument("-t", "--timeout", default=30,
@@ -137,6 +155,7 @@ args = argp.parse_args()
 
 conf = args.config
 whitelist = args.whitelist
+time_restricted = args.time_restricted
 ignore_retrieval_failure = args.ignore_retrieval_failure
 
-blacklists_from_config_file(conf, whitelist, ignore_retrieval_failure)
+blacklists_from_config_file(conf, whitelist, time_restricted, ignore_retrieval_failure)
