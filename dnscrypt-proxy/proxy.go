@@ -285,6 +285,7 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 		} else if serverInfo.Proto == StampProtoTypeDoH {
 			tid := TransactionID(query)
 			SetTransactionID(query, 0)
+			serverInfo.noticeBegin(proxy)
 			resp, _, err := proxy.xTransport.DoHQuery(serverInfo.useGet, serverInfo.URL, query, proxy.timeout)
 			SetTransactionID(query, tid)
 			if err != nil {
@@ -311,6 +312,7 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 		serverInfo.noticeFailure(proxy)
 		return
 	}
+	serverInfo.noticeSuccess(proxy)
 	if clientProto == "udp" {
 		if len(response) > MaxDNSUDPPacketSize {
 			response, err = TruncatedResponse(response)
@@ -332,7 +334,6 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 		}
 		clientPc.Write(response)
 	}
-	serverInfo.noticeSuccess(proxy)
 }
 
 func ttlFromHTTPResponse(proxy *Proxy, resp *http.Response) *uint32 {
