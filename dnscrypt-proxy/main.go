@@ -44,6 +44,9 @@ func main() {
 	dlog.Noticef("dnscrypt-proxy %s", AppVersion)
 
 	if len(*svcFlag) != 0 {
+		if svc == nil {
+			dlog.Fatal("Built-in service installation is not supported on this platform")
+		}
 		if err := service.Control(svc, *svcFlag); err != nil {
 			dlog.Fatal(err)
 		}
