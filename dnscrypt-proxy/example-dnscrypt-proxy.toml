@@ -20,6 +20,7 @@
 ## If this line is commented, all registered servers matching the require_* filters
 ## will be used
 ## The proxy will automatically pick the fastest, working servers from the list.
+## Remove the leading # first to enable this; lines starting with # are ignored.
 
 # server_names = ['scaleway-fr', 'google', 'yandex']
 
