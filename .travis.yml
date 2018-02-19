@@ -9,7 +9,8 @@ go:
   - 1.10rc2
 
 script:
-  - echo $TRAVIS_GO_VERSION
+  - gimme --list
+  - echo $TRAVIS_GO_VERSION  
   - cd dnscrypt-proxy
 
   - go clean
