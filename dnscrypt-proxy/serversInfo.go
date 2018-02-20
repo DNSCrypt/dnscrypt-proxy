@@ -167,8 +167,28 @@ func (serversInfo *ServersInfo) getOne() *ServerInfo {
 	if candidate == 0 {
 		return &serversInfo.inner[candidate]
 	}
-	if serversInfo.inner[candidate].rtt.Value() < serversInfo.inner[0].rtt.Value() {
+	candidateRtt, currentBestRtt := serversInfo.inner[candidate].rtt.Value(), serversInfo.inner[0].rtt.Value()
+	if currentBestRtt < 0 {
+		currentBestRtt = candidateRtt
+		serversInfo.inner[0].rtt.Set(currentBestRtt)
+	}
+	partialSort := false
+	if candidateRtt < currentBestRtt {
 		serversInfo.inner[candidate], serversInfo.inner[0] = serversInfo.inner[0], serversInfo.inner[candidate]
+		partialSort = true
+		dlog.Debugf("New prefered candidate: %v (rtt: %v vs previous: %v)", serversInfo.inner[0].Name, candidateRtt, currentBestRtt)
+	} else if candidateRtt >= currentBestRtt*4.0 {
+		if time.Since(serversInfo.inner[candidate].lastActionTS) > time.Duration(1*time.Minute) {
+			serversInfo.inner[candidate].rtt.Add(MinF(MaxF(candidateRtt/2.0, currentBestRtt*2.0), candidateRtt))
+			partialSort = true
+		}
+	}
+	if partialSort {
+		for i := 1; i < serversCount; i++ {
+			if serversInfo.inner[i-1].rtt.Value() > serversInfo.inner[i].rtt.Value() {
+				serversInfo.inner[i-1], serversInfo.inner[i] = serversInfo.inner[i], serversInfo.inner[i-1]
+			}
+		}
 	}
 	switch serversInfo.lbStrategy {
 	case LBStrategyFastest:
@@ -315,7 +335,7 @@ func (serversInfo *ServersInfo) fetchDoHServerInfo(proxy *Proxy, name string, st
 
 func (serverInfo *ServerInfo) noticeFailure(proxy *Proxy) {
 	serverInfo.Lock()
-	serverInfo.rtt.Set(float64(proxy.timeout.Nanoseconds()))
+	serverInfo.rtt.Add(float64(proxy.timeout.Nanoseconds() / 1000000))
 	serverInfo.Unlock()
 }
 
@@ -328,9 +348,10 @@ func (serverInfo *ServerInfo) noticeBegin(proxy *Proxy) {
 func (serverInfo *ServerInfo) noticeSuccess(proxy *Proxy) {
 	now := time.Now()
 	serverInfo.Lock()
-	elapsed := now.Sub(serverInfo.lastActionTS) / 1024
-	if elapsed > 0 {
-		serverInfo.rtt.Add(float64(elapsed))
+	elapsed := now.Sub(serverInfo.lastActionTS)
+	elapsedMs := elapsed.Nanoseconds() / 1000000
+	if elapsedMs > 0 && elapsed < proxy.timeout {
+		serverInfo.rtt.Add(float64(elapsedMs))
 	}
 	serverInfo.Unlock()
 }
