@@ -6,7 +6,7 @@ os:
   - linux
 
 go:
-  - 1.10.0
+  - 1.10rc2
 
 script:
   - gimme --list
@@ -156,7 +156,7 @@ deploy:
   skip_cleanup: true
   on:
     repo: jedisct1/dnscrypt-proxy
-    condition: "${TRAVIS_GO_VERSION} == 1.10.0"
+    condition: "${TRAVIS_GO_VERSION} == 1.10rc2"
     tags: true
 
 after_deploy:
