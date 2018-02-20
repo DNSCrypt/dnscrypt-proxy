@@ -1,4 +1,10 @@
 
+* Version 2.0.2
+ - Properly error out on FreeBSD and other platforms where built-in
+service installation is not supported yet.
+ - Improved load-balancing algorithm, which should result in lower
+latency.
+
 * Version 2.0.1
  - Cached source data were not redownloaded if the proxy was used
 without interruption. This has been fixed.
