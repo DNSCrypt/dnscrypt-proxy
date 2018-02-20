@@ -72,7 +72,7 @@ func newConfig() Config {
 		SourceIPv6:            false,
 		SourceDNSCrypt:        true,
 		SourceDoH:             true,
-		MaxClients:            100,
+		MaxClients:            250,
 		FallbackResolver:      DefaultFallbackResolver,
 		IgnoreSystemDNS:       false,
 	}
