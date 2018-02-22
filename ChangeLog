@@ -1,4 +1,10 @@
 
+* Version 2.0.3
+ - Load balancing: resolvers that respond promptly, but with bogus
+responses are now gradually removed from the preferred pool.
+ - Due to popular request, Android binaries are now available! Thanks
+to @sporif for his help on getting these built.
+
 * Version 2.0.2
  - Properly error out on FreeBSD and other platforms where built-in
 service installation is not supported yet.
