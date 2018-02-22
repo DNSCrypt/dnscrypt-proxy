@@ -143,6 +143,20 @@ script:
   - ln ../LICENSE example-dnscrypt-proxy.toml example-*.txt macos/
   - tar czpvf dnscrypt-proxy-macos-${TRAVIS_TAG:-dev}.tar.gz macos
 
+  - go clean
+  - env CC=arm-linux-androideabi-clang CGO_ENABLED=1 GOOS=android GOARCH=arm GOARM=7 go build -ldflags="-s -w"
+  - mkdir android-arm
+  - ln dnscrypt-proxy android-arm/
+  - cp ../LICENSE example-dnscrypt-proxy.toml example-*.txt android-arm/
+  - zip -9 -r dnscrypt-proxy-android_arm-${TRAVIS_TAG:-dev}.zip android-arm
+
+  - go clean
+  - env CC=aarch64-linux-android-clang CGO_ENABLED=1 GOOS=android GOARCH=arm64 go build -ldflags="-s -w"
+  - mkdir android-arm64
+  - ln dnscrypt-proxy android-arm64/
+  - cp ../LICENSE example-dnscrypt-proxy.toml example-*.txt android-arm64/
+  - zip -9 -r dnscrypt-proxy-android_arm64-${TRAVIS_TAG:-dev}.zip android-arm64
+
   - ls -l dnscrypt-proxy-*.tar.gz dnscrypt-proxy-*.zip
 
 deploy:
@@ -161,3 +175,20 @@ deploy:
 
 after_deploy:
   - ls -l dnscrypt-proxy-*.tar.gz
+
+before_install:
+  - NDK_VER=r15c
+  - curl -LO http://dl.google.com/android/repository/android-ndk-${NDK_VER}-linux-x86_64.zip
+  - unzip -q android-ndk-${NDK_VER}-linux-x86_64.zip -d $HOME
+  - rm android-ndk-${NDK_VER}-linux-x86_64.zip
+
+  - NDK_TOOLS=$HOME/android-ndk-${NDK_VER}
+  - NDK_STANDALONE=$HOME/ndk-standalone-${NDK_VER}
+  - MAKE_TOOLCHAIN=$NDK_TOOLS/build/tools/make_standalone_toolchain.py
+
+  - python $MAKE_TOOLCHAIN --arch arm   --api 21 --install-dir $NDK_STANDALONE/arm
+  - python $MAKE_TOOLCHAIN --arch arm64 --api 21 --install-dir $NDK_STANDALONE/arm64
+  - rm -rf $NDK_TOOLS
+
+  - PATH=$PATH:$NDK_STANDALONE/arm/bin
+  - PATH=$PATH:$NDK_STANDALONE/arm64/bin
