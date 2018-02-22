@@ -52,6 +52,10 @@ func SetTransactionID(packet []byte, tid uint16) {
 	binary.BigEndian.PutUint16(packet[0:2], tid)
 }
 
+func Rcode(packet []byte) uint8 {
+	return packet[3] & 0xf
+}
+
 func NormalizeName(name *[]byte) {
 	for i, c := range *name {
 		if c >= 65 && c <= 90 {

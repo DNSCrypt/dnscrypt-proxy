@@ -289,10 +289,12 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 			resp, _, err := proxy.xTransport.DoHQuery(serverInfo.useGet, serverInfo.URL, query, proxy.timeout)
 			SetTransactionID(query, tid)
 			if err != nil {
+				serverInfo.noticeFailure(proxy)
 				return
 			}
 			response, err = ioutil.ReadAll(io.LimitReader(resp.Body, int64(MaxDNSPacketSize)))
 			if err != nil {
+				serverInfo.noticeFailure(proxy)
 				return
 			}
 			if len(response) >= MinDNSPacketSize {
@@ -302,17 +304,21 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 		} else {
 			dlog.Fatal("Unsupported protocol")
 		}
+		if len(response) < MinDNSPacketSize || len(response) > MaxDNSPacketSize {
+			serverInfo.noticeFailure(proxy)
+			return
+		}
+		response, err = pluginsState.ApplyResponsePlugins(&proxy.pluginsGlobals, response, ttl)
 		if err != nil {
 			serverInfo.noticeFailure(proxy)
 			return
 		}
-		response, _ = pluginsState.ApplyResponsePlugins(&proxy.pluginsGlobals, response, ttl)
+		if rcode := Rcode(response); rcode == 2 || rcode == 5 { // SERVFAIL / REFUSED
+			serverInfo.noticeFailure(proxy)
+		} else {
+			serverInfo.noticeSuccess(proxy)
+		}
 	}
-	if len(response) < MinDNSPacketSize || len(response) > MaxDNSPacketSize {
-		serverInfo.noticeFailure(proxy)
-		return
-	}
-	serverInfo.noticeSuccess(proxy)
 	if clientProto == "udp" {
 		if len(response) > MaxDNSUDPPacketSize {
 			response, err = TruncatedResponse(response)
