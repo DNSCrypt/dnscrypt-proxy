@@ -155,6 +155,9 @@ func (pluginsState *PluginsState) ApplyResponsePlugins(pluginsGlobals *PluginsGl
 	pluginsState.action = PluginsActionForward
 	msg := dns.Msg{}
 	if err := msg.Unpack(packet); err != nil {
+		if len(packet) >= MinDNSPacketSize && HasTCFlag(packet) {
+			err = nil
+		}
 		return packet, err
 	}
 	pluginsGlobals.RLock()
