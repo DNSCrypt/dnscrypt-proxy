@@ -27,3 +27,8 @@ tracker.*
 # start.
 
 eth0.me
+
+# ibpxl.com is a tracker that seems to frequently have issues, causing
+# page loads to stall.
+
+ibpxl.com
