@@ -29,6 +29,10 @@ It includes all the major features from dnscrypt-proxy 1.9.5, with improved reli
 
 Up-to-date, pre-built binaries are available for:
 
+* Android/arm
+* Android/arm64
+* Android/x86
+* Android/x86_64
 * Dragonfly BSD
 * FreeBSD/x86
 * FreeBSD/x86_64
