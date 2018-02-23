@@ -206,6 +206,3 @@ before_install:
     done
 
   - rm -rf $NDK_TOOLS
-
-  - PATH=$PATH:$NDK_STANDALONE/arm/bin
-  - PATH=$PATH:$NDK_STANDALONE/arm64/bin
