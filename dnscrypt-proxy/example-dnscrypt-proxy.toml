@@ -348,6 +348,10 @@ cache_neg_ttl = 60
 ## avoid collisions if different sources share the same for
 ## different servers. In that case, names listed in `server_names`
 ## must include the prefixes.
+##
+## If the `url` property is missing, cached files and valid signatures
+## must be already present; they will not receive any updates even
+## after they expire.
 
 [sources]
 
