@@ -349,9 +349,9 @@ cache_neg_ttl = 60
 ## different servers. In that case, names listed in `server_names`
 ## must include the prefixes.
 ##
-## If the `url` property is missing, cached files and valid signatures
-## must be already present; they will not receive any updates even
-## after they expire.
+## If the `url` property is missing, cache files and valid signatures
+## must be already present; This doesn't prevent these cache files from
+## expiring after `refresh_delay` hours.
 
 [sources]
 
