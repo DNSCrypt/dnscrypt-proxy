@@ -180,7 +180,7 @@ cache_size = 256
 cache_min_ttl = 600
 
 
-## Maxmimum TTL for cached entries
+## Maximum TTL for cached entries
 
 cache_max_ttl = 86400
 
@@ -364,7 +364,7 @@ cache_neg_ttl = 60
   refresh_delay = 72
   prefix = ''
 
-  ## Another example source, with resolvers censoring some websites not approriate for children
+  ## Another example source, with resolvers censoring some websites not appropriate for children
   ## This is a subset of the `public-resolvers` list, so enabling both is useless
 
   #  [sources.'parental-control']
