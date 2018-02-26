@@ -176,7 +176,7 @@ func (serversInfo *ServersInfo) getOne() *ServerInfo {
 	if candidateRtt < currentBestRtt {
 		serversInfo.inner[candidate], serversInfo.inner[0] = serversInfo.inner[0], serversInfo.inner[candidate]
 		partialSort = true
-		dlog.Debugf("New prefered candidate: %v (rtt: %v vs previous: %v)", serversInfo.inner[0].Name, candidateRtt, currentBestRtt)
+		dlog.Debugf("New preferred candidate: %v (rtt: %v vs previous: %v)", serversInfo.inner[0].Name, candidateRtt, currentBestRtt)
 	} else if candidateRtt >= currentBestRtt*4.0 {
 		if time.Since(serversInfo.inner[candidate].lastActionTS) > time.Duration(1*time.Minute) {
 			serversInfo.inner[candidate].rtt.Add(MinF(MaxF(candidateRtt/2.0, currentBestRtt*2.0), candidateRtt))
