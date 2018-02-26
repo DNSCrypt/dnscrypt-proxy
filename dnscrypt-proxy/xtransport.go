@@ -32,16 +32,20 @@ type XTransport struct {
 	cachedIPs        CachedIPs
 	fallbackResolver string
 	ignoreSystemDNS  bool
+	useIPv4          bool
+	useIPv6          bool
 }
 
 var IdleConnTimeout = 5 * time.Second
 
-func NewXTransport(timeout time.Duration) *XTransport {
+func NewXTransport(timeout time.Duration, useIPv4 bool, useIPv6 bool) *XTransport {
 	xTransport := XTransport{
 		cachedIPs:        CachedIPs{cache: make(map[string]string)},
 		timeout:          timeout,
 		fallbackResolver: DefaultFallbackResolver,
 		ignoreSystemDNS:  false,
+		useIPv4:          useIPv4,
+		useIPv6:          useIPv6,
 	}
 	xTransport.rebuildTransport()
 	return &xTransport
@@ -129,6 +133,9 @@ func (xTransport *XTransport) Fetch(method string, url *url.URL, accept string, 
 		dlog.Debugf("IP for [%s] was cached to [%s], but connection failed: [%s]", host, cachedIP, err)
 		return nil, 0, err
 	}
+	if !xTransport.useIPv4 {
+		return nil, 0, fmt.Errorf("IPv4 connectivity would be required to use [%s]", host)
+	}
 	dnsClient := new(dns.Client)
 	msg := new(dns.Msg)
 	msg.SetQuestion(dns.Fqdn(host), dns.TypeA)
@@ -142,12 +149,19 @@ func (xTransport *XTransport) Fetch(method string, url *url.URL, accept string, 
 	if err != nil {
 		return nil, 0, err
 	}
-	if len(in.Answer) <= 0 {
+	var foundIP *string
+	for _, answer := range in.Answer {
+		if answer.Header().Rrtype == dns.TypeA {
+			foundIPx := in.Answer[0].(*dns.A).A.String()
+			foundIP = &foundIPx
+			break
+		}
+	}
+	if foundIP == nil {
 		return nil, 0, fmt.Errorf("No IP found for [%s]", host)
 	}
-	foundIP := in.Answer[0].(*dns.A).A.String()
 	xTransport.cachedIPs.Lock()
-	xTransport.cachedIPs.cache[host] = foundIP
+	xTransport.cachedIPs.cache[host] = *foundIP
 	xTransport.cachedIPs.Unlock()
 	dlog.Debugf("[%s] IP address [%s] added to the cache", host, foundIP)
 

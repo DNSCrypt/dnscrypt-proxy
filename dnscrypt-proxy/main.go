@@ -36,7 +36,7 @@ func main() {
 		dlog.Debug(err)
 	}
 	app.proxy = NewProxy()
-	app.proxy.xTransport = NewXTransport(30 * time.Second)
+	app.proxy.xTransport = NewXTransport(30*time.Second, true, false)
 
 	if err := ConfigLoad(&app.proxy, svcFlag); err != nil {
 		dlog.Fatal(err)
