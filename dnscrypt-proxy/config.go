@@ -271,6 +271,7 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 
 	if testGracePeriod != nil && *testGracePeriod > 0 {
 		proxy.testGracePeriod = testGracePeriod
+		proxy.listenAddresses = nil
 	}
 
 	if *listAll {
