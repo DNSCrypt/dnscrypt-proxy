@@ -286,12 +286,18 @@ func (serversInfo *ServersInfo) fetchDoHServerInfo(proxy *Proxy, name string, st
 	showCerts := len(os.Getenv("SHOW_CERTS")) > 0
 	found := false
 	var wantedHash [32]byte
+	now := time.Now()
 	for _, cert := range tls.PeerCertificates {
 		h := sha256.Sum256(cert.RawTBSCertificate)
 		if showCerts {
 			dlog.Infof("Advertised cert: [%s] [%x]", cert.Subject, h)
 		} else {
 			dlog.Debugf("Advertised cert: [%s] [%x]", cert.Subject, h)
+		}
+		if proxy.testGracePeriod != nil {
+			if remaining := int(cert.NotAfter.Sub(now).Minutes()); *proxy.testGracePeriod > remaining {
+				dlog.Fatalf("Certificate [%s] for [%s] is going to expire before the grace period, in %d minutes", cert.Subject, name, remaining)
+			}
 		}
 		for _, hash := range stamp.hashes {
 			if len(hash) == len(wantedHash) {

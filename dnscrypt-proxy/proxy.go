@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"net"
 	"net/http"
+	"os"
 	"sync/atomic"
 	"time"
 
@@ -52,6 +53,7 @@ type Proxy struct {
 	maxClients                   uint32
 	xTransport                   *XTransport
 	allWeeklyRanges              *map[string]WeeklyRanges
+	testGracePeriod              *int
 }
 
 func (proxy *Proxy) StartProxy() {
@@ -83,6 +85,14 @@ func (proxy *Proxy) StartProxy() {
 		dlog.Fatal(err)
 	}
 	liveServers, err := proxy.serversInfo.refresh(proxy)
+	if proxy.testGracePeriod != nil {
+		if liveServers > 0 {
+			dlog.Noticef("%d certificates successfully checked", liveServers)
+			os.Exit(0)
+		} else {
+			dlog.Fatal("Unable to check servers certificates")
+		}
+	}
 	if liveServers > 0 {
 		dlog.Noticef("dnscrypt-proxy is ready - live servers: %d", liveServers)
 		SystemDNotify()

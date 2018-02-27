@@ -95,6 +95,12 @@ func FetchCurrentDNSCryptCert(proxy *Proxy, serverName *string, proto string, pk
 		} else {
 			certInfo.ForwardSecurity = true
 		}
+		if proxy.testGracePeriod != nil {
+			if remaining := (tsEnd - now) / 60; uint32(*proxy.testGracePeriod) > remaining {
+				dlog.Fatalf("Certificate for [%v] is going to expire in %d minutes, before the grace period",
+					providerName, remaining)
+			}
+		}
 		if !proxy.certIgnoreTimestamp {
 			if now > tsEnd || now < tsBegin {
 				dlog.Debugf("[%v] Certificate not valid at the current date", providerName)
