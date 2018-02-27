@@ -1,4 +1,10 @@
 
+* Version 2.0.5
+ - Fixes a crash occasionally happening when using DoH servers, with
+stamps not containing any IP addresses, a DNSSEC-signed name, a
+non-working system DNS configuration, and a fallback server supporting
+DNSSEC.
+
 * Version 2.0.4
  - Fixes a regression with truncated packets. Thanks to @mazesy and
 @the-w1nd for spotting a case triggering this!
