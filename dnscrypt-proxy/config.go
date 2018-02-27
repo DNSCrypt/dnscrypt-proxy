@@ -136,7 +136,6 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 	listAll := flag.Bool("list-all", false, "print the complete list of available resolvers, ignoring filters")
 	jsonOutput := flag.Bool("json", false, "output list as JSON")
 	check := flag.Bool("check", false, "check the configuration file and exit")
-	testGracePeriod := flag.Int("test", -1, "test that certificates of chosen servers are not going to expire before that number of minutes")
 	flag.Parse()
 	if *svcFlag == "stop" || *svcFlag == "uninstall" {
 		return nil
@@ -268,11 +267,6 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 		return err
 	}
 	proxy.allWeeklyRanges = allWeeklyRanges
-
-	if testGracePeriod != nil && *testGracePeriod >= 0 {
-		proxy.testGracePeriod = testGracePeriod
-		proxy.listenAddresses = nil
-	}
 
 	if *listAll {
 		config.ServerNames = nil
