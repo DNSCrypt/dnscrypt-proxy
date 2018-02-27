@@ -84,7 +84,7 @@ func (xTransport *XTransport) rebuildTransport() {
 	xTransport.transport = transport
 }
 
-func (xTransport *XTransport) Fetch(method string, url *url.URL, accept string, contentType string, body *io.ReadCloser, timeout time.Duration) (*http.Response, time.Duration, error) {
+func (xTransport *XTransport) Fetch(method string, url *url.URL, accept string, contentType string, body *io.ReadCloser, timeout time.Duration, padding *string) (*http.Response, time.Duration, error) {
 	if timeout <= 0 {
 		timeout = xTransport.timeout
 	}
@@ -95,6 +95,9 @@ func (xTransport *XTransport) Fetch(method string, url *url.URL, accept string, 
 	}
 	if len(contentType) > 0 {
 		header["Content-Type"] = []string{contentType}
+	}
+	if padding != nil {
+		header["X-Pad"] = []string{*padding}
 	}
 	req := &http.Request{
 		Method: method,
@@ -184,14 +187,17 @@ func (xTransport *XTransport) Fetch(method string, url *url.URL, accept string, 
 }
 
 func (xTransport *XTransport) Get(url *url.URL, accept string, timeout time.Duration) (*http.Response, time.Duration, error) {
-	return xTransport.Fetch("GET", url, "", "", nil, timeout)
+	return xTransport.Fetch("GET", url, "", "", nil, timeout, nil)
 }
 
-func (xTransport *XTransport) Post(url *url.URL, accept string, contentType string, body []byte, timeout time.Duration) (*http.Response, time.Duration, error) {
+func (xTransport *XTransport) Post(url *url.URL, accept string, contentType string, body []byte, timeout time.Duration, padding *string) (*http.Response, time.Duration, error) {
 	bc := ioutil.NopCloser(bytes.NewReader(body))
-	return xTransport.Fetch("POST", url, accept, contentType, &bc, timeout)
+	return xTransport.Fetch("POST", url, accept, contentType, &bc, timeout, padding)
 }
+
 func (xTransport *XTransport) DoHQuery(useGet bool, url *url.URL, body []byte, timeout time.Duration) (*http.Response, time.Duration, error) {
+	padLen := 63 - (len(body)+63)&63
+	padding := xTransport.makePad(padLen)
 	dataType := "application/dns-udpwireformat"
 	if useGet {
 		qs := url.Query()
@@ -199,9 +205,18 @@ func (xTransport *XTransport) DoHQuery(useGet bool, url *url.URL, body []byte, t
 		encBody := base64.RawURLEncoding.EncodeToString(body)
 		qs.Add("body", encBody)
 		qs.Add("dns", encBody)
+		qs.Add("random_padding", *padding)
 		url2 := *url
 		url2.RawQuery = qs.Encode()
 		return xTransport.Get(&url2, dataType, timeout)
 	}
-	return xTransport.Post(url, dataType, dataType, body, timeout)
+	return xTransport.Post(url, dataType, dataType, body, timeout, padding)
+}
+
+func (xTransport *XTransport) makePad(padLen int) *string {
+	if padLen <= 0 {
+		return nil
+	}
+	padding := strings.Repeat("X", padLen)
+	return &padding
 }
