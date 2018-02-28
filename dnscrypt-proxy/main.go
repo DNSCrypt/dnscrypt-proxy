@@ -3,9 +3,11 @@ package main
 import (
 	"flag"
 	"fmt"
+	"os"
 	"sync"
 	"time"
 
+	"github.com/facebookgo/pidfile"
 	"github.com/jedisct1/dlog"
 	"github.com/kardianos/service"
 )
@@ -94,12 +96,17 @@ func (app *App) Start(service service.Service) error {
 
 func (app *App) AppMain(proxy *Proxy) {
 	proxy.StartProxy()
+	pidfile.Write()
 	<-app.quit
 	dlog.Notice("Quit signal received...")
 	app.wg.Done()
+
 }
 
 func (app *App) Stop(service service.Service) error {
+	if pidFilePath := pidfile.GetPidfilePath(); len(pidFilePath) > 1 {
+		os.Remove(pidFilePath)
+	}
 	dlog.Notice("Stopped.")
 	return nil
 }
