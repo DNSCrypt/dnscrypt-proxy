@@ -72,7 +72,7 @@ const DefaultLBStrategy = LBStrategyP2
 
 type ServersInfo struct {
 	sync.RWMutex
-	inner             []ServerInfo
+	inner             []*ServerInfo
 	registeredServers []RegisteredServer
 	lbStrategy        LBStrategy
 }
@@ -110,10 +110,10 @@ func (serversInfo *ServersInfo) refreshServer(proxy *Proxy, name string, stamp S
 	}
 	newServer.rtt = ewma.NewMovingAverage(RTTEwmaDecay)
 	if previousIndex >= 0 {
-		serversInfo.inner[previousIndex] = newServer
+		serversInfo.inner[previousIndex] = &newServer
 		return nil
 	}
-	serversInfo.inner = append(serversInfo.inner, newServer)
+	serversInfo.inner = append(serversInfo.inner, &newServer)
 	serversInfo.registeredServers = append(serversInfo.registeredServers, RegisteredServer{name: name, stamp: stamp})
 	return nil
 }
@@ -165,7 +165,7 @@ func (serversInfo *ServersInfo) getOne() *ServerInfo {
 	}
 	candidate := rand.Intn(serversCount)
 	if candidate == 0 {
-		return &serversInfo.inner[candidate]
+		return serversInfo.inner[candidate]
 	}
 	candidateRtt, currentBestRtt := serversInfo.inner[candidate].rtt.Value(), serversInfo.inner[0].rtt.Value()
 	if currentBestRtt < 0 {
@@ -200,8 +200,8 @@ func (serversInfo *ServersInfo) getOne() *ServerInfo {
 	default:
 		candidate = rand.Intn(Min(serversCount, 2))
 	}
-	serverInfo := &serversInfo.inner[candidate]
-	dlog.Debugf("Using candidate %v: [%v]", candidate, serverInfo.Name)
+	serverInfo := serversInfo.inner[candidate]
+	dlog.Debugf("Using candidate %v: [%v]", candidate, (*serverInfo).Name)
 
 	return serverInfo
 }
