@@ -227,7 +227,7 @@ func (proxy *Proxy) exchangeWithTCPServer(serverInfo *ServerInfo, encryptedQuery
 
 func (proxy *Proxy) clientsCountInc() bool {
 	for {
-		count := proxy.clientsCount
+		count := atomic.LoadUint32(&proxy.clientsCount)
 		if count >= proxy.maxClients {
 			return false
 		}
@@ -240,7 +240,7 @@ func (proxy *Proxy) clientsCountInc() bool {
 
 func (proxy *Proxy) clientsCountDec() {
 	for {
-		if count := proxy.clientsCount; count == 0 || atomic.CompareAndSwapUint32(&proxy.clientsCount, count, count-1) {
+		if count := atomic.LoadUint32(&proxy.clientsCount); count == 0 || atomic.CompareAndSwapUint32(&proxy.clientsCount, count, count-1) {
 			break
 		}
 	}
