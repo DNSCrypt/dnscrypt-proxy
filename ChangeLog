@@ -1,4 +1,8 @@
 
+* Version 2.0.6
+ - Automatic log files rotation was finally implemented.
+ - A new -pidfile command-line option to write the PID file was added.
+
 * Version 2.0.5
  - Fixes a crash occasionally happening when using DoH servers, with
 stamps not containing any IP addresses, a DNSSEC-signed name, a
