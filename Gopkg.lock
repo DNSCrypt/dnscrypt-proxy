@@ -154,7 +154,7 @@
     "ipv4",
     "ipv6"
   ]
-  revision = "cbe0f9307d0156177f9dd5dc85da1a31abc5f2fb"
+  revision = "22ae77b79946ea320088417e4d50825671d82d57"
 
 [[projects]]
   branch = "master"
@@ -166,7 +166,7 @@
     "windows/svc/eventlog",
     "windows/svc/mgr"
   ]
-  revision = "f6cff0780e542efa0c8e864dc8fa522808f6a598"
+  revision = "dd2ff4accc098aceecb86b36eaa7829b2a17b1c9"
 
 [solve-meta]
   analyzer-name = "dep"
