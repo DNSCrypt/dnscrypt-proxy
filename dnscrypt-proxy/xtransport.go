@@ -155,7 +155,7 @@ func (xTransport *XTransport) Fetch(method string, url *url.URL, accept string, 
 	var foundIP *string
 	for _, answer := range in.Answer {
 		if answer.Header().Rrtype == dns.TypeA {
-			foundIPx := in.Answer[0].(*dns.A).A.String()
+			foundIPx := answer.(*dns.A).A.String()
 			foundIP = &foundIPx
 			break
 		}
