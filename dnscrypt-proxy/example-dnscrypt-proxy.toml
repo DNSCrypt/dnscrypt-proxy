@@ -128,7 +128,7 @@ log_files_max_size = 10
 log_files_max_age = 7
 
 # Maximum log files backups to keep
-log_files_backups = 1
+log_files_max_backups = 1
 
 
 
