@@ -4,18 +4,16 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"os"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/jedisct1/dlog"
 	"github.com/miekg/dns"
+	lumberjack "gopkg.in/natefinch/lumberjack.v2"
 )
 
 type PluginQueryLog struct {
-	sync.Mutex
-	outFd         *os.File
+	logger        *lumberjack.Logger
 	format        string
 	ignoredQtypes []string
 }
@@ -29,13 +27,7 @@ func (plugin *PluginQueryLog) Description() string {
 }
 
 func (plugin *PluginQueryLog) Init(proxy *Proxy) error {
-	plugin.Lock()
-	defer plugin.Unlock()
-	outFd, err := os.OpenFile(proxy.queryLogFile, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644)
-	if err != nil {
-		return err
-	}
-	plugin.outFd = outFd
+	plugin.logger = &lumberjack.Logger{LocalTime: true, MaxSize: proxy.logMaxSize, MaxAge: proxy.logMaxAge, MaxBackups: proxy.logMaxBackups, Filename: proxy.queryLogFile, Compress: true}
 	plugin.format = proxy.queryLogFormat
 	plugin.ignoredQtypes = proxy.queryLogIgnoredQtypes
 
@@ -88,11 +80,9 @@ func (plugin *PluginQueryLog) Eval(pluginsState *PluginsState, msg *dns.Msg) err
 	} else {
 		dlog.Fatalf("Unexpected log format: [%s]", plugin.format)
 	}
-	plugin.Lock()
-	if plugin.outFd == nil {
+	if plugin.logger == nil {
 		return errors.New("Log file not initialized")
 	}
-	plugin.outFd.WriteString(line)
-	defer plugin.Unlock()
+	plugin.logger.Write([]byte(line))
 	return nil
 }

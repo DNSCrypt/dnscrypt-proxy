@@ -52,6 +52,9 @@ type Config struct {
 	FallbackResolver      string                     `toml:"fallback_resolver"`
 	IgnoreSystemDNS       bool                       `toml:"ignore_system_dns"`
 	AllWeeklyRanges       map[string]WeeklyRangesStr `toml:"schedules"`
+	LogMaxSize            int                        `toml:"log_files_max_size"`
+	LogMaxAge             int                        `toml:"log_files_max_age"`
+	LogMaxBackups         int                        `toml:"log_files_max_backups"`
 }
 
 func newConfig() Config {
@@ -75,6 +78,9 @@ func newConfig() Config {
 		MaxClients:            250,
 		FallbackResolver:      DefaultFallbackResolver,
 		IgnoreSystemDNS:       false,
+		LogMaxSize:            10,
+		LogMaxAge:             7,
+		LogMaxBackups:         1,
 	}
 }
 
@@ -169,6 +175,9 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 	} else if config.LogFile != nil {
 		dlog.UseLogFile(*config.LogFile)
 	}
+	proxy.logMaxSize = config.LogMaxSize
+	proxy.logMaxAge = config.LogMaxAge
+	proxy.logMaxBackups = config.LogMaxBackups
 	proxy.xTransport.fallbackResolver = config.FallbackResolver
 	if len(config.FallbackResolver) > 0 {
 		proxy.xTransport.ignoreSystemDNS = config.IgnoreSystemDNS

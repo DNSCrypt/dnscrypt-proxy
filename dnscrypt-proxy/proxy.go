@@ -52,6 +52,9 @@ type Proxy struct {
 	maxClients                   uint32
 	xTransport                   *XTransport
 	allWeeklyRanges              *map[string]WeeklyRanges
+	logMaxSize                   int
+	logMaxAge                    int
+	logMaxBackups                int
 }
 
 func (proxy *Proxy) StartProxy() {

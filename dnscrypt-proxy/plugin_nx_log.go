@@ -4,18 +4,16 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"os"
-	"sync"
 	"time"
 
 	"github.com/jedisct1/dlog"
 	"github.com/miekg/dns"
+	lumberjack "gopkg.in/natefinch/lumberjack.v2"
 )
 
 type PluginNxLog struct {
-	sync.Mutex
-	outFd         *os.File
-	format        string
+	logger *lumberjack.Logger
+	format string
 }
 
 func (plugin *PluginNxLog) Name() string {
@@ -27,13 +25,7 @@ func (plugin *PluginNxLog) Description() string {
 }
 
 func (plugin *PluginNxLog) Init(proxy *Proxy) error {
-	plugin.Lock()
-	defer plugin.Unlock()
-	outFd, err := os.OpenFile(proxy.nxLogFile, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644)
-	if err != nil {
-		return err
-	}
-	plugin.outFd = outFd
+	plugin.logger = &lumberjack.Logger{LocalTime: true, MaxSize: proxy.logMaxSize, MaxAge: proxy.logMaxAge, MaxBackups: proxy.logMaxBackups, Filename: proxy.nxLogFile, Compress: true}
 	plugin.format = proxy.nxLogFormat
 
 	return nil
@@ -81,12 +73,10 @@ func (plugin *PluginNxLog) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 	} else {
 		dlog.Fatalf("Unexpected log format: [%s]", plugin.format)
 	}
-	plugin.Lock()
-	if plugin.outFd == nil {
+	if plugin.logger == nil {
 		return errors.New("Log file not initialized")
 	}
-	plugin.outFd.WriteString(line)
-	defer plugin.Unlock()
+	plugin.logger.Write([]byte(line))
 
 	return nil
 }

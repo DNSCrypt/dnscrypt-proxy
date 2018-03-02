@@ -5,22 +5,20 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
-	"os"
 	"strings"
-	"sync"
 	"time"
 	"unicode"
 
 	"github.com/hashicorp/go-immutable-radix"
 	"github.com/jedisct1/dlog"
 	"github.com/miekg/dns"
+	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 type PluginBlockIP struct {
-	sync.Mutex
 	blockedPrefixes *iradix.Tree
 	blockedIPs      map[string]interface{}
-	outFd           *os.File
+	logger          *lumberjack.Logger
 	format          string
 }
 
@@ -75,13 +73,7 @@ func (plugin *PluginBlockIP) Init(proxy *Proxy) error {
 	if len(proxy.blockIPLogFile) == 0 {
 		return nil
 	}
-	plugin.Lock()
-	defer plugin.Unlock()
-	outFd, err := os.OpenFile(proxy.blockIPLogFile, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644)
-	if err != nil {
-		return err
-	}
-	plugin.outFd = outFd
+	plugin.logger = &lumberjack.Logger{LocalTime: true, MaxSize: proxy.logMaxSize, MaxAge: proxy.logMaxAge, MaxBackups: proxy.logMaxBackups, Filename: proxy.blockIPLogFile, Compress: true}
 	plugin.format = proxy.blockIPFormat
 
 	return nil
@@ -126,7 +118,7 @@ func (plugin *PluginBlockIP) Eval(pluginsState *PluginsState, msg *dns.Msg) erro
 	}
 	if reject {
 		pluginsState.action = PluginsActionReject
-		if plugin.outFd != nil {
+		if plugin.logger != nil {
 			questions := msg.Question
 			if len(questions) != 1 {
 				return nil
@@ -153,12 +145,10 @@ func (plugin *PluginBlockIP) Eval(pluginsState *PluginsState, msg *dns.Msg) erro
 			} else {
 				dlog.Fatalf("Unexpected log format: [%s]", plugin.format)
 			}
-			plugin.Lock()
-			if plugin.outFd == nil {
+			if plugin.logger == nil {
 				return errors.New("Log file not initialized")
 			}
-			plugin.outFd.WriteString(line)
-			defer plugin.Unlock()
+			plugin.logger.Write([]byte(line))
 		}
 	}
 	return nil

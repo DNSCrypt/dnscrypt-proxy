@@ -24,6 +24,10 @@
 
 [[constraint]]
   branch = "master"
+  name = "github.com/facebookgo/pidfile"
+
+[[constraint]]
+  branch = "master"
   name = "github.com/hashicorp/go-immutable-radix"
 
 [[constraint]]
@@ -59,5 +63,5 @@
   name = "golang.org/x/crypto"
 
 [[constraint]]
-  branch = "master"
-  name = "github.com/facebookgo/pidfile"
+  name = "gopkg.in/natefinch/lumberjack.v2"
+  version = "2.1.0"

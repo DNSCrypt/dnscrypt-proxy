@@ -5,17 +5,16 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
-	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 	"unicode"
 
 	"github.com/hashicorp/go-immutable-radix"
 	"github.com/jedisct1/dlog"
 	"github.com/miekg/dns"
+	lumberjack "gopkg.in/natefinch/lumberjack.v2"
 )
 
 type PluginBlockType int
@@ -29,14 +28,13 @@ const (
 )
 
 type PluginBlockName struct {
-	sync.Mutex
 	blockedPrefixes      *iradix.Tree
 	blockedSuffixes      *iradix.Tree
 	allWeeklyRanges      *map[string]WeeklyRanges
 	weeklyRangesIndirect map[string]*WeeklyRanges
 	blockedSubstrings    []string
 	blockedPatterns      []string
-	outFd                *os.File
+	logger               *lumberjack.Logger
 	format               string
 }
 
@@ -157,13 +155,7 @@ func (plugin *PluginBlockName) Init(proxy *Proxy) error {
 	if len(proxy.blockNameLogFile) == 0 {
 		return nil
 	}
-	plugin.Lock()
-	defer plugin.Unlock()
-	outFd, err := os.OpenFile(proxy.blockNameLogFile, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644)
-	if err != nil {
-		return err
-	}
-	plugin.outFd = outFd
+	plugin.logger = &lumberjack.Logger{LocalTime: true, MaxSize: proxy.logMaxSize, MaxAge: proxy.logMaxAge, MaxBackups: proxy.logMaxBackups, Filename: proxy.blockNameLogFile, Compress: true}
 	plugin.format = proxy.blockNameFormat
 
 	return nil
@@ -236,7 +228,7 @@ func (plugin *PluginBlockName) Eval(pluginsState *PluginsState, msg *dns.Msg) er
 	}
 	if reject {
 		pluginsState.action = PluginsActionReject
-		if plugin.outFd != nil {
+		if plugin.logger != nil {
 			var clientIPStr string
 			if pluginsState.clientProto == "udp" {
 				clientIPStr = (*pluginsState.clientAddr).(*net.UDPAddr).IP.String()
@@ -255,12 +247,10 @@ func (plugin *PluginBlockName) Eval(pluginsState *PluginsState, msg *dns.Msg) er
 			} else {
 				dlog.Fatalf("Unexpected log format: [%s]", plugin.format)
 			}
-			plugin.Lock()
-			if plugin.outFd == nil {
+			if plugin.logger == nil {
 				return errors.New("Log file not initialized")
 			}
-			plugin.outFd.WriteString(line)
-			defer plugin.Unlock()
+			plugin.logger.Write([]byte(line))
 		}
 	}
 	return nil
