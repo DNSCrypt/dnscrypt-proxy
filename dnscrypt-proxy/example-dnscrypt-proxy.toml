@@ -119,6 +119,18 @@ fallback_resolver = '9.9.9.9:53'
 ignore_system_dns = false
 
 
+## Automatic log files rotation
+
+# Maximum log files size in MB
+log_files_max_size = 10
+
+# Maximum log files age in days
+log_files_max_age = 7
+
+# Maximum log files backups to keep
+log_files_backups = 1
+
+
 
 #########################
 #        Filters        #
