@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 	"unicode"
@@ -170,12 +171,16 @@ func NewSource(xTransport *XTransport, url string, minisignKeyStr string, cacheF
 	}
 	if !cached {
 		if err = AtomicFileWrite(cacheFile, []byte(in)); err != nil {
-			dlog.Warnf("%s: %s", cacheFile, err)
+			if absPath, err2 := filepath.Abs(cacheFile); err2 == nil {
+				dlog.Warnf("%s: %s", absPath, err)
+			}
 		}
 	}
 	if !sigCached {
 		if err = AtomicFileWrite(sigCacheFile, []byte(sigStr)); err != nil {
-			dlog.Warnf("%s: %s", sigCacheFile, err)
+			if absPath, err2 := filepath.Abs(sigCacheFile); err2 == nil {
+				dlog.Warnf("%s: %s", absPath, err)
+			}
 		}
 	}
 	dlog.Noticef("Source [%s] loaded", url)
