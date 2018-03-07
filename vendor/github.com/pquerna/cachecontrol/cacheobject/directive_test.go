@@ -246,6 +246,27 @@ func TestResPrivate(t *testing.T) {
 	require.Equal(t, cd.PrivatePresent, true)
 }
 
+func TestResImmutable(t *testing.T) {
+	cd, err := ParseResponseCacheControl(`immutable`)
+	require.NoError(t, err)
+	require.NotNil(t, cd)
+	require.Equal(t, cd.Immutable, true)
+}
+
+func TestResStaleIfError(t *testing.T) {
+	cd, err := ParseResponseCacheControl(`stale-if-error=99999`)
+	require.NoError(t, err)
+	require.NotNil(t, cd)
+	require.Equal(t, cd.StaleIfError, DeltaSeconds(99999))
+}
+
+func TestResStaleWhileRevalidate(t *testing.T) {
+	cd, err := ParseResponseCacheControl(`stale-while-revalidate=99999`)
+	require.NoError(t, err)
+	require.NotNil(t, cd)
+	require.Equal(t, cd.StaleWhileRevalidate, DeltaSeconds(99999))
+}
+
 func TestParseDeltaSecondsZero(t *testing.T) {
 	ds, err := parseDeltaSeconds("0")
 	require.NoError(t, err)

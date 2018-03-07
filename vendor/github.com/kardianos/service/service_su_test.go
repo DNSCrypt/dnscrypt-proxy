@@ -8,6 +8,7 @@
 package service_test
 
 import (
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -23,17 +24,18 @@ import (
 const runAsServiceArg = "RunThisAsService"
 
 func TestMain(m *testing.M) {
-	if len(os.Args) == 2 {
+	reportDir := flag.String("su.reportDir", "", "")
+	runAsService := flag.Bool("su.runAsService", false, "")
+	flag.Parse()
+	if !*runAsService {
 		os.Exit(m.Run())
-	} else if len(os.Args) == 4 && os.Args[2] == runAsServiceArg {
-		reportDir := os.Args[3]
-		writeReport(reportDir, "call")
-		runService()
-		writeReport(reportDir, "finished")
-		os.Exit(0)
 	}
-
-	log.Fatalf("Invalid arguments: %v", os.Args)
+	if len(*reportDir) == 0 {
+		log.Fatal("missing su.reportDir argument")
+	}
+	writeReport(*reportDir, "call")
+	runService()
+	writeReport(*reportDir, "finished")
 }
 
 func TestInstallRunRestartStopRemove(t *testing.T) {
@@ -168,7 +170,7 @@ func mustNewRunAsService(
 ) service.Service {
 	sc := &service.Config{
 		Name:      "go_service_test",
-		Arguments: []string{"-test.v=true", runAsServiceArg, reportDir},
+		Arguments: []string{"-test.v=true", "-su.runAsService", "-su.reportDir", reportDir},
 	}
 	s, err := service.New(p, sc)
 	if err != nil {

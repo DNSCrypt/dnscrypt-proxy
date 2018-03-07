@@ -65,3 +65,7 @@
 [[constraint]]
   name = "gopkg.in/natefinch/lumberjack.v2"
   version = "2.1.0"
+
+[[constraint]]
+  branch = "master"
+  name = "github.com/jedisct1/go-clocksmith"

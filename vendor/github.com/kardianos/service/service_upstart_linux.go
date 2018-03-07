@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"regexp"
+	"strconv"
 	"text/template"
 	"time"
 )
@@ -54,6 +56,47 @@ func (s *upstart) configPath() (cp string, err error) {
 	cp = "/etc/init/" + s.Config.Name + ".conf"
 	return
 }
+
+func (s *upstart) hasKillStanza() bool {
+	defaultValue := true
+
+	out, err := exec.Command("/sbin/init", "--version").Output()
+	if err != nil {
+		return defaultValue
+	}
+
+	re := regexp.MustCompile(`init \(upstart (\d+.\d+.\d+)\)`)
+	matches := re.FindStringSubmatch(string(out))
+	if len(matches) != 2 {
+		return defaultValue
+	}
+
+	version := make([]int, 3)
+	for idx, vStr := range strings.Split(matches[1], ".") {
+		version[idx], err = strconv.Atoi(vStr)
+		if err != nil {
+			return defaultValue
+		}
+	}
+
+	maxVersion := []int{0, 6, 5}
+	if versionAtMost(version, maxVersion) {
+		return false
+	}
+
+	return defaultValue
+}
+
+func versionAtMost(version, max []int) bool {
+	for idx, m := range max {
+		v := version[idx]
+		if v > m {
+			return false
+		}
+	}
+	return true
+}
+
 func (s *upstart) template() *template.Template {
 	return template.Must(template.New("").Funcs(tf).Parse(upstartScript))
 }
@@ -81,10 +124,12 @@ func (s *upstart) Install() error {
 
 	var to = &struct {
 		*Config
-		Path string
+		Path          string
+		HasKillStanza bool
 	}{
 		s.Config,
 		path,
+		s.hasKillStanza(),
 	}
 
 	return s.template().Execute(f, to)
@@ -149,7 +194,7 @@ const upstartScript = `# {{.Description}}
 
 {{if .DisplayName}}description    "{{.DisplayName}}"{{end}}
 
-kill signal INT
+{{if .HasKillStanza}}kill signal INT{{end}}
 {{if .ChRoot}}chroot {{.ChRoot}}{{end}}
 {{if .WorkingDirectory}}chdir {{.WorkingDirectory}}{{end}}
 start on filesystem or runlevel [2345]

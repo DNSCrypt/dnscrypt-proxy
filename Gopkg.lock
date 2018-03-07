@@ -96,6 +96,12 @@
 
 [[projects]]
   branch = "master"
+  name = "github.com/jedisct1/go-clocksmith"
+  packages = ["."]
+  revision = "cd58e2ceb29bcb6568281e33a1166f55d2d80188"
+
+[[projects]]
+  branch = "master"
   name = "github.com/jedisct1/go-minisign"
   packages = ["."]
   revision = "f404c079ea5f0d4669fe617c553651f75167494e"
@@ -116,7 +122,7 @@
   branch = "master"
   name = "github.com/kardianos/service"
   packages = ["."]
-  revision = "89346fbadecfd8c0ca98cfd31523f8eba9b4abbf"
+  revision = "0ab6efe2ea51f0531a8ceaaa33416b3aab844c28"
 
 [[projects]]
   name = "github.com/miekg/dns"
@@ -128,7 +134,7 @@
   branch = "master"
   name = "github.com/pquerna/cachecontrol"
   packages = ["cacheobject"]
-  revision = "0dec1b30a0215bb68605dfc568e8855066c9202d"
+  revision = "525d0eb5f91d30e3b1548de401b7ef9ea6898520"
 
 [[projects]]
   branch = "master"
@@ -142,7 +148,7 @@
     "poly1305",
     "salsa20/salsa"
   ]
-  revision = "91a49db82a88618983a78a06c1cbd4e00ab749ab"
+  revision = "85f98707c97e11569271e4d9b3d397e079c4f4d0"
 
 [[projects]]
   branch = "master"
@@ -154,7 +160,7 @@
     "ipv4",
     "ipv6"
   ]
-  revision = "22ae77b79946ea320088417e4d50825671d82d57"
+  revision = "d25186b37f34ebdbbea8f488ef055638dfab272d"
 
 [[projects]]
   branch = "master"
@@ -177,6 +183,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "32f9b1bb4dd9f1ca13e9daedf85fc6cc9f3a97a023171a32ac7a2144ba9c1956"
+  inputs-digest = "5305be9b7e7f5f7d400b08b3b175eda810ccb13aa04049ff7efd58c13c04a809"
   solver-name = "gps-cdcl"
   solver-version = 1
