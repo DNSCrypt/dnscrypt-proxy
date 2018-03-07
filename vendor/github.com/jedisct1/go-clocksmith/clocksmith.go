@@ -4,7 +4,7 @@ import "time"
 
 const (
 	// DefaultGranularity - Maximum duration of actual time.Sleep() calls
-	DefaultGranularity = 10 * time.Second
+	DefaultGranularity = 5 * time.Second
 )
 
 // SleepWithGranularity - sleeps for the given amount of time, with the given granularity;
