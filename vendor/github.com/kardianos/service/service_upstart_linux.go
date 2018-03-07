@@ -8,9 +8,11 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"os/signal"
 	"regexp"
 	"strconv"
+	"strings"
 	"text/template"
 	"time"
 )
