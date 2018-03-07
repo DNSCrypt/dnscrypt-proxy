@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/jedisct1/dlog"
+	clocksmith "github.com/jedisct1/go-clocksmith"
 	"github.com/pquerna/cachecontrol/cacheobject"
 	"golang.org/x/crypto/curve25519"
 )
@@ -100,7 +101,7 @@ func (proxy *Proxy) StartProxy() {
 			if proxy.serversInfo.liveServers() == 0 {
 				delay = proxy.certRefreshDelayAfterFailure
 			}
-			time.Sleep(delay)
+			clocksmith.Sleep(delay)
 			proxy.serversInfo.refresh(proxy)
 		}
 	}()
@@ -121,7 +122,7 @@ func (proxy *Proxy) prefetcher(urlsToPrefetch *[]URLToPrefetch) {
 					}
 				}
 			}
-			time.Sleep(60 * time.Second)
+			clocksmith.Sleep(60 * time.Second)
 		}
 	}()
 }
