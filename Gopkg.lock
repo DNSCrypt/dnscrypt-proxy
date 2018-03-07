@@ -98,7 +98,7 @@
   branch = "master"
   name = "github.com/jedisct1/go-clocksmith"
   packages = ["."]
-  revision = "cd58e2ceb29bcb6568281e33a1166f55d2d80188"
+  revision = "37ddc416ad55843f387500810537f09f0c8d2cf0"
 
 [[projects]]
   branch = "master"

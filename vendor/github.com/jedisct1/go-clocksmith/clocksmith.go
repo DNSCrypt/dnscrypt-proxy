@@ -14,10 +14,13 @@ func SleepWithGranularity(duration time.Duration, granularity time.Duration) {
 		time.Sleep(duration)
 		return
 	}
-	now := time.Now()
+	start := time.Now().Unix()
 	for {
 		time.Sleep(granularity)
-		if elapsed := time.Since(now); elapsed > duration-granularity {
+		elapsed := time.Duration(time.Now().Unix()-start) * time.Second
+		if elapsed < 0 || elapsed > duration {
+			break
+		} else if elapsed > duration-granularity {
 			time.Sleep(duration - elapsed)
 			break
 		}
