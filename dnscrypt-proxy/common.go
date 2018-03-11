@@ -64,7 +64,7 @@ func ReadPrefixed(conn *net.TCPConn) ([]byte, error) {
 			}
 		}
 		if pos >= 2+packetLength {
-			return buf[2:pos], nil
+			return buf[2:2+packetLength], nil
 		}
 	}
 }
