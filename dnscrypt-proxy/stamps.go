@@ -99,7 +99,7 @@ func newDNSCryptServerStamp(bin []byte) (ServerStamp, error) {
 	pos++
 	stamp.serverAddrStr = string(bin[pos : pos+len])
 	pos += len
-	if net.ParseIP(stamp.serverAddrStr) != nil {
+	if (net.ParseIP(strings.TrimRight(strings.TrimLeft(stamp.serverAddrStr, "["), "]"))) != nil {
 		stamp.serverAddrStr = fmt.Sprintf("%s:%d", stamp.serverAddrStr, DefaultPort)
 	}
 
