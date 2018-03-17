@@ -125,9 +125,8 @@ func (xTransport *XTransport) Fetch(method string, url *url.URL, accept string, 
 				err = fmt.Errorf("Webserver returned code %d", resp.StatusCode)
 			}
 			return resp, rtt, err
-		} else {
-			(*xTransport.transport).CloseIdleConnections()
 		}
+		(*xTransport.transport).CloseIdleConnections()
 		dlog.Debugf("[%s]: [%s]", req.URL, err)
 	} else {
 		dlog.Debug("Ignoring system DNS")

@@ -236,7 +236,7 @@ func (serversInfo *ServersInfo) fetchDNSCryptServerInfo(proxy *Proxy, name strin
 	if err != nil {
 		return ServerInfo{}, err
 	}
-	serverInfo := ServerInfo{
+	return ServerInfo{
 		Proto:              StampProtoTypeDNSCrypt,
 		MagicQuery:         certInfo.MagicQuery,
 		ServerPk:           certInfo.ServerPk,
@@ -247,8 +247,7 @@ func (serversInfo *ServersInfo) fetchDNSCryptServerInfo(proxy *Proxy, name strin
 		UDPAddr:            remoteUDPAddr,
 		TCPAddr:            remoteTCPAddr,
 		initialRtt:         rtt,
-	}
-	return serverInfo, nil
+	}, nil
 }
 
 func (serversInfo *ServersInfo) fetchDoHServerInfo(proxy *Proxy, name string, stamp ServerStamp, isNew bool) (ServerInfo, error) {
@@ -322,8 +321,7 @@ func (serversInfo *ServersInfo) fetchDoHServerInfo(proxy *Proxy, name string, st
 	} else {
 		dlog.Infof("[%s] OK (DoH) - rtt: %dms", name, rtt.Nanoseconds()/1000000)
 	}
-
-	serverInfo := ServerInfo{
+	return ServerInfo{
 		Proto:      StampProtoTypeDoH,
 		Name:       name,
 		Timeout:    proxy.timeout,
@@ -331,8 +329,7 @@ func (serversInfo *ServersInfo) fetchDoHServerInfo(proxy *Proxy, name string, st
 		HostName:   stamp.providerName,
 		initialRtt: int(rtt.Nanoseconds() / 1000000),
 		useGet:     useGet,
-	}
-	return serverInfo, nil
+	}, nil
 }
 
 func (serverInfo *ServerInfo) noticeFailure(proxy *Proxy) {

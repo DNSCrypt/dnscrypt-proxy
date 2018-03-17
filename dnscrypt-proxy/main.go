@@ -75,8 +75,8 @@ func main() {
 }
 
 func (app *App) Start(service service.Service) error {
-	proxy := app.proxy
-	if err := InitPluginsGlobals(&proxy.pluginsGlobals, &proxy); err != nil {
+	proxy := &app.proxy
+	if err := InitPluginsGlobals(&proxy.pluginsGlobals, proxy); err != nil {
 		dlog.Fatal(err)
 	}
 	if proxy.daemonize {
@@ -86,10 +86,10 @@ func (app *App) Start(service service.Service) error {
 	app.wg.Add(1)
 	if service != nil {
 		go func() {
-			app.AppMain(&proxy)
+			app.AppMain(proxy)
 		}()
 	} else {
-		app.AppMain(&proxy)
+		app.AppMain(proxy)
 	}
 	return nil
 }
