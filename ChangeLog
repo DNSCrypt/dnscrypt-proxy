@@ -1,4 +1,11 @@
 
+* Version 2.0.7
+ - Bug fix: optional ports were not properly parsed with IPv6
+addresses -- thanks to @bleeee for the report and fix.
+ - Bug fix: truncate TCP queries to the prefixed length.
+ - Certificates are force-refreshed after a time jump (e.g. when a
+system resumes from hibernation).
+
 * Version 2.0.6
  - Automatic log files rotation was finally implemented.
  - A new -pidfile command-line option to write the PID file was added.
