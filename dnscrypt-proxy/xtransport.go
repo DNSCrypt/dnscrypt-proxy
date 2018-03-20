@@ -165,7 +165,7 @@ func (xTransport *XTransport) Fetch(method string, url *url.URL, accept string, 
 	xTransport.cachedIPs.Lock()
 	xTransport.cachedIPs.cache[host] = *foundIP
 	xTransport.cachedIPs.Unlock()
-	dlog.Debugf("[%s] IP address [%s] added to the cache", host, foundIP)
+	dlog.Debugf("[%s] IP address [%s] added to the cache", host, *foundIP)
 
 	start := time.Now()
 	resp, err := client.Do(req)
