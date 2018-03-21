@@ -51,6 +51,13 @@ func NewXTransport(timeout time.Duration, useIPv4 bool, useIPv6 bool) *XTranspor
 	return &xTransport
 }
 
+func (xTransport *XTransport) clearCache() {
+	xTransport.cachedIPs.Lock()
+	xTransport.cachedIPs.cache = make(map[string]string)
+	xTransport.cachedIPs.Unlock()
+	dlog.Info("IP cache cleared")
+}
+
 func (xTransport *XTransport) rebuildTransport() {
 	dlog.Debug("Rebuilding transport")
 	if xTransport.transport != nil {
