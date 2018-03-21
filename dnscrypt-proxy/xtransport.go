@@ -135,29 +135,49 @@ func (xTransport *XTransport) Fetch(method string, url *url.URL, accept string, 
 		dlog.Debugf("IP for [%s] was cached to [%s], but connection failed: [%s]", host, cachedIP, err)
 		return nil, 0, err
 	}
-	if !xTransport.useIPv4 {
-		return nil, 0, fmt.Errorf("IPv4 connectivity would be required to use [%s]", host)
-	}
-	dnsClient := new(dns.Client)
-	msg := new(dns.Msg)
-	msg.SetQuestion(dns.Fqdn(host), dns.TypeA)
-	msg.SetEdns0(4096, true)
 	if !xTransport.ignoreSystemDNS {
 		dlog.Noticef("System DNS configuration not usable yet, exceptionally resolving [%s] using fallback resolver [%s]", host, xTransport.fallbackResolver)
 	} else {
 		dlog.Debugf("Resolving [%s] using fallback resolver [%s]", host, xTransport.fallbackResolver)
 	}
-	in, _, err := dnsClient.Exchange(msg, xTransport.fallbackResolver)
+	dnsClient := new(dns.Client)
+
+	var foundIP *string
+	err = nil
+	if xTransport.useIPv4 {
+		msg := new(dns.Msg)
+		msg.SetQuestion(dns.Fqdn(host), dns.TypeA)
+		msg.SetEdns0(4096, true)
+		var in *dns.Msg
+		in, _, err = dnsClient.Exchange(msg, xTransport.fallbackResolver)
+		if err == nil {
+			for _, answer := range in.Answer {
+				if answer.Header().Rrtype == dns.TypeA {
+					foundIPx := answer.(*dns.A).A.String()
+					foundIP = &foundIPx
+					break
+				}
+			}
+		}
+	}
+	if xTransport.useIPv6 && foundIP == nil {
+		msg := new(dns.Msg)
+		msg.SetQuestion(dns.Fqdn(host), dns.TypeAAAA)
+		msg.SetEdns0(4096, true)
+		var in *dns.Msg
+		in, _, err = dnsClient.Exchange(msg, xTransport.fallbackResolver)
+		if err == nil {
+			for _, answer := range in.Answer {
+				if answer.Header().Rrtype == dns.TypeAAAA {
+					foundIPx := "[" + answer.(*dns.AAAA).AAAA.String() + "]"
+					foundIP = &foundIPx
+					break
+				}
+			}
+		}
+	}
 	if err != nil {
 		return nil, 0, err
-	}
-	var foundIP *string
-	for _, answer := range in.Answer {
-		if answer.Header().Rrtype == dns.TypeA {
-			foundIPx := answer.(*dns.A).A.String()
-			foundIP = &foundIPx
-			break
-		}
 	}
 	if foundIP == nil {
 		return nil, 0, fmt.Errorf("No IP found for [%s]", host)

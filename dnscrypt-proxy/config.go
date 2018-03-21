@@ -182,6 +182,8 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 	if len(config.FallbackResolver) > 0 {
 		proxy.xTransport.ignoreSystemDNS = config.IgnoreSystemDNS
 	}
+	proxy.xTransport.useIPv4 = config.SourceIPv4
+	proxy.xTransport.useIPv6 = config.SourceIPv6
 	proxy.timeout = time.Duration(config.Timeout) * time.Millisecond
 	proxy.maxClients = config.MaxClients
 	proxy.mainProto = "udp"
