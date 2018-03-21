@@ -414,6 +414,9 @@ func (config *Config) loadSource(proxy *Proxy, requiredProps ServerInformalPrope
 		}
 		if config.SourceIPv4 || config.SourceIPv6 {
 			isIPv4, isIPv6 := true, false
+			if registeredServer.stamp.proto == StampProtoTypeDoH {
+				isIPv4, isIPv6 = true, true
+			}
 			if strings.HasPrefix(registeredServer.stamp.serverAddrStr, "[") {
 				isIPv4, isIPv6 = false, true
 			}
