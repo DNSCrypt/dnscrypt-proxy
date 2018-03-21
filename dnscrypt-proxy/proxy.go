@@ -89,9 +89,6 @@ func (proxy *Proxy) StartProxy() {
 	liveServers, err := proxy.serversInfo.refresh(proxy)
 	if liveServers > 0 {
 		dlog.Noticef("dnscrypt-proxy is ready - live servers: %d", liveServers)
-		if !proxy.xTransport.ignoreSystemDNS {
-			proxy.xTransport.clearCache()
-		}
 		SystemDNotify()
 	} else if err != nil {
 		dlog.Error(err)
