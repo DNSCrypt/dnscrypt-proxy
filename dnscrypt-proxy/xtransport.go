@@ -91,6 +91,44 @@ func (xTransport *XTransport) rebuildTransport() {
 	xTransport.transport = transport
 }
 
+func (xTransport *XTransport) resolve(dnsClient *dns.Client, host string, resolver string) (*string, error) {
+	var foundIP *string
+	var err error
+	if xTransport.useIPv4 {
+		msg := new(dns.Msg)
+		msg.SetQuestion(dns.Fqdn(host), dns.TypeA)
+		msg.SetEdns0(4096, true)
+		var in *dns.Msg
+		in, _, err = dnsClient.Exchange(msg, resolver)
+		if err == nil {
+			for _, answer := range in.Answer {
+				if answer.Header().Rrtype == dns.TypeA {
+					foundIPx := answer.(*dns.A).A.String()
+					foundIP = &foundIPx
+					return foundIP, nil
+				}
+			}
+		}
+	}
+	if xTransport.useIPv6 && foundIP == nil {
+		msg := new(dns.Msg)
+		msg.SetQuestion(dns.Fqdn(host), dns.TypeAAAA)
+		msg.SetEdns0(4096, true)
+		var in *dns.Msg
+		in, _, err = dnsClient.Exchange(msg, resolver)
+		if err == nil {
+			for _, answer := range in.Answer {
+				if answer.Header().Rrtype == dns.TypeAAAA {
+					foundIPx := "[" + answer.(*dns.AAAA).AAAA.String() + "]"
+					foundIP = &foundIPx
+					return foundIP, nil
+				}
+			}
+		}
+	}
+	return nil, err
+}
+
 func (xTransport *XTransport) Fetch(method string, url *url.URL, accept string, contentType string, body *io.ReadCloser, timeout time.Duration, padding *string) (*http.Response, time.Duration, error) {
 	if timeout <= 0 {
 		timeout = xTransport.timeout
@@ -148,41 +186,7 @@ func (xTransport *XTransport) Fetch(method string, url *url.URL, accept string, 
 		dlog.Debugf("Resolving [%s] using fallback resolver [%s]", host, xTransport.fallbackResolver)
 	}
 	dnsClient := new(dns.Client)
-
-	var foundIP *string
-	err = nil
-	if xTransport.useIPv4 {
-		msg := new(dns.Msg)
-		msg.SetQuestion(dns.Fqdn(host), dns.TypeA)
-		msg.SetEdns0(4096, true)
-		var in *dns.Msg
-		in, _, err = dnsClient.Exchange(msg, xTransport.fallbackResolver)
-		if err == nil {
-			for _, answer := range in.Answer {
-				if answer.Header().Rrtype == dns.TypeA {
-					foundIPx := answer.(*dns.A).A.String()
-					foundIP = &foundIPx
-					break
-				}
-			}
-		}
-	}
-	if xTransport.useIPv6 && foundIP == nil {
-		msg := new(dns.Msg)
-		msg.SetQuestion(dns.Fqdn(host), dns.TypeAAAA)
-		msg.SetEdns0(4096, true)
-		var in *dns.Msg
-		in, _, err = dnsClient.Exchange(msg, xTransport.fallbackResolver)
-		if err == nil {
-			for _, answer := range in.Answer {
-				if answer.Header().Rrtype == dns.TypeAAAA {
-					foundIPx := "[" + answer.(*dns.AAAA).AAAA.String() + "]"
-					foundIP = &foundIPx
-					break
-				}
-			}
-		}
-	}
+	foundIP, err := xTransport.resolve(dnsClient, host, xTransport.fallbackResolver)
 	if err != nil {
 		return nil, 0, err
 	}
