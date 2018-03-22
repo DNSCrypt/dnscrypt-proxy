@@ -109,6 +109,8 @@ cert_refresh_delay = 240
 ## don't include host names without IP addresses.
 ## It will not be used if the configured system DNS works.
 ## A resolver supporting DNSSEC is recommended. This may become mandatory.
+##
+## People in China may need to use 114.114.114.114:53 here.
 
 fallback_resolver = '9.9.9.9:53'
 
