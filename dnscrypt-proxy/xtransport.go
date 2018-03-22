@@ -19,7 +19,7 @@ import (
 	"github.com/miekg/dns"
 )
 
-const DefaultFallbackResolver = "114.114.114.114:53"
+const DefaultFallbackResolver = "9.9.9.9:53"
 
 type CachedIPs struct {
 	sync.RWMutex

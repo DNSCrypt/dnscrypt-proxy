@@ -110,7 +110,7 @@ cert_refresh_delay = 240
 ## It will not be used if the configured system DNS works.
 ## A resolver supporting DNSSEC is recommended. This may become mandatory.
 
-fallback_resolver = '114.114.114.114:53'
+fallback_resolver = '9.9.9.9:53'
 
 
 ## Never try to use the system DNS settings; unconditionally use the
