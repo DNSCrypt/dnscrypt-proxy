@@ -1,5 +1,7 @@
 [Unit]
 Description=dnscrypt-proxy listening socket
+Before=nss-lookup.target
+Wants=nss-lookup.target
 
 [Socket]
 ListenStream=127.0.0.1:53
