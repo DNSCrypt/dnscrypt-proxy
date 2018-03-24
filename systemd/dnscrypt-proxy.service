@@ -13,6 +13,15 @@ WantedBy=multi-user.target
 [Service]
 Type=simple
 NonBlocking=true
+ProtectHome=true
 
 # Change this
 ExecStart=/opt/dnscrypt-proxy/dnscrypt-proxy
+
+# Run dnscrypt-proxy as unprivileged user with
+# temporary assigned UID/GID. See man:systemd.exec
+# for more info. Requires systemd 232+.
+#DynamicUser=yes
+#CacheDirectory=dnscrypt-proxy
+#LogsDirectory=dnscrypt-proxy
+#RuntimeDirectory=dnscrypt-proxy
