@@ -1,5 +1,5 @@
 [Unit]
-Description=dnscrypt-proxy listening socket
+Description=DNSCrypt-proxy socket
 Documentation=https://github.com/jedisct1/dnscrypt-proxy/wiki
 Before=nss-lookup.target
 Wants=nss-lookup.target
