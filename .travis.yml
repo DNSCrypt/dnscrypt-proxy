@@ -60,11 +60,11 @@ script:
   - tar czpvf dnscrypt-proxy-freebsd_amd64-${TRAVIS_TAG:-dev}.tar.gz freebsd-amd64
 
   - go clean
-  - env GOOS=freebsd GOARCH=arm GOARM=7 go build -ldflags="-s -w"
-  - mkdir freebsd-armv7
-  - ln dnscrypt-proxy freebsd-armv7/
-  - ln ../LICENSE example-dnscrypt-proxy.toml example-*.txt freebsd-armv7/
-  - tar czpvf dnscrypt-proxy-freebsd_armv7-${TRAVIS_TAG:-dev}.tar.gz freebsd-armv7
+  - env GOOS=freebsd GOARCH=arm go build -ldflags="-s -w"
+  - mkdir freebsd-arm
+  - ln dnscrypt-proxy freebsd-arm/
+  - ln ../LICENSE example-dnscrypt-proxy.toml example-*.txt freebsd-arm/
+  - tar czpvf dnscrypt-proxy-freebsd_arm-${TRAVIS_TAG:-dev}.tar.gz freebsd-arm
 
   - go clean
   - env GOOS=dragonfly GOARCH=amd64 go build -ldflags="-s -w"
