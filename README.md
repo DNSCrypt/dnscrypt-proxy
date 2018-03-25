@@ -34,6 +34,7 @@ Up-to-date, pre-built binaries are available for:
 * Android/x86
 * Android/x86_64
 * Dragonfly BSD
+* FreeBSD/armv7
 * FreeBSD/x86
 * FreeBSD/x86_64
 * Linux/arm
