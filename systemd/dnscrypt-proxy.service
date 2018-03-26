@@ -1,27 +1,26 @@
 [Unit]
-Description=DNSCrypt client proxy
-Documentation=man:dnscrypt-proxy(8)
+Description=DNSCrypt-proxy client
+Documentation=https://github.com/jedisct1/dnscrypt-proxy/wiki
 Requires=dnscrypt-proxy.socket
 After=network.target
 Before=nss-lookup.target
 Wants=nss-lookup.target
 
-[Install]
-Also=dnscrypt-proxy.socket
-WantedBy=multi-user.target
-
 [Service]
-Type=simple
 NonBlocking=true
-ProtectHome=true
-
-# Change this
-ExecStart=/opt/dnscrypt-proxy/dnscrypt-proxy
+ExecStart=/usr/bin/dnscrypt-proxy --config /etc/dnscrypt-proxy/dnscrypt-proxy.toml
+ProtectHome=yes
+ProtectControlGroups=yes
+ProtectKernelModules=yes
 
 # Run dnscrypt-proxy as unprivileged user with
 # temporary assigned UID/GID. See man:systemd.exec
 # for more info. Requires systemd 232+.
-#DynamicUser=yes
-#CacheDirectory=dnscrypt-proxy
-#LogsDirectory=dnscrypt-proxy
-#RuntimeDirectory=dnscrypt-proxy
+DynamicUser=yes
+CacheDirectory=dnscrypt-proxy
+LogsDirectory=dnscrypt-proxy
+RuntimeDirectory=dnscrypt-proxy
+
+[Install]
+Also=dnscrypt-proxy.socket
+WantedBy=multi-user.target
