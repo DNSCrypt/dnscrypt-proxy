@@ -16,10 +16,11 @@ def parse_list(content, trusted=False):
     rx_h = re.compile(r'^[0-9]{1,3}[.][0-9]{1,3}[.][0-9]{1,3}[.][0-9]{1,3}\s+([a-z0-9.-]+[.][a-z]{2,})$')
     rx_mdl = re.compile(r'^"[^"]+","([a-z0-9.-]+[.][a-z]{2,})",')
     rx_b = re.compile(r'^([a-z0-9.-]+[.][a-z]{2,}),.+,[0-9: /-]+,')
+    rx_dq = re.compile(r'^address=/([a-z0-9.-]+[.][a-z]{2,})/.')
     rx_trusted = re.compile(r'^([*a-z0-9.-]+)$')
 
     names = set()
-    rx_set = [rx_u, rx_l, rx_h, rx_mdl, rx_b]
+    rx_set = [rx_u, rx_l, rx_h, rx_mdl, rx_b, rx_dq]
     if trusted:
         rx_set = [rx_trusted]
     for line in content.splitlines():
