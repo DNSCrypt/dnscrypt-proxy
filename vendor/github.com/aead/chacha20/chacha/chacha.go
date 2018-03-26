@@ -28,6 +28,7 @@ const (
 var (
 	useSSE2  bool
 	useSSSE3 bool
+	useAVX   bool
 	useAVX2  bool
 )
 

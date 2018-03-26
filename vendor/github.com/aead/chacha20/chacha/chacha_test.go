@@ -23,14 +23,19 @@ func fromHex(bits string) []byte {
 }
 
 func TestHChaCha20(t *testing.T) {
-	defer func(sse2, ssse3, avx2 bool) {
-		useSSE2, useSSSE3, useAVX2 = sse2, ssse3, avx2
-	}(useSSE2, useSSSE3, useAVX2)
+	defer func(sse2, ssse3, avx, avx2 bool) {
+		useSSE2, useSSSE3, useAVX, useAVX2 = sse2, ssse3, avx, avx2
+	}(useSSE2, useSSSE3, useAVX, useAVX2)
 
 	if useAVX2 {
 		t.Log("AVX2 version")
 		testHChaCha20(t)
 		useAVX2 = false
+	}
+	if useAVX {
+		t.Log("AVX version")
+		testIncremental(t, 5, 2049)
+		useAVX = false
 	}
 	if useSSSE3 {
 		t.Log("SSSE3 version")
@@ -47,14 +52,19 @@ func TestHChaCha20(t *testing.T) {
 }
 
 func TestVectors(t *testing.T) {
-	defer func(sse2, ssse3, avx2 bool) {
-		useSSE2, useSSSE3, useAVX2 = sse2, ssse3, avx2
-	}(useSSE2, useSSSE3, useAVX2)
+	defer func(sse2, ssse3, avx, avx2 bool) {
+		useSSE2, useSSSE3, useAVX, useAVX2 = sse2, ssse3, avx, avx2
+	}(useSSE2, useSSSE3, useAVX, useAVX2)
 
 	if useAVX2 {
 		t.Log("AVX2 version")
 		testVectors(t)
 		useAVX2 = false
+	}
+	if useAVX {
+		t.Log("AVX version")
+		testIncremental(t, 5, 2049)
+		useAVX = false
 	}
 	if useSSSE3 {
 		t.Log("SSSE3 version")
@@ -71,14 +81,19 @@ func TestVectors(t *testing.T) {
 }
 
 func TestIncremental(t *testing.T) {
-	defer func(sse2, ssse3, avx2 bool) {
-		useSSE2, useSSSE3, useAVX2 = sse2, ssse3, avx2
-	}(useSSE2, useSSSE3, useAVX2)
+	defer func(sse2, ssse3, avx, avx2 bool) {
+		useSSE2, useSSSE3, useAVX, useAVX2 = sse2, ssse3, avx, avx2
+	}(useSSE2, useSSSE3, useAVX, useAVX2)
 
 	if useAVX2 {
 		t.Log("AVX2 version")
 		testIncremental(t, 5, 2049)
 		useAVX2 = false
+	}
+	if useAVX {
+		t.Log("AVX version")
+		testIncremental(t, 5, 2049)
+		useAVX = false
 	}
 	if useSSSE3 {
 		t.Log("SSSE3 version")
@@ -131,7 +146,7 @@ func testVectors(t *testing.T) {
 }
 
 func testIncremental(t *testing.T, iter int, size int) {
-	sse2, ssse3, avx2 := useSSE2, useSSSE3, useAVX2
+	sse2, ssse3, avx, avx2 := useSSE2, useSSSE3, useAVX, useAVX2
 	msg, ref, stream := make([]byte, size), make([]byte, size), make([]byte, size)
 
 	for i := 0; i < iter; i++ {
@@ -154,21 +169,21 @@ func testIncremental(t *testing.T, iter int, size int) {
 		}
 
 		for j := 0; j <= len(msg); j++ {
-			useSSE2, useSSSE3, useAVX2 = false, false, false
+			useSSE2, useSSSE3, useAVX, useAVX2 = false, false, false, false
 			XORKeyStream(ref[:j], msg[:j], nonce, key[:], 20)
 
-			useSSE2, useSSSE3, useAVX2 = sse2, ssse3, avx2
+			useSSE2, useSSSE3, useAVX, useAVX2 = sse2, ssse3, avx, avx2
 			XORKeyStream(stream[:j], msg[:j], nonce, key[:], 20)
 
 			if !bytes.Equal(ref[:j], stream[:j]) {
 				t.Fatalf("Iteration %d failed:\n Message length: %d\n\n got:  %s\nwant: %s", i, j, toHex(stream[:j]), toHex(ref[:j]))
 			}
 
-			useSSE2, useSSSE3, useAVX2 = false, false, false
+			useSSE2, useSSSE3, useAVX, useAVX2 = false, false, false, false
 			c, _ := NewCipher(nonce, key[:], 20)
 			c.XORKeyStream(stream[:j], msg[:j])
 
-			useSSE2, useSSSE3, useAVX2 = sse2, ssse3, avx2
+			useSSE2, useSSSE3, useAVX, useAVX2 = sse2, ssse3, avx, avx2
 			c, _ = NewCipher(nonce, key[:], 20)
 			c.XORKeyStream(stream[:j], msg[:j])
 

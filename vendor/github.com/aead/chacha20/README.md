@@ -1,16 +1,19 @@
 [![Godoc Reference](https://godoc.org/github.com/aead/chacha20?status.svg)](https://godoc.org/github.com/aead/chacha20)
+[![Build Status](https://travis-ci.org/aead/chacha20.svg?branch=master)](https://travis-ci.org/aead/chacha20)
+[![Go Report Card](https://goreportcard.com/badge/aead/chacha20)](https://goreportcard.com/report/aead/chacha20)
 
 ## The ChaCha20 stream cipher
 
 ChaCha is a stream cipher family created by Daniel J. Bernstein.  
-The most common ChaCha cipher is ChaCha20 (20 rounds). ChaCha20 is standardized in [RFC 7539](https://tools.ietf.org/html/rfc7539 "RFC 7539").
+The most common ChaCha variant is ChaCha20 (20 rounds). ChaCha20 is
+standardized in [RFC 7539](https://tools.ietf.org/html/rfc7539 "RFC 7539").
 
 This package provides implementations of three ChaCha versions:
 - ChaCha20 with a 64 bit nonce (can en/decrypt up to 2^64 * 64 bytes for one key-nonce combination)  
 - ChaCha20 with a 96 bit nonce (can en/decrypt up to 2^32 * 64 bytes ~ 256 GB for one key-nonce combination)  
 - XChaCha20 with a 192 bit nonce (can en/decrypt up to 2^64 * 64 bytes for one key-nonce combination)  
 
-Furthermore the chacha subpackage implements ChaCha20/12 and ChaCha20/8.
+Furthermore the chacha sub package implements ChaCha20/12 and ChaCha20/8.
 These versions use 12 or 8 rounds instead of 20.
 But it's recommended to use ChaCha20 (with 20 rounds) - it will be fast enough for almost all purposes. 
 
@@ -18,8 +21,8 @@ But it's recommended to use ChaCha20 (with 20 rounds) - it will be fast enough f
 Install in your GOPATH: `go get -u github.com/aead/chacha20`
 
 ### Requirements
-All go versions >= 1.5.3 are supported.  
-Please notice, that the amd64 AVX2 asm implementation requires go1.7 or newer.
+All go versions >= 1.8.7 are supported.
+The code may also work on Go 1.7 but this is not tested.
 
 ### Performance
 

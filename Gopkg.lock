@@ -23,7 +23,7 @@
   branch = "master"
   name = "github.com/aead/chacha20"
   packages = ["chacha"]
-  revision = "c8d29375923a8e1d2a0f0dc0fc1d8a0aba5b97ba"
+  revision = "e0d4ab3067da29fbce5b60445bed6d54c41c3c62"
 
 [[projects]]
   branch = "master"
@@ -122,7 +122,7 @@
   branch = "master"
   name = "github.com/kardianos/service"
   packages = ["."]
-  revision = "0ab6efe2ea51f0531a8ceaaa33416b3aab844c28"
+  revision = "615a14ed75099c9eaac6949e22ac2341bf9d3197"
 
 [[projects]]
   name = "github.com/miekg/dns"
@@ -148,7 +148,7 @@
     "poly1305",
     "salsa20/salsa"
   ]
-  revision = "374053ea96cb300f8671b8d3b07edeeb06e203b4"
+  revision = "88942b9c40a4c9d203b82b3731787b672d6e809b"
 
 [[projects]]
   branch = "master"
@@ -160,7 +160,7 @@
     "ipv4",
     "ipv6"
   ]
-  revision = "24dd3780ca4f75fed9f321890729414a4b5d3f13"
+  revision = "6078986fec03a1dcc236c34816c71b0e05018fda"
 
 [[projects]]
   branch = "master"
@@ -172,7 +172,7 @@
     "windows/svc/eventlog",
     "windows/svc/mgr"
   ]
-  revision = "2f1e207ee39ff70f3433e49c6eb52677a515e3b5"
+  revision = "13d03a9a82fba647c21a0ef8fba44a795d0f0835"
 
 [[projects]]
   name = "gopkg.in/natefinch/lumberjack.v2"

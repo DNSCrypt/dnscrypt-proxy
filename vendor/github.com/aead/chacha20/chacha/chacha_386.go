@@ -11,6 +11,7 @@ import "encoding/binary"
 func init() {
 	useSSE2 = supportsSSE2()
 	useSSSE3 = supportsSSSE3()
+	useAVX = false
 	useAVX2 = false
 }
 
