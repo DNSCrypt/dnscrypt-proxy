@@ -12,6 +12,7 @@ invalid
 j.mp
 l-msedge.net
 lan
+liveinternet.ru
 localdomain
 microsoft.com
 msedge.net
