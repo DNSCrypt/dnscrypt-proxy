@@ -129,7 +129,7 @@ log_files_max_size = 10
 # How long to keep backup files, in days
 log_files_max_age = 7
 
-# Maximum log files backups to keep
+# Maximum log files backups to keep (or 0 to keep all backups)
 log_files_max_backups = 1
 
 
