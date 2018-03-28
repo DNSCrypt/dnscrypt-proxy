@@ -123,6 +123,7 @@ type ServerSummary struct {
 	Name        string `json:"name"`
 	Proto       string `json:"proto"`
 	IPv6        bool   `json:"ipv6"`
+	Addr        string `json:"addr"`
 	Ports       []int  `json:"ports"`
 	DNSSEC      bool   `json:"dnssec"`
 	NoLog       bool   `json:"nolog"`
@@ -319,6 +320,7 @@ func (config *Config) printRegisteredServers(proxy *Proxy, jsonOutput bool) {
 			Name:        registeredServer.name,
 			Proto:       registeredServer.stamp.proto.String(),
 			IPv6:        strings.HasPrefix(addrStr, "["),
+			Addr:        registeredServer.stamp.serverAddrStr,
 			Ports:       []int{port},
 			DNSSEC:      registeredServer.stamp.props&ServerInformalPropertyDNSSEC != 0,
 			NoLog:       registeredServer.stamp.props&ServerInformalPropertyNoLog != 0,
