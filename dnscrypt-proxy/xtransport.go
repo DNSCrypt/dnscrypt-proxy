@@ -74,7 +74,7 @@ func (xTransport *XTransport) rebuildTransport() {
 		ExpectContinueTimeout:  timeout,
 		MaxResponseHeaderBytes: 4096,
 		DialContext: func(ctx context.Context, network, addrStr string) (net.Conn, error) {
-			host := addrStr[:strings.LastIndex(addrStr, ":")]
+			host, port := ExtractHostAndPort(addrStr, DefaultPort)
 			ipOnly := host
 			xTransport.cachedIPs.RLock()
 			cachedIP := xTransport.cachedIPs.cache[host]
@@ -84,7 +84,7 @@ func (xTransport *XTransport) rebuildTransport() {
 			} else {
 				dlog.Debugf("[%s] IP address was not cached", host)
 			}
-			addrStr = ipOnly + addrStr[strings.LastIndex(addrStr, ":"):]
+			addrStr = ipOnly + ":" + string(port)
 			return dialer.DialContext(ctx, network, addrStr)
 		},
 	}
