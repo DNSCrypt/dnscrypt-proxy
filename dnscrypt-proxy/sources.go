@@ -142,10 +142,10 @@ func NewSource(xTransport *XTransport, url string, minisignKeyStr string, cacheF
 	now := time.Now()
 	urlsToPrefetch := []URLToPrefetch{}
 
-	sigURL := url + ".minisig"
 	in, cached, delayTillNextUpdate, err := fetchWithCache(xTransport, url, cacheFile)
 	urlsToPrefetch = append(urlsToPrefetch, URLToPrefetch{url: url, cacheFile: cacheFile, when: now.Add(delayTillNextUpdate)})
 
+	sigURL := url + ".minisig"
 	sigCacheFile := cacheFile + ".minisig"
 	sigStr, sigCached, sigDelayTillNextUpdate, sigErr := fetchWithCache(xTransport, sigURL, sigCacheFile)
 	urlsToPrefetch = append(urlsToPrefetch, URLToPrefetch{url: sigURL, cacheFile: sigCacheFile, when: now.Add(sigDelayTillNextUpdate)})
