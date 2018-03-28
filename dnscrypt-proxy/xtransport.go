@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -84,7 +85,7 @@ func (xTransport *XTransport) rebuildTransport() {
 			} else {
 				dlog.Debugf("[%s] IP address was not cached", host)
 			}
-			addrStr = ipOnly + ":" + string(port)
+			addrStr = ipOnly + ":" + strconv.Itoa(port)
 			return dialer.DialContext(ctx, network, addrStr)
 		},
 	}
