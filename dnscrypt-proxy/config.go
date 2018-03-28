@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -311,10 +310,10 @@ func (config *Config) printRegisteredServers(proxy *Proxy, jsonOutput bool) {
 	var summary []ServerSummary
 	for _, registeredServer := range proxy.registeredServers {
 		addrStr, port := registeredServer.stamp.serverAddrStr, DefaultPort
-		if idx := strings.LastIndex(addrStr, ":"); idx >= 0 && idx < len(addrStr)-1 {
-			if portX, err := strconv.Atoi(addrStr[idx+1:]); err == nil {
-				port = portX
-			}
+		port = ExtractPort(addrStr, port)
+		if registeredServer.stamp.proto == StampProtoTypeDoH && len(registeredServer.stamp.providerName) > 0 {
+			providerName := registeredServer.stamp.providerName
+			port = ExtractPort(providerName, port)
 		}
 		serverSummary := ServerSummary{
 			Name:        registeredServer.name,

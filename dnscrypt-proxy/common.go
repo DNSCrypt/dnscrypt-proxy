@@ -64,7 +64,7 @@ func ReadPrefixed(conn *net.TCPConn) ([]byte, error) {
 			}
 		}
 		if pos >= 2+packetLength {
-			return buf[2:2+packetLength], nil
+			return buf[2 : 2+packetLength], nil
 		}
 	}
 }
@@ -123,4 +123,14 @@ func StringTwoFields(str string) (string, string, bool) {
 func StringQuote(str string) string {
 	str = strconv.QuoteToGraphic(str)
 	return str[1 : len(str)-1]
+}
+
+func ExtractPort(str string, defaultPort int) int {
+	port := defaultPort
+	if idx := strings.LastIndex(str, ":"); idx >= 0 && idx < len(str)-1 {
+		if portX, err := strconv.Atoi(str[idx+1:]); err == nil {
+			port = portX
+		}
+	}
+	return port
 }

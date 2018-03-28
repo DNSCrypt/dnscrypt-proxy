@@ -143,9 +143,6 @@ func newDoHServerStamp(bin []byte) (ServerStamp, error) {
 	pos++
 	stamp.serverAddrStr = string(bin[pos : pos+len])
 	pos += len
-	if net.ParseIP(strings.TrimRight(strings.TrimLeft(stamp.serverAddrStr, "["), "]")) != nil {
-		stamp.serverAddrStr = fmt.Sprintf("%s:%d", stamp.serverAddrStr, DefaultPort)
-	}
 
 	for {
 		vlen := int(bin[pos])
@@ -182,6 +179,11 @@ func newDoHServerStamp(bin []byte) (ServerStamp, error) {
 	if pos != binLen {
 		return stamp, errors.New("Invalid stamp (garbage after end)")
 	}
+
+	if net.ParseIP(strings.TrimRight(strings.TrimLeft(stamp.serverAddrStr, "["), "]")) != nil {
+		stamp.serverAddrStr = fmt.Sprintf("%s:%d", stamp.serverAddrStr, DefaultPort)
+	}
+
 	return stamp, nil
 }
 
