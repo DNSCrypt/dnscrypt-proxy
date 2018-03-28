@@ -89,6 +89,7 @@ type StaticConfig struct {
 
 type SourceConfig struct {
 	URL            string
+	URLs           []string
 	MinisignKeyStr string `toml:"minisign_key"`
 	CacheFile      string `toml:"cache_file"`
 	FormatStr      string `toml:"format"`
@@ -387,8 +388,12 @@ func (config *Config) loadSources(proxy *Proxy) error {
 }
 
 func (config *Config) loadSource(proxy *Proxy, requiredProps ServerInformalProperties, cfgSourceName string, cfgSource *SourceConfig) error {
-	if cfgSource.URL == "" {
-		dlog.Debugf("Missing URL for source [%s]", cfgSourceName)
+	if len(cfgSource.URLs) == 0 {
+		if len(cfgSource.URL) == 0 {
+			dlog.Debugf("Missing URLs for source [%s]", cfgSourceName)
+		} else {
+			cfgSource.URLs = []string{cfgSource.URL}
+		}
 	}
 	if cfgSource.MinisignKeyStr == "" {
 		return fmt.Errorf("Missing Minisign key for source [%s]", cfgSourceName)
@@ -402,7 +407,7 @@ func (config *Config) loadSource(proxy *Proxy, requiredProps ServerInformalPrope
 	if cfgSource.RefreshDelay <= 0 {
 		cfgSource.RefreshDelay = 72
 	}
-	source, sourceUrlsToPrefetch, err := NewSource(proxy.xTransport, cfgSource.URL, cfgSource.MinisignKeyStr, cfgSource.CacheFile, cfgSource.FormatStr, time.Duration(cfgSource.RefreshDelay)*time.Hour)
+	source, sourceUrlsToPrefetch, err := NewSource(proxy.xTransport, cfgSource.URLs, cfgSource.MinisignKeyStr, cfgSource.CacheFile, cfgSource.FormatStr, time.Duration(cfgSource.RefreshDelay)*time.Hour)
 	proxy.urlsToPrefetch = append(proxy.urlsToPrefetch, sourceUrlsToPrefetch...)
 	if err != nil {
 		dlog.Criticalf("Unable use source [%s]: [%s]", cfgSourceName, err)

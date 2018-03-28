@@ -363,7 +363,7 @@ cache_neg_ttl = 60
 ## different servers. In that case, names listed in `server_names`
 ## must include the prefixes.
 ##
-## If the `url` property is missing, cache files and valid signatures
+## If the `urls` property is missing, cache files and valid signatures
 ## must be already present; This doesn't prevent these cache files from
 ## expiring after `refresh_delay` hours.
 
@@ -372,7 +372,7 @@ cache_neg_ttl = 60
   ## An example of a remote source
 
   [sources.'public-resolvers']
-  url = 'https://download.dnscrypt.info/resolvers-list/v2/public-resolvers.md'
+  urls = ['https://raw.githubusercontent.com/DNSCrypt/dnscrypt-resolvers/master/v2/public-resolvers.md', 'https://download.dnscrypt.info/resolvers-list/v2/public-resolvers.md']
   cache_file = 'public-resolvers.md'
   minisign_key = 'RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3'
   refresh_delay = 72
@@ -382,7 +382,7 @@ cache_neg_ttl = 60
   ## This is a subset of the `public-resolvers` list, so enabling both is useless
 
   #  [sources.'parental-control']
-  #  url = 'https://download.dnscrypt.info/resolvers-list/v2/parental-control.md'
+  #  urls = ['https://raw.githubusercontent.com/DNSCrypt/dnscrypt-resolvers/master/v2/parental-control.md', 'https://download.dnscrypt.info/resolvers-list/v2/parental-control.md']
   #  cache_file = 'parental-control.md'
   #  minisign_key = 'RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3'
 

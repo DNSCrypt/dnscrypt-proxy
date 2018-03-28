@@ -32,7 +32,7 @@ const (
 )
 
 type Source struct {
-	url    string
+	urls   []string
 	format SourceFormat
 	in     string
 }
@@ -125,9 +125,9 @@ type URLToPrefetch struct {
 	when      time.Time
 }
 
-func NewSource(xTransport *XTransport, url string, minisignKeyStr string, cacheFile string, formatStr string, refreshDelay time.Duration) (Source, []URLToPrefetch, error) {
+func NewSource(xTransport *XTransport, urls []string, minisignKeyStr string, cacheFile string, formatStr string, refreshDelay time.Duration) (Source, []URLToPrefetch, error) {
 	_ = refreshDelay
-	source := Source{url: url}
+	source := Source{urls: urls}
 	if formatStr == "v1" {
 		source.format = SourceFormatV1
 	} else if formatStr == "v2" {
@@ -141,19 +141,39 @@ func NewSource(xTransport *XTransport, url string, minisignKeyStr string, cacheF
 	}
 	now := time.Now()
 	urlsToPrefetch := []URLToPrefetch{}
-
-	in, cached, delayTillNextUpdate, err := fetchWithCache(xTransport, url, cacheFile)
-	urlsToPrefetch = append(urlsToPrefetch, URLToPrefetch{url: url, cacheFile: cacheFile, when: now.Add(delayTillNextUpdate)})
-
-	sigURL := url + ".minisig"
 	sigCacheFile := cacheFile + ".minisig"
-	sigStr, sigCached, sigDelayTillNextUpdate, sigErr := fetchWithCache(xTransport, sigURL, sigCacheFile)
-	urlsToPrefetch = append(urlsToPrefetch, URLToPrefetch{url: sigURL, cacheFile: sigCacheFile, when: now.Add(sigDelayTillNextUpdate)})
 
-	if err != nil || sigErr != nil {
-		if err == nil {
-			err = sigErr
+	var sigStr, in string
+	var cached, sigCached bool
+	var delayTillNextUpdate, sigDelayTillNextUpdate time.Duration
+	var sigErr error
+	var preloadURL string
+	if len(urls) <= 0 {
+		in, cached, delayTillNextUpdate, err = fetchWithCache(xTransport, "", cacheFile)
+		sigStr, sigCached, sigDelayTillNextUpdate, sigErr = fetchWithCache(xTransport, "", sigCacheFile)
+	} else {
+		preloadURL = urls[0]
+		for _, url := range urls {
+			sigURL := url + ".minisig"
+			in, cached, delayTillNextUpdate, err = fetchWithCache(xTransport, url, cacheFile)
+			sigStr, sigCached, sigDelayTillNextUpdate, sigErr = fetchWithCache(xTransport, sigURL, sigCacheFile)
+			if err == nil && sigErr == nil {
+				preloadURL = url
+				break
+			}
+			dlog.Infof("Loading from [%s] failed", url)
 		}
+	}
+	if len(preloadURL) > 0 {
+		url := preloadURL
+		sigURL := url + ".minisig"
+		urlsToPrefetch = append(urlsToPrefetch, URLToPrefetch{url: url, cacheFile: cacheFile, when: now.Add(delayTillNextUpdate)})
+		urlsToPrefetch = append(urlsToPrefetch, URLToPrefetch{url: sigURL, cacheFile: sigCacheFile, when: now.Add(sigDelayTillNextUpdate)})
+	}
+	if sigErr != nil && err == nil {
+		err = sigErr
+	}
+	if err != nil {
 		return source, urlsToPrefetch, err
 	}
 
@@ -183,7 +203,7 @@ func NewSource(xTransport *XTransport, url string, minisignKeyStr string, cacheF
 			}
 		}
 	}
-	dlog.Noticef("Source [%s] loaded", url)
+	dlog.Noticef("Source [%s] loaded", cacheFile)
 	source.in = in
 	return source, urlsToPrefetch, nil
 }
@@ -246,18 +266,18 @@ func (source *Source) parseV2(prefix string) ([]RegisteredServer, error) {
 	in := string(source.in)
 	parts := strings.Split(in, "## ")
 	if len(parts) < 2 {
-		return registeredServers, fmt.Errorf("Invalid format for source at [%s]", source.url)
+		return registeredServers, fmt.Errorf("Invalid format for source at [%v]", source.urls)
 	}
 	parts = parts[1:]
 	for _, part := range parts {
 		part = strings.TrimFunc(part, unicode.IsSpace)
 		subparts := strings.Split(part, "\n")
 		if len(subparts) < 2 {
-			return registeredServers, fmt.Errorf("Invalid format for source at [%s]", source.url)
+			return registeredServers, fmt.Errorf("Invalid format for source at [%v]", source.urls)
 		}
 		name := strings.TrimFunc(subparts[0], unicode.IsSpace)
 		if len(name) == 0 {
-			return registeredServers, fmt.Errorf("Invalid format for source at [%s]", source.url)
+			return registeredServers, fmt.Errorf("Invalid format for source at [%v]", source.urls)
 		}
 		subparts = subparts[1:]
 		name = prefix + name
@@ -266,7 +286,7 @@ func (source *Source) parseV2(prefix string) ([]RegisteredServer, error) {
 			subpart = strings.TrimFunc(subpart, unicode.IsSpace)
 			if strings.HasPrefix(subpart, "sdns://") {
 				if len(stampStr) > 0 {
-					return registeredServers, fmt.Errorf("Multiple stamps for server [%s] in source from [%s]", name, source.url)
+					return registeredServers, fmt.Errorf("Multiple stamps for server [%s] in source from [%v]", name, source.urls)
 				}
 				stampStr = subpart
 				continue
@@ -279,7 +299,7 @@ func (source *Source) parseV2(prefix string) ([]RegisteredServer, error) {
 			description += subpart
 		}
 		if len(stampStr) < 8 {
-			return registeredServers, fmt.Errorf("Missing stamp for server [%s] in source from [%s]", name, source.url)
+			return registeredServers, fmt.Errorf("Missing stamp for server [%s] in source from [%v]", name, source.urls)
 		}
 		stamp, err := NewServerStampFromString(stampStr)
 		if err != nil {
