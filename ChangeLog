@@ -1,4 +1,18 @@
 
+* Version 2.0.8
+ - Multiple URLs can be defined for a source in order to improve
+resiliency when servers are temporarily unreachable.
+ - Connections over IPv6 will be preferred over IPv4 for DoH servers
+when using a fallback resolver if `ipv6_servers` is set.
+ - Improvements have been made to the example systemd configuration
+files.
+ - The chacha20 implementation was updated to possibly fix a bug on
+Android/x86.
+ - `generate-domains-blacklist.py` can now parse dnsmasq-style rules.
+ - FreeBSD/arm builds have been added.
+ - `dnscrypt-proxy -list -json` and `-list-all -json` now include the
+remove servers names and IP addresses.
+
 * Version 2.0.7
  - Bug fix: optional ports were not properly parsed with IPv6
 addresses -- thanks to @bleeee for the report and fix.
