@@ -120,14 +120,15 @@ type BlockIPConfig struct {
 }
 
 type ServerSummary struct {
-	Name        string `json:"name"`
-	Proto       string `json:"proto"`
-	IPv6        bool   `json:"ipv6"`
-	Ports       []int  `json:"ports"`
-	DNSSEC      bool   `json:"dnssec"`
-	NoLog       bool   `json:"nolog"`
-	NoFilter    bool   `json:"nofilter"`
-	Description string `json:"description,omitempty"`
+	Name        string   `json:"name"`
+	Proto       string   `json:"proto"`
+	IPv6        bool     `json:"ipv6"`
+	Addrs       []string `json:"addrs,omitempty"`
+	Ports       []int    `json:"ports"`
+	DNSSEC      bool     `json:"dnssec"`
+	NoLog       bool     `json:"nolog"`
+	NoFilter    bool     `json:"nofilter"`
+	Description string   `json:"description,omitempty"`
 }
 
 func ConfigLoad(proxy *Proxy, svcFlag *string) error {
@@ -311,15 +312,22 @@ func (config *Config) printRegisteredServers(proxy *Proxy, jsonOutput bool) {
 	for _, registeredServer := range proxy.registeredServers {
 		addrStr, port := registeredServer.stamp.serverAddrStr, DefaultPort
 		port = ExtractPort(addrStr, port)
+		addrs := make([]string, 0)
 		if registeredServer.stamp.proto == StampProtoTypeDoH && len(registeredServer.stamp.providerName) > 0 {
 			providerName := registeredServer.stamp.providerName
-			port = ExtractPort(providerName, port)
+			var host string
+			host, port = ExtractHostAndPort(providerName, port)
+			addrs = append(addrs, host)
+		}
+		if len(addrStr) > 0 {
+			addrs = append(addrs, ExtractHost(addrStr))
 		}
 		serverSummary := ServerSummary{
 			Name:        registeredServer.name,
 			Proto:       registeredServer.stamp.proto.String(),
 			IPv6:        strings.HasPrefix(addrStr, "["),
 			Ports:       []int{port},
+			Addrs:       addrs,
 			DNSSEC:      registeredServer.stamp.props&ServerInformalPropertyDNSSEC != 0,
 			NoLog:       registeredServer.stamp.props&ServerInformalPropertyNoLog != 0,
 			NoFilter:    registeredServer.stamp.props&ServerInformalPropertyNoFilter != 0,
