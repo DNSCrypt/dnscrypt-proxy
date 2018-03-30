@@ -111,8 +111,9 @@ cert_refresh_delay = 240
 ## A resolver supporting DNSSEC is recommended. This may become mandatory.
 ##
 ## People in China may need to use 114.114.114.114:53 here.
+## Other popular options include 8.8.8.8 and 1.1.1.1.
 
-fallback_resolver = '1.1.1.1:53'
+fallback_resolver = '9.9.9.9:53'
 
 
 ## Never try to use the system DNS settings; unconditionally use the
