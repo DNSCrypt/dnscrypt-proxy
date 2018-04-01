@@ -23,6 +23,7 @@ type Config struct {
 	Daemonize             bool
 	ForceTCP              bool   `toml:"force_tcp"`
 	Timeout               int    `toml:"timeout"`
+	KeepAlive             int    `toml:"keepalive"`
 	CertRefreshDelay      int    `toml:"cert_refresh_delay"`
 	CertIgnoreTimestamp   bool   `toml:"cert_ignore_timestamp"`
 	LBStrategy            string `toml:"lb_strategy"`
@@ -61,6 +62,7 @@ func newConfig() Config {
 		LogLevel:              int(dlog.LogLevel()),
 		ListenAddresses:       []string{"127.0.0.1:53"},
 		Timeout:               2500,
+		KeepAlive:             5,
 		CertRefreshDelay:      240,
 		CertIgnoreTimestamp:   false,
 		Cache:                 true,
@@ -185,6 +187,7 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 	}
 	proxy.xTransport.useIPv4 = config.SourceIPv4
 	proxy.xTransport.useIPv6 = config.SourceIPv6
+	proxy.xTransport.keepAlive = time.Duration(config.KeepAlive) * time.Second
 	proxy.timeout = time.Duration(config.Timeout) * time.Millisecond
 	proxy.maxClients = config.MaxClients
 	proxy.mainProto = "udp"

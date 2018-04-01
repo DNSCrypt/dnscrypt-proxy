@@ -74,6 +74,11 @@ force_tcp = false
 timeout = 2500
 
 
+## Keepalive for HTTP (HTTPS, HTTP/2) queries, in seconds
+
+keepalive = 5
+
+
 ## Load-balancing strategy: 'p2' (default), 'ph', 'fastest' or 'random'
 
 # lb_strategy = 'p2'

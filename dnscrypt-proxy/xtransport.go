@@ -29,6 +29,7 @@ type CachedIPs struct {
 
 type XTransport struct {
 	transport        *http.Transport
+	keepAlive        time.Duration
 	timeout          time.Duration
 	cachedIPs        CachedIPs
 	fallbackResolver string
@@ -37,11 +38,12 @@ type XTransport struct {
 	useIPv6          bool
 }
 
-var IdleConnTimeout = 5 * time.Second
+var DefaultKeepAlive = 5 * time.Second
 
 func NewXTransport(timeout time.Duration, useIPv4 bool, useIPv6 bool) *XTransport {
 	xTransport := XTransport{
 		cachedIPs:        CachedIPs{cache: make(map[string]string)},
+		keepAlive:        DefaultKeepAlive,
 		timeout:          timeout,
 		fallbackResolver: DefaultFallbackResolver,
 		ignoreSystemDNS:  false,
@@ -70,7 +72,7 @@ func (xTransport *XTransport) rebuildTransport() {
 		DisableKeepAlives:      false,
 		DisableCompression:     true,
 		MaxIdleConns:           1,
-		IdleConnTimeout:        IdleConnTimeout,
+		IdleConnTimeout:        xTransport.keepAlive,
 		ResponseHeaderTimeout:  timeout,
 		ExpectContinueTimeout:  timeout,
 		MaxResponseHeaderBytes: 4096,
