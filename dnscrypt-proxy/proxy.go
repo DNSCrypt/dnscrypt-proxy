@@ -271,22 +271,7 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 	}
 	if len(response) == 0 {
 		var ttl *uint32
-		if serverInfo.Proto == StampProtoTypeDNSCrypt {
-			encryptedQuery, clientNonce, err := proxy.Encrypt(serverInfo, query, serverProto)
-			if err != nil {
-				return
-			}
-			serverInfo.noticeBegin(proxy)
-			if serverProto == "udp" {
-				response, err = proxy.exchangeWithUDPServer(serverInfo, encryptedQuery, clientNonce)
-			} else {
-				response, err = proxy.exchangeWithTCPServer(serverInfo, encryptedQuery, clientNonce)
-			}
-			if err != nil {
-				serverInfo.noticeFailure(proxy)
-				return
-			}
-		} else if serverInfo.Proto == StampProtoTypeDoH {
+		if serverInfo.Proto == StampProtoTypeDoH {
 			tid := TransactionID(query)
 			SetTransactionID(query, 0)
 			serverInfo.noticeBegin(proxy)

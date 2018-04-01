@@ -43,7 +43,6 @@ type Config struct {
 	SourceRequireDNSSEC   bool                       `toml:"require_dnssec"`
 	SourceRequireNoLog    bool                       `toml:"require_nolog"`
 	SourceRequireNoFilter bool                       `toml:"require_nofilter"`
-	SourceDNSCrypt        bool                       `toml:"dnscrypt_servers"`
 	SourceDoH             bool                       `toml:"doh_servers"`
 	SourceIPv4            bool                       `toml:"ipv4_servers"`
 	SourceIPv6            bool                       `toml:"ipv6_servers"`
@@ -72,7 +71,6 @@ func newConfig() Config {
 		SourceRequireNoFilter: true,
 		SourceIPv4:            true,
 		SourceIPv6:            false,
-		SourceDNSCrypt:        true,
 		SourceDoH:             true,
 		MaxClients:            250,
 		FallbackResolver:      DefaultFallbackResolver,
@@ -287,7 +285,6 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 		config.SourceRequireNoLog = false
 		config.SourceIPv4 = true
 		config.SourceIPv6 = true
-		config.SourceDNSCrypt = true
 		config.SourceDoH = true
 	}
 
@@ -438,8 +435,7 @@ func (config *Config) loadSource(proxy *Proxy, requiredProps ServerInformalPrope
 				continue
 			}
 		}
-		if !((config.SourceDNSCrypt && registeredServer.stamp.proto == StampProtoTypeDNSCrypt) ||
-			(config.SourceDoH && registeredServer.stamp.proto == StampProtoTypeDoH)) {
+		if !(config.SourceDoH && registeredServer.stamp.proto == StampProtoTypeDoH) {
 			continue
 		}
 		dlog.Debugf("Adding [%s] to the set of wanted resolvers", registeredServer.name)
