@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/csv"
 	"errors"
 	"fmt"
 	"io"
@@ -208,11 +209,56 @@ func NewSource(xTransport *XTransport, urls []string, minisignKeyStr string, cac
 }
 
 func (source *Source) Parse(prefix string) ([]RegisteredServer, error) {
-	if source.format == SourceFormatV2 {
+	if source.format == SourceFormatV1 {
+		return source.parseV1(prefix)
+	} else if source.format == SourceFormatV2 {
 		return source.parseV2(prefix)
 	}
 	dlog.Fatal("Unexpected source format")
 	return []RegisteredServer{}, nil
+}
+
+func (source *Source) parseV1(prefix string) ([]RegisteredServer, error) {
+	var registeredServers []RegisteredServer
+
+	csvReader := csv.NewReader(strings.NewReader(source.in))
+	records, err := csvReader.ReadAll()
+	if err != nil {
+		return registeredServers, nil
+	}
+	for lineNo, record := range records {
+		if len(record) == 0 {
+			continue
+		}
+		if len(record) < 14 {
+			return registeredServers, fmt.Errorf("Parse error at line %d", 1+lineNo)
+		}
+		if lineNo == 0 {
+			continue
+		}
+		name := prefix + record[0]
+		description := record[2]
+		serverAddrStr := record[10]
+		providerName := record[11]
+		serverPkStr := record[12]
+		props := ServerInformalProperties(0)
+		if strings.EqualFold(record[7], "yes") {
+			props |= ServerInformalPropertyDNSSEC
+		}
+		if strings.EqualFold(record[8], "yes") {
+			props |= ServerInformalPropertyNoLog
+		}
+		stamp, err := NewDNSCryptServerStampFromLegacy(serverAddrStr, serverPkStr, providerName, props)
+		if err != nil {
+			return registeredServers, err
+		}
+		registeredServer := RegisteredServer{
+			name: name, stamp: stamp, description: description,
+		}
+		dlog.Debugf("Registered [%s] with stamp [%s]", name, stamp.String())
+		registeredServers = append(registeredServers, registeredServer)
+	}
+	return registeredServers, nil
 }
 
 func (source *Source) parseV2(prefix string) ([]RegisteredServer, error) {

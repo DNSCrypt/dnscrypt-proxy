@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/VividCortex/ewma"
 	"github.com/jedisct1/dlog"
+	"golang.org/x/crypto/ed25519"
 )
 
 const (
@@ -205,10 +207,47 @@ func (serversInfo *ServersInfo) getOne() *ServerInfo {
 }
 
 func (serversInfo *ServersInfo) fetchServerInfo(proxy *Proxy, name string, stamp ServerStamp, isNew bool) (ServerInfo, error) {
-	if stamp.proto == StampProtoTypeDoH {
+	if stamp.proto == StampProtoTypeDNSCrypt {
+		return serversInfo.fetchDNSCryptServerInfo(proxy, name, stamp, isNew)
+	} else if stamp.proto == StampProtoTypeDoH {
 		return serversInfo.fetchDoHServerInfo(proxy, name, stamp, isNew)
 	}
 	return ServerInfo{}, errors.New("Unsupported protocol")
+}
+
+func (serversInfo *ServersInfo) fetchDNSCryptServerInfo(proxy *Proxy, name string, stamp ServerStamp, isNew bool) (ServerInfo, error) {
+	if len(stamp.serverPk) != ed25519.PublicKeySize {
+		serverPk, err := hex.DecodeString(strings.Replace(string(stamp.serverPk), ":", "", -1))
+		if err != nil || len(serverPk) != ed25519.PublicKeySize {
+			dlog.Fatalf("Unsupported public key for [%s]: [%s]", name, stamp.serverPk)
+		}
+		dlog.Warnf("Public key [%s] shouldn't be hex-encoded any more", string(stamp.serverPk))
+		stamp.serverPk = serverPk
+	}
+	certInfo, rtt, err := FetchCurrentDNSCryptCert(proxy, &name, proxy.mainProto, stamp.serverPk, stamp.serverAddrStr, stamp.providerName, isNew)
+	if err != nil {
+		return ServerInfo{}, err
+	}
+	remoteUDPAddr, err := net.ResolveUDPAddr("udp", stamp.serverAddrStr)
+	if err != nil {
+		return ServerInfo{}, err
+	}
+	remoteTCPAddr, err := net.ResolveTCPAddr("tcp", stamp.serverAddrStr)
+	if err != nil {
+		return ServerInfo{}, err
+	}
+	return ServerInfo{
+		Proto:              StampProtoTypeDNSCrypt,
+		MagicQuery:         certInfo.MagicQuery,
+		ServerPk:           certInfo.ServerPk,
+		SharedKey:          certInfo.SharedKey,
+		CryptoConstruction: certInfo.CryptoConstruction,
+		Name:               name,
+		Timeout:            proxy.timeout,
+		UDPAddr:            remoteUDPAddr,
+		TCPAddr:            remoteTCPAddr,
+		initialRtt:         rtt,
+	}, nil
 }
 
 func (serversInfo *ServersInfo) fetchDoHServerInfo(proxy *Proxy, name string, stamp ServerStamp, isNew bool) (ServerInfo, error) {
