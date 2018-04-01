@@ -17,8 +17,13 @@
 ##################################
 
 ## List of servers to use
+##
+## Servers from the "public-resolvers" source (see down below) can
+## be viewed here: https://dnscrypt.info/public-servers
+##
 ## If this line is commented, all registered servers matching the require_* filters
-## will be used
+## will be used.
+##
 ## The proxy will automatically pick the fastest, working servers from the list.
 ## Remove the leading # first to enable this; lines starting with # are ignored.
 
@@ -375,7 +380,7 @@ cache_neg_ttl = 60
 
 [sources]
 
-  ## An example of a remote source
+  ## An example of a remote source from https://github.com/DNSCrypt/dnscrypt-resolvers
 
   [sources.'public-resolvers']
   urls = ['https://raw.githubusercontent.com/DNSCrypt/dnscrypt-resolvers/master/v2/public-resolvers.md', 'https://download.dnscrypt.info/resolvers-list/v2/public-resolvers.md']
