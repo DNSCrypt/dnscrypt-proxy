@@ -9,10 +9,10 @@ A flexible DNS proxy, with support for modern encrypted DNS protocols such as [D
 ## [Documentation](https://dnscrypt.info/doc)
 
 * [DNSCrypt project home page](https://dnscrypt.info/)
-* Public [DNS-over-HTTP/2 and DNSCrypt resolvers](https://dnscrypt.info/public-servers)
+* [DNS-over-HTTP/2 and DNSCrypt resolvers](https://dnscrypt.info/public-servers)
 * [Server and client implementations](https://dnscrypt.info/implementations)
 * [DNS stamps](https://dnscrypt.info/stamps)
-* [FQA](https://dnscrypt.info/faq)
+* [FAQ](https://dnscrypt.info/faq)
 
 ## Features
 
