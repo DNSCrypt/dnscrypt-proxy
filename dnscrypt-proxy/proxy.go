@@ -5,13 +5,11 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"net"
-	"net/http"
 	"sync/atomic"
 	"time"
 
 	"github.com/jedisct1/dlog"
 	clocksmith "github.com/jedisct1/go-clocksmith"
-	"github.com/pquerna/cachecontrol/cacheobject"
 	"golang.org/x/crypto/curve25519"
 )
 
@@ -304,7 +302,6 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 			if len(response) >= MinDNSPacketSize {
 				SetTransactionID(response, tid)
 			}
-			ttl = ttlFromHTTPResponse(proxy, resp)
 		} else {
 			dlog.Fatal("Unsupported protocol")
 		}
@@ -345,25 +342,6 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 		}
 		clientPc.Write(response)
 	}
-}
-
-func ttlFromHTTPResponse(proxy *Proxy, resp *http.Response) *uint32 {
-	cacheControlStr := resp.Header.Get("Cache-Control")
-	if len(cacheControlStr) == 0 {
-		return nil
-	}
-	cacheControl, err := cacheobject.ParseResponseCacheControl(cacheControlStr)
-	if err != nil {
-		return nil
-	}
-	foundTTL := uint32(cacheControl.MaxAge)
-	if foundTTL < proxy.cacheMinTTL {
-		foundTTL = proxy.cacheMinTTL
-	}
-	if foundTTL > proxy.cacheMaxTTL {
-		foundTTL = proxy.cacheMaxTTL
-	}
-	return &foundTTL
 }
 
 func NewProxy() Proxy {
