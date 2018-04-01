@@ -6,8 +6,7 @@ A flexible DNS proxy, with support for modern encrypted DNS protocols such as [D
 
 ## [dnscrypt-proxy 2.0.8 final is available for download!](https://github.com/jedisct1/dnscrypt-proxy/releases/latest)
 
-## [Documentation](https://dnscrypt.info/doc)
-
+* [dnscrypt-proxy documentation](https://dnscrypt.info/doc) -- This project's documentation (Wiki)
 * [DNSCrypt project home page](https://dnscrypt.info/)
 * [DNS-over-HTTP/2 and DNSCrypt resolvers](https://dnscrypt.info/public-servers)
 * [Server and client implementations](https://dnscrypt.info/implementations)
