@@ -127,14 +127,8 @@
 [[projects]]
   name = "github.com/miekg/dns"
   packages = ["."]
-  revision = "5364553f1ee9cddc7ac8b62dce148309c386695b"
-  version = "v1.0.4"
-
-[[projects]]
-  branch = "master"
-  name = "github.com/pquerna/cachecontrol"
-  packages = ["cacheobject"]
-  revision = "525d0eb5f91d30e3b1548de401b7ef9ea6898520"
+  revision = "83c435cc65d2862736428b9b4d07d0ab10ad3e4d"
+  version = "v1.0.5"
 
 [[projects]]
   branch = "master"
@@ -148,7 +142,7 @@
     "poly1305",
     "salsa20/salsa"
   ]
-  revision = "88942b9c40a4c9d203b82b3731787b672d6e809b"
+  revision = "12892e8c234f4fe6f6803f052061de9057903bb2"
 
 [[projects]]
   branch = "master"
@@ -160,7 +154,7 @@
     "ipv4",
     "ipv6"
   ]
-  revision = "6078986fec03a1dcc236c34816c71b0e05018fda"
+  revision = "b68f30494add4df6bd8ef5e82803f308e7f7c59c"
 
 [[projects]]
   branch = "master"
@@ -172,7 +166,7 @@
     "windows/svc/eventlog",
     "windows/svc/mgr"
   ]
-  revision = "13d03a9a82fba647c21a0ef8fba44a795d0f0835"
+  revision = "378d26f46672a356c46195c28f61bdb4c0a781dd"
 
 [[projects]]
   name = "gopkg.in/natefinch/lumberjack.v2"
@@ -183,6 +177,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "5305be9b7e7f5f7d400b08b3b175eda810ccb13aa04049ff7efd58c13c04a809"
+  inputs-digest = "b42eaffe36e3d325de06319d842b067e1c2b9f197089422d6a2df2a5947e3c4c"
   solver-name = "gps-cdcl"
   solver-version = 1
