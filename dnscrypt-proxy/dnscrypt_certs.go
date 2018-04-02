@@ -43,6 +43,7 @@ func FetchCurrentDNSCryptCert(proxy *Proxy, serverName *string, proto string, pk
 	now := uint32(time.Now().Unix())
 	certInfo := CertInfo{CryptoConstruction: UndefinedConstruction}
 	highestSerial := uint32(0)
+	var certCountStr string
 	for _, answerRr := range in.Answer {
 		binCert, err := packTxtString(strings.Join(answerRr.(*dns.TXT).Txt, ""))
 		if err != nil {
@@ -135,10 +136,11 @@ func FetchCurrentDNSCryptCert(proxy *Proxy, serverName *string, proto string, pk
 		copy(certInfo.ServerPk[:], serverPk[:])
 		copy(certInfo.MagicQuery[:], binCert[104:112])
 		if isNew {
-			dlog.Noticef("[%s] OK (crypto v%d) - rtt: %dms", *serverName, cryptoConstruction, rtt.Nanoseconds()/1000000)
+			dlog.Noticef("[%s] OK (crypto v%d) - rtt: %dms%s", *serverName, cryptoConstruction, rtt.Nanoseconds()/1000000, certCountStr)
 		} else {
-			dlog.Infof("[%s] OK (crypto v%d) - rtt: %dms", *serverName, cryptoConstruction, rtt.Nanoseconds()/1000000)
+			dlog.Infof("[%s] OK (crypto v%d) - rtt: %dms%s", *serverName, cryptoConstruction, rtt.Nanoseconds()/1000000, certCountStr)
 		}
+		certCountStr = " - additional certificate"
 	}
 	if certInfo.CryptoConstruction == UndefinedConstruction {
 		return certInfo, 0, errors.New("No useable certificate found")
