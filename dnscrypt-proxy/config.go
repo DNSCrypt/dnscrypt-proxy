@@ -135,8 +135,7 @@ type ServerSummary struct {
 	Description string   `json:"description,omitempty"`
 }
 
-func FindConfigFile() (string, error) {
-	configFile := flag.String("config", DefaultConfigFileName, "Path to the configuration file")
+func findConfigFile(configFile *string) (string, error) {
 	if _, err := os.Stat(*configFile); os.IsNotExist(err) {
 		cdLocal()
 		if _, err := os.Stat(*configFile); err != nil {
@@ -147,17 +146,23 @@ func FindConfigFile() (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if filepath.IsAbs(*configFile) {
+		return *configFile, nil
+	}
 	return path.Join(pwd, *configFile), nil
 }
 
-func ConfigLoad(configFile *string, proxy *Proxy, svcFlag *string) error {
+func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 	version := flag.Bool("version", false, "print current proxy version")
 	resolve := flag.String("resolve", "", "resolve a name using system libraries")
 	list := flag.Bool("list", false, "print the list of available resolvers for the enabled filters")
 	listAll := flag.Bool("list-all", false, "print the complete list of available resolvers, ignoring filters")
 	jsonOutput := flag.Bool("json", false, "output list as JSON")
 	check := flag.Bool("check", false, "check the configuration file and exit")
+	configFile := flag.String("config", DefaultConfigFileName, "Path to the configuration file")
+
 	flag.Parse()
+
 	if *svcFlag == "stop" || *svcFlag == "uninstall" {
 		return nil
 	}
@@ -169,8 +174,13 @@ func ConfigLoad(configFile *string, proxy *Proxy, svcFlag *string) error {
 		Resolve(*resolve)
 		os.Exit(0)
 	}
+
+	foundConfigFile, err := findConfigFile(configFile)
+	if err != nil {
+		dlog.Fatalf("Unable to load the configuration file [%s] -- Maybe use the -config command-line switch?", *configFile)
+	}
 	config := newConfig()
-	md, err := toml.DecodeFile(*configFile, &config)
+	md, err := toml.DecodeFile(foundConfigFile, &config)
 	if err != nil {
 		return err
 	}
@@ -178,7 +188,7 @@ func ConfigLoad(configFile *string, proxy *Proxy, svcFlag *string) error {
 	if len(undecoded) > 0 {
 		return fmt.Errorf("Unsupported key in configuration file: [%s]", undecoded[0])
 	}
-	cdFileDir(*configFile)
+	cdFileDir(foundConfigFile)
 	if config.LogLevel >= 0 && config.LogLevel < int(dlog.SeverityLast) {
 		dlog.SetLogLevel(dlog.Severity(config.LogLevel))
 	}

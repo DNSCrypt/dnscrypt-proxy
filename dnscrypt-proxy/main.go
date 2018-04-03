@@ -26,17 +26,15 @@ type App struct {
 func main() {
 	dlog.Init("dnscrypt-proxy", dlog.SeverityNotice, "DAEMON")
 
-	var err error
-	configFile, err := FindConfigFile()
+	pwd, err := os.Getwd()
 	if err != nil {
-		dlog.Fatalf("Unable to load the configuration file: [%s] -- Maybe use the -config command-line switch?", err)
+		dlog.Fatal("Unable to find the path to the current directory")
 	}
-
 	svcConfig := &service.Config{
-		Name:        "dnscrypt-proxy",
-		DisplayName: "DNSCrypt client proxy",
-		Description: "Encrypted/authenticated DNS proxy",
-		Arguments:   []string{"-config", configFile},
+		Name:             "dnscrypt-proxy",
+		DisplayName:      "DNSCrypt client proxy",
+		Description:      "Encrypted/authenticated DNS proxy",
+		WorkingDirectory: pwd,
 	}
 	svcFlag := flag.String("service", "", fmt.Sprintf("Control the system service: %q", service.ControlAction))
 	app := &App{}
@@ -48,7 +46,7 @@ func main() {
 	app.proxy = NewProxy()
 	app.proxy.xTransport = NewXTransport(30*time.Second, true, false)
 
-	if err := ConfigLoad(&configFile, &app.proxy, svcFlag); err != nil {
+	if err := ConfigLoad(&app.proxy, svcFlag); err != nil {
 		dlog.Fatal(err)
 	}
 	dlog.Noticef("dnscrypt-proxy %s", AppVersion)
