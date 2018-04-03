@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -134,11 +135,22 @@ type ServerSummary struct {
 	Description string   `json:"description,omitempty"`
 }
 
-func ConfigLoad(proxy *Proxy, svcFlag *string) error {
+func FindConfigFile() (string, error) {
 	configFile := flag.String("config", DefaultConfigFileName, "Path to the configuration file")
 	if _, err := os.Stat(*configFile); os.IsNotExist(err) {
 		cdLocal()
+		if _, err := os.Stat(*configFile); err != nil {
+			return "", err
+		}
 	}
+	pwd, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
+	return path.Join(pwd, *configFile), nil
+}
+
+func ConfigLoad(configFile *string, proxy *Proxy, svcFlag *string) error {
 	version := flag.Bool("version", false, "print current proxy version")
 	resolve := flag.String("resolve", "", "resolve a name using system libraries")
 	list := flag.Bool("list", false, "print the list of available resolvers for the enabled filters")
