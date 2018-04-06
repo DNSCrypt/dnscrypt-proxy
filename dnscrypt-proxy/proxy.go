@@ -314,7 +314,7 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 			serverInfo.noticeFailure(proxy)
 			return
 		}
-		if rcode := Rcode(response); rcode == 5 { // REFUSED
+		if rcode := Rcode(response); rcode == 2 || rcode == 5 { // SERVFAIL / REFUSED
 			dlog.Infof("Server [%v] returned error code [%v] -- It might be experiencing upstream connectivity issues", serverInfo.Name, rcode)
 			serverInfo.noticeFailure(proxy)
 		} else {
