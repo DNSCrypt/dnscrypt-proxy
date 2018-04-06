@@ -5,37 +5,21 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 	"unicode"
 
-	"github.com/hashicorp/go-immutable-radix"
 	"github.com/jedisct1/dlog"
 	"github.com/miekg/dns"
 	lumberjack "gopkg.in/natefinch/lumberjack.v2"
 )
 
-type PluginBlockType int
-
-const (
-	PluginBlockTypeNone PluginBlockType = iota
-	PluginBlockTypePrefix
-	PluginBlockTypeSuffix
-	PluginBlockTypeSubstring
-	PluginBlockTypePattern
-)
-
 type PluginBlockName struct {
-	blockedPrefixes      *iradix.Tree
-	blockedSuffixes      *iradix.Tree
-	allWeeklyRanges      *map[string]WeeklyRanges
-	weeklyRangesIndirect map[string]*WeeklyRanges
-	blockedSubstrings    []string
-	blockedPatterns      []string
-	logger               *lumberjack.Logger
-	format               string
+	allWeeklyRanges *map[string]WeeklyRanges
+	patternMatcher  *PatternMatcher
+	logger          *lumberjack.Logger
+	format          string
 }
 
 type TimeRange struct {
@@ -71,9 +55,7 @@ func (plugin *PluginBlockName) Init(proxy *Proxy) error {
 		return err
 	}
 	plugin.allWeeklyRanges = proxy.allWeeklyRanges
-	plugin.weeklyRangesIndirect = make(map[string]*WeeklyRanges)
-	plugin.blockedPrefixes = iradix.New()
-	plugin.blockedSuffixes = iradix.New()
+	plugin.patternMatcher = NewPatternPatcher()
 	for lineNo, line := range strings.Split(string(bin), "\n") {
 		line = strings.TrimFunc(line, unicode.IsSpace)
 		if len(line) == 0 || strings.HasPrefix(line, "#") {
@@ -88,41 +70,6 @@ func (plugin *PluginBlockName) Init(proxy *Proxy) error {
 			dlog.Errorf("Syntax error in block rules at line %d -- Unexpected @ character", 1+lineNo)
 			continue
 		}
-		leadingStar := strings.HasPrefix(line, "*")
-		trailingStar := strings.HasSuffix(line, "*")
-		blockType := PluginBlockTypeNone
-		if isGlobCandidate(line) {
-			blockType = PluginBlockTypePattern
-			_, err := filepath.Match(line, "example.com")
-			if len(line) < 2 || err != nil {
-				dlog.Errorf("Syntax error in block rules at line %d", 1+lineNo)
-				continue
-			}
-		} else if leadingStar && trailingStar {
-			blockType = PluginBlockTypeSubstring
-			if len(line) < 3 {
-				dlog.Errorf("Syntax error in block rules at line %d", 1+lineNo)
-				continue
-			}
-			line = line[1 : len(line)-1]
-		} else if trailingStar {
-			blockType = PluginBlockTypePrefix
-			if len(line) < 2 {
-				dlog.Errorf("Syntax error in block rules at line %d", 1+lineNo)
-				continue
-			}
-			line = line[:len(line)-1]
-		} else {
-			blockType = PluginBlockTypeSuffix
-			if leadingStar {
-				line = line[1:]
-			}
-			line = strings.TrimPrefix(line, ".")
-		}
-		if len(line) == 0 {
-			dlog.Errorf("Syntax error in block rule at line %d", 1+lineNo)
-			continue
-		}
 		var weeklyRanges *WeeklyRanges
 		if len(timeRangeName) > 0 {
 			weeklyRangesX, ok := (*plugin.allWeeklyRanges)[timeRangeName]
@@ -132,24 +79,9 @@ func (plugin *PluginBlockName) Init(proxy *Proxy) error {
 				weeklyRanges = &weeklyRangesX
 			}
 		}
-		line = strings.ToLower(line)
-		switch blockType {
-		case PluginBlockTypeSubstring:
-			plugin.blockedSubstrings = append(plugin.blockedSubstrings, line)
-			if weeklyRanges != nil {
-				plugin.weeklyRangesIndirect[line] = weeklyRanges
-			}
-		case PluginBlockTypePattern:
-			plugin.blockedPatterns = append(plugin.blockedPatterns, line)
-			if weeklyRanges != nil {
-				plugin.weeklyRangesIndirect[line] = weeklyRanges
-			}
-		case PluginBlockTypePrefix:
-			plugin.blockedPrefixes, _, _ = plugin.blockedPrefixes.Insert([]byte(line), weeklyRanges)
-		case PluginBlockTypeSuffix:
-			plugin.blockedSuffixes, _, _ = plugin.blockedSuffixes.Insert([]byte(StringReverse(line)), weeklyRanges)
-		default:
-			dlog.Fatal("Unexpected block type")
+		if _, err := plugin.patternMatcher.Add(line, weeklyRanges, lineNo+1); err != nil {
+			dlog.Error(err)
+			continue
 		}
 	}
 	if len(proxy.blockNameLogFile) == 0 {
@@ -175,52 +107,8 @@ func (plugin *PluginBlockName) Eval(pluginsState *PluginsState, msg *dns.Msg) er
 		return nil
 	}
 	qName := strings.ToLower(StripTrailingDot(questions[0].Name))
-	if len(qName) < 2 {
-		return nil
-	}
-	revQname := StringReverse(qName)
-	reject, reason := false, ""
-	var weeklyRanges *WeeklyRanges
-	if !reject {
-		if match, weeklyRangesX, found := plugin.blockedSuffixes.Root().LongestPrefix([]byte(revQname)); found {
-			if len(match) == len(qName) || revQname[len(match)] == '.' {
-				reject, reason, weeklyRanges = true, "*."+StringReverse(string(match)), weeklyRangesX.(*WeeklyRanges)
-			} else if len(match) < len(revQname) && len(revQname) > 0 {
-				if i := strings.LastIndex(revQname, "."); i > 0 {
-					pName := revQname[:i]
-					if match, _, found := plugin.blockedSuffixes.Root().LongestPrefix([]byte(pName)); found {
-						if len(match) == len(pName) || pName[len(match)] == '.' {
-							reject, reason, weeklyRanges = true, "*."+StringReverse(string(match)), weeklyRangesX.(*WeeklyRanges)
-						}
-					}
-				}
-			}
-		}
-	}
-	if !reject {
-		match, weeklyRangesX, found := plugin.blockedPrefixes.Root().LongestPrefix([]byte(qName))
-		if found {
-			reject, reason, weeklyRanges = true, string(match)+"*", weeklyRangesX.(*WeeklyRanges)
-		}
-	}
-	if !reject {
-		for _, substring := range plugin.blockedSubstrings {
-			if strings.Contains(qName, substring) {
-				reject, reason = true, "*"+substring+"*"
-				weeklyRanges = plugin.weeklyRangesIndirect[substring]
-				break
-			}
-		}
-	}
-	if !reject {
-		for _, pattern := range plugin.blockedPatterns {
-			if found, _ := filepath.Match(pattern, qName); found {
-				reject, reason = true, pattern
-				weeklyRanges = plugin.weeklyRangesIndirect[pattern]
-				break
-			}
-		}
-	}
+	reject, reason, xweeklyRanges := plugin.patternMatcher.Eval(qName)
+	weeklyRanges := xweeklyRanges.(*WeeklyRanges)
 	if reject {
 		if weeklyRanges != nil && !weeklyRanges.Match() {
 			reject = false
@@ -254,17 +142,6 @@ func (plugin *PluginBlockName) Eval(pluginsState *PluginsState, msg *dns.Msg) er
 		}
 	}
 	return nil
-}
-
-func isGlobCandidate(str string) bool {
-	for i, c := range str {
-		if c == '?' || c == '[' {
-			return true
-		} else if c == '*' && i != 0 && i != len(str)-1 {
-			return true
-		}
-	}
-	return false
 }
 
 func daySecsFromStr(str string) (int, error) {
