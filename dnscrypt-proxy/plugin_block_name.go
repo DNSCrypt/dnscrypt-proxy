@@ -108,7 +108,10 @@ func (plugin *PluginBlockName) Eval(pluginsState *PluginsState, msg *dns.Msg) er
 	}
 	qName := strings.ToLower(StripTrailingDot(questions[0].Name))
 	reject, reason, xweeklyRanges := plugin.patternMatcher.Eval(qName)
-	weeklyRanges := xweeklyRanges.(*WeeklyRanges)
+	var weeklyRanges *WeeklyRanges
+	if xweeklyRanges != nil {
+		weeklyRanges = xweeklyRanges.(*WeeklyRanges)
+	}
 	if reject {
 		if weeklyRanges != nil && !weeklyRanges.Match() {
 			reject = false
