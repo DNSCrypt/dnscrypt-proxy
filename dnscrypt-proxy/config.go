@@ -153,7 +153,8 @@ func findConfigFile(configFile *string) (string, error) {
 }
 
 func ConfigLoad(proxy *Proxy, svcFlag *string) error {
-	version := flag.Bool("version", false, "print current proxy version")
+	version_short := flag.Bool("v", false, "print current proxy version")
+	version := flag.Bool("version", false, "alias for -v")
 	resolve := flag.String("resolve", "", "resolve a name using system libraries")
 	list := flag.Bool("list", false, "print the list of available resolvers for the enabled filters")
 	listAll := flag.Bool("list-all", false, "print the complete list of available resolvers, ignoring filters")
@@ -166,7 +167,7 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 	if *svcFlag == "stop" || *svcFlag == "uninstall" {
 		return nil
 	}
-	if *version {
+	if *version || *version_short {
 		fmt.Println(AppVersion)
 		os.Exit(0)
 	}
