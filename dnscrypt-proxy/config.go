@@ -219,6 +219,7 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 	proxy.xTransport.useIPv6 = config.SourceIPv6
 	proxy.xTransport.keepAlive = time.Duration(config.KeepAlive) * time.Second
 	proxy.xTransport.rebuildTransport()
+
 	proxy.timeout = time.Duration(config.Timeout) * time.Millisecond
 	proxy.maxClients = config.MaxClients
 	proxy.mainProto = "udp"
