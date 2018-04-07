@@ -43,20 +43,20 @@ type XTransport struct {
 }
 
 var DefaultKeepAlive = 5 * time.Second
+var DefaultTimeout = 30 * time.Second
 
-func NewXTransport(timeout time.Duration, useIPv4 bool, useIPv6 bool) *XTransport {
+func NewXTransport() *XTransport {
 	xTransport := XTransport{
 		cachedIPs:                CachedIPs{cache: make(map[string]string)},
 		keepAlive:                DefaultKeepAlive,
-		timeout:                  timeout,
+		timeout:                  DefaultTimeout,
 		fallbackResolver:         DefaultFallbackResolver,
 		ignoreSystemDNS:          false,
-		useIPv4:                  useIPv4,
-		useIPv6:                  useIPv6,
+		useIPv4:                  true,
+		useIPv6:                  false,
 		tlsDisableSessionTickets: false,
 		tlsCipherSuite:           nil,
 	}
-	xTransport.rebuildTransport()
 	return &xTransport
 }
 
