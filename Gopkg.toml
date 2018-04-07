@@ -40,6 +40,10 @@
 
 [[constraint]]
   branch = "master"
+  name = "github.com/jedisct1/go-clocksmith"
+
+[[constraint]]
+  branch = "master"
   name = "github.com/jedisct1/go-minisign"
 
 [[constraint]]
@@ -47,16 +51,16 @@
   name = "github.com/jedisct1/xsecretbox"
 
 [[constraint]]
+  name = "github.com/k-sone/critbitgo"
+  version = "1.1.0"
+
+[[constraint]]
   branch = "master"
   name = "github.com/kardianos/service"
 
 [[constraint]]
   name = "github.com/miekg/dns"
-  version = "1.0.4"
-
-[[constraint]]
-  branch = "master"
-  name = "github.com/pquerna/cachecontrol"
+  version = "1.0.5"
 
 [[constraint]]
   branch = "master"
@@ -65,7 +69,3 @@
 [[constraint]]
   name = "gopkg.in/natefinch/lumberjack.v2"
   version = "2.1.0"
-
-[[constraint]]
-  branch = "master"
-  name = "github.com/jedisct1/go-clocksmith"

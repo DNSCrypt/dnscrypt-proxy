@@ -92,7 +92,7 @@
   branch = "master"
   name = "github.com/jedisct1/dlog"
   packages = ["."]
-  revision = "52c32ac39e436cd9295a4629a91f0613ce67052f"
+  revision = "d3f1bf94f2a248f6d000c48612836796f333f2dd"
 
 [[projects]]
   branch = "master"
@@ -111,6 +111,12 @@
   name = "github.com/jedisct1/xsecretbox"
   packages = ["."]
   revision = "88b1956e8d9a013c98dda528d3a5b77f168b057f"
+
+[[projects]]
+  name = "github.com/k-sone/critbitgo"
+  packages = ["."]
+  revision = "1b44ffc7fc9ad8dea28251e340eadb04093c8af3"
+  version = "v1.1.0"
 
 [[projects]]
   branch = "master"
@@ -142,7 +148,7 @@
     "poly1305",
     "salsa20/salsa"
   ]
-  revision = "12892e8c234f4fe6f6803f052061de9057903bb2"
+  revision = "b2aa35443fbc700ab74c586ae79b81c171851023"
 
 [[projects]]
   branch = "master"
@@ -154,7 +160,7 @@
     "ipv4",
     "ipv6"
   ]
-  revision = "b68f30494add4df6bd8ef5e82803f308e7f7c59c"
+  revision = "61147c48b25b599e5b561d2e9c4f3e1ef489ca41"
 
 [[projects]]
   branch = "master"
@@ -166,7 +172,7 @@
     "windows/svc/eventlog",
     "windows/svc/mgr"
   ]
-  revision = "378d26f46672a356c46195c28f61bdb4c0a781dd"
+  revision = "3b87a42e500a6dc65dae1a55d0b641295971163e"
 
 [[projects]]
   name = "gopkg.in/natefinch/lumberjack.v2"
@@ -177,6 +183,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "b42eaffe36e3d325de06319d842b067e1c2b9f197089422d6a2df2a5947e3c4c"
+  inputs-digest = "a4dd651828c61eaf4a60761a081ef914190ece4cfa682cb3391712be98bdb34b"
   solver-name = "gps-cdcl"
   solver-version = 1
