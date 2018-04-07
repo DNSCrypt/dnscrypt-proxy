@@ -81,7 +81,7 @@ timeout = 2500
 
 ## Keepalive for HTTP (HTTPS, HTTP/2) queries, in seconds
 
-keepalive = 5
+keepalive = 10
 
 
 ## Load-balancing strategy: 'p2' (default), 'ph', 'fastest' or 'random'
@@ -112,7 +112,7 @@ cert_refresh_delay = 240
 ## DoH: Disable TLS session tickets
 ## increases privacy but also latency - Bump keepalive up to compensate.
 
-tls_disable_session_tickets = false
+# tls_disable_session_tickets = false
 
 
 ## DoH: Use a specific cipher suite
