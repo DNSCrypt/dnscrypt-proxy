@@ -121,7 +121,8 @@ cert_refresh_delay = 240
 ## 52392 = TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305
 ## 52393 = TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305
 ##
-## On non-Intel systems such as Raspberry Pi and other ARM systems, the following is recommended
+## On non-Intel systems such as Raspberry Pi and other ARM systems,
+## the following suite may improve performance.
 ## Everybody else should not set this parameter, and just use the default suite.
 
 # tls_cipher_suite = [52392, 49199]
