@@ -1,4 +1,21 @@
 
+* Version 2.0.9
+ - Whitelists have been implemented: one a name matches a pattern in
+the whitelist, rules from the name-based and IP-based blacklists will
+be bypassed. Whitelists support the same patterns as blacklists, as
+well as time-based rules, so that some website can be normally
+blocked, but accessible on specific days or times of the day.
+ - Lists are now faster to load, and large lists require significantly
+less memory than before.
+ - New options have been added to disable TLS session tickets as well
+as use a specific cipher suite. See the example configuration file for
+a recommended configuration to speed up DoH servers on ARM such as
+Android devices and Raspberry Pi.
+ - The `-service install` command now remembers what the current
+directory was when the service was installed, in order to later load
+configuration files with relative paths.
+ - DoH: The "Cache-Control: max-age" header is now ignored.
+
 * Version 2.0.8
  - Multiple URLs can be defined for a source in order to improve
 resiliency when servers are temporarily unreachable.
