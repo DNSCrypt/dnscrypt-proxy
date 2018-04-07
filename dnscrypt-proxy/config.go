@@ -37,6 +37,7 @@ type Config struct {
 	QueryLog                 QueryLogConfig             `toml:"query_log"`
 	NxLog                    NxLogConfig                `toml:"nx_log"`
 	BlockName                BlockNameConfig            `toml:"blacklist"`
+	WhitelistName            WhitelistNameConfig        `toml:"whitelist"`
 	BlockIP                  BlockIPConfig              `toml:"ip_blacklist"`
 	ForwardFile              string                     `toml:"forwarding_rules"`
 	CloakFile                string                     `toml:"cloaking_rules"`
@@ -117,6 +118,12 @@ type NxLogConfig struct {
 
 type BlockNameConfig struct {
 	File    string `toml:"blacklist_file"`
+	LogFile string `toml:"log_file"`
+	Format  string `toml:"log_format"`
+}
+
+type WhitelistNameConfig struct {
+	File    string `toml:"whitelist_file"`
 	LogFile string `toml:"log_file"`
 	Format  string `toml:"log_format"`
 }
@@ -293,6 +300,18 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 	proxy.blockNameFile = config.BlockName.File
 	proxy.blockNameFormat = config.BlockName.Format
 	proxy.blockNameLogFile = config.BlockName.LogFile
+
+	if len(config.WhitelistName.Format) == 0 {
+		config.WhitelistName.Format = "tsv"
+	} else {
+		config.WhitelistName.Format = strings.ToLower(config.WhitelistName.Format)
+	}
+	if config.WhitelistName.Format != "tsv" && config.WhitelistName.Format != "ltsv" {
+		return errors.New("Unsupported whitelist log format")
+	}
+	proxy.whitelistNameFile = config.WhitelistName.File
+	proxy.whitelistNameFormat = config.WhitelistName.Format
+	proxy.whitelistNameLogFile = config.WhitelistName.LogFile
 
 	if len(config.BlockIP.Format) == 0 {
 		config.BlockIP.Format = "tsv"

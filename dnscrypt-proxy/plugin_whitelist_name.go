@@ -14,24 +14,24 @@ import (
 	lumberjack "gopkg.in/natefinch/lumberjack.v2"
 )
 
-type PluginBlockName struct {
+type PluginWhitelistName struct {
 	allWeeklyRanges *map[string]WeeklyRanges
 	patternMatcher  *PatternMatcher
 	logger          *lumberjack.Logger
 	format          string
 }
 
-func (plugin *PluginBlockName) Name() string {
-	return "block_name"
+func (plugin *PluginWhitelistName) Name() string {
+	return "whitelist_name"
 }
 
-func (plugin *PluginBlockName) Description() string {
-	return "Block DNS queries matching name patterns"
+func (plugin *PluginWhitelistName) Description() string {
+	return "Whitelists DNS queries matching name patterns"
 }
 
-func (plugin *PluginBlockName) Init(proxy *Proxy) error {
-	dlog.Noticef("Loading the set of blocking rules from [%s]", proxy.blockNameFile)
-	bin, err := ioutil.ReadFile(proxy.blockNameFile)
+func (plugin *PluginWhitelistName) Init(proxy *Proxy) error {
+	dlog.Noticef("Loading the set of whitelisting rules from [%s]", proxy.whitelistNameFile)
+	bin, err := ioutil.ReadFile(proxy.whitelistNameFile)
 	if err != nil {
 		return err
 	}
@@ -48,7 +48,7 @@ func (plugin *PluginBlockName) Init(proxy *Proxy) error {
 			line = strings.TrimFunc(parts[0], unicode.IsSpace)
 			timeRangeName = strings.TrimFunc(parts[1], unicode.IsSpace)
 		} else if len(parts) > 2 {
-			dlog.Errorf("Syntax error in block rules at line %d -- Unexpected @ character", 1+lineNo)
+			dlog.Errorf("Syntax error in whitelist rules at line %d -- Unexpected @ character", 1+lineNo)
 			continue
 		}
 		var weeklyRanges *WeeklyRanges
@@ -65,44 +65,44 @@ func (plugin *PluginBlockName) Init(proxy *Proxy) error {
 			continue
 		}
 	}
-	if len(proxy.blockNameLogFile) == 0 {
+	if len(proxy.whitelistNameLogFile) == 0 {
 		return nil
 	}
-	plugin.logger = &lumberjack.Logger{LocalTime: true, MaxSize: proxy.logMaxSize, MaxAge: proxy.logMaxAge, MaxBackups: proxy.logMaxBackups, Filename: proxy.blockNameLogFile, Compress: true}
-	plugin.format = proxy.blockNameFormat
+	plugin.logger = &lumberjack.Logger{LocalTime: true, MaxSize: proxy.logMaxSize, MaxAge: proxy.logMaxAge, MaxBackups: proxy.logMaxBackups, Filename: proxy.whitelistNameLogFile, Compress: true}
+	plugin.format = proxy.whitelistNameFormat
 
 	return nil
 }
 
-func (plugin *PluginBlockName) Drop() error {
+func (plugin *PluginWhitelistName) Drop() error {
 	return nil
 }
 
-func (plugin *PluginBlockName) Reload() error {
+func (plugin *PluginWhitelistName) Reload() error {
 	return nil
 }
 
-func (plugin *PluginBlockName) Eval(pluginsState *PluginsState, msg *dns.Msg) error {
-	if pluginsState.sessionData["whitelisted"] != nil {
-		return nil
-	}
+func (plugin *PluginWhitelistName) Eval(pluginsState *PluginsState, msg *dns.Msg) error {
 	questions := msg.Question
 	if len(questions) != 1 {
 		return nil
 	}
 	qName := strings.ToLower(StripTrailingDot(questions[0].Name))
-	reject, reason, xweeklyRanges := plugin.patternMatcher.Eval(qName)
+	whitelist, reason, xweeklyRanges := plugin.patternMatcher.Eval(qName)
 	var weeklyRanges *WeeklyRanges
 	if xweeklyRanges != nil {
 		weeklyRanges = xweeklyRanges.(*WeeklyRanges)
 	}
-	if reject {
+	if whitelist {
 		if weeklyRanges != nil && !weeklyRanges.Match() {
-			reject = false
+			whitelist = false
 		}
 	}
-	if reject {
-		pluginsState.action = PluginsActionReject
+	if whitelist {
+		if pluginsState.sessionData == nil {
+			pluginsState.sessionData = make(map[string]interface{})
+		}
+		pluginsState.sessionData["whitelisted"] = true
 		if plugin.logger != nil {
 			var clientIPStr string
 			if pluginsState.clientProto == "udp" {

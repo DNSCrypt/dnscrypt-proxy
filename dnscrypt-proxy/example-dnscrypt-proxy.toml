@@ -341,6 +341,34 @@ cache_neg_ttl = 60
 
 
 
+######################################################
+#   Pattern-based whitelisting (blacklists bypass)   #
+######################################################
+
+## Whitelists support the same patterns as blacklists
+## If a name matches a whitelist entry, the corresponding session
+## will bypass names and IP filters.
+##
+## Time-based rules are also supported to make some websites only accessible at specific times of the day.
+
+[whitelist]
+
+  ## Path to the file of whitelisting rules (absolute, or relative to the same directory as the executable file)
+
+  # whitelist_file = 'whitelist.txt'
+
+
+  ## Optional path to a file logging whitelisted queries
+
+  # log_file = 'whitelisted.log'
+
+
+  ## Optional log format: tsv or ltsv (default: tsv)
+
+  # log_format = 'tsv'
+
+
+
 ##########################################
 #        Time access restrictions        #
 ##########################################

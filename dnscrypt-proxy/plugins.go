@@ -45,6 +45,9 @@ func InitPluginsGlobals(pluginsGlobals *PluginsGlobals, proxy *Proxy) error {
 	if len(proxy.queryLogFile) != 0 {
 		*queryPlugins = append(*queryPlugins, Plugin(new(PluginQueryLog)))
 	}
+	if len(proxy.whitelistNameFile) != 0 {
+		*queryPlugins = append(*queryPlugins, Plugin(new(PluginWhitelistName)))
+	}
 	if len(proxy.blockNameFile) != 0 {
 		*queryPlugins = append(*queryPlugins, Plugin(new(PluginBlockName)))
 	}

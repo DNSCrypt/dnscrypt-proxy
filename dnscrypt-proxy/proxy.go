@@ -38,8 +38,11 @@ type Proxy struct {
 	nxLogFile                    string
 	nxLogFormat                  string
 	blockNameFile                string
+	whitelistNameFile            string
 	blockNameLogFile             string
+	whitelistNameLogFile         string
 	blockNameFormat              string
+	whitelistNameFormat          string
 	blockIPFile                  string
 	blockIPLogFile               string
 	blockIPFormat                string

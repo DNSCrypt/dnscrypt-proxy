@@ -88,6 +88,9 @@ func (plugin *PluginBlockIP) Reload() error {
 }
 
 func (plugin *PluginBlockIP) Eval(pluginsState *PluginsState, msg *dns.Msg) error {
+	if pluginsState.sessionData["whitelisted"] != nil {
+		return nil
+	}
 	answers := msg.Answer
 	if len(answers) == 0 {
 		return nil
