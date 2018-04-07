@@ -5,7 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/hashicorp/go-immutable-radix"
+	"github.com/k-sone/critbitgo"
+
 	"github.com/jedisct1/dlog"
 )
 
@@ -20,8 +21,8 @@ const (
 )
 
 type PatternMatcher struct {
-	blockedPrefixes   *iradix.Tree
-	blockedSuffixes   *iradix.Tree
+	blockedPrefixes   *critbitgo.Trie
+	blockedSuffixes   *critbitgo.Trie
 	blockedSubstrings []string
 	blockedPatterns   []string
 	indirectVals      map[string]interface{}
@@ -29,8 +30,8 @@ type PatternMatcher struct {
 
 func NewPatternPatcher() *PatternMatcher {
 	patternMatcher := PatternMatcher{
-		blockedPrefixes: iradix.New(),
-		blockedSuffixes: iradix.New(),
+		blockedPrefixes: critbitgo.NewTrie(),
+		blockedSuffixes: critbitgo.NewTrie(),
 	}
 	return &patternMatcher
 }
@@ -92,9 +93,9 @@ func (patternMatcher *PatternMatcher) Add(pattern string, val interface{}, posit
 			patternMatcher.indirectVals[pattern] = val
 		}
 	case PatternTypePrefix:
-		patternMatcher.blockedPrefixes, _, _ = patternMatcher.blockedPrefixes.Insert([]byte(pattern), val)
+		patternMatcher.blockedPrefixes.Insert([]byte(pattern), val)
 	case PatternTypeSuffix:
-		patternMatcher.blockedSuffixes, _, _ = patternMatcher.blockedSuffixes.Insert([]byte(StringReverse(pattern)), val)
+		patternMatcher.blockedSuffixes.Insert([]byte(StringReverse(pattern)), val)
 	default:
 		dlog.Fatal("Unexpected block type")
 	}
@@ -107,14 +108,14 @@ func (patternMatcher *PatternMatcher) Eval(qName string) (reject bool, reason st
 	}
 
 	revQname := StringReverse(qName)
-	if match, xval, found := patternMatcher.blockedSuffixes.Root().LongestPrefix([]byte(revQname)); found {
+	if match, xval, found := patternMatcher.blockedSuffixes.LongestPrefix([]byte(revQname)); found {
 		if len(match) == len(qName) || revQname[len(match)] == '.' {
 			return true, "*." + StringReverse(string(match)), xval
 		}
 		if len(match) < len(revQname) && len(revQname) > 0 {
 			if i := strings.LastIndex(revQname, "."); i > 0 {
 				pName := revQname[:i]
-				if match, _, found := patternMatcher.blockedSuffixes.Root().LongestPrefix([]byte(pName)); found {
+				if match, _, found := patternMatcher.blockedSuffixes.LongestPrefix([]byte(pName)); found {
 					if len(match) == len(pName) || pName[len(match)] == '.' {
 						return true, "*." + StringReverse(string(match)), xval
 					}
@@ -123,7 +124,7 @@ func (patternMatcher *PatternMatcher) Eval(qName string) (reject bool, reason st
 		}
 	}
 
-	if match, xval, found := patternMatcher.blockedPrefixes.Root().LongestPrefix([]byte(qName)); found {
+	if match, xval, found := patternMatcher.blockedPrefixes.LongestPrefix([]byte(qName)); found {
 		return true, string(match) + "*", xval
 	}
 
