@@ -109,6 +109,24 @@ keepalive = 5
 cert_refresh_delay = 240
 
 
+## DoH: Disable TLS session tickets
+## increases privacy but also latency - Bump keepalive up to compensate.
+
+tls_disable_session_tickets = false
+
+
+## DoH: Use a specific cipher suite
+## 49199 = TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+## 49195 = TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+## 52392 = TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305
+## 52393 = TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305
+
+### On non-Intel systems such as Raspberry Pi and other ARM systems, the following is recommended
+### Everybody else should not set this parameter, and just use the default suite.
+
+# tls_cipher_suite = [52392, 49199]
+
+
 ## Fallback resolver
 ## This is a normal, non-encrypted DNS resolver, that will be only used
 ## for one-shot queries when retrieving the initial resolvers list, and

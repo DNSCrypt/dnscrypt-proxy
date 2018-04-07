@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -18,6 +19,7 @@ import (
 
 	"github.com/jedisct1/dlog"
 	"github.com/miekg/dns"
+	"golang.org/x/net/http2"
 )
 
 const DefaultFallbackResolver = "9.9.9.9:53"
@@ -28,27 +30,31 @@ type CachedIPs struct {
 }
 
 type XTransport struct {
-	transport        *http.Transport
-	keepAlive        time.Duration
-	timeout          time.Duration
-	cachedIPs        CachedIPs
-	fallbackResolver string
-	ignoreSystemDNS  bool
-	useIPv4          bool
-	useIPv6          bool
+	transport                *http.Transport
+	keepAlive                time.Duration
+	timeout                  time.Duration
+	cachedIPs                CachedIPs
+	fallbackResolver         string
+	ignoreSystemDNS          bool
+	useIPv4                  bool
+	useIPv6                  bool
+	tlsDisableSessionTickets bool
+	tlsCipherSuite           []uint16
 }
 
 var DefaultKeepAlive = 5 * time.Second
 
 func NewXTransport(timeout time.Duration, useIPv4 bool, useIPv6 bool) *XTransport {
 	xTransport := XTransport{
-		cachedIPs:        CachedIPs{cache: make(map[string]string)},
-		keepAlive:        DefaultKeepAlive,
-		timeout:          timeout,
-		fallbackResolver: DefaultFallbackResolver,
-		ignoreSystemDNS:  false,
-		useIPv4:          useIPv4,
-		useIPv6:          useIPv6,
+		cachedIPs:                CachedIPs{cache: make(map[string]string)},
+		keepAlive:                DefaultKeepAlive,
+		timeout:                  timeout,
+		fallbackResolver:         DefaultFallbackResolver,
+		ignoreSystemDNS:          false,
+		useIPv4:                  useIPv4,
+		useIPv6:                  useIPv6,
+		tlsDisableSessionTickets: false,
+		tlsCipherSuite:           nil,
 	}
 	xTransport.rebuildTransport()
 	return &xTransport
@@ -91,6 +97,17 @@ func (xTransport *XTransport) rebuildTransport() {
 			return dialer.DialContext(ctx, network, addrStr)
 		},
 	}
+	if xTransport.tlsDisableSessionTickets || xTransport.tlsCipherSuite != nil {
+		tlsClientConfig := tls.Config{
+			SessionTicketsDisabled: xTransport.tlsDisableSessionTickets,
+		}
+		if xTransport.tlsCipherSuite != nil {
+			tlsClientConfig.PreferServerCipherSuites = false
+			tlsClientConfig.CipherSuites = xTransport.tlsCipherSuite
+		}
+		transport.TLSClientConfig = &tlsClientConfig
+	}
+	http2.ConfigureTransport(transport)
 	xTransport.transport = transport
 }
 
