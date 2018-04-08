@@ -32,6 +32,7 @@ func NewPatternPatcher() *PatternMatcher {
 	patternMatcher := PatternMatcher{
 		blockedPrefixes: critbitgo.NewTrie(),
 		blockedSuffixes: critbitgo.NewTrie(),
+		indirectVals:    make(map[string]interface{}),
 	}
 	return &patternMatcher
 }
