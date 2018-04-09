@@ -101,6 +101,9 @@ func (xTransport *XTransport) rebuildTransport() {
 		tlsClientConfig := tls.Config{
 			SessionTicketsDisabled: xTransport.tlsDisableSessionTickets,
 		}
+		if !xTransport.tlsDisableSessionTickets {
+			tlsClientConfig.ClientSessionCache = tls.NewLRUClientSessionCache(10)
+		}
 		if xTransport.tlsCipherSuite != nil {
 			tlsClientConfig.PreferServerCipherSuites = false
 			tlsClientConfig.CipherSuites = xTransport.tlsCipherSuite
