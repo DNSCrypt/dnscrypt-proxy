@@ -27,6 +27,7 @@ type Config struct {
 	KeepAlive                int    `toml:"keepalive"`
 	CertRefreshDelay         int    `toml:"cert_refresh_delay"`
 	CertIgnoreTimestamp      bool   `toml:"cert_ignore_timestamp"`
+	EphemeralKeys            bool   `toml:"dnscrypt_ephemeral_keys"`
 	LBStrategy               string `toml:"lb_strategy"`
 	BlockIPv6                bool   `toml:"block_ipv6"`
 	Cache                    bool
@@ -69,6 +70,7 @@ func newConfig() Config {
 		KeepAlive:                5,
 		CertRefreshDelay:         240,
 		CertIgnoreTimestamp:      false,
+		EphemeralKeys:            false,
 		Cache:                    true,
 		CacheSize:                256,
 		CacheNegTTL:              60,
@@ -236,6 +238,7 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 	proxy.certRefreshDelay = time.Duration(config.CertRefreshDelay) * time.Minute
 	proxy.certRefreshDelayAfterFailure = time.Duration(10 * time.Second)
 	proxy.certIgnoreTimestamp = config.CertIgnoreTimestamp
+	proxy.ephemeralKeys = config.EphemeralKeys
 	if len(config.ListenAddresses) == 0 {
 		dlog.Debug("No local IP/port configured")
 	}

@@ -8,10 +8,8 @@ import (
 	"time"
 
 	"github.com/jedisct1/dlog"
-	"github.com/jedisct1/xsecretbox"
 	"github.com/miekg/dns"
 	"golang.org/x/crypto/ed25519"
-	"golang.org/x/crypto/nacl/box"
 )
 
 type CertInfo struct {
@@ -120,16 +118,7 @@ func FetchCurrentDNSCryptCert(proxy *Proxy, serverName *string, proto string, pk
 		}
 		var serverPk [32]byte
 		copy(serverPk[:], binCert[72:104])
-		var sharedKey [32]byte
-		if cryptoConstruction == XChacha20Poly1305 {
-			sharedKey, err = xsecretbox.SharedKey(proxy.proxySecretKey, serverPk)
-			if err != nil {
-				dlog.Criticalf("[%v] Weak public key", providerName)
-				continue
-			}
-		} else {
-			box.Precompute(&sharedKey, &serverPk, &proxy.proxySecretKey)
-		}
+		sharedKey := ComputeSharedKey(cryptoConstruction, &proxy.proxySecretKey, &serverPk, &providerName)
 		certInfo.SharedKey = sharedKey
 		highestSerial = serial
 		certInfo.CryptoConstruction = cryptoConstruction

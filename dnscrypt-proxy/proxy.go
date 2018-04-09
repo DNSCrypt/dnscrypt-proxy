@@ -16,6 +16,7 @@ import (
 type Proxy struct {
 	proxyPublicKey               [32]byte
 	proxySecretKey               [32]byte
+	ephemeralKeys                bool
 	questionSizeEstimator        QuestionSizeEstimator
 	serversInfo                  ServersInfo
 	timeout                      time.Duration
@@ -193,7 +194,7 @@ func (proxy *Proxy) tcpListenerFromAddr(listenAddr *net.TCPAddr) error {
 	return nil
 }
 
-func (proxy *Proxy) exchangeWithUDPServer(serverInfo *ServerInfo, encryptedQuery []byte, clientNonce []byte) ([]byte, error) {
+func (proxy *Proxy) exchangeWithUDPServer(serverInfo *ServerInfo, sharedKey *[32]byte, encryptedQuery []byte, clientNonce []byte) ([]byte, error) {
 	pc, err := net.DialUDP("udp", nil, serverInfo.UDPAddr)
 	if err != nil {
 		return nil, err
@@ -207,10 +208,10 @@ func (proxy *Proxy) exchangeWithUDPServer(serverInfo *ServerInfo, encryptedQuery
 		return nil, err
 	}
 	encryptedResponse = encryptedResponse[:length]
-	return proxy.Decrypt(serverInfo, encryptedResponse, clientNonce)
+	return proxy.Decrypt(serverInfo, sharedKey, encryptedResponse, clientNonce)
 }
 
-func (proxy *Proxy) exchangeWithTCPServer(serverInfo *ServerInfo, encryptedQuery []byte, clientNonce []byte) ([]byte, error) {
+func (proxy *Proxy) exchangeWithTCPServer(serverInfo *ServerInfo, sharedKey *[32]byte, encryptedQuery []byte, clientNonce []byte) ([]byte, error) {
 	pc, err := net.DialTCP("tcp", nil, serverInfo.TCPAddr)
 	if err != nil {
 		return nil, err
@@ -227,7 +228,7 @@ func (proxy *Proxy) exchangeWithTCPServer(serverInfo *ServerInfo, encryptedQuery
 	if err != nil {
 		return nil, err
 	}
-	return proxy.Decrypt(serverInfo, encryptedResponse, clientNonce)
+	return proxy.Decrypt(serverInfo, sharedKey, encryptedResponse, clientNonce)
 }
 
 func (proxy *Proxy) clientsCountInc() bool {
@@ -273,15 +274,15 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 	if len(response) == 0 {
 		var ttl *uint32
 		if serverInfo.Proto == StampProtoTypeDNSCrypt {
-			encryptedQuery, clientNonce, err := proxy.Encrypt(serverInfo, query, serverProto)
+			sharedKey, encryptedQuery, clientNonce, err := proxy.Encrypt(serverInfo, query, serverProto)
 			if err != nil {
 				return
 			}
 			serverInfo.noticeBegin(proxy)
 			if serverProto == "udp" {
-				response, err = proxy.exchangeWithUDPServer(serverInfo, encryptedQuery, clientNonce)
+				response, err = proxy.exchangeWithUDPServer(serverInfo, sharedKey, encryptedQuery, clientNonce)
 			} else {
-				response, err = proxy.exchangeWithTCPServer(serverInfo, encryptedQuery, clientNonce)
+				response, err = proxy.exchangeWithTCPServer(serverInfo, sharedKey, encryptedQuery, clientNonce)
 			}
 			if err != nil {
 				serverInfo.noticeFailure(proxy)

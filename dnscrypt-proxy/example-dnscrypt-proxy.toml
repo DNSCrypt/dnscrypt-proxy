@@ -109,6 +109,14 @@ keepalive = 10
 cert_refresh_delay = 240
 
 
+## DNSCrypt: Create a new, unique key for every single DNS query
+## This may improve privacy but can also have a significant impact on CPU usage
+## Only enable if you don't have a lot of network load
+
+# dnscrypt_ephemeral_keys = false
+
+
+
 ## DoH: Disable TLS session tickets
 ## increases privacy but also latency - Bump keepalive up to compensate.
 
