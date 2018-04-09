@@ -12,7 +12,8 @@ EXIT
 
 @CD /d %~dp0
 
-.\dnscrypt-proxy.exe -service restart
+.\dnscrypt-proxy.exe -service stop
+.\dnscrypt-proxy.exe -service start
 
 @ECHO ""
 @SET /P _=Thank you for using dnscrypt-proxy! Hit [RETURN] to finish
