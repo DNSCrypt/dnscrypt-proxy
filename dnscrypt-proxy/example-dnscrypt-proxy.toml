@@ -123,17 +123,19 @@ cert_refresh_delay = 240
 # tls_disable_session_tickets = false
 
 
-## DoH: Use a specific cipher suite
+## DoH: Use a specific cipher suite instead of the server preference
 ## 49199 = TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
 ## 49195 = TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
 ## 52392 = TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305
 ## 52393 = TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305
 ##
 ## On non-Intel systems such as MIPS routers and ARM systems (Android, Raspberry Pi...),
-## the following suite may improve performance.
-## Everybody else should not set this parameter, and just use the default suite.
+## the following suite improves performance.
+##
+## Delete or comment the next line if you have issues connecting to some DoH servers, but
+## any modern server should support this cipher suite. Google and Cloudflare do.
 
-# tls_cipher_suite = [52392, 49199]
+tls_cipher_suite = [52392, 49199]
 
 
 ## Fallback resolver
