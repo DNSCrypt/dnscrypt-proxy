@@ -15,6 +15,15 @@ Android devices and Raspberry Pi.
 directory was when the service was installed, in order to later load
 configuration files with relative paths.
  - DoH: The "Cache-Control: max-age" header is now ignored.
+ - Patterns can now be prefixed with `=` to do exact matching:
+`=example.com` matches `example.com` but will not match `www.example.com`.
+ - Patterns are now fully supported by the cloaking module.
+ - A new option was added to use a specific cipher suite instead of
+the server's provided one. Using RSA+ChaChaPoly over ECDSA+AES-GCM has
+shown to decrease CPU usage and latency when connecting to Cloudflare,
+especially on Mips and ARM systems.
+ - The ephemeral keys mode of dnscrypt-proxy v1.x was reimplemented: this
+creates a new unique key for every single query.
 
 * Version 2.0.8
  - Multiple URLs can be defined for a source in order to improve
