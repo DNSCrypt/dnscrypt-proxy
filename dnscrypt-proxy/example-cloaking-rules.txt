@@ -9,8 +9,7 @@
 # configuration file
 
 
-www.google.com           forcesafesearch.google.com
-www.google.fr            forcesafesearch.google.com
+www.google.*             forcesafesearch.google.com
 
 www.bing.com             strict.bing.com
 

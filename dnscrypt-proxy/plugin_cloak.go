@@ -22,8 +22,8 @@ type CloakedName struct {
 
 type PluginCloak struct {
 	sync.RWMutex
-	cloakedNames map[string]*CloakedName
-	ttl          uint32
+	patternMatcher *PatternMatcher
+	ttl            uint32
 }
 
 func (plugin *PluginCloak) Name() string {
@@ -41,7 +41,7 @@ func (plugin *PluginCloak) Init(proxy *Proxy) error {
 		return err
 	}
 	plugin.ttl = proxy.cacheMinTTL
-	plugin.cloakedNames = make(map[string]*CloakedName)
+	plugin.patternMatcher = NewPatternPatcher()
 	for lineNo, line := range strings.Split(string(bin), "\n") {
 		line = strings.TrimFunc(line, unicode.IsSpace)
 		if len(line) == 0 || strings.HasPrefix(line, "#") {
@@ -75,7 +75,7 @@ func (plugin *PluginCloak) Init(proxy *Proxy) error {
 		} else {
 			cloakedName.target = target
 		}
-		plugin.cloakedNames[line] = &cloakedName
+		plugin.patternMatcher.Add(line, &cloakedName, lineNo+1)
 	}
 	return nil
 }
@@ -103,11 +103,12 @@ func (plugin *PluginCloak) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 	}
 	now := time.Now()
 	plugin.RLock()
-	cloakedName := plugin.cloakedNames[qName]
-	if cloakedName == nil {
+	_, _, xcloakedName := plugin.patternMatcher.Eval(qName)
+	if xcloakedName == nil {
 		plugin.RUnlock()
 		return nil
 	}
+	cloakedName := xcloakedName.(*CloakedName)
 	ttl, expired := plugin.ttl, false
 	if cloakedName.lastUpdate != nil {
 		if elapsed := uint32(now.Sub(*cloakedName.lastUpdate).Seconds()); elapsed < ttl {
