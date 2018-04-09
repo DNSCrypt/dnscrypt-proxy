@@ -155,10 +155,14 @@
   name = "golang.org/x/net"
   packages = [
     "bpf",
+    "http2",
+    "http2/hpack",
+    "idna",
     "internal/iana",
     "internal/socket",
     "ipv4",
-    "ipv6"
+    "ipv6",
+    "lex/httplex"
   ]
   revision = "61147c48b25b599e5b561d2e9c4f3e1ef489ca41"
 
@@ -175,6 +179,27 @@
   revision = "3b87a42e500a6dc65dae1a55d0b641295971163e"
 
 [[projects]]
+  name = "golang.org/x/text"
+  packages = [
+    "collate",
+    "collate/build",
+    "internal/colltab",
+    "internal/gen",
+    "internal/tag",
+    "internal/triegen",
+    "internal/ucd",
+    "language",
+    "secure/bidirule",
+    "transform",
+    "unicode/bidi",
+    "unicode/cldr",
+    "unicode/norm",
+    "unicode/rangetable"
+  ]
+  revision = "f21a4dfb5e38f5895301dc265a8def02365cc3d0"
+  version = "v0.3.0"
+
+[[projects]]
   name = "gopkg.in/natefinch/lumberjack.v2"
   packages = ["."]
   revision = "a96e63847dc3c67d17befa69c303767e2f84e54f"
@@ -183,6 +208,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "a4dd651828c61eaf4a60761a081ef914190ece4cfa682cb3391712be98bdb34b"
+  inputs-digest = "5afc7ca4456d4f6f1a1da31e3ae1eb4eaf79ffe39c72a3dc98a2d78d4d865b79"
   solver-name = "gps-cdcl"
   solver-version = 1
