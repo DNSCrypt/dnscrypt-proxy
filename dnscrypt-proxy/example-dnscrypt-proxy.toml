@@ -297,6 +297,7 @@ cache_neg_ttl = 60
 ## Blacklists are made of one pattern per line. Example of valid patterns:
 ##
 ##   example.com
+##   =example.com
 ##   *sex*
 ##   ads.*
 ##   ads*.example.*

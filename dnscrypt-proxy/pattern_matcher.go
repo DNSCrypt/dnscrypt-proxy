@@ -18,6 +18,7 @@ const (
 	PatternTypeSuffix
 	PatternTypeSubstring
 	PatternTypePattern
+	PatternTypeExact
 )
 
 type PatternMatcher struct {
@@ -25,6 +26,7 @@ type PatternMatcher struct {
 	blockedSuffixes   *critbitgo.Trie
 	blockedSubstrings []string
 	blockedPatterns   []string
+	blockedExact      map[string]interface{}
 	indirectVals      map[string]interface{}
 }
 
@@ -32,6 +34,7 @@ func NewPatternPatcher() *PatternMatcher {
 	patternMatcher := PatternMatcher{
 		blockedPrefixes: critbitgo.NewTrie(),
 		blockedSuffixes: critbitgo.NewTrie(),
+		blockedExact:    make(map[string]interface{}),
 		indirectVals:    make(map[string]interface{}),
 	}
 	return &patternMatcher
@@ -51,6 +54,7 @@ func isGlobCandidate(str string) bool {
 func (patternMatcher *PatternMatcher) Add(pattern string, val interface{}, position int) (PatternType, error) {
 	leadingStar := strings.HasPrefix(pattern, "*")
 	trailingStar := strings.HasSuffix(pattern, "*")
+	exact := strings.HasPrefix(pattern, "=")
 	patternType := PatternTypeNone
 	if isGlobCandidate(pattern) {
 		patternType = PatternTypePattern
@@ -70,6 +74,12 @@ func (patternMatcher *PatternMatcher) Add(pattern string, val interface{}, posit
 			return patternType, fmt.Errorf("Syntax error in block rules at pattern %d", position)
 		}
 		pattern = pattern[:len(pattern)-1]
+	} else if exact {
+		patternType = PatternTypeExact
+		if len(pattern) < 2 {
+			return patternType, fmt.Errorf("Syntax error in block rules at pattern %d", position)
+		}
+		pattern = pattern[1:]
 	} else {
 		patternType = PatternTypeSuffix
 		if leadingStar {
@@ -97,6 +107,8 @@ func (patternMatcher *PatternMatcher) Add(pattern string, val interface{}, posit
 		patternMatcher.blockedPrefixes.Insert([]byte(pattern), val)
 	case PatternTypeSuffix:
 		patternMatcher.blockedSuffixes.Insert([]byte(StringReverse(pattern)), val)
+	case PatternTypeExact:
+		patternMatcher.blockedExact[pattern] = val
 	default:
 		dlog.Fatal("Unexpected block type")
 	}
@@ -140,5 +152,10 @@ func (patternMatcher *PatternMatcher) Eval(qName string) (reject bool, reason st
 			return true, pattern, patternMatcher.indirectVals[pattern]
 		}
 	}
+
+	if xval := patternMatcher.blockedExact[qName]; xval != nil {
+		return true, qName, xval
+	}
+
 	return false, "", nil
 }
