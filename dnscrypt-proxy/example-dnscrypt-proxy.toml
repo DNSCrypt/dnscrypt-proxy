@@ -81,7 +81,7 @@ timeout = 2500
 
 ## Keepalive for HTTP (HTTPS, HTTP/2) queries, in seconds
 
-keepalive = 10
+keepalive = 30
 
 
 ## Load-balancing strategy: 'p2' (default), 'ph', 'fastest' or 'random'
@@ -116,9 +116,7 @@ cert_refresh_delay = 240
 # dnscrypt_ephemeral_keys = false
 
 
-
-## DoH: Disable TLS session tickets
-## increases privacy but also latency - Bump keepalive up to compensate.
+## DoH: Disable TLS session tickets - increases privacy but also latency
 
 # tls_disable_session_tickets = false
 
@@ -130,7 +128,7 @@ cert_refresh_delay = 240
 ## 52393 = TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305
 ##
 ## On non-Intel systems such as MIPS routers and ARM systems (Android, Raspberry Pi...),
-## the following suite improves performance.
+## the following suite improves performance. RSA verification is faster than ECDSA.
 ##
 ## Delete or comment the next line if you have issues connecting to some DoH servers, but
 ## any modern server should support this cipher suite. Google and Cloudflare do.
