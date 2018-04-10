@@ -389,7 +389,7 @@ cache_neg_ttl = 60
 ##
 ## For example, the following rule in a blacklist file:
 ## *.youtube.* @time-to-sleep
-## would block access to Youtube only during the days, and period of the days
+## would block access to YouTube only during the days, and period of the days
 ## define by the 'time-to-sleep' schedule.
 ##
 ## {after='21:00', before= '7:00'} matches 0:00-7:00 and 21:00-0:00
