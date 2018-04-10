@@ -72,7 +72,7 @@ func newConfig() Config {
 		CertIgnoreTimestamp:      false,
 		EphemeralKeys:            false,
 		Cache:                    true,
-		CacheSize:                256,
+		CacheSize:                512,
 		CacheNegTTL:              60,
 		CacheMinTTL:              60,
 		CacheMaxTTL:              8600,
