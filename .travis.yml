@@ -18,6 +18,7 @@ script:
   - mkdir win32
   - ln dnscrypt-proxy.exe win32/
   - cp ../LICENSE example-dnscrypt-proxy.toml example-*.txt win32/
+  - rm -f example-dnscrypt-proxy.toml ; sed 's/^tls_cipher_suite/# tls_cipher_suite/' example-dnscrypt-proxy.toml > example-dnscrypt-proxy.toml
   - for i in win32/LICENSE win32/*.toml win32/*.txt; do ex -bsc '%!awk "{sub(/$/,\"\r\")}1"' -cx "$i"; done
   - ln ../windows/* win32/
   - zip -9 -r dnscrypt-proxy-win32-${TRAVIS_TAG:-dev}.zip win32
@@ -27,6 +28,7 @@ script:
   - mkdir win64
   - ln dnscrypt-proxy.exe win64/
   - cp ../LICENSE example-dnscrypt-proxy.toml example-*.txt win64/
+  - rm -f example-dnscrypt-proxy.toml ; sed 's/^tls_cipher_suite/# tls_cipher_suite/' example-dnscrypt-proxy.toml > example-dnscrypt-proxy.toml
   - for i in win64/LICENSE win64/*.toml win64/*.txt; do ex -bsc '%!awk "{sub(/$/,\"\r\")}1"' -cx "$i"; done
   - ln ../windows/* win64/
   - zip -9 -r dnscrypt-proxy-win64-${TRAVIS_TAG:-dev}.zip win64
@@ -43,6 +45,7 @@ script:
   - mkdir openbsd-amd64
   - ln dnscrypt-proxy openbsd-amd64/
   - ln ../LICENSE example-dnscrypt-proxy.toml example-*.txt openbsd-amd64/
+  - rm -f example-dnscrypt-proxy.toml ; sed 's/^tls_cipher_suite/# tls_cipher_suite/' example-dnscrypt-proxy.toml > example-dnscrypt-proxy.toml
   - tar czpvf dnscrypt-proxy-openbsd_amd64-${TRAVIS_TAG:-dev}.tar.gz openbsd-amd64
 
   - go clean
@@ -57,6 +60,7 @@ script:
   - mkdir freebsd-amd64
   - ln dnscrypt-proxy freebsd-amd64/
   - ln ../LICENSE example-dnscrypt-proxy.toml example-*.txt freebsd-amd64/
+  - rm -f example-dnscrypt-proxy.toml ; sed 's/^tls_cipher_suite/# tls_cipher_suite/' example-dnscrypt-proxy.toml > example-dnscrypt-proxy.toml
   - tar czpvf dnscrypt-proxy-freebsd_amd64-${TRAVIS_TAG:-dev}.tar.gz freebsd-amd64
 
   - go clean
@@ -71,6 +75,7 @@ script:
   - mkdir dragonflybsd-amd64
   - ln dnscrypt-proxy dragonflybsd-amd64/
   - ln ../LICENSE example-dnscrypt-proxy.toml example-*.txt dragonflybsd-amd64/
+  - rm -f example-dnscrypt-proxy.toml ; sed 's/^tls_cipher_suite/# tls_cipher_suite/' example-dnscrypt-proxy.toml > example-dnscrypt-proxy.toml
   - tar czpvf dnscrypt-proxy-dragonflybsd_amd64-${TRAVIS_TAG:-dev}.tar.gz dragonflybsd-amd64
 
   - go clean
@@ -85,6 +90,7 @@ script:
   - mkdir netbsd-amd64
   - ln dnscrypt-proxy netbsd-amd64/
   - ln ../LICENSE example-dnscrypt-proxy.toml example-*.txt netbsd-amd64/
+  - rm -f example-dnscrypt-proxy.toml ; sed 's/^tls_cipher_suite/# tls_cipher_suite/' example-dnscrypt-proxy.toml > example-dnscrypt-proxy.toml
   - tar czpvf dnscrypt-proxy-netbsd_amd64-${TRAVIS_TAG:-dev}.tar.gz netbsd-amd64
 
   - go clean
@@ -99,6 +105,7 @@ script:
   - mkdir linux-x86_64
   - ln dnscrypt-proxy linux-x86_64/
   - ln ../LICENSE ../systemd/* example-dnscrypt-proxy.toml example-*.txt linux-x86_64/
+  - rm -f example-dnscrypt-proxy.toml ; sed 's/^tls_cipher_suite/# tls_cipher_suite/' example-dnscrypt-proxy.toml > example-dnscrypt-proxy.toml
   - tar czpvf dnscrypt-proxy-linux_x86_64-${TRAVIS_TAG:-dev}.tar.gz linux-x86_64
 
   - go clean
@@ -148,6 +155,7 @@ script:
   - mkdir macos
   - ln dnscrypt-proxy macos/
   - ln ../LICENSE example-dnscrypt-proxy.toml example-*.txt macos/
+  - rm -f example-dnscrypt-proxy.toml ; sed 's/^tls_cipher_suite/# tls_cipher_suite/' example-dnscrypt-proxy.toml > example-dnscrypt-proxy.toml
   - tar czpvf dnscrypt-proxy-macos-${TRAVIS_TAG:-dev}.tar.gz macos
 
   - go clean
@@ -176,6 +184,7 @@ script:
   - mkdir android-x86_64
   - ln dnscrypt-proxy android-x86_64/
   - cp ../LICENSE example-dnscrypt-proxy.toml example-*.txt android-x86_64/
+  - rm -f example-dnscrypt-proxy.toml ; sed 's/^tls_cipher_suite/# tls_cipher_suite/' example-dnscrypt-proxy.toml > example-dnscrypt-proxy.toml
   - zip -9 -r dnscrypt-proxy-android_x86_64-${TRAVIS_TAG:-dev}.zip android-x86_64
 
   - ls -l dnscrypt-proxy-*.tar.gz dnscrypt-proxy-*.zip
