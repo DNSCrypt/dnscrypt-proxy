@@ -13,20 +13,7 @@ EXIT
 
 :ADMINTASKS
 
-REM If DNSCrypt-Proxy is not yet running restart will fail
-Tasklist /FI "IMAGENAME eq dnscrypt-proxy.exe" /NH | Find "dnscrypt-proxy.exe" >NUL:
-IF ERRORLEVEL 1 GOTO :SVCSTART
-
-ECHO Re-Starting Service...
-dnscrypt-proxy.exe -service restart
-GOTO :SAYTHANKS
-
-:SVCSTART
-
-ECHO Starting Service...
-dnscrypt-proxy.exe -service start
-
-:SAYTHANKS
+dnscrypt-proxy.exe -service stop
 
 ECHO.
 SET /P _=Thank you for using dnscrypt-proxy! Hit [RETURN] to finish
