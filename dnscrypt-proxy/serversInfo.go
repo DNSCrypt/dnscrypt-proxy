@@ -270,9 +270,6 @@ func (serversInfo *ServersInfo) fetchDoHServerInfo(proxy *Proxy, name string, st
 	if _, _, err := proxy.xTransport.DoHQuery(useGet, url, body, proxy.timeout); err != nil {
 		useGet = true
 		if _, _, err := proxy.xTransport.DoHQuery(useGet, url, body, proxy.timeout); err != nil {
-			if proxy.xTransport.tlsCipherSuite != nil && strings.Contains(err.Error(), "handshake failure") {
-				dlog.Warnf("TLS handshake failure - Try changing or deleting the tls_cipher_suite value in the configuration file")
-			}
 			return ServerInfo{}, err
 		}
 		dlog.Debugf("Server [%s] doesn't appear to support POST; falling back to GET requests", name)
