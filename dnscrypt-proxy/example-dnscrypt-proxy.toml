@@ -131,8 +131,8 @@ cert_refresh_delay = 240
 ## the following suite improves performance. RSA verification is faster than ECDSA.
 ## This may also help on Intel CPUs running 32-bit operating systems.
 ##
-## Delete or comment the next line if you have issues connecting to some DoH servers.
-## Google and Cloudflare are fine with it.
+## Delete or comment the next line if you have issues fetching sources or
+## connecting to some DoH servers. Google and Cloudflare are fine with it.
 
 tls_cipher_suite = [52392, 49199]
 
