@@ -148,7 +148,7 @@
     "poly1305",
     "salsa20/salsa"
   ]
-  revision = "beb2a9779c3b677077c41673505f150149fce895"
+  revision = "f70185d77e8278766928032ee1355e3da47e7181"
 
 [[projects]]
   branch = "master"
