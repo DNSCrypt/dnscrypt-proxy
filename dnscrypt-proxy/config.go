@@ -467,12 +467,12 @@ func (config *Config) loadSource(proxy *Proxy, requiredProps ServerInformalPrope
 	source, sourceUrlsToPrefetch, err := NewSource(proxy.xTransport, cfgSource.URLs, cfgSource.MinisignKeyStr, cfgSource.CacheFile, cfgSource.FormatStr, time.Duration(cfgSource.RefreshDelay)*time.Hour)
 	proxy.urlsToPrefetch = append(proxy.urlsToPrefetch, sourceUrlsToPrefetch...)
 	if err != nil {
-		dlog.Criticalf("Unable use source [%s]: [%s]", cfgSourceName, err)
+		dlog.Criticalf("Unable to use source [%s]: [%s]", cfgSourceName, err)
 		return nil
 	}
 	registeredServers, err := source.Parse(cfgSource.Prefix)
 	if err != nil {
-		dlog.Criticalf("Unable use source [%s]: [%s]", cfgSourceName, err)
+		dlog.Criticalf("Unable to use source [%s]: [%s]", cfgSourceName, err)
 		return nil
 	}
 	for _, registeredServer := range registeredServers {
