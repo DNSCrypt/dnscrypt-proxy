@@ -235,6 +235,11 @@ func (xTransport *XTransport) Fetch(method string, url *url.URL, accept string, 
 	}
 	if err != nil {
 		dlog.Debugf("[%s]: [%s]", req.URL, err)
+		if xTransport.tlsCipherSuite != nil && strings.Contains(err.Error(), "handshake failure") {
+			dlog.Warnf("TLS handshake failure - Try changing or deleting the tls_cipher_suite value in the configuration file")
+			xTransport.tlsCipherSuite = nil
+			xTransport.rebuildTransport()
+		}
 	}
 	return resp, rtt, err
 }

@@ -127,13 +127,14 @@ cert_refresh_delay = 240
 ## 52392 = TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305
 ## 52393 = TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305
 ##
-## On non-Intel systems such as MIPS routers and ARM systems (Android, Raspberry Pi...),
-## the following suite improves performance. RSA verification is faster than ECDSA.
+## On non-Intel CPUs such as MIPS routers and ARM systems (Android, Raspberry Pi...),
+## the following suite improves performance.
+## This may also help on Intel CPUs running 32-bit operating systems.
 ##
-## Delete or comment the next line if you have issues connecting to some DoH servers, but
-## any modern server should support this cipher suite. Google and Cloudflare do.
+## Delete or comment the next line if you have issues fetching sources or
+## connecting to some DoH servers. Google and Cloudflare are fine with it.
 
-tls_cipher_suite = [52392, 49199]
+# tls_cipher_suite = [52392, 49199]
 
 
 ## Fallback resolver
@@ -224,7 +225,7 @@ cache = true
 
 ## Cache size
 
-cache_size = 256
+cache_size = 512
 
 
 ## Minimum TTL for cached entries
@@ -389,7 +390,7 @@ cache_neg_ttl = 60
 ##
 ## For example, the following rule in a blacklist file:
 ## *.youtube.* @time-to-sleep
-## would block access to Youtube only during the days, and period of the days
+## would block access to YouTube only during the days, and period of the days
 ## define by the 'time-to-sleep' schedule.
 ##
 ## {after='21:00', before= '7:00'} matches 0:00-7:00 and 21:00-0:00
