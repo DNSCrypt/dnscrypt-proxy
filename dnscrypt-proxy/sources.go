@@ -18,6 +18,7 @@ import (
 
 	"github.com/jedisct1/dlog"
 	"github.com/jedisct1/go-minisign"
+	"github.com/jedisct1/dnscrypt-proxy/stamps"
 )
 
 type SourceFormat int
@@ -241,14 +242,14 @@ func (source *Source) parseV1(prefix string) ([]RegisteredServer, error) {
 		serverAddrStr := record[10]
 		providerName := record[11]
 		serverPkStr := record[12]
-		props := ServerInformalProperties(0)
+		props := stamps.ServerInformalProperties(0)
 		if strings.EqualFold(record[7], "yes") {
-			props |= ServerInformalPropertyDNSSEC
+			props |= stamps.ServerInformalPropertyDNSSEC
 		}
 		if strings.EqualFold(record[8], "yes") {
-			props |= ServerInformalPropertyNoLog
+			props |= stamps.ServerInformalPropertyNoLog
 		}
-		stamp, err := NewDNSCryptServerStampFromLegacy(serverAddrStr, serverPkStr, providerName, props)
+		stamp, err := stamps.NewDNSCryptServerStampFromLegacy(serverAddrStr, serverPkStr, providerName, props)
 		if err != nil {
 			return registeredServers, err
 		}
@@ -301,7 +302,7 @@ func (source *Source) parseV2(prefix string) ([]RegisteredServer, error) {
 		if len(stampStr) < 8 {
 			return registeredServers, fmt.Errorf("Missing stamp for server [%s] in source from [%v]", name, source.urls)
 		}
-		stamp, err := NewServerStampFromString(stampStr)
+		stamp, err := stamps.NewServerStampFromString(stampStr)
 		if err != nil {
 			return registeredServers, err
 		}
