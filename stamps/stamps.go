@@ -10,7 +10,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/jedisct1/dlog"
 	"golang.org/x/crypto/ed25519"
 )
 
@@ -203,8 +202,7 @@ func (stamp *ServerStamp) String() string {
 	} else if stamp.Proto == StampProtoTypeDoH {
 		return stamp.dohString()
 	}
-	dlog.Fatal("Unsupported protocol")
-	return ""
+	panic("Unsupported protocol")
 }
 
 func (stamp *ServerStamp) dnsCryptString() string {
