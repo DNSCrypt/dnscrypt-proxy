@@ -16,7 +16,8 @@ import (
 	"strings"
 	"sync"
 	"time"
-
+	
+	"github.com/jedisct1/dnscrypt-proxy/stamps"
 	"github.com/jedisct1/dlog"
 	"github.com/miekg/dns"
 	"golang.org/x/net/http2"
@@ -83,7 +84,7 @@ func (xTransport *XTransport) rebuildTransport() {
 		ExpectContinueTimeout:  timeout,
 		MaxResponseHeaderBytes: 4096,
 		DialContext: func(ctx context.Context, network, addrStr string) (net.Conn, error) {
-			host, port := ExtractHostAndPort(addrStr, DefaultPort)
+			host, port := ExtractHostAndPort(addrStr, stamps.DefaultPort)
 			ipOnly := host
 			xTransport.cachedIPs.RLock()
 			cachedIP := xTransport.cachedIPs.cache[host]

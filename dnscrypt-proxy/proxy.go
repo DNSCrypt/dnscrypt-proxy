@@ -11,6 +11,7 @@ import (
 	"github.com/jedisct1/dlog"
 	clocksmith "github.com/jedisct1/go-clocksmith"
 	"golang.org/x/crypto/curve25519"
+	"github.com/jedisct1/dnscrypt-proxy/stamps"
 )
 
 type Proxy struct {
@@ -274,7 +275,7 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 	}
 	if len(response) == 0 {
 		var ttl *uint32
-		if serverInfo.Proto == StampProtoTypeDNSCrypt {
+		if serverInfo.Proto == stamps.StampProtoTypeDNSCrypt {
 			sharedKey, encryptedQuery, clientNonce, err := proxy.Encrypt(serverInfo, query, serverProto)
 			if err != nil {
 				return
@@ -289,7 +290,7 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 				serverInfo.noticeFailure(proxy)
 				return
 			}
-		} else if serverInfo.Proto == StampProtoTypeDoH {
+		} else if serverInfo.Proto == stamps.StampProtoTypeDoH {
 			tid := TransactionID(query)
 			SetTransactionID(query, 0)
 			serverInfo.noticeBegin(proxy)
