@@ -33,6 +33,8 @@ type Config struct {
 	Cache                    bool
 	CacheSize                int                        `toml:"cache_size"`
 	CacheNegTTL              uint32                     `toml:"cache_neg_ttl"`
+	CacheNegMinTTL           uint32                     `toml:"cache_neg_min_ttl"`
+	CacheNegMaxTTL           uint32                     `toml:"cache_neg_max_ttl"`
 	CacheMinTTL              uint32                     `toml:"cache_min_ttl"`
 	CacheMaxTTL              uint32                     `toml:"cache_max_ttl"`
 	QueryLog                 QueryLogConfig             `toml:"query_log"`
@@ -73,7 +75,9 @@ func newConfig() Config {
 		EphemeralKeys:            false,
 		Cache:                    true,
 		CacheSize:                512,
-		CacheNegTTL:              60,
+		CacheNegTTL:              0,
+		CacheNegMinTTL:           60,
+		CacheNegMaxTTL:           600,
 		CacheMinTTL:              60,
 		CacheMaxTTL:              8600,
 		SourceRequireNoLog:       true,
@@ -265,7 +269,15 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 	proxy.pluginBlockIPv6 = config.BlockIPv6
 	proxy.cache = config.Cache
 	proxy.cacheSize = config.CacheSize
-	proxy.cacheNegTTL = config.CacheNegTTL
+
+	if config.CacheNegTTL > 0 {
+		proxy.cacheNegMinTTL = config.CacheNegTTL
+		proxy.cacheNegMaxTTL = config.CacheNegTTL
+	} else {
+		proxy.cacheNegMinTTL = config.CacheNegMinTTL
+		proxy.cacheNegMaxTTL = config.CacheNegMaxTTL
+	}
+
 	proxy.cacheMinTTL = config.CacheMinTTL
 	proxy.cacheMaxTTL = config.CacheMaxTTL
 

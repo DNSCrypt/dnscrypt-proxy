@@ -56,7 +56,7 @@ func (plugin *PluginCacheResponse) Eval(pluginsState *PluginsState, msg *dns.Msg
 	if err != nil {
 		return err
 	}
-	ttl := getMinTTL(msg, pluginsState.cacheMinTTL, pluginsState.cacheMaxTTL, pluginsState.cacheNegTTL)
+	ttl := getMinTTL(msg, pluginsState.cacheMinTTL, pluginsState.cacheMaxTTL, pluginsState.cacheNegMinTTL, pluginsState.cacheNegMaxTTL)
 	cachedResponse := CachedResponse{
 		expiration: time.Now().Add(ttl),
 		msg:        *msg,

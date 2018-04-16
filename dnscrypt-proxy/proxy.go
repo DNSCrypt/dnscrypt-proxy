@@ -30,7 +30,8 @@ type Proxy struct {
 	pluginBlockIPv6              bool
 	cache                        bool
 	cacheSize                    int
-	cacheNegTTL                  uint32
+	cacheNegMinTTL               uint32
+	cacheNegMaxTTL               uint32
 	cacheMinTTL                  uint32
 	cacheMaxTTL                  uint32
 	queryLogFile                 string
