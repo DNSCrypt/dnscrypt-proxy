@@ -17,7 +17,7 @@ CD /d %~dp0
 CMD.EXE /c ".\dnscrypt-proxy.exe -service stop"
 CMD.EXE /c ".\dnscrypt-proxy.exe -service uninstall"
 
-ECHO ""
+ECHO.
 SET /P _=Thank you for using dnscrypt-proxy! Hit [RETURN] to finish
 
 EXIT
