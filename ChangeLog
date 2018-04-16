@@ -1,4 +1,10 @@
 
+* Version 2.0.10
+ - This version fixes a crash when an incomplete size is sent by a
+local client for a query over TCP.
+ - Slight performance improvement of DNSCrypt on non-Intel CPUs such
+as Raspberry Pi.
+
 * Version 2.0.9
  - Whitelists have been implemented: one a name matches a pattern in
 the whitelist, rules from the name-based and IP-based blacklists will
