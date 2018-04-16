@@ -138,7 +138,7 @@ func update(msg []byte, flag uint32, h, r *[5]uint32) {
 	r0, r1, r2, r3, r4 := uint64(r[0]), uint64(r[1]), uint64(r[2]), uint64(r[3]), uint64(r[4])
 	R1, R2, R3, R4 := r1*5, r2*5, r3*5, r4*5
 
-	for len(msg) > 0 {
+	for len(msg) >= TagSize {
 		// h += msg
 		h0 += binary.LittleEndian.Uint32(msg[0:]) & 0x3ffffff
 		h1 += (binary.LittleEndian.Uint32(msg[3:]) >> 2) & 0x3ffffff

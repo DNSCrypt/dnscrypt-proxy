@@ -29,7 +29,7 @@
   branch = "master"
   name = "github.com/aead/poly1305"
   packages = ["."]
-  revision = "6cf43fdfd7a228cf3003ae23d10ddbf65e85997b"
+  revision = "969857f48f7ae439b6d2449ed1dcd9aaabc49c67"
 
 [[projects]]
   branch = "master"
@@ -148,7 +148,7 @@
     "poly1305",
     "salsa20/salsa"
   ]
-  revision = "f70185d77e8278766928032ee1355e3da47e7181"
+  revision = "d6449816ce06963d9d136eee5a56fca5b0616e7e"
 
 [[projects]]
   branch = "master"
@@ -164,7 +164,7 @@
     "ipv6",
     "lex/httplex"
   ]
-  revision = "61147c48b25b599e5b561d2e9c4f3e1ef489ca41"
+  revision = "500e7a4f953ddaf55d316b4d3adc516aa0379622"
 
 [[projects]]
   branch = "master"
@@ -176,7 +176,7 @@
     "windows/svc/eventlog",
     "windows/svc/mgr"
   ]
-  revision = "3b87a42e500a6dc65dae1a55d0b641295971163e"
+  revision = "2281fa97ef7b0c26324634d5a22f04babdac8713"
 
 [[projects]]
   name = "golang.org/x/text"
