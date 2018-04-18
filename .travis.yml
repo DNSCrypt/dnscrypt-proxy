@@ -187,6 +187,7 @@ deploy:
   file:
     - dnscrypt-proxy-*.tar.gz
     - dnscrypt-proxy-*.zip
+    - dnscrypt-proxy-*.minisig
   file_glob: true
   skip_cleanup: true
   on:
@@ -194,8 +195,26 @@ deploy:
     condition: "${TRAVIS_GO_VERSION} == 1.10.1"
     tags: true
 
+before_deploy:
+  - mkdir -p /tmp/bin /tmp/lib /tmp/include
+  - export LD_LIBRARY_PATH=/tmp/lib:LD_LIBRARY_PATH
+  - export PATH=/tmp/bin:$PATH
+  - git clone https://github.com/jedisct1/libsodium.git --branch=stable
+  - cd libsodium
+  - env ./configure --disable-dependency-tracking --prefix=/tmp
+  - make -j$(nproc) install
+  - cd ..
+  - git clone https://github.com/jedisct1/minisign.git
+  - cd minisign/src
+  - gcc -O2 -o /tmp/bin/minisign -I/tmp/include -L/tmp/lib *.c -lsodium
+  - cd ..
+  - minisign -v
+  - echo '#' > /tmp/minisign.key
+  - echo "$MINISIGN_SK" >> /tmp/minisign.key
+  - echo | minisign -s /tmp/minisign.key -Sm dnscrypt-proxy-*.tar.gz dnscrypt-proxy-*.zip
+
 after_deploy:
-  - ls -l dnscrypt-proxy-*.tar.gz
+  - ls -l dnscrypt-proxy-*.tar.gz dnscrypt-proxy-*.zip
 
 before_install:
   - NDK_VER=r15c
@@ -213,3 +232,7 @@ before_install:
     done
 
   - rm -rf $NDK_TOOLS
+
+env:
+  global:
+    secure: SC9UAXUzaB1no6/NuH1D9IsnZoCf7eg7u4qdVw1bEvBzXrwYbGbuiiJvue3q62eWf31QZ6m0MbUKDxVsDUD62oM0rxdtEO/wxvO0slylAxQQ563XWNgGtkUsn7/pDYMmGVBXHFcT4ha53eaUv756MzyUD5NBmjtnBvMKsQUMQaMqmBikjPytVSEzwLpDjgATiwlNhLvEsUzZCYCabGv2AUCaEAkvUYjfPVHOCHTPq9LGbnfQnpu2Al/xFYjnsjHxAfQEHebu0ANzBj6uMlW4UKJeOItWpovDC5rDUOgVfeFGa6sv7k8fKzimq1JCIOTdFw2e2Zu31oG/DLvdnoAcQfjOO8by+0XYmOCVQS8PipTKfrCZovwmxOCooOOvaLonLWwHIY7YN9B54kZPRSCowqTZG4Oj7Mf1PZ3+YCnyCCIegoLyo/fQgSU0Zdkp0z2xTdTqc10xlIV6rUUCENvswrVzkOfvSm6WzC3WaCb/YCpGX+7BYLdfjW5rLnmslp+s9y0B41F9avarsHXSsnDRpiouJNxaOvBN+Q1vb9wCllMQuwW2IrEDSphcPreGxTVGX+xsppfhRYTdnzO+e6pQx69jbh+BQozBEQUXPshJJOYj3KmuBqFHHMIcF6Jw2Q2uYra4qmkibVQoaXKf5NwEMrRVk4F6S0GvDdAA8A513sY=
