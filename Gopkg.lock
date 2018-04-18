@@ -104,7 +104,7 @@
   branch = "master"
   name = "github.com/jedisct1/go-dnsstamps"
   packages = ["."]
-  revision = "d8908ceb62ed5ff9fe230d14cdde7727b90737e6"
+  revision = "1e4999280f861b465e03e21e4f84d838f2f02b38"
 
 [[projects]]
   branch = "master"

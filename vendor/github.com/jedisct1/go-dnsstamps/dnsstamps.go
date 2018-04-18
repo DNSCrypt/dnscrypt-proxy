@@ -9,8 +9,6 @@ import (
 	"net"
 	"strconv"
 	"strings"
-
-	"golang.org/x/crypto/ed25519"
 )
 
 const DefaultPort = 443
@@ -60,7 +58,7 @@ func NewDNSCryptServerStampFromLegacy(serverAddrStr string, serverPkStr string, 
 		serverAddrStr = fmt.Sprintf("%s:%d", serverAddrStr, DefaultPort)
 	}
 	serverPk, err := hex.DecodeString(strings.Replace(serverPkStr, ":", "", -1))
-	if err != nil || len(serverPk) != ed25519.PublicKeySize {
+	if err != nil || len(serverPk) != 32 {
 		return ServerStamp{}, fmt.Errorf("Unsupported public key: [%s]", serverPkStr)
 	}
 	return ServerStamp{
