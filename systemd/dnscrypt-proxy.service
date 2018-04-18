@@ -2,7 +2,7 @@
 Description=DNSCrypt-proxy client
 Documentation=https://github.com/jedisct1/dnscrypt-proxy/wiki
 Requires=dnscrypt-proxy.socket
-After=network.target
+After=network-online.target
 Before=nss-lookup.target
 Wants=nss-lookup.target
 
