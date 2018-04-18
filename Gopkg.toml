@@ -44,6 +44,10 @@
 
 [[constraint]]
   branch = "master"
+  name = "github.com/jedisct1/go-dnsstamps"
+
+[[constraint]]
+  branch = "master"
   name = "github.com/jedisct1/go-minisign"
 
 [[constraint]]
@@ -65,6 +69,10 @@
 [[constraint]]
   branch = "master"
   name = "golang.org/x/crypto"
+
+[[constraint]]
+  branch = "master"
+  name = "golang.org/x/net"
 
 [[constraint]]
   name = "gopkg.in/natefinch/lumberjack.v2"

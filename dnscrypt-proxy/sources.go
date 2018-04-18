@@ -17,7 +17,7 @@ import (
 	"github.com/dchest/safefile"
 
 	"github.com/jedisct1/dlog"
-	stamps "github.com/jedisct1/dnscrypt-proxy/dnsstamps"
+	stamps "github.com/jedisct1/go-dnsstamps"
 	"github.com/jedisct1/go-minisign"
 )
 

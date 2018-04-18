@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/jedisct1/dlog"
-	stamps "github.com/jedisct1/dnscrypt-proxy/dnsstamps"
+	stamps "github.com/jedisct1/go-dnsstamps"
 	clocksmith "github.com/jedisct1/go-clocksmith"
 	"golang.org/x/crypto/curve25519"
 )

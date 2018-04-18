@@ -102,6 +102,12 @@
 
 [[projects]]
   branch = "master"
+  name = "github.com/jedisct1/go-dnsstamps"
+  packages = ["."]
+  revision = "d8908ceb62ed5ff9fe230d14cdde7727b90737e6"
+
+[[projects]]
+  branch = "master"
   name = "github.com/jedisct1/go-minisign"
   packages = ["."]
   revision = "f404c079ea5f0d4669fe617c553651f75167494e"
@@ -155,6 +161,7 @@
   name = "golang.org/x/net"
   packages = [
     "bpf",
+    "http/httpguts",
     "http2",
     "http2/hpack",
     "idna",
@@ -164,7 +171,7 @@
     "ipv6",
     "lex/httplex"
   ]
-  revision = "500e7a4f953ddaf55d316b4d3adc516aa0379622"
+  revision = "d41e8174641f662c5a2d1c7a5f9e828788eb8706"
 
 [[projects]]
   branch = "master"
@@ -176,7 +183,7 @@
     "windows/svc/eventlog",
     "windows/svc/mgr"
   ]
-  revision = "2281fa97ef7b0c26324634d5a22f04babdac8713"
+  revision = "b126b21c05a91c856b027c16779c12e3bf236954"
 
 [[projects]]
   name = "golang.org/x/text"
@@ -208,6 +215,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "5afc7ca4456d4f6f1a1da31e3ae1eb4eaf79ffe39c72a3dc98a2d78d4d865b79"
+  inputs-digest = "883af9e923fc950ed5ce4f7e72f24ff18aaed239807516582d38953d65273c22"
   solver-name = "gps-cdcl"
   solver-version = 1

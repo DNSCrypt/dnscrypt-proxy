@@ -17,7 +17,7 @@ import (
 
 	"github.com/VividCortex/ewma"
 	"github.com/jedisct1/dlog"
-	stamps "github.com/jedisct1/dnscrypt-proxy/dnsstamps"
+	stamps "github.com/jedisct1/go-dnsstamps"
 	"golang.org/x/crypto/ed25519"
 )
 

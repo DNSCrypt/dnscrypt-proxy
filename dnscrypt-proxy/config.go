@@ -13,7 +13,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/jedisct1/dlog"
-	stamps "github.com/jedisct1/dnscrypt-proxy/dnsstamps"
+	stamps "github.com/jedisct1/go-dnsstamps"
 )
 
 type Config struct {
