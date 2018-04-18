@@ -17,8 +17,8 @@ import (
 	"github.com/dchest/safefile"
 
 	"github.com/jedisct1/dlog"
+	stamps "github.com/jedisct1/dnscrypt-proxy/dnsstamps"
 	"github.com/jedisct1/go-minisign"
-	"github.com/jedisct1/dnscrypt-proxy/stamps"
 )
 
 type SourceFormat int

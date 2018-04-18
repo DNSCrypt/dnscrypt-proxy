@@ -16,9 +16,9 @@ import (
 	"strings"
 	"sync"
 	"time"
-	
-	"github.com/jedisct1/dnscrypt-proxy/stamps"
+
 	"github.com/jedisct1/dlog"
+	stamps "github.com/jedisct1/dnscrypt-proxy/dnsstamps"
 	"github.com/miekg/dns"
 	"golang.org/x/net/http2"
 )

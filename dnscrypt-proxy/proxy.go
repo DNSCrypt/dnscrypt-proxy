@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"github.com/jedisct1/dlog"
+	stamps "github.com/jedisct1/dnscrypt-proxy/dnsstamps"
 	clocksmith "github.com/jedisct1/go-clocksmith"
 	"golang.org/x/crypto/curve25519"
-	"github.com/jedisct1/dnscrypt-proxy/stamps"
 )
 
 type Proxy struct {

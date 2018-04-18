@@ -1,4 +1,4 @@
-package stamps
+package dnsstamps
 
 import (
 	"encoding/base64"
@@ -29,6 +29,7 @@ const (
 	StampProtoTypePlain    = StampProtoType(0x00)
 	StampProtoTypeDNSCrypt = StampProtoType(0x01)
 	StampProtoTypeDoH      = StampProtoType(0x02)
+	StampProtoTypeTLS      = StampProtoType(0x03)
 )
 
 func (stampProtoType *StampProtoType) String() string {
