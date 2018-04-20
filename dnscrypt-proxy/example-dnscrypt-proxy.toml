@@ -68,8 +68,11 @@ require_nolog = true
 require_nofilter = true
 
 
-
-## Always use TCP to connect to upstream servers
+## Always use TCP to connect to upstream servers.
+## This can be can be useful if you need to route everything through Tor.
+## Otherwise, leave this to `false`, as it doesn't improve security
+## (dnscrypt-proxy will always encrypt everything even using UDP), and can
+## only increase latency.
 
 force_tcp = false
 
