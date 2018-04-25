@@ -31,6 +31,12 @@ func TestNet(t *testing.T) {
 	if r, v, err := trie.MatchIP(hostIP); r != nil || v != nil || err != nil {
 		t.Errorf("MatchIP() - phantom: %v, %v, %v", r, v, err)
 	}
+	if _, err := trie.ContainedIP(net.IP([]byte{})); err == nil {
+		t.Error("ContainedIP() - not error")
+	}
+	if b, err := trie.ContainedIP(hostIP); b || err != nil {
+		t.Errorf("ContainedIP() - phantom: %v, %v", b, err)
+	}
 	if _, _, err := trie.DeleteCIDR(""); err == nil {
 		t.Error("DeleteCIDR() - not error")
 	}
@@ -49,6 +55,9 @@ func TestNet(t *testing.T) {
 	}
 	if r, v, err := trie.MatchIP(hostIP); r == nil || r.String() != cidr || v != &cidr || err != nil {
 		t.Errorf("MatchIP() - failed: %v, %v, %v", r, v, err)
+	}
+	if b, err := trie.ContainedIP(hostIP); !b || err != nil {
+		t.Errorf("ContainedIP() - failed: %v, %v", b, err)
 	}
 	if v, ok, err := trie.DeleteCIDR(cidr); v != &cidr || !ok || err != nil {
 		t.Errorf("DeleteCIDR() - failed: %v, %v, %v", v, ok, err)

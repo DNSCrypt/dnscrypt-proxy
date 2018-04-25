@@ -23,7 +23,7 @@
   branch = "master"
   name = "github.com/aead/chacha20"
   packages = ["chacha"]
-  revision = "e0d4ab3067da29fbce5b60445bed6d54c41c3c62"
+  revision = "c1766ed472dff2392a1a13de7b82e8f5a64ab11d"
 
 [[projects]]
   branch = "master"
@@ -121,8 +121,8 @@
 [[projects]]
   name = "github.com/k-sone/critbitgo"
   packages = ["."]
-  revision = "1b44ffc7fc9ad8dea28251e340eadb04093c8af3"
-  version = "v1.1.0"
+  revision = "658116ef1e826b72c603cfe2091b12503f9bca43"
+  version = "v1.2.0"
 
 [[projects]]
   branch = "master"
@@ -154,7 +154,7 @@
     "poly1305",
     "salsa20/salsa"
   ]
-  revision = "d6449816ce06963d9d136eee5a56fca5b0616e7e"
+  revision = "b0697eccbea9adec5b7ba8008f4c33d98d733388"
 
 [[projects]]
   branch = "master"
@@ -171,7 +171,7 @@
     "ipv6",
     "lex/httplex"
   ]
-  revision = "d41e8174641f662c5a2d1c7a5f9e828788eb8706"
+  revision = "5f9ae10d9af5b1c89ae6904293b14b064d4ada23"
 
 [[projects]]
   branch = "master"
@@ -183,7 +183,7 @@
     "windows/svc/eventlog",
     "windows/svc/mgr"
   ]
-  revision = "b126b21c05a91c856b027c16779c12e3bf236954"
+  revision = "79b0c6888797020a994db17c8510466c72fe75d9"
 
 [[projects]]
   name = "golang.org/x/text"

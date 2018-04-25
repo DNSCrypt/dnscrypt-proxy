@@ -137,7 +137,7 @@ func TestSize(t *testing.T) {
 }
 
 func TestAllprefixed(t *testing.T) {
-	keys := []string{"", "a", "aa", "b", "bb", "ab", "ba", "aba", "bab"}
+	keys := []string{"", "a", "aa", "b", "bb", "ab", "ba", "aba", "bab", "bc"}
 	trie := buildTrie(t, keys)
 
 	elems := make([]string, 0, len(keys))
@@ -150,10 +150,10 @@ func TestAllprefixed(t *testing.T) {
 	if !trie.Allprefixed([]byte{}, handle) {
 		t.Error("Allprefixed() - invalid result")
 	}
-	if len(elems) != 9 {
+	if len(elems) != 10 {
 		t.Errorf("Allprefixed() - invalid elems length [%v]", elems)
 	}
-	for i, key := range []string{"", "a", "aa", "ab", "aba", "b", "ba", "bab", "bb"} {
+	for i, key := range []string{"", "a", "aa", "ab", "aba", "b", "ba", "bab", "bb", "bc"} {
 		if key != elems[i] {
 			t.Errorf("Allprefixed() - not found [%s]", key)
 		}
@@ -167,6 +167,19 @@ func TestAllprefixed(t *testing.T) {
 		t.Errorf("Allprefixed() - invalid elems length [%v]", elems)
 	}
 	for i, key := range []string{"a", "aa", "ab", "aba"} {
+		if key != elems[i] {
+			t.Errorf("Allprefixed() - not found [%s]", key)
+		}
+	}
+
+	elems = make([]string, 0, len(keys))
+	if !trie.Allprefixed([]byte("bb"), handle) {
+		t.Error("Allprefixed() - invalid result")
+	}
+	if len(elems) != 1 {
+		t.Errorf("Allprefixed() - invalid elems length [%v]", elems)
+	}
+	for i, key := range []string{"bb"} {
 		if key != elems[i] {
 			t.Errorf("Allprefixed() - not found [%s]", key)
 		}
