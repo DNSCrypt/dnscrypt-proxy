@@ -152,7 +152,7 @@ CHACHA_LOOP:
 	PADDQ X0, X3
 
 	CMPL Len, $64
-	JB   BUFFER_KEYSTREAM
+	JL   BUFFER_KEYSTREAM
 
 	XOR_SSE(Dst, Src, 0, X4, X5, X6, X7, X0)
 	MOVOU 0*16(State), X0    // Restore X0 from state
