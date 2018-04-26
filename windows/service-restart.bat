@@ -1,23 +1,35 @@
-@ECHO OFF
+@set @_cmd=1 /*
+@echo off
+setlocal EnableExtensions
+title DNSCrypt-Proxy
 
-SFC 2>&1 | FIND /i "/SCANNOW" >NUL
-IF %ERRORLEVEL% NEQ 0 GOTO ELEVATE
-GOTO ADMINTASKS
+whoami /groups | find "S-1-16-12288" >nul && goto :admin
+if "%~1"=="RunAsAdmin" goto :error
 
-:ELEVATE
-ECHO Elevated privileges are temporarily required, just to register or remove the dnscrypt-proxy service
-CD /d %~dp0
-MSHTA "javascript: var shell = new ActiveXObject('shell.application'); shell.ShellExecute('%~nx0', '', '', 'runas', 1); close();"
-EXIT
+echo Requesting privileges elevation for managing the dnscrypt-proxy service . . .
+cscript /nologo /e:javascript "%~f0" || goto :error
+exit /b
 
-:ADMINTASKS
+:error
+echo.
+echo Error: Administrator privileges elevation failed,
+echo        please manually run this script as administrator.
+echo.
+goto :end
 
-CD /d %~dp0
+:admin
+pushd "%~dp0"
+dnscrypt-proxy.exe -service stop
+dnscrypt-proxy.exe -service start
+popd
+echo.
+echo Thank you for using DNSCrypt-Proxy!
 
-CMD.EXE /c "dnscrypt-proxy.exe -service stop"
-CMD.EXE /c "dnscrypt-proxy.exe -service start"
+:end
+set /p =Press [Enter] to exit . . .
+exit /b */
 
-ECHO.
-SET /P _=Thank you for using dnscrypt-proxy! Hit [RETURN] to finish
-
-EXIT
+// JScript, restart batch script as administrator
+var objShell = WScript.CreateObject('Shell.Application');
+var ComSpec = WScript.CreateObject('WScript.Shell').ExpandEnvironmentStrings('%ComSpec%');
+objShell.ShellExecute(ComSpec, '/c ""' + WScript.ScriptFullName + '" RunAsAdmin"', '', 'runas', 1);
