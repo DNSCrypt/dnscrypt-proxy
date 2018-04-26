@@ -47,7 +47,7 @@ TEXT ·supportsSSSE3(SB), NOSPLIT, $0-1
 #define Dst DI
 #define Nonce AX
 #define Key BX
-#define Rounds CX
+#define Rounds DX
 
 // func hChaCha20SSE2(out *[32]byte, nonce *[16]byte, key *[32]byte)
 TEXT ·hChaCha20SSE2(SB), 4, $0-12
@@ -117,9 +117,9 @@ chacha_loop:
 TEXT ·xorKeyStreamSSE2(SB), 4, $0-40
 	MOVL dst_base+0(FP), Dst
 	MOVL src_base+12(FP), Src
-	MOVL src_len+16(FP), Len
 	MOVL state+28(FP), State
 	MOVL rounds+32(FP), Rounds
+	MOVL src_len+16(FP), Len
 
 	MOVOU 0*16(State), X0
 	MOVOU 1*16(State), X1
@@ -199,9 +199,9 @@ DONE:
 TEXT ·xorKeyStreamSSSE3(SB), 4, $80-40
 	MOVL dst_base+0(FP), Dst
 	MOVL src_base+12(FP), Src
-	MOVL src_len+16(FP), Len
 	MOVL state+28(FP), Tmp0
 	MOVL rounds+32(FP), Rounds
+	MOVL src_len+16(FP), Len
 
 	MOVL Stack, Tmp2 // save stack pointer
 	ADDL $16, Stack  // ensure 16 byte stack alignment
@@ -211,6 +211,7 @@ TEXT ·xorKeyStreamSSSE3(SB), 4, $80-40
 	MOVOU 1*16(Tmp0), X1
 	MOVOU 2*16(Tmp0), X2
 	MOVOU 3*16(Tmp0), X3
+
 	TESTL Len, Len
 	JZ    DONE
 

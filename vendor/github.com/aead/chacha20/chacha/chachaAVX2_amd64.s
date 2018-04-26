@@ -21,10 +21,10 @@
 TEXT ·xorKeyStreamAVX2(SB), 4, $320-80
 	MOVQ dst_base+0(FP), DI
 	MOVQ src_base+24(FP), SI
-	MOVQ src_len+32(FP), CX
 	MOVQ block+48(FP), BX
 	MOVQ state+56(FP), AX
 	MOVQ rounds+64(FP), DX
+	MOVQ src_len+32(FP), CX
 
 	MOVQ SP, R8
 	ADDQ $32, SP

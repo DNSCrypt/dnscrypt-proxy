@@ -49,7 +49,7 @@ TEXT ·supportsAVX2(SB), 4, $0-1
 #define Dst DI
 #define Nonce AX
 #define Key BX
-#define Rounds CX
+#define Rounds DX
 
 // func initialize(state *[64]byte, key []byte, nonce *[16]byte)
 TEXT ·initialize(SB), 4, $0-40
@@ -166,10 +166,10 @@ chacha_loop:
 TEXT ·xorKeyStreamSSE2(SB), 4, $112-80
 	MOVQ dst_base+0(FP), Dst
 	MOVQ src_base+24(FP), Src
-	MOVQ src_len+32(FP), Len
 	MOVQ block+48(FP), Buffer
 	MOVQ state+56(FP), State
 	MOVQ rounds+64(FP), Rounds
+	MOVQ src_len+32(FP), Len
 
 	MOVOU 0*16(State), X0
 	MOVOU 1*16(State), X1
@@ -462,10 +462,10 @@ DONE:
 TEXT ·xorKeyStreamSSSE3(SB), 4, $144-80
 	MOVQ dst_base+0(FP), Dst
 	MOVQ src_base+24(FP), Src
-	MOVQ src_len+32(FP), Len
 	MOVQ block+48(FP), Buffer
 	MOVQ state+56(FP), State
 	MOVQ rounds+64(FP), Rounds
+	MOVQ src_len+32(FP), Len
 
 	MOVOU 0*16(State), X0
 	MOVOU 1*16(State), X1
@@ -773,10 +773,10 @@ DONE:
 TEXT ·xorKeyStreamAVX(SB), 4, $144-80
 	MOVQ dst_base+0(FP), Dst
 	MOVQ src_base+24(FP), Src
-	MOVQ src_len+32(FP), Len
 	MOVQ block+48(FP), Buffer
 	MOVQ state+56(FP), State
 	MOVQ rounds+64(FP), Rounds
+	MOVQ src_len+32(FP), Len
 
 	VMOVDQU 0*16(State), X0
 	VMOVDQU 1*16(State), X1

@@ -23,7 +23,7 @@
   branch = "master"
   name = "github.com/aead/chacha20"
   packages = ["chacha"]
-  revision = "0a02eb8dd59b95937590a847165c4d0b97032422"
+  revision = "8457f65383c5be6183d33e992fbf1786d6ab3e76"
 
 [[projects]]
   branch = "master"
