@@ -1,4 +1,12 @@
 
+* Version 2.0.11
+ - This release fixes a long-standing bug that caused the proxy to
+block or crash when Position-Independent Executables were produced.
+This bug only showed up when compiled on (not for) Alpine Linux and
+Android, for some CPU architectures.
+ - New configuration settings: cache_neg_min_ttl and
+cache_neg_max_ttl, to clamp the negative caching TTL.
+
 * Version 2.0.10
  - This version fixes a crash when an incomplete size is sent by a
 local client for a query over TCP.
