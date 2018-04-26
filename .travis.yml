@@ -179,11 +179,11 @@ before_deploy:
 - cd libsodium
 - env ./configure --disable-dependency-tracking --prefix=/tmp
 - make -j$(nproc) install
-- cd ..
+- cd -
 - git clone https://github.com/jedisct1/minisign.git
 - cd minisign/src
 - gcc -O2 -o /tmp/bin/minisign -I/tmp/include -L/tmp/lib *.c -lsodium
-- cd ..
+- cd -
 - minisign -v
 - echo '#' > /tmp/minisign.key
 - echo "$MINISIGN_SK" >> /tmp/minisign.key
