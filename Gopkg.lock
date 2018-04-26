@@ -23,7 +23,7 @@
   branch = "master"
   name = "github.com/aead/chacha20"
   packages = ["chacha"]
-  revision = "c1766ed472dff2392a1a13de7b82e8f5a64ab11d"
+  revision = "0a02eb8dd59b95937590a847165c4d0b97032422"
 
 [[projects]]
   branch = "master"
@@ -154,7 +154,7 @@
     "poly1305",
     "salsa20/salsa"
   ]
-  revision = "b0697eccbea9adec5b7ba8008f4c33d98d733388"
+  revision = "dccd99e89d39b13e12f1103c72e3bc49eb40a833"
 
 [[projects]]
   branch = "master"
@@ -183,7 +183,7 @@
     "windows/svc/eventlog",
     "windows/svc/mgr"
   ]
-  revision = "79b0c6888797020a994db17c8510466c72fe75d9"
+  revision = "bb9c189858d91f42db229b04d45a4c3d23a7662a"
 
 [[projects]]
   name = "golang.org/x/text"

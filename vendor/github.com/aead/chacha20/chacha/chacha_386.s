@@ -22,7 +22,7 @@
 	INCL block;        \
 	INCL dst;          \
 	DECL len;          \
-	JA   FINALIZE_LOOP \
+	JG   FINALIZE_LOOP \
 
 // func supportsSSE2() bool
 TEXT ·supportsSSE2(SB), NOSPLIT, $0-1
@@ -152,7 +152,7 @@ CHACHA_LOOP:
 	PADDQ X0, X3
 
 	CMPL Len, $64
-	JB   BUFFER_KEYSTREAM
+	JL   BUFFER_KEYSTREAM
 
 	XOR_SSE(Dst, Src, 0, X4, X5, X6, X7, X0)
 	MOVOU 0*16(State), X0    // Restore X0 from state
@@ -245,7 +245,7 @@ CHACHA_LOOP:
 	PADDQ 3*16(Stack), X3
 
 	CMPL Len, $64
-	JB   BUFFER_KEYSTREAM
+	JL   BUFFER_KEYSTREAM
 
 	XOR_SSE(Dst, Src, 0, X4, X5, X6, X7, X0)
 	ADDL $64, Src
