@@ -5,19 +5,19 @@
   branch = "master"
   name = "github.com/aead/chacha20"
   packages = ["chacha"]
-  revision = "c8d29375923a8e1d2a0f0dc0fc1d8a0aba5b97ba"
+  revision = "8457f65383c5be6183d33e992fbf1786d6ab3e76"
 
 [[projects]]
   branch = "master"
   name = "github.com/aead/poly1305"
   packages = ["."]
-  revision = "6cf43fdfd7a228cf3003ae23d10ddbf65e85997b"
+  revision = "969857f48f7ae439b6d2449ed1dcd9aaabc49c67"
 
 [[projects]]
   branch = "master"
   name = "golang.org/x/crypto"
   packages = ["curve25519"]
-  revision = "650f4a345ab4e5b245a3034b110ebc7299e68186"
+  revision = "b49d69b5da943f7ef3c9cf91c8777c1f78a0cc3c"
 
 [solve-meta]
   analyzer-name = "dep"
