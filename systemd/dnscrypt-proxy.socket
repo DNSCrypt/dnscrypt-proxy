@@ -5,8 +5,14 @@ Before=nss-lookup.target
 Wants=nss-lookup.target
 
 [Socket]
+## Listen on TCP socket.
 ListenStream=127.0.0.1:53
+
+## Listen on UDP socket.
 ListenDatagram=127.0.0.1:53
+
+## Below options are valid only for TCP socket.
+## Applying them to UDP socket will result in error which can be ignored.
 NoDelay=true
 DeferAcceptSec=1
 
