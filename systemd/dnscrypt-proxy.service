@@ -2,21 +2,24 @@
 Description=DNSCrypt-proxy client
 Documentation=https://github.com/jedisct1/dnscrypt-proxy/wiki
 
-## Use systemd sockets.
-Requires=dnscrypt-proxy.socket
+## Use systemd sockets - Do not enable unless you are very familiar with the systemd socket activation mechanism.
+## Always try without systemd sockets before reporting any issues related to speed, latency or reliability.
+## If you enable this, the `listen_addresses` list in the main configuration file can be empty. Or, at least,
+## the addresses it contains should not overlap with the systemd socket addresses.
+# Requires=dnscrypt-proxy.socket
 
 ## Start service after the network is online.
 ## Requires a wait service such as NetworkManager or systemd-networkd.
-## Verify using: 
+## Verify using:
 ## systemctl is-enabled NetworkManager-wait-online.service systemd-networkd-wait-online.service
 ## Then enable:
 ## systemctl enable NetworkManager-wait-online.service
-## Or alternatively: 
+## Or alternatively:
 ## systemctl enable systemd-networkd-wait-online.service
 After=network-online.target
 Wants=network-online.target
 
-## DNSCrypt-proxy provides and requires name resolution. 
+## DNSCrypt-proxy provides and requires name resolution.
 Before=nss-lookup.target
 Wants=nss-lookup.target
 
@@ -27,7 +30,7 @@ NonBlocking=true
 ## Execute dnscrypt-proxy with configuration file.
 ExecStart=/usr/bin/dnscrypt-proxy --config /etc/dnscrypt-proxy/dnscrypt-proxy.toml
 
-## Make /home, /root and /run/user innacessible.
+## Make /home, /root and /run/user inacessible.
 ProtectHome=yes
 
 ## Make Linux control groups read only.
