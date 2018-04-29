@@ -78,13 +78,13 @@ script:
 - env GOOS=linux GOARCH=386 go build -ldflags="-s -w"
 - mkdir linux-i386
 - ln dnscrypt-proxy linux-i386/
-- ln ../LICENSE ../systemd/* example-dnscrypt-proxy.toml example-*.txt linux-i386/
+- ln ../LICENSE example-dnscrypt-proxy.toml example-*.txt linux-i386/
 - tar czpvf dnscrypt-proxy-linux_i386-${TRAVIS_TAG:-dev}.tar.gz linux-i386
 - go clean
 - env GOOS=linux GOARCH=amd64 go build -ldflags="-s -w"
 - mkdir linux-x86_64
 - ln dnscrypt-proxy linux-x86_64/
-- ln ../LICENSE ../systemd/* example-dnscrypt-proxy.toml example-*.txt linux-x86_64/
+- ln ../LICENSE example-dnscrypt-proxy.toml example-*.txt linux-x86_64/
 - tar czpvf dnscrypt-proxy-linux_x86_64-${TRAVIS_TAG:-dev}.tar.gz linux-x86_64
 - go clean
 - env GOOS=linux GOARCH=arm go build -ldflags="-s -w"
