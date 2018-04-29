@@ -2,7 +2,7 @@
 Description=DNSCrypt-proxy client
 Documentation=https://github.com/jedisct1/dnscrypt-proxy/wiki
 
-## Use systemd sockets. Disable on TCP_NODELAY fail. Then define ip address in dnscrypt-proxy.toml.
+## Use systemd sockets.
 Requires=dnscrypt-proxy.socket
 
 ## Start service after the network is online.
@@ -27,7 +27,7 @@ NonBlocking=true
 ## Execute dnscrypt-proxy with configuration file.
 ExecStart=/usr/bin/dnscrypt-proxy --config /etc/dnscrypt-proxy/dnscrypt-proxy.toml
 
-## Make /home, /root and /run/user read only.
+## Make /home, /root and /run/user innacessible.
 ProtectHome=yes
 
 ## Make Linux control groups read only.
