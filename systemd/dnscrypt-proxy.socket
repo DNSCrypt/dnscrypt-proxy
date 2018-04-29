@@ -12,7 +12,10 @@ ListenStream=127.0.0.1:53
 ListenDatagram=127.0.0.1:53
 
 ## Below options are valid only for TCP socket.
-## Applying them to UDP socket will result in error which can be ignored.
+## Applying them to UDP socket will result in warnings:
+## TCP_NODELAY failed: Protocol not available
+## TCP_DEFER_ACCEPT failed: Protocol not available
+## Those can be safely ignored.
 NoDelay=true
 DeferAcceptSec=1
 
