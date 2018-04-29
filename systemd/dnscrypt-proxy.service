@@ -2,11 +2,11 @@
 Description=DNSCrypt-proxy client
 Documentation=https://github.com/jedisct1/dnscrypt-proxy/wiki
 
-## Use systemd sockets - Do not enable unless you are very familiar with the systemd socket activation mechanism.
-## Always try without systemd sockets before reporting any issues related to speed, latency or reliability.
-## If you enable this, the `listen_addresses` list in the main configuration file can be empty. Or, at least,
-## the addresses it contains should not overlap with the systemd socket addresses.
-# Requires=dnscrypt-proxy.socket
+## Use systemd socket activation. If enabled, the `listen_addresses`
+## list in the main configuration file should be empty. If you want to change
+## listenning address modify dnscrypt-proxy.socket instead.
+Requires=dnscrypt-proxy.socket
+After=dnscrypt-proxy.socket
 
 ## Start service after the network is online.
 ## Requires a wait service such as NetworkManager or systemd-networkd.
@@ -39,9 +39,9 @@ ProtectControlGroups=yes
 ## Deny explicit module loading.
 ProtectKernelModules=yes
 
-## Run dnscrypt-proxy as unprivileged user with
-## temporary assigned UID/GID. See man:systemd.exec
-## for more info. Requires systemd 232+.
+## Run dnscrypt-proxy as unprivileged user with temporary assigned UID/GID.
+## See man:systemd.exec for more info. Requires systemd 232+. If you don't
+## use systemd socket activation then you have to disable that option.
 DynamicUser=yes
 CacheDirectory=dnscrypt-proxy
 LogsDirectory=dnscrypt-proxy
