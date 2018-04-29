@@ -1,8 +1,6 @@
 [Unit]
 Description=DNSCrypt-proxy socket
 Documentation=https://github.com/jedisct1/dnscrypt-proxy/wiki
-Before=nss-lookup.target
-Wants=nss-lookup.target
 
 [Socket]
 ## Listen on TCP socket.
