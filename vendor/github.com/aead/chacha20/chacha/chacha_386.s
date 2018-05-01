@@ -41,7 +41,8 @@ TEXT ·supportsSSSE3(SB), NOSPLIT, $0-1
 	CPUID
 	SHRL $9, CX
 	ANDL $1, CX
-	MOVB CX, ret+0(FP)
+	MOVB CX, DX
+	MOVB DX, ret+0(FP)
 	RET
 
 #define Dst DI
@@ -163,18 +164,19 @@ CHACHA_LOOP:
 	JMP   GENERATE_KEYSTREAM // There is at least one more plaintext byte
 
 BUFFER_KEYSTREAM:
+	MOVL  Len, Rounds         // Use Rounds as tmp. register for Len - we don't need Rounds anymore
 	MOVL  block+24(FP), State
 	MOVOU X4, 0(State)
 	MOVOU X5, 16(State)
 	MOVOU X6, 32(State)
 	MOVOU X7, 48(State)
-	MOVL  Len, Rounds         // Use Rounds as tmp. register for Len - we don't need Rounds anymore
 	FINALIZE(Dst, Src, State, Rounds, Tmp0, Tmp1)
 
 DONE:
+	MOVL  Len, Tmp0           // Number of bytes written to the keystream buffer - 0 iff Len mod 64 == 0
+	MOVL  Tmp0, ret+36(FP)
 	MOVL  state+28(FP), State
 	MOVOU X3, 3*16(State)
-	MOVL  Len, ret+36(FP)     // Number of bytes written to the keystream buffer - 0 iff Len mod 64 == 0
 	RET
 
 #undef State
@@ -267,10 +269,11 @@ BUFFER_KEYSTREAM:
 	MOVL  Stack, Tmp2        // set BP to SP so that DONE resets SP correctly
 
 DONE:
+	MOVL  Len, Tmp0
+	MOVL  Tmp0, ret+36(FP)
 	MOVL  Tmp2, Stack        // restore stack pointer
 	MOVL  state+28(FP), Tmp0
 	MOVOU X3, 3*16(Tmp0)
-	MOVL  Len, ret+36(FP)
 	RET
 
 #undef Dst
