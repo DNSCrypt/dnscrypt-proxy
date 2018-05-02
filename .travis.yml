@@ -3,7 +3,7 @@ language: go
 os:
 - linux
 go:
-- 1.10.1
+- 1.10.2
 script:
 - gimme --list
 - echo $TRAVIS_GO_VERSION
@@ -169,7 +169,7 @@ deploy:
   skip_cleanup: true
   on:
     repo: jedisct1/dnscrypt-proxy
-    condition: "${TRAVIS_GO_VERSION} == 1.10.1"
+    condition: "${TRAVIS_GO_VERSION} == 1.10.2"
     tags: true
 before_deploy:
 - mkdir -p /tmp/bin /tmp/lib /tmp/include
