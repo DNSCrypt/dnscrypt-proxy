@@ -52,7 +52,8 @@ func hChaCha20(out *[32]byte, nonce *[16]byte, key *[32]byte) {
 }
 
 func xorKeyStream(dst, src []byte, block, state *[64]byte, rounds int) int {
-	if useSSE2 {
+	switch {
+	case useSSE2:
 		return xorKeyStreamSSE2(dst, src, block, state, rounds)
 	default:
 		return xorKeyStreamGeneric(dst, src, block, state, rounds)
