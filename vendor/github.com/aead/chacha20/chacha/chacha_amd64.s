@@ -24,28 +24,6 @@
 	DECQ len;          \
 	JG   FINALIZE_LOOP \
 
-// func supportsSSSE3() bool
-TEXT ·supportsSSSE3(SB), NOSPLIT, $0-1
-	XORQ AX, AX
-	INCQ AX
-	CPUID
-	SHRQ $9, CX
-	ANDQ $1, CX
-	MOVB CX, ret+0(FP)
-	RET
-
-// func supportsAVX() bool
-TEXT ·supportsAVX(SB), 4, $0-1
-	MOVQ runtime·support_avx(SB), AX
-	MOVB AX, ret+0(FP)
-	RET
-
-// func supportsAVX2() bool
-TEXT ·supportsAVX2(SB), 4, $0-1
-	MOVQ runtime·support_avx2(SB), AX
-	MOVB AX, ret+0(FP)
-	RET
-
 #define Dst DI
 #define Nonce AX
 #define Key BX
@@ -152,7 +130,7 @@ chacha_loop:
 
 #define Dst DI
 #define Src SI
-#define Len CX
+#define Len R12
 #define Rounds DX
 #define Buffer BX
 #define State AX

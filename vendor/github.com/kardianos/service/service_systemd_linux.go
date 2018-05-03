@@ -156,9 +156,6 @@ func (s *systemd) Restart() error {
 const systemdScript = `[Unit]
 Description={{.Description}}
 ConditionFileIsExecutable={{.Path|cmdEscape}}
-{{range .UnitAdd}}
-{{.Key}}={{.Value}}
-{{end}}
 
 [Service]
 StartLimitInterval=5
@@ -172,13 +169,7 @@ ExecStart={{.Path|cmdEscape}}{{range .Arguments}} {{.|cmd}}{{end}}
 Restart=always
 RestartSec=120
 EnvironmentFile=-/etc/sysconfig/{{.Name}}
-{{range .ServiceAdd}}
-{{.Key}}={{.Value}}
-{{end}}
 
 [Install]
 WantedBy=multi-user.target
-{{range .InstallAdd}}
-{{.Key}}={{.Value}}
-{{end}}
 `

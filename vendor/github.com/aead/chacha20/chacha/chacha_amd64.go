@@ -6,28 +6,18 @@
 
 package chacha
 
+import "golang.org/x/sys/cpu"
+
 func init() {
-	useSSE2 = true
-	useSSSE3 = supportsSSSE3()
-	useAVX = supportsAVX()
-	useAVX2 = supportsAVX2() && false // disable until #16 is fixed
+	useSSE2 = cpu.X86.HasSSE2
+	useSSSE3 = cpu.X86.HasSSSE3
+	useAVX = cpu.X86.HasAVX
+	useAVX2 = cpu.X86.HasAVX2 && false // disable until #16 is fixed
 }
 
 // This function is implemented in chacha_amd64.s
 //go:noescape
 func initialize(state *[64]byte, key []byte, nonce *[16]byte)
-
-// This function is implemented in chacha_amd64.s
-//go:noescape
-func supportsSSSE3() bool
-
-// This function is implemented in chacha_amd64.s
-//go:noescape
-func supportsAVX() bool
-
-// This function is implemented in chacha_amd64.s
-//go:noescape
-func supportsAVX2() bool
 
 // This function is implemented in chacha_amd64.s
 //go:noescape
@@ -58,26 +48,29 @@ func xorKeyStreamAVX(dst, src []byte, block, state *[64]byte, rounds int) int
 func xorKeyStreamAVX2(dst, src []byte, block, state *[64]byte, rounds int) int
 
 func hChaCha20(out *[32]byte, nonce *[16]byte, key *[32]byte) {
-	if useAVX {
+	switch {
+	case useAVX:
 		hChaCha20AVX(out, nonce, key)
-	} else if useSSSE3 {
+	case useSSSE3:
 		hChaCha20SSSE3(out, nonce, key)
-	} else if useSSE2 { // on amd64 this is  always true - necessary for testing generic on amd64
+	case useSSE2:
 		hChaCha20SSE2(out, nonce, key)
-	} else {
+	default:
 		hChaCha20Generic(out, nonce, key)
 	}
 }
 
 func xorKeyStream(dst, src []byte, block, state *[64]byte, rounds int) int {
-	if useAVX2 {
+	switch {
+	case useAVX2:
 		return xorKeyStreamAVX2(dst, src, block, state, rounds)
-	} else if useAVX {
+	case useAVX:
 		return xorKeyStreamAVX(dst, src, block, state, rounds)
-	} else if useSSSE3 {
+	case useSSSE3:
 		return xorKeyStreamSSSE3(dst, src, block, state, rounds)
-	} else if useSSE2 { // on amd64 this is  always true - necessary for testing generic on amd64
+	case useSSE2:
 		return xorKeyStreamSSE2(dst, src, block, state, rounds)
+	default:
+		return xorKeyStreamGeneric(dst, src, block, state, rounds)
 	}
-	return xorKeyStreamGeneric(dst, src, block, state, rounds)
 }

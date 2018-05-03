@@ -23,7 +23,7 @@
   branch = "master"
   name = "github.com/aead/chacha20"
   packages = ["chacha"]
-  revision = "8457f65383c5be6183d33e992fbf1786d6ab3e76"
+  revision = "52db354a4a380462fc762185d72dffb206e50a42"
 
 [[projects]]
   branch = "master"
@@ -92,7 +92,7 @@
   branch = "master"
   name = "github.com/jedisct1/dlog"
   packages = ["."]
-  revision = "d3f1bf94f2a248f6d000c48612836796f333f2dd"
+  revision = "e9403225aeeae12daf0c67ef68f2052e185a8b50"
 
 [[projects]]
   branch = "master"
@@ -154,7 +154,7 @@
     "poly1305",
     "salsa20/salsa"
   ]
-  revision = "b49d69b5da943f7ef3c9cf91c8777c1f78a0cc3c"
+  revision = "76a954637dfa3223c13edb4529f981f0d62cfa26"
 
 [[projects]]
   branch = "master"
@@ -171,19 +171,20 @@
     "ipv6",
     "lex/httplex"
   ]
-  revision = "5f9ae10d9af5b1c89ae6904293b14b064d4ada23"
+  revision = "640f4622ab692b87c2f3a94265e6f579fe38263d"
 
 [[projects]]
   branch = "master"
   name = "golang.org/x/sys"
   packages = [
+    "cpu",
     "windows",
     "windows/registry",
     "windows/svc",
     "windows/svc/eventlog",
     "windows/svc/mgr"
   ]
-  revision = "bb9c189858d91f42db229b04d45a4c3d23a7662a"
+  revision = "78d5f264b493f125018180c204871ecf58a2dce1"
 
 [[projects]]
   name = "golang.org/x/text"
