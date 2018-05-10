@@ -1,4 +1,13 @@
 
+* Version 2.0.12
+ - Further compatibility fixes for Alpine Linux/i386 and Android/i386
+have been made. Thanks to @aead for his help!
+ - The proxy will now wait for network connectivity before starting.
+This is useful if the proxy is automatically started at boot, possibly
+before the network is fully configured.
+ - The IPv6 blocking module now returns synthetic SOA records to
+improve compatibility with downstream resolvers and stub resolvers.
+
 * Version 2.0.11
  - This release fixes a long-standing bug that caused the proxy to
 block or crash when Position-Independent Executables were produced.
