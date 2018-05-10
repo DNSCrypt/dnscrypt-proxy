@@ -2,7 +2,6 @@ package main
 
 import (
 	"strings"
-	"time"
 
 	"github.com/miekg/dns"
 )
@@ -54,14 +53,10 @@ func (plugin *PluginBlockIPv6) Eval(pluginsState *PluginsState, msg *dns.Msg) er
 	if !(i < 0 || i+1 >= len(qName)) {
 		parentZone = qName[i+1:]
 	}
-	dotParentZone := "."
-	if parentZone != "." {
-		dotParentZone += parentZone
-	}
 	soa := new(dns.SOA)
-	soa.Mbox = "h" + dotParentZone
+	soa.Mbox = "h.invalid."
 	soa.Ns = "a.root-servers.net."
-	soa.Serial = uint32(time.Now().Unix())
+	soa.Serial = 1
 	soa.Refresh = 10000
 	soa.Minttl = 2400
 	soa.Expire = 604800
