@@ -163,8 +163,10 @@ fallback_resolver = '9.9.9.9:53'
 ignore_system_dns = false
 
 
-## Maximum time (in seconds) to wait for network connectivity before initializing the proxy.
-## Useful if the proxy is automatically started at boot, and network connectivity is not guaranteed to be immediately available.
+## Maximum time (in seconds) to wait for network connectivity before
+## initializing the proxy.
+## Useful if the proxy is automatically started at boot, and network
+## connectivity is not guaranteed to be immediately available.
 ## Use 0 to disable.
 
 netprobe_timeout = 30
