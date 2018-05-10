@@ -60,7 +60,7 @@ func (plugin *PluginBlockIPv6) Eval(pluginsState *PluginsState, msg *dns.Msg) er
 	}
 	soa := new(dns.SOA)
 	soa.Mbox = "h" + dotParentZone
-	soa.Ns = "n" + dotParentZone
+	soa.Ns = "a.root-servers.net."
 	soa.Serial = uint32(time.Now().Unix())
 	soa.Refresh = 10000
 	soa.Minttl = 2400
