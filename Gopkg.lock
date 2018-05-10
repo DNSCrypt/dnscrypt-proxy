@@ -23,7 +23,7 @@
   branch = "master"
   name = "github.com/aead/chacha20"
   packages = ["chacha"]
-  revision = "52db354a4a380462fc762185d72dffb206e50a42"
+  revision = "e2538746bfea853aaa589feb8ec46bd46ee78f86"
 
 [[projects]]
   branch = "master"
@@ -116,7 +116,7 @@
   branch = "master"
   name = "github.com/jedisct1/xsecretbox"
   packages = ["."]
-  revision = "e790e3a36d5cdde0f309753d16100f2e7b396482"
+  revision = "7a679c0bcd9a5bbfe097fb7d48497bc06d17be76"
 
 [[projects]]
   name = "github.com/k-sone/critbitgo"
@@ -139,8 +139,8 @@
 [[projects]]
   name = "github.com/miekg/dns"
   packages = ["."]
-  revision = "83c435cc65d2862736428b9b4d07d0ab10ad3e4d"
-  version = "v1.0.5"
+  revision = "eac804ceef194db2da6ee80c728d7658c8c805ff"
+  version = "v1.0.6"
 
 [[projects]]
   branch = "master"
@@ -154,7 +154,7 @@
     "poly1305",
     "salsa20/salsa"
   ]
-  revision = "76a954637dfa3223c13edb4529f981f0d62cfa26"
+  revision = "2d027ae1dddd4694d54f7a8b6cbe78dca8720226"
 
 [[projects]]
   branch = "master"
@@ -168,10 +168,9 @@
     "internal/iana",
     "internal/socket",
     "ipv4",
-    "ipv6",
-    "lex/httplex"
+    "ipv6"
   ]
-  revision = "640f4622ab692b87c2f3a94265e6f579fe38263d"
+  revision = "f73e4c9ed3b7ebdd5f699a16a880c2b1994e50dd"
 
 [[projects]]
   branch = "master"
@@ -184,7 +183,7 @@
     "windows/svc/eventlog",
     "windows/svc/mgr"
   ]
-  revision = "78d5f264b493f125018180c204871ecf58a2dce1"
+  revision = "7dfd1290c7917b7ba22824b9d24954ab3002fe24"
 
 [[projects]]
   name = "golang.org/x/text"
