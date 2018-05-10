@@ -15,7 +15,7 @@
     "windows/registry",
     "windows/svc/eventlog"
   ]
-  revision = "78d5f264b493f125018180c204871ecf58a2dce1"
+  revision = "7dfd1290c7917b7ba22824b9d24954ab3002fe24"
 
 [solve-meta]
   analyzer-name = "dep"

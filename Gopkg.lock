@@ -92,7 +92,7 @@
   branch = "master"
   name = "github.com/jedisct1/dlog"
   packages = ["."]
-  revision = "e9403225aeeae12daf0c67ef68f2052e185a8b50"
+  revision = "08cef41542e5c78041f764962bea3d30dc5d4a64"
 
 [[projects]]
   branch = "master"
@@ -110,7 +110,7 @@
   branch = "master"
   name = "github.com/jedisct1/go-minisign"
   packages = ["."]
-  revision = "f404c079ea5f0d4669fe617c553651f75167494e"
+  revision = "9db77cefece9267a416903f994c5dda9da849d65"
 
 [[projects]]
   branch = "master"
@@ -215,6 +215,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "883af9e923fc950ed5ce4f7e72f24ff18aaed239807516582d38953d65273c22"
+  inputs-digest = "2665fa9c725a2e63a6769a05e1da1b68dfc6ea2adcce5f2bf2fdfac975ec9574"
   solver-name = "gps-cdcl"
   solver-version = 1
