@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"net"
 	"os"
 	"path"
 	"path/filepath"
@@ -63,6 +64,8 @@ type Config struct {
 	LogMaxBackups            int                        `toml:"log_files_max_backups"`
 	TLSDisableSessionTickets bool                       `toml:"tls_disable_session_tickets"`
 	TLSCipherSuite           []uint16                   `toml:"tls_cipher_suite"`
+	NetprobeAddress          string                     `toml:"netprobe_address"`
+	NetprobeTimeout          int                        `toml:"netprobe_timeout"`
 }
 
 func newConfig() Config {
@@ -95,6 +98,8 @@ func newConfig() Config {
 		LogMaxBackups:            1,
 		TLSDisableSessionTickets: false,
 		TLSCipherSuite:           nil,
+		NetprobeAddress:          "1.0.0.0:0",
+		NetprobeTimeout:          30,
 	}
 }
 
@@ -361,6 +366,8 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 		config.SourceDoH = true
 	}
 
+	netProbe(config.NetprobeAddress, config.NetprobeTimeout)
+
 	if err := config.loadSources(proxy); err != nil {
 		return err
 	}
@@ -538,4 +545,35 @@ func cdLocal() {
 		return
 	}
 	os.Chdir(filepath.Dir(exeFileName))
+}
+
+func netProbe(address string, timeout int) error {
+	if len(address) <= 0 || timeout <= 0 {
+		return nil
+	}
+	remoteUDPAddr, err := net.ResolveUDPAddr("udp", address)
+	if err != nil {
+		return err
+	}
+	retried := false
+	for tries := timeout; tries > 0; tries-- {
+		pc, err := net.DialUDP("udp", nil, remoteUDPAddr)
+		if err != nil {
+			if !retried {
+				retried = true
+				dlog.Notice("Network not available yet -- waiting...")
+			}
+			dlog.Debug(err)
+			time.Sleep(1 * time.Second)
+			continue
+		}
+		pc.Close()
+		if retried {
+			dlog.Notice("Network connectivity detected")
+		}
+		return nil
+	}
+	es := "Timeout while waiting for network connectivity"
+	dlog.Error(es)
+	return errors.New(es)
 }
