@@ -264,7 +264,9 @@ func (xTransport *XTransport) DoHQuery(useGet bool, url *url.URL, body []byte, t
 		encBody := base64.RawURLEncoding.EncodeToString(body)
 		qs.Add("body", encBody)
 		qs.Add("dns", encBody)
-		qs.Add("random_padding", *padding)
+		if padding != nil {
+			qs.Add("random_padding", *padding)
+		}
 		url2 := *url
 		url2.RawQuery = qs.Encode()
 		return xTransport.Get(&url2, dataType, timeout)
