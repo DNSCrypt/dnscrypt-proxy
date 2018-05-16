@@ -1255,10 +1255,8 @@ func setNSEC3(h RR_Header, c chan lex, o, f string) (RR, *ParseError, string) {
 	if len(l.token) == 0 || l.err {
 		return nil, &ParseError{f, "bad NSEC3 Salt", l}, ""
 	}
-	if l.token != "-" {
-		rr.SaltLength = uint8(len(l.token)) / 2
-		rr.Salt = l.token
-	}
+	rr.SaltLength = uint8(len(l.token)) / 2
+	rr.Salt = l.token
 
 	<-c
 	l = <-c
@@ -1323,10 +1321,8 @@ func setNSEC3PARAM(h RR_Header, c chan lex, o, f string) (RR, *ParseError, strin
 	rr.Iterations = uint16(i)
 	<-c
 	l = <-c
-	if l.token != "-" {
-		rr.SaltLength = uint8(len(l.token))
-		rr.Salt = l.token
-	}
+	rr.SaltLength = uint8(len(l.token))
+	rr.Salt = l.token
 	return rr, nil, ""
 }
 
