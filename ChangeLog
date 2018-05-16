@@ -1,4 +1,8 @@
 
+* Version 2.0.13
+ - This version fixes a crash when using DoH for queries whose size
+were a multiple of the block size. Reported by @char101, thanks!
+
 * Version 2.0.12
  - Further compatibility fixes for Alpine Linux/i386 and Android/i386
 have been made. Thanks to @aead for his help!
