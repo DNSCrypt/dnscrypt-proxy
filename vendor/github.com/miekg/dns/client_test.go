@@ -588,3 +588,25 @@ func TestConcurrentExchanges(t *testing.T) {
 		}
 	}
 }
+
+func TestDoHExchange(t *testing.T) {
+	const addrstr = "dns.cloudflare.com:443"
+
+	m := new(Msg)
+	m.SetQuestion("miek.nl.", TypeSOA)
+
+	cl := &Client{Net: "https"}
+
+	r, _, err := cl.Exchange(m, addrstr)
+	if err != nil {
+		t.Fatalf("failed to exchange: %v", err)
+	}
+
+	if r == nil || r.Rcode != RcodeSuccess {
+		t.Errorf("failed to get an valid answer\n%v", r)
+	}
+
+	t.Log(r)
+
+	// TODO: proper tests for this
+}

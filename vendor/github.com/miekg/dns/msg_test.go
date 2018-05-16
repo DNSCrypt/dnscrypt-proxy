@@ -26,6 +26,28 @@ var (
 	})
 )
 
+func TestPackNoSideEffect(t *testing.T) {
+	m := new(Msg)
+	m.SetQuestion(Fqdn("example.com."), TypeNS)
+
+	a := new(Msg)
+	o := &OPT{
+		Hdr: RR_Header{
+			Name:   ".",
+			Rrtype: TypeOPT,
+		},
+	}
+	o.SetUDPSize(DefaultMsgSize)
+
+	a.Extra = append(a.Extra, o)
+	a.SetRcode(m, RcodeBadVers)
+
+	a.Pack()
+	if a.Rcode != RcodeBadVers {
+		t.Errorf("after pack: Rcode is expected to be BADVERS")
+	}
+}
+
 func TestUnpackDomainName(t *testing.T) {
 	var cases = []struct {
 		label          string

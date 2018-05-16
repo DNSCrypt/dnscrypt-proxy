@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-// Maximum number of TCP queries before we close the socket.
+// Default maximum number of TCP queries before we close the socket.
 const maxTCPQueries = 128
 
 // Interval for stop worker if no load
@@ -303,6 +303,8 @@ type Server struct {
 	DecorateReader DecorateReader
 	// DecorateWriter is optional, allows customization of the process that writes raw DNS messages.
 	DecorateWriter DecorateWriter
+	// Maximum number of TCP queries before we close the socket. Default is maxTCPQueries (unlimited if -1).
+	MaxTCPQueries int
 
 	// UDP packet or TCP connection queue
 	queue chan *response
@@ -593,8 +595,12 @@ func (srv *Server) serve(w *response) {
 
 	timeout := srv.getReadTimeout()
 
-	// TODO(miek): make maxTCPQueries configurable?
-	for q := 0; q < maxTCPQueries; q++ {
+	limit := srv.MaxTCPQueries
+	if limit == 0 {
+		limit = maxTCPQueries
+	}
+
+	for q := 0; q < limit || limit == -1; q++ {
 		var err error
 		w.msg, err = reader.ReadTCP(w.tcp, timeout)
 		if err != nil {

@@ -131,3 +131,11 @@ func TestNsec3(t *testing.T) {
 		}
 	}
 }
+
+func TestNsec3EmptySalt(t *testing.T) {
+	rr, _ := NewRR("CK0POJMG874LJREF7EFN8430QVIT8BSM.com. 86400 IN NSEC3 1 1 0 - CK0Q1GIN43N1ARRC9OSM6QPQR81H5M9A  NS SOA RRSIG DNSKEY NSEC3PARAM")
+
+	if !rr.(*NSEC3).Match("com.") {
+		t.Fatalf("expected record to match com. label")
+	}
+}
