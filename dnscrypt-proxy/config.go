@@ -98,7 +98,7 @@ func newConfig() Config {
 		LogMaxBackups:            1,
 		TLSDisableSessionTickets: false,
 		TLSCipherSuite:           nil,
-		NetprobeAddress:          "1.0.0.0:0",
+		NetprobeAddress:          "9.9.9.9:53",
 		NetprobeTimeout:          30,
 	}
 }
