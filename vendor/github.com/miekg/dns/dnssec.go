@@ -240,7 +240,7 @@ func (k *DNSKEY) ToDS(h uint8) *DS {
 // ToCDNSKEY converts a DNSKEY record to a CDNSKEY record.
 func (k *DNSKEY) ToCDNSKEY() *CDNSKEY {
 	c := &CDNSKEY{DNSKEY: *k}
-	c.Hdr = *k.Hdr.copyHeader()
+	c.Hdr = k.Hdr
 	c.Hdr.Rrtype = TypeCDNSKEY
 	return c
 }
@@ -248,7 +248,7 @@ func (k *DNSKEY) ToCDNSKEY() *CDNSKEY {
 // ToCDS converts a DS record to a CDS record.
 func (d *DS) ToCDS() *CDS {
 	c := &CDS{DS: *d}
-	c.Hdr = *d.Hdr.copyHeader()
+	c.Hdr = d.Hdr
 	c.Hdr.Rrtype = TypeCDS
 	return c
 }

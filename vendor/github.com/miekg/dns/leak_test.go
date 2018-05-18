@@ -29,6 +29,7 @@ func interestingGoroutines() (gs []string) {
 			strings.Contains(stack, "closeWriteAndWait") ||
 			strings.Contains(stack, "testing.Main(") ||
 			strings.Contains(stack, "testing.(*T).Run(") ||
+			strings.Contains(stack, "created by net/http.(*http2Transport).newClientConn") ||
 			// These only show up with GOTRACEBACK=2; Issue 5005 (comment 28)
 			strings.Contains(stack, "runtime.goexit") ||
 			strings.Contains(stack, "created by runtime.gc") ||

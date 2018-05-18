@@ -92,7 +92,7 @@
   branch = "master"
   name = "github.com/jedisct1/dlog"
   packages = ["."]
-  revision = "08cef41542e5c78041f764962bea3d30dc5d4a64"
+  revision = "d9d2d2575aef4e29f8a9b7d75a75a1d0b146f1af"
 
 [[projects]]
   branch = "master"
@@ -110,7 +110,7 @@
   branch = "master"
   name = "github.com/jedisct1/go-minisign"
   packages = ["."]
-  revision = "9db77cefece9267a416903f994c5dda9da849d65"
+  revision = "f4dbde220b4f73d450949b9ba27fa941faa05a78"
 
 [[projects]]
   branch = "master"
@@ -139,8 +139,8 @@
 [[projects]]
   name = "github.com/miekg/dns"
   packages = ["."]
-  revision = "eac804ceef194db2da6ee80c728d7658c8c805ff"
-  version = "v1.0.6"
+  revision = "e57bf427e68187a27e22adceac868350d7a7079b"
+  version = "v1.0.7"
 
 [[projects]]
   branch = "master"
@@ -154,7 +154,7 @@
     "poly1305",
     "salsa20/salsa"
   ]
-  revision = "2d027ae1dddd4694d54f7a8b6cbe78dca8720226"
+  revision = "1a580b3eff7814fc9b40602fd35256c63b50f491"
 
 [[projects]]
   branch = "master"
@@ -170,7 +170,7 @@
     "ipv4",
     "ipv6"
   ]
-  revision = "f73e4c9ed3b7ebdd5f699a16a880c2b1994e50dd"
+  revision = "2491c5de3490fced2f6cff376127c667efeed857"
 
 [[projects]]
   branch = "master"
@@ -183,7 +183,7 @@
     "windows/svc/eventlog",
     "windows/svc/mgr"
   ]
-  revision = "7dfd1290c7917b7ba22824b9d24954ab3002fe24"
+  revision = "7c87d13f8e835d2fb3a70a2912c811ed0c1d241b"
 
 [[projects]]
   name = "golang.org/x/text"
