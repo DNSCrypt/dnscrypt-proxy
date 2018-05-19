@@ -1,4 +1,9 @@
 
+* Version 2.0.14
+ - Supports DNS-over-HTTPS draft 08.
+ - Netprobes don't use port 0 by default, as this causes issues with
+Little Snitch and FreeBSD.
+
 * Version 2.0.13
  - This version fixes a crash when using DoH for queries whose size
 were a multiple of the block size. Reported by @char101, thanks!
