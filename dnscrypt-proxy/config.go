@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"net"
 	"os"
 	"path"
 	"path/filepath"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/jedisct1/dlog"
+	stamps "github.com/jedisct1/go-dnsstamps"
 )
 
 type Config struct {
@@ -33,6 +35,8 @@ type Config struct {
 	Cache                    bool
 	CacheSize                int                        `toml:"cache_size"`
 	CacheNegTTL              uint32                     `toml:"cache_neg_ttl"`
+	CacheNegMinTTL           uint32                     `toml:"cache_neg_min_ttl"`
+	CacheNegMaxTTL           uint32                     `toml:"cache_neg_max_ttl"`
 	CacheMinTTL              uint32                     `toml:"cache_min_ttl"`
 	CacheMaxTTL              uint32                     `toml:"cache_max_ttl"`
 	QueryLog                 QueryLogConfig             `toml:"query_log"`
@@ -60,6 +64,8 @@ type Config struct {
 	LogMaxBackups            int                        `toml:"log_files_max_backups"`
 	TLSDisableSessionTickets bool                       `toml:"tls_disable_session_tickets"`
 	TLSCipherSuite           []uint16                   `toml:"tls_cipher_suite"`
+	NetprobeAddress          string                     `toml:"netprobe_address"`
+	NetprobeTimeout          int                        `toml:"netprobe_timeout"`
 }
 
 func newConfig() Config {
@@ -73,7 +79,9 @@ func newConfig() Config {
 		EphemeralKeys:            false,
 		Cache:                    true,
 		CacheSize:                512,
-		CacheNegTTL:              60,
+		CacheNegTTL:              0,
+		CacheNegMinTTL:           60,
+		CacheNegMaxTTL:           600,
 		CacheMinTTL:              60,
 		CacheMaxTTL:              8600,
 		SourceRequireNoLog:       true,
@@ -90,6 +98,8 @@ func newConfig() Config {
 		LogMaxBackups:            1,
 		TLSDisableSessionTickets: false,
 		TLSCipherSuite:           nil,
+		NetprobeAddress:          "9.9.9.9:53",
+		NetprobeTimeout:          30,
 	}
 }
 
@@ -265,7 +275,15 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 	proxy.pluginBlockIPv6 = config.BlockIPv6
 	proxy.cache = config.Cache
 	proxy.cacheSize = config.CacheSize
-	proxy.cacheNegTTL = config.CacheNegTTL
+
+	if config.CacheNegTTL > 0 {
+		proxy.cacheNegMinTTL = config.CacheNegTTL
+		proxy.cacheNegMaxTTL = config.CacheNegTTL
+	} else {
+		proxy.cacheNegMinTTL = config.CacheNegMinTTL
+		proxy.cacheNegMaxTTL = config.CacheNegMaxTTL
+	}
+
 	proxy.cacheMinTTL = config.CacheMinTTL
 	proxy.cacheMaxTTL = config.CacheMaxTTL
 
@@ -348,6 +366,8 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 		config.SourceDoH = true
 	}
 
+	netProbe(config.NetprobeAddress, config.NetprobeTimeout)
+
 	if err := config.loadSources(proxy); err != nil {
 		return err
 	}
@@ -368,11 +388,11 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 func (config *Config) printRegisteredServers(proxy *Proxy, jsonOutput bool) {
 	var summary []ServerSummary
 	for _, registeredServer := range proxy.registeredServers {
-		addrStr, port := registeredServer.stamp.serverAddrStr, DefaultPort
+		addrStr, port := registeredServer.stamp.ServerAddrStr, stamps.DefaultPort
 		port = ExtractPort(addrStr, port)
 		addrs := make([]string, 0)
-		if registeredServer.stamp.proto == StampProtoTypeDoH && len(registeredServer.stamp.providerName) > 0 {
-			providerName := registeredServer.stamp.providerName
+		if registeredServer.stamp.Proto == stamps.StampProtoTypeDoH && len(registeredServer.stamp.ProviderName) > 0 {
+			providerName := registeredServer.stamp.ProviderName
 			var host string
 			host, port = ExtractHostAndPort(providerName, port)
 			addrs = append(addrs, host)
@@ -382,13 +402,13 @@ func (config *Config) printRegisteredServers(proxy *Proxy, jsonOutput bool) {
 		}
 		serverSummary := ServerSummary{
 			Name:        registeredServer.name,
-			Proto:       registeredServer.stamp.proto.String(),
+			Proto:       registeredServer.stamp.Proto.String(),
 			IPv6:        strings.HasPrefix(addrStr, "["),
 			Ports:       []int{port},
 			Addrs:       addrs,
-			DNSSEC:      registeredServer.stamp.props&ServerInformalPropertyDNSSEC != 0,
-			NoLog:       registeredServer.stamp.props&ServerInformalPropertyNoLog != 0,
-			NoFilter:    registeredServer.stamp.props&ServerInformalPropertyNoFilter != 0,
+			DNSSEC:      registeredServer.stamp.Props&stamps.ServerInformalPropertyDNSSEC != 0,
+			NoLog:       registeredServer.stamp.Props&stamps.ServerInformalPropertyNoLog != 0,
+			NoFilter:    registeredServer.stamp.Props&stamps.ServerInformalPropertyNoFilter != 0,
 			Description: registeredServer.description,
 		}
 		if jsonOutput {
@@ -407,15 +427,15 @@ func (config *Config) printRegisteredServers(proxy *Proxy, jsonOutput bool) {
 }
 
 func (config *Config) loadSources(proxy *Proxy) error {
-	requiredProps := ServerInformalProperties(0)
+	var requiredProps stamps.ServerInformalProperties
 	if config.SourceRequireDNSSEC {
-		requiredProps |= ServerInformalPropertyDNSSEC
+		requiredProps |= stamps.ServerInformalPropertyDNSSEC
 	}
 	if config.SourceRequireNoLog {
-		requiredProps |= ServerInformalPropertyNoLog
+		requiredProps |= stamps.ServerInformalPropertyNoLog
 	}
 	if config.SourceRequireNoFilter {
-		requiredProps |= ServerInformalPropertyNoFilter
+		requiredProps |= stamps.ServerInformalPropertyNoFilter
 	}
 	for cfgSourceName, cfgSource := range config.SourcesConfig {
 		if err := config.loadSource(proxy, requiredProps, cfgSourceName, &cfgSource); err != nil {
@@ -435,7 +455,7 @@ func (config *Config) loadSources(proxy *Proxy) error {
 		if len(staticConfig.Stamp) == 0 {
 			dlog.Fatalf("Missing stamp for the static [%s] definition", serverName)
 		}
-		stamp, err := NewServerStampFromString(staticConfig.Stamp)
+		stamp, err := stamps.NewServerStampFromString(staticConfig.Stamp)
 		if err != nil {
 			return err
 		}
@@ -444,7 +464,7 @@ func (config *Config) loadSources(proxy *Proxy) error {
 	return nil
 }
 
-func (config *Config) loadSource(proxy *Proxy, requiredProps ServerInformalProperties, cfgSourceName string, cfgSource *SourceConfig) error {
+func (config *Config) loadSource(proxy *Proxy, requiredProps stamps.ServerInformalProperties, cfgSourceName string, cfgSource *SourceConfig) error {
 	if len(cfgSource.URLs) == 0 {
 		if len(cfgSource.URL) == 0 {
 			dlog.Debugf("Missing URLs for source [%s]", cfgSourceName)
@@ -480,23 +500,23 @@ func (config *Config) loadSource(proxy *Proxy, requiredProps ServerInformalPrope
 			if !includesName(config.ServerNames, registeredServer.name) {
 				continue
 			}
-		} else if registeredServer.stamp.props&requiredProps != requiredProps {
+		} else if registeredServer.stamp.Props&requiredProps != requiredProps {
 			continue
 		}
 		if config.SourceIPv4 || config.SourceIPv6 {
 			isIPv4, isIPv6 := true, false
-			if registeredServer.stamp.proto == StampProtoTypeDoH {
+			if registeredServer.stamp.Proto == stamps.StampProtoTypeDoH {
 				isIPv4, isIPv6 = true, true
 			}
-			if strings.HasPrefix(registeredServer.stamp.serverAddrStr, "[") {
+			if strings.HasPrefix(registeredServer.stamp.ServerAddrStr, "[") {
 				isIPv4, isIPv6 = false, true
 			}
 			if !(config.SourceIPv4 == isIPv4 || config.SourceIPv6 == isIPv6) {
 				continue
 			}
 		}
-		if !((config.SourceDNSCrypt && registeredServer.stamp.proto == StampProtoTypeDNSCrypt) ||
-			(config.SourceDoH && registeredServer.stamp.proto == StampProtoTypeDoH)) {
+		if !((config.SourceDNSCrypt && registeredServer.stamp.Proto == stamps.StampProtoTypeDNSCrypt) ||
+			(config.SourceDoH && registeredServer.stamp.Proto == stamps.StampProtoTypeDoH)) {
 			continue
 		}
 		dlog.Debugf("Adding [%s] to the set of wanted resolvers", registeredServer.name)
@@ -525,4 +545,35 @@ func cdLocal() {
 		return
 	}
 	os.Chdir(filepath.Dir(exeFileName))
+}
+
+func netProbe(address string, timeout int) error {
+	if len(address) <= 0 || timeout <= 0 {
+		return nil
+	}
+	remoteUDPAddr, err := net.ResolveUDPAddr("udp", address)
+	if err != nil {
+		return err
+	}
+	retried := false
+	for tries := timeout; tries > 0; tries-- {
+		pc, err := net.DialUDP("udp", nil, remoteUDPAddr)
+		if err != nil {
+			if !retried {
+				retried = true
+				dlog.Notice("Network not available yet -- waiting...")
+			}
+			dlog.Debug(err)
+			time.Sleep(1 * time.Second)
+			continue
+		}
+		pc.Close()
+		if retried {
+			dlog.Notice("Network connectivity detected")
+		}
+		return nil
+	}
+	es := "Timeout while waiting for network connectivity"
+	dlog.Error(es)
+	return errors.New(es)
 }

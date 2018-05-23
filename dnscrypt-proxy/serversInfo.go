@@ -17,31 +17,23 @@ import (
 
 	"github.com/VividCortex/ewma"
 	"github.com/jedisct1/dlog"
+	stamps "github.com/jedisct1/go-dnsstamps"
 	"golang.org/x/crypto/ed25519"
 )
 
 const (
 	RTTEwmaDecay = 10.0
-	DefaultPort  = 443
-)
-
-type ServerInformalProperties uint64
-
-const (
-	ServerInformalPropertyDNSSEC   = ServerInformalProperties(1) << 0
-	ServerInformalPropertyNoLog    = ServerInformalProperties(1) << 1
-	ServerInformalPropertyNoFilter = ServerInformalProperties(1) << 2
 )
 
 type RegisteredServer struct {
 	name        string
-	stamp       ServerStamp
+	stamp       stamps.ServerStamp
 	description string
 }
 
 type ServerInfo struct {
 	sync.RWMutex
-	Proto              StampProtoType
+	Proto              stamps.StampProtoType
 	MagicQuery         [8]byte
 	ServerPk           [32]byte
 	SharedKey          [32]byte
@@ -77,7 +69,7 @@ type ServersInfo struct {
 	lbStrategy        LBStrategy
 }
 
-func (serversInfo *ServersInfo) registerServer(proxy *Proxy, name string, stamp ServerStamp) error {
+func (serversInfo *ServersInfo) registerServer(proxy *Proxy, name string, stamp stamps.ServerStamp) error {
 	newRegisteredServer := RegisteredServer{name: name, stamp: stamp}
 	serversInfo.Lock()
 	defer serversInfo.Unlock()
@@ -91,7 +83,7 @@ func (serversInfo *ServersInfo) registerServer(proxy *Proxy, name string, stamp 
 	return nil
 }
 
-func (serversInfo *ServersInfo) refreshServer(proxy *Proxy, name string, stamp ServerStamp) error {
+func (serversInfo *ServersInfo) refreshServer(proxy *Proxy, name string, stamp stamps.ServerStamp) error {
 	serversInfo.Lock()
 	defer serversInfo.Unlock()
 	previousIndex := -1
@@ -206,38 +198,38 @@ func (serversInfo *ServersInfo) getOne() *ServerInfo {
 	return serverInfo
 }
 
-func (serversInfo *ServersInfo) fetchServerInfo(proxy *Proxy, name string, stamp ServerStamp, isNew bool) (ServerInfo, error) {
-	if stamp.proto == StampProtoTypeDNSCrypt {
+func (serversInfo *ServersInfo) fetchServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, isNew bool) (ServerInfo, error) {
+	if stamp.Proto == stamps.StampProtoTypeDNSCrypt {
 		return serversInfo.fetchDNSCryptServerInfo(proxy, name, stamp, isNew)
-	} else if stamp.proto == StampProtoTypeDoH {
+	} else if stamp.Proto == stamps.StampProtoTypeDoH {
 		return serversInfo.fetchDoHServerInfo(proxy, name, stamp, isNew)
 	}
 	return ServerInfo{}, errors.New("Unsupported protocol")
 }
 
-func (serversInfo *ServersInfo) fetchDNSCryptServerInfo(proxy *Proxy, name string, stamp ServerStamp, isNew bool) (ServerInfo, error) {
-	if len(stamp.serverPk) != ed25519.PublicKeySize {
-		serverPk, err := hex.DecodeString(strings.Replace(string(stamp.serverPk), ":", "", -1))
+func (serversInfo *ServersInfo) fetchDNSCryptServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, isNew bool) (ServerInfo, error) {
+	if len(stamp.ServerPk) != ed25519.PublicKeySize {
+		serverPk, err := hex.DecodeString(strings.Replace(string(stamp.ServerPk), ":", "", -1))
 		if err != nil || len(serverPk) != ed25519.PublicKeySize {
-			dlog.Fatalf("Unsupported public key for [%s]: [%s]", name, stamp.serverPk)
+			dlog.Fatalf("Unsupported public key for [%s]: [%s]", name, stamp.ServerPk)
 		}
-		dlog.Warnf("Public key [%s] shouldn't be hex-encoded any more", string(stamp.serverPk))
-		stamp.serverPk = serverPk
+		dlog.Warnf("Public key [%s] shouldn't be hex-encoded any more", string(stamp.ServerPk))
+		stamp.ServerPk = serverPk
 	}
-	certInfo, rtt, err := FetchCurrentDNSCryptCert(proxy, &name, proxy.mainProto, stamp.serverPk, stamp.serverAddrStr, stamp.providerName, isNew)
+	certInfo, rtt, err := FetchCurrentDNSCryptCert(proxy, &name, proxy.mainProto, stamp.ServerPk, stamp.ServerAddrStr, stamp.ProviderName, isNew)
 	if err != nil {
 		return ServerInfo{}, err
 	}
-	remoteUDPAddr, err := net.ResolveUDPAddr("udp", stamp.serverAddrStr)
+	remoteUDPAddr, err := net.ResolveUDPAddr("udp", stamp.ServerAddrStr)
 	if err != nil {
 		return ServerInfo{}, err
 	}
-	remoteTCPAddr, err := net.ResolveTCPAddr("tcp", stamp.serverAddrStr)
+	remoteTCPAddr, err := net.ResolveTCPAddr("tcp", stamp.ServerAddrStr)
 	if err != nil {
 		return ServerInfo{}, err
 	}
 	return ServerInfo{
-		Proto:              StampProtoTypeDNSCrypt,
+		Proto:              stamps.StampProtoTypeDNSCrypt,
 		MagicQuery:         certInfo.MagicQuery,
 		ServerPk:           certInfo.ServerPk,
 		SharedKey:          certInfo.SharedKey,
@@ -250,18 +242,18 @@ func (serversInfo *ServersInfo) fetchDNSCryptServerInfo(proxy *Proxy, name strin
 	}, nil
 }
 
-func (serversInfo *ServersInfo) fetchDoHServerInfo(proxy *Proxy, name string, stamp ServerStamp, isNew bool) (ServerInfo, error) {
-	if len(stamp.serverAddrStr) > 0 {
-		addrStr := stamp.serverAddrStr
+func (serversInfo *ServersInfo) fetchDoHServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, isNew bool) (ServerInfo, error) {
+	if len(stamp.ServerAddrStr) > 0 {
+		addrStr := stamp.ServerAddrStr
 		ipOnly := addrStr[:strings.LastIndex(addrStr, ":")]
 		proxy.xTransport.cachedIPs.Lock()
-		proxy.xTransport.cachedIPs.cache[stamp.providerName] = ipOnly
+		proxy.xTransport.cachedIPs.cache[stamp.ProviderName] = ipOnly
 		proxy.xTransport.cachedIPs.Unlock()
 	}
 	url := &url.URL{
 		Scheme: "https",
-		Host:   stamp.providerName,
-		Path:   stamp.path,
+		Host:   stamp.ProviderName,
+		Path:   stamp.Path,
 	}
 	body := []byte{
 		0xca, 0xfe, 0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x02, 0x00, 0x01, 0x00, 0x00, 0x29, 0x10, 0x00, 0x00, 0x00, 0x80, 0x00, 0x00, 0x00,
@@ -293,7 +285,7 @@ func (serversInfo *ServersInfo) fetchDoHServerInfo(proxy *Proxy, name string, st
 		} else {
 			dlog.Debugf("Advertised cert: [%s] [%x]", cert.Subject, h)
 		}
-		for _, hash := range stamp.hashes {
+		for _, hash := range stamp.Hashes {
 			if len(hash) == len(wantedHash) {
 				copy(wantedHash[:], hash)
 				if h == wantedHash {
@@ -306,7 +298,7 @@ func (serversInfo *ServersInfo) fetchDoHServerInfo(proxy *Proxy, name string, st
 			break
 		}
 	}
-	if !found && len(stamp.hashes) > 0 {
+	if !found && len(stamp.Hashes) > 0 {
 		return ServerInfo{}, fmt.Errorf("Certificate hash [%x] not found for [%s]", wantedHash, name)
 	}
 	respBody, err := ioutil.ReadAll(io.LimitReader(resp.Body, MaxHTTPBodyLength))
@@ -323,11 +315,11 @@ func (serversInfo *ServersInfo) fetchDoHServerInfo(proxy *Proxy, name string, st
 		dlog.Infof("[%s] OK (DoH) - rtt: %dms", name, rtt.Nanoseconds()/1000000)
 	}
 	return ServerInfo{
-		Proto:      StampProtoTypeDoH,
+		Proto:      stamps.StampProtoTypeDoH,
 		Name:       name,
 		Timeout:    proxy.timeout,
 		URL:        url,
-		HostName:   stamp.providerName,
+		HostName:   stamp.ProviderName,
 		initialRtt: int(rtt.Nanoseconds() / 1000000),
 		useGet:     useGet,
 	}, nil

@@ -236,9 +236,11 @@ func (t *Trie) Allprefixed(prefix []byte, handle func(key []byte, value interfac
 	p := &t.root
 	top := p
 	if len(prefix) > 0 {
-		for p.internal != nil {
-			top = p
-			p = &p.internal.child[p.internal.direction(prefix)]
+		for q := p.internal; q != nil; q = p.internal {
+			p = &q.child[q.direction(prefix)]
+			if q.offset < len(prefix) {
+				top = p
+			}
 		}
 
 		// check prefix

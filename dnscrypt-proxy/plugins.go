@@ -35,7 +35,8 @@ type PluginsState struct {
 	synthResponse          *dns.Msg
 	dnssec                 bool
 	cacheSize              int
-	cacheNegTTL            uint32
+	cacheNegMinTTL         uint32
+	cacheNegMaxTTL         uint32
 	cacheMinTTL            uint32
 	cacheMaxTTL            uint32
 }
@@ -107,7 +108,8 @@ func NewPluginsState(proxy *Proxy, clientProto string, clientAddr *net.Addr) Plu
 		clientProto:    clientProto,
 		clientAddr:     clientAddr,
 		cacheSize:      proxy.cacheSize,
-		cacheNegTTL:    proxy.cacheNegTTL,
+		cacheNegMinTTL: proxy.cacheNegMinTTL,
+		cacheNegMaxTTL: proxy.cacheNegMaxTTL,
 		cacheMinTTL:    proxy.cacheMinTTL,
 		cacheMaxTTL:    proxy.cacheMaxTTL,
 	}

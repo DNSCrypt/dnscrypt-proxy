@@ -34,7 +34,7 @@ func TestHChaCha20(t *testing.T) {
 	}
 	if useAVX {
 		t.Log("AVX version")
-		testIncremental(t, 5, 2049)
+		testHChaCha20(t)
 		useAVX = false
 	}
 	if useSSSE3 {
@@ -63,7 +63,7 @@ func TestVectors(t *testing.T) {
 	}
 	if useAVX {
 		t.Log("AVX version")
-		testIncremental(t, 5, 2049)
+		testVectors(t)
 		useAVX = false
 	}
 	if useSSSE3 {

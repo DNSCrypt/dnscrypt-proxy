@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/jedisct1/dlog"
+	stamps "github.com/jedisct1/go-dnsstamps"
 	"github.com/miekg/dns"
 	"golang.org/x/net/http2"
 )
@@ -83,7 +84,7 @@ func (xTransport *XTransport) rebuildTransport() {
 		ExpectContinueTimeout:  timeout,
 		MaxResponseHeaderBytes: 4096,
 		DialContext: func(ctx context.Context, network, addrStr string) (net.Conn, error) {
-			host, port := ExtractHostAndPort(addrStr, DefaultPort)
+			host, port := ExtractHostAndPort(addrStr, stamps.DefaultPort)
 			ipOnly := host
 			xTransport.cachedIPs.RLock()
 			cachedIP := xTransport.cachedIPs.cache[host]
@@ -256,14 +257,16 @@ func (xTransport *XTransport) Post(url *url.URL, accept string, contentType stri
 func (xTransport *XTransport) DoHQuery(useGet bool, url *url.URL, body []byte, timeout time.Duration) (*http.Response, time.Duration, error) {
 	padLen := 63 - (len(body)+63)&63
 	padding := xTransport.makePad(padLen)
-	dataType := "application/dns-udpwireformat"
+	dataType := "application/dns-message"
 	if useGet {
 		qs := url.Query()
 		qs.Add("ct", "")
 		encBody := base64.RawURLEncoding.EncodeToString(body)
 		qs.Add("body", encBody)
 		qs.Add("dns", encBody)
-		qs.Add("random_padding", *padding)
+		if padding != nil {
+			qs.Add("random_padding", *padding)
+		}
 		url2 := *url
 		url2.RawQuery = qs.Encode()
 		return xTransport.Get(&url2, dataType, timeout)

@@ -1,4 +1,4 @@
-package main
+package dnsstamps
 
 import (
 	"encoding/base64"
@@ -9,9 +9,16 @@ import (
 	"net"
 	"strconv"
 	"strings"
+)
 
-	"github.com/jedisct1/dlog"
-	"golang.org/x/crypto/ed25519"
+const DefaultPort = 443
+
+type ServerInformalProperties uint64
+
+const (
+	ServerInformalPropertyDNSSEC   = ServerInformalProperties(1) << 0
+	ServerInformalPropertyNoLog    = ServerInformalProperties(1) << 1
+	ServerInformalPropertyNoFilter = ServerInformalProperties(1) << 2
 )
 
 type StampProtoType uint8
@@ -20,6 +27,7 @@ const (
 	StampProtoTypePlain    = StampProtoType(0x00)
 	StampProtoTypeDNSCrypt = StampProtoType(0x01)
 	StampProtoTypeDoH      = StampProtoType(0x02)
+	StampProtoTypeTLS      = StampProtoType(0x03)
 )
 
 func (stampProtoType *StampProtoType) String() string {
@@ -36,13 +44,13 @@ func (stampProtoType *StampProtoType) String() string {
 }
 
 type ServerStamp struct {
-	serverAddrStr string
-	serverPk      []uint8
-	hashes        [][]uint8
-	providerName  string
-	path          string
-	props         ServerInformalProperties
-	proto         StampProtoType
+	ServerAddrStr string
+	ServerPk      []uint8
+	Hashes        [][]uint8
+	ProviderName  string
+	Path          string
+	Props         ServerInformalProperties
+	Proto         StampProtoType
 }
 
 func NewDNSCryptServerStampFromLegacy(serverAddrStr string, serverPkStr string, providerName string, props ServerInformalProperties) (ServerStamp, error) {
@@ -50,15 +58,15 @@ func NewDNSCryptServerStampFromLegacy(serverAddrStr string, serverPkStr string, 
 		serverAddrStr = fmt.Sprintf("%s:%d", serverAddrStr, DefaultPort)
 	}
 	serverPk, err := hex.DecodeString(strings.Replace(serverPkStr, ":", "", -1))
-	if err != nil || len(serverPk) != ed25519.PublicKeySize {
+	if err != nil || len(serverPk) != 32 {
 		return ServerStamp{}, fmt.Errorf("Unsupported public key: [%s]", serverPkStr)
 	}
 	return ServerStamp{
-		serverAddrStr: serverAddrStr,
-		serverPk:      serverPk,
-		providerName:  providerName,
-		props:         props,
-		proto:         StampProtoTypeDNSCrypt,
+		ServerAddrStr: serverAddrStr,
+		ServerPk:      serverPk,
+		ProviderName:  providerName,
+		Props:         props,
+		Proto:         StampProtoTypeDNSCrypt,
 	}, nil
 }
 
@@ -84,11 +92,11 @@ func NewServerStampFromString(stampStr string) (ServerStamp, error) {
 // id(u8)=0x01 props addrLen(1) serverAddr pkStrlen(1) pkStr providerNameLen(1) providerName
 
 func newDNSCryptServerStamp(bin []byte) (ServerStamp, error) {
-	stamp := ServerStamp{proto: StampProtoTypeDNSCrypt}
+	stamp := ServerStamp{Proto: StampProtoTypeDNSCrypt}
 	if len(bin) < 66 {
 		return stamp, errors.New("Stamp is too short")
 	}
-	stamp.props = ServerInformalProperties(binary.LittleEndian.Uint64(bin[1:9]))
+	stamp.Props = ServerInformalProperties(binary.LittleEndian.Uint64(bin[1:9]))
 	binLen := len(bin)
 	pos := 9
 
@@ -97,10 +105,10 @@ func newDNSCryptServerStamp(bin []byte) (ServerStamp, error) {
 		return stamp, errors.New("Invalid stamp")
 	}
 	pos++
-	stamp.serverAddrStr = string(bin[pos : pos+len])
+	stamp.ServerAddrStr = string(bin[pos : pos+len])
 	pos += len
-	if net.ParseIP(strings.TrimRight(strings.TrimLeft(stamp.serverAddrStr, "["), "]")) != nil {
-		stamp.serverAddrStr = fmt.Sprintf("%s:%d", stamp.serverAddrStr, DefaultPort)
+	if net.ParseIP(strings.TrimRight(strings.TrimLeft(stamp.ServerAddrStr, "["), "]")) != nil {
+		stamp.ServerAddrStr = fmt.Sprintf("%s:%d", stamp.ServerAddrStr, DefaultPort)
 	}
 
 	len = int(bin[pos])
@@ -108,7 +116,7 @@ func newDNSCryptServerStamp(bin []byte) (ServerStamp, error) {
 		return stamp, errors.New("Invalid stamp")
 	}
 	pos++
-	stamp.serverPk = bin[pos : pos+len]
+	stamp.ServerPk = bin[pos : pos+len]
 	pos += len
 
 	len = int(bin[pos])
@@ -116,7 +124,7 @@ func newDNSCryptServerStamp(bin []byte) (ServerStamp, error) {
 		return stamp, errors.New("Invalid stamp")
 	}
 	pos++
-	stamp.providerName = string(bin[pos : pos+len])
+	stamp.ProviderName = string(bin[pos : pos+len])
 	pos += len
 
 	if pos != binLen {
@@ -128,11 +136,11 @@ func newDNSCryptServerStamp(bin []byte) (ServerStamp, error) {
 // id(u8)=0x02 props addrLen(1) serverAddr hashLen(1) hash providerNameLen(1) providerName pathLen(1) path
 
 func newDoHServerStamp(bin []byte) (ServerStamp, error) {
-	stamp := ServerStamp{proto: StampProtoTypeDoH, hashes: [][]byte{}}
+	stamp := ServerStamp{Proto: StampProtoTypeDoH}
 	if len(bin) < 22 {
 		return stamp, errors.New("Stamp is too short")
 	}
-	stamp.props = ServerInformalProperties(binary.LittleEndian.Uint64(bin[1:9]))
+	stamp.Props = ServerInformalProperties(binary.LittleEndian.Uint64(bin[1:9]))
 	binLen := len(bin)
 	pos := 9
 
@@ -141,7 +149,7 @@ func newDoHServerStamp(bin []byte) (ServerStamp, error) {
 		return stamp, errors.New("Invalid stamp")
 	}
 	pos++
-	stamp.serverAddrStr = string(bin[pos : pos+len])
+	stamp.ServerAddrStr = string(bin[pos : pos+len])
 	pos += len
 
 	for {
@@ -152,7 +160,7 @@ func newDoHServerStamp(bin []byte) (ServerStamp, error) {
 		}
 		pos++
 		if len > 0 {
-			stamp.hashes = append(stamp.hashes, bin[pos:pos+len])
+			stamp.Hashes = append(stamp.Hashes, bin[pos:pos+len])
 		}
 		pos += len
 		if vlen&0x80 != 0x80 {
@@ -165,7 +173,7 @@ func newDoHServerStamp(bin []byte) (ServerStamp, error) {
 		return stamp, errors.New("Invalid stamp")
 	}
 	pos++
-	stamp.providerName = string(bin[pos : pos+len])
+	stamp.ProviderName = string(bin[pos : pos+len])
 	pos += len
 
 	len = int(bin[pos])
@@ -173,47 +181,46 @@ func newDoHServerStamp(bin []byte) (ServerStamp, error) {
 		return stamp, errors.New("Invalid stamp")
 	}
 	pos++
-	stamp.path = string(bin[pos : pos+len])
+	stamp.Path = string(bin[pos : pos+len])
 	pos += len
 
 	if pos != binLen {
 		return stamp, errors.New("Invalid stamp (garbage after end)")
 	}
 
-	if net.ParseIP(strings.TrimRight(strings.TrimLeft(stamp.serverAddrStr, "["), "]")) != nil {
-		stamp.serverAddrStr = fmt.Sprintf("%s:%d", stamp.serverAddrStr, DefaultPort)
+	if net.ParseIP(strings.TrimRight(strings.TrimLeft(stamp.ServerAddrStr, "["), "]")) != nil {
+		stamp.ServerAddrStr = fmt.Sprintf("%s:%d", stamp.ServerAddrStr, DefaultPort)
 	}
 
 	return stamp, nil
 }
 
 func (stamp *ServerStamp) String() string {
-	if stamp.proto == StampProtoTypeDNSCrypt {
+	if stamp.Proto == StampProtoTypeDNSCrypt {
 		return stamp.dnsCryptString()
-	} else if stamp.proto == StampProtoTypeDoH {
+	} else if stamp.Proto == StampProtoTypeDoH {
 		return stamp.dohString()
 	}
-	dlog.Fatal("Unsupported protocol")
-	return ""
+	panic("Unsupported protocol")
 }
 
 func (stamp *ServerStamp) dnsCryptString() string {
 	bin := make([]uint8, 9)
 	bin[0] = uint8(StampProtoTypeDNSCrypt)
-	binary.LittleEndian.PutUint64(bin[1:9], uint64(stamp.props))
+	binary.LittleEndian.PutUint64(bin[1:9], uint64(stamp.Props))
 
-	serverAddrStr := stamp.serverAddrStr
+	serverAddrStr := stamp.ServerAddrStr
 	if strings.HasSuffix(serverAddrStr, ":"+strconv.Itoa(DefaultPort)) {
 		serverAddrStr = serverAddrStr[:len(serverAddrStr)-1-len(strconv.Itoa(DefaultPort))]
 	}
 	bin = append(bin, uint8(len(serverAddrStr)))
 	bin = append(bin, []uint8(serverAddrStr)...)
 
-	bin = append(bin, uint8(len(stamp.serverPk)))
-	bin = append(bin, stamp.serverPk...)
+	bin = append(bin, uint8(len(stamp.ServerPk)))
+	bin = append(bin, stamp.ServerPk...)
 
-	bin = append(bin, uint8(len(stamp.providerName)))
-	bin = append(bin, []uint8(stamp.providerName)...)
+	bin = append(bin, uint8(len(stamp.ProviderName)))
+	bin = append(bin, []uint8(stamp.ProviderName)...)
 
 	str := base64.RawURLEncoding.EncodeToString(bin)
 
@@ -223,17 +230,17 @@ func (stamp *ServerStamp) dnsCryptString() string {
 func (stamp *ServerStamp) dohString() string {
 	bin := make([]uint8, 9)
 	bin[0] = uint8(StampProtoTypeDoH)
-	binary.LittleEndian.PutUint64(bin[1:9], uint64(stamp.props))
+	binary.LittleEndian.PutUint64(bin[1:9], uint64(stamp.Props))
 
-	serverAddrStr := stamp.serverAddrStr
+	serverAddrStr := stamp.ServerAddrStr
 	if strings.HasSuffix(serverAddrStr, ":"+strconv.Itoa(DefaultPort)) {
 		serverAddrStr = serverAddrStr[:len(serverAddrStr)-1-len(strconv.Itoa(DefaultPort))]
 	}
 	bin = append(bin, uint8(len(serverAddrStr)))
 	bin = append(bin, []uint8(serverAddrStr)...)
 
-	last := len(stamp.hashes) - 1
-	for i, hash := range stamp.hashes {
+	last := len(stamp.Hashes) - 1
+	for i, hash := range stamp.Hashes {
 		vlen := len(hash)
 		if i < last {
 			vlen |= 0x80
@@ -242,11 +249,11 @@ func (stamp *ServerStamp) dohString() string {
 		bin = append(bin, hash...)
 	}
 
-	bin = append(bin, uint8(len(stamp.providerName)))
-	bin = append(bin, []uint8(stamp.providerName)...)
+	bin = append(bin, uint8(len(stamp.ProviderName)))
+	bin = append(bin, []uint8(stamp.ProviderName)...)
 
-	bin = append(bin, uint8(len(stamp.path)))
-	bin = append(bin, []uint8(stamp.path)...)
+	bin = append(bin, uint8(len(stamp.Path)))
+	bin = append(bin, []uint8(stamp.Path)...)
 
 	str := base64.RawURLEncoding.EncodeToString(bin)
 

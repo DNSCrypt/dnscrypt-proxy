@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/jedisct1/dlog"
+	stamps "github.com/jedisct1/go-dnsstamps"
 	clocksmith "github.com/jedisct1/go-clocksmith"
 	"golang.org/x/crypto/curve25519"
 )
@@ -30,7 +31,8 @@ type Proxy struct {
 	pluginBlockIPv6              bool
 	cache                        bool
 	cacheSize                    int
-	cacheNegTTL                  uint32
+	cacheNegMinTTL               uint32
+	cacheNegMaxTTL               uint32
 	cacheMinTTL                  uint32
 	cacheMaxTTL                  uint32
 	queryLogFile                 string
@@ -273,7 +275,7 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 	}
 	if len(response) == 0 {
 		var ttl *uint32
-		if serverInfo.Proto == StampProtoTypeDNSCrypt {
+		if serverInfo.Proto == stamps.StampProtoTypeDNSCrypt {
 			sharedKey, encryptedQuery, clientNonce, err := proxy.Encrypt(serverInfo, query, serverProto)
 			if err != nil {
 				return
@@ -288,7 +290,7 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 				serverInfo.noticeFailure(proxy)
 				return
 			}
-		} else if serverInfo.Proto == StampProtoTypeDoH {
+		} else if serverInfo.Proto == stamps.StampProtoTypeDoH {
 			tid := TransactionID(query)
 			SetTransactionID(query, 0)
 			serverInfo.noticeBegin(proxy)
@@ -318,7 +320,7 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 			serverInfo.noticeFailure(proxy)
 			return
 		}
-		if rcode := Rcode(response); rcode == 2 || rcode == 5 { // SERVFAIL / REFUSED
+		if rcode := Rcode(response); rcode == 2 { // SERVFAIL
 			dlog.Infof("Server [%v] returned temporary error code [%v] -- Upstream server may be experiencing connectivity issues", serverInfo.Name, rcode)
 			serverInfo.noticeFailure(proxy)
 		} else {

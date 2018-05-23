@@ -5,7 +5,7 @@
 // +build 386,!gccgo,!appengine,!nacl amd64,!gccgo,!appengine,!nacl
 
 // ROTL_SSE rotates all 4 32 bit values of the XMM register v
-// left by n bits using SSE2 instructions (0 <= n <= 32). 
+// left by n bits using SSE2 instructions (0 <= n <= 32).
 // The XMM register t is used as a temp. register.
 #define ROTL_SSE(n, t, v) \
 	MOVO  v, t;       \
@@ -14,7 +14,7 @@
 	PXOR  t, v
 
 // ROTL_AVX rotates all 4/8 32 bit values of the AVX/AVX2 register v
-// left by n bits using AVX/AVX2 instructions (0 <= n <= 32). 
+// left by n bits using AVX/AVX2 instructions (0 <= n <= 32).
 // The AVX/AVX2 register t is used as a temp. register.
 #define ROTL_AVX(n, t, v) \
 	VPSLLD $n, v, t;      \
@@ -25,41 +25,41 @@
 // 4 XMM registers v0, v1, v2 and v3. It uses only ROTL_SSE2 for
 // rotations. The XMM register t is used as a temp. register.
 #define CHACHA_QROUND_SSE2(v0, v1, v2, v3, t) \
-	PADDL v1, v0;          \
-	PXOR  v0, v3;          \
+	PADDL v1, v0;        \
+	PXOR  v0, v3;        \
 	ROTL_SSE(16, t, v3); \
-	PADDL v3, v2;          \
-	PXOR  v2, v1;          \
+	PADDL v3, v2;        \
+	PXOR  v2, v1;        \
 	ROTL_SSE(12, t, v1); \
-	PADDL v1, v0;          \
-	PXOR  v0, v3;          \
+	PADDL v1, v0;        \
+	PXOR  v0, v3;        \
 	ROTL_SSE(8, t, v3);  \
-	PADDL v3, v2;          \
-	PXOR  v2, v1;          \
+	PADDL v3, v2;        \
+	PXOR  v2, v1;        \
 	ROTL_SSE(7, t, v1)
 
 // CHACHA_QROUND_SSSE3 performs a ChaCha quarter-round using the
-// 4 XMM registers v0, v1, v2 and v3. It uses PSHUFB for 8/16 bit 
+// 4 XMM registers v0, v1, v2 and v3. It uses PSHUFB for 8/16 bit
 // rotations. The XMM register t is used as a temp. register.
 //
 // r16 holds the PSHUFB constant for a 16 bit left rotate.
 // r8 holds the PSHUFB constant for a 8 bit left rotate.
 #define CHACHA_QROUND_SSSE3(v0, v1, v2, v3, t, r16, r8) \
-	PADDL  v1, v0;         \
-	PXOR   v0, v3;         \
-	PSHUFB r16, v3;        \
-	PADDL  v3, v2;         \
-	PXOR   v2, v1;         \
+	PADDL  v1, v0;       \
+	PXOR   v0, v3;       \
+	PSHUFB r16, v3;      \
+	PADDL  v3, v2;       \
+	PXOR   v2, v1;       \
 	ROTL_SSE(12, t, v1); \
-	PADDL  v1, v0;         \
-	PXOR   v0, v3;         \
-	PSHUFB r8, v3;         \
-	PADDL  v3, v2;         \
-	PXOR   v2, v1;         \
+	PADDL  v1, v0;       \
+	PXOR   v0, v3;       \
+	PSHUFB r8, v3;       \
+	PADDL  v3, v2;       \
+	PXOR   v2, v1;       \
 	ROTL_SSE(7, t, v1)
 
 // CHACHA_QROUND_AVX performs a ChaCha quarter-round using the
-// 4 AVX/AVX2 registers v0, v1, v2 and v3. It uses VPSHUFB for 8/16 bit 
+// 4 AVX/AVX2 registers v0, v1, v2 and v3. It uses VPSHUFB for 8/16 bit
 // rotations. The AVX/AVX2 register t is used as a temp. register.
 //
 // r16 holds the VPSHUFB constant for a 16 bit left rotate.
@@ -70,7 +70,7 @@
 	VPSHUFB r16, v3, v3; \
 	VPADDD  v2, v3, v2;  \
 	VPXOR   v1, v2, v1;  \
-	ROTL_AVX(12, t, v1);     \
+	ROTL_AVX(12, t, v1); \
 	VPADDD  v0, v1, v0;  \
 	VPXOR   v3, v0, v3;  \
 	VPSHUFB r8, v3, v3;  \
@@ -94,8 +94,8 @@
 	VPSHUFD $0x4E, v2, v2; \
 	VPSHUFD $0x93, v3, v3
 
-// XOR_SSE extracts 4x16 byte vectors from src at 
-// off, xors all vectors with the corresponding XMM 
+// XOR_SSE extracts 4x16 byte vectors from src at
+// off, xors all vectors with the corresponding XMM
 // register (v0 - v3) and writes the result to dst
 // at off.
 // The XMM register t is used as a temp. register.
@@ -113,8 +113,8 @@
 	PXOR  v3, t;          \
 	MOVOU t, 48+off(dst)
 
-// XOR_AVX extracts 4x16 byte vectors from src at 
-// off, xors all vectors with the corresponding AVX 
+// XOR_AVX extracts 4x16 byte vectors from src at
+// off, xors all vectors with the corresponding AVX
 // register (v0 - v3) and writes the result to dst
 // at off.
 // The XMM register t is used as a temp. register.

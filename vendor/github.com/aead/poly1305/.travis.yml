@@ -1,8 +1,9 @@
 language: go
 
 go:
-  - 1.7
-  - 1.8
+  - "1.8.x"
+  - "1.9.x"
+  - "1.10.x"
 
 env:
   - TRAVIS_GOARCH=amd64
@@ -14,3 +15,7 @@ before_install:
 branches:
   only:
   - master
+
+script:
+- diff -au <(gofmt -d .) <(printf "")
+- go test -v ./...

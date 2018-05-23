@@ -1,4 +1,36 @@
 
+* Version 2.0.14
+ - Supports DNS-over-HTTPS draft 08.
+ - Netprobes don't use port 0 by default, as this causes issues with
+Little Snitch and FreeBSD.
+
+* Version 2.0.13
+ - This version fixes a crash when using DoH for queries whose size
+were a multiple of the block size. Reported by @char101, thanks!
+
+* Version 2.0.12
+ - Further compatibility fixes for Alpine Linux/i386 and Android/i386
+have been made. Thanks to @aead for his help!
+ - The proxy will now wait for network connectivity before starting.
+This is useful if the proxy is automatically started at boot, possibly
+before the network is fully configured.
+ - The IPv6 blocking module now returns synthetic SOA records to
+improve compatibility with downstream resolvers and stub resolvers.
+
+* Version 2.0.11
+ - This release fixes a long-standing bug that caused the proxy to
+block or crash when Position-Independent Executables were produced.
+This bug only showed up when compiled on (not for) Alpine Linux and
+Android, for some CPU architectures.
+ - New configuration settings: cache_neg_min_ttl and
+cache_neg_max_ttl, to clamp the negative caching TTL.
+
+* Version 2.0.10
+ - This version fixes a crash when an incomplete size is sent by a
+local client for a query over TCP.
+ - Slight performance improvement of DNSCrypt on non-Intel CPUs such
+as Raspberry Pi.
+
 * Version 2.0.9
  - Whitelists have been implemented: one a name matches a pattern in
 the whitelist, rules from the name-based and IP-based blacklists will

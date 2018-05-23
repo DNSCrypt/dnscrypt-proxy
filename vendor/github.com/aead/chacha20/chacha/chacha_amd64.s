@@ -22,34 +22,12 @@
 	INCQ block;        \
 	INCQ dst;          \
 	DECQ len;          \
-	JA   FINALIZE_LOOP \
-
-// func supportsSSSE3() bool
-TEXT ·supportsSSSE3(SB), NOSPLIT, $0-1
-	XORQ AX, AX
-	INCQ AX
-	CPUID
-	SHRQ $9, CX
-	ANDQ $1, CX
-	MOVB CX, ret+0(FP)
-	RET
-
-// func supportsAVX() bool
-TEXT ·supportsAVX(SB), 4, $0-1
-	MOVQ runtime·support_avx(SB), AX
-	MOVB AX, ret+0(FP)
-	RET
-
-// func supportsAVX2() bool
-TEXT ·supportsAVX2(SB), 4, $0-1
-	MOVQ runtime·support_avx2(SB), AX
-	MOVB AX, ret+0(FP)
-	RET
+	JG   FINALIZE_LOOP \
 
 #define Dst DI
 #define Nonce AX
 #define Key BX
-#define Rounds CX
+#define Rounds DX
 
 // func initialize(state *[64]byte, key []byte, nonce *[16]byte)
 TEXT ·initialize(SB), 4, $0-40
@@ -152,7 +130,7 @@ chacha_loop:
 
 #define Dst DI
 #define Src SI
-#define Len CX
+#define Len R12
 #define Rounds DX
 #define Buffer BX
 #define State AX
@@ -166,10 +144,10 @@ chacha_loop:
 TEXT ·xorKeyStreamSSE2(SB), 4, $112-80
 	MOVQ dst_base+0(FP), Dst
 	MOVQ src_base+24(FP), Src
-	MOVQ src_len+32(FP), Len
 	MOVQ block+48(FP), Buffer
 	MOVQ state+56(FP), State
 	MOVQ rounds+64(FP), Rounds
+	MOVQ src_len+32(FP), Len
 
 	MOVOU 0*16(State), X0
 	MOVOU 1*16(State), X1
@@ -191,11 +169,11 @@ TEXT ·xorKeyStreamSSE2(SB), 4, $112-80
 	MOVO  X4, 4*16(Stack)
 
 	CMPQ Len, $64
-	JBE  GENERATE_KEYSTREAM_64
+	JLE  GENERATE_KEYSTREAM_64
 	CMPQ Len, $128
-	JBE  GENERATE_KEYSTREAM_128
+	JLE  GENERATE_KEYSTREAM_128
 	CMPQ Len, $192
-	JBE  GENERATE_KEYSTREAM_192
+	JLE  GENERATE_KEYSTREAM_192
 
 GENERATE_KEYSTREAM_256:
 	MOVO  X0, X12
@@ -283,7 +261,7 @@ CHACHA_LOOP_256:
 	SUBQ $192, Len
 
 	CMPQ Len, $64
-	JB   BUFFER_KEYSTREAM
+	JL   BUFFER_KEYSTREAM
 
 	XOR_SSE(Dst, Src, 0, X4, X5, X6, X7, X8)
 	ADDQ $64, Dst
@@ -291,11 +269,11 @@ CHACHA_LOOP_256:
 	SUBQ $64, Len
 	JZ   DONE
 	CMPQ Len, $64               // If Len <= 64 -> gen. only 64 byte keystream.
-	JBE  GENERATE_KEYSTREAM_64
+	JLE  GENERATE_KEYSTREAM_64
 	CMPQ Len, $128              // If 64 < Len <= 128 -> gen. only 128 byte keystream.
-	JBE  GENERATE_KEYSTREAM_128
+	JLE  GENERATE_KEYSTREAM_128
 	CMPQ Len, $192              // If Len > 192 -> repeat, otherwise Len > 128 && Len <= 192 -> gen. 192 byte keystream
-	JA   GENERATE_KEYSTREAM_256
+	JG   GENERATE_KEYSTREAM_256
 
 GENERATE_KEYSTREAM_192:
 	MOVO  X0, X12
@@ -355,7 +333,7 @@ CHACHA_LOOP_192:
 	SUBQ $128, Len
 
 	CMPQ Len, $64
-	JB   BUFFER_KEYSTREAM
+	JL   BUFFER_KEYSTREAM
 
 	XOR_SSE(Dst, Src, 0, X4, X5, X6, X7, X8)
 	ADDQ $64, Dst
@@ -363,7 +341,7 @@ CHACHA_LOOP_192:
 	SUBQ $64, Len
 	JZ   DONE
 	CMPQ Len, $64              // If Len <= 64 -> gen. only 64 byte keystream.
-	JBE  GENERATE_KEYSTREAM_64
+	JLE  GENERATE_KEYSTREAM_64
 
 GENERATE_KEYSTREAM_128:
 	MOVO  X0, X8
@@ -406,7 +384,7 @@ CHACHA_LOOP_128:
 	SUBQ $64, Len
 
 	CMPQ Len, $64
-	JB   BUFFER_KEYSTREAM
+	JL   BUFFER_KEYSTREAM
 
 	XOR_SSE(Dst, Src, 0, X4, X5, X6, X7, X8)
 	ADDQ $64, Dst
@@ -436,7 +414,7 @@ CHACHA_LOOP_64:
 	PADDQ 4*16(Stack), X3
 
 	CMPQ Len, $64
-	JB   BUFFER_KEYSTREAM
+	JL   BUFFER_KEYSTREAM
 
 	XOR_SSE(Dst, Src, 0, X4, X5, X6, X7, X8)
 	ADDQ $64, Src
@@ -462,10 +440,10 @@ DONE:
 TEXT ·xorKeyStreamSSSE3(SB), 4, $144-80
 	MOVQ dst_base+0(FP), Dst
 	MOVQ src_base+24(FP), Src
-	MOVQ src_len+32(FP), Len
 	MOVQ block+48(FP), Buffer
 	MOVQ state+56(FP), State
 	MOVQ rounds+64(FP), Rounds
+	MOVQ src_len+32(FP), Len
 
 	MOVOU 0*16(State), X0
 	MOVOU 1*16(State), X1
@@ -491,11 +469,11 @@ TEXT ·xorKeyStreamSSSE3(SB), 4, $144-80
 	MOVO  X6, 7*16(Stack)
 
 	CMPQ Len, $64
-	JBE  GENERATE_KEYSTREAM_64
+	JLE  GENERATE_KEYSTREAM_64
 	CMPQ Len, $128
-	JBE  GENERATE_KEYSTREAM_128
+	JLE  GENERATE_KEYSTREAM_128
 	CMPQ Len, $192
-	JBE  GENERATE_KEYSTREAM_192
+	JLE  GENERATE_KEYSTREAM_192
 
 GENERATE_KEYSTREAM_256:
 	MOVO  X0, X12
@@ -583,7 +561,7 @@ CHACHA_LOOP_256:
 	SUBQ $192, Len
 
 	CMPQ Len, $64
-	JB   BUFFER_KEYSTREAM
+	JL   BUFFER_KEYSTREAM
 
 	XOR_SSE(Dst, Src, 0, X4, X5, X6, X7, X8)
 	ADDQ $64, Dst
@@ -591,11 +569,11 @@ CHACHA_LOOP_256:
 	SUBQ $64, Len
 	JZ   DONE
 	CMPQ Len, $64               // If Len <= 64 -> gen. only 64 byte keystream.
-	JBE  GENERATE_KEYSTREAM_64
+	JLE  GENERATE_KEYSTREAM_64
 	CMPQ Len, $128              // If 64 < Len <= 128 -> gen. only 128 byte keystream.
-	JBE  GENERATE_KEYSTREAM_128
+	JLE  GENERATE_KEYSTREAM_128
 	CMPQ Len, $192              // If Len > 192 -> repeat, otherwise Len > 128 && Len <= 192 -> gen. 192 byte keystream
-	JA   GENERATE_KEYSTREAM_256
+	JG   GENERATE_KEYSTREAM_256
 
 GENERATE_KEYSTREAM_192:
 	MOVO  X0, X12
@@ -660,15 +638,15 @@ CHACHA_LOOP_192:
 	SUBQ $128, Len
 
 	CMPQ Len, $64
-	JB   BUFFER_KEYSTREAM
+	JL   BUFFER_KEYSTREAM
 
 	XOR_SSE(Dst, Src, 0, X4, X5, X6, X7, X8)
 	ADDQ $64, Dst
 	ADDQ $64, Src
 	SUBQ $64, Len
 	JZ   DONE
-	CMPQ Len, $64               // If Len <= 64 -> gen. only 64 byte keystream.
-	JBE  GENERATE_KEYSTREAM_64
+	CMPQ Len, $64              // If Len <= 64 -> gen. only 64 byte keystream.
+	JLE  GENERATE_KEYSTREAM_64
 
 GENERATE_KEYSTREAM_128:
 	MOVO  X0, X8
@@ -714,7 +692,7 @@ CHACHA_LOOP_128:
 	SUBQ $64, Len
 
 	CMPQ Len, $64
-	JB   BUFFER_KEYSTREAM
+	JL   BUFFER_KEYSTREAM
 
 	XOR_SSE(Dst, Src, 0, X4, X5, X6, X7, X8)
 	ADDQ $64, Dst
@@ -747,7 +725,7 @@ CHACHA_LOOP_64:
 	PADDQ 4*16(Stack), X3
 
 	CMPQ Len, $64
-	JB   BUFFER_KEYSTREAM
+	JL   BUFFER_KEYSTREAM
 
 	XOR_SSE(Dst, Src, 0, X4, X5, X6, X7, X8)
 	ADDQ $64, Src
@@ -773,10 +751,10 @@ DONE:
 TEXT ·xorKeyStreamAVX(SB), 4, $144-80
 	MOVQ dst_base+0(FP), Dst
 	MOVQ src_base+24(FP), Src
-	MOVQ src_len+32(FP), Len
 	MOVQ block+48(FP), Buffer
 	MOVQ state+56(FP), State
 	MOVQ rounds+64(FP), Rounds
+	MOVQ src_len+32(FP), Len
 
 	VMOVDQU 0*16(State), X0
 	VMOVDQU 1*16(State), X1
@@ -793,38 +771,38 @@ TEXT ·xorKeyStreamAVX(SB), 4, $144-80
 	VMOVDQU ·one<>(SB), X4
 	VMOVDQU ·rol16<>(SB), X5
 	VMOVDQU ·rol8<>(SB), X6
-	VMOVDQA  X0, 0*16(Stack)
-	VMOVDQA  X1, 1*16(Stack)
-	VMOVDQA  X2, 2*16(Stack)
-	VMOVDQA  X3, 3*16(Stack)
-	VMOVDQA  X4, 4*16(Stack)
-	VMOVDQA  X5, 6*16(Stack)
-	VMOVDQA  X6, 7*16(Stack)
+	VMOVDQA X0, 0*16(Stack)
+	VMOVDQA X1, 1*16(Stack)
+	VMOVDQA X2, 2*16(Stack)
+	VMOVDQA X3, 3*16(Stack)
+	VMOVDQA X4, 4*16(Stack)
+	VMOVDQA X5, 6*16(Stack)
+	VMOVDQA X6, 7*16(Stack)
 
 	CMPQ Len, $64
-	JBE  GENERATE_KEYSTREAM_64
+	JLE  GENERATE_KEYSTREAM_64
 	CMPQ Len, $128
-	JBE  GENERATE_KEYSTREAM_128
+	JLE  GENERATE_KEYSTREAM_128
 	CMPQ Len, $192
-	JBE  GENERATE_KEYSTREAM_192
+	JLE  GENERATE_KEYSTREAM_192
 
 GENERATE_KEYSTREAM_256:
-	VMOVDQA  X0, X12
-	VMOVDQA  X1, X13
-	VMOVDQA  X2, X14
-	VMOVDQA  X3, X15
-	VPADDQ 4*16(Stack), X15, X15
-	VMOVDQA  X0, X8
-	VMOVDQA  X1, X9
-	VMOVDQA  X2, X10
-	VMOVDQA  X15, X11
-	VPADDQ 4*16(Stack), X11, X11
-	VMOVDQA  X0, X4
-	VMOVDQA  X1, X5
-	VMOVDQA  X2, X6
-	VMOVDQA  X11, X7
-	VPADDQ 4*16(Stack), X7, X7
-	MOVQ  Rounds, Tmp0
+	VMOVDQA X0, X12
+	VMOVDQA X1, X13
+	VMOVDQA X2, X14
+	VMOVDQA X3, X15
+	VPADDQ  4*16(Stack), X15, X15
+	VMOVDQA X0, X8
+	VMOVDQA X1, X9
+	VMOVDQA X2, X10
+	VMOVDQA X15, X11
+	VPADDQ  4*16(Stack), X11, X11
+	VMOVDQA X0, X4
+	VMOVDQA X1, X5
+	VMOVDQA X2, X6
+	VMOVDQA X11, X7
+	VPADDQ  4*16(Stack), X7, X7
+	MOVQ    Rounds, Tmp0
 
 	VMOVDQA X3, 3*16(Stack) // Save X3
 
@@ -853,22 +831,22 @@ CHACHA_LOOP_256:
 	CHACHA_SHUFFLE_AVX(X15, X14, X13)
 	CHACHA_SHUFFLE_AVX(X11, X10, X9)
 	CHACHA_SHUFFLE_AVX(X7, X6, X5)
-	SUBQ $2, Tmp0
-	JNZ  CHACHA_LOOP_256
+	SUBQ    $2, Tmp0
+	JNZ     CHACHA_LOOP_256
 
-	VPADDD 0*16(Stack), X0, X0
-	VPADDD 1*16(Stack), X1, X1
-	VPADDD 2*16(Stack), X2, X2
-	VPADDD 3*16(Stack), X3, X3
-	VMOVDQA  X4, 5*16(Stack) // Save X4
+	VPADDD  0*16(Stack), X0, X0
+	VPADDD  1*16(Stack), X1, X1
+	VPADDD  2*16(Stack), X2, X2
+	VPADDD  3*16(Stack), X3, X3
+	VMOVDQA X4, 5*16(Stack)     // Save X4
 	XOR_AVX(Dst, Src, 0, X0, X1, X2, X3, X4)
-	VMOVDQA  5*16(Stack), X4 // Restore X4
+	VMOVDQA 5*16(Stack), X4     // Restore X4
 
-	VMOVDQA  0*16(Stack), X0
-	VMOVDQA  1*16(Stack), X1
-	VMOVDQA  2*16(Stack), X2
-	VMOVDQA  3*16(Stack), X3
-	VPADDQ 4*16(Stack), X3, X3
+	VMOVDQA 0*16(Stack), X0
+	VMOVDQA 1*16(Stack), X1
+	VMOVDQA 2*16(Stack), X2
+	VMOVDQA 3*16(Stack), X3
+	VPADDQ  4*16(Stack), X3, X3
 
 	VPADDD X0, X12, X12
 	VPADDD X1, X13, X13
@@ -889,12 +867,12 @@ CHACHA_LOOP_256:
 	XOR_AVX(Dst, Src, 64, X12, X13, X14, X15, X0)
 	XOR_AVX(Dst, Src, 128, X8, X9, X10, X11, X0)
 	VMOVDQA 0*16(Stack), X0 // Restore X0
-	ADDQ $192, Dst
-	ADDQ $192, Src
-	SUBQ $192, Len
+	ADDQ    $192, Dst
+	ADDQ    $192, Src
+	SUBQ    $192, Len
 
 	CMPQ Len, $64
-	JB   BUFFER_KEYSTREAM
+	JL   BUFFER_KEYSTREAM
 
 	XOR_AVX(Dst, Src, 0, X4, X5, X6, X7, X8)
 	ADDQ $64, Dst
@@ -902,28 +880,28 @@ CHACHA_LOOP_256:
 	SUBQ $64, Len
 	JZ   DONE
 	CMPQ Len, $64               // If Len <= 64 -> gen. only 64 byte keystream.
-	JBE  GENERATE_KEYSTREAM_64
+	JLE  GENERATE_KEYSTREAM_64
 	CMPQ Len, $128              // If 64 < Len <= 128 -> gen. only 128 byte keystream.
-	JBE  GENERATE_KEYSTREAM_128
+	JLE  GENERATE_KEYSTREAM_128
 	CMPQ Len, $192              // If Len > 192 -> repeat, otherwise Len > 128 && Len <= 192 -> gen. 192 byte keystream
-	JA   GENERATE_KEYSTREAM_256
+	JG   GENERATE_KEYSTREAM_256
 
 GENERATE_KEYSTREAM_192:
-	VMOVDQA  X0, X12
-	VMOVDQA  X1, X13
-	VMOVDQA  X2, X14
-	VMOVDQA  X3, X15
-	VMOVDQA  X0, X8
-	VMOVDQA  X1, X9
-	VMOVDQA  X2, X10
-	VMOVDQA  X3, X11
-	VPADDQ 4*16(Stack), X11, X11
-	VMOVDQA  X0, X4
-	VMOVDQA  X1, X5
-	VMOVDQA  X2, X6
-	VMOVDQA  X11, X7
-	VPADDQ 4*16(Stack), X7, X7
-	MOVQ  Rounds, Tmp0
+	VMOVDQA X0, X12
+	VMOVDQA X1, X13
+	VMOVDQA X2, X14
+	VMOVDQA X3, X15
+	VMOVDQA X0, X8
+	VMOVDQA X1, X9
+	VMOVDQA X2, X10
+	VMOVDQA X3, X11
+	VPADDQ  4*16(Stack), X11, X11
+	VMOVDQA X0, X4
+	VMOVDQA X1, X5
+	VMOVDQA X2, X6
+	VMOVDQA X11, X7
+	VPADDQ  4*16(Stack), X7, X7
+	MOVQ    Rounds, Tmp0
 
 	VMOVDQA 6*16(Stack), X1 // Load 16 bit rotate-left constant
 	VMOVDQA 7*16(Stack), X2 // Load 8 bit rotate-left constant
@@ -944,54 +922,54 @@ CHACHA_LOOP_192:
 	SUBQ $2, Tmp0
 	JNZ  CHACHA_LOOP_192
 
-	VMOVDQA  0*16(Stack), X0 // Restore X0
-	VMOVDQA  1*16(Stack), X1 // Restore X1
-	VMOVDQA  2*16(Stack), X2 // Restore X2
-	VPADDD X0, X12, X12
-	VPADDD X1, X13, X13
-	VPADDD X2, X14, X14
-	VPADDD X3, X15, X15
-	VPADDQ 4*16(Stack), X3, X3
-	VPADDD X0, X8, X8
-	VPADDD X1, X9, X9
-	VPADDD X2, X10, X10
-	VPADDD X3, X11, X11
-	VPADDQ 4*16(Stack), X3, X3
-	VPADDD X0, X4, X4
-	VPADDD X1, X5, X5
-	VPADDD X2, X6, X6
-	VPADDD X3, X7, X7
-	VPADDQ 4*16(Stack), X3, X3
+	VMOVDQA 0*16(Stack), X0     // Restore X0
+	VMOVDQA 1*16(Stack), X1     // Restore X1
+	VMOVDQA 2*16(Stack), X2     // Restore X2
+	VPADDD  X0, X12, X12
+	VPADDD  X1, X13, X13
+	VPADDD  X2, X14, X14
+	VPADDD  X3, X15, X15
+	VPADDQ  4*16(Stack), X3, X3
+	VPADDD  X0, X8, X8
+	VPADDD  X1, X9, X9
+	VPADDD  X2, X10, X10
+	VPADDD  X3, X11, X11
+	VPADDQ  4*16(Stack), X3, X3
+	VPADDD  X0, X4, X4
+	VPADDD  X1, X5, X5
+	VPADDD  X2, X6, X6
+	VPADDD  X3, X7, X7
+	VPADDQ  4*16(Stack), X3, X3
 
 	XOR_AVX(Dst, Src, 0, X12, X13, X14, X15, X0)
 	XOR_AVX(Dst, Src, 64, X8, X9, X10, X11, X0)
 	VMOVDQA 0*16(Stack), X0 // Restore X0
-	ADDQ $128, Dst
-	ADDQ $128, Src
-	SUBQ $128, Len
+	ADDQ    $128, Dst
+	ADDQ    $128, Src
+	SUBQ    $128, Len
 
 	CMPQ Len, $64
-	JB   BUFFER_KEYSTREAM
+	JL   BUFFER_KEYSTREAM
 
 	XOR_AVX(Dst, Src, 0, X4, X5, X6, X7, X8)
 	ADDQ $64, Dst
 	ADDQ $64, Src
 	SUBQ $64, Len
 	JZ   DONE
-	CMPQ Len, $64               // If Len <= 64 -> gen. only 64 byte keystream.
-	JBE  GENERATE_KEYSTREAM_64
+	CMPQ Len, $64              // If Len <= 64 -> gen. only 64 byte keystream.
+	JLE  GENERATE_KEYSTREAM_64
 
 GENERATE_KEYSTREAM_128:
-	VMOVDQA  X0, X8
-	VMOVDQA  X1, X9
-	VMOVDQA  X2, X10
-	VMOVDQA  X3, X11
-	VMOVDQA  X0, X4
-	VMOVDQA  X1, X5
-	VMOVDQA  X2, X6
-	VMOVDQA  X3, X7
-	VPADDQ 4*16(Stack), X7, X7
-	MOVQ Rounds, Tmp0
+	VMOVDQA X0, X8
+	VMOVDQA X1, X9
+	VMOVDQA X2, X10
+	VMOVDQA X3, X11
+	VMOVDQA X0, X4
+	VMOVDQA X1, X5
+	VMOVDQA X2, X6
+	VMOVDQA X3, X7
+	VPADDQ  4*16(Stack), X7, X7
+	MOVQ    Rounds, Tmp0
 
 	VMOVDQA 6*16(Stack), X13 // Load 16 bit rotate-left constant
 	VMOVDQA 7*16(Stack), X14 // Load 8 bit rotate-left constant
@@ -1025,7 +1003,7 @@ CHACHA_LOOP_128:
 	SUBQ $64, Len
 
 	CMPQ Len, $64
-	JB   BUFFER_KEYSTREAM
+	JL   BUFFER_KEYSTREAM
 
 	XOR_AVX(Dst, Src, 0, X4, X5, X6, X7, X8)
 	ADDQ $64, Dst
@@ -1038,7 +1016,7 @@ GENERATE_KEYSTREAM_64:
 	VMOVDQA X1, X5
 	VMOVDQA X2, X6
 	VMOVDQA X3, X7
-	MOVQ Rounds, Tmp0
+	MOVQ    Rounds, Tmp0
 
 	VMOVDQA 6*16(Stack), X9  // Load 16 bit rotate-left constant
 	VMOVDQA 7*16(Stack), X10 // Load 8 bit rotate-left constant
@@ -1058,7 +1036,7 @@ CHACHA_LOOP_64:
 	VPADDQ 4*16(Stack), X3, X3
 
 	CMPQ Len, $64
-	JB   BUFFER_KEYSTREAM
+	JL   BUFFER_KEYSTREAM
 
 	XOR_AVX(Dst, Src, 0, X4, X5, X6, X7, X8)
 	ADDQ $64, Src
@@ -1071,14 +1049,14 @@ BUFFER_KEYSTREAM:
 	VMOVDQU X5, 1*16(Buffer)
 	VMOVDQU X6, 2*16(Buffer)
 	VMOVDQU X7, 3*16(Buffer)
-	MOVQ  Len, Tmp0
+	MOVQ    Len, Tmp0
 	FINALIZE(Dst, Src, Buffer, Tmp0, Tmp1, Tmp2)
 
 DONE:
-	MOVQ  SavedSP, Stack  // Restore stack pointer
+	MOVQ    SavedSP, Stack  // Restore stack pointer
 	VMOVDQU X3, 3*16(State)
 	VZEROUPPER
-	MOVQ  Len, ret+72(FP)
+	MOVQ    Len, ret+72(FP)
 	RET
 
 #undef Dst

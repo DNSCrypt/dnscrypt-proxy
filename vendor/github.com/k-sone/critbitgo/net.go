@@ -97,9 +97,25 @@ func (n *Net) MatchCIDR(s string) (route *net.IPNet, value interface{}, err erro
 	return
 }
 
+// Return a bool indicating whether a route would be found
+func (n *Net) ContainedIP(ip net.IP) (contained bool, err error) {
+	k, _, err := n.matchIP(ip)
+	contained = k != nil
+	return
+}
+
 // Return a specific route by using the longest prefix matching.
 // If `ip` is invalid IP, or a route is not found, `route` is nil.
 func (n *Net) MatchIP(ip net.IP) (route *net.IPNet, value interface{}, err error) {
+	k, v, err := n.matchIP(ip)
+	if k != nil {
+		route = netKeyToIPNet(k)
+		value = v
+	}
+	return
+}
+
+func (n *Net) matchIP(ip net.IP) (k []byte, v interface{}, err error) {
 	var isV4 bool
 	ip, isV4, err = netValidateIP(ip)
 	if err != nil {
@@ -111,10 +127,7 @@ func (n *Net) MatchIP(ip net.IP) (route *net.IPNet, value interface{}, err error
 	} else {
 		mask = mask128
 	}
-	if k, v := n.match(netIPNetToKey(ip, mask)); k != nil {
-		route = netKeyToIPNet(k)
-		value = v
-	}
+	k, v = n.match(netIPNetToKey(ip, mask))
 	return
 }
 

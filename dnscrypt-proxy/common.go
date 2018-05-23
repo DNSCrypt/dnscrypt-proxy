@@ -65,7 +65,7 @@ func ReadPrefixed(conn *net.TCPConn) ([]byte, error) {
 				return buf, errors.New("Packet too short")
 			}
 		}
-		if pos >= 2+packetLength {
+		if packetLength >= 0 && pos >= 2+packetLength {
 			return buf[2 : 2+packetLength], nil
 		}
 	}

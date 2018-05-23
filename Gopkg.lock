@@ -23,13 +23,13 @@
   branch = "master"
   name = "github.com/aead/chacha20"
   packages = ["chacha"]
-  revision = "e0d4ab3067da29fbce5b60445bed6d54c41c3c62"
+  revision = "e2538746bfea853aaa589feb8ec46bd46ee78f86"
 
 [[projects]]
   branch = "master"
   name = "github.com/aead/poly1305"
   packages = ["."]
-  revision = "6cf43fdfd7a228cf3003ae23d10ddbf65e85997b"
+  revision = "969857f48f7ae439b6d2449ed1dcd9aaabc49c67"
 
 [[projects]]
   branch = "master"
@@ -92,7 +92,7 @@
   branch = "master"
   name = "github.com/jedisct1/dlog"
   packages = ["."]
-  revision = "d3f1bf94f2a248f6d000c48612836796f333f2dd"
+  revision = "d9d2d2575aef4e29f8a9b7d75a75a1d0b146f1af"
 
 [[projects]]
   branch = "master"
@@ -102,21 +102,27 @@
 
 [[projects]]
   branch = "master"
+  name = "github.com/jedisct1/go-dnsstamps"
+  packages = ["."]
+  revision = "1e4999280f861b465e03e21e4f84d838f2f02b38"
+
+[[projects]]
+  branch = "master"
   name = "github.com/jedisct1/go-minisign"
   packages = ["."]
-  revision = "f404c079ea5f0d4669fe617c553651f75167494e"
+  revision = "f4dbde220b4f73d450949b9ba27fa941faa05a78"
 
 [[projects]]
   branch = "master"
   name = "github.com/jedisct1/xsecretbox"
   packages = ["."]
-  revision = "88b1956e8d9a013c98dda528d3a5b77f168b057f"
+  revision = "7a679c0bcd9a5bbfe097fb7d48497bc06d17be76"
 
 [[projects]]
   name = "github.com/k-sone/critbitgo"
   packages = ["."]
-  revision = "1b44ffc7fc9ad8dea28251e340eadb04093c8af3"
-  version = "v1.1.0"
+  revision = "658116ef1e826b72c603cfe2091b12503f9bca43"
+  version = "v1.2.0"
 
 [[projects]]
   branch = "master"
@@ -133,8 +139,8 @@
 [[projects]]
   name = "github.com/miekg/dns"
   packages = ["."]
-  revision = "83c435cc65d2862736428b9b4d07d0ab10ad3e4d"
-  version = "v1.0.5"
+  revision = "e57bf427e68187a27e22adceac868350d7a7079b"
+  version = "v1.0.7"
 
 [[projects]]
   branch = "master"
@@ -148,35 +154,36 @@
     "poly1305",
     "salsa20/salsa"
   ]
-  revision = "f70185d77e8278766928032ee1355e3da47e7181"
+  revision = "1a580b3eff7814fc9b40602fd35256c63b50f491"
 
 [[projects]]
   branch = "master"
   name = "golang.org/x/net"
   packages = [
     "bpf",
+    "http/httpguts",
     "http2",
     "http2/hpack",
     "idna",
     "internal/iana",
     "internal/socket",
     "ipv4",
-    "ipv6",
-    "lex/httplex"
+    "ipv6"
   ]
-  revision = "61147c48b25b599e5b561d2e9c4f3e1ef489ca41"
+  revision = "2491c5de3490fced2f6cff376127c667efeed857"
 
 [[projects]]
   branch = "master"
   name = "golang.org/x/sys"
   packages = [
+    "cpu",
     "windows",
     "windows/registry",
     "windows/svc",
     "windows/svc/eventlog",
     "windows/svc/mgr"
   ]
-  revision = "3b87a42e500a6dc65dae1a55d0b641295971163e"
+  revision = "7c87d13f8e835d2fb3a70a2912c811ed0c1d241b"
 
 [[projects]]
   name = "golang.org/x/text"
@@ -208,6 +215,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "5afc7ca4456d4f6f1a1da31e3ae1eb4eaf79ffe39c72a3dc98a2d78d4d865b79"
+  inputs-digest = "2665fa9c725a2e63a6769a05e1da1b68dfc6ea2adcce5f2bf2fdfac975ec9574"
   solver-name = "gps-cdcl"
   solver-version = 1

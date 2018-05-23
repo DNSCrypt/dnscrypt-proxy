@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/csv"
 	"errors"
 	"fmt"
 	"io"
@@ -17,14 +16,14 @@ import (
 	"github.com/dchest/safefile"
 
 	"github.com/jedisct1/dlog"
+	stamps "github.com/jedisct1/go-dnsstamps"
 	"github.com/jedisct1/go-minisign"
 )
 
 type SourceFormat int
 
 const (
-	SourceFormatV1 = iota
-	SourceFormatV2
+	SourceFormatV2 = iota
 )
 
 const (
@@ -128,9 +127,7 @@ type URLToPrefetch struct {
 func NewSource(xTransport *XTransport, urls []string, minisignKeyStr string, cacheFile string, formatStr string, refreshDelay time.Duration) (Source, []URLToPrefetch, error) {
 	_ = refreshDelay
 	source := Source{urls: urls}
-	if formatStr == "v1" {
-		source.format = SourceFormatV1
-	} else if formatStr == "v2" {
+	if formatStr == "v2" {
 		source.format = SourceFormatV2
 	} else {
 		return source, []URLToPrefetch{}, fmt.Errorf("Unsupported source format: [%s]", formatStr)
@@ -209,56 +206,11 @@ func NewSource(xTransport *XTransport, urls []string, minisignKeyStr string, cac
 }
 
 func (source *Source) Parse(prefix string) ([]RegisteredServer, error) {
-	if source.format == SourceFormatV1 {
-		return source.parseV1(prefix)
-	} else if source.format == SourceFormatV2 {
+	if source.format == SourceFormatV2 {
 		return source.parseV2(prefix)
 	}
 	dlog.Fatal("Unexpected source format")
 	return []RegisteredServer{}, nil
-}
-
-func (source *Source) parseV1(prefix string) ([]RegisteredServer, error) {
-	var registeredServers []RegisteredServer
-
-	csvReader := csv.NewReader(strings.NewReader(source.in))
-	records, err := csvReader.ReadAll()
-	if err != nil {
-		return registeredServers, nil
-	}
-	for lineNo, record := range records {
-		if len(record) == 0 {
-			continue
-		}
-		if len(record) < 14 {
-			return registeredServers, fmt.Errorf("Parse error at line %d", 1+lineNo)
-		}
-		if lineNo == 0 {
-			continue
-		}
-		name := prefix + record[0]
-		description := record[2]
-		serverAddrStr := record[10]
-		providerName := record[11]
-		serverPkStr := record[12]
-		props := ServerInformalProperties(0)
-		if strings.EqualFold(record[7], "yes") {
-			props |= ServerInformalPropertyDNSSEC
-		}
-		if strings.EqualFold(record[8], "yes") {
-			props |= ServerInformalPropertyNoLog
-		}
-		stamp, err := NewDNSCryptServerStampFromLegacy(serverAddrStr, serverPkStr, providerName, props)
-		if err != nil {
-			return registeredServers, err
-		}
-		registeredServer := RegisteredServer{
-			name: name, stamp: stamp, description: description,
-		}
-		dlog.Debugf("Registered [%s] with stamp [%s]", name, stamp.String())
-		registeredServers = append(registeredServers, registeredServer)
-	}
-	return registeredServers, nil
 }
 
 func (source *Source) parseV2(prefix string) ([]RegisteredServer, error) {
@@ -301,7 +253,7 @@ func (source *Source) parseV2(prefix string) ([]RegisteredServer, error) {
 		if len(stampStr) < 8 {
 			return registeredServers, fmt.Errorf("Missing stamp for server [%s] in source from [%v]", name, source.urls)
 		}
-		stamp, err := NewServerStampFromString(stampStr)
+		stamp, err := stamps.NewServerStampFromString(stampStr)
 		if err != nil {
 			return registeredServers, err
 		}

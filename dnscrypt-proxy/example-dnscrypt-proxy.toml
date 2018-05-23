@@ -68,8 +68,11 @@ require_nolog = true
 require_nofilter = true
 
 
-
-## Always use TCP to connect to upstream servers
+## Always use TCP to connect to upstream servers.
+## This can be can be useful if you need to route everything through Tor.
+## Otherwise, leave this to `false`, as it doesn't improve security
+## (dnscrypt-proxy will always encrypt everything even using UDP), and can
+## only increase latency.
 
 force_tcp = false
 
@@ -131,7 +134,7 @@ cert_refresh_delay = 240
 ## the following suite improves performance.
 ## This may also help on Intel CPUs running 32-bit operating systems.
 ##
-## Delete or comment the next line if you have issues fetching sources or
+## Keep tls_cipher_suite empty if you have issues fetching sources or
 ## connecting to some DoH servers. Google and Cloudflare are fine with it.
 
 # tls_cipher_suite = [52392, 49199]
@@ -154,10 +157,19 @@ cert_refresh_delay = 240
 fallback_resolver = '9.9.9.9:53'
 
 
-## Never try to use the system DNS settings; unconditionally use the
-## fallback resolver.
+## Never let dnscrypt-proxy try to use the system DNS settings;
+## unconditionally use the fallback resolver.
 
 ignore_system_dns = false
+
+
+## Maximum time (in seconds) to wait for network connectivity before
+## initializing the proxy.
+## Useful if the proxy is automatically started at boot, and network
+## connectivity is not guaranteed to be immediately available.
+## Use 0 to disable.
+
+netprobe_timeout = 30
 
 
 ## Automatic log files rotation
@@ -179,8 +191,9 @@ log_files_max_backups = 1
 
 ## Immediately respond to IPv6-related queries with an empty response
 ## This makes things faster when there is no IPv6 connectivity, but can
-## also cause reliability issues with some stub resolvers. In
-## particular, enabling this on macOS is not recommended.
+## also cause reliability issues with some stub resolvers.
+## Do not enable if you added a validating resolver such as dnsmasq in front
+## of the proxy.
 
 block_ipv6 = false
 
@@ -238,9 +251,14 @@ cache_min_ttl = 600
 cache_max_ttl = 86400
 
 
-## TTL for negatively cached entries
+## Minimum TTL for negatively cached entries
 
-cache_neg_ttl = 60
+cache_neg_min_ttl = 60
+
+
+## Maximum TTL for negatively cached entries
+
+cache_neg_max_ttl = 600
 
 
 

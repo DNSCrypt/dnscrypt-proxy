@@ -8,7 +8,7 @@
     "ed25519",
     "ed25519/internal/edwards25519"
   ]
-  revision = "13931e22f9e72ea58bb73048bc752b48c6d4d4ac"
+  revision = "1a580b3eff7814fc9b40602fd35256c63b50f491"
 
 [solve-meta]
   analyzer-name = "dep"
