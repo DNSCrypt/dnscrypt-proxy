@@ -3,6 +3,12 @@ package main
 import (
 	"io"
 	"io/ioutil"
+	"os"
+	"os/exec"
+	"os/user"
+	"path/filepath"
+	"strconv"
+	"syscall"
 	"math/rand"
 	"net"
 	"sync/atomic"
@@ -15,6 +21,8 @@ import (
 )
 
 type Proxy struct {
+	username                     string
+	child                        bool
 	proxyPublicKey               [32]byte
 	proxySecretKey               [32]byte
 	ephemeralKeys                bool
@@ -62,6 +70,49 @@ type Proxy struct {
 	logMaxBackups                int
 }
 
+func (proxy *Proxy) dropPrivilege(userStr string, fds []*os.File) {
+	user, err := user.Lookup(userStr)
+	args := os.Args
+
+	if err != nil {
+		dlog.Fatal(err)
+	}
+	uid, err := strconv.Atoi(user.Uid)
+	if err != nil {
+		dlog.Fatal(err)
+	}
+	gid, err := strconv.Atoi(user.Gid)
+	if err != nil {
+		dlog.Fatal(err)
+	}
+	exec_path, err := exec.LookPath(args[0])
+	if err != nil {
+		dlog.Fatal(err)
+	}
+	path, err := filepath.Abs(exec_path)
+	if err != nil {
+		dlog.Fatal(err)
+	}
+
+	// remove arg[0]
+	copy(args[0:], args[0+1:])
+	args[len(args)-1] = ""
+	args = args[:len(args)-1]
+	args = append(args, "-start-child")
+
+	cmd := exec.Command(path, args...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.ExtraFiles = fds
+	cmd.SysProcAttr = &syscall.SysProcAttr{}
+	cmd.SysProcAttr.Credential = &syscall.Credential{Uid: uint32(uid), Gid: uint32(gid)}
+	dlog.Notice("Dropping privileges")
+	if err := cmd.Start(); err != nil {
+		dlog.Fatal(err)
+	}
+	// os.Exit(0)
+}
+
 func (proxy *Proxy) StartProxy() {
 	proxy.questionSizeEstimator = NewQuestionSizeEstimator()
 	if _, err := rand.Read(proxy.proxySecretKey[:]); err != nil {
@@ -71,6 +122,9 @@ func (proxy *Proxy) StartProxy() {
 	for _, registeredServer := range proxy.registeredServers {
 		proxy.serversInfo.registerServer(proxy, registeredServer.name, registeredServer.stamp)
 	}
+
+	numberOfFD := 0
+	fds := make([]*os.File, 0)
 	for _, listenAddrStr := range proxy.listenAddresses {
 		listenUDPAddr, err := net.ResolveUDPAddr("udp", listenAddrStr)
 		if err != nil {
@@ -80,12 +134,69 @@ func (proxy *Proxy) StartProxy() {
 		if err != nil {
 			dlog.Fatal(err)
 		}
-		if err := proxy.udpListenerFromAddr(listenUDPAddr); err != nil {
-			dlog.Fatal(err)
+
+		// if 'username' is not set, continue as before (Todo: refactor for DRYniss)
+		if !(len(proxy.username) > 0) {
+			if err := proxy.udpListenerFromAddr(listenUDPAddr); err != nil {
+				dlog.Fatal(err)
+			}
+			if err := proxy.tcpListenerFromAddr(listenTCPAddr); err != nil {
+				dlog.Fatal(err)
+			}
+		} else {
+			// if 'username' is set and we are the parent process
+			if !proxy.child {
+				// parent
+				listenerUDP, err := net.ListenUDP("udp", listenUDPAddr)
+				if err != nil {
+					dlog.Fatal(err)
+				}
+				listenerTCP, err := net.ListenTCP("tcp", listenTCPAddr)
+				if err != nil {
+					dlog.Fatal(err)
+				}
+
+				fdUDP, err := listenerUDP.File() // On Windows, the File method of UDPConn is not implemented.
+				if err != nil {
+					dlog.Fatal(err)
+				}
+				fdTCP, err := listenerTCP.File() // On Windows, the File method of TCPListener is not implemented.
+				if err != nil {
+					dlog.Fatal(err)
+				}
+				defer listenerUDP.Close()
+				defer listenerTCP.Close()
+				fds = append(fds, fdUDP)
+				fds = append(fds, fdTCP)
+
+			// if 'username' is set and we are the child process
+			} else {
+				// child
+				listenerUDP, err := net.FilePacketConn(os.NewFile(uintptr(3+numberOfFD), "listenerUDP"))
+				if err != nil {
+					dlog.Fatal(err)
+				}
+				numberOfFD++
+
+				listenerTCP, err := net.FileListener(os.NewFile(uintptr(3+numberOfFD), "listenerTCP"))
+				if err != nil {
+					dlog.Fatal(err)
+				}
+				numberOfFD++
+
+				dlog.Noticef("Now listening to %v [UDP]", listenUDPAddr)
+				go proxy.udpListener(listenerUDP.(*net.UDPConn))
+
+				dlog.Noticef("Now listening to %v [TCP]", listenAddrStr)
+				go proxy.tcpListener(listenerTCP.(*net.TCPListener))
+			}
 		}
-		if err := proxy.tcpListenerFromAddr(listenTCPAddr); err != nil {
-			dlog.Fatal(err)
-		}
+	}
+
+	// if 'username' is set and we are the parent process drop privilege and exit
+	if len(proxy.username) > 0 && !proxy.child {
+		proxy.dropPrivilege(proxy.username, fds)
+		os.Exit(0)
 	}
 	if err := proxy.SystemDListeners(); err != nil {
 		dlog.Fatal(err)

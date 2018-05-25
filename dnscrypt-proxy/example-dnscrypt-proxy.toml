@@ -40,6 +40,11 @@ listen_addresses = ['127.0.0.1:53', '[::1]:53']
 
 max_clients = 250
 
+## After binding to the port(s) user privileges are dropped by calling itself
+## via exec.command() with SysProcAttr.Credential()
+
+username = 'nobody'
+
 
 ## Require servers (from static + remote sources) to satisfy specific properties
 
