@@ -4,11 +4,6 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"os/exec"
-	"os/user"
-	"path/filepath"
-	"strconv"
-	"syscall"
 	"math/rand"
 	"net"
 	"sync/atomic"
@@ -68,49 +63,6 @@ type Proxy struct {
 	logMaxSize                   int
 	logMaxAge                    int
 	logMaxBackups                int
-}
-
-func (proxy *Proxy) dropPrivilege(userStr string, fds []*os.File) {
-	user, err := user.Lookup(userStr)
-	args := os.Args
-
-	if err != nil {
-		dlog.Fatal(err)
-	}
-	uid, err := strconv.Atoi(user.Uid)
-	if err != nil {
-		dlog.Fatal(err)
-	}
-	gid, err := strconv.Atoi(user.Gid)
-	if err != nil {
-		dlog.Fatal(err)
-	}
-	exec_path, err := exec.LookPath(args[0])
-	if err != nil {
-		dlog.Fatal(err)
-	}
-	path, err := filepath.Abs(exec_path)
-	if err != nil {
-		dlog.Fatal(err)
-	}
-
-	// remove arg[0]
-	copy(args[0:], args[0+1:])
-	args[len(args)-1] = ""
-	args = args[:len(args)-1]
-	args = append(args, "-start-child")
-
-	cmd := exec.Command(path, args...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.ExtraFiles = fds
-	cmd.SysProcAttr = &syscall.SysProcAttr{}
-	cmd.SysProcAttr.Credential = &syscall.Credential{Uid: uint32(uid), Gid: uint32(gid)}
-	dlog.Notice("Dropping privileges")
-	if err := cmd.Start(); err != nil {
-		dlog.Fatal(err)
-	}
-	// os.Exit(0)
 }
 
 func (proxy *Proxy) StartProxy() {
@@ -196,7 +148,6 @@ func (proxy *Proxy) StartProxy() {
 	// if 'username' is set and we are the parent process drop privilege and exit
 	if len(proxy.username) > 0 && !proxy.child {
 		proxy.dropPrivilege(proxy.username, fds)
-		os.Exit(0)
 	}
 	if err := proxy.SystemDListeners(); err != nil {
 		dlog.Fatal(err)
