@@ -84,10 +84,16 @@ func (plugin *PluginForward) Eval(pluginsState *PluginsState, msg *dns.Msg) erro
 		if candidateLen > questionLen {
 			continue
 		}
-		if question[questionLen-candidateLen:] == candidate.domain && (candidateLen == questionLen || (question[questionLen-candidateLen-1] == '.')) {
+		if strings.HasPrefix(candidate.domain, "*") {
+			if candidateLen > 1 && question[questionLen-candidateLen+1:] == candidate.domain[1:candidateLen] {
+				servers = candidate.servers
+				break
+			}
+		} else if question[questionLen-candidateLen:] == candidate.domain && (candidateLen == questionLen || (question[questionLen-candidateLen-1] == '.')) {
 			servers = candidate.servers
 			break
 		}
+
 	}
 	if len(servers) == 0 {
 		return nil
