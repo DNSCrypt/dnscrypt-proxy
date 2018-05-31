@@ -46,8 +46,8 @@
     "activation",
     "daemon"
   ]
-  revision = "40e2722dffead74698ca12a750f64ef313ddce05"
-  version = "v16"
+  revision = "39ca1b05acc7ad1220e09f133283b8859a8b71ab"
+  version = "v17"
 
 [[projects]]
   branch = "master"
@@ -154,7 +154,7 @@
     "poly1305",
     "salsa20/salsa"
   ]
-  revision = "1a580b3eff7814fc9b40602fd35256c63b50f491"
+  revision = "ab813273cd59e1333f7ae7bff5d027d4aadf528c"
 
 [[projects]]
   branch = "master"
@@ -170,7 +170,7 @@
     "ipv4",
     "ipv6"
   ]
-  revision = "2491c5de3490fced2f6cff376127c667efeed857"
+  revision = "1e491301e022f8f977054da4c2d852decd59571f"
 
 [[projects]]
   branch = "master"
@@ -183,7 +183,7 @@
     "windows/svc/eventlog",
     "windows/svc/mgr"
   ]
-  revision = "7c87d13f8e835d2fb3a70a2912c811ed0c1d241b"
+  revision = "c11f84a56e43e20a78cee75a7c034031ecf57d1f"
 
 [[projects]]
   name = "golang.org/x/text"
@@ -215,6 +215,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "2665fa9c725a2e63a6769a05e1da1b68dfc6ea2adcce5f2bf2fdfac975ec9574"
+  inputs-digest = "3addcda55a55bed25195ba087dd5485d24d206d58145633ed2e69bb55167c687"
   solver-name = "gps-cdcl"
   solver-version = 1

@@ -73,14 +73,14 @@ func TestListeners(t *testing.T) {
 	r2.Write([]byte("Hi"))
 
 	cmd.Env = os.Environ()
-	cmd.Env = append(cmd.Env, "LISTEN_FDS=2", "FIX_LISTEN_PID=1")
+	cmd.Env = append(cmd.Env, "LISTEN_FDS=2", "LISTEN_FDNAMES=fd1:fd2", "FIX_LISTEN_PID=1")
 
-	out, err := cmd.Output()
+	out, err := cmd.CombinedOutput()
 	if err != nil {
 		println(string(out))
 		t.Fatalf(err.Error())
 	}
 
-	correctStringWrittenNet(t, r1, "Hello world")
-	correctStringWrittenNet(t, r2, "Goodbye world")
+	correctStringWrittenNet(t, r1, "Hello world: fd1")
+	correctStringWrittenNet(t, r2, "Goodbye world: fd2")
 }
