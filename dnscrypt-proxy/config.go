@@ -225,6 +225,12 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 		dlog.UseSyslog(true)
 	} else if config.LogFile != nil {
 		dlog.UseLogFile(*config.LogFile)
+		if !*child {
+			FileDescriptors = append(FileDescriptors, dlog.GetFileDescriptor())
+		} else {
+			FileDescriptorNum++
+			dlog.SetFileDescriptor(os.NewFile(uintptr(3), "logFile"))
+		}
 	}
 	proxy.logMaxSize = config.LogMaxSize
 	proxy.logMaxAge = config.LogMaxAge

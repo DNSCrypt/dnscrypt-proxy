@@ -75,8 +75,6 @@ func (proxy *Proxy) StartProxy() {
 		proxy.serversInfo.registerServer(proxy, registeredServer.name, registeredServer.stamp)
 	}
 
-	numberOfFD := 0
-	fds := make([]*os.File, 0)
 	for _, listenAddrStr := range proxy.listenAddresses {
 		listenUDPAddr, err := net.ResolveUDPAddr("udp", listenAddrStr)
 		if err != nil {
@@ -118,23 +116,23 @@ func (proxy *Proxy) StartProxy() {
 				}
 				defer listenerUDP.Close()
 				defer listenerTCP.Close()
-				fds = append(fds, fdUDP)
-				fds = append(fds, fdTCP)
+				FileDescriptors = append(FileDescriptors, fdUDP)
+				FileDescriptors = append(FileDescriptors, fdTCP)
 
 			// if 'username' is set and we are the child process
 			} else {
 				// child
-				listenerUDP, err := net.FilePacketConn(os.NewFile(uintptr(3+numberOfFD), "listenerUDP"))
+				listenerUDP, err := net.FilePacketConn(os.NewFile(uintptr(3+FileDescriptorNum), "listenerUDP"))
 				if err != nil {
 					dlog.Fatal(err)
 				}
-				numberOfFD++
+				FileDescriptorNum++
 
-				listenerTCP, err := net.FileListener(os.NewFile(uintptr(3+numberOfFD), "listenerTCP"))
+				listenerTCP, err := net.FileListener(os.NewFile(uintptr(3+FileDescriptorNum), "listenerTCP"))
 				if err != nil {
 					dlog.Fatal(err)
 				}
-				numberOfFD++
+				FileDescriptorNum++
 
 				dlog.Noticef("Now listening to %v [UDP]", listenUDPAddr)
 				go proxy.udpListener(listenerUDP.(*net.UDPConn))
@@ -147,7 +145,7 @@ func (proxy *Proxy) StartProxy() {
 
 	// if 'username' is set and we are the parent process drop privilege and exit
 	if len(proxy.username) > 0 && !proxy.child {
-		proxy.dropPrivilege(proxy.username, fds)
+		proxy.dropPrivilege(proxy.username, FileDescriptors)
 	}
 	if err := proxy.SystemDListeners(); err != nil {
 		dlog.Fatal(err)
