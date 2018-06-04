@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/jedisct1/dlog"
-	stamps "github.com/jedisct1/go-dnsstamps"
 	clocksmith "github.com/jedisct1/go-clocksmith"
+	stamps "github.com/jedisct1/go-dnsstamps"
 	"golang.org/x/crypto/curve25519"
 )
 
@@ -260,6 +260,7 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 	}
 	pluginsState := NewPluginsState(proxy, clientProto, clientAddr)
 	query, _ = pluginsState.ApplyQueryPlugins(&proxy.pluginsGlobals, query)
+	pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
 	var response []byte
 	var err error
 	if pluginsState.action != PluginsActionForward {
