@@ -26,6 +26,32 @@ type PluginsGlobals struct {
 	loggingPlugins  *[]Plugin
 }
 
+type PluginsReturnCode int
+
+const (
+	PluginsReturnCodePass = iota
+	PluginsReturnCodeForward
+	PluginsReturnCodeDrop
+	PluginsReturnCodeReject
+	PluginsReturnCodeSynth
+	PluginsReturnCodeParseError
+	PluginsReturnCodeNXDomain
+	PluginsReturnCodeResponseError
+	PluginsReturnCodeServerError
+)
+
+var PluginsReturnCodeToString = map[PluginsReturnCode]string{
+	PluginsReturnCodePass:          "PASS",
+	PluginsReturnCodeForward:       "FORWARD",
+	PluginsReturnCodeDrop:          "DROP",
+	PluginsReturnCodeReject:        "REJECT",
+	PluginsReturnCodeSynth:         "SYNTH",
+	PluginsReturnCodeParseError:    "PARSE_ERROR",
+	PluginsReturnCodeNXDomain:      "NXDOMAIN",
+	PluginsReturnCodeResponseError: "RESPONSE_ERROR",
+	PluginsReturnCodeServerError:   "SERVER_ERROR",
+}
+
 type PluginsState struct {
 	sessionData            map[string]interface{}
 	action                 PluginsAction
@@ -41,7 +67,7 @@ type PluginsState struct {
 	cacheMinTTL            uint32
 	cacheMaxTTL            uint32
 	questionMsg            *dns.Msg
-	rcode                  uint8
+	returnCode             PluginsReturnCode
 }
 
 func InitPluginsGlobals(pluginsGlobals *PluginsGlobals, proxy *Proxy) error {
@@ -179,7 +205,16 @@ func (pluginsState *PluginsState) ApplyResponsePlugins(pluginsGlobals *PluginsGl
 		}
 		return packet, err
 	}
-	pluginsState.rcode = Rcode(packet)
+	switch Rcode(packet) {
+	case dns.RcodeSuccess:
+		pluginsState.returnCode = PluginsReturnCodePass
+	case dns.RcodeNameError:
+		pluginsState.returnCode = PluginsReturnCodeNXDomain
+	case dns.RcodeServerFailure:
+		pluginsState.returnCode = PluginsReturnCodeServerError
+	default:
+		pluginsState.returnCode = PluginsReturnCodeResponseError
+	}
 	pluginsGlobals.RLock()
 	for _, plugin := range *pluginsGlobals.responsePlugins {
 		if ret := plugin.Eval(pluginsState, &msg); ret != nil {

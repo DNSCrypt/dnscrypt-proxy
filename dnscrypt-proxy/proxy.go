@@ -8,8 +8,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/miekg/dns"
-
 	"github.com/jedisct1/dlog"
 	clocksmith "github.com/jedisct1/go-clocksmith"
 	stamps "github.com/jedisct1/go-dnsstamps"
@@ -268,23 +266,25 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 		if pluginsState.synthResponse != nil {
 			response, err = pluginsState.synthResponse.PackBuffer(response)
 			if err != nil {
-				pluginsState.rcode = dns.RcodeFormatError
+				pluginsState.returnCode = PluginsReturnCodeParseError
 				pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
 				return
 			}
 		}
 		if pluginsState.action == PluginsActionDrop {
-			pluginsState.rcode = dns.RcodeRefused
+			pluginsState.returnCode = PluginsReturnCodeDrop
 			pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
 			return
 		}
+	} else {
+		pluginsState.returnCode = PluginsReturnCodeForward
 	}
 	if len(response) == 0 {
 		var ttl *uint32
 		if serverInfo.Proto == stamps.StampProtoTypeDNSCrypt {
 			sharedKey, encryptedQuery, clientNonce, err := proxy.Encrypt(serverInfo, query, serverProto)
 			if err != nil {
-				pluginsState.rcode = dns.RcodeFormatError
+				pluginsState.returnCode = PluginsReturnCodeParseError
 				pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
 				return
 			}
@@ -295,7 +295,7 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 				response, err = proxy.exchangeWithTCPServer(serverInfo, sharedKey, encryptedQuery, clientNonce)
 			}
 			if err != nil {
-				pluginsState.rcode = dns.RcodeServerFailure
+				pluginsState.returnCode = PluginsReturnCodeServerError
 				pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
 				serverInfo.noticeFailure(proxy)
 				return
@@ -307,14 +307,14 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 			resp, _, err := proxy.xTransport.DoHQuery(serverInfo.useGet, serverInfo.URL, query, proxy.timeout)
 			SetTransactionID(query, tid)
 			if err != nil {
-				pluginsState.rcode = dns.RcodeServerFailure
+				pluginsState.returnCode = PluginsReturnCodeServerError
 				pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
 				serverInfo.noticeFailure(proxy)
 				return
 			}
 			response, err = ioutil.ReadAll(io.LimitReader(resp.Body, int64(MaxDNSPacketSize)))
 			if err != nil {
-				pluginsState.rcode = dns.RcodeServerFailure
+				pluginsState.returnCode = PluginsReturnCodeServerError
 				pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
 				serverInfo.noticeFailure(proxy)
 				return
@@ -326,14 +326,14 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 			dlog.Fatal("Unsupported protocol")
 		}
 		if len(response) < MinDNSPacketSize || len(response) > MaxDNSPacketSize {
-			pluginsState.rcode = dns.RcodeFormatError
+			pluginsState.returnCode = PluginsReturnCodeParseError
 			pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
 			serverInfo.noticeFailure(proxy)
 			return
 		}
 		response, err = pluginsState.ApplyResponsePlugins(&proxy.pluginsGlobals, response, ttl)
 		if err != nil {
-			pluginsState.rcode = dns.RcodeServerFailure
+			pluginsState.returnCode = PluginsReturnCodeParseError
 			pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
 			serverInfo.noticeFailure(proxy)
 			return
@@ -349,7 +349,7 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 		if len(response) > MaxDNSUDPPacketSize {
 			response, err = TruncatedResponse(response)
 			if err != nil {
-				pluginsState.rcode = dns.RcodeSuccess
+				pluginsState.returnCode = PluginsReturnCodeParseError
 				pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
 				return
 			}
@@ -363,7 +363,7 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 	} else {
 		response, err = PrefixWithSize(response)
 		if err != nil {
-			pluginsState.rcode = dns.RcodeFormatError
+			pluginsState.returnCode = PluginsReturnCodeParseError
 			pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
 			serverInfo.noticeFailure(proxy)
 			return
