@@ -41,6 +41,7 @@ type PluginsState struct {
 	cacheMinTTL            uint32
 	cacheMaxTTL            uint32
 	questionMsg            *dns.Msg
+	rcode                  uint8
 }
 
 func InitPluginsGlobals(pluginsGlobals *PluginsGlobals, proxy *Proxy) error {
@@ -128,7 +129,7 @@ func NewPluginsState(proxy *Proxy, clientProto string, clientAddr *net.Addr) Plu
 }
 
 func (pluginsState *PluginsState) ApplyQueryPlugins(pluginsGlobals *PluginsGlobals, packet []byte) ([]byte, error) {
-	if len(*pluginsGlobals.queryPlugins) == 0 {
+	if len(*pluginsGlobals.queryPlugins) == 0 && len(*pluginsGlobals.loggingPlugins) == 0 {
 		return packet, nil
 	}
 	pluginsState.action = PluginsActionForward
@@ -167,7 +168,7 @@ func (pluginsState *PluginsState) ApplyQueryPlugins(pluginsGlobals *PluginsGloba
 }
 
 func (pluginsState *PluginsState) ApplyResponsePlugins(pluginsGlobals *PluginsGlobals, packet []byte, ttl *uint32) ([]byte, error) {
-	if len(*pluginsGlobals.responsePlugins) == 0 {
+	if len(*pluginsGlobals.responsePlugins) == 0 && len(*pluginsGlobals.loggingPlugins) == 0 {
 		return packet, nil
 	}
 	pluginsState.action = PluginsActionForward
@@ -178,6 +179,7 @@ func (pluginsState *PluginsState) ApplyResponsePlugins(pluginsGlobals *PluginsGl
 		}
 		return packet, err
 	}
+	pluginsState.rcode = Rcode(packet)
 	pluginsGlobals.RLock()
 	for _, plugin := range *pluginsGlobals.responsePlugins {
 		if ret := plugin.Eval(pluginsState, &msg); ret != nil {
