@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"net"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -15,6 +16,7 @@ import (
 	"github.com/BurntSushi/toml"
 	"github.com/jedisct1/dlog"
 	stamps "github.com/jedisct1/go-dnsstamps"
+	netproxy "golang.org/x/net/proxy"
 )
 
 type Config struct {
@@ -27,6 +29,7 @@ type Config struct {
 	ForceTCP                 bool   `toml:"force_tcp"`
 	Timeout                  int    `toml:"timeout"`
 	KeepAlive                int    `toml:"keepalive"`
+	Proxy                    string `toml:"proxy"`
 	CertRefreshDelay         int    `toml:"cert_refresh_delay"`
 	CertIgnoreTimestamp      bool   `toml:"cert_ignore_timestamp"`
 	EphemeralKeys            bool   `toml:"dnscrypt_ephemeral_keys"`
@@ -237,6 +240,19 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 	proxy.xTransport.useIPv4 = config.SourceIPv4
 	proxy.xTransport.useIPv6 = config.SourceIPv6
 	proxy.xTransport.keepAlive = time.Duration(config.KeepAlive) * time.Second
+
+	if len(config.Proxy) > 0 {
+		proxyDialerURL, err := url.Parse(config.Proxy)
+		if err != nil {
+			dlog.Fatalf("Unable to parse proxy url [%v]", config.Proxy)
+		}
+		proxyDialer, err := netproxy.FromURL(proxyDialerURL, netproxy.Direct)
+		if err != nil {
+			dlog.Fatalf("Unable to use the proxy: [%v]", err)
+		}
+		proxy.xTransport.proxyDialer = &proxyDialer
+	}
+
 	proxy.xTransport.rebuildTransport()
 
 	proxy.timeout = time.Duration(config.Timeout) * time.Millisecond

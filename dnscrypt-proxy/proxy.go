@@ -176,7 +176,7 @@ func (proxy *Proxy) tcpListener(acceptPc *net.TCPListener) {
 			}
 			defer proxy.clientsCountDec()
 			clientPc.SetDeadline(time.Now().Add(proxy.timeout))
-			packet, err := ReadPrefixed(clientPc.(*net.TCPConn))
+			packet, err := ReadPrefixed(&clientPc)
 			if err != nil || len(packet) < MinDNSPacketSize {
 				return
 			}
@@ -214,22 +214,29 @@ func (proxy *Proxy) exchangeWithUDPServer(serverInfo *ServerInfo, sharedKey *[32
 }
 
 func (proxy *Proxy) exchangeWithTCPServer(serverInfo *ServerInfo, sharedKey *[32]byte, encryptedQuery []byte, clientNonce []byte) ([]byte, error) {
-	pc, err := net.DialTCP("tcp", nil, serverInfo.TCPAddr)
+	proxyDialer := proxy.xTransport.proxyDialer
+	var pc *net.Conn
+	if proxyDialer == nil {
+		pcx, err := net.DialTCP("tcp", nil, serverInfo.TCPAddr)
+		if err != nil {
+			return nil, err
+		}
+		pc = interface{}(pcx).(*net.Conn)
+	} else {
+		pcx, err := (*proxyDialer).Dial("tcp", serverInfo.TCPAddr.String())
+		if err != nil {
+			return nil, err
+		}
+		pc = &pcx
+	}
+	(*pc).SetDeadline(time.Now().Add(serverInfo.Timeout))
+	encryptedQuery, err := PrefixWithSize(encryptedQuery)
 	if err != nil {
 		return nil, err
 	}
-	pc.SetDeadline(time.Now().Add(serverInfo.Timeout))
-	encryptedQuery, err = PrefixWithSize(encryptedQuery)
-	if err != nil {
-		return nil, err
-	}
-	pc.Write(encryptedQuery)
-
+	(*pc).Write(encryptedQuery)
 	encryptedResponse, err := ReadPrefixed(pc)
-	pc.Close()
-	if err != nil {
-		return nil, err
-	}
+	(*pc).Close()
 	return proxy.Decrypt(serverInfo, sharedKey, encryptedResponse, clientNonce)
 }
 

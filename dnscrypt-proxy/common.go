@@ -47,7 +47,7 @@ func PrefixWithSize(packet []byte) ([]byte, error) {
 	return packet, nil
 }
 
-func ReadPrefixed(conn *net.TCPConn) ([]byte, error) {
+func ReadPrefixed(conn *net.Conn) ([]byte, error) {
 	buf := make([]byte, 2+MaxDNSPacketSize)
 	packetLength, pos := -1, 0
 	for {
