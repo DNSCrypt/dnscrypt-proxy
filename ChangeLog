@@ -1,4 +1,13 @@
 
+* Version 2.0.15
+ - Support for proxies (HTTP/SOCKS) was added. All it takes to route
+all TCP queries to Tor is add `proxy = "socks5://127.0.0.1:9050"` to
+the configuration file.
+ - Querylog files have a new record indicating the outcome of each
+transaction.
+ - Pre-built binaries for Linux are statically linked on all
+architectures.
+
 * Version 2.0.14
  - Supports DNS-over-HTTPS draft 08.
  - Netprobes don't use port 0 by default, as this causes issues with
