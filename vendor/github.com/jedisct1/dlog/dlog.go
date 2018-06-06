@@ -180,6 +180,28 @@ func UseLogFile(fileName string) {
 	_globals.Unlock()
 }
 
+func GetFileDescriptor() (*os.File) {
+	_globals.Lock()
+	createFileDescriptor()
+	_globals.Unlock()
+	return _globals.outFd
+}
+
+func SetFileDescriptor(fd *os.File) {
+	_globals.Lock()
+	_globals.outFd = fd
+	_globals.Unlock()
+}
+
+func createFileDescriptor() {
+	if _globals.fileName != nil && len(*_globals.fileName) > 0 && _globals.outFd == nil {
+		outFd, err := os.OpenFile(*_globals.fileName, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644)
+		if err == nil {
+			_globals.outFd = outFd
+		}
+	}
+}
+
 func logf(severity Severity, format string, args ...interface{}) {
 	if severity < _globals.logLevel.get() {
 		return
@@ -212,12 +234,7 @@ func logf(severity Severity, format string, args ...interface{}) {
 			_globals.systemLogger = systemLogger
 		}
 	}
-	if _globals.fileName != nil && len(*_globals.fileName) > 0 && _globals.outFd == nil {
-		outFd, err := os.OpenFile(*_globals.fileName, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644)
-		if err == nil {
-			_globals.outFd = outFd
-		}
-	}
+	createFileDescriptor()
 	if _globals.systemLogger != nil {
 		(*_globals.systemLogger).writeString(severity, message)
 	} else {
