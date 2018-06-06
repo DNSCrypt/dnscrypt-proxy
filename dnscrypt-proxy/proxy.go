@@ -214,29 +214,22 @@ func (proxy *Proxy) exchangeWithUDPServer(serverInfo *ServerInfo, sharedKey *[32
 }
 
 func (proxy *Proxy) exchangeWithTCPServer(serverInfo *ServerInfo, sharedKey *[32]byte, encryptedQuery []byte, clientNonce []byte) ([]byte, error) {
+	var err error
+	var pc net.Conn
 	proxyDialer := proxy.xTransport.proxyDialer
-	var pc *net.Conn
 	if proxyDialer == nil {
-		pcx, err := net.DialTCP("tcp", nil, serverInfo.TCPAddr)
-		if err != nil {
-			return nil, err
-		}
-		pc = interface{}(pcx).(*net.Conn)
+		pc, err = net.Dial("tcp", serverInfo.TCPAddr.String())
 	} else {
-		pcx, err := (*proxyDialer).Dial("tcp", serverInfo.TCPAddr.String())
-		if err != nil {
-			return nil, err
-		}
-		pc = &pcx
+		pc, err = (*proxyDialer).Dial("tcp", serverInfo.TCPAddr.String())
 	}
-	(*pc).SetDeadline(time.Now().Add(serverInfo.Timeout))
-	encryptedQuery, err := PrefixWithSize(encryptedQuery)
+	pc.SetDeadline(time.Now().Add(serverInfo.Timeout))
+	encryptedQuery, err = PrefixWithSize(encryptedQuery)
 	if err != nil {
 		return nil, err
 	}
-	(*pc).Write(encryptedQuery)
-	encryptedResponse, err := ReadPrefixed(pc)
-	(*pc).Close()
+	pc.Write(encryptedQuery)
+	encryptedResponse, err := ReadPrefixed(&pc)
+	pc.Close()
 	return proxy.Decrypt(serverInfo, sharedKey, encryptedResponse, clientNonce)
 }
 
