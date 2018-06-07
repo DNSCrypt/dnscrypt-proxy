@@ -21,6 +21,7 @@ import (
 	stamps "github.com/jedisct1/go-dnsstamps"
 	"github.com/miekg/dns"
 	"golang.org/x/net/http2"
+	netproxy "golang.org/x/net/proxy"
 )
 
 const DefaultFallbackResolver = "9.9.9.9:53"
@@ -41,6 +42,7 @@ type XTransport struct {
 	useIPv6                  bool
 	tlsDisableSessionTickets bool
 	tlsCipherSuite           []uint16
+	proxyDialer              *netproxy.Dialer
 }
 
 var DefaultKeepAlive = 5 * time.Second
@@ -74,7 +76,6 @@ func (xTransport *XTransport) rebuildTransport() {
 		(*xTransport.transport).CloseIdleConnections()
 	}
 	timeout := xTransport.timeout
-	dialer := &net.Dialer{Timeout: timeout, KeepAlive: timeout, DualStack: true}
 	transport := &http.Transport{
 		DisableKeepAlives:      false,
 		DisableCompression:     true,
@@ -95,7 +96,12 @@ func (xTransport *XTransport) rebuildTransport() {
 				dlog.Debugf("[%s] IP address was not cached", host)
 			}
 			addrStr = ipOnly + ":" + strconv.Itoa(port)
-			return dialer.DialContext(ctx, network, addrStr)
+			if xTransport.proxyDialer == nil {
+				dialer := &net.Dialer{Timeout: timeout, KeepAlive: timeout, DualStack: true}
+				return dialer.DialContext(ctx, network, addrStr)
+			} else {
+				return (*xTransport.proxyDialer).Dial(network, addrStr)
+			}
 		},
 	}
 	if xTransport.tlsDisableSessionTickets || xTransport.tlsCipherSuite != nil {

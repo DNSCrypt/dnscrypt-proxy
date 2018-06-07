@@ -9,7 +9,7 @@ import (
 )
 
 func (proxy *Proxy) SystemDListeners() error {
-	listeners, err := activation.Listeners(false)
+	listeners, err := activation.Listeners()
 	if err == nil && len(listeners) > 0 {
 		for i, listener := range listeners {
 			if listener != nil {
@@ -18,7 +18,7 @@ func (proxy *Proxy) SystemDListeners() error {
 			}
 		}
 	}
-	packetConns, err := activation.PacketConns(false)
+	packetConns, err := activation.PacketConns()
 	if err == nil && len(packetConns) > 0 {
 		for i, packetConn := range packetConns {
 			if packetConn != nil {

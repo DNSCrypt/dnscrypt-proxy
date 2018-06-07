@@ -46,8 +46,8 @@
     "activation",
     "daemon"
   ]
-  revision = "40e2722dffead74698ca12a750f64ef313ddce05"
-  version = "v16"
+  revision = "39ca1b05acc7ad1220e09f133283b8859a8b71ab"
+  version = "v17"
 
 [[projects]]
   branch = "master"
@@ -92,7 +92,7 @@
   branch = "master"
   name = "github.com/jedisct1/dlog"
   packages = ["."]
-  revision = "d9d2d2575aef4e29f8a9b7d75a75a1d0b146f1af"
+  revision = "f81e5af176e59fc11674b2777fe465fc506c27fe"
 
 [[projects]]
   branch = "master"
@@ -139,8 +139,8 @@
 [[projects]]
   name = "github.com/miekg/dns"
   packages = ["."]
-  revision = "e57bf427e68187a27e22adceac868350d7a7079b"
-  version = "v1.0.7"
+  revision = "5a2b9fab83ff0f8bfc99684bd5f43a37abe560f1"
+  version = "v1.0.8"
 
 [[projects]]
   branch = "master"
@@ -154,7 +154,7 @@
     "poly1305",
     "salsa20/salsa"
   ]
-  revision = "1a580b3eff7814fc9b40602fd35256c63b50f491"
+  revision = "b47b1587369238182299fe4dad77d05b8b461e06"
 
 [[projects]]
   branch = "master"
@@ -167,10 +167,12 @@
     "idna",
     "internal/iana",
     "internal/socket",
+    "internal/socks",
     "ipv4",
-    "ipv6"
+    "ipv6",
+    "proxy"
   ]
-  revision = "2491c5de3490fced2f6cff376127c667efeed857"
+  revision = "1e491301e022f8f977054da4c2d852decd59571f"
 
 [[projects]]
   branch = "master"
@@ -183,7 +185,7 @@
     "windows/svc/eventlog",
     "windows/svc/mgr"
   ]
-  revision = "7c87d13f8e835d2fb3a70a2912c811ed0c1d241b"
+  revision = "538ab54ba952cc4c7c705fa213fbf7993c97c175"
 
 [[projects]]
   name = "golang.org/x/text"
@@ -215,6 +217,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "2665fa9c725a2e63a6769a05e1da1b68dfc6ea2adcce5f2bf2fdfac975ec9574"
+  inputs-digest = "d5f42f6f996d902d4c18ce227affb4baf70ff089470d3f63f41679e74756f18c"
   solver-name = "gps-cdcl"
   solver-version = 1

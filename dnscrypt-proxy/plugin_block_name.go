@@ -103,6 +103,7 @@ func (plugin *PluginBlockName) Eval(pluginsState *PluginsState, msg *dns.Msg) er
 	}
 	if reject {
 		pluginsState.action = PluginsActionReject
+		pluginsState.returnCode = PluginsReturnCodeReject
 		if plugin.logger != nil {
 			var clientIPStr string
 			if pluginsState.clientProto == "udp" {

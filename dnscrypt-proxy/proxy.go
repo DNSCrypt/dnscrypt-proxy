@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/jedisct1/dlog"
-	stamps "github.com/jedisct1/go-dnsstamps"
 	clocksmith "github.com/jedisct1/go-clocksmith"
+	stamps "github.com/jedisct1/go-dnsstamps"
 	"golang.org/x/crypto/curve25519"
 )
 
@@ -176,7 +176,7 @@ func (proxy *Proxy) tcpListener(acceptPc *net.TCPListener) {
 			}
 			defer proxy.clientsCountDec()
 			clientPc.SetDeadline(time.Now().Add(proxy.timeout))
-			packet, err := ReadPrefixed(clientPc.(*net.TCPConn))
+			packet, err := ReadPrefixed(&clientPc)
 			if err != nil || len(packet) < MinDNSPacketSize {
 				return
 			}
@@ -214,9 +214,13 @@ func (proxy *Proxy) exchangeWithUDPServer(serverInfo *ServerInfo, sharedKey *[32
 }
 
 func (proxy *Proxy) exchangeWithTCPServer(serverInfo *ServerInfo, sharedKey *[32]byte, encryptedQuery []byte, clientNonce []byte) ([]byte, error) {
-	pc, err := net.DialTCP("tcp", nil, serverInfo.TCPAddr)
-	if err != nil {
-		return nil, err
+	var err error
+	var pc net.Conn
+	proxyDialer := proxy.xTransport.proxyDialer
+	if proxyDialer == nil {
+		pc, err = net.Dial("tcp", serverInfo.TCPAddr.String())
+	} else {
+		pc, err = (*proxyDialer).Dial("tcp", serverInfo.TCPAddr.String())
 	}
 	pc.SetDeadline(time.Now().Add(serverInfo.Timeout))
 	encryptedQuery, err = PrefixWithSize(encryptedQuery)
@@ -224,12 +228,8 @@ func (proxy *Proxy) exchangeWithTCPServer(serverInfo *ServerInfo, sharedKey *[32
 		return nil, err
 	}
 	pc.Write(encryptedQuery)
-
-	encryptedResponse, err := ReadPrefixed(pc)
+	encryptedResponse, err := ReadPrefixed(&pc)
 	pc.Close()
-	if err != nil {
-		return nil, err
-	}
 	return proxy.Decrypt(serverInfo, sharedKey, encryptedResponse, clientNonce)
 }
 
@@ -266,18 +266,26 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 		if pluginsState.synthResponse != nil {
 			response, err = pluginsState.synthResponse.PackBuffer(response)
 			if err != nil {
+				pluginsState.returnCode = PluginsReturnCodeParseError
+				pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
 				return
 			}
 		}
 		if pluginsState.action == PluginsActionDrop {
+			pluginsState.returnCode = PluginsReturnCodeDrop
+			pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
 			return
 		}
+	} else {
+		pluginsState.returnCode = PluginsReturnCodeForward
 	}
 	if len(response) == 0 {
 		var ttl *uint32
 		if serverInfo.Proto == stamps.StampProtoTypeDNSCrypt {
 			sharedKey, encryptedQuery, clientNonce, err := proxy.Encrypt(serverInfo, query, serverProto)
 			if err != nil {
+				pluginsState.returnCode = PluginsReturnCodeParseError
+				pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
 				return
 			}
 			serverInfo.noticeBegin(proxy)
@@ -287,6 +295,8 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 				response, err = proxy.exchangeWithTCPServer(serverInfo, sharedKey, encryptedQuery, clientNonce)
 			}
 			if err != nil {
+				pluginsState.returnCode = PluginsReturnCodeServerError
+				pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
 				serverInfo.noticeFailure(proxy)
 				return
 			}
@@ -297,11 +307,15 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 			resp, _, err := proxy.xTransport.DoHQuery(serverInfo.useGet, serverInfo.URL, query, proxy.timeout)
 			SetTransactionID(query, tid)
 			if err != nil {
+				pluginsState.returnCode = PluginsReturnCodeServerError
+				pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
 				serverInfo.noticeFailure(proxy)
 				return
 			}
 			response, err = ioutil.ReadAll(io.LimitReader(resp.Body, int64(MaxDNSPacketSize)))
 			if err != nil {
+				pluginsState.returnCode = PluginsReturnCodeServerError
+				pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
 				serverInfo.noticeFailure(proxy)
 				return
 			}
@@ -312,11 +326,15 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 			dlog.Fatal("Unsupported protocol")
 		}
 		if len(response) < MinDNSPacketSize || len(response) > MaxDNSPacketSize {
+			pluginsState.returnCode = PluginsReturnCodeParseError
+			pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
 			serverInfo.noticeFailure(proxy)
 			return
 		}
 		response, err = pluginsState.ApplyResponsePlugins(&proxy.pluginsGlobals, response, ttl)
 		if err != nil {
+			pluginsState.returnCode = PluginsReturnCodeParseError
+			pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
 			serverInfo.noticeFailure(proxy)
 			return
 		}
@@ -331,6 +349,8 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 		if len(response) > MaxDNSUDPPacketSize {
 			response, err = TruncatedResponse(response)
 			if err != nil {
+				pluginsState.returnCode = PluginsReturnCodeParseError
+				pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
 				return
 			}
 		}
@@ -343,11 +363,14 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 	} else {
 		response, err = PrefixWithSize(response)
 		if err != nil {
+			pluginsState.returnCode = PluginsReturnCodeParseError
+			pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
 			serverInfo.noticeFailure(proxy)
 			return
 		}
 		clientPc.Write(response)
 	}
+	pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
 }
 
 func NewProxy() Proxy {

@@ -590,7 +590,7 @@ func TestConcurrentExchanges(t *testing.T) {
 }
 
 func TestDoHExchange(t *testing.T) {
-	const addrstr = "dns.cloudflare.com:443"
+	const addrstr = "https://dns.cloudflare.com/dns-query"
 
 	m := new(Msg)
 	m.SetQuestion("miek.nl.", TypeSOA)

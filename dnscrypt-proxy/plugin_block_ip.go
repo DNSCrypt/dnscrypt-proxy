@@ -121,6 +121,7 @@ func (plugin *PluginBlockIP) Eval(pluginsState *PluginsState, msg *dns.Msg) erro
 	}
 	if reject {
 		pluginsState.action = PluginsActionReject
+		pluginsState.returnCode = PluginsReturnCodeReject
 		if plugin.logger != nil {
 			questions := msg.Question
 			if len(questions) != 1 {

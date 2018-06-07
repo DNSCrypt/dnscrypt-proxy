@@ -839,3 +839,22 @@ func TestInvalidRRSet(t *testing.T) {
 		t.Fatal("Verification did not return ErrRRset with inconsistent records")
 	}
 }
+
+// Issue #688 - RSA exponent unpacked in reverse
+func TestRsaExponentUnpack(t *testing.T) {
+	zskRrDnskey, _ := NewRR("isc.org.                7200    IN      DNSKEY  256 3 5 AwEAAcdkaRUlsRD4gcF63PpPJJ1E6kOIb3yn/UHptVsPEQtEbgJ2y20O eix4unpwoQkz+bIAd2rrOU/95wgV530x0/qqKwBLWoGkxdcnNcvVT4hl 3SOTZy1VjwkAfyayHPU8VisXqJGbB3KWevBZlb6AtrXzFu8AHuBeeAAe /fOgreCh")
+	kskRrDnskey, _ := NewRR("isc.org.                7200    IN      DNSKEY  257 3 5 BEAAAAOhHQDBrhQbtphgq2wQUpEQ5t4DtUHxoMVFu2hWLDMvoOMRXjGr hhCeFvAZih7yJHf8ZGfW6hd38hXG/xylYCO6Krpbdojwx8YMXLA5/kA+ u50WIL8ZR1R6KTbsYVMf/Qx5RiNbPClw+vT+U8eXEJmO20jIS1ULgqy3 47cBB1zMnnz/4LJpA0da9CbKj3A254T515sNIMcwsB8/2+2E63/zZrQz Bkj0BrN/9Bexjpiks3jRhZatEsXn3dTy47R09Uix5WcJt+xzqZ7+ysyL KOOedS39Z7SDmsn2eA0FKtQpwA6LXeG2w+jxmw3oA8lVUgEf/rzeC/bB yBNsO70aEFTd")
+	kskRrRrsig, _ := NewRR("isc.org.                7200    IN      RRSIG   DNSKEY 5 2 7200 20180627230244 20180528230244 12892 isc.org. ebKBlhYi1hPGTdPg6zSwvprOIkoFMs+WIhMSjoYW6/K5CS9lDDFdK4cu TgXJRT3etrltTuJiFe2HRpp+7t5cKLy+CeJZVzqrCz200MoHiFuLI9yI DJQGaS5YYCiFbw5+jUGU6aUhZ7Y5/YufeqATkRZzdrKwgK+zri8LPw9T WLoVJPAOW7GR0dgxl9WKmO7Fzi9P8BZR3NuwLV7329X94j+4zyswaw7q e5vif0ybzFveODLsEi/E0a2rTXc4QzzyM0fSVxRkVQyQ7ifIPP4ohnnT d5qpPUbE8xxBzTdWR/TaKADC5aCFkppG9lVAq5CPfClii2949X5RYzy1 rxhuSA==")
+	zskRrRrsig, _ := NewRR("isc.org.                7200    IN      RRSIG   DNSKEY 5 2 7200 20180627230244 20180528230244 19923 isc.org. RgCfzUeq4RJPGoe9RRB6cWf6d/Du+tHK5SxI5QL1waA3O5qVtQKFkY1C dq/yyVjwzfjD9F62TObujOaktv8X80ZMcNPmgHbvK1xOqelMBWv5hxj3 xRe+QQObLZ5NPfHFsphQKXvwgO5Sjk8py2B2iCr3BHCZ8S38oIfuSrQx sn8=")
+
+	zsk, ksk := zskRrDnskey.(*DNSKEY), kskRrDnskey.(*DNSKEY)
+	zskSig, kskSig := zskRrRrsig.(*RRSIG), kskRrRrsig.(*RRSIG)
+
+	if e := zskSig.Verify(zsk, []RR{zsk, ksk}); e != nil {
+		t.Fatalf("cannot verify RRSIG with keytag [%d]. Cause [%s]", zsk.KeyTag(), e.Error())
+	}
+
+	if e := kskSig.Verify(ksk, []RR{zsk, ksk}); e != nil {
+		t.Fatalf("cannot verify RRSIG with keytag [%d]. Cause [%s]", ksk.KeyTag(), e.Error())
+	}
+}

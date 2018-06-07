@@ -10,7 +10,7 @@ env:
     - GOPATH=/opt
     - BUILD_DIR=/opt/src/github.com/coreos/go-systemd
   matrix:
-    - DOCKER_BASE=ubuntu:16.04
+    - DOCKER_BASE=ubuntu:18.04
     - DOCKER_BASE=debian:stretch
 
 before_install:
