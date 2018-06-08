@@ -31,7 +31,6 @@
 
 
 ## List of local addresses and ports to listen to. Can be IPv4 and/or IPv6.
-## Note: When using systemd socket activation, choose an empty set (i.e. [] ).
 
 listen_addresses = ['127.0.0.1:53', '[::1]:53']
 
