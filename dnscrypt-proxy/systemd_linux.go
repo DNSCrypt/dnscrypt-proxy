@@ -9,24 +9,19 @@ import (
 )
 
 func (proxy *Proxy) SystemDListeners() error {
-	listeners, err := activation.Listeners()
-	if err == nil && len(listeners) > 0 {
-		for i, listener := range listeners {
-			if listener != nil {
-				dlog.Noticef("Wiring systemd TCP socket #%d", i)
-				go proxy.tcpListener(listener.(*net.TCPListener))
-			}
+	files := activation.Files(true)
+
+	for i, file := range files {
+		if listener, err := net.FileListener(file); err == nil {
+			dlog.Noticef("Wiring systemd TCP socket #%d, %s, %s", i, file.Name(), listener.Addr())
+			go proxy.tcpListener(listener.(*net.TCPListener))
+		} else if pc, err := net.FilePacketConn(file); err == nil {
+			dlog.Noticef("Wiring systemd UDP socket #%d, %s, %s", i, file.Name(), pc.LocalAddr())
+			go proxy.udpListener(pc.(*net.UDPConn))
 		}
+		file.Close()
 	}
-	packetConns, err := activation.PacketConns()
-	if err == nil && len(packetConns) > 0 {
-		for i, packetConn := range packetConns {
-			if packetConn != nil {
-				dlog.Noticef("Wiring systemd UDP socket #%d", i)
-				go proxy.udpListener(packetConn.(*net.UDPConn))
-			}
-		}
-	}
+
 	return nil
 }
 
