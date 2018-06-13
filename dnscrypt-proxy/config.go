@@ -188,7 +188,7 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 	check := flag.Bool("check", false, "check the configuration file and exit")
 	configFile := flag.String("config", DefaultConfigFileName, "Path to the configuration file")
 	username := flag.String("username", "", "After binding to the port user privileges are dropped")
-	child := flag.Bool("start-child", false, "Invokes program as a child process")
+	child := flag.Bool("child", false, "Invokes program as a child process")
 
 	flag.Parse()
 

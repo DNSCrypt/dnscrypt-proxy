@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"syscall"
+
 	"github.com/jedisct1/dlog"
 )
 
@@ -27,11 +28,11 @@ func (proxy *Proxy) dropPrivilege(userStr string, fds []*os.File) {
 	if err != nil {
 		dlog.Fatal(err)
 	}
-	exec_path, err := exec.LookPath(args[0])
+	execPath, err := exec.LookPath(args[0])
 	if err != nil {
 		dlog.Fatal(err)
 	}
-	path, err := filepath.Abs(exec_path)
+	path, err := filepath.Abs(execPath)
 	if err != nil {
 		dlog.Fatal(err)
 	}
@@ -40,7 +41,7 @@ func (proxy *Proxy) dropPrivilege(userStr string, fds []*os.File) {
 	copy(args[0:], args[0+1:])
 	args[len(args)-1] = ""
 	args = args[:len(args)-1]
-	args = append(args, "-start-child")
+	args = append(args, "-child")
 
 	cmd := exec.Command(path, args...)
 	cmd.Stdout = os.Stdout
@@ -48,8 +49,9 @@ func (proxy *Proxy) dropPrivilege(userStr string, fds []*os.File) {
 	cmd.ExtraFiles = fds
 	cmd.SysProcAttr = &syscall.SysProcAttr{}
 	cmd.SysProcAttr.Credential = &syscall.Credential{Uid: uint32(uid), Gid: uint32(gid)}
+	cmd.SysProcAttr.Setsid = true
 	dlog.Notice("Dropping privileges")
-	if err := cmd.Start(); err != nil {
+	if err := cmd.Run(); err != nil {
 		dlog.Fatal(err)
 	}
 	os.Exit(0)
