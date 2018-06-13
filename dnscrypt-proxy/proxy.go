@@ -3,6 +3,7 @@ package main
 import (
 	"io"
 	"io/ioutil"
+	"os"
 	"math/rand"
 	"net"
 	"sync/atomic"
@@ -15,6 +16,8 @@ import (
 )
 
 type Proxy struct {
+	username                     string
+	child                        bool
 	proxyPublicKey               [32]byte
 	proxySecretKey               [32]byte
 	ephemeralKeys                bool
@@ -71,6 +74,7 @@ func (proxy *Proxy) StartProxy() {
 	for _, registeredServer := range proxy.registeredServers {
 		proxy.serversInfo.registerServer(proxy, registeredServer.name, registeredServer.stamp)
 	}
+
 	for _, listenAddrStr := range proxy.listenAddresses {
 		listenUDPAddr, err := net.ResolveUDPAddr("udp", listenAddrStr)
 		if err != nil {
@@ -80,12 +84,68 @@ func (proxy *Proxy) StartProxy() {
 		if err != nil {
 			dlog.Fatal(err)
 		}
-		if err := proxy.udpListenerFromAddr(listenUDPAddr); err != nil {
-			dlog.Fatal(err)
+
+		// if 'username' is not set, continue as before (Todo: refactor for DRYniss)
+		if !(len(proxy.username) > 0) {
+			if err := proxy.udpListenerFromAddr(listenUDPAddr); err != nil {
+				dlog.Fatal(err)
+			}
+			if err := proxy.tcpListenerFromAddr(listenTCPAddr); err != nil {
+				dlog.Fatal(err)
+			}
+		} else {
+			// if 'username' is set and we are the parent process
+			if !proxy.child {
+				// parent
+				listenerUDP, err := net.ListenUDP("udp", listenUDPAddr)
+				if err != nil {
+					dlog.Fatal(err)
+				}
+				listenerTCP, err := net.ListenTCP("tcp", listenTCPAddr)
+				if err != nil {
+					dlog.Fatal(err)
+				}
+
+				fdUDP, err := listenerUDP.File() // On Windows, the File method of UDPConn is not implemented.
+				if err != nil {
+					dlog.Fatal(err)
+				}
+				fdTCP, err := listenerTCP.File() // On Windows, the File method of TCPListener is not implemented.
+				if err != nil {
+					dlog.Fatal(err)
+				}
+				defer listenerUDP.Close()
+				defer listenerTCP.Close()
+				FileDescriptors = append(FileDescriptors, fdUDP)
+				FileDescriptors = append(FileDescriptors, fdTCP)
+
+			// if 'username' is set and we are the child process
+			} else {
+				// child
+				listenerUDP, err := net.FilePacketConn(os.NewFile(uintptr(3+FileDescriptorNum), "listenerUDP"))
+				if err != nil {
+					dlog.Fatal(err)
+				}
+				FileDescriptorNum++
+
+				listenerTCP, err := net.FileListener(os.NewFile(uintptr(3+FileDescriptorNum), "listenerTCP"))
+				if err != nil {
+					dlog.Fatal(err)
+				}
+				FileDescriptorNum++
+
+				dlog.Noticef("Now listening to %v [UDP]", listenUDPAddr)
+				go proxy.udpListener(listenerUDP.(*net.UDPConn))
+
+				dlog.Noticef("Now listening to %v [TCP]", listenAddrStr)
+				go proxy.tcpListener(listenerTCP.(*net.TCPListener))
+			}
 		}
-		if err := proxy.tcpListenerFromAddr(listenTCPAddr); err != nil {
-			dlog.Fatal(err)
-		}
+	}
+
+	// if 'username' is set and we are the parent process drop privilege and exit
+	if len(proxy.username) > 0 && !proxy.child {
+		proxy.dropPrivilege(proxy.username, FileDescriptors)
 	}
 	if err := proxy.SystemDListeners(); err != nil {
 		dlog.Fatal(err)

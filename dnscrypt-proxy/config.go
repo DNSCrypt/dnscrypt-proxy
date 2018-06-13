@@ -26,6 +26,7 @@ type Config struct {
 	ServerNames              []string `toml:"server_names"`
 	ListenAddresses          []string `toml:"listen_addresses"`
 	Daemonize                bool
+	Username                 string `toml:"username"`
 	ForceTCP                 bool   `toml:"force_tcp"`
 	Timeout                  int    `toml:"timeout"`
 	KeepAlive                int    `toml:"keepalive"`
@@ -186,6 +187,8 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 	jsonOutput := flag.Bool("json", false, "output list as JSON")
 	check := flag.Bool("check", false, "check the configuration file and exit")
 	configFile := flag.String("config", DefaultConfigFileName, "Path to the configuration file")
+	username := flag.String("username", "", "After binding to the port user privileges are dropped")
+	child := flag.Bool("start-child", false, "Invokes program as a child process")
 
 	flag.Parse()
 
@@ -225,11 +228,22 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 		dlog.UseSyslog(true)
 	} else if config.LogFile != nil {
 		dlog.UseLogFile(*config.LogFile)
+		if !*child {
+			FileDescriptors = append(FileDescriptors, dlog.GetFileDescriptor())
+		} else {
+			FileDescriptorNum++
+			dlog.SetFileDescriptor(os.NewFile(uintptr(3), "logFile"))
+		}
 	}
 	proxy.logMaxSize = config.LogMaxSize
 	proxy.logMaxAge = config.LogMaxAge
 	proxy.logMaxBackups = config.LogMaxBackups
 
+	proxy.username = config.Username
+	if len(*username) > 0 {
+		proxy.username = *username
+	}
+	proxy.child = *child
 	proxy.xTransport = NewXTransport()
 	proxy.xTransport.tlsDisableSessionTickets = config.TLSDisableSessionTickets
 	proxy.xTransport.tlsCipherSuite = config.TLSCipherSuite

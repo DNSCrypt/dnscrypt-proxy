@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
+	"os"
 )
 
 type CryptoConstruction uint16
@@ -34,6 +35,11 @@ var (
 	MaxDNSPacketSize       = 4096
 	MaxDNSUDPPacketSize    = 1252
 	InitialMinQuestionSize = 256
+)
+
+var (
+	FileDescriptors = make([]*os.File, 0)
+	FileDescriptorNum = 0
 )
 
 func PrefixWithSize(packet []byte) ([]byte, error) {
