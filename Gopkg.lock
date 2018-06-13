@@ -15,12 +15,6 @@
 
 [[projects]]
   branch = "master"
-  name = "github.com/VividCortex/godaemon"
-  packages = ["."]
-  revision = "3d9f6e0b234fe7d17448b345b2e14ac05814a758"
-
-[[projects]]
-  branch = "master"
   name = "github.com/aead/chacha20"
   packages = ["chacha"]
   revision = "e2538746bfea853aaa589feb8ec46bd46ee78f86"
@@ -185,7 +179,7 @@
     "windows/svc/eventlog",
     "windows/svc/mgr"
   ]
-  revision = "f4b713d59635e9af9041b0e1b1fd102d95812dbe"
+  revision = "8ee9f3e146b708d082f4bab861e5759d1edf8c00"
 
 [[projects]]
   name = "golang.org/x/text"
@@ -217,6 +211,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "d5f42f6f996d902d4c18ce227affb4baf70ff089470d3f63f41679e74756f18c"
+  inputs-digest = "c2408310ad6e3a3b8987a6b1aeac25d10b74502190596d85af5d27ebbf8896d0"
   solver-name = "gps-cdcl"
   solver-version = 1
