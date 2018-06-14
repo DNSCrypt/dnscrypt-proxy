@@ -120,6 +120,11 @@ keepalive = 30
 # use_syslog = true
 
 
+## Delay, in minutes, after which plugin status is logged (0 to disable)
+
+# plugin_status_delay = 0
+
+
 ## Delay, in minutes, after which certificates are reloaded
 
 cert_refresh_delay = 240

@@ -24,6 +24,7 @@ type Proxy struct {
 	questionSizeEstimator        QuestionSizeEstimator
 	serversInfo                  ServersInfo
 	timeout                      time.Duration
+	pluginStatusDelay            time.Duration
 	certRefreshDelay             time.Duration
 	certRefreshDelayAfterFailure time.Duration
 	certIgnoreTimestamp          bool

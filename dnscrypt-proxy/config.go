@@ -31,6 +31,7 @@ type Config struct {
 	Timeout                  int    `toml:"timeout"`
 	KeepAlive                int    `toml:"keepalive"`
 	Proxy                    string `toml:"proxy"`
+	PluginStatusDelay        int    `toml:"plugin_status_delay"`
 	CertRefreshDelay         int    `toml:"cert_refresh_delay"`
 	CertIgnoreTimestamp      bool   `toml:"cert_ignore_timestamp"`
 	EphemeralKeys            bool   `toml:"dnscrypt_ephemeral_keys"`
@@ -78,6 +79,7 @@ func newConfig() Config {
 		ListenAddresses:          []string{"127.0.0.1:53"},
 		Timeout:                  2500,
 		KeepAlive:                5,
+		PluginStatusDelay:        0,
 		CertRefreshDelay:         240,
 		CertIgnoreTimestamp:      false,
 		EphemeralKeys:            false,
@@ -275,6 +277,7 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 	if config.ForceTCP {
 		proxy.mainProto = "tcp"
 	}
+	proxy.pluginStatusDelay = time.Duration(config.PluginStatusDelay) * time.Minute
 	proxy.certRefreshDelay = time.Duration(config.CertRefreshDelay) * time.Minute
 	proxy.certRefreshDelayAfterFailure = time.Duration(10 * time.Second)
 	proxy.certIgnoreTimestamp = config.CertIgnoreTimestamp
