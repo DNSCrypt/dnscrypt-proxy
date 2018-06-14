@@ -8,6 +8,7 @@ import (
 	"time"
 
 	lru "github.com/hashicorp/golang-lru"
+	"github.com/jedisct1/dlog"
 	"github.com/miekg/dns"
 )
 
@@ -21,10 +22,20 @@ type CachedResponses struct {
 	cache *lru.ARCCache
 }
 
+type CacheStats struct {
+	sync.RWMutex
+	entries     int
+	hits        uint64
+	misses      uint64
+	expirations uint64
+}
+
 var cachedResponses CachedResponses
+var cacheStats CacheStats
 
 type PluginCacheResponse struct {
 	cachedResponses *CachedResponses
+	cacheStats      *CacheStats
 }
 
 func (plugin *PluginCacheResponse) Name() string {
@@ -36,6 +47,10 @@ func (plugin *PluginCacheResponse) Description() string {
 }
 
 func (plugin *PluginCacheResponse) Init(proxy *Proxy) error {
+	cacheStats.Lock()
+	cacheStats.entries = 0
+	cacheStats.Unlock()
+	plugin.cacheStats = &cacheStats
 	return nil
 }
 
@@ -70,13 +85,21 @@ func (plugin *PluginCacheResponse) Eval(pluginsState *PluginsState, msg *dns.Msg
 		}
 	}
 	plugin.cachedResponses.cache.Add(cacheKey, cachedResponse)
+	plugin.cacheStats.Lock()
+	plugin.cacheStats.entries = plugin.cachedResponses.cache.Len()
+	plugin.cacheStats.Unlock()
 	updateTTL(msg, cachedResponse.expiration)
 
 	return nil
 }
 
+func (plugin *PluginCacheResponse) Status() error {
+	return nil
+}
+
 type PluginCache struct {
 	cachedResponses *CachedResponses
+	cacheStats      *CacheStats
 }
 
 func (plugin *PluginCache) Name() string {
@@ -88,6 +111,13 @@ func (plugin *PluginCache) Description() string {
 }
 
 func (plugin *PluginCache) Init(proxy *Proxy) error {
+	cacheStats.Lock()
+	cacheStats.hits = 0
+	cacheStats.misses = 0
+	cacheStats.expirations = 0
+	cacheStats.Unlock()
+	plugin.cacheStats = &cacheStats
+
 	return nil
 }
 
@@ -96,6 +126,18 @@ func (plugin *PluginCache) Drop() error {
 }
 
 func (plugin *PluginCache) Reload() error {
+	return nil
+}
+
+func (plugin *PluginCache) Status() error {
+	plugin.cacheStats.RLock()
+	dlog.Noticef("%s status: %d entries, %d hits, %d misses, %d expirations",
+		plugin.Name(),
+		cacheStats.entries,
+		cacheStats.hits,
+		cacheStats.misses,
+		cacheStats.expirations)
+	plugin.cacheStats.RUnlock()
 	return nil
 }
 
@@ -108,18 +150,26 @@ func (plugin *PluginCache) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 	}
 	plugin.cachedResponses.RLock()
 	defer plugin.cachedResponses.RUnlock()
+
+	plugin.cacheStats.Lock()
+	defer plugin.cacheStats.Unlock()
+
 	if plugin.cachedResponses.cache == nil {
+		plugin.cacheStats.misses++
 		return nil
 	}
 	cachedAny, ok := plugin.cachedResponses.cache.Get(cacheKey)
 	if !ok {
+		plugin.cacheStats.misses++
 		return nil
 	}
 	cached := cachedAny.(CachedResponse)
 	if time.Now().After(cached.expiration) {
+		plugin.cacheStats.expirations++
 		return nil
 	}
 
+	plugin.cacheStats.hits++
 	updateTTL(&cached.msg, cached.expiration)
 
 	synth := cached.msg

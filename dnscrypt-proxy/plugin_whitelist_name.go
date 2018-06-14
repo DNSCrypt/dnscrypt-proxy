@@ -130,3 +130,7 @@ func (plugin *PluginWhitelistName) Eval(pluginsState *PluginsState, msg *dns.Msg
 	}
 	return nil
 }
+
+func (plugin *PluginWhitelistName) Status() error {
+	return nil
+}

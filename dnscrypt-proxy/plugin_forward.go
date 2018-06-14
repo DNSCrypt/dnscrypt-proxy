@@ -101,3 +101,7 @@ func (plugin *PluginForward) Eval(pluginsState *PluginsState, msg *dns.Msg) erro
 	pluginsState.action = PluginsActionSynth
 	return nil
 }
+
+func (plugin *PluginForward) Status() error {
+	return nil
+}

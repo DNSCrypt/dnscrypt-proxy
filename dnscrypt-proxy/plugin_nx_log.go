@@ -80,3 +80,7 @@ func (plugin *PluginNxLog) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 
 	return nil
 }
+
+func (plugin *PluginNxLog) Status() error {
+	return nil
+}

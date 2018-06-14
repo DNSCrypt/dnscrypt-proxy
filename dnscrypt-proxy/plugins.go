@@ -137,6 +137,7 @@ type Plugin interface {
 	Drop() error
 	Reload() error
 	Eval(pluginsState *PluginsState, msg *dns.Msg) error
+	Status() error
 }
 
 func NewPluginsState(proxy *Proxy, clientProto string, clientAddr *net.Addr) PluginsState {

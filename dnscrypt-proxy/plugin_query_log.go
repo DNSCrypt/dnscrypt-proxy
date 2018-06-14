@@ -90,3 +90,7 @@ func (plugin *PluginQueryLog) Eval(pluginsState *PluginsState, msg *dns.Msg) err
 	plugin.logger.Write([]byte(line))
 	return nil
 }
+
+func (plugin *PluginQueryLog) Status() error {
+	return nil
+}

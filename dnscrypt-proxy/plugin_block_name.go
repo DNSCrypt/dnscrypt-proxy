@@ -131,3 +131,7 @@ func (plugin *PluginBlockName) Eval(pluginsState *PluginsState, msg *dns.Msg) er
 	}
 	return nil
 }
+
+func (plugin *PluginBlockName) Status() error {
+	return nil
+}
