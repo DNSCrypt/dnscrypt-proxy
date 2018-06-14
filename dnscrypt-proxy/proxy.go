@@ -168,8 +168,18 @@ func (proxy *Proxy) StartProxy() {
 			}
 			clocksmith.Sleep(delay)
 			proxy.serversInfo.refresh(proxy)
+			proxy.GetPluginsStatus()
 		}
 	}()
+
+	if (proxy.pluginStatusDelay > 0) {
+		go func() {
+			for {
+				clocksmith.Sleep(proxy.pluginStatusDelay)
+				proxy.GetPluginsStatus()
+			}
+		}()
+	}
 }
 
 func (proxy *Proxy) prefetcher(urlsToPrefetch *[]URLToPrefetch) {
@@ -313,6 +323,11 @@ func (proxy *Proxy) clientsCountDec() {
 			break
 		}
 	}
+}
+
+func (proxy *Proxy) GetPluginsStatus() {
+	pluginsState := NewPluginsState(proxy, "", nil)
+	pluginsState.GetPluginsStatus(&proxy.pluginsGlobals)
 }
 
 func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto string, serverProto string, query []byte, clientAddr *net.Addr, clientPc net.Conn) {

@@ -264,3 +264,28 @@ func (pluginsState *PluginsState) ApplyLoggingPlugins(pluginsGlobals *PluginsGlo
 	pluginsGlobals.RUnlock()
 	return nil
 }
+
+func (pluginsState *PluginsState) GetPluginsStatus(pluginsGlobals *PluginsGlobals) error {
+
+	pluginsGlobals.RLock()
+	defer pluginsGlobals.RUnlock()
+
+	dlog.Debugf("Plugin count: %d query, %d response, %d logging", len(*pluginsGlobals.queryPlugins), len(*pluginsGlobals.responsePlugins), len(*pluginsGlobals.loggingPlugins))
+
+	for _, plugin := range *pluginsGlobals.queryPlugins {
+		if ret := plugin.Status(); ret != nil {
+			return ret
+		}
+	}
+	for _, plugin := range *pluginsGlobals.responsePlugins {
+		if ret := plugin.Status(); ret != nil {
+			return ret
+		}
+	}
+	for _, plugin := range *pluginsGlobals.loggingPlugins {
+		if ret := plugin.Status(); ret != nil {
+			return ret
+		}
+	}
+	return nil
+}
