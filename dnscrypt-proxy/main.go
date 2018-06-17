@@ -83,9 +83,6 @@ func (app *App) Start(service service.Service) error {
 	if err := InitPluginsGlobals(&proxy.pluginsGlobals, proxy); err != nil {
 		dlog.Fatal(err)
 	}
-	if proxy.daemonize {
-		Daemonize()
-	}
 	app.quit = make(chan struct{})
 	app.wg.Add(1)
 	if service != nil {
