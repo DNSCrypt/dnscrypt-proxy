@@ -24,7 +24,6 @@ type Proxy struct {
 	questionSizeEstimator        QuestionSizeEstimator
 	serversInfo                  ServersInfo
 	timeout                      time.Duration
-	pluginStatusDelay            time.Duration
 	certRefreshDelay             time.Duration
 	certRefreshDelayAfterFailure time.Duration
 	certIgnoreTimestamp          bool
@@ -64,6 +63,7 @@ type Proxy struct {
 	logMaxSize                   int
 	logMaxAge                    int
 	logMaxBackups                int
+	collectStatistics            bool
 }
 
 func (proxy *Proxy) StartProxy() {
@@ -168,17 +168,11 @@ func (proxy *Proxy) StartProxy() {
 			}
 			clocksmith.Sleep(delay)
 			proxy.serversInfo.refresh(proxy)
-			proxy.GetPluginsStatus()
 		}
 	}()
 
-	if (proxy.pluginStatusDelay > 0) {
-		go func() {
-			for {
-				clocksmith.Sleep(proxy.pluginStatusDelay)
-				proxy.GetPluginsStatus()
-			}
-		}()
+	if proxy.collectStatistics {
+		// Need some kind of interface for gathering statistics
 	}
 }
 
@@ -325,9 +319,9 @@ func (proxy *Proxy) clientsCountDec() {
 	}
 }
 
-func (proxy *Proxy) GetPluginsStatus() {
+func (proxy *Proxy) CollectStatistics() {
 	pluginsState := NewPluginsState(proxy, "", nil)
-	pluginsState.GetPluginsStatus(&proxy.pluginsGlobals)
+	pluginsState.CollectStatistics(&proxy.pluginsGlobals)
 }
 
 func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto string, serverProto string, query []byte, clientAddr *net.Addr, clientPc net.Conn) {

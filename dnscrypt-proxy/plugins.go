@@ -265,7 +265,7 @@ func (pluginsState *PluginsState) ApplyLoggingPlugins(pluginsGlobals *PluginsGlo
 	return nil
 }
 
-func (pluginsState *PluginsState) GetPluginsStatus(pluginsGlobals *PluginsGlobals) error {
+func (pluginsState *PluginsState) CollectStatistics(pluginsGlobals *PluginsGlobals) error {
 
 	pluginsGlobals.RLock()
 	defer pluginsGlobals.RUnlock()

@@ -46,6 +46,11 @@ max_clients = 250
 # username = 'nobody'
 
 
+## Collect operational statistics (cache hits/misses, etc.)
+
+# collect_statistics = false
+
+
 ## Require servers (from static + remote sources) to satisfy specific properties
 
 # Use servers reachable over IPv4
@@ -118,11 +123,6 @@ keepalive = 30
 ## Use the system logger (syslog on Unix, Event Log on Windows)
 
 # use_syslog = true
-
-
-## Delay, in minutes, after which plugin status is logged (0 to disable)
-
-# plugin_status_delay = 0
 
 
 ## Delay, in minutes, after which certificates are reloaded

@@ -23,6 +23,7 @@ type Config struct {
 	LogLevel                 int      `toml:"log_level"`
 	LogFile                  *string  `toml:"log_file"`
 	UseSyslog                bool     `toml:"use_syslog"`
+	CollectStatistics        bool     `toml:"collect_statistics"`
 	ServerNames              []string `toml:"server_names"`
 	ListenAddresses          []string `toml:"listen_addresses"`
 	Daemonize                bool
@@ -31,7 +32,6 @@ type Config struct {
 	Timeout                  int    `toml:"timeout"`
 	KeepAlive                int    `toml:"keepalive"`
 	Proxy                    string `toml:"proxy"`
-	PluginStatusDelay        int    `toml:"plugin_status_delay"`
 	CertRefreshDelay         int    `toml:"cert_refresh_delay"`
 	CertIgnoreTimestamp      bool   `toml:"cert_ignore_timestamp"`
 	EphemeralKeys            bool   `toml:"dnscrypt_ephemeral_keys"`
@@ -76,10 +76,10 @@ type Config struct {
 func newConfig() Config {
 	return Config{
 		LogLevel:                 int(dlog.LogLevel()),
+		CollectStatistics:        false,
 		ListenAddresses:          []string{"127.0.0.1:53"},
 		Timeout:                  2500,
 		KeepAlive:                5,
-		PluginStatusDelay:        0,
 		CertRefreshDelay:         240,
 		CertIgnoreTimestamp:      false,
 		EphemeralKeys:            false,
@@ -241,6 +241,7 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 	proxy.logMaxAge = config.LogMaxAge
 	proxy.logMaxBackups = config.LogMaxBackups
 
+	proxy.collectStatistics = config.CollectStatistics
 	proxy.username = config.Username
 	if len(*username) > 0 {
 		proxy.username = *username
@@ -277,7 +278,6 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 	if config.ForceTCP {
 		proxy.mainProto = "tcp"
 	}
-	proxy.pluginStatusDelay = time.Duration(config.PluginStatusDelay) * time.Minute
 	proxy.certRefreshDelay = time.Duration(config.CertRefreshDelay) * time.Minute
 	proxy.certRefreshDelayAfterFailure = time.Duration(10 * time.Second)
 	proxy.certIgnoreTimestamp = config.CertIgnoreTimestamp
