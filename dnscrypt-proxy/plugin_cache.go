@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	lru "github.com/hashicorp/golang-lru"
@@ -23,8 +24,6 @@ type CachedResponses struct {
 }
 
 type CacheStats struct {
-	sync.RWMutex
-	entries     int
 	hits        uint64
 	misses      uint64
 	expirations uint64
@@ -35,7 +34,6 @@ var cacheStats CacheStats
 
 type PluginCacheResponse struct {
 	cachedResponses *CachedResponses
-	cacheStats      *CacheStats
 }
 
 func (plugin *PluginCacheResponse) Name() string {
@@ -47,10 +45,6 @@ func (plugin *PluginCacheResponse) Description() string {
 }
 
 func (plugin *PluginCacheResponse) Init(proxy *Proxy) error {
-	cacheStats.Lock()
-	cacheStats.entries = 0
-	cacheStats.Unlock()
-	plugin.cacheStats = &cacheStats
 	return nil
 }
 
@@ -85,9 +79,6 @@ func (plugin *PluginCacheResponse) Eval(pluginsState *PluginsState, msg *dns.Msg
 		}
 	}
 	plugin.cachedResponses.cache.Add(cacheKey, cachedResponse)
-	plugin.cacheStats.Lock()
-	plugin.cacheStats.entries = plugin.cachedResponses.cache.Len()
-	plugin.cacheStats.Unlock()
 	updateTTL(msg, cachedResponse.expiration)
 
 	return nil
@@ -111,11 +102,9 @@ func (plugin *PluginCache) Description() string {
 }
 
 func (plugin *PluginCache) Init(proxy *Proxy) error {
-	cacheStats.Lock()
-	cacheStats.hits = 0
-	cacheStats.misses = 0
-	cacheStats.expirations = 0
-	cacheStats.Unlock()
+	atomic.StoreUint64(&cacheStats.hits, 0)
+	atomic.StoreUint64(&cacheStats.misses, 0)
+	atomic.StoreUint64(&cacheStats.expirations, 0)
 	plugin.cacheStats = &cacheStats
 
 	return nil
@@ -130,14 +119,16 @@ func (plugin *PluginCache) Reload() error {
 }
 
 func (plugin *PluginCache) Status() error {
-	plugin.cacheStats.RLock()
+	plugin.cachedResponses.RLock()
+	entries := plugin.cachedResponses.cache.Len()
+	plugin.cachedResponses.RUnlock()
+
 	dlog.Noticef("%s status: %d entries, %d hits, %d misses, %d expirations",
 		plugin.Name(),
-		cacheStats.entries,
-		cacheStats.hits,
-		cacheStats.misses,
-		cacheStats.expirations)
-	plugin.cacheStats.RUnlock()
+		entries,
+		atomic.LoadUint64(&cacheStats.hits),
+		atomic.LoadUint64(&cacheStats.misses),
+		atomic.LoadUint64(&cacheStats.expirations))
 	return nil
 }
 
@@ -151,25 +142,22 @@ func (plugin *PluginCache) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 	plugin.cachedResponses.RLock()
 	defer plugin.cachedResponses.RUnlock()
 
-	plugin.cacheStats.Lock()
-	defer plugin.cacheStats.Unlock()
-
 	if plugin.cachedResponses.cache == nil {
-		plugin.cacheStats.misses++
+		atomic.AddUint64(&plugin.cacheStats.misses, 1)
 		return nil
 	}
 	cachedAny, ok := plugin.cachedResponses.cache.Get(cacheKey)
 	if !ok {
-		plugin.cacheStats.misses++
+		atomic.AddUint64(&plugin.cacheStats.misses, 1)
 		return nil
 	}
 	cached := cachedAny.(CachedResponse)
 	if time.Now().After(cached.expiration) {
-		plugin.cacheStats.expirations++
+		atomic.AddUint64(&plugin.cacheStats.expirations, 1)
 		return nil
 	}
 
-	plugin.cacheStats.hits++
+	atomic.AddUint64(&plugin.cacheStats.hits, 1)
 	updateTTL(&cached.msg, cached.expiration)
 
 	synth := cached.msg
