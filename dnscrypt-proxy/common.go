@@ -42,6 +42,11 @@ var (
 	FileDescriptorNum = 0
 )
 
+var (
+	ProxyAPIPrefix  = "/api/v1/proxy/"
+	PluginAPIPrefix = "/api/v1/plugin/"
+)
+
 func PrefixWithSize(packet []byte) ([]byte, error) {
 	packetLen := len(packet)
 	if packetLen > 0xffff {

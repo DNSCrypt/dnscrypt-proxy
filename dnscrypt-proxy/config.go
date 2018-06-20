@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"net"
+	"net/http"
 	"net/url"
 	"os"
 	"path"
@@ -381,6 +382,10 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 
 	proxy.forwardFile = config.ForwardFile
 	proxy.cloakFile = config.CloakFile
+
+	proxy.httpMux = http.NewServeMux()
+	proxy.httpMux.Handle("/", http.NotFoundHandler())
+	// proxy.httpMux.Handle("/", http.FileServer(http.Dir("www")))
 
 	allWeeklyRanges, err := ParseAllWeeklyRanges(config.AllWeeklyRanges)
 	if err != nil {

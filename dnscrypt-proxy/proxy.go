@@ -3,9 +3,10 @@ package main
 import (
 	"io"
 	"io/ioutil"
-	"os"
 	"math/rand"
 	"net"
+	"net/http"
+	"os"
 	"sync/atomic"
 	"time"
 
@@ -64,6 +65,7 @@ type Proxy struct {
 	logMaxSize                   int
 	logMaxAge                    int
 	logMaxBackups                int
+	httpMux                      *http.ServeMux
 }
 
 func (proxy *Proxy) StartProxy() {
@@ -144,6 +146,15 @@ func (proxy *Proxy) StartProxy() {
 		}
 	}
 
+	for _, manageAddrStr := range proxy.manageAddresses {
+		dlog.Noticef("Manage listening to %v [HTTP]", manageAddrStr)
+		go func() {
+			if err := http.ListenAndServe(manageAddrStr, proxy.httpMux); err != nil {
+				dlog.Fatal(err)
+			}
+		}()
+	}
+
 	// if 'username' is set and we are the parent process drop privilege and exit
 	if len(proxy.username) > 0 && !proxy.child {
 		proxy.dropPrivilege(proxy.username, FileDescriptors)
@@ -170,7 +181,15 @@ func (proxy *Proxy) StartProxy() {
 			proxy.serversInfo.refresh(proxy)
 		}
 	}()
+}
 
+func (proxy *Proxy) RegisterHTTPHandler(pattern string, handler func(http.ResponseWriter, *http.Request)) {
+	dlog.Noticef("Registering handler for " + pattern)
+	proxy.httpMux.HandleFunc(pattern, handler)
+}
+
+func (proxy *Proxy) RegisterPluginHTTPHandler(name string, pattern string, handler func(http.ResponseWriter, *http.Request)) {
+	proxy.RegisterHTTPHandler(PluginAPIPrefix+name+pattern, handler)
 }
 
 func (proxy *Proxy) prefetcher(urlsToPrefetch *[]URLToPrefetch) {
