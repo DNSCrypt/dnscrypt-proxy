@@ -2,13 +2,13 @@
 
 # ![dnscrypt-proxy 2](https://raw.github.com/jedisct1/dnscrypt-proxy/master/logo.png?2)
 
-A flexible DNS proxy, with support for modern encrypted DNS protocols such as [DNSCrypt v2](https://dnscrypt.info/protocol) and [DNS-over-HTTP](https://tools.ietf.org/html/draft-ietf-doh-dns-over-https-10).
+A flexible DNS proxy, with support for modern encrypted DNS protocols such as [DNSCrypt v2](https://dnscrypt.info/protocol) and [DNS-over-HTTPS](https://tools.ietf.org/html/draft-ietf-doh-dns-over-https-11).
 
 ## [dnscrypt-proxy 2.0.15 final is available for download!](https://github.com/jedisct1/dnscrypt-proxy/releases/latest)
 
 * [dnscrypt-proxy documentation](https://dnscrypt.info/doc) – This project's documentation (Wiki)
 * [DNSCrypt project home page](https://dnscrypt.info/)
-* [DNS-over-HTTP/2 and DNSCrypt resolvers](https://dnscrypt.info/public-servers)
+* [DNS-over-HTTPS and DNSCrypt resolvers](https://dnscrypt.info/public-servers)
 * [Server and client implementations](https://dnscrypt.info/implementations)
 * [DNS stamps](https://dnscrypt.info/stamps)
 * [FAQ](https://dnscrypt.info/faq)

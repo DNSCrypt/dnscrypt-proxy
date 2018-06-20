@@ -49,7 +49,6 @@ func (proxy *Proxy) dropPrivilege(userStr string, fds []*os.File) {
 	cmd.ExtraFiles = fds
 	cmd.SysProcAttr = &syscall.SysProcAttr{}
 	cmd.SysProcAttr.Credential = &syscall.Credential{Uid: uint32(uid), Gid: uint32(gid)}
-	cmd.SysProcAttr.Setsid = true
 	dlog.Notice("Dropping privileges")
 	if err := cmd.Run(); err != nil {
 		dlog.Fatal(err)

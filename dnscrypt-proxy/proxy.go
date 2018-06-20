@@ -303,6 +303,9 @@ func (proxy *Proxy) exchangeWithTCPServer(serverInfo *ServerInfo, sharedKey *[32
 	} else {
 		pc, err = (*proxyDialer).Dial("tcp", serverInfo.TCPAddr.String())
 	}
+	if err != nil {
+		return nil, err
+	}
 	pc.SetDeadline(time.Now().Add(serverInfo.Timeout))
 	encryptedQuery, err = PrefixWithSize(encryptedQuery)
 	if err != nil {
