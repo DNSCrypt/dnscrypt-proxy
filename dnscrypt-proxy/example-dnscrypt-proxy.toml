@@ -41,6 +41,11 @@ listen_addresses = ['127.0.0.1:53', '[::1]:53']
 max_clients = 250
 
 
+## List of local addresses and ports for the management interface. Can be IPv4 and/or IPv6.
+
+# manage_addresses = ['127.0.0.1:8080', '[::1]:8080']
+
+
 ## Switch to a non-privileged system user after listeneing sockets have been created
 
 # username = 'nobody'

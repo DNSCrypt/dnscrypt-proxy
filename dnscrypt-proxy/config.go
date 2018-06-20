@@ -25,6 +25,7 @@ type Config struct {
 	UseSyslog                bool     `toml:"use_syslog"`
 	ServerNames              []string `toml:"server_names"`
 	ListenAddresses          []string `toml:"listen_addresses"`
+	ManageAddresses          []string `toml:"manage_addresses"`
 	Daemonize                bool
 	Username                 string `toml:"username"`
 	ForceTCP                 bool   `toml:"force_tcp"`
@@ -76,6 +77,7 @@ func newConfig() Config {
 	return Config{
 		LogLevel:                 int(dlog.LogLevel()),
 		ListenAddresses:          []string{"127.0.0.1:53"},
+		ManageAddresses:          []string{},
 		Timeout:                  2500,
 		KeepAlive:                5,
 		CertRefreshDelay:         240,
@@ -301,6 +303,7 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 	proxy.serversInfo.lbStrategy = lbStrategy
 
 	proxy.listenAddresses = config.ListenAddresses
+	proxy.manageAddresses = config.ManageAddresses
 	proxy.daemonize = config.Daemonize
 	proxy.pluginBlockIPv6 = config.BlockIPv6
 	proxy.cache = config.Cache

@@ -29,6 +29,7 @@ type Proxy struct {
 	certIgnoreTimestamp          bool
 	mainProto                    string
 	listenAddresses              []string
+	manageAddresses              []string
 	daemonize                    bool
 	registeredServers            []RegisteredServer
 	pluginBlockIPv6              bool
