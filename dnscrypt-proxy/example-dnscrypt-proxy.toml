@@ -46,11 +46,6 @@ max_clients = 250
 # username = 'nobody'
 
 
-## Collect operational statistics (cache hits/misses, etc.)
-
-# collect_statistics = false
-
-
 ## Require servers (from static + remote sources) to satisfy specific properties
 
 # Use servers reachable over IPv4

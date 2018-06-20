@@ -167,7 +167,3 @@ func (plugin *PluginCloak) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 	pluginsState.action = PluginsActionSynth
 	return nil
 }
-
-func (plugin *PluginCloak) Status() error {
-	return nil
-}

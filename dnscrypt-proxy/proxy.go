@@ -63,7 +63,6 @@ type Proxy struct {
 	logMaxSize                   int
 	logMaxAge                    int
 	logMaxBackups                int
-	collectStatistics            bool
 }
 
 func (proxy *Proxy) StartProxy() {
@@ -171,9 +170,6 @@ func (proxy *Proxy) StartProxy() {
 		}
 	}()
 
-	if proxy.collectStatistics {
-		// Need some kind of interface for gathering statistics
-	}
 }
 
 func (proxy *Proxy) prefetcher(urlsToPrefetch *[]URLToPrefetch) {
@@ -317,11 +313,6 @@ func (proxy *Proxy) clientsCountDec() {
 			break
 		}
 	}
-}
-
-func (proxy *Proxy) CollectStatistics() {
-	pluginsState := NewPluginsState(proxy, "", nil)
-	pluginsState.CollectStatistics(&proxy.pluginsGlobals)
 }
 
 func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto string, serverProto string, query []byte, clientAddr *net.Addr, clientPc net.Conn) {

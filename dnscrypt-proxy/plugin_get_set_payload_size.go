@@ -46,7 +46,3 @@ func (plugin *PluginGetSetPayloadSize) Eval(pluginsState *PluginsState, msg *dns
 	}
 	return nil
 }
-
-func (plugin *PluginGetSetPayloadSize) Status() error {
-	return nil
-}

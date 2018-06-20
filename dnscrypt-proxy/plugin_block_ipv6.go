@@ -69,7 +69,3 @@ func (plugin *PluginBlockIPv6) Eval(pluginsState *PluginsState, msg *dns.Msg) er
 	pluginsState.returnCode = PluginsReturnCodeSynth
 	return nil
 }
-
-func (plugin *PluginBlockIPv6) Status() error {
-	return nil
-}

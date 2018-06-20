@@ -157,7 +157,3 @@ func (plugin *PluginBlockIP) Eval(pluginsState *PluginsState, msg *dns.Msg) erro
 	}
 	return nil
 }
-
-func (plugin *PluginBlockIP) Status() error {
-	return nil
-}

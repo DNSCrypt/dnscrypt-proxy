@@ -23,7 +23,6 @@ type Config struct {
 	LogLevel                 int      `toml:"log_level"`
 	LogFile                  *string  `toml:"log_file"`
 	UseSyslog                bool     `toml:"use_syslog"`
-	CollectStatistics        bool     `toml:"collect_statistics"`
 	ServerNames              []string `toml:"server_names"`
 	ListenAddresses          []string `toml:"listen_addresses"`
 	Daemonize                bool
@@ -76,7 +75,6 @@ type Config struct {
 func newConfig() Config {
 	return Config{
 		LogLevel:                 int(dlog.LogLevel()),
-		CollectStatistics:        false,
 		ListenAddresses:          []string{"127.0.0.1:53"},
 		Timeout:                  2500,
 		KeepAlive:                5,
@@ -241,7 +239,6 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 	proxy.logMaxAge = config.LogMaxAge
 	proxy.logMaxBackups = config.LogMaxBackups
 
-	proxy.collectStatistics = config.CollectStatistics
 	proxy.username = config.Username
 	if len(*username) > 0 {
 		proxy.username = *username

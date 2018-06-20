@@ -84,10 +84,6 @@ func (plugin *PluginCacheResponse) Eval(pluginsState *PluginsState, msg *dns.Msg
 	return nil
 }
 
-func (plugin *PluginCacheResponse) Status() error {
-	return nil
-}
-
 type PluginCache struct {
 	cachedResponses *CachedResponses
 	cacheStats      *CacheStats
@@ -115,20 +111,6 @@ func (plugin *PluginCache) Drop() error {
 }
 
 func (plugin *PluginCache) Reload() error {
-	return nil
-}
-
-func (plugin *PluginCache) Status() error {
-	plugin.cachedResponses.RLock()
-	entries := plugin.cachedResponses.cache.Len()
-	plugin.cachedResponses.RUnlock()
-
-	dlog.Noticef("%s status: %d entries, %d hits, %d misses, %d expirations",
-		plugin.Name(),
-		entries,
-		atomic.LoadUint64(&cacheStats.hits),
-		atomic.LoadUint64(&cacheStats.misses),
-		atomic.LoadUint64(&cacheStats.expirations))
 	return nil
 }
 
