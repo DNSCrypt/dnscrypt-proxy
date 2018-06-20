@@ -3,7 +3,9 @@ package main
 import (
 	"crypto/sha512"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
+	"net/http"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -24,6 +26,7 @@ type CachedResponses struct {
 }
 
 type CacheStats struct {
+	size        int32
 	hits        uint64
 	misses      uint64
 	expirations uint64
@@ -77,6 +80,7 @@ func (plugin *PluginCacheResponse) Eval(pluginsState *PluginsState, msg *dns.Msg
 		if err != nil {
 			return err
 		}
+		atomic.StoreInt32(&cacheStats.size, int32(pluginsState.cacheSize))
 	}
 	plugin.cachedResponses.cache.Add(cacheKey, cachedResponse)
 	updateTTL(msg, cachedResponse.expiration)
@@ -98,11 +102,14 @@ func (plugin *PluginCache) Description() string {
 }
 
 func (plugin *PluginCache) Init(proxy *Proxy) error {
+	atomic.StoreInt32(&cacheStats.size, 0)
 	atomic.StoreUint64(&cacheStats.hits, 0)
 	atomic.StoreUint64(&cacheStats.misses, 0)
 	atomic.StoreUint64(&cacheStats.expirations, 0)
 	plugin.cacheStats = &cacheStats
 
+	// proxy.RegisterPluginHTTPHandler(plugin.Name(), "/config", plugin.httpConfigHandler)
+	proxy.RegisterPluginHTTPHandler(plugin.Name(), "/status", plugin.httpStatusHandler)
 	return nil
 }
 
@@ -172,4 +179,38 @@ func computeCacheKey(pluginsState *PluginsState, msg *dns.Msg) ([32]byte, error)
 	var sum [32]byte
 	h.Sum(sum[:0])
 	return sum, nil
+}
+
+// func (plugin *PluginCache) httpConfigHandler(w http.ResponseWriter, r *http.Request) {
+// 	dlog.Noticef("Unhandled call to " + r.RequestURI)
+// }
+
+func (plugin *PluginCache) httpStatusHandler(responseWriter http.ResponseWriter, request *http.Request) {
+	dlog.Debugf("Handling call to " + request.RequestURI)
+
+	if request.Method != "GET" {
+		responseWriter.WriteHeader(405)
+		return
+	}
+
+	entries := 0
+	if plugin.cachedResponses != nil {
+		plugin.cachedResponses.RLock()
+		entries = plugin.cachedResponses.cache.Len()
+		plugin.cachedResponses.RUnlock()
+	}
+
+	jsonValues := map[string]interface{}{
+		"plugin": plugin.Name(),
+		"statistics": map[string]interface{}{
+			"entries":     entries,
+			"size":        atomic.LoadInt32(&cacheStats.size),
+			"hits":        atomic.LoadUint64(&cacheStats.hits),
+			"misses":      atomic.LoadUint64(&cacheStats.misses),
+			"expirations": atomic.LoadUint64(&cacheStats.expirations),
+		},
+	}
+
+	jsonEncoder := json.NewEncoder(responseWriter)
+	jsonEncoder.Encode(jsonValues)
 }
