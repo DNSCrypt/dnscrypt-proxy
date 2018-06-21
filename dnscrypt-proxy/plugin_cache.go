@@ -26,10 +26,9 @@ type CachedResponses struct {
 }
 
 type CacheStats struct {
-	size        int32
-	hits        uint64
-	misses      uint64
-	expirations uint64
+	size   int32
+	hits   uint64
+	misses uint64
 }
 
 var cachedResponses CachedResponses
@@ -90,7 +89,6 @@ func (plugin *PluginCacheResponse) Eval(pluginsState *PluginsState, msg *dns.Msg
 
 type PluginCache struct {
 	cachedResponses *CachedResponses
-	cacheStats      *CacheStats
 }
 
 func (plugin *PluginCache) Name() string {
@@ -105,8 +103,6 @@ func (plugin *PluginCache) Init(proxy *Proxy) error {
 	atomic.StoreInt32(&cacheStats.size, 0)
 	atomic.StoreUint64(&cacheStats.hits, 0)
 	atomic.StoreUint64(&cacheStats.misses, 0)
-	atomic.StoreUint64(&cacheStats.expirations, 0)
-	plugin.cacheStats = &cacheStats
 
 	// proxy.RegisterPluginHTTPHandler(plugin.Name(), "/config", plugin.httpConfigHandler)
 	proxy.RegisterPluginHTTPHandler(plugin.Name(), "/status", plugin.httpStatusHandler)
@@ -132,21 +128,21 @@ func (plugin *PluginCache) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 	defer plugin.cachedResponses.RUnlock()
 
 	if plugin.cachedResponses.cache == nil {
-		atomic.AddUint64(&plugin.cacheStats.misses, 1)
+		atomic.AddUint64(&cacheStats.misses, 1)
 		return nil
 	}
 	cachedAny, ok := plugin.cachedResponses.cache.Get(cacheKey)
 	if !ok {
-		atomic.AddUint64(&plugin.cacheStats.misses, 1)
+		atomic.AddUint64(&cacheStats.misses, 1)
 		return nil
 	}
 	cached := cachedAny.(CachedResponse)
 	if time.Now().After(cached.expiration) {
-		atomic.AddUint64(&plugin.cacheStats.expirations, 1)
+		atomic.AddUint64(&cacheStats.misses, 1)
 		return nil
 	}
 
-	atomic.AddUint64(&plugin.cacheStats.hits, 1)
+	atomic.AddUint64(&cacheStats.hits, 1)
 	updateTTL(&cached.msg, cached.expiration)
 
 	synth := cached.msg
@@ -207,7 +203,6 @@ func (plugin *PluginCache) httpStatusHandler(responseWriter http.ResponseWriter,
 			"size":        atomic.LoadInt32(&cacheStats.size),
 			"hits":        atomic.LoadUint64(&cacheStats.hits),
 			"misses":      atomic.LoadUint64(&cacheStats.misses),
-			"expirations": atomic.LoadUint64(&cacheStats.expirations),
 		},
 	}
 
