@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -189,23 +190,58 @@ func (plugin *PluginCache) httpStatusHandler(responseWriter http.ResponseWriter,
 		return
 	}
 
-	entries := 0
-	if plugin.cachedResponses != nil {
+	detailedStats := strings.Contains(request.RequestURI, "detailed=true")
+
+	validEntries := make([]interface{}, 0)
+	expiredEntries := make([]interface{}, 0)
+	count := 0
+
+	if detailedStats && plugin.cachedResponses != nil {
 		plugin.cachedResponses.RLock()
-		entries = plugin.cachedResponses.cache.Len()
+
+		count = plugin.cachedResponses.cache.Len()
+		for _, key := range plugin.cachedResponses.cache.Keys() {
+			val, _ := plugin.cachedResponses.cache.Peek(key)
+			cached := val.(CachedResponse)
+
+			if time.Now().Before(cached.expiration) {
+				validEntries = append(validEntries, dnsMsgToJSON(&cached.msg))
+			} else {
+				expiredEntries = append(expiredEntries, dnsMsgToJSON(&cached.msg))
+			}
+		}
+
 		plugin.cachedResponses.RUnlock()
 	}
 
 	jsonValues := map[string]interface{}{
 		"plugin": plugin.Name(),
 		"statistics": map[string]interface{}{
-			"entries":     entries,
-			"size":        atomic.LoadInt32(&cacheStats.size),
-			"hits":        atomic.LoadUint64(&cacheStats.hits),
-			"misses":      atomic.LoadUint64(&cacheStats.misses),
+			"hits":   atomic.LoadUint64(&cacheStats.hits),
+			"misses": atomic.LoadUint64(&cacheStats.misses),
 		},
+		"size": atomic.LoadInt32(&cacheStats.size),
 	}
 
-	jsonEncoder := json.NewEncoder(responseWriter)
-	jsonEncoder.Encode(jsonValues)
+	if detailedStats {
+		jsonValues["entries"] = map[string]interface{}{
+			"count":   count,
+			"valid":   validEntries,
+			"expired": expiredEntries,
+		}
+	}
+
+	responseWriter.Header().Add("Content-Type", "application/json")
+	json.NewEncoder(responseWriter).Encode(jsonValues)
+}
+
+func dnsMsgToJSON(msg *dns.Msg) interface{} {
+	message := map[string]interface{}{
+		"question": map[string]interface{}{
+			"name":  msg.Question[0].Name,
+			"class": dns.Class(msg.Question[0].Qclass).String(),
+			"type":  dns.Type(msg.Question[0].Qtype).String(),
+		},
+	}
+	return message
 }
