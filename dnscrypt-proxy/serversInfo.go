@@ -59,7 +59,7 @@ const (
 	LBStrategyPH
 )
 
-const DefaultLBStrategy = LBStrategyRandom
+const DefaultLBStrategy = LBStrategyFastest
 const DefaultLBStrategyFastestCount = 2
 
 type ServersInfo struct {
