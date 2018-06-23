@@ -438,6 +438,6 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 
 func NewProxy() Proxy {
 	return Proxy{
-		serversInfo: ServersInfo{lbStrategy: DefaultLBStrategy},
+		serversInfo: ServersInfo{lbStrategy: DefaultLBStrategy, lbStrategyFastestCount: DefaultLBStrategyFastestCount},
 	}
 }
