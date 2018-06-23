@@ -35,6 +35,7 @@ type Config struct {
 	CertIgnoreTimestamp      bool   `toml:"cert_ignore_timestamp"`
 	EphemeralKeys            bool   `toml:"dnscrypt_ephemeral_keys"`
 	LBStrategy               string `toml:"lb_strategy"`
+	LBStrategyFastestCount   int    `toml:"lb_strategy_fastest_count"`
 	BlockIPv6                bool   `toml:"block_ipv6"`
 	Cache                    bool
 	CacheSize                int                        `toml:"cache_size"`
@@ -81,6 +82,7 @@ func newConfig() Config {
 		CertRefreshDelay:         240,
 		CertIgnoreTimestamp:      false,
 		EphemeralKeys:            false,
+		LBStrategyFastestCount:   DefaultLBStrategyFastestCount,
 		Cache:                    true,
 		CacheSize:                512,
 		CacheNegTTL:              0,
@@ -287,18 +289,19 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 	switch strings.ToLower(config.LBStrategy) {
 	case "":
 		// default
-	case "p2":
-		lbStrategy = LBStrategyP2
-	case "ph":
-		lbStrategy = LBStrategyPH
 	case "fastest":
 		lbStrategy = LBStrategyFastest
 	case "random":
 		lbStrategy = LBStrategyRandom
+	case "ph":
+		lbStrategy = LBStrategyPH
 	default:
 		dlog.Warnf("Unknown load balancing strategy: [%s]", config.LBStrategy)
 	}
 	proxy.serversInfo.lbStrategy = lbStrategy
+	if config.LBStrategyFastestCount > 0 {
+		proxy.serversInfo.lbStrategyFastestCount = config.LBStrategyFastestCount
+	}
 
 	proxy.listenAddresses = config.ListenAddresses
 	proxy.daemonize = config.Daemonize

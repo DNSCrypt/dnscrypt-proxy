@@ -101,9 +101,11 @@ timeout = 2500
 keepalive = 30
 
 
-## Load-balancing strategy: 'p2' (default), 'ph', 'fastest' or 'random'
+## Load-balancing strategy: 
+## 'fastest' (default, picks 'lb_strategy_fastest_count' fastest servers), 'ph' (fastest half) or 'random'
 
-# lb_strategy = 'p2'
+# lb_strategy = 'fastest'
+# lb_strategy_fastest_count = 2
 
 
 ## Log level (0-6, default: 2 - 0 is very verbose, 6 only contains fatal errors)
