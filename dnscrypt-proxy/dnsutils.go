@@ -119,7 +119,7 @@ func setMaxTTL(msg *dns.Msg, ttl uint32) {
 	}
 	for _, rr := range msg.Extra {
 		header := rr.Header()
-		if header.Class == dns.ClassINET && header.Rrtype == dns.TypeOPT {
+		if header.Rrtype == dns.TypeOPT {
 			continue
 		}
 		if ttl < rr.Header().Ttl {
@@ -139,7 +139,7 @@ func updateTTL(msg *dns.Msg, expiration time.Time) {
 	}
 	for _, rr := range msg.Extra {
 		header := rr.Header()
-		if header.Class == dns.ClassINET && header.Rrtype == dns.TypeOPT {
+		if header.Rrtype == dns.TypeOPT {
 			continue
 		}
 		rr.Header().Ttl = ttl
