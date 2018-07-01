@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"syscall"
+	"time"
 
 	"github.com/jedisct1/dlog"
 )
@@ -40,15 +41,18 @@ func (proxy *Proxy) dropPrivilege(userStr string, fds []*os.File) {
 	args = args[1:]
 	args = append(args, "-child")
 
-	cmd := exec.Command(path, args...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.ExtraFiles = fds
-	cmd.SysProcAttr = &syscall.SysProcAttr{}
-	cmd.SysProcAttr.Credential = &syscall.Credential{Uid: uint32(uid), Gid: uint32(gid)}
 	dlog.Notice("Dropping privileges")
-	if err := cmd.Run(); err != nil {
-		dlog.Fatal(err)
+	for {
+		cmd := exec.Command(path, args...)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		cmd.ExtraFiles = fds
+		cmd.SysProcAttr = &syscall.SysProcAttr{}
+		cmd.SysProcAttr.Credential = &syscall.Credential{Uid: uint32(uid), Gid: uint32(gid)}
+		if cmd.Run() == nil {
+			break
+		}
+		time.Sleep(1 * time.Second)
 	}
 	os.Exit(0)
 }
