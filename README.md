@@ -25,10 +25,9 @@ A flexible DNS proxy, with support for modern encrypted DNS protocols such as [D
 * Load balancing: pick a set of resolvers, dnscrypt-proxy will automatically measure and keep track of their speed, and balance the traffic across the fastest available ones.
 * Cloaking: like a `HOSTS` file on steroids, that can return preconfigured addresses for specific names, or resolve and return the IP address of other names. This can be used for local development as well as to enforce safe search results on Google, Yahoo and Bing.
 * Automatic background updates of resolvers lists
-* Can force outgoing connections to use TCP; useful with tunnels such as Tor.
+* Can force outgoing connections to use TCP
+* Supports SOCKS proxies
 * Compatible with DNSSEC
-
-It includes all the major features from dnscrypt-proxy 1.9.5, with improved reliability, flexibility, usability and performance.
 
 ## Pre-built binaries
 
