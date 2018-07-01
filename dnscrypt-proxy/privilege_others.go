@@ -37,10 +37,7 @@ func (proxy *Proxy) dropPrivilege(userStr string, fds []*os.File) {
 		dlog.Fatal(err)
 	}
 
-	// remove arg[0]
-	copy(args[0:], args[0+1:])
-	args[len(args)-1] = ""
-	args = args[:len(args)-1]
+	args = args[1:]
 	args = append(args, "-child")
 
 	cmd := exec.Command(path, args...)
