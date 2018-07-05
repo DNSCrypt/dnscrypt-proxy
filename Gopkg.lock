@@ -167,7 +167,7 @@
     "ipv6",
     "proxy"
   ]
-  revision = "afe8f62b1d6bbd81f31868121a50b06d8188e1f9"
+  revision = "ed29d75add3d7c4bf7ca65aac0c6df3d1420216f"
 
 [[projects]]
   branch = "master"
@@ -180,7 +180,7 @@
     "windows/svc/eventlog",
     "windows/svc/mgr"
   ]
-  revision = "a200a19cb90b19de298170992778b1fda7217bd6"
+  revision = "151529c776cdc58ddbe7963ba9af779f3577b419"
 
 [[projects]]
   name = "golang.org/x/text"

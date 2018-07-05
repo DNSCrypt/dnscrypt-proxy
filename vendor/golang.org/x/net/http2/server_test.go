@@ -3762,6 +3762,7 @@ func TestIssue20704Race(t *testing.T) {
 
 func TestServer_Rejects_TooSmall(t *testing.T) {
 	testServerResponse(t, func(w http.ResponseWriter, r *http.Request) error {
+		ioutil.ReadAll(r.Body)
 		return nil
 	}, func(st *serverTester) {
 		st.writeHeaders(HeadersFrameParam{
@@ -3776,5 +3777,67 @@ func TestServer_Rejects_TooSmall(t *testing.T) {
 		st.writeData(1, true, []byte("12345"))
 
 		st.wantRSTStream(1, ErrCodeProtocol)
+	})
+}
+
+// Tests that a handler setting "Connection: close" results in a GOAWAY being sent,
+// and the connection still completing.
+func TestServerHandlerConnectionClose(t *testing.T) {
+	unblockHandler := make(chan bool, 1)
+	defer close(unblockHandler) // backup; in case of errors
+	testServerResponse(t, func(w http.ResponseWriter, r *http.Request) error {
+		w.Header().Set("Connection", "close")
+		w.Header().Set("Foo", "bar")
+		w.(http.Flusher).Flush()
+		<-unblockHandler
+		return nil
+	}, func(st *serverTester) {
+		st.writeHeaders(HeadersFrameParam{
+			StreamID:      1,
+			BlockFragment: st.encodeHeader(),
+			EndStream:     true,
+			EndHeaders:    true,
+		})
+		var sawGoAway bool
+		var sawRes bool
+		for {
+			f, err := st.readFrame()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			switch f := f.(type) {
+			case *GoAwayFrame:
+				sawGoAway = true
+				unblockHandler <- true
+				if f.LastStreamID != 1 || f.ErrCode != ErrCodeNo {
+					t.Errorf("unexpected GOAWAY frame: %v", summarizeFrame(f))
+				}
+			case *HeadersFrame:
+				goth := st.decodeHeader(f.HeaderBlockFragment())
+				if !sawGoAway {
+					t.Fatalf("unexpected Headers frame before GOAWAY: %s, %v", summarizeFrame(f), goth)
+				}
+				wanth := [][2]string{
+					{":status", "200"},
+					{"foo", "bar"},
+				}
+				if !reflect.DeepEqual(goth, wanth) {
+					t.Errorf("got headers %v; want %v", goth, wanth)
+				}
+				sawRes = true
+			case *DataFrame:
+				if f.StreamID != 1 || !f.StreamEnded() || len(f.Data()) != 0 {
+					t.Errorf("unexpected DATA frame: %v", summarizeFrame(f))
+				}
+			default:
+				t.Logf("unexpected frame: %v", summarizeFrame(f))
+			}
+		}
+		if !sawRes {
+			t.Errorf("didn't see response")
+		}
 	})
 }
