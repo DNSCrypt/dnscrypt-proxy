@@ -3,9 +3,9 @@ package main
 import (
 	"io"
 	"io/ioutil"
-	"os"
 	"math/rand"
 	"net"
+	"os"
 	"sync/atomic"
 	"time"
 
@@ -119,7 +119,7 @@ func (proxy *Proxy) StartProxy() {
 				FileDescriptors = append(FileDescriptors, fdUDP)
 				FileDescriptors = append(FileDescriptors, fdTCP)
 
-			// if 'username' is set and we are the child process
+				// if 'username' is set and we are the child process
 			} else {
 				// child
 				listenerUDP, err := net.FilePacketConn(os.NewFile(uintptr(3+FileDescriptorNum), "listenerUDP"))
@@ -159,16 +159,18 @@ func (proxy *Proxy) StartProxy() {
 		dlog.Notice("dnscrypt-proxy is waiting for at least one server to be reachable")
 	}
 	proxy.prefetcher(&proxy.urlsToPrefetch)
-	go func() {
-		for {
-			delay := proxy.certRefreshDelay
-			if proxy.serversInfo.liveServers() == 0 {
-				delay = proxy.certRefreshDelayAfterFailure
+	if len(proxy.serversInfo.registeredServers) > 0 {
+		go func() {
+			for {
+				delay := proxy.certRefreshDelay
+				if proxy.serversInfo.liveServers() == 0 {
+					delay = proxy.certRefreshDelayAfterFailure
+				}
+				clocksmith.Sleep(delay)
+				proxy.serversInfo.refresh(proxy)
 			}
-			clocksmith.Sleep(delay)
-			proxy.serversInfo.refresh(proxy)
-		}
-	}()
+		}()
+	}
 }
 
 func (proxy *Proxy) prefetcher(urlsToPrefetch *[]URLToPrefetch) {
@@ -318,7 +320,7 @@ func (proxy *Proxy) clientsCountDec() {
 }
 
 func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto string, serverProto string, query []byte, clientAddr *net.Addr, clientPc net.Conn) {
-	if len(query) < MinDNSPacketSize || serverInfo == nil {
+	if len(query) < MinDNSPacketSize {
 		return
 	}
 	pluginsState := NewPluginsState(proxy, clientProto, clientAddr)
@@ -342,7 +344,7 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 	} else {
 		pluginsState.returnCode = PluginsReturnCodeForward
 	}
-	if len(response) == 0 {
+	if len(response) == 0 && serverInfo != nil {
 		var ttl *uint32
 		if serverInfo.Proto == stamps.StampProtoTypeDNSCrypt {
 			sharedKey, encryptedQuery, clientNonce, err := proxy.Encrypt(serverInfo, query, serverProto)
@@ -408,6 +410,14 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 			serverInfo.noticeSuccess(proxy)
 		}
 	}
+	if len(response) < MinDNSPacketSize || len(response) > MaxDNSPacketSize {
+		pluginsState.returnCode = PluginsReturnCodeParseError
+		pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
+		if serverInfo != nil {
+			serverInfo.noticeFailure(proxy)
+		}
+		return
+	}
 	if clientProto == "udp" {
 		if len(response) > MaxDNSUDPPacketSize {
 			response, err = TruncatedResponse(response)
@@ -428,7 +438,9 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 		if err != nil {
 			pluginsState.returnCode = PluginsReturnCodeParseError
 			pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
-			serverInfo.noticeFailure(proxy)
+			if serverInfo != nil {
+				serverInfo.noticeFailure(proxy)
+			}
 			return
 		}
 		clientPc.Write(response)

@@ -70,6 +70,7 @@ type Config struct {
 	TLSCipherSuite           []uint16                   `toml:"tls_cipher_suite"`
 	NetprobeAddress          string                     `toml:"netprobe_address"`
 	NetprobeTimeout          int                        `toml:"netprobe_timeout"`
+	OfflineMode              bool                       `toml:"offline_mode"`
 }
 
 func newConfig() Config {
@@ -104,6 +105,7 @@ func newConfig() Config {
 		TLSCipherSuite:           nil,
 		NetprobeAddress:          "9.9.9.9:53",
 		NetprobeTimeout:          30,
+		OfflineMode:              false,
 	}
 }
 
@@ -397,12 +399,13 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 	}
 
 	netProbe(config.NetprobeAddress, config.NetprobeTimeout)
-
-	if err := config.loadSources(proxy); err != nil {
-		return err
-	}
-	if len(proxy.registeredServers) == 0 {
-		return errors.New("No servers configured")
+	if !config.OfflineMode {
+		if err := config.loadSources(proxy); err != nil {
+			return err
+		}
+		if len(proxy.registeredServers) == 0 {
+			return errors.New("No servers configured")
+		}
 	}
 	if *list || *listAll {
 		config.printRegisteredServers(proxy, *jsonOutput)

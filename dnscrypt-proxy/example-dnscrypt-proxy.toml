@@ -186,6 +186,13 @@ ignore_system_dns = false
 netprobe_timeout = 30
 
 
+## Offline mode - Do not use any remote encrypted servers.
+## The proxy will remain fully functional to respond to queries that
+## plugins can handle directly (forwarding, cloaking, ...)
+
+# offline_mode = false
+
+
 ## Automatic log files rotation
 
 # Maximum log files size in MB
