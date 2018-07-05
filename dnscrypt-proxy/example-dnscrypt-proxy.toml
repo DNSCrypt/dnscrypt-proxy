@@ -41,8 +41,12 @@ listen_addresses = ['127.0.0.1:53', '[::1]:53']
 max_clients = 250
 
 
-## Switch to a non-privileged system user after listening sockets have been created
-## Note: This option is unsupported on Windows
+## Switch to a non-privileged system user after listening sockets have been created.
+## Two processes will be running.
+## The first one will keep root privileges, but is only a supervisor, that does nothing
+## except create the sockets, manage the service, and restart it if it crashes.
+## The second process is the service itself, and that one will always run as a different
+## user. Note: this feature is currently unsupported on Windows.
 
 # username = 'nobody'
 
