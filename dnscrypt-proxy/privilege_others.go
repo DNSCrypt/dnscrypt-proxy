@@ -39,6 +39,7 @@ func (proxy *Proxy) dropPrivilege(userStr string, fds []*os.File) {
 	}
 
 	SystemDNotify()
+	PledgeChild()
 
 	args = args[1:]
 	args = append(args, "-child")
