@@ -3817,9 +3817,6 @@ func TestServerHandlerConnectionClose(t *testing.T) {
 				}
 			case *HeadersFrame:
 				goth := st.decodeHeader(f.HeaderBlockFragment())
-				if !sawGoAway {
-					t.Fatalf("unexpected Headers frame before GOAWAY: %s, %v", summarizeFrame(f), goth)
-				}
 				wanth := [][2]string{
 					{":status", "200"},
 					{"foo", "bar"},
@@ -3835,6 +3832,9 @@ func TestServerHandlerConnectionClose(t *testing.T) {
 			default:
 				t.Logf("unexpected frame: %v", summarizeFrame(f))
 			}
+		}
+		if !sawGoAway {
+			t.Errorf("didn't see GOAWAY")
 		}
 		if !sawRes {
 			t.Errorf("didn't see response")

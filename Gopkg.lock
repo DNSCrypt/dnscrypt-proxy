@@ -167,20 +167,21 @@
     "ipv6",
     "proxy"
   ]
-  revision = "ed29d75add3d7c4bf7ca65aac0c6df3d1420216f"
+  revision = "32a936f46389aa10549d60bd7833e54b01685d09"
 
 [[projects]]
   branch = "master"
   name = "golang.org/x/sys"
   packages = [
     "cpu",
+    "unix",
     "windows",
     "windows/registry",
     "windows/svc",
     "windows/svc/eventlog",
     "windows/svc/mgr"
   ]
-  revision = "151529c776cdc58ddbe7963ba9af779f3577b419"
+  revision = "3c6ecd8f22c6f40fbeec94c000a069d7d87c7624"
 
 [[projects]]
   name = "golang.org/x/text"
@@ -212,6 +213,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "c2408310ad6e3a3b8987a6b1aeac25d10b74502190596d85af5d27ebbf8896d0"
+  inputs-digest = "2e3662737bdfec3295cf1f397f5584d97fbfd99973ab0351fafe66049bfa79bb"
   solver-name = "gps-cdcl"
   solver-version = 1
