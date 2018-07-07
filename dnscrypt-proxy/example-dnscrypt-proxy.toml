@@ -50,7 +50,7 @@ max_clients = 250
 ## Note (1): this feature is currently unsupported on Windows.
 ## Note (2): this feature is not compatible with systemd socket activation.
 
-# username = 'nobody'
+# user_name = 'nobody'
 
 
 ## Require servers (from static + remote sources) to satisfy specific properties

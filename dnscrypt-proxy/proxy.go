@@ -16,7 +16,7 @@ import (
 )
 
 type Proxy struct {
-	username                     string
+	userName                     string
 	child                        bool
 	proxyPublicKey               [32]byte
 	proxySecretKey               [32]byte
@@ -85,8 +85,8 @@ func (proxy *Proxy) StartProxy() {
 			dlog.Fatal(err)
 		}
 
-		// if 'username' is not set, continue as before (Todo: refactor for DRYniss)
-		if !(len(proxy.username) > 0) {
+		// if 'userName' is not set, continue as before
+		if !(len(proxy.userName) > 0) {
 			if err := proxy.udpListenerFromAddr(listenUDPAddr); err != nil {
 				dlog.Fatal(err)
 			}
@@ -94,7 +94,7 @@ func (proxy *Proxy) StartProxy() {
 				dlog.Fatal(err)
 			}
 		} else {
-			// if 'username' is set and we are the parent process
+			// if 'userName' is set and we are the parent process
 			if !proxy.child {
 				// parent
 				listenerUDP, err := net.ListenUDP("udp", listenUDPAddr)
@@ -119,7 +119,7 @@ func (proxy *Proxy) StartProxy() {
 				FileDescriptors = append(FileDescriptors, fdUDP)
 				FileDescriptors = append(FileDescriptors, fdTCP)
 
-				// if 'username' is set and we are the child process
+				// if 'userName' is set and we are the child process
 			} else {
 				// child
 				listenerUDP, err := net.FilePacketConn(os.NewFile(uintptr(3+FileDescriptorNum), "listenerUDP"))
@@ -143,9 +143,9 @@ func (proxy *Proxy) StartProxy() {
 		}
 	}
 
-	// if 'username' is set and we are the parent process drop privilege and exit
-	if len(proxy.username) > 0 && !proxy.child {
-		proxy.dropPrivilege(proxy.username, FileDescriptors)
+	// if 'userName' is set and we are the parent process drop privilege and exit
+	if len(proxy.userName) > 0 && !proxy.child {
+		proxy.dropPrivilege(proxy.userName, FileDescriptors)
 	}
 	if err := proxy.SystemDListeners(); err != nil {
 		dlog.Fatal(err)
