@@ -2,7 +2,7 @@
 
 package main
 
-import "unix"
+import "golang.org/x/sys/unix"
 
 func Pledge() {
 	unix.Pledge("stdio rpath wpath cpath tmppath inet fattr flock dns getpw sendfd recvfd proc exec id",
