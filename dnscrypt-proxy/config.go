@@ -240,6 +240,8 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 	proxy.logMaxAge = config.LogMaxAge
 	proxy.logMaxBackups = config.LogMaxBackups
 
+	proxy.userName = config.UserName
+
 	proxy.child = *child
 	proxy.xTransport = NewXTransport()
 	proxy.xTransport.tlsDisableSessionTickets = config.TLSDisableSessionTickets
