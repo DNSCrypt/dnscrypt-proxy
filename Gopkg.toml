@@ -8,10 +8,6 @@
 
 [[constraint]]
   branch = "master"
-  name = "github.com/VividCortex/godaemon"
-
-[[constraint]]
-  branch = "master"
   name = "github.com/agl/ed25519"
 
 [[constraint]]
@@ -64,7 +60,7 @@
 
 [[constraint]]
   name = "github.com/miekg/dns"
-  version = "1.0.7"
+  version = "1.0.8"
 
 [[constraint]]
   branch = "master"
