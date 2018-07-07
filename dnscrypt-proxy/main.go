@@ -25,6 +25,8 @@ type App struct {
 func main() {
 	dlog.Init("dnscrypt-proxy", dlog.SeverityNotice, "DAEMON")
 
+	Pledge()
+
 	pwd, err := os.Getwd()
 	if err != nil {
 		dlog.Fatal("Unable to find the path to the current directory")
