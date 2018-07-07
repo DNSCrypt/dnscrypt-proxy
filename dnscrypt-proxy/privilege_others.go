@@ -38,6 +38,8 @@ func (proxy *Proxy) dropPrivilege(userStr string, fds []*os.File) {
 		dlog.Fatal(err)
 	}
 
+	SystemDNotify()
+
 	args = args[1:]
 	args = append(args, "-child")
 

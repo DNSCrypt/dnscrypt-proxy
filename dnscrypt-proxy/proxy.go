@@ -153,7 +153,9 @@ func (proxy *Proxy) StartProxy() {
 	liveServers, err := proxy.serversInfo.refresh(proxy)
 	if liveServers > 0 {
 		dlog.Noticef("dnscrypt-proxy is ready - live servers: %d", liveServers)
-		SystemDNotify()
+		if !proxy.child {
+			SystemDNotify()
+		}
 	} else if err != nil {
 		dlog.Error(err)
 		dlog.Notice("dnscrypt-proxy is waiting for at least one server to be reachable")
