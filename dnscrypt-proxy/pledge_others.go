@@ -5,3 +5,7 @@ package main
 func Pledge() {
 
 }
+
+func PledgeChild() {
+
+}
