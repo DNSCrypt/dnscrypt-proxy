@@ -255,6 +255,7 @@ func (source *Source) parseV2(prefix string) ([]RegisteredServer, error) {
 		}
 		stamp, err := stamps.NewServerStampFromString(stampStr)
 		if err != nil {
+			dlog.Errorf("Invalid or unsupported stamp: [%v]", stampStr)
 			return registeredServers, err
 		}
 		registeredServer := RegisteredServer{
