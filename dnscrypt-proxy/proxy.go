@@ -297,6 +297,9 @@ func (proxy *Proxy) exchangeWithTCPServer(serverInfo *ServerInfo, sharedKey *[32
 	pc.Write(encryptedQuery)
 	encryptedResponse, err := ReadPrefixed(&pc)
 	pc.Close()
+	if err != nil {
+		return nil, err
+	}
 	return proxy.Decrypt(serverInfo, sharedKey, encryptedResponse, clientNonce)
 }
 
