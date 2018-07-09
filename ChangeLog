@@ -1,4 +1,16 @@
 
+* Version 2.0.16
+ - On Unix-like systems, the server can run as an unprivileged user,
+and the main process will automatically restart if an error occurs.
+ - pledge() on OpenBSD.
+ - New "offline" mode to serve queries locally without contacting any
+upstream servers. This can be especially useful along with the
+cloaking module for local development.
+ - New logo.
+ - TTL of OPT records is properly ignored by the caching module.
+ - The proxy doesn't quit any more if new TCP connections cannot be
+created.
+
 * Version 2.0.15
  - Support for proxies (HTTP/SOCKS) was added. All it takes to route
 all TCP queries to Tor is add `proxy = "socks5://127.0.0.1:9050"` to
