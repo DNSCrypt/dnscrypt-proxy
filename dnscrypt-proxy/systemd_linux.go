@@ -4,7 +4,6 @@ import (
 	"net"
 
 	"github.com/coreos/go-systemd/activation"
-	"github.com/coreos/go-systemd/daemon"
 	"github.com/jedisct1/dlog"
 )
 
@@ -27,8 +26,4 @@ func (proxy *Proxy) SystemDListeners() error {
 	}
 
 	return nil
-}
-
-func SystemDNotify() {
-	daemon.SdNotify(false, "READY=1")
 }

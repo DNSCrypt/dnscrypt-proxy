@@ -38,7 +38,7 @@ func (proxy *Proxy) dropPrivilege(userStr string, fds []*os.File) {
 		dlog.Fatal(err)
 	}
 
-	SystemDNotify()
+	ServiceManagerReadyNotify()
 
 	args = args[1:]
 	args = append(args, "-child")

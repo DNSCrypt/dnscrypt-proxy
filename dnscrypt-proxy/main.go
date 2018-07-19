@@ -45,7 +45,7 @@ func main() {
 		dlog.Debug(err)
 	}
 	app.proxy = NewProxy()
-
+	_ = ServiceManagerStartNotify()
 	if err := ConfigLoad(&app.proxy, svcFlag); err != nil {
 		dlog.Fatal(err)
 	}
