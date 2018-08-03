@@ -110,6 +110,7 @@ func (app *App) Stop(service service.Service) error {
 	if pidFilePath := pidfile.GetPidfilePath(); len(pidFilePath) > 1 {
 		os.Remove(pidFilePath)
 	}
+	killChild()
 	dlog.Notice("Stopped.")
 	return nil
 }
