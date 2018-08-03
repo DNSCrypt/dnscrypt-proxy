@@ -14,7 +14,16 @@ import (
 	"github.com/jedisct1/dlog"
 )
 
+var cmd *exec.Cmd
+
 func (proxy *Proxy) dropPrivilege(userStr string, fds []*os.File) {
+	currentUser, err := user.Current()
+	if err != nil {
+		dlog.Fatal(err)
+	}
+	if currentUser.Uid != "0" {
+		dlog.Fatal("I need root permissions. Try again with 'sudo'")
+	}
 	user, err := user.Lookup(userStr)
 	args := os.Args
 
@@ -45,7 +54,7 @@ func (proxy *Proxy) dropPrivilege(userStr string, fds []*os.File) {
 
 	dlog.Notice("Dropping privileges")
 	for {
-		cmd := exec.Command(path, args...)
+		cmd = exec.Command(path, args...)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		cmd.ExtraFiles = fds
@@ -57,4 +66,12 @@ func (proxy *Proxy) dropPrivilege(userStr string, fds []*os.File) {
 		time.Sleep(1 * time.Second)
 	}
 	os.Exit(0)
+}
+
+func killChild() {
+	if cmd != nil {
+		if err := cmd.Process.Kill(); err != nil {
+			dlog.Fatal("Failed to kill child process.")
+		}
+	}
 }

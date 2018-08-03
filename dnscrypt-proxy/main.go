@@ -98,8 +98,8 @@ func (app *App) Start(service service.Service) error {
 }
 
 func (app *App) AppMain(proxy *Proxy) {
-	proxy.StartProxy()
 	pidfile.Write()
+	proxy.StartProxy()
 	<-app.quit
 	dlog.Notice("Quit signal received...")
 	app.wg.Done()
@@ -110,6 +110,7 @@ func (app *App) Stop(service service.Service) error {
 	if pidFilePath := pidfile.GetPidfilePath(); len(pidFilePath) > 1 {
 		os.Remove(pidFilePath)
 	}
+	killChild()
 	dlog.Notice("Stopped.")
 	return nil
 }
