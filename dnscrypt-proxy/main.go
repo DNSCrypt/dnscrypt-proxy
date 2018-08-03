@@ -98,8 +98,8 @@ func (app *App) Start(service service.Service) error {
 }
 
 func (app *App) AppMain(proxy *Proxy) {
-	proxy.StartProxy()
 	pidfile.Write()
+	proxy.StartProxy()
 	<-app.quit
 	dlog.Notice("Quit signal received...")
 	app.wg.Done()
