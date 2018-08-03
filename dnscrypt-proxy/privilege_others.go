@@ -15,6 +15,13 @@ import (
 )
 
 func (proxy *Proxy) dropPrivilege(userStr string, fds []*os.File) {
+	currentUser, err := user.Current()
+	if err != nil {
+		dlog.Fatal(err)
+	}
+	if currentUser.Uid != "0" {
+		dlog.Fatal("I need root permissions. Try again with 'sudo'")
+	}
 	user, err := user.Lookup(userStr)
 	args := os.Args
 
