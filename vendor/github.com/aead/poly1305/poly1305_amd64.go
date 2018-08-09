@@ -7,13 +7,11 @@
 package poly1305
 
 import (
+	"golang.org/x/sys/cpu"
 	"io"
 )
 
-var useAVX2 = supportsAVX2()
-
-//go:noescape
-func supportsAVX2() bool
+var useAVX2 = cpu.X86.HasAVX2
 
 //go:noescape
 func initialize(state *[7]uint64, key *[32]byte)

@@ -12,7 +12,7 @@ func init() {
 	useSSE2 = cpu.X86.HasSSE2
 	useSSSE3 = cpu.X86.HasSSSE3
 	useAVX = cpu.X86.HasAVX
-	useAVX2 = cpu.X86.HasAVX2 && false // disable until #16 is fixed
+	useAVX2 = cpu.X86.HasAVX2
 }
 
 // This function is implemented in chacha_amd64.s

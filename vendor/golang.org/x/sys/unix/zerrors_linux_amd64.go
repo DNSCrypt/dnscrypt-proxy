@@ -1076,6 +1076,8 @@ const (
 	NETLINK_UNUSED                       = 0x1
 	NETLINK_USERSOCK                     = 0x2
 	NETLINK_XFRM                         = 0x6
+	NETNSA_MAX                           = 0x3
+	NETNSA_NSID_NOT_ASSIGNED             = -0x1
 	NFNETLINK_V0                         = 0x0
 	NFNLGRP_ACCT_QUOTA                   = 0x8
 	NFNLGRP_CONNTRACK_DESTROY            = 0x3
@@ -1428,6 +1430,9 @@ const (
 	RAMFS_MAGIC                          = 0x858458f6
 	RDTGROUP_SUPER_MAGIC                 = 0x7655821
 	REISERFS_SUPER_MAGIC                 = 0x52654973
+	RENAME_EXCHANGE                      = 0x2
+	RENAME_NOREPLACE                     = 0x1
+	RENAME_WHITEOUT                      = 0x4
 	RLIMIT_AS                            = 0x9
 	RLIMIT_CORE                          = 0x4
 	RLIMIT_CPU                           = 0x0

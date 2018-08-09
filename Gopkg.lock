@@ -2,142 +2,185 @@
 
 
 [[projects]]
+  digest = "1:b16fbfbcc20645cb419f78325bb2e85ec729b338e996a228124d68931a6f2a37"
   name = "github.com/BurntSushi/toml"
   packages = ["."]
+  pruneopts = "UT"
   revision = "b26d9c308763d68093482582cea63d69be07a0f0"
   version = "v0.3.0"
 
 [[projects]]
+  digest = "1:e626376fab8608a972d47e91b3c1bbbddaecaf1d42b82be6dcc52d10a7557893"
   name = "github.com/VividCortex/ewma"
   packages = ["."]
+  pruneopts = "UT"
   revision = "b24eb346a94c3ba12c1da1e564dbac1b498a77ce"
   version = "v1.1.1"
 
 [[projects]]
   branch = "master"
+  digest = "1:6d6d9309d10d5dffaaf3a56c4b2570dec62152f978ac3566b13bdfafd63f32fb"
   name = "github.com/aead/chacha20"
   packages = ["chacha"]
-  revision = "e2538746bfea853aaa589feb8ec46bd46ee78f86"
+  pruneopts = "UT"
+  revision = "8b13a72661dae6e9e5dea04f344f0dc95ea29547"
 
 [[projects]]
   branch = "master"
+  digest = "1:82df2686fe2e0cc2894fbec00098fe2efeacbda08af8087a86d9eeea58699d49"
   name = "github.com/aead/poly1305"
   packages = ["."]
-  revision = "969857f48f7ae439b6d2449ed1dcd9aaabc49c67"
+  pruneopts = "UT"
+  revision = "3fee0db0b63511234f7230da50b72414f6258f10"
 
 [[projects]]
   branch = "master"
+  digest = "1:47ea4fbe2ab4aeb9808502c51e657041c2e49b36b83fc1c1a349135cdf16342f"
   name = "github.com/agl/ed25519"
   packages = [
     ".",
-    "edwards25519"
+    "edwards25519",
   ]
+  pruneopts = "UT"
   revision = "5312a61534124124185d41f09206b9fef1d88403"
 
 [[projects]]
+  digest = "1:9ddcd6732e302feb09865d8bfbebd55c295d95915ee0a530fd22b51851d852e4"
   name = "github.com/coreos/go-systemd"
   packages = [
     "activation",
-    "daemon"
+    "daemon",
   ]
+  pruneopts = "UT"
   revision = "39ca1b05acc7ad1220e09f133283b8859a8b71ab"
   version = "v17"
 
 [[projects]]
   branch = "master"
+  digest = "1:b78a58e00a1b951af4803ddfefbbcae14c7cacce3940ebad359c9d5582bf74a0"
   name = "github.com/dchest/safefile"
   packages = ["."]
+  pruneopts = "UT"
   revision = "855e8d98f1852d48dde521e0522408d1fe7e836a"
 
 [[projects]]
   branch = "master"
+  digest = "1:c183111eaf02a9e6bb39c213bdfb5472b16f1955dd4c9dab82db83f114c64a63"
   name = "github.com/facebookgo/atomicfile"
   packages = ["."]
+  pruneopts = "UT"
   revision = "2de1f203e7d5e386a6833233882782932729f27e"
 
 [[projects]]
   branch = "master"
+  digest = "1:b0b75ab0829ae3769f1f221486da0c40c8dc0680fb93d072b5df5a39d56c996c"
   name = "github.com/facebookgo/pidfile"
   packages = ["."]
+  pruneopts = "UT"
   revision = "f242e2999868dcd267a2b86e49ce1f9cf9e15b16"
 
 [[projects]]
   branch = "master"
+  digest = "1:2394f5a25132b3868eff44599cc28d44bdd0330806e34c495d754dd052df612b"
   name = "github.com/hashicorp/go-immutable-radix"
   packages = ["."]
+  pruneopts = "UT"
   revision = "7f3cd4390caab3250a57f30efdb2a65dd7649ecf"
 
 [[projects]]
   branch = "master"
+  digest = "1:4d9d876a856ada3b553062ac8e50331a9a539e12893c0c4a50d8ae2af4242685"
   name = "github.com/hashicorp/go-syslog"
   packages = ["."]
+  pruneopts = "UT"
   revision = "326bf4a7f709d263f964a6a96558676b103f3534"
 
 [[projects]]
   branch = "master"
+  digest = "1:cf296baa185baae04a9a7004efee8511d08e2f5f51d4cbe5375da89722d681db"
   name = "github.com/hashicorp/golang-lru"
   packages = [
     ".",
-    "simplelru"
+    "simplelru",
   ]
+  pruneopts = "UT"
   revision = "0fb14efe8c47ae851c0034ed7a448854d3d34cf3"
 
 [[projects]]
   branch = "master"
+  digest = "1:d7b8c19830aedc4fec0c843fd3ada94eeb47f7c4f43149f90e6e9623627480d7"
   name = "github.com/jedisct1/dlog"
   packages = ["."]
+  pruneopts = "UT"
   revision = "f81e5af176e59fc11674b2777fe465fc506c27fe"
 
 [[projects]]
   branch = "master"
+  digest = "1:6874350bad25169257ca2ccfe929d852d0f866b841908632d3b94b1a100178df"
   name = "github.com/jedisct1/go-clocksmith"
   packages = ["."]
+  pruneopts = "UT"
   revision = "c35da9bed550558a4797c74e34957071214342e7"
 
 [[projects]]
   branch = "master"
+  digest = "1:2c8c475bb86fe1b4cdb134c3b4649385daafcd37fa56b970957d98814db7b3ea"
   name = "github.com/jedisct1/go-dnsstamps"
   packages = ["."]
+  pruneopts = "UT"
   revision = "1e4999280f861b465e03e21e4f84d838f2f02b38"
 
 [[projects]]
   branch = "master"
+  digest = "1:d1d9e8794639828c2953fae54ef5f25eb0dbc42032f9a8700ebabbc42d70130d"
   name = "github.com/jedisct1/go-minisign"
   packages = ["."]
+  pruneopts = "UT"
   revision = "f4dbde220b4f73d450949b9ba27fa941faa05a78"
 
 [[projects]]
   branch = "master"
+  digest = "1:9eb6e583742b094222b15794641e0e5fac69078147b82f4a5c971bb0b8938671"
   name = "github.com/jedisct1/xsecretbox"
   packages = ["."]
+  pruneopts = "UT"
   revision = "7a679c0bcd9a5bbfe097fb7d48497bc06d17be76"
 
 [[projects]]
+  digest = "1:9d85ab479918f5d22a449601d35ff4e94115e31db534e22b8431e2c7b152bc4d"
   name = "github.com/k-sone/critbitgo"
   packages = ["."]
+  pruneopts = "UT"
   revision = "658116ef1e826b72c603cfe2091b12503f9bca43"
   version = "v1.2.0"
 
 [[projects]]
   branch = "master"
+  digest = "1:caf6db28595425c0e0f2301a00257d11712f65c1878e12cffc42f6b9a9cf3f23"
   name = "github.com/kardianos/osext"
   packages = ["."]
+  pruneopts = "UT"
   revision = "ae77be60afb1dcacde03767a8c37337fad28ac14"
 
 [[projects]]
   branch = "master"
+  digest = "1:2c4470d47613daac5ff660ff9b67a6f8dca489845bb867186e3fcda742a3e53f"
   name = "github.com/kardianos/service"
   packages = ["."]
+  pruneopts = "UT"
   revision = "615a14ed75099c9eaac6949e22ac2341bf9d3197"
 
 [[projects]]
+  digest = "1:463e4140189f8194f9121ca1c7fe3b8e9e9a2ab3d949b43c835c21034927dc62"
   name = "github.com/miekg/dns"
   packages = ["."]
+  pruneopts = "UT"
   revision = "5a2b9fab83ff0f8bfc99684bd5f43a37abe560f1"
   version = "v1.0.8"
 
 [[projects]]
   branch = "master"
+  digest = "1:fb92a63e4dcf1d88c58efdbc028d0b91bcaeddd8633758056beb376f13531147"
   name = "golang.org/x/crypto"
   packages = [
     "curve25519",
@@ -147,12 +190,14 @@
     "nacl/box",
     "nacl/secretbox",
     "poly1305",
-    "salsa20/salsa"
+    "salsa20/salsa",
   ]
-  revision = "a49355c7e3f8fe157a85be2f77e6e269a0f89602"
+  pruneopts = "UT"
+  revision = "de0752318171da717af4ce24d0a2e8626afaeb11"
 
 [[projects]]
   branch = "master"
+  digest = "1:b6a4877dbd8d954aebfe3c6e4b8f674f0564aaf7ac2bb99ea1d9e190410f46c4"
   name = "golang.org/x/net"
   packages = [
     "bpf",
@@ -165,12 +210,14 @@
     "internal/socks",
     "ipv4",
     "ipv6",
-    "proxy"
+    "proxy",
   ]
-  revision = "32a936f46389aa10549d60bd7833e54b01685d09"
+  pruneopts = "UT"
+  revision = "f9ce57c11b242f0f1599cf25c89d8cb02c45295a"
 
 [[projects]]
   branch = "master"
+  digest = "1:86c7b355731b7a7eb6cb38f1af9c7e025412c081ba76bffed9ba5381802d275a"
   name = "golang.org/x/sys"
   packages = [
     "cpu",
@@ -179,11 +226,13 @@
     "windows/registry",
     "windows/svc",
     "windows/svc/eventlog",
-    "windows/svc/mgr"
+    "windows/svc/mgr",
   ]
-  revision = "3c6ecd8f22c6f40fbeec94c000a069d7d87c7624"
+  pruneopts = "UT"
+  revision = "904bdc257025c7b3f43c19360ad3ab85783fad78"
 
 [[projects]]
+  digest = "1:a2ab62866c75542dd18d2b069fec854577a20211d7c0ea6ae746072a1dccdd18"
   name = "golang.org/x/text"
   packages = [
     "collate",
@@ -199,20 +248,50 @@
     "unicode/bidi",
     "unicode/cldr",
     "unicode/norm",
-    "unicode/rangetable"
+    "unicode/rangetable",
   ]
+  pruneopts = "UT"
   revision = "f21a4dfb5e38f5895301dc265a8def02365cc3d0"
   version = "v0.3.0"
 
 [[projects]]
+  digest = "1:c805e517269b0ba4c21ded5836019ed7d16953d4026cb7d00041d039c7906be9"
   name = "gopkg.in/natefinch/lumberjack.v2"
   packages = ["."]
+  pruneopts = "UT"
   revision = "a96e63847dc3c67d17befa69c303767e2f84e54f"
   version = "v2.1"
 
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "2e3662737bdfec3295cf1f397f5584d97fbfd99973ab0351fafe66049bfa79bb"
+  input-imports = [
+    "github.com/BurntSushi/toml",
+    "github.com/VividCortex/ewma",
+    "github.com/agl/ed25519",
+    "github.com/coreos/go-systemd/activation",
+    "github.com/coreos/go-systemd/daemon",
+    "github.com/dchest/safefile",
+    "github.com/facebookgo/pidfile",
+    "github.com/hashicorp/go-immutable-radix",
+    "github.com/hashicorp/golang-lru",
+    "github.com/jedisct1/dlog",
+    "github.com/jedisct1/go-clocksmith",
+    "github.com/jedisct1/go-dnsstamps",
+    "github.com/jedisct1/go-minisign",
+    "github.com/jedisct1/xsecretbox",
+    "github.com/k-sone/critbitgo",
+    "github.com/kardianos/service",
+    "github.com/miekg/dns",
+    "golang.org/x/crypto/curve25519",
+    "golang.org/x/crypto/ed25519",
+    "golang.org/x/crypto/nacl/box",
+    "golang.org/x/crypto/nacl/secretbox",
+    "golang.org/x/net/http2",
+    "golang.org/x/net/proxy",
+    "golang.org/x/sys/unix",
+    "golang.org/x/sys/windows/svc/mgr",
+    "gopkg.in/natefinch/lumberjack.v2",
+  ]
   solver-name = "gps-cdcl"
   solver-version = 1

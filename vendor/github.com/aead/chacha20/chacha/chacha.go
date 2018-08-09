@@ -9,6 +9,7 @@ package chacha // import "github.com/aead/chacha20/chacha"
 import (
 	"encoding/binary"
 	"errors"
+	"math"
 )
 
 const (
@@ -160,6 +161,21 @@ func (c *Cipher) XORKeyStream(dst, src []byte) {
 		src = src[n:]
 		dst = dst[n:]
 		c.off = 0
+	}
+
+	// check for counter overflow
+	blocksToXOR := len(src) / 64
+	if len(src)%64 != 0 {
+		blocksToXOR++
+	}
+	var overflow bool
+	if c.noncesize == INonceSize {
+		overflow = binary.LittleEndian.Uint32(c.state[48:]) > math.MaxUint32-uint32(blocksToXOR)
+	} else {
+		overflow = binary.LittleEndian.Uint64(c.state[48:]) > math.MaxUint64-uint64(blocksToXOR)
+	}
+	if overflow {
+		panic("chacha20/chacha: counter overflow")
 	}
 
 	c.off += xorKeyStream(dst, src, &(c.block), &(c.state), c.rounds)
