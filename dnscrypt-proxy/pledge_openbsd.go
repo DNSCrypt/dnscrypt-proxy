@@ -7,9 +7,9 @@ import (
 )
 
 func Pledge() {
-	unix.Pledge("stdio rpath wpath cpath tmppath inet fattr flock dns getpw sendfd recvfd proc exec id", nil)
+	unix.Pledge("stdio rpath wpath cpath tmppath inet unix fattr flock dns getpw sendfd recvfd proc exec id", nil)
 }
 
 func PledgeChild() {
-	unix.Pledge("stdio rpath wpath cpath tmppath inet fattr flock dns recvfd", nil)
+	unix.Pledge("stdio rpath wpath cpath tmppath inet unix fattr flock dns recvfd", nil)
 }
