@@ -193,6 +193,9 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 
 	flag.Parse()
 
+	if *child {
+		PledgeChild()
+	}
 	if *svcFlag == "stop" || *svcFlag == "uninstall" {
 		return nil
 	}
