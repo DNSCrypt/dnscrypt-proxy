@@ -161,12 +161,14 @@ func NewSource(xTransport *XTransport, urls []string, minisignKeyStr string, cac
 			dlog.Infof("Loading from [%s] failed", url)
 		}
 	}
+
 	if len(preloadURL) > 0 {
 		url := preloadURL
 		sigURL := url + ".minisig"
 		urlsToPrefetch = append(urlsToPrefetch, URLToPrefetch{url: url, cacheFile: cacheFile, when: now.Add(delayTillNextUpdate)})
 		urlsToPrefetch = append(urlsToPrefetch, URLToPrefetch{url: sigURL, cacheFile: sigCacheFile, when: now.Add(sigDelayTillNextUpdate)})
 	}
+
 	if sigErr != nil && err == nil {
 		err = sigErr
 	}
@@ -180,12 +182,14 @@ func NewSource(xTransport *XTransport, urls []string, minisignKeyStr string, cac
 		os.Remove(sigCacheFile)
 		return source, urlsToPrefetch, err
 	}
+
 	res, err := minisignKey.Verify([]byte(in), signature)
 	if err != nil || !res {
 		os.Remove(cacheFile)
 		os.Remove(sigCacheFile)
 		return source, urlsToPrefetch, err
 	}
+
 	if !cached {
 		if err = AtomicFileWrite(cacheFile, []byte(in)); err != nil {
 			if absPath, err2 := filepath.Abs(cacheFile); err2 == nil {
@@ -193,6 +197,7 @@ func NewSource(xTransport *XTransport, urls []string, minisignKeyStr string, cac
 			}
 		}
 	}
+
 	if !sigCached {
 		if err = AtomicFileWrite(sigCacheFile, []byte(sigStr)); err != nil {
 			if absPath, err2 := filepath.Abs(sigCacheFile); err2 == nil {
@@ -200,8 +205,17 @@ func NewSource(xTransport *XTransport, urls []string, minisignKeyStr string, cac
 			}
 		}
 	}
+
+	// XXX eau
+	// ok this is the first problem actually with the previously made pledge
+	// calls. Mainly this uses the hashicorp syslog wrapping code
+	// for some reasons it does not use the golang log/syslog package
+	// and does a connect() to a unix path
+	// hence the addition of "unix" in the pledge call
+	// i did not investigate further.
 	dlog.Noticef("Source [%s] loaded", cacheFile)
 	source.in = in
+
 	return source, urlsToPrefetch, nil
 }
 

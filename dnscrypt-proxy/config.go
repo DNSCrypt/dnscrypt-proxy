@@ -193,9 +193,9 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 
 	flag.Parse()
 
-	if *child {
-		PledgeChild()
-	}
+	//	if *child {
+	////		PledgeChild()
+	//	}
 	if *svcFlag == "stop" || *svcFlag == "uninstall" {
 		return nil
 	}
@@ -203,6 +203,7 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 		fmt.Println(AppVersion)
 		os.Exit(0)
 	}
+
 	if resolve != nil && len(*resolve) > 0 {
 		Resolve(*resolve)
 		os.Exit(0)
@@ -212,22 +213,27 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 	if err != nil {
 		dlog.Fatalf("Unable to load the configuration file [%s] -- Maybe use the -config command-line switch?", *configFile)
 	}
+
 	config := newConfig()
 	md, err := toml.DecodeFile(foundConfigFile, &config)
 	if err != nil {
 		return err
 	}
+
 	undecoded := md.Undecoded()
 	if len(undecoded) > 0 {
 		return fmt.Errorf("Unsupported key in configuration file: [%s]", undecoded[0])
 	}
+
 	cdFileDir(foundConfigFile)
 	if config.LogLevel >= 0 && config.LogLevel < int(dlog.SeverityLast) {
 		dlog.SetLogLevel(dlog.Severity(config.LogLevel))
 	}
+
 	if dlog.LogLevel() <= dlog.SeverityDebug && os.Getenv("DEBUG") == "" {
 		dlog.SetLogLevel(dlog.SeverityInfo)
 	}
+
 	if config.UseSyslog {
 		dlog.UseSyslog(true)
 	} else if config.LogFile != nil {
@@ -239,6 +245,7 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 			dlog.SetFileDescriptor(os.NewFile(uintptr(3), "logFile"))
 		}
 	}
+
 	proxy.logMaxSize = config.LogMaxSize
 	proxy.logMaxAge = config.LogMaxAge
 	proxy.logMaxBackups = config.LogMaxBackups
@@ -277,6 +284,7 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 	if config.ForceTCP {
 		proxy.mainProto = "tcp"
 	}
+
 	proxy.certRefreshDelay = time.Duration(config.CertRefreshDelay) * time.Minute
 	proxy.certRefreshDelayAfterFailure = time.Duration(10 * time.Second)
 	proxy.certIgnoreTimestamp = config.CertIgnoreTimestamp
@@ -399,6 +407,7 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 	}
 
 	netProbe(config.NetprobeAddress, config.NetprobeTimeout)
+
 	if !config.OfflineMode {
 		if err := config.loadSources(proxy); err != nil {
 			return err
@@ -407,10 +416,12 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 			return errors.New("No servers configured")
 		}
 	}
+
 	if *list || *listAll {
 		config.printRegisteredServers(proxy, *jsonOutput)
 		os.Exit(0)
 	}
+
 	if *check {
 		dlog.Notice("Configuration successfully checked")
 		os.Exit(0)
@@ -460,21 +471,26 @@ func (config *Config) printRegisteredServers(proxy *Proxy, jsonOutput bool) {
 }
 
 func (config *Config) loadSources(proxy *Proxy) error {
+
 	var requiredProps stamps.ServerInformalProperties
 	if config.SourceRequireDNSSEC {
 		requiredProps |= stamps.ServerInformalPropertyDNSSEC
 	}
+
 	if config.SourceRequireNoLog {
 		requiredProps |= stamps.ServerInformalPropertyNoLog
 	}
+
 	if config.SourceRequireNoFilter {
 		requiredProps |= stamps.ServerInformalPropertyNoFilter
 	}
+
 	for cfgSourceName, cfgSource := range config.SourcesConfig {
 		if err := config.loadSource(proxy, requiredProps, cfgSourceName, &cfgSource); err != nil {
 			return err
 		}
 	}
+
 	if len(config.ServerNames) == 0 {
 		for serverName := range config.ServersConfig {
 			config.ServerNames = append(config.ServerNames, serverName)
@@ -505,29 +521,35 @@ func (config *Config) loadSource(proxy *Proxy, requiredProps stamps.ServerInform
 			cfgSource.URLs = []string{cfgSource.URL}
 		}
 	}
+
 	if cfgSource.MinisignKeyStr == "" {
 		return fmt.Errorf("Missing Minisign key for source [%s]", cfgSourceName)
 	}
 	if cfgSource.CacheFile == "" {
 		return fmt.Errorf("Missing cache file for source [%s]", cfgSourceName)
 	}
+
 	if cfgSource.FormatStr == "" {
 		cfgSource.FormatStr = "v2"
 	}
 	if cfgSource.RefreshDelay <= 0 {
 		cfgSource.RefreshDelay = 72
 	}
+
 	source, sourceUrlsToPrefetch, err := NewSource(proxy.xTransport, cfgSource.URLs, cfgSource.MinisignKeyStr, cfgSource.CacheFile, cfgSource.FormatStr, time.Duration(cfgSource.RefreshDelay)*time.Hour)
 	proxy.urlsToPrefetch = append(proxy.urlsToPrefetch, sourceUrlsToPrefetch...)
+
 	if err != nil {
 		dlog.Criticalf("Unable to use source [%s]: [%s]", cfgSourceName, err)
 		return nil
 	}
+
 	registeredServers, err := source.Parse(cfgSource.Prefix)
 	if err != nil {
 		dlog.Criticalf("Unable to use source [%s]: [%s]", cfgSourceName, err)
 		return nil
 	}
+
 	for _, registeredServer := range registeredServers {
 		if len(config.ServerNames) > 0 {
 			if !includesName(config.ServerNames, registeredServer.name) {

@@ -25,7 +25,10 @@ type App struct {
 func main() {
 	dlog.Init("dnscrypt-proxy", dlog.SeverityNotice, "DAEMON")
 
-	Pledge()
+	err := Pledge()
+	if err != nil {
+		dlog.Fatal("pledge() failed")
+	}
 
 	pwd, err := os.Getwd()
 	if err != nil {
@@ -37,6 +40,7 @@ func main() {
 		Description:      "Encrypted/authenticated DNS proxy",
 		WorkingDirectory: pwd,
 	}
+
 	svcFlag := flag.String("service", "", fmt.Sprintf("Control the system service: %q", service.ControlAction))
 	app := &App{}
 	svc, err := service.New(app, svcConfig)
@@ -44,6 +48,7 @@ func main() {
 		svc = nil
 		dlog.Debug(err)
 	}
+
 	app.proxy = NewProxy()
 	_ = ServiceManagerStartNotify()
 	if err := ConfigLoad(&app.proxy, svcFlag); err != nil {
@@ -72,6 +77,7 @@ func main() {
 		return
 	}
 	if svc != nil {
+
 		if err = svc.Run(); err != nil {
 			dlog.Fatal(err)
 		}
