@@ -268,7 +268,7 @@ func (ws *windowsService) Run() error {
 
 	sigChan := make(chan os.Signal)
 
-	signal.Notify(sigChan, os.Interrupt, os.Kill)
+	signal.Notify(sigChan, os.Interrupt)
 
 	<-sigChan
 
@@ -311,7 +311,7 @@ func (ws *windowsService) Status() (Status, error) {
 	case svc.Stopped:
 		return StatusStopped, nil
 	default:
-		return StatusUnknown, fmt.Errorf("unknown status %s", status)
+		return StatusUnknown, fmt.Errorf("unknown status %v", status)
 	}
 }
 

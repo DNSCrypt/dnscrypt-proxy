@@ -11,6 +11,7 @@ import (
 	"os/signal"
 	"regexp"
 	"strings"
+	"syscall"
 	"text/template"
 	"time"
 )
@@ -186,7 +187,7 @@ func (s *upstart) Run() (err error) {
 
 	s.Option.funcSingle(optionRunWait, func() {
 		var sigChan = make(chan os.Signal, 3)
-		signal.Notify(sigChan, os.Interrupt, os.Kill)
+		signal.Notify(sigChan, syscall.SIGTERM, os.Interrupt)
 		<-sigChan
 	})()
 
