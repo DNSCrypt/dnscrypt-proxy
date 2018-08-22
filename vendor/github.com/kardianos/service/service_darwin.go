@@ -11,6 +11,8 @@ import (
 	"os/signal"
 	"os/user"
 	"path/filepath"
+	"regexp"
+	"strings"
 	"syscall"
 	"text/template"
 	"time"
@@ -100,6 +102,25 @@ func (s *darwinLaunchdService) getServiceFilePath() (string, error) {
 	return "/Library/LaunchDaemons/" + s.Name + ".plist", nil
 }
 
+func (s *darwinLaunchdService) template() *template.Template {
+	functions := template.FuncMap{
+		"bool": func(v bool) string {
+			if v {
+				return "true"
+			}
+			return "false"
+		},
+	}
+
+	customConfig := s.Option.string(optionLaunchdConfig, "")
+
+	if customConfig != "" {
+		return template.Must(template.New("").Funcs(functions).Parse(customConfig))
+	} else {
+		return template.Must(template.New("").Funcs(functions).Parse(launchdConfig))
+	}
+}
+
 func (s *darwinLaunchdService) Install() error {
 	confPath, err := s.getServiceFilePath()
 	if err != nil {
@@ -143,16 +164,7 @@ func (s *darwinLaunchdService) Install() error {
 		SessionCreate: s.Option.bool(optionSessionCreate, optionSessionCreateDefault),
 	}
 
-	functions := template.FuncMap{
-		"bool": func(v bool) string {
-			if v {
-				return "true"
-			}
-			return "false"
-		},
-	}
-	t := template.Must(template.New("launchdConfig").Funcs(functions).Parse(launchdConfig))
-	return t.Execute(f, to)
+	return s.template().Execute(f, to)
 }
 
 func (s *darwinLaunchdService) Uninstall() error {
@@ -163,6 +175,32 @@ func (s *darwinLaunchdService) Uninstall() error {
 		return err
 	}
 	return os.Remove(confPath)
+}
+
+func (s *darwinLaunchdService) Status() (Status, error) {
+	exitCode, out, err := runWithOutput("launchctl", "list", s.Name)
+	if exitCode == 0 && err != nil {
+		if !strings.Contains(err.Error(), "failed with stderr") {
+			return StatusUnknown, err
+		}
+	}
+
+	re := regexp.MustCompile(`"PID" = ([0-9]+);`)
+	matches := re.FindStringSubmatch(out)
+	if len(matches) == 2 {
+		return StatusRunning, nil
+	}
+
+	confPath, err := s.getServiceFilePath()
+	if err != nil {
+		return StatusUnknown, err
+	}
+
+	if _, err = os.Stat(confPath); err == nil {
+		return StatusStopped, nil
+	}
+
+	return StatusUnknown, ErrNotInstalled
 }
 
 func (s *darwinLaunchdService) Start() error {

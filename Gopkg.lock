@@ -164,11 +164,11 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:2c4470d47613daac5ff660ff9b67a6f8dca489845bb867186e3fcda742a3e53f"
+  digest = "1:7df4ff301fb9872b59f4d4944ab7c6e3c4cd4076906f499f83759a69df8a7266"
   name = "github.com/kardianos/service"
   packages = ["."]
   pruneopts = "UT"
-  revision = "615a14ed75099c9eaac6949e22ac2341bf9d3197"
+  revision = "45244176fc183034f15c4f1c2f801da5e25828b7"
 
 [[projects]]
   digest = "1:463e4140189f8194f9121ca1c7fe3b8e9e9a2ab3d949b43c835c21034927dc62"
@@ -193,11 +193,11 @@
     "salsa20/salsa",
   ]
   pruneopts = "UT"
-  revision = "de0752318171da717af4ce24d0a2e8626afaeb11"
+  revision = "614d502a4dac94afa3a6ce146bd1736da82514c6"
 
 [[projects]]
   branch = "master"
-  digest = "1:b6a4877dbd8d954aebfe3c6e4b8f674f0564aaf7ac2bb99ea1d9e190410f46c4"
+  digest = "1:b466f4983ef526ec64fc233af86644596b2c1c5711a7c3b460d908f376f4c4ae"
   name = "golang.org/x/net"
   packages = [
     "bpf",
@@ -213,11 +213,11 @@
     "proxy",
   ]
   pruneopts = "UT"
-  revision = "f9ce57c11b242f0f1599cf25c89d8cb02c45295a"
+  revision = "922f4815f713f213882e8ef45e0d315b164d705c"
 
 [[projects]]
   branch = "master"
-  digest = "1:86c7b355731b7a7eb6cb38f1af9c7e025412c081ba76bffed9ba5381802d275a"
+  digest = "1:8a2bf4e954e1e521d7670730fd03cc8e9e3323d5f29a14c202c1360c5d14cb6f"
   name = "golang.org/x/sys"
   packages = [
     "cpu",
@@ -229,7 +229,7 @@
     "windows/svc/mgr",
   ]
   pruneopts = "UT"
-  revision = "904bdc257025c7b3f43c19360ad3ab85783fad78"
+  revision = "3b58ed4ad3395d483fc92d5d14123ce2c3581fec"
 
 [[projects]]
   digest = "1:a2ab62866c75542dd18d2b069fec854577a20211d7c0ea6ae746072a1dccdd18"

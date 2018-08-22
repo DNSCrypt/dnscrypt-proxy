@@ -8,9 +8,11 @@ package service
 
 import (
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log/syslog"
 	"os/exec"
+	"syscall"
 )
 
 func newSysLogger(name string, errs chan<- error) (Logger, error) {
@@ -53,20 +55,43 @@ func (s sysLogger) Infof(format string, a ...interface{}) error {
 }
 
 func run(command string, arguments ...string) error {
+	_, _, err := runCommand(command, false, arguments...)
+	return err
+}
+
+func runWithOutput(command string, arguments ...string) (int, string, error) {
+	return runCommand(command, true, arguments...)
+}
+
+func runCommand(command string, readStdout bool, arguments ...string) (int, string, error) {
 	cmd := exec.Command(command, arguments...)
+
+	var output string
+	var stdout io.ReadCloser
+	var err error
+
+	if readStdout {
+		// Connect pipe to read Stdout
+		stdout, err = cmd.StdoutPipe()
+
+		if err != nil {
+			// Failed to connect pipe
+			return 0, "", fmt.Errorf("%q failed to connect stdout pipe: %v", command, err)
+		}
+	}
 
 	// Connect pipe to read Stderr
 	stderr, err := cmd.StderrPipe()
 
 	if err != nil {
 		// Failed to connect pipe
-		return fmt.Errorf("%q failed to connect stderr pipe: %v", command, err)
+		return 0, "", fmt.Errorf("%q failed to connect stderr pipe: %v", command, err)
 	}
 
 	// Do not use cmd.Run()
 	if err := cmd.Start(); err != nil {
 		// Problem while copying stdin, stdout, or stderr
-		return fmt.Errorf("%q failed: %v", command, err)
+		return 0, "", fmt.Errorf("%q failed: %v", command, err)
 	}
 
 	// Zero exit status
@@ -75,14 +100,39 @@ func run(command string, arguments ...string) error {
 	if command == "launchctl" {
 		slurp, _ := ioutil.ReadAll(stderr)
 		if len(slurp) > 0 {
-			return fmt.Errorf("%q failed with stderr: %s", command, slurp)
+			return 0, "", fmt.Errorf("%q failed with stderr: %s", command, slurp)
+		}
+	}
+
+	if readStdout {
+		out, err := ioutil.ReadAll(stdout)
+		if err != nil {
+			return 0, "", fmt.Errorf("%q failed while attempting to read stdout: %v", command, err)
+		} else if len(out) > 0 {
+			output = string(out)
 		}
 	}
 
 	if err := cmd.Wait(); err != nil {
-		// Command didn't exit with a zero exit status.
-		return fmt.Errorf("%q failed: %v", command, err)
+		exitStatus, ok := isExitError(err)
+		if ok {
+			// Command didn't exit with a zero exit status.
+			return exitStatus, output, err
+		}
+
+		// An error occurred and there is no exit status.
+		return 0, output, fmt.Errorf("%q failed: %v", command, err)
 	}
 
-	return nil
+	return 0, output, nil
+}
+
+func isExitError(err error) (int, bool) {
+	if exiterr, ok := err.(*exec.ExitError); ok {
+		if status, ok := exiterr.Sys().(syscall.WaitStatus); ok {
+			return status.ExitStatus(), true
+		}
+	}
+
+	return 0, false
 }

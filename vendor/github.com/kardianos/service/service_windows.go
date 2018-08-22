@@ -275,6 +275,46 @@ func (ws *windowsService) Run() error {
 	return ws.i.Stop(ws)
 }
 
+func (ws *windowsService) Status() (Status, error) {
+	m, err := mgr.Connect()
+	if err != nil {
+		return StatusUnknown, err
+	}
+	defer m.Disconnect()
+
+	s, err := m.OpenService(ws.Name)
+	if err != nil {
+		if err.Error() == "The specified service does not exist as an installed service." {
+			return StatusUnknown, ErrNotInstalled
+		}
+		return StatusUnknown, err
+	}
+
+	status, err := s.Query()
+	if err != nil {
+		return StatusUnknown, err
+	}
+
+	switch status.State {
+	case svc.StartPending:
+		fallthrough
+	case svc.Running:
+		return StatusRunning, nil
+	case svc.PausePending:
+		fallthrough
+	case svc.Paused:
+		fallthrough
+	case svc.ContinuePending:
+		fallthrough
+	case svc.StopPending:
+		fallthrough
+	case svc.Stopped:
+		return StatusStopped, nil
+	default:
+		return StatusUnknown, fmt.Errorf("unknown status %s", status)
+	}
+}
+
 func (ws *windowsService) Start() error {
 	m, err := mgr.Connect()
 	if err != nil {
