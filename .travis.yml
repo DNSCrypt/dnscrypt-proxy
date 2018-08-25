@@ -130,7 +130,7 @@ script:
 - tar czpvf dnscrypt-proxy-macos-${TRAVIS_TAG:-dev}.tar.gz macos
 - go clean
 - env CC=arm-linux-androideabi-clang CXX=arm-linux-androideabi-clang++
-  CGO_ENABLED=1 CGO_CFLAGS="-D__ANDROID_API__=19"
+  CGO_ENABLED=1
   GOOS=android GOARCH=arm GOARM=7 go build -ldflags="-s -w"
 - mkdir android-arm
 - ln dnscrypt-proxy android-arm/
@@ -138,7 +138,7 @@ script:
 - zip -9 -r dnscrypt-proxy-android_arm-${TRAVIS_TAG:-dev}.zip android-arm
 - go clean
 - env CC=aarch64-linux-android-clang CXX=aarch64-linux-android-clang++
-  CGO_ENABLED=1 CGO_CFLAGS="-D__ANDROID_API__=19"
+  CGO_ENABLED=1
   GOOS=android GOARCH=arm64 go build -ldflags="-s -w"
 - mkdir android-arm64
 - ln dnscrypt-proxy android-arm64/
@@ -146,7 +146,7 @@ script:
 - zip -9 -r dnscrypt-proxy-android_arm64-${TRAVIS_TAG:-dev}.zip android-arm64
 - go clean
 - env CC=i686-linux-android-clang CXX=i686-linux-android-clang++
-  CGO_ENABLED=1 CGO_CFLAGS="-D__ANDROID_API__=19" GOOS=android
+  CGO_ENABLED=1 GOOS=android
   GOARCH=386 go build -ldflags="-s -w"
 - mkdir android-i386
 - ln dnscrypt-proxy android-i386/
@@ -154,7 +154,7 @@ script:
 - zip -9 -r dnscrypt-proxy-android_i386-${TRAVIS_TAG:-dev}.zip android-i386
 - go clean
 - env CC=x86_64-linux-android-clang CXX=x86_64-linux-android-clang++
-  CGO_ENABLED=1 CGO_CFLAGS="-D__ANDROID_API__=19"
+  CGO_ENABLED=1
   GOOS=android GOARCH=amd64 go build -ldflags="-s -w"
 - mkdir android-x86_64
 - ln dnscrypt-proxy android-x86_64/
