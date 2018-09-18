@@ -71,6 +71,7 @@ type Config struct {
 	NetprobeAddress          string                     `toml:"netprobe_address"`
 	NetprobeTimeout          int                        `toml:"netprobe_timeout"`
 	OfflineMode              bool                       `toml:"offline_mode"`
+	GetSetPayload            bool                       `toml:"get_set_payload"`
 }
 
 func newConfig() Config {
@@ -106,6 +107,7 @@ func newConfig() Config {
 		NetprobeAddress:          "9.9.9.9:53",
 		NetprobeTimeout:          30,
 		OfflineMode:              false,
+		GetSetPayload:            true,
 	}
 }
 
@@ -304,6 +306,7 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 	proxy.pluginBlockIPv6 = config.BlockIPv6
 	proxy.cache = config.Cache
 	proxy.cacheSize = config.CacheSize
+	proxy.getSetPayload = config.GetSetPayload
 
 	if config.CacheNegTTL > 0 {
 		proxy.cacheNegMinTTL = config.CacheNegTTL
