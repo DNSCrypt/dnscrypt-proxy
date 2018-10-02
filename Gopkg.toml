@@ -4,7 +4,7 @@
 
 [[constraint]]
   name = "github.com/BurntSushi/toml"
-  version = "0.3.0"
+  version = "0.3.1"
 
 [[constraint]]
   name = "github.com/VividCortex/ewma"
@@ -27,12 +27,12 @@
   name = "github.com/facebookgo/pidfile"
 
 [[constraint]]
-  branch = "master"
   name = "github.com/hashicorp/go-immutable-radix"
+  version = "1.0.0"
 
 [[constraint]]
-  branch = "master"
   name = "github.com/hashicorp/golang-lru"
+  version = "0.5.0"
 
 [[constraint]]
   branch = "master"
@@ -64,7 +64,7 @@
 
 [[constraint]]
   name = "github.com/miekg/dns"
-  version = "1.0.8"
+  version = "1.0.12"
 
 [[constraint]]
   branch = "master"
@@ -73,6 +73,10 @@
 [[constraint]]
   branch = "master"
   name = "golang.org/x/net"
+
+[[constraint]]
+  branch = "master"
+  name = "golang.org/x/sys"
 
 [[constraint]]
   name = "gopkg.in/natefinch/lumberjack.v2"

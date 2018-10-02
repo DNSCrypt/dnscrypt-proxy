@@ -2,12 +2,12 @@
 
 
 [[projects]]
-  digest = "1:b16fbfbcc20645cb419f78325bb2e85ec729b338e996a228124d68931a6f2a37"
+  digest = "1:9f3b30d9f8e0d7040f729b82dcbc8f0dead820a133b3147ce355fc451f32d761"
   name = "github.com/BurntSushi/toml"
   packages = ["."]
   pruneopts = "UT"
-  revision = "b26d9c308763d68093482582cea63d69be07a0f0"
-  version = "v0.3.0"
+  revision = "3012a1dbe2e4bd1391d42b32f0577cb7bbc7f005"
+  version = "v0.3.1"
 
 [[projects]]
   digest = "1:e626376fab8608a972d47e91b3c1bbbddaecaf1d42b82be6dcc52d10a7557893"
@@ -80,12 +80,12 @@
   revision = "f242e2999868dcd267a2b86e49ce1f9cf9e15b16"
 
 [[projects]]
-  branch = "master"
-  digest = "1:2394f5a25132b3868eff44599cc28d44bdd0330806e34c495d754dd052df612b"
+  digest = "1:2be5a35f0c5b35162c41bb24971e5dcf6ce825403296ee435429cdcc4e1e847e"
   name = "github.com/hashicorp/go-immutable-radix"
   packages = ["."]
   pruneopts = "UT"
-  revision = "7f3cd4390caab3250a57f30efdb2a65dd7649ecf"
+  revision = "27df80928bb34bb1b0d6d0e01b9e679902e7a6b5"
+  version = "v1.0.0"
 
 [[projects]]
   branch = "master"
@@ -96,15 +96,15 @@
   revision = "326bf4a7f709d263f964a6a96558676b103f3534"
 
 [[projects]]
-  branch = "master"
-  digest = "1:cf296baa185baae04a9a7004efee8511d08e2f5f51d4cbe5375da89722d681db"
+  digest = "1:8ec8d88c248041a6df5f6574b87bc00e7e0b493881dad2e7ef47b11dc69093b5"
   name = "github.com/hashicorp/golang-lru"
   packages = [
     ".",
     "simplelru",
   ]
   pruneopts = "UT"
-  revision = "0fb14efe8c47ae851c0034ed7a448854d3d34cf3"
+  revision = "20f1fb78b0740ba8c3cb143a61e86ba5c8669768"
+  version = "v0.5.0"
 
 [[projects]]
   branch = "master"
@@ -164,19 +164,19 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:7df4ff301fb9872b59f4d4944ab7c6e3c4cd4076906f499f83759a69df8a7266"
+  digest = "1:c39ff39a1da2cd11d67fe005ffc39b21a453f16394a52e9f4237bf15441fd8be"
   name = "github.com/kardianos/service"
   packages = ["."]
   pruneopts = "UT"
-  revision = "45244176fc183034f15c4f1c2f801da5e25828b7"
+  revision = "b1866cf76903d81b491fb668ba14f4b1322b2ca7"
 
 [[projects]]
-  digest = "1:463e4140189f8194f9121ca1c7fe3b8e9e9a2ab3d949b43c835c21034927dc62"
+  digest = "1:fc5013a7a6f9600051ad48b059fef4a3035e8692d1c54ffd8dccfaa8ebe0b505"
   name = "github.com/miekg/dns"
   packages = ["."]
   pruneopts = "UT"
-  revision = "5a2b9fab83ff0f8bfc99684bd5f43a37abe560f1"
-  version = "v1.0.8"
+  revision = "ba6747e8a94115e9dc7738afb87850687611df1b"
+  version = "v1.0.12"
 
 [[projects]]
   branch = "master"
@@ -193,11 +193,11 @@
     "salsa20/salsa",
   ]
   pruneopts = "UT"
-  revision = "614d502a4dac94afa3a6ce146bd1736da82514c6"
+  revision = "e3636079e1a4c1f337f212cc5cd2aca108f6c900"
 
 [[projects]]
   branch = "master"
-  digest = "1:b466f4983ef526ec64fc233af86644596b2c1c5711a7c3b460d908f376f4c4ae"
+  digest = "1:76eb5cc3dd66497fd6f88855893db840cef8f495b9b82d8afbcad8b40e07de1b"
   name = "golang.org/x/net"
   packages = [
     "bpf",
@@ -213,11 +213,11 @@
     "proxy",
   ]
   pruneopts = "UT"
-  revision = "922f4815f713f213882e8ef45e0d315b164d705c"
+  revision = "4dfa2610cdf3b287375bbba5b8f2a14d3b01d8de"
 
 [[projects]]
   branch = "master"
-  digest = "1:8a2bf4e954e1e521d7670730fd03cc8e9e3323d5f29a14c202c1360c5d14cb6f"
+  digest = "1:097b0981a9939b2ece7e11fca320a6f5ddf7c74abe149d99ac6430257d717f70"
   name = "golang.org/x/sys"
   packages = [
     "cpu",
@@ -229,7 +229,7 @@
     "windows/svc/mgr",
   ]
   pruneopts = "UT"
-  revision = "3b58ed4ad3395d483fc92d5d14123ce2c3581fec"
+  revision = "e4b3c5e9061176387e7cea65e4dc5853801f3fb7"
 
 [[projects]]
   digest = "1:a2ab62866c75542dd18d2b069fec854577a20211d7c0ea6ae746072a1dccdd18"
@@ -289,7 +289,6 @@
     "golang.org/x/crypto/nacl/secretbox",
     "golang.org/x/net/http2",
     "golang.org/x/net/proxy",
-    "golang.org/x/sys/unix",
     "golang.org/x/sys/windows/svc/mgr",
     "gopkg.in/natefinch/lumberjack.v2",
   ]

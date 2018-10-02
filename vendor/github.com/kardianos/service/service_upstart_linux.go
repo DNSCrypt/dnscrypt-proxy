@@ -31,14 +31,16 @@ func isUpstart() bool {
 }
 
 type upstart struct {
-	i Interface
+	i        Interface
+	platform string
 	*Config
 }
 
-func newUpstartService(i Interface, c *Config) (Service, error) {
+func newUpstartService(i Interface, platform string, c *Config) (Service, error) {
 	s := &upstart{
-		i:      i,
-		Config: c,
+		i:        i,
+		platform: platform,
+		Config:   c,
 	}
 
 	return s, nil
@@ -49,6 +51,10 @@ func (s *upstart) String() string {
 		return s.DisplayName
 	}
 	return s.Name
+}
+
+func (s *upstart) Platform() string {
+	return s.platform
 }
 
 // Upstart has some support for user services in graphical sessions.

@@ -13,7 +13,7 @@ type linuxSystemService struct {
 	name        string
 	detect      func() bool
 	interactive func() bool
-	new         func(i Interface, c *Config) (Service, error)
+	new         func(i Interface, platform string, c *Config) (Service, error)
 }
 
 func (sc linuxSystemService) String() string {
@@ -26,7 +26,7 @@ func (sc linuxSystemService) Interactive() bool {
 	return sc.interactive()
 }
 func (sc linuxSystemService) New(i Interface, c *Config) (Service, error) {
-	return sc.new(i, c)
+	return sc.new(i, sc.String(), c)
 }
 
 func init() {
