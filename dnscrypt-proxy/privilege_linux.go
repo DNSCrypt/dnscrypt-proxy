@@ -22,23 +22,28 @@ func (proxy *Proxy) dropPrivilege(userStr string, fds []*os.File) {
 	if currentUser.Uid != "0" {
 		dlog.Fatal("I need root permissions. Try again with 'sudo'")
 	}
-	user, err := user.Lookup(userStr)
+	userInfo, err := user.Lookup(userStr)
 	args := os.Args
 
 	if err != nil {
-		dlog.Fatal(err)
+		uid, err2 := strconv.Atoi(userStr)
+		if err2 != nil || uid <= 0 {
+			dlog.Fatalf("Unable to retrieve any information about user [%s]: [%s] - Remove the user_name directive from the configuration file in order to avoid identity switch", userStr, err)
+		}
+		dlog.Warnf("Unable to retrieve any information about user [%s]: [%s] - Switching to user id [%v] with the same group id, as [%v] looks like a user id. But you should remove or fix the user_name directive in the configuration file if possible", userStr, err, uid, uid)
+		userInfo = &user.User{Uid: userStr, Gid: userStr}
 	}
-	uid, err := strconv.Atoi(user.Uid)
+	uid, err := strconv.Atoi(userInfo.Uid)
 	if err != nil {
 		dlog.Fatal(err)
 	}
-	gid, err := strconv.Atoi(user.Gid)
+	gid, err := strconv.Atoi(userInfo.Gid)
 	if err != nil {
 		dlog.Fatal(err)
 	}
 	execPath, err := exec.LookPath(args[0])
 	if err != nil {
-		dlog.Fatal(err)
+		dlog.Fatalf("Unable to get the path to the dnscrypt-proxy executable file: [%s]", err)
 	}
 	path, err := filepath.Abs(execPath)
 	if err != nil {
@@ -52,13 +57,13 @@ func (proxy *Proxy) dropPrivilege(userStr string, fds []*os.File) {
 	dlog.Notice("Dropping privileges")
 	runtime.LockOSThread()
 	if _, _, rcode := syscall.RawSyscall(syscall.SYS_SETGROUPS, uintptr(0), uintptr(0), 0); rcode != 0 {
-		dlog.Fatalf("Unable to drop additional groups: %s", err)
+		dlog.Fatalf("Unable to drop additional groups: [%s]", err)
 	}
 	if _, _, rcode := syscall.RawSyscall(syscall.SYS_SETGID, uintptr(gid), 0, 0); rcode != 0 {
-		dlog.Fatalf("Unable to drop user privileges: %s", err)
+		dlog.Fatalf("Unable to drop user privileges: [%s]", err)
 	}
 	if _, _, rcode := syscall.RawSyscall(syscall.SYS_SETUID, uintptr(uid), 0, 0); rcode != 0 {
-		dlog.Fatalf("Unable to drop user privileges: %s", err)
+		dlog.Fatalf("Unable to drop user privileges: [%s]", err)
 	}
 	maxfd := uintptr(0)
 	for _, fd := range fds {
