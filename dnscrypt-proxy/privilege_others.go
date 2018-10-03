@@ -7,9 +7,9 @@ import (
 	"os/exec"
 	"os/user"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"syscall"
-	"time"
 
 	"github.com/jedisct1/dlog"
 )
@@ -49,23 +49,42 @@ func (proxy *Proxy) dropPrivilege(userStr string, fds []*os.File) {
 
 	ServiceManagerReadyNotify()
 
-	args = args[1:]
 	args = append(args, "-child")
 
 	dlog.Notice("Dropping privileges")
-	for {
-		cmd = exec.Command(path, args...)
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		cmd.ExtraFiles = fds
-		cmd.SysProcAttr = &syscall.SysProcAttr{}
-		cmd.SysProcAttr.Credential = &syscall.Credential{Uid: uint32(uid), Gid: uint32(gid)}
-		if cmd.Run() == nil {
-			break
-		}
-		time.Sleep(1 * time.Second)
+	runtime.LockOSThread()
+	if _, _, rcode := syscall.RawSyscall(syscall.SYS_SETGROUPS, uintptr(0), uintptr(0), 0); rcode != 0 {
+		dlog.Fatalf("Unable to drop additional groups: %s", err)
 	}
-	os.Exit(0)
+	if _, _, rcode := syscall.RawSyscall(syscall.SYS_SETGID, uintptr(gid), 0, 0); rcode != 0 {
+		dlog.Fatalf("Unable to drop user privileges: %s", err)
+	}
+	if _, _, rcode := syscall.RawSyscall(syscall.SYS_SETUID, uintptr(uid), 0, 0); rcode != 0 {
+		dlog.Fatalf("Unable to drop user privileges: %s", err)
+	}
+	maxfd := uintptr(0)
+	for _, fd := range fds {
+		if fd.Fd() > maxfd {
+			maxfd = fd.Fd()
+		}
+	}
+	fdbase := maxfd + 1
+	for i, fd := range fds {
+		if _, _, rcode := syscall.RawSyscall(syscall.SYS_DUP2, fd.Fd(), fdbase+uintptr(i), 0); rcode != 0 {
+			dlog.Fatal("Unable to clone file descriptor")
+		}
+		if _, _, rcode := syscall.RawSyscall(syscall.SYS_FCNTL, fd.Fd(), syscall.F_SETFD, syscall.FD_CLOEXEC); rcode != 0 {
+			dlog.Fatal("Unable to set the close on exec flag")
+		}
+	}
+	for i := range fds {
+		if _, _, rcode := syscall.RawSyscall(syscall.SYS_DUP2, fdbase+uintptr(i), uintptr(i)+3, 0); rcode != 0 {
+			dlog.Fatal("Unable to reassign descriptor")
+		}
+	}
+	syscall.Exec(path, args, os.Environ())
+	dlog.Fatalf("Unable to reexecute [%s]", path)
+	os.Exit(1)
 }
 
 func killChild() {
