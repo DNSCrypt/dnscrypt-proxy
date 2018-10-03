@@ -1,4 +1,12 @@
 
+* Version 2.0.17
+ - Go >= 1.11 is now supported
+ - The flipside is that Windows XP is not supported any more :(
+ - When dropping privileges, there is no supervisor process any more.
+ - DNS options used to be cleared from DNS queries, with the exception
+of flags and payload sizes. This is not the case any more.
+ - Android builds use a newer NDK, and add compatibility with API 19.
+
 * Version 2.0.16
  - On Unix-like systems, the server can run as an unprivileged user,
 and the main process will automatically restart if an error occurs.
