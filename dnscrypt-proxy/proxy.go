@@ -63,6 +63,7 @@ type Proxy struct {
 	logMaxSize                   int
 	logMaxAge                    int
 	logMaxBackups                int
+	getSetPayload                bool
 }
 
 func (proxy *Proxy) StartProxy() {
