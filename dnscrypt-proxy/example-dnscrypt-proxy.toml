@@ -41,12 +41,7 @@ listen_addresses = ['127.0.0.1:53', '[::1]:53']
 max_clients = 250
 
 
-## Switch to a non-privileged system user after listening sockets have been created.
-## Two processes will be running.
-## The first one will keep root privileges, but is only a supervisor, that does nothing
-## except create the sockets, manage the service, and restart it if it crashes.
-## The second process is the service itself, and that one will always run as a different
-## user.
+## Switch to a different system user after listening sockets have been created.
 ## Note (1): this feature is currently unsupported on Windows.
 ## Note (2): this feature is not compatible with systemd socket activation.
 
@@ -490,6 +485,15 @@ cache_neg_max_ttl = 600
   minisign_key = 'RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3'
   refresh_delay = 72
   prefix = ''
+
+  ## Quad9 over DNSCrypt - https://quad9.net/
+
+  # [sources.quad9-resolvers]
+  # urls = ["https://www.quad9.net/quad9-resolvers.md"]
+  # minisign_key = "RWQBphd2+f6eiAqBsvDZEBXBGHQBJfeG6G+wJPPKxCZMoEQYpmoysKUN"
+  # cache_file = "quad9-resolvers.md"
+  # refresh_delay = 72
+  # prefix = "quad9"
 
   ## Another example source, with resolvers censoring some websites not appropriate for children
   ## This is a subset of the `public-resolvers` list, so enabling both is useless

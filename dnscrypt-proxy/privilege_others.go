@@ -86,11 +86,3 @@ func (proxy *Proxy) dropPrivilege(userStr string, fds []*os.File) {
 	dlog.Fatalf("Unable to reexecute [%s]", path)
 	os.Exit(1)
 }
-
-func killChild() {
-	if cmd != nil {
-		if err := cmd.Process.Kill(); err != nil {
-			dlog.Fatal("Failed to kill child process.")
-		}
-	}
-}
