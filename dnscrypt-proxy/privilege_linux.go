@@ -1,5 +1,3 @@
-// +build !windows,!linux
-
 package main
 
 import (
@@ -70,7 +68,7 @@ func (proxy *Proxy) dropPrivilege(userStr string, fds []*os.File) {
 	}
 	fdbase := maxfd + 1
 	for i, fd := range fds {
-		if _, _, rcode := syscall.RawSyscall(syscall.SYS_DUP2, fd.Fd(), fdbase+uintptr(i), 0); rcode != 0 {
+		if _, _, rcode := syscall.RawSyscall(syscall.SYS_DUP3, fd.Fd(), fdbase+uintptr(i), 0); rcode != 0 {
 			dlog.Fatal("Unable to clone file descriptor")
 		}
 		if _, _, rcode := syscall.RawSyscall(syscall.SYS_FCNTL, fd.Fd(), syscall.F_SETFD, syscall.FD_CLOEXEC); rcode != 0 {
@@ -78,7 +76,7 @@ func (proxy *Proxy) dropPrivilege(userStr string, fds []*os.File) {
 		}
 	}
 	for i := range fds {
-		if _, _, rcode := syscall.RawSyscall(syscall.SYS_DUP2, fdbase+uintptr(i), uintptr(i)+3, 0); rcode != 0 {
+		if _, _, rcode := syscall.RawSyscall(syscall.SYS_DUP3, fdbase+uintptr(i), uintptr(i)+3, 0); rcode != 0 {
 			dlog.Fatal("Unable to reassign descriptor")
 		}
 	}
