@@ -85,7 +85,7 @@ func (proxy *Proxy) dropPrivilege(userStr string, fds []*os.File) {
 			dlog.Fatal("Unable to reassign descriptor")
 		}
 	}
-	syscall.Exec(path, args, os.Environ())
-	dlog.Fatalf("Unable to reexecute [%s]", path)
+	err := syscall.Exec(path, args, os.Environ())
+	dlog.Fatalf("Unable to reexecute [%s]: [%s]", path, err)
 	os.Exit(1)
 }
