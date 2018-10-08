@@ -16,11 +16,8 @@ var cmd *exec.Cmd
 
 func (proxy *Proxy) dropPrivilege(userStr string, fds []*os.File) {
 	currentUser, err := user.Current()
-	if err != nil {
-		dlog.Fatal(err)
-	}
-	if currentUser.Uid != "0" {
-		dlog.Fatal("I need root permissions. Try again with 'sudo'")
+	if err != nil && currentUser.Uid != "0" {
+		dlog.Fatal("Root privileges are required in order to switch to a different user. Maybe try again with 'sudo'")
 	}
 	userInfo, err := user.Lookup(userStr)
 	args := os.Args
