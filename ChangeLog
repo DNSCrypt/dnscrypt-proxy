@@ -5,7 +5,6 @@
  - When dropping privileges, there is no supervisor process any more.
  - DNS options used to be cleared from DNS queries, with the exception
 of flags and payload sizes. This is not the case any more.
- - Android builds use a newer NDK, and add compatibility with API 19.
  - DoH queries are smaller, since workarounds are not required any more
 after Google updated their implementation.
 
