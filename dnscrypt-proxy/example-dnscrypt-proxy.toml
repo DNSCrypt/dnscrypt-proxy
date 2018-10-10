@@ -487,6 +487,15 @@ cache_neg_max_ttl = 600
   refresh_delay = 72
   prefix = ''
 
+  ## Quad9 over DNSCrypt - https://quad9.net/
+
+  # [sources.quad9-resolvers]
+  # urls = ["https://www.quad9.net/quad9-resolvers.md"]
+  # minisign_key = "RWQBphd2+f6eiAqBsvDZEBXBGHQBJfeG6G+wJPPKxCZMoEQYpmoysKUN"
+  # cache_file = "quad9-resolvers.md"
+  # refresh_delay = 72
+  # prefix = "quad9"
+
   ## Another example source, with resolvers censoring some websites not appropriate for children
   ## This is a subset of the `public-resolvers` list, so enabling both is useless
 
