@@ -494,7 +494,7 @@ cache_neg_max_ttl = 600
   # minisign_key = "RWQBphd2+f6eiAqBsvDZEBXBGHQBJfeG6G+wJPPKxCZMoEQYpmoysKUN"
   # cache_file = "quad9-resolvers.md"
   # refresh_delay = 72
-  # prefix = "quad9"
+  # prefix = "quad9-"
 
   ## Another example source, with resolvers censoring some websites not appropriate for children
   ## This is a subset of the `public-resolvers` list, so enabling both is useless
