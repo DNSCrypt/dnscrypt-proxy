@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"math/rand"
 	"net"
 	"strings"
@@ -31,7 +30,7 @@ func (plugin *PluginForward) Description() string {
 
 func (plugin *PluginForward) Init(proxy *Proxy) error {
 	dlog.Noticef("Loading the set of forwarding rules from [%s]", proxy.forwardFile)
-	bin, err := ioutil.ReadFile(proxy.forwardFile)
+	bin, err := ReadTextFile(proxy.forwardFile)
 	if err != nil {
 		return err
 	}

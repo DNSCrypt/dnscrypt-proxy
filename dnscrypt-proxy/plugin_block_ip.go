@@ -3,7 +3,6 @@ package main
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"strings"
 	"time"
@@ -32,7 +31,7 @@ func (plugin *PluginBlockIP) Description() string {
 
 func (plugin *PluginBlockIP) Init(proxy *Proxy) error {
 	dlog.Noticef("Loading the set of IP blocking rules from [%s]", proxy.blockIPFile)
-	bin, err := ioutil.ReadFile(proxy.blockIPFile)
+	bin, err := ReadTextFile(proxy.blockIPFile)
 	if err != nil {
 		return err
 	}

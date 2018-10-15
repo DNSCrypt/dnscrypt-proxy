@@ -1,7 +1,6 @@
 package main
 
 import (
-	"io/ioutil"
 	"net"
 	"strings"
 	"sync"
@@ -36,7 +35,7 @@ func (plugin *PluginCloak) Description() string {
 
 func (plugin *PluginCloak) Init(proxy *Proxy) error {
 	dlog.Noticef("Loading the set of cloaking rules from [%s]", proxy.cloakFile)
-	bin, err := ioutil.ReadFile(proxy.cloakFile)
+	bin, err := ReadTextFile(proxy.cloakFile)
 	if err != nil {
 		return err
 	}

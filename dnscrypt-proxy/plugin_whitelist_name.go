@@ -3,7 +3,6 @@ package main
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"strings"
 	"time"
@@ -31,7 +30,7 @@ func (plugin *PluginWhitelistName) Description() string {
 
 func (plugin *PluginWhitelistName) Init(proxy *Proxy) error {
 	dlog.Noticef("Loading the set of whitelisting rules from [%s]", proxy.whitelistNameFile)
-	bin, err := ioutil.ReadFile(proxy.whitelistNameFile)
+	bin, err := ReadTextFile(proxy.whitelistNameFile)
 	if err != nil {
 		return err
 	}

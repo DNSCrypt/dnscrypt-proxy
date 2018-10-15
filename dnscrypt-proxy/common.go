@@ -1,15 +1,17 @@
 package main
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"net"
+	"os"
 	"runtime"
 	"strconv"
 	"strings"
 	"unicode"
-	"os"
 )
 
 type CryptoConstruction uint16
@@ -38,7 +40,7 @@ var (
 )
 
 var (
-	FileDescriptors = make([]*os.File, 0)
+	FileDescriptors   = make([]*os.File, 0)
 	FileDescriptorNum = 0
 )
 
@@ -169,4 +171,13 @@ func MemUsage() {
 	fmt.Printf("\tTotalAlloc = %v MiB", m.TotalAlloc/1024/1024)
 	fmt.Printf("\tSys = %v MiB", m.Sys/1024/1024)
 	fmt.Printf("\tNumGC = %v\n", m.NumGC)
+}
+
+func ReadTextFile(filename string) (string, error) {
+	bin, err := ioutil.ReadFile(filename)
+	if err != nil {
+		return "", err
+	}
+	bin = bytes.TrimPrefix(bin, []byte{0xef, 0xbb, 0xbf})
+	return string(bin), nil
 }
