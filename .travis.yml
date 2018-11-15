@@ -3,7 +3,7 @@ language: go
 os:
 - linux
 go:
-- 1.x
+- master
 script:
 - gimme --list
 - echo $TRAVIS_GO_VERSION
