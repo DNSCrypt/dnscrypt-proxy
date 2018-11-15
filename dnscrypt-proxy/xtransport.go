@@ -43,6 +43,7 @@ type XTransport struct {
 	tlsDisableSessionTickets bool
 	tlsCipherSuite           []uint16
 	proxyDialer              *netproxy.Dialer
+	httpProxyFunction        func(*http.Request) (*url.URL, error)
 }
 
 var DefaultKeepAlive = 5 * time.Second
@@ -103,6 +104,9 @@ func (xTransport *XTransport) rebuildTransport() {
 				return (*xTransport.proxyDialer).Dial(network, addrStr)
 			}
 		},
+	}
+	if xTransport.httpProxyFunction != nil {
+		transport.Proxy = xTransport.httpProxyFunction
 	}
 	if xTransport.tlsDisableSessionTickets || xTransport.tlsCipherSuite != nil {
 		tlsClientConfig := tls.Config{

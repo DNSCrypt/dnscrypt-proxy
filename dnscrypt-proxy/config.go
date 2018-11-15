@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"net"
+	"net/http"
 	"net/url"
 	"os"
 	"path"
@@ -71,6 +72,7 @@ type Config struct {
 	NetprobeAddress          string                     `toml:"netprobe_address"`
 	NetprobeTimeout          int                        `toml:"netprobe_timeout"`
 	OfflineMode              bool                       `toml:"offline_mode"`
+	HTTPProxyURL             string                     `toml:"http_proxy"`
 }
 
 func newConfig() Config {
@@ -254,11 +256,18 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 	proxy.xTransport.useIPv4 = config.SourceIPv4
 	proxy.xTransport.useIPv6 = config.SourceIPv6
 	proxy.xTransport.keepAlive = time.Duration(config.KeepAlive) * time.Second
+	if len(config.HTTPProxyURL) > 0 {
+		httpProxyURL, err := url.Parse(config.HTTPProxyURL)
+		if err != nil {
+			dlog.Fatalf("Unable to parse the HTTP proxy URL [%v]", config.HTTPProxyURL)
+		}
+		proxy.xTransport.httpProxyFunction = http.ProxyURL(httpProxyURL)
+	}
 
 	if len(config.Proxy) > 0 {
 		proxyDialerURL, err := url.Parse(config.Proxy)
 		if err != nil {
-			dlog.Fatalf("Unable to parse proxy url [%v]", config.Proxy)
+			dlog.Fatalf("Unable to parse the proxy URL [%v]", config.Proxy)
 		}
 		proxyDialer, err := netproxy.FromURL(proxyDialerURL, netproxy.Direct)
 		if err != nil {
