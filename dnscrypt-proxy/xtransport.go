@@ -252,7 +252,7 @@ func (xTransport *XTransport) Fetch(method string, url *url.URL, accept string, 
 }
 
 func (xTransport *XTransport) Get(url *url.URL, accept string, timeout time.Duration) (*http.Response, time.Duration, error) {
-	return xTransport.Fetch("GET", url, "", "", nil, timeout, nil)
+	return xTransport.Fetch("GET", url, accept, "", nil, timeout, nil)
 }
 
 func (xTransport *XTransport) Post(url *url.URL, accept string, contentType string, body []byte, timeout time.Duration, padding *string) (*http.Response, time.Duration, error) {
