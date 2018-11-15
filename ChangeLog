@@ -1,4 +1,13 @@
 
+* Version 2.0.18
+ - Official builds now support TLS 1.3.
+ - The timeout for the initial connectivity check can now be set from
+the command line.
+ - An `Accept:` header is now always sent with `GET` queries.
+ - BOMs are now ignored in configuration files.
+ - In addition to SOCKS, HTTP and HTTPS proxies are now supported for
+DoH servers.
+
 * Version 2.0.17
  - Go >= 1.11 is now supported
  - The flipside is that Windows XP is not supported any more :(
