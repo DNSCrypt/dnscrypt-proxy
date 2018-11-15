@@ -190,6 +190,7 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 	check := flag.Bool("check", false, "check the configuration file and exit")
 	configFile := flag.String("config", DefaultConfigFileName, "Path to the configuration file")
 	child := flag.Bool("child", false, "Invokes program as a child process")
+	netprobeTimeoutOverride := flag.Int("netprobe-timeout", 30, "Override the netprobe timeout")
 
 	flag.Parse()
 
@@ -395,7 +396,11 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 		config.SourceDoH = true
 	}
 
-	netProbe(config.NetprobeAddress, config.NetprobeTimeout)
+	netprobeTimeout := config.NetprobeTimeout
+	if netprobeTimeoutOverride != nil {
+		netprobeTimeout = *netprobeTimeoutOverride
+	}
+	netProbe(config.NetprobeAddress, netprobeTimeout)
 	if !config.OfflineMode {
 		if err := config.loadSources(proxy); err != nil {
 			return err
