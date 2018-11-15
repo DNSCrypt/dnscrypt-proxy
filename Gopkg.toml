@@ -11,12 +11,8 @@
   version = "1.1.1"
 
 [[constraint]]
-  branch = "master"
-  name = "github.com/agl/ed25519"
-
-[[constraint]]
   name = "github.com/coreos/go-systemd"
-  version = "17.0.0"
+  version = "18.0.0"
 
 [[constraint]]
   branch = "master"
@@ -35,8 +31,8 @@
   version = "0.5.0"
 
 [[constraint]]
-  branch = "master"
   name = "github.com/jedisct1/dlog"
+  branch = "master"
 
 [[constraint]]
   branch = "master"
@@ -64,7 +60,7 @@
 
 [[constraint]]
   name = "github.com/miekg/dns"
-  version = "1.0.12"
+  version = "1.0.15"
 
 [[constraint]]
   branch = "master"
