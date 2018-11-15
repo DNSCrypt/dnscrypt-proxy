@@ -4,7 +4,7 @@
 
 A flexible DNS proxy, with support for modern encrypted DNS protocols such as [DNSCrypt v2](https://dnscrypt.info/protocol) and [DNS-over-HTTPS](https://www.rfc-editor.org/rfc/rfc8484.txt).
 
-## [dnscrypt-proxy 2.0.17 final is available for download!](https://github.com/jedisct1/dnscrypt-proxy/releases/latest)
+## [dnscrypt-proxy 2.0.18 final is available for download!](https://github.com/jedisct1/dnscrypt-proxy/releases/latest)
 
 * [dnscrypt-proxy documentation](https://dnscrypt.info/doc) – This project's documentation (Wiki)
 * [DNSCrypt project home page](https://dnscrypt.info/)
@@ -15,7 +15,7 @@ A flexible DNS proxy, with support for modern encrypted DNS protocols such as [D
 
 ## Features
 
-* DNS traffic encryption and authentication. Supports DNS-over-HTTPS (DoH) and DNSCrypt.
+* DNS traffic encryption and authentication. Supports DNS-over-HTTPS (DoH) using TLS 1.3, and DNSCrypt.
 * DNS query monitoring, with separate log files for regular and suspicious queries
 * Filtering: block ads, malware, and other unwanted content. Compatible with all DNS services
 * Time-based filtering, with a flexible weekly schedule
