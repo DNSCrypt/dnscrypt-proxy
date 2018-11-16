@@ -406,9 +406,11 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 	}
 
 	netprobeTimeout := config.NetprobeTimeout
-	if netprobeTimeoutOverride != nil {
-		netprobeTimeout = *netprobeTimeoutOverride
-	}
+	flag.Visit(func(flag *flag.Flag) {
+		if flag.Name == "netprobe-timeout" && netprobeTimeoutOverride != nil {
+			netprobeTimeout = *netprobeTimeoutOverride
+		}
+	})
 	netProbe(config.NetprobeAddress, netprobeTimeout)
 	if !config.OfflineMode {
 		if err := config.loadSources(proxy); err != nil {
