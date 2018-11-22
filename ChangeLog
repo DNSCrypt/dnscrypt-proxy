@@ -1,3 +1,11 @@
+* Version 2.0.19
+ - The value for `netprobe_timeout` was read from the command-line, but
+not from the configuration file any more. This is a regression introduced
+in the previous version, that has been fixed.
+ - The default value for netprobe timeouts has been raised to 60 seconds.
+ - A hash of the body is added to query parameters when sending DoH
+queries with the POST method in order to work around badly configured
+proxies.
 
 * Version 2.0.18
  - Official builds now support TLS 1.3.
