@@ -7,7 +7,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -163,7 +162,7 @@ func (xTransport *XTransport) resolve(dnsClient *dns.Client, host string, resolv
 	return nil, err
 }
 
-func (xTransport *XTransport) Fetch(method string, url *url.URL, accept string, contentType string, body *io.ReadCloser, timeout time.Duration, padding *string) (*http.Response, time.Duration, error) {
+func (xTransport *XTransport) Fetch(method string, url *url.URL, accept string, contentType string, body *[]byte, timeout time.Duration, padding *string) (*http.Response, time.Duration, error) {
 	if timeout <= 0 {
 		timeout = xTransport.timeout
 	}
@@ -185,7 +184,9 @@ func (xTransport *XTransport) Fetch(method string, url *url.URL, accept string, 
 		Close:  false,
 	}
 	if body != nil {
-		req.Body = *body
+		req.ContentLength = int64(len(*body))
+		bc := ioutil.NopCloser(bytes.NewReader(*body))
+		req.Body = bc
 	}
 	var err error
 	host := url.Host
@@ -259,9 +260,9 @@ func (xTransport *XTransport) Get(url *url.URL, accept string, timeout time.Dura
 	return xTransport.Fetch("GET", url, accept, "", nil, timeout, nil)
 }
 
-func (xTransport *XTransport) Post(url *url.URL, accept string, contentType string, body []byte, timeout time.Duration, padding *string) (*http.Response, time.Duration, error) {
-	bc := ioutil.NopCloser(bytes.NewReader(body))
-	return xTransport.Fetch("POST", url, accept, contentType, &bc, timeout, padding)
+func (xTransport *XTransport) Post(url *url.URL, accept string, contentType string, body *[]byte, timeout time.Duration, padding *string) (*http.Response, time.Duration, error) {
+
+	return xTransport.Fetch("POST", url, accept, contentType, body, timeout, padding)
 }
 
 func (xTransport *XTransport) DoHQuery(useGet bool, url *url.URL, body []byte, timeout time.Duration) (*http.Response, time.Duration, error) {
@@ -280,7 +281,7 @@ func (xTransport *XTransport) DoHQuery(useGet bool, url *url.URL, body []byte, t
 		url2.RawQuery = qs.Encode()
 		return xTransport.Get(&url2, dataType, timeout)
 	}
-	return xTransport.Post(url, dataType, dataType, body, timeout, padding)
+	return xTransport.Post(url, dataType, dataType, &body, timeout, padding)
 }
 
 func (xTransport *XTransport) makePad(padLen int) *string {
