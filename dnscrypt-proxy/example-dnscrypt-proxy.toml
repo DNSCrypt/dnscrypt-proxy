@@ -190,7 +190,7 @@ ignore_system_dns = false
 ## connectivity is not guaranteed to be immediately available.
 ## Use 0 to disable.
 
-netprobe_timeout = 30
+netprobe_timeout = 60
 
 
 ## Offline mode - Do not use any remote encrypted servers.

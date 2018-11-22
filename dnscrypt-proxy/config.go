@@ -106,7 +106,7 @@ func newConfig() Config {
 		TLSDisableSessionTickets: false,
 		TLSCipherSuite:           nil,
 		NetprobeAddress:          "9.9.9.9:53",
-		NetprobeTimeout:          30,
+		NetprobeTimeout:          60,
 		OfflineMode:              false,
 	}
 }
@@ -192,7 +192,7 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 	check := flag.Bool("check", false, "check the configuration file and exit")
 	configFile := flag.String("config", DefaultConfigFileName, "Path to the configuration file")
 	child := flag.Bool("child", false, "Invokes program as a child process")
-	netprobeTimeoutOverride := flag.Int("netprobe-timeout", 30, "Override the netprobe timeout")
+	netprobeTimeoutOverride := flag.Int("netprobe-timeout", 60, "Override the netprobe timeout")
 
 	flag.Parse()
 
