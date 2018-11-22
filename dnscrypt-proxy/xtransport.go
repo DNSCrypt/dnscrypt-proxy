@@ -198,7 +198,6 @@ func (xTransport *XTransport) Fetch(method string, url *url.URL, accept string, 
 		bc := ioutil.NopCloser(bytes.NewReader(*body))
 		req.Body = bc
 	}
-	fmt.Println(req)
 	var err error
 	host := url.Host
 	xTransport.cachedIPs.RLock()
