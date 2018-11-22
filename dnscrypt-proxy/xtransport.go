@@ -3,8 +3,10 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/sha512"
 	"crypto/tls"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -177,6 +179,14 @@ func (xTransport *XTransport) Fetch(method string, url *url.URL, accept string, 
 	if padding != nil {
 		header["X-Pad"] = []string{*padding}
 	}
+	if body != nil {
+		h := sha512.Sum512(*body)
+		qs := url.Query()
+		qs.Add("body_hash", hex.EncodeToString(h[:32]))
+		url2 := *url
+		url2.RawQuery = qs.Encode()
+		url = &url2
+	}
 	req := &http.Request{
 		Method: method,
 		URL:    url,
@@ -188,6 +198,7 @@ func (xTransport *XTransport) Fetch(method string, url *url.URL, accept string, 
 		bc := ioutil.NopCloser(bytes.NewReader(*body))
 		req.Body = bc
 	}
+	fmt.Println(req)
 	var err error
 	host := url.Host
 	xTransport.cachedIPs.RLock()
