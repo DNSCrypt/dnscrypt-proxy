@@ -206,7 +206,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:7f80e6d51e34f74f6cb67b4ed3996c95c9b3a821b2498781688ec389e49d1664"
+  digest = "1:ba34c1c340b60aef6b918408d10368f00f45ff869dc6a5910bcc676a10371341"
   name = "golang.org/x/sys"
   packages = [
     "cpu",
@@ -218,7 +218,7 @@
     "windows/svc/mgr",
   ]
   pruneopts = "UT"
-  revision = "66b7b1311ac80bbafcd2daeef9a5e6e2cd1e2399"
+  revision = "62eef0e2fa9b2c385f7b2778e763486da6880d37"
 
 [[projects]]
   digest = "1:a2ab62866c75542dd18d2b069fec854577a20211d7c0ea6ae746072a1dccdd18"

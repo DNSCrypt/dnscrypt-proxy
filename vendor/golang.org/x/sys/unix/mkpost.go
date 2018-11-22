@@ -46,6 +46,10 @@ func main() {
 	valRegex := regexp.MustCompile(`type (Fsid|Sigset_t) struct {(\s+)X__val(\s+\S+\s+)}`)
 	b = valRegex.ReplaceAll(b, []byte("type $1 struct {${2}Val$3}"))
 
+	// Intentionally export __fds_bits field in FdSet
+	fdSetRegex := regexp.MustCompile(`type (FdSet) struct {(\s+)X__fds_bits(\s+\S+\s+)}`)
+	b = fdSetRegex.ReplaceAll(b, []byte("type $1 struct {${2}Bits$3}"))
+
 	// If we have empty Ptrace structs, we should delete them. Only s390x emits
 	// nonempty Ptrace structs.
 	ptraceRexexp := regexp.MustCompile(`type Ptrace((Psw|Fpregs|Per) struct {\s*})`)
