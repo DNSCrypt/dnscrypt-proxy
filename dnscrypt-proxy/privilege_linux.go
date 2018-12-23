@@ -54,13 +54,13 @@ func (proxy *Proxy) dropPrivilege(userStr string, fds []*os.File) {
 	dlog.Notice("Dropping privileges")
 	runtime.LockOSThread()
 	if _, _, rcode := syscall.RawSyscall(syscall.SYS_SETGROUPS, uintptr(0), uintptr(0), 0); rcode != 0 {
-		dlog.Fatalf("Unable to drop additional groups: [%s]", err)
+		dlog.Fatalf("Unable to drop additional groups: [%s]", rcode.Error())
 	}
 	if _, _, rcode := syscall.RawSyscall(syscall.SYS_SETGID, uintptr(gid), 0, 0); rcode != 0 {
-		dlog.Fatalf("Unable to drop user privileges: [%s]", err)
+		dlog.Fatalf("Unable to drop user privileges: [%s]", rcode.Error())
 	}
 	if _, _, rcode := syscall.RawSyscall(syscall.SYS_SETUID, uintptr(uid), 0, 0); rcode != 0 {
-		dlog.Fatalf("Unable to drop user privileges: [%s]", err)
+		dlog.Fatalf("Unable to drop user privileges: [%s]", rcode.Error())
 	}
 	maxfd := uintptr(0)
 	for _, fd := range fds {
@@ -71,15 +71,15 @@ func (proxy *Proxy) dropPrivilege(userStr string, fds []*os.File) {
 	fdbase := maxfd + 1
 	for i, fd := range fds {
 		if _, _, rcode := syscall.RawSyscall(syscall.SYS_DUP3, fd.Fd(), fdbase+uintptr(i), 0); rcode != 0 {
-			dlog.Fatal("Unable to clone file descriptor")
+			dlog.Fatalf("Unable to clone file descriptor: [%s]", rcode.Error())
 		}
 		if _, _, rcode := syscall.RawSyscall(syscall.SYS_FCNTL, fd.Fd(), syscall.F_SETFD, syscall.FD_CLOEXEC); rcode != 0 {
-			dlog.Fatal("Unable to set the close on exec flag")
+			dlog.Fatalf("Unable to set the close on exec flag: [%s]", rcode.Error())
 		}
 	}
 	for i := range fds {
 		if _, _, rcode := syscall.RawSyscall(syscall.SYS_DUP3, fdbase+uintptr(i), uintptr(i)+3, 0); rcode != 0 {
-			dlog.Fatal("Unable to reassign descriptor")
+			dlog.Fatalf("Unable to reassign descriptor: [%s]", rcode.Error())
 		}
 	}
 	err = syscall.Exec(path, args, os.Environ())
