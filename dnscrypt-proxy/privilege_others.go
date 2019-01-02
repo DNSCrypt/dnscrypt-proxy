@@ -14,8 +14,6 @@ import (
 	"github.com/jedisct1/dlog"
 )
 
-var cmd *exec.Cmd
-
 func (proxy *Proxy) dropPrivilege(userStr string, fds []*os.File) {
 	currentUser, err := user.Current()
 	if err != nil && currentUser.Uid != "0" {
