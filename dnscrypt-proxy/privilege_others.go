@@ -14,6 +14,10 @@ import (
 	"github.com/jedisct1/dlog"
 )
 
+func serviceStartupUserName() *string {
+	return nil
+}
+
 func (proxy *Proxy) dropPrivilege(userStr string, fds []*os.File) {
 	currentUser, err := user.Current()
 	if err != nil && currentUser.Uid != "0" {

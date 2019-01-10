@@ -35,6 +35,9 @@ func main() {
 		Description:      "Encrypted/authenticated DNS proxy",
 		WorkingDirectory: pwd,
 	}
+	if serviceUserName := serviceStartupUserName(); serviceUserName != nil {
+		svcConfig.UserName = *serviceUserName
+	}
 	svcFlag := flag.String("service", "", fmt.Sprintf("Control the system service: %q", service.ControlAction))
 	app := &App{}
 	svc, err := service.New(app, svcConfig)
