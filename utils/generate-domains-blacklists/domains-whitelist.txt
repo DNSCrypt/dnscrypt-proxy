@@ -18,6 +18,7 @@ microsoft.com
 msedge.net
 nsatc.net
 ovh.net
+polyfill.io
 pusher.com
 pusherapp.com
 spotify.com
