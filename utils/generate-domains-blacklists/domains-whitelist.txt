@@ -21,6 +21,7 @@ ovh.net
 polyfill.io
 pusher.com
 pusherapp.com
+revinate.com
 spotify.com
 tagcommander.com
 tracker.debian.org
