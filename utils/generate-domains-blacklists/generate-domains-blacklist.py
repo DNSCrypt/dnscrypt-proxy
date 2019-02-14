@@ -8,21 +8,44 @@ import sys
 import urllib2
 
 
-def parse_list(content, trusted=False):
+def parse_trusted_list(content):
     rx_comment = re.compile(r'^(#|$)')
     rx_inline_comment = re.compile(r'\s*#\s*[a-z0-9-].*$')
-    rx_u = re.compile(r'^@*\|\|([a-z0-9.-]+[.][a-z]{2,})\^?(\$(popup|third-party))?$')
-    rx_l = re.compile(r'^([a-z0-9.-]+[.][a-z]{2,})$')
-    rx_h = re.compile(r'^[0-9]{1,3}[.][0-9]{1,3}[.][0-9]{1,3}[.][0-9]{1,3}\s+([a-z0-9.-]+[.][a-z]{2,})$')
-    rx_mdl = re.compile(r'^"[^"]+","([a-z0-9.-]+[.][a-z]{2,})",')
-    rx_b = re.compile(r'^([a-z0-9.-]+[.][a-z]{2,}),.+,[0-9: /-]+,')
-    rx_dq = re.compile(r'^address=/([a-z0-9.-]+[.][a-z]{2,})/.')
     rx_trusted = re.compile(r'^([*a-z0-9.-]+)$')
 
     names = set()
-    rx_set = [rx_u, rx_l, rx_h, rx_mdl, rx_b, rx_dq]
+    rx_set = [rx_trusted]
+    for line in content.splitlines():
+        line = str.lower(str.strip(line))
+        if rx_comment.match(line):
+            continue
+        line = rx_inline_comment.sub('', line)
+        for rx in rx_set:
+            matches = rx.match(line)
+            if not matches:
+                continue
+            name = matches.group(1)
+            names.add(name)
+    return names
+
+
+def parse_list(content, trusted=False):
+    rx_comment = re.compile(r'^(#|$)')
+    rx_inline_comment = re.compile(r'\s*#\s*[a-z0-9-].*$')
+    rx_u = re.compile(
+        r'^@*\|\|([a-z0-9.-]+[.][a-z]{2,})\^?(\$(popup|third-party))?$')
+    rx_l = re.compile(r'^([a-z0-9.-]+[.][a-z]{2,})$')
+    rx_h = re.compile(
+        r'^[0-9]{1,3}[.][0-9]{1,3}[.][0-9]{1,3}[.][0-9]{1,3}\s+([a-z0-9.-]+[.][a-z]{2,})$')
+    rx_mdl = re.compile(r'^"[^"]+","([a-z0-9.-]+[.][a-z]{2,})",')
+    rx_b = re.compile(r'^([a-z0-9.-]+[.][a-z]{2,}),.+,[0-9: /-]+,')
+    rx_dq = re.compile(r'^address=/([a-z0-9.-]+[.][a-z]{2,})/.')
+
     if trusted:
-        rx_set = [rx_trusted]
+        return parse_trusted_list(content)
+
+    names = set()
+    rx_set = [rx_u, rx_l, rx_h, rx_mdl, rx_b, rx_dq]
     for line in content.splitlines():
         line = str.lower(str.strip(line))
         if rx_comment.match(line):
@@ -49,7 +72,8 @@ def load_from_url(url):
     except urllib2.URLError as err:
         raise Exception("[{}] could not be loaded: {}\n".format(url, err))
     if trusted is False and response.getcode() != 200:
-        raise Exception("[{}] returned HTTP code {}\n".format(url, response.getcode()))
+        raise Exception("[{}] returned HTTP code {}\n".format(
+            url, response.getcode()))
     content = response.read()
 
     return (content, trusted)
@@ -108,7 +132,7 @@ def blacklists_from_config_file(file, whitelist, time_restricted_url, ignore_ret
 
     if time_restricted_url:
         time_restricted_content, trusted = load_from_url(time_restricted_url)
-        time_restricted_names = parse_list(time_restricted_content)
+        time_restricted_names = parse_list(time_restricted_content, trusted)
 
         if time_restricted_names:
             print("########## Time-based blacklist ##########\n")
@@ -147,17 +171,18 @@ def blacklists_from_config_file(file, whitelist, time_restricted_url, ignore_ret
             print(name)
 
 
-argp = argparse.ArgumentParser(description="Create a unified blacklist from a set of local and remote files")
+argp = argparse.ArgumentParser(
+    description="Create a unified blacklist from a set of local and remote files")
 argp.add_argument("-c", "--config", default="domains-blacklist.conf",
-    help="file containing blacklist sources")
+                  help="file containing blacklist sources")
 argp.add_argument("-w", "--whitelist", default="domains-whitelist.txt",
-    help="file containing a set of names to exclude from the blacklist")
+                  help="file containing a set of names to exclude from the blacklist")
 argp.add_argument("-r", "--time-restricted", default="domains-time-restricted.txt",
-    help="file containing a set of names to be time restricted")
+                  help="file containing a set of names to be time restricted")
 argp.add_argument("-i", "--ignore-retrieval-failure", action='store_true',
-    help="generate list even if some urls couldn't be retrieved")
+                  help="generate list even if some urls couldn't be retrieved")
 argp.add_argument("-t", "--timeout", default=30,
-    help="URL open timeout")
+                  help="URL open timeout")
 args = argp.parse_args()
 
 conf = args.config
@@ -165,4 +190,5 @@ whitelist = args.whitelist
 time_restricted = args.time_restricted
 ignore_retrieval_failure = args.ignore_retrieval_failure
 
-blacklists_from_config_file(conf, whitelist, time_restricted, ignore_retrieval_failure)
+blacklists_from_config_file(
+    conf, whitelist, time_restricted, ignore_retrieval_failure)
