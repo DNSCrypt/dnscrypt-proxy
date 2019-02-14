@@ -8,12 +8,13 @@ import sys
 import urllib2
 
 
-def parse_trusted_list(content):
+def parse_time_restricted_list(content):
     rx_comment = re.compile(r'^(#|$)')
     rx_inline_comment = re.compile(r'\s*#\s*[a-z0-9-].*$')
-    rx_trusted = re.compile(r'^([*a-z0-9.-]+)$')
+    rx_trusted = re.compile(r'^([*a-z0-9.-]+)\s*(@\S+)?$')
 
     names = set()
+    time_restrictions = {}
     rx_set = [rx_trusted]
     for line in content.splitlines():
         line = str.lower(str.strip(line))
@@ -26,7 +27,16 @@ def parse_trusted_list(content):
                 continue
             name = matches.group(1)
             names.add(name)
-    return names
+            time_restriction = matches.group(2)
+            if time_restriction:
+                time_restrictions[name] = time_restriction
+    return names, time_restrictions
+
+
+def parse_trusted_list(content):
+    names, _time_restrictions = parse_time_restricted_list(content)
+    time_restrictions = {}
+    return names, time_restrictions
 
 
 def parse_list(content, trusted=False):
@@ -45,6 +55,7 @@ def parse_list(content, trusted=False):
         return parse_trusted_list(content)
 
     names = set()
+    time_restrictions = {}
     rx_set = [rx_u, rx_l, rx_h, rx_mdl, rx_b, rx_dq]
     for line in content.splitlines():
         line = str.lower(str.strip(line))
@@ -57,7 +68,15 @@ def parse_list(content, trusted=False):
                 continue
             name = matches.group(1)
             names.add(name)
-    return names
+    return names, time_restrictions
+
+
+def print_restricted_name(name, time_restrictions):
+    if name in time_restrictions:
+        print("{}\t{}".format(name, time_restrictions[name]))
+    else:
+        print("# ignored: [{}] was in the time-restricted list, "
+              "but without a time restriction label".format(name))
 
 
 def load_from_url(url):
@@ -100,7 +119,8 @@ def whitelist_from_url(url):
         return set()
     content, trusted = load_from_url(url)
 
-    return parse_list(content, trusted)
+    names, _time_restrictions = parse_list(content, trusted)
+    return names
 
 
 def blacklists_from_config_file(file, whitelist, time_restricted_url, ignore_retrieval_failure):
@@ -118,7 +138,7 @@ def blacklists_from_config_file(file, whitelist, time_restricted_url, ignore_ret
             url = line
             try:
                 content, trusted = load_from_url(url)
-                names = parse_list(content, trusted)
+                names, _time_restrictions = parse_list(content, trusted)
                 blacklists[url] = names
                 all_names |= names
             except Exception as e:
@@ -131,13 +151,14 @@ def blacklists_from_config_file(file, whitelist, time_restricted_url, ignore_ret
         time_restricted_url = "file:" + time_restricted_url
 
     if time_restricted_url:
-        time_restricted_content, trusted = load_from_url(time_restricted_url)
-        time_restricted_names = parse_list(time_restricted_content, trusted)
+        time_restricted_content, _trusted = load_from_url(time_restricted_url)
+        time_restricted_names, time_restrictions = parse_time_restricted_list(
+            time_restricted_content)
 
         if time_restricted_names:
             print("########## Time-based blacklist ##########\n")
             for name in time_restricted_names:
-                print(name)
+                print_restricted_name(name, time_restrictions)
 
         # Time restricted names should be whitelisted, or they could be always blocked
         whitelisted_names |= time_restricted_names
