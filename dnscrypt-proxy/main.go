@@ -24,6 +24,7 @@ type App struct {
 
 func main() {
 	dlog.Init("dnscrypt-proxy", dlog.SeverityNotice, "DAEMON")
+	os.Setenv("GODEBUG", os.Getenv("GODEBUG")+",tls13=1")
 
 	pwd, err := os.Getwd()
 	if err != nil {
