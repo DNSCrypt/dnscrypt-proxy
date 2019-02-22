@@ -73,6 +73,7 @@ type Config struct {
 	NetprobeTimeout          int                        `toml:"netprobe_timeout"`
 	OfflineMode              bool                       `toml:"offline_mode"`
 	HTTPProxyURL             string                     `toml:"http_proxy"`
+	RefusedCodeInResponses   bool                       `toml:"refused_code_in_responses"`
 }
 
 func newConfig() Config {
@@ -108,6 +109,7 @@ func newConfig() Config {
 		NetprobeAddress:          "9.9.9.9:53",
 		NetprobeTimeout:          60,
 		OfflineMode:              false,
+		RefusedCodeInResponses:   false,
 	}
 }
 
@@ -278,6 +280,7 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 
 	proxy.xTransport.rebuildTransport()
 
+	proxy.refusedCodeInResponses = config.RefusedCodeInResponses
 	proxy.timeout = time.Duration(config.Timeout) * time.Millisecond
 	proxy.maxClients = config.MaxClients
 	proxy.mainProto = "udp"

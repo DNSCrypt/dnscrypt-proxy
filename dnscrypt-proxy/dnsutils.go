@@ -31,12 +31,16 @@ func EmptyResponseFromMessage(srcMsg *dns.Msg) (*dns.Msg, error) {
 	return dstMsg, nil
 }
 
-func RefusedResponseFromMessage(srcMsg *dns.Msg) (*dns.Msg, error) {
+func RefusedResponseFromMessage(srcMsg *dns.Msg, refusedCode bool) (*dns.Msg, error) {
 	dstMsg, err := EmptyResponseFromMessage(srcMsg)
 	if err != nil {
 		return dstMsg, err
 	}
-	dstMsg.Rcode = dns.RcodeRefused
+	if refusedCode {
+		dstMsg.Rcode = dns.RcodeRefused
+	} else {
+		dstMsg.Rcode = dns.RcodeSuccess
+	}
 	return dstMsg, nil
 }
 
