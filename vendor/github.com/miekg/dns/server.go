@@ -162,11 +162,11 @@ type defaultReader struct {
 	*Server
 }
 
-func (dr *defaultReader) ReadTCP(conn net.Conn, timeout time.Duration) ([]byte, error) {
+func (dr defaultReader) ReadTCP(conn net.Conn, timeout time.Duration) ([]byte, error) {
 	return dr.readTCP(conn, timeout)
 }
 
-func (dr *defaultReader) ReadUDP(conn *net.UDPConn, timeout time.Duration) ([]byte, *SessionUDP, error) {
+func (dr defaultReader) ReadUDP(conn *net.UDPConn, timeout time.Duration) ([]byte, *SessionUDP, error) {
 	return dr.readUDP(conn, timeout)
 }
 
@@ -203,9 +203,6 @@ type Server struct {
 	IdleTimeout func() time.Duration
 	// Secret(s) for Tsig map[<zonename>]<base64 secret>. The zonename must be in canonical form (lowercase, fqdn, see RFC 4034 Section 6.2).
 	TsigSecret map[string]string
-	// Unsafe instructs the server to disregard any sanity checks and directly hand the message to
-	// the handler. It will specifically not check if the query has the QR bit not set.
-	Unsafe bool
 	// If NotifyStartedFunc is set it is called once the server has started listening.
 	NotifyStartedFunc func()
 	// DecorateReader is optional, allows customization of the process that reads raw DNS messages.
@@ -217,6 +214,9 @@ type Server struct {
 	// Whether to set the SO_REUSEPORT socket option, allowing multiple listeners to be bound to a single address.
 	// It is only supported on go1.11+ and when using ListenAndServe.
 	ReusePort bool
+	// AcceptMsgFunc will check the incoming message and will reject it early in the process.
+	// By default DefaultMsgAcceptFunc will be used.
+	MsgAcceptFunc MsgAcceptFunc
 
 	// UDP packet or TCP connection queue
 	queue chan *response
@@ -299,6 +299,9 @@ func (srv *Server) init() {
 
 	if srv.UDPSize == 0 {
 		srv.UDPSize = MinMsgSize
+	}
+	if srv.MsgAcceptFunc == nil {
+		srv.MsgAcceptFunc = defaultMsgAcceptFunc
 	}
 
 	srv.udpPool.New = makeUDPBuffer(srv.UDPSize)
@@ -460,11 +463,10 @@ var testShutdownNotify *sync.Cond
 
 // getReadTimeout is a helper func to use system timeout if server did not intend to change it.
 func (srv *Server) getReadTimeout() time.Duration {
-	rtimeout := dnsTimeout
 	if srv.ReadTimeout != 0 {
-		rtimeout = srv.ReadTimeout
+		return srv.ReadTimeout
 	}
-	return rtimeout
+	return dnsTimeout
 }
 
 // serveTCP starts a TCP listener for the server.
@@ -515,7 +517,7 @@ func (srv *Server) serveUDP(l *net.UDPConn) error {
 		srv.NotifyStartedFunc()
 	}
 
-	reader := Reader(&defaultReader{srv})
+	reader := Reader(defaultReader{srv})
 	if srv.DecorateReader != nil {
 		reader = srv.DecorateReader(reader)
 	}
@@ -585,7 +587,7 @@ func (srv *Server) serve(w *response) {
 		w.wg.Done()
 	}()
 
-	reader := Reader(&defaultReader{srv})
+	reader := Reader(defaultReader{srv})
 	if srv.DecorateReader != nil {
 		reader = srv.DecorateReader(reader)
 	}
@@ -630,14 +632,34 @@ func (srv *Server) disposeBuffer(w *response) {
 }
 
 func (srv *Server) serveDNS(w *response) {
-	req := new(Msg)
-	err := req.Unpack(w.msg)
-	if err != nil { // Send a FormatError back
-		x := new(Msg)
-		x.SetRcodeFormatError(req)
-		w.WriteMsg(x)
+	dh, off, err := unpackMsgHdr(w.msg, 0)
+	if err != nil {
+		// Let client hang, they are sending crap; any reply can be used to amplify.
+		return
 	}
-	if err != nil || !srv.Unsafe && req.Response {
+
+	req := new(Msg)
+	req.setHdr(dh)
+
+	switch srv.MsgAcceptFunc(dh) {
+	case MsgAccept:
+	case MsgIgnore:
+		return
+	case MsgReject:
+		req.SetRcodeFormatError(req)
+		// Are we allowed to delete any OPT records here?
+		req.Ns, req.Answer, req.Extra = nil, nil, nil
+
+		w.WriteMsg(req)
+		srv.disposeBuffer(w)
+		return
+	}
+
+	if err := req.unpack(dh, w.msg, off); err != nil {
+		req.SetRcodeFormatError(req)
+		req.Ns, req.Answer, req.Extra = nil, nil, nil
+
+		w.WriteMsg(req)
 		srv.disposeBuffer(w)
 		return
 	}
@@ -760,8 +782,7 @@ func (w *response) Write(m []byte) (int, error) {
 
 	switch {
 	case w.udp != nil:
-		n, err := WriteToSessionUDP(w.udp, m, w.udpSession)
-		return n, err
+		return WriteToSessionUDP(w.udp, m, w.udpSession)
 	case w.tcp != nil:
 		lm := len(m)
 		if lm < 2 {

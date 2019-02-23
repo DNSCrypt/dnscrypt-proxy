@@ -34,6 +34,17 @@
   revision = "3fee0db0b63511234f7230da50b72414f6258f10"
 
 [[projects]]
+  branch = "master"
+  digest = "1:47ea4fbe2ab4aeb9808502c51e657041c2e49b36b83fc1c1a349135cdf16342f"
+  name = "github.com/agl/ed25519"
+  packages = [
+    ".",
+    "edwards25519",
+  ]
+  pruneopts = "UT"
+  revision = "5312a61534124124185d41f09206b9fef1d88403"
+
+[[projects]]
   digest = "1:9ddcd6732e302feb09865d8bfbebd55c295d95915ee0a530fd22b51851d852e4"
   name = "github.com/coreos/go-systemd"
   packages = [
@@ -78,11 +89,11 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:4d9d876a856ada3b553062ac8e50331a9a539e12893c0c4a50d8ae2af4242685"
+  digest = "1:0a48cb9c2757781932550a45ad11dd497722d4018a28077de65674aec7eee90e"
   name = "github.com/hashicorp/go-syslog"
   packages = ["."]
   pruneopts = "UT"
-  revision = "326bf4a7f709d263f964a6a96558676b103f3534"
+  revision = "8d1874e3e8d1862b74e0536851e218c4571066a5"
 
 [[projects]]
   digest = "1:8ec8d88c248041a6df5f6574b87bc00e7e0b493881dad2e7ef47b11dc69093b5"
@@ -97,11 +108,11 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:d7b8c19830aedc4fec0c843fd3ada94eeb47f7c4f43149f90e6e9623627480d7"
+  digest = "1:380d66115ab180714aae0d7c81878812ca8b8fa99baed3e40d0737d7c9df1b7f"
   name = "github.com/jedisct1/dlog"
   packages = ["."]
   pruneopts = "UT"
-  revision = "f81e5af176e59fc11674b2777fe465fc506c27fe"
+  revision = "794eb21b6ae843fbfb3aa9f2d9c3a8c21fe1ebcc"
 
 [[projects]]
   branch = "master"
@@ -129,11 +140,11 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:9eb6e583742b094222b15794641e0e5fac69078147b82f4a5c971bb0b8938671"
+  digest = "1:43a67edadd56db576d5ce1829111e223136bec1ba365b39f18e0bbba7a6bfb50"
   name = "github.com/jedisct1/xsecretbox"
   packages = ["."]
   pruneopts = "UT"
-  revision = "7a679c0bcd9a5bbfe097fb7d48497bc06d17be76"
+  revision = "855e18301bf05f96b551af3986061926758be0ca"
 
 [[projects]]
   digest = "1:9d85ab479918f5d22a449601d35ff4e94115e31db534e22b8431e2c7b152bc4d"
@@ -145,31 +156,23 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:caf6db28595425c0e0f2301a00257d11712f65c1878e12cffc42f6b9a9cf3f23"
-  name = "github.com/kardianos/osext"
-  packages = ["."]
-  pruneopts = "UT"
-  revision = "ae77be60afb1dcacde03767a8c37337fad28ac14"
-
-[[projects]]
-  branch = "master"
-  digest = "1:833906243c69267906c5935dbda058540be450f4e545248cd5c5907c06991a5a"
+  digest = "1:8f18653ebbb51d8223ce56f8834f62bb1cb11d59d3ba4f661cc8dc69a059ccc4"
   name = "github.com/kardianos/service"
   packages = ["."]
   pruneopts = "UT"
-  revision = "4c239ee84e7bb93441b1b6a3f2db62d40e0e6cbd"
+  revision = "56787a3ea05e9b262708192e7ce3b500aba73561"
 
 [[projects]]
-  digest = "1:b20d8767957e40b9302a8caaee88caa698513fbd972509a54555302c3aebfa04"
+  digest = "1:1b46adc9e3d878cdf38a164cfdac2e19340f4d2662aa5bee88062f6ee08ac9df"
   name = "github.com/miekg/dns"
   packages = ["."]
   pruneopts = "UT"
-  revision = "7064f7248f5fa5fd79382a76328b4e200b79e4ae"
-  version = "v1.0.15"
+  revision = "8fc2e5773bbd308ca2fcc962fd8d25c1bd0f6743"
+  version = "v1.1.4"
 
 [[projects]]
   branch = "master"
-  digest = "1:fb92a63e4dcf1d88c58efdbc028d0b91bcaeddd8633758056beb376f13531147"
+  digest = "1:372ae7863e9a53b8bd3f637800da91ee58a0bb2596b6fb6cab3c3ed46b2218fd"
   name = "golang.org/x/crypto"
   packages = [
     "curve25519",
@@ -182,11 +185,11 @@
     "salsa20/salsa",
   ]
   pruneopts = "UT"
-  revision = "3d3f9f413869b949e48070b5bc593aa22cc2b8f2"
+  revision = "ffb98f73852f696ea2bb21a617a5c4b3e067a439"
 
 [[projects]]
   branch = "master"
-  digest = "1:10895db13b16df529c0b264dc63a7308c840ce31e8e20903fbe3e31c62563c73"
+  digest = "1:18a4a28f6649bd6cffb31fb37a3c44feefbe170b8d29cd1f7b259194d3cbc7c1"
   name = "golang.org/x/net"
   packages = [
     "bpf",
@@ -202,11 +205,11 @@
     "proxy",
   ]
   pruneopts = "UT"
-  revision = "adae6a3d119ae4890b46832a2e88a95adc62b8e7"
+  revision = "3a22650c66bd7f4fb6d1e8072ffd7b75c8a27898"
 
 [[projects]]
   branch = "master"
-  digest = "1:ba34c1c340b60aef6b918408d10368f00f45ff869dc6a5910bcc676a10371341"
+  digest = "1:8df2a3fe17c92a246fc1291df663268697e40c57bba4b77cc1fd10d482402062"
   name = "golang.org/x/sys"
   packages = [
     "cpu",
@@ -218,7 +221,7 @@
     "windows/svc/mgr",
   ]
   pruneopts = "UT"
-  revision = "62eef0e2fa9b2c385f7b2778e763486da6880d37"
+  revision = "cd391775e71e684db52b63df9affd58269495083"
 
 [[projects]]
   digest = "1:a2ab62866c75542dd18d2b069fec854577a20211d7c0ea6ae746072a1dccdd18"
@@ -257,6 +260,7 @@
   input-imports = [
     "github.com/BurntSushi/toml",
     "github.com/VividCortex/ewma",
+    "github.com/agl/ed25519",
     "github.com/coreos/go-systemd/activation",
     "github.com/coreos/go-systemd/daemon",
     "github.com/dchest/safefile",
