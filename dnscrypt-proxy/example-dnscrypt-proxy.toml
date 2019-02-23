@@ -30,6 +30,11 @@
 # server_names = ['scaleway-fr', 'google', 'yandex', 'cloudflare']
 
 
+## Server names to avoid even if they match all criteria.
+
+# disabled_server_names = []
+
+
 ## List of local addresses and ports to listen to. Can be IPv4 and/or IPv6.
 ## Note: When using systemd socket activation, choose an empty set (i.e. [] ).
 

@@ -25,6 +25,7 @@ type Config struct {
 	LogFile                  *string  `toml:"log_file"`
 	UseSyslog                bool     `toml:"use_syslog"`
 	ServerNames              []string `toml:"server_names"`
+	DisabledServerNames      []string `toml:"disabled_server_names"`
 	ListenAddresses          []string `toml:"listen_addresses"`
 	Daemonize                bool
 	UserName                 string `toml:"user_name"`
@@ -399,6 +400,7 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 
 	if *listAll {
 		config.ServerNames = nil
+		config.DisabledServerNames = nil
 		config.SourceRequireDNSSEC = false
 		config.SourceRequireNoFilter = false
 		config.SourceRequireNoLog = false
@@ -550,6 +552,9 @@ func (config *Config) loadSource(proxy *Proxy, requiredProps stamps.ServerInform
 				continue
 			}
 		} else if registeredServer.stamp.Props&requiredProps != requiredProps {
+			continue
+		}
+		if includesName(config.DisabledServerNames, registeredServer.name) {
 			continue
 		}
 		if config.SourceIPv4 || config.SourceIPv6 {
