@@ -108,6 +108,13 @@ timeout = 2500
 keepalive = 30
 
 
+## Use the REFUSED return code for blocked responses
+## Setting this to `false` means that some responses will be lies.
+## Unfortunately, `false` appears to be required for Android 8+
+
+refused_code_in_responses = false
+
+
 ## Load-balancing strategy: 'p2' (default), 'ph', 'fastest' or 'random'
 
 # lb_strategy = 'p2'
