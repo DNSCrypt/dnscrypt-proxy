@@ -1,6 +1,7 @@
 package main
 
 import (
+	"math/rand"
 	"net"
 	"strings"
 	"sync"
@@ -13,9 +14,10 @@ import (
 
 type CloakedName struct {
 	target     string
-	ipv4       *net.IP
-	ipv6       *net.IP
+	ipv4       []*net.IP
+	ipv6       []*net.IP
 	lastUpdate *time.Time
+	lineNo     int
 	isIP       bool
 }
 
@@ -41,6 +43,7 @@ func (plugin *PluginCloak) Init(proxy *Proxy) error {
 	}
 	plugin.ttl = proxy.cacheMinTTL
 	plugin.patternMatcher = NewPatternPatcher()
+	cloakedNames := make(map[string]*CloakedName)
 	for lineNo, line := range strings.Split(string(bin), "\n") {
 		line = strings.TrimFunc(line, unicode.IsSpace)
 		if len(line) == 0 || strings.HasPrefix(line, "#") {
@@ -60,12 +63,15 @@ func (plugin *PluginCloak) Init(proxy *Proxy) error {
 			continue
 		}
 		line = strings.ToLower(line)
-		cloakedName := CloakedName{}
+		cloakedName, found := cloakedNames[line]
+		if !found {
+			cloakedName = &CloakedName{}
+		}
 		if ip := net.ParseIP(target); ip != nil {
 			if ipv4 := ip.To4(); ipv4 != nil {
-				cloakedName.ipv4 = &ipv4
+				cloakedName.ipv4 = append((*cloakedName).ipv4, &ipv4)
 			} else if ipv6 := ip.To16(); ipv6 != nil {
-				cloakedName.ipv6 = &ipv6
+				cloakedName.ipv6 = append((*cloakedName).ipv6, &ipv6)
 			} else {
 				dlog.Errorf("Invalid IP address in cloaking rule at line %d", 1+lineNo)
 				continue
@@ -74,7 +80,11 @@ func (plugin *PluginCloak) Init(proxy *Proxy) error {
 		} else {
 			cloakedName.target = target
 		}
-		plugin.patternMatcher.Add(line, &cloakedName, lineNo+1)
+		cloakedName.lineNo = lineNo + 1
+		cloakedNames[line] = cloakedName
+	}
+	for line, cloakedName := range cloakedNames {
+		plugin.patternMatcher.Add(line, cloakedName, cloakedName.lineNo)
 	}
 	return nil
 }
@@ -125,14 +135,19 @@ func (plugin *PluginCloak) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 		}
 		plugin.Lock()
 		cloakedName.lastUpdate = &now
+		cloakedName.ipv4 = nil
+		cloakedName.ipv6 = nil
 		for _, foundIP := range foundIPs {
 			if ipv4 := foundIP.To4(); ipv4 != nil {
-				cloakedName.ipv4 = &ipv4
+				cloakedName.ipv4 = append(cloakedName.ipv4, &foundIP)
+				if len(cloakedName.ipv4) >= 16 {
+					break
+				}
 			} else {
-				cloakedName.ipv6 = &foundIP
-			}
-			if cloakedName.ipv4 != nil && cloakedName.ipv6 != nil {
-				break
+				cloakedName.ipv6 = append(cloakedName.ipv6, &foundIP)
+				if len(cloakedName.ipv6) >= 16 {
+					break
+				}
 			}
 		}
 		plugin.Unlock()
@@ -141,9 +156,15 @@ func (plugin *PluginCloak) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 	}
 	var ip *net.IP
 	if question.Qtype == dns.TypeA {
-		ip = cloakedName.ipv4
+		ipLen := len(cloakedName.ipv4)
+		if ipLen > 0 {
+			ip = cloakedName.ipv4[rand.Intn(ipLen)]
+		}
 	} else {
-		ip = cloakedName.ipv6
+		ipLen := len(cloakedName.ipv6)
+		if ipLen > 0 {
+			ip = cloakedName.ipv6[rand.Intn(ipLen)]
+		}
 	}
 	synth, err := EmptyResponseFromMessage(msg)
 	if err != nil {
