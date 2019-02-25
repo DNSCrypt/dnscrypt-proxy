@@ -40,6 +40,15 @@ func RefusedResponseFromMessage(srcMsg *dns.Msg, refusedCode bool) (*dns.Msg, er
 		dstMsg.Rcode = dns.RcodeRefused
 	} else {
 		dstMsg.Rcode = dns.RcodeSuccess
+		questions := srcMsg.Question
+		if len(questions) > 0 {
+			hinfo := new(dns.HINFO)
+			hinfo.Hdr = dns.RR_Header{Name: questions[0].Name, Rrtype: dns.TypeHINFO,
+				Class: dns.ClassINET, Ttl: 1}
+			hinfo.Cpu = "This query has been locally blocked"
+			hinfo.Os = "by dnscrypt-proxy"
+			dstMsg.Answer = []dns.RR{hinfo}
+		}
 	}
 	return dstMsg, nil
 }
