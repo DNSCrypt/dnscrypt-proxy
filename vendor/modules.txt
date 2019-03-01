@@ -1,0 +1,76 @@
+# github.com/BurntSushi/toml v0.3.1
+github.com/BurntSushi/toml
+# github.com/VividCortex/ewma v1.1.1
+github.com/VividCortex/ewma
+# github.com/aead/chacha20 v0.0.0-20180709150244-8b13a72661da
+github.com/aead/chacha20/chacha
+# github.com/aead/poly1305 v0.0.0-20180717145839-3fee0db0b635
+github.com/aead/poly1305
+# github.com/coreos/go-systemd v0.0.0-20190212144455-93d5ec2c7f76
+github.com/coreos/go-systemd/activation
+github.com/coreos/go-systemd/daemon
+# github.com/dchest/safefile v0.0.0-20151022103144-855e8d98f185
+github.com/dchest/safefile
+# github.com/facebookgo/atomicfile v0.0.0-20151019160806-2de1f203e7d5
+github.com/facebookgo/atomicfile
+# github.com/facebookgo/pidfile v0.0.0-20150612191647-f242e2999868
+github.com/facebookgo/pidfile
+# github.com/hashicorp/go-immutable-radix v1.0.0
+github.com/hashicorp/go-immutable-radix
+# github.com/hashicorp/go-syslog v1.0.0
+github.com/hashicorp/go-syslog
+# github.com/hashicorp/golang-lru v0.5.1
+github.com/hashicorp/golang-lru
+github.com/hashicorp/golang-lru/simplelru
+# github.com/jedisct1/dlog v0.0.0-20181221013014-794eb21b6ae8
+github.com/jedisct1/dlog
+# github.com/jedisct1/go-clocksmith v0.0.0-20180307175859-c35da9bed550
+github.com/jedisct1/go-clocksmith
+# github.com/jedisct1/go-dnsstamps v0.0.0-20180418170050-1e4999280f86
+github.com/jedisct1/go-dnsstamps
+# github.com/jedisct1/go-minisign v0.0.0-20180516093733-f4dbde220b4f
+github.com/jedisct1/go-minisign
+# github.com/jedisct1/xsecretbox v0.0.0-20190218134741-855e18301bf0
+github.com/jedisct1/xsecretbox
+# github.com/k-sone/critbitgo v1.2.0
+github.com/k-sone/critbitgo
+# github.com/kardianos/service v1.0.0
+github.com/kardianos/service
+# github.com/miekg/dns v1.1.4
+github.com/miekg/dns
+# golang.org/x/crypto v0.0.0-20190228161510-8dd112bcdc25
+golang.org/x/crypto/curve25519
+golang.org/x/crypto/ed25519
+golang.org/x/crypto/nacl/box
+golang.org/x/crypto/nacl/secretbox
+golang.org/x/crypto/ed25519/internal/edwards25519
+golang.org/x/crypto/salsa20/salsa
+golang.org/x/crypto/internal/subtle
+golang.org/x/crypto/poly1305
+# golang.org/x/net v0.0.0-20190228165749-92fc7df08ae7
+golang.org/x/net/http2
+golang.org/x/net/proxy
+golang.org/x/net/ipv4
+golang.org/x/net/ipv6
+golang.org/x/net/http/httpguts
+golang.org/x/net/http2/hpack
+golang.org/x/net/idna
+golang.org/x/net/internal/socks
+golang.org/x/net/bpf
+golang.org/x/net/internal/iana
+golang.org/x/net/internal/socket
+# golang.org/x/sys v0.0.0-20190228124157-a34e9553db1e
+golang.org/x/sys/windows/svc/mgr
+golang.org/x/sys/windows/svc/eventlog
+golang.org/x/sys/windows/registry
+golang.org/x/sys/windows/svc
+golang.org/x/sys/unix
+golang.org/x/sys/windows
+golang.org/x/sys/cpu
+# golang.org/x/text v0.3.0
+golang.org/x/text/secure/bidirule
+golang.org/x/text/unicode/bidi
+golang.org/x/text/unicode/norm
+golang.org/x/text/transform
+# gopkg.in/natefinch/lumberjack.v2 v2.0.0
+gopkg.in/natefinch/lumberjack.v2

@@ -7,12 +7,10 @@
 
 package socket
 
-import "errors"
-
 func (c *Conn) recvMsg(m *Message, flags int) error {
-	return errors.New("not implemented")
+	return errNotImplemented
 }
 
 func (c *Conn) sendMsg(m *Message, flags int) error {
-	return errors.New("not implemented")
+	return errNotImplemented
 }
