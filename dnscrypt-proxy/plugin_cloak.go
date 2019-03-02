@@ -185,5 +185,6 @@ func (plugin *PluginCloak) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 	}
 	pluginsState.synthResponse = synth
 	pluginsState.action = PluginsActionSynth
+	pluginsState.returnCode = PluginsReturnCodeCloak
 	return nil
 }

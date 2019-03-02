@@ -39,6 +39,7 @@ const (
 	PluginsReturnCodeNXDomain
 	PluginsReturnCodeResponseError
 	PluginsReturnCodeServerError
+	PluginsReturnCodeCloak
 )
 
 var PluginsReturnCodeToString = map[PluginsReturnCode]string{
@@ -51,6 +52,7 @@ var PluginsReturnCodeToString = map[PluginsReturnCode]string{
 	PluginsReturnCodeNXDomain:      "NXDOMAIN",
 	PluginsReturnCodeResponseError: "RESPONSE_ERROR",
 	PluginsReturnCodeServerError:   "SERVER_ERROR",
+	PluginsReturnCodeCloak:         "CLOAK",
 }
 
 type PluginsState struct {
