@@ -236,7 +236,7 @@ func (source *Source) parseV2(prefix string) ([]RegisteredServer, error) {
 		var stampStr, description string
 		for _, subpart := range subparts {
 			subpart = strings.TrimFunc(subpart, unicode.IsSpace)
-			if strings.HasPrefix(subpart, "sdns://") {
+			if strings.HasPrefix(subpart, "sdns:") {
 				if len(stampStr) > 0 {
 					return registeredServers, fmt.Errorf("Multiple stamps for server [%s] in source from [%v]", name, source.urls)
 				}
@@ -250,7 +250,7 @@ func (source *Source) parseV2(prefix string) ([]RegisteredServer, error) {
 			}
 			description += subpart
 		}
-		if len(stampStr) < 8 {
+		if len(stampStr) < 6 {
 			return registeredServers, fmt.Errorf("Missing stamp for server [%s] in source from [%v]", name, source.urls)
 		}
 		stamp, err := stamps.NewServerStampFromString(stampStr)

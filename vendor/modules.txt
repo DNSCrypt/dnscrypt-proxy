@@ -6,6 +6,9 @@ github.com/VividCortex/ewma
 github.com/aead/chacha20/chacha
 # github.com/aead/poly1305 v0.0.0-20180717145839-3fee0db0b635
 github.com/aead/poly1305
+# github.com/agl/ed25519 v0.0.0-20170116200512-5312a6153412
+github.com/agl/ed25519
+github.com/agl/ed25519/edwards25519
 # github.com/coreos/go-systemd v0.0.0-20190212144455-93d5ec2c7f76
 github.com/coreos/go-systemd/activation
 github.com/coreos/go-systemd/daemon
@@ -26,7 +29,7 @@ github.com/hashicorp/golang-lru/simplelru
 github.com/jedisct1/dlog
 # github.com/jedisct1/go-clocksmith v0.0.0-20180307175859-c35da9bed550
 github.com/jedisct1/go-clocksmith
-# github.com/jedisct1/go-dnsstamps v0.0.0-20180418170050-1e4999280f86
+# github.com/jedisct1/go-dnsstamps v0.0.0-20190303171121-de46dd0ba576
 github.com/jedisct1/go-dnsstamps
 # github.com/jedisct1/go-minisign v0.0.0-20180516093733-f4dbde220b4f
 github.com/jedisct1/go-minisign
@@ -47,7 +50,7 @@ golang.org/x/crypto/ed25519/internal/edwards25519
 golang.org/x/crypto/salsa20/salsa
 golang.org/x/crypto/internal/subtle
 golang.org/x/crypto/poly1305
-# golang.org/x/net v0.0.0-20190228165749-92fc7df08ae7
+# golang.org/x/net v0.0.0-20190301231341-16b79f2e4e95
 golang.org/x/net/http2
 golang.org/x/net/proxy
 golang.org/x/net/ipv4
@@ -59,7 +62,7 @@ golang.org/x/net/internal/socks
 golang.org/x/net/bpf
 golang.org/x/net/internal/iana
 golang.org/x/net/internal/socket
-# golang.org/x/sys v0.0.0-20190228124157-a34e9553db1e
+# golang.org/x/sys v0.0.0-20190303122642-d455e41777fc
 golang.org/x/sys/windows/svc/mgr
 golang.org/x/sys/windows/svc/eventlog
 golang.org/x/sys/windows/registry

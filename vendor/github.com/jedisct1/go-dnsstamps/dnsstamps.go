@@ -71,10 +71,14 @@ func NewDNSCryptServerStampFromLegacy(serverAddrStr string, serverPkStr string, 
 }
 
 func NewServerStampFromString(stampStr string) (ServerStamp, error) {
-	if !strings.HasPrefix(stampStr, "sdns://") && !strings.HasPrefix(stampStr, "dnsc://") {
-		return ServerStamp{}, errors.New("Stamps are expected to start with sdns://")
+	if !strings.HasPrefix(stampStr, "sdns:") {
+		return ServerStamp{}, errors.New("Stamps are expected to start with sdns:")
 	}
-	bin, err := base64.RawURLEncoding.DecodeString(stampStr[7:])
+	stampStr = stampStr[5:]
+	if strings.HasPrefix(stampStr, "//") {
+		stampStr = stampStr[2:]
+	}
+	bin, err := base64.RawURLEncoding.DecodeString(stampStr)
 	if err != nil {
 		return ServerStamp{}, err
 	}
