@@ -13,6 +13,11 @@ A flexible DNS proxy, with support for modern encrypted DNS protocols such as [D
 * [DNS stamps](https://dnscrypt.info/stamps)
 * [FAQ](https://dnscrypt.info/faq)
 
+## [Download the latest release](https://github.com/jedisct1/dnscrypt-proxy/releases/latest)
+
+Available as source code and pre-built binaries for most operating
+systems and architectures (see below).
+
 ## Features
 
 * DNS traffic encryption and authentication. Supports DNS-over-HTTPS (DoH) using TLS 1.3, and DNSCrypt.
