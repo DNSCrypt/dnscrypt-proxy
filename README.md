@@ -1,4 +1,7 @@
-# ![dnscrypt-proxy 2](https://raw.github.com/jedisct1/dnscrypt-proxy/master/logo.png?3)
+<p align="center">
+  <img width="300" height="220" src="https://raw.github.com/jedisct1/dnscrypt-proxy/master/logo.png?3")">
+</p>
+
 
 [![Build Status](https://travis-ci.org/jedisct1/dnscrypt-proxy.svg?branch=master)](https://travis-ci.org/jedisct1/dnscrypt-proxy?branch=master) ![Matrix](https://img.shields.io/matrix/dnscrypt-proxy:matrix.org.svg?label=DNSCrypt-Proxy%20Matrix%20Chat&server_fqdn=matrix.org&style=popout)
 
