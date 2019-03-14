@@ -1,10 +1,10 @@
-[![Build Status](https://travis-ci.org/jedisct1/dnscrypt-proxy.svg?branch=master)](https://travis-ci.org/jedisct1/dnscrypt-proxy?branch=master)
-
 # ![dnscrypt-proxy 2](https://raw.github.com/jedisct1/dnscrypt-proxy/master/logo.png?3)
 
-A flexible DNS proxy, with support for modern encrypted DNS protocols such as [DNSCrypt v2](https://dnscrypt.info/protocol) and [DNS-over-HTTPS](https://www.rfc-editor.org/rfc/rfc8484.txt).
+[![DNSCrypt-Proxy Release](https://img.shields.io/github/release/jedisct1/dnscrypt-proxy.svg?label=Latest%20Release&style=popout)](https://github.com/jedisct1/dnscrypt-proxy/releases/latest)  [![Build Status](https://travis-ci.org/jedisct1/dnscrypt-proxy.svg?branch=master)](https://travis-ci.org/jedisct1/dnscrypt-proxy?branch=master) [![#dnscrypt-proxy:matrix.org](https://img.shields.io/matrix/dnscrypt-proxy:matrix.org.svg?label=DNSCrypt-Proxy%20Matrix%20Chat&server_fqdn=matrix.org&style=popout)](https://matrix.to/#/#dnscrypt-proxy:matrix.org)
 
-## [dnscrypt-proxy 2.0.19 final is available for download!](https://github.com/jedisct1/dnscrypt-proxy/releases/latest)
+## Overview
+
+A flexible DNS proxy, with support for modern encrypted DNS protocols such as [DNSCrypt v2](https://dnscrypt.info/protocol) and [DNS-over-HTTPS](https://www.rfc-editor.org/rfc/rfc8484.txt).
 
 * [dnscrypt-proxy documentation](https://dnscrypt.info/doc) – This project's documentation (Wiki)
 * [DNSCrypt project home page](https://dnscrypt.info/)
@@ -12,6 +12,11 @@ A flexible DNS proxy, with support for modern encrypted DNS protocols such as [D
 * [Server and client implementations](https://dnscrypt.info/implementations)
 * [DNS stamps](https://dnscrypt.info/stamps)
 * [FAQ](https://dnscrypt.info/faq)
+
+## [Download the latest release](https://github.com/jedisct1/dnscrypt-proxy/releases/latest)
+
+Available as source code and pre-built binaries for most operating
+systems and architectures (see below).
 
 ## Features
 
