@@ -1,16 +1,20 @@
+* Version 2.0.21
+ - The change to run the Windows service as `NT AUTHORITY\NetworkService`
+has been reverted, as it was reported to break logging (Windows only).
+
 * Version 2.0.20
  - Startup is now *way* faster, especially when using DoH servers.
- - A new action: "CLOAK" is logged when queries are being cloaked.
+ - A new action: `CLOAK` is logged when queries are being cloaked.
  - A cloaking rule can now map to multiple IPv4 and IPv6 addresses,
 with load-balancing.
- - New option: "refused_code_in_responses" to return (or not) a
-REFUSED code on blacklisted queries. This is disabled by default, in
+ - New option: `refused_code_in_responses` to return (or not) a
+`REFUSED` code on blacklisted queries. This is disabled by default, in
 order to work around a bug in Android Pie.
  - Time-based restrictions are now properly handled in the
 generate-domains-blacklist.py script.
- - Other improvements have been made to the generate-domains-blacklist.py
+ - Other improvements have been made to the `generate-domains-blacklist.py`
 script.
- - The Windows service is now installed as "NT AUTHORITY\NetworkService".
+ - The Windows service is now installed as `NT AUTHORITY\NetworkService`.
 
 * Version 2.0.19
  - The value for `netprobe_timeout` was read from the command-line, but

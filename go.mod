@@ -24,6 +24,7 @@ require (
 	github.com/k-sone/critbitgo v1.2.0
 	github.com/kardianos/service v1.0.0
 	github.com/kr/pretty v0.1.0 // indirect
+	github.com/kr/pty v1.1.3 // indirect
 	github.com/miekg/dns v1.1.6
 	golang.org/x/crypto v0.0.0-20190313024323-a1f597ede03a
 	golang.org/x/net v0.0.0-20190313220215-9f648a60d977
