@@ -84,8 +84,7 @@ func (serversInfo *ServersInfo) registerServer(proxy *Proxy, name string, stamp 
 }
 
 func (serversInfo *ServersInfo) refreshServer(proxy *Proxy, name string, stamp stamps.ServerStamp) error {
-	serversInfo.Lock()
-	defer serversInfo.Unlock()
+	serversInfo.RLock()
 	previousIndex := -1
 	for i, oldServer := range serversInfo.inner {
 		if oldServer.Name == name {
@@ -93,6 +92,7 @@ func (serversInfo *ServersInfo) refreshServer(proxy *Proxy, name string, stamp s
 			break
 		}
 	}
+	serversInfo.RUnlock()
 	newServer, err := serversInfo.fetchServerInfo(proxy, name, stamp, previousIndex < 0)
 	if err != nil {
 		return err
@@ -101,6 +101,15 @@ func (serversInfo *ServersInfo) refreshServer(proxy *Proxy, name string, stamp s
 		dlog.Fatalf("[%s] != [%s]", name, newServer.Name)
 	}
 	newServer.rtt = ewma.NewMovingAverage(RTTEwmaDecay)
+	serversInfo.Lock()
+	defer serversInfo.Unlock()
+	previousIndex = -1
+	for i, oldServer := range serversInfo.inner {
+		if oldServer.Name == name {
+			previousIndex = i
+			break
+		}
+	}
 	if previousIndex >= 0 {
 		serversInfo.inner[previousIndex] = &newServer
 		return nil
