@@ -3,7 +3,7 @@
 setlocal EnableExtensions
 title DNSCrypt-Proxy
 
-whoami /groups | find "S-1-16-12288" >nul && goto :admin
+whoami /groups | findstr "S-1-16-12288" >nul && goto :admin
 if "%~1"=="RunAsAdmin" goto :error
 
 echo Requesting privileges elevation for managing the dnscrypt-proxy service . . .
