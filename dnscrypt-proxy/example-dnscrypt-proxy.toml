@@ -88,6 +88,31 @@ disabled_server_names = []
 force_tcp = false
 
 
+## Enable the Stretch-Hash-and-Truncate (SH&T) algorithm for extreme DNS privacy.
+##
+## This works over DNSCrypt and DoH, but requires a specifically configured server.
+## Instead of sending the actual DNS queries, the SH-T system works as follows:
+##
+## Step 1: the client query is evaluated through Argon2id, a military-grade,
+## memory-hard, CPU-hard stretching function. This makes it very expensive
+## for an attacker to find the original query, even using GPUs and ASICs.
+## For post-quantum resistance, we use it to generate a 1024-bit key.
+##
+## Step 2: in case the Argon2id algorithm has a vulnerability, or, since this
+## is a popular function used for hashing passwords and for cryptocurrencices,
+## and people may have built rainbow tables already, we use a hash function over
+## the result of the previous function. This immediately defeats rainbow tables.
+##
+## Step 3: the output of the hash function is truncated to 64-bit.
+## Due to a property of this operation known as collision-misresistance, and even
+## if the previous steps fail due to a nation-state actor, it is impossible for a
+## server operator to prove what exact query was originally sent by a client.
+##
+## This feature is experimental.
+
+enable_sh_t = false
+
+
 ## SOCKS proxy
 ## Uncomment the following line to route all TCP connections to a local Tor node
 ## Tor doesn't support UDP, so set `force_tcp` to `true` as well.

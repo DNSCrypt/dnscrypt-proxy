@@ -75,6 +75,7 @@ type Config struct {
 	OfflineMode              bool                       `toml:"offline_mode"`
 	HTTPProxyURL             string                     `toml:"http_proxy"`
 	RefusedCodeInResponses   bool                       `toml:"refused_code_in_responses"`
+	SHT                      bool                       `toml:"enable_sh_t"`
 }
 
 func newConfig() Config {
@@ -281,6 +282,7 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 
 	proxy.xTransport.rebuildTransport()
 
+	proxy.sht = config.SHT
 	proxy.refusedCodeInResponses = config.RefusedCodeInResponses
 	proxy.timeout = time.Duration(config.Timeout) * time.Millisecond
 	proxy.maxClients = config.MaxClients
