@@ -1,7 +1,6 @@
 package main
 
 import (
-	"crypto/sha512"
 	"io"
 	"io/ioutil"
 	"math/rand"
@@ -13,7 +12,6 @@ import (
 	"github.com/jedisct1/dlog"
 	clocksmith "github.com/jedisct1/go-clocksmith"
 	stamps "github.com/jedisct1/go-dnsstamps"
-	"golang.org/x/crypto/argon2"
 	"golang.org/x/crypto/curve25519"
 )
 
@@ -66,7 +64,6 @@ type Proxy struct {
 	logMaxAge                    int
 	logMaxBackups                int
 	refusedCodeInResponses       bool
-	sht                          bool
 }
 
 func (proxy *Proxy) StartProxy() {
@@ -354,12 +351,6 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 		pluginsState.returnCode = PluginsReturnCodeForward
 	}
 	if len(response) == 0 && serverInfo != nil {
-		if proxy.sht {
-			stretched := argon2.IDKey(query, []byte("dns"), 1, 64*1024, 4, 128)
-			hashed := sha512.Sum512(stretched)
-			truncated := hashed[0:8]
-			query = truncated
-		}
 		var ttl *uint32
 		if serverInfo.Proto == stamps.StampProtoTypeDNSCrypt {
 			sharedKey, encryptedQuery, clientNonce, err := proxy.Encrypt(serverInfo, query, serverProto)
