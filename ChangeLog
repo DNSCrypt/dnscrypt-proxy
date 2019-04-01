@@ -1,3 +1,7 @@
+* Version 2.0.22
+ - The previous version had issues with the .org TLD when used in
+conjunction with dnsmasq. This has been fixed.
+
 * Version 2.0.21
  - The change to run the Windows service as `NT AUTHORITY\NetworkService`
 has been reverted, as it was reported to break logging (Windows only).
