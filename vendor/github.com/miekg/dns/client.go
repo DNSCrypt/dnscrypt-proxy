@@ -270,8 +270,7 @@ func (co *Conn) Read(p []byte) (n int, err error) {
 			return 0, io.ErrShortBuffer
 		}
 
-		n, err := io.ReadFull(co.Conn, p[:length])
-		return int(n), err
+		return io.ReadFull(co.Conn, p[:length])
 	}
 
 	// UDP connection
