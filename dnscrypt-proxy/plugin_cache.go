@@ -52,6 +52,9 @@ func (plugin *PluginCacheResponse) Eval(pluginsState *PluginsState, msg *dns.Msg
 	if msg.Rcode != dns.RcodeSuccess && msg.Rcode != dns.RcodeNameError && msg.Rcode != dns.RcodeNotAuth {
 		return nil
 	}
+	if msg.Truncated {
+		return nil
+	}
 	cacheKey, err := computeCacheKey(pluginsState, msg)
 	if err != nil {
 		return err
