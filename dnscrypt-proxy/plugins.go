@@ -6,8 +6,9 @@ import (
 	"strings"
 	"sync"
 	"time"
-
+	"github.com/fsnotify/fsnotify"
 	"github.com/jedisct1/dlog"
+	"github.com/jedisct1/go-clocksmith"
 	"github.com/miekg/dns"
 )
 
@@ -29,6 +30,8 @@ type PluginsGlobals struct {
 	refusedCodeInResponses bool
 	respondWithIPv4        net.IP
 	respondWithIPv6        net.IP
+	watcher                *fsnotify.Watcher
+	reloadMap              map[string]*PluginReloadState
 }
 
 type PluginsReturnCode int
@@ -81,19 +84,128 @@ type PluginsState struct {
 	serverName             string
 }
 
+type PluginReloadState struct {
+	pluginArray   *[]Plugin
+	pluginIdx     int
+	reloadTrigger bool
+	newPlugin     func() Plugin
+}
+
+func watchPluginFile(pluginsGlobals *PluginsGlobals, fileName string, pluginArray *[]Plugin, newPlugin func() Plugin) error {
+	pluginsGlobals.reloadMap[fileName] = &PluginReloadState{
+		pluginArray, len(*pluginArray) - 1, false, newPlugin,
+	}
+	if err := pluginsGlobals.watcher.Add(fileName); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func initPluginFileWatcher(pluginsGlobals *PluginsGlobals) error {
+	pluginsGlobals.reloadMap = make(map[string]*PluginReloadState)
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		return err
+	}
+
+	(*pluginsGlobals).watcher = watcher
+
+	go func() {
+		for {
+			select {
+			case event, ok := <-watcher.Events:
+				if !ok {
+					return
+				}
+
+				if event.Op&fsnotify.Write == fsnotify.Write {
+					dlog.Debugf("Plugin file [%s] has been modified", event.Name)
+					if reloadState, ok := pluginsGlobals.reloadMap[event.Name]; ok {
+						reloadState.reloadTrigger = true
+					}
+				}
+			case err, ok := <-watcher.Errors:
+				if !ok {
+					return
+				}
+
+				dlog.Warnf("fsnotify.Watcher error:", err)
+			}
+		}
+	}()
+
+	return nil
+}
+
+func startPluginReloader(pluginsGlobals *PluginsGlobals, proxy *Proxy) {
+	go func() {
+		for {
+			for k, v := range pluginsGlobals.reloadMap {
+				if v.reloadTrigger {
+					dlog.Debugf("Reloading plugin that watches file [%s]", k)
+
+					newPlugin := v.newPlugin()
+					if err := newPlugin.Init(proxy); err != nil {
+						dlog.Error(err)
+						continue
+					}
+
+					pluginsGlobals.RLock()
+					(*v.pluginArray)[v.pluginIdx] = newPlugin
+					pluginsGlobals.RUnlock()
+
+					v.reloadTrigger = false
+					dlog.Noticef("Plugin [%s] reloaded", newPlugin.Name())
+				}
+			}
+			clocksmith.Sleep(5 * time.Second)
+		}
+	}()
+}
+
 func InitPluginsGlobals(pluginsGlobals *PluginsGlobals, proxy *Proxy) error {
+	err := initPluginFileWatcher(pluginsGlobals)
+	if err != nil {
+		return err
+	}
+
 	queryPlugins := &[]Plugin{}
 	if len(proxy.whitelistNameFile) != 0 {
 		*queryPlugins = append(*queryPlugins, Plugin(new(PluginWhitelistName)))
+
+		// watch file for changes
+		err = watchPluginFile(pluginsGlobals, proxy.whitelistNameFile, queryPlugins, func() Plugin {
+			return Plugin(new(PluginWhitelistName))
+		})
+		if err != nil {
+			return err
+		}
 	}
 	if len(proxy.blockNameFile) != 0 {
 		*queryPlugins = append(*queryPlugins, Plugin(new(PluginBlockName)))
+
+		// watch file for changes
+		err = watchPluginFile(pluginsGlobals, proxy.blockNameFile, queryPlugins, func() Plugin {
+			return Plugin(new(PluginBlockName))
+		})
+		if err != nil {
+			return err
+		}
 	}
 	if proxy.pluginBlockIPv6 {
 		*queryPlugins = append(*queryPlugins, Plugin(new(PluginBlockIPv6)))
 	}
 	if len(proxy.cloakFile) != 0 {
 		*queryPlugins = append(*queryPlugins, Plugin(new(PluginCloak)))
+
+		// watch file for changes
+		err = watchPluginFile(pluginsGlobals, proxy.cloakFile, queryPlugins, func() Plugin {
+			return Plugin(new(PluginCloak))
+		})
+		if err != nil {
+			return err
+		}
 	}
 	*queryPlugins = append(*queryPlugins, Plugin(new(PluginGetSetPayloadSize)))
 	if proxy.cache {
@@ -101,14 +213,38 @@ func InitPluginsGlobals(pluginsGlobals *PluginsGlobals, proxy *Proxy) error {
 	}
 	if len(proxy.forwardFile) != 0 {
 		*queryPlugins = append(*queryPlugins, Plugin(new(PluginForward)))
+
+		// watch file for changes
+		err = watchPluginFile(pluginsGlobals, proxy.forwardFile, queryPlugins, func() Plugin {
+			return Plugin(new(PluginForward))
+		})
+		if err != nil {
+			return err
+		}
 	}
 
 	responsePlugins := &[]Plugin{}
 	if len(proxy.nxLogFile) != 0 {
 		*responsePlugins = append(*responsePlugins, Plugin(new(PluginNxLog)))
+
+		// watch file for changes
+		err = watchPluginFile(pluginsGlobals, proxy.nxLogFile, responsePlugins, func() Plugin {
+			return Plugin(new(PluginNxLog))
+		})
+		if err != nil {
+			return err
+		}
 	}
 	if len(proxy.blockIPFile) != 0 {
 		*responsePlugins = append(*responsePlugins, Plugin(new(PluginBlockIP)))
+
+		// watch file for changes
+		err = watchPluginFile(pluginsGlobals, proxy.blockIPFile, responsePlugins, func() Plugin {
+			return Plugin(new(PluginBlockIP))
+		})
+		if err != nil {
+			return err
+		}
 	}
 	if proxy.cache {
 		*responsePlugins = append(*responsePlugins, Plugin(new(PluginCacheResponse)))
@@ -117,6 +253,14 @@ func InitPluginsGlobals(pluginsGlobals *PluginsGlobals, proxy *Proxy) error {
 	loggingPlugins := &[]Plugin{}
 	if len(proxy.queryLogFile) != 0 {
 		*loggingPlugins = append(*loggingPlugins, Plugin(new(PluginQueryLog)))
+
+		// watch file for changes
+		err = watchPluginFile(pluginsGlobals, proxy.queryLogFile, loggingPlugins, func() Plugin {
+			return Plugin(new(PluginQueryLog))
+		})
+		if err != nil {
+			return err
+		}
 	}
 
 	for _, plugin := range *queryPlugins {
@@ -140,6 +284,7 @@ func InitPluginsGlobals(pluginsGlobals *PluginsGlobals, proxy *Proxy) error {
 	(*pluginsGlobals).loggingPlugins = loggingPlugins
 
 	parseBlockedQueryResponse(proxy.blockedQueryResponse, pluginsGlobals)
+	startPluginReloader(pluginsGlobals, proxy)
 
 	return nil
 }
