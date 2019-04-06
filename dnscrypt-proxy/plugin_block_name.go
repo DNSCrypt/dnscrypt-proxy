@@ -28,7 +28,15 @@ func (plugin *PluginBlockName) Description() string {
 	return "Block DNS queries matching name patterns"
 }
 
-func (plugin *PluginBlockName) Init(proxy *Proxy) error {
+func NewPluginBlockName() Plugin {
+	return Plugin(new(PluginBlockName))
+}
+
+func PluginBlockNameEnabled(proxy *Proxy) bool {
+	return len(proxy.blockNameFile) != 0
+}
+
+func (plugin *PluginBlockName) Init(proxy *Proxy, old *Plugin) error {
 	dlog.Noticef("Loading the set of blocking rules from [%s]", proxy.blockNameFile)
 	bin, err := ReadTextFile(proxy.blockNameFile)
 	if err != nil {
@@ -67,6 +75,16 @@ func (plugin *PluginBlockName) Init(proxy *Proxy) error {
 	if len(proxy.blockNameLogFile) == 0 {
 		return nil
 	}
+
+	// if we are hot-reloading, migrate over the logger
+	if old != nil {
+		if old, ok := (*old).(*PluginBlockName); ok {
+			plugin.logger = old.logger
+			plugin.format = old.format
+			return nil
+		}
+	}
+
 	plugin.logger = &lumberjack.Logger{LocalTime: true, MaxSize: proxy.logMaxSize, MaxAge: proxy.logMaxAge, MaxBackups: proxy.logMaxBackups, Filename: proxy.blockNameLogFile, Compress: true}
 	plugin.format = proxy.blockNameFormat
 

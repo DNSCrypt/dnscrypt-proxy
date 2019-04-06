@@ -35,7 +35,15 @@ func (plugin *PluginCloak) Description() string {
 	return "Return a synthetic IP address or a flattened CNAME for specific names"
 }
 
-func (plugin *PluginCloak) Init(proxy *Proxy) error {
+func NewPluginCloak() Plugin {
+	return Plugin(new(PluginCloak))
+}
+
+func PluginCloakEnabled(proxy *Proxy) bool {
+	return len(proxy.cloakFile) != 0
+}
+
+func (plugin *PluginCloak) Init(proxy *Proxy, old *Plugin) error {
 	dlog.Noticef("Loading the set of cloaking rules from [%s]", proxy.cloakFile)
 	bin, err := ReadTextFile(proxy.cloakFile)
 	if err != nil {

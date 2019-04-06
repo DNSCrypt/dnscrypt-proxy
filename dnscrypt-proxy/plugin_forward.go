@@ -28,7 +28,15 @@ func (plugin *PluginForward) Description() string {
 	return "Route queries matching specific domains to a dedicated set of servers"
 }
 
-func (plugin *PluginForward) Init(proxy *Proxy) error {
+func NewPluginForward() Plugin {
+	return Plugin(new(PluginForward))
+}
+
+func PluginForwardEnabled(proxy *Proxy) bool {
+	return len(proxy.forwardFile) != 0
+}
+
+func (plugin *PluginForward) Init(proxy *Proxy, old *Plugin) error {
 	dlog.Noticef("Loading the set of forwarding rules from [%s]", proxy.forwardFile)
 	bin, err := ReadTextFile(proxy.forwardFile)
 	if err != nil {

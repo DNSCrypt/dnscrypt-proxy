@@ -82,6 +82,7 @@ type Config struct {
 	HTTPProxyURL             string                     `toml:"http_proxy"`
 	RefusedCodeInResponses   bool                       `toml:"refused_code_in_responses"`
 	BlockedQueryResponse     string                     `toml:"blocked_query_response"`
+	HotReloadPlugins         bool                       `toml:"hot_reload_plugins"`
 }
 
 func newConfig() Config {
@@ -119,6 +120,7 @@ func newConfig() Config {
 		RefusedCodeInResponses:   false,
 		LBEstimator:              true,
 		BlockedQueryResponse:     "hinfo",
+		HotReloadPlugins:         false,
 	}
 }
 
@@ -301,6 +303,7 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 		}
 	}
 	proxy.blockedQueryResponse = config.BlockedQueryResponse
+	proxy.hotReloadPlugins = config.HotReloadPlugins
 	proxy.timeout = time.Duration(config.Timeout) * time.Millisecond
 	proxy.maxClients = config.MaxClients
 	proxy.mainProto = "udp"

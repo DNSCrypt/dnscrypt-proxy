@@ -28,7 +28,15 @@ func (plugin *PluginWhitelistName) Description() string {
 	return "Whitelists DNS queries matching name patterns"
 }
 
-func (plugin *PluginWhitelistName) Init(proxy *Proxy) error {
+func NewPluginWhitelistName() Plugin {
+	return Plugin(new(PluginWhitelistName))
+}
+
+func PluginWhitelistNameEnabled(proxy *Proxy) bool {
+	return len(proxy.whitelistNameFile) != 0
+}
+
+func (plugin *PluginWhitelistName) Init(proxy *Proxy, old *Plugin) error {
 	dlog.Noticef("Loading the set of whitelisting rules from [%s]", proxy.whitelistNameFile)
 	bin, err := ReadTextFile(proxy.whitelistNameFile)
 	if err != nil {
@@ -67,6 +75,16 @@ func (plugin *PluginWhitelistName) Init(proxy *Proxy) error {
 	if len(proxy.whitelistNameLogFile) == 0 {
 		return nil
 	}
+
+	// if we are hot-reloading, migrate over the logger
+	if old != nil {
+		if old, ok := (*old).(*PluginWhitelistName); ok {
+			plugin.logger = old.logger
+			plugin.format = old.format
+			return nil
+		}
+	}
+
 	plugin.logger = &lumberjack.Logger{LocalTime: true, MaxSize: proxy.logMaxSize, MaxAge: proxy.logMaxAge, MaxBackups: proxy.logMaxBackups, Filename: proxy.whitelistNameLogFile, Compress: true}
 	plugin.format = proxy.whitelistNameFormat
 

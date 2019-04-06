@@ -24,7 +24,15 @@ func (plugin *PluginNxLog) Description() string {
 	return "Log DNS queries for nonexistent zones."
 }
 
-func (plugin *PluginNxLog) Init(proxy *Proxy) error {
+func NewPluginNxLog() Plugin {
+	return Plugin(new(PluginNxLog))
+}
+
+func PluginNxLogEnabled(proxy *Proxy) bool {
+	return len(proxy.nxLogFile) != 0
+}
+
+func (plugin *PluginNxLog) Init(proxy *Proxy, old *Plugin) error {
 	plugin.logger = &lumberjack.Logger{LocalTime: true, MaxSize: proxy.logMaxSize, MaxAge: proxy.logMaxAge, MaxBackups: proxy.logMaxBackups, Filename: proxy.nxLogFile, Compress: true}
 	plugin.format = proxy.nxLogFormat
 

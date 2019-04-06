@@ -26,7 +26,15 @@ func (plugin *PluginQueryLog) Description() string {
 	return "Log DNS queries."
 }
 
-func (plugin *PluginQueryLog) Init(proxy *Proxy) error {
+func NewPluginQueryLog() Plugin {
+	return Plugin(new(PluginQueryLog))
+}
+
+func PluginQueryLogEnabled(proxy *Proxy) bool {
+	return len(proxy.queryLogFile) != 0
+}
+
+func (plugin *PluginQueryLog) Init(proxy *Proxy, old *Plugin) error {
 	plugin.logger = &lumberjack.Logger{LocalTime: true, MaxSize: proxy.logMaxSize, MaxAge: proxy.logMaxAge, MaxBackups: proxy.logMaxBackups, Filename: proxy.queryLogFile, Compress: true}
 	plugin.format = proxy.queryLogFormat
 	plugin.ignoredQtypes = proxy.queryLogIgnoredQtypes

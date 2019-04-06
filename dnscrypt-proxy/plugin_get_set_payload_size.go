@@ -12,7 +12,15 @@ func (plugin *PluginGetSetPayloadSize) Description() string {
 	return "Adjusts the maximum payload size advertised in queries sent to upstream servers."
 }
 
-func (plugin *PluginGetSetPayloadSize) Init(proxy *Proxy) error {
+func NewPluginGetSetPayloadSize() Plugin {
+	return Plugin(new(PluginGetSetPayloadSize))
+}
+
+func PluginGetSetPayloadSizeEnabled(proxy *Proxy) bool {
+	return true
+}
+
+func (plugin *PluginGetSetPayloadSize) Init(proxy *Proxy, old *Plugin) error {
 	return nil
 }
 

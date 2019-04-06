@@ -16,7 +16,15 @@ func (plugin *PluginBlockIPv6) Description() string {
 	return "Immediately return a synthetic response to AAAA queries."
 }
 
-func (plugin *PluginBlockIPv6) Init(proxy *Proxy) error {
+func NewPluginBlockIPv6() Plugin {
+	return Plugin(new(PluginBlockIPv6))
+}
+
+func PluginBlockIPv6Enabled(proxy *Proxy) bool {
+	return proxy.pluginBlockIPv6
+}
+
+func (plugin *PluginBlockIPv6) Init(proxy *Proxy, old *Plugin) error {
 	return nil
 }
 

@@ -35,7 +35,15 @@ func (plugin *PluginCacheResponse) Description() string {
 	return "DNS cache (writer)."
 }
 
-func (plugin *PluginCacheResponse) Init(proxy *Proxy) error {
+func NewPluginCacheResponse() Plugin {
+	return Plugin(new(PluginCacheResponse))
+}
+
+func PluginCacheResponseEnabled(proxy *Proxy) bool {
+	return proxy.cache
+}
+
+func (plugin *PluginCacheResponse) Init(proxy *Proxy, old *Plugin) error {
 	return nil
 }
 
@@ -90,7 +98,15 @@ func (plugin *PluginCache) Description() string {
 	return "DNS cache (reader)."
 }
 
-func (plugin *PluginCache) Init(proxy *Proxy) error {
+func NewPluginCache() Plugin {
+	return Plugin(new(PluginCache))
+}
+
+func PluginCacheEnabled(proxy *Proxy) bool {
+	return proxy.cache
+}
+
+func (plugin *PluginCache) Init(proxy *Proxy, old *Plugin) error {
 	return nil
 }
 

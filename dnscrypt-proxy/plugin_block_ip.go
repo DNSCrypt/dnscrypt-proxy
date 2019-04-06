@@ -29,7 +29,15 @@ func (plugin *PluginBlockIP) Description() string {
 	return "Block responses containing specific IP addresses"
 }
 
-func (plugin *PluginBlockIP) Init(proxy *Proxy) error {
+func NewPluginBlockIP() Plugin {
+	return Plugin(new(PluginBlockIP))
+}
+
+func PluginBlockIPEnabled(proxy *Proxy) bool {
+	return len(proxy.blockIPFile) != 0
+}
+
+func (plugin *PluginBlockIP) Init(proxy *Proxy, old *Plugin) error {
 	dlog.Noticef("Loading the set of IP blocking rules from [%s]", proxy.blockIPFile)
 	bin, err := ReadTextFile(proxy.blockIPFile)
 	if err != nil {
@@ -72,6 +80,16 @@ func (plugin *PluginBlockIP) Init(proxy *Proxy) error {
 	if len(proxy.blockIPLogFile) == 0 {
 		return nil
 	}
+
+	// if we are hot-reloading, migrate over the logger
+	if old != nil {
+		if old, ok := (*old).(*PluginBlockIP); ok {
+			plugin.logger = old.logger
+			plugin.format = old.format
+			return nil
+		}
+	}
+
 	plugin.logger = &lumberjack.Logger{LocalTime: true, MaxSize: proxy.logMaxSize, MaxAge: proxy.logMaxAge, MaxBackups: proxy.logMaxBackups, Filename: proxy.blockIPLogFile, Compress: true}
 	plugin.format = proxy.blockIPFormat
 

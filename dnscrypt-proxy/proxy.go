@@ -65,6 +65,7 @@ type Proxy struct {
 	logMaxBackups                int
 	blockedQueryResponse         string
 	showCerts                    bool
+	hotReloadPlugins             bool
 }
 
 func (proxy *Proxy) StartProxy() {

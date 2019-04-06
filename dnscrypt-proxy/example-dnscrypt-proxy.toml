@@ -230,6 +230,13 @@ netprobe_address = "9.9.9.9:53"
 # offline_mode = false
 
 
+## Hot reload of plugins - if an enabled plugin's config file
+## ('forwarding-rules.txt' 'cloaking-rules.txt', ...) is updated
+## while the server is running, reload the plugin in the background
+
+# hot_reload_plugins = false
+
+
 ## Automatic log files rotation
 
 # Maximum log files size in MB
