@@ -87,15 +87,57 @@ type PluginsState struct {
 }
 
 type PluginReloadState struct {
+	fileName      string
 	pluginArray   *[]Plugin
 	arrayIdx      int
 	triggerReload bool
 	newPlugin     func() Plugin
 }
 
+func (state *PluginReloadState) initNewPlugin(pluginsGlobals *PluginsGlobals, proxy *Proxy) (Plugin, error) {
+	newPlugin := state.newPlugin()
+
+	pluginsGlobals.RLock()
+	defer pluginsGlobals.RUnlock()
+
+	if err := newPlugin.Init(proxy, &(*state.pluginArray)[state.arrayIdx]); err != nil {
+		return nil, err
+	}
+	return newPlugin, nil
+}
+
+func (state *PluginReloadState) updatePlugin(pluginsGlobals *PluginsGlobals, newPlugin Plugin) {
+	pluginsGlobals.Lock()
+	defer pluginsGlobals.Unlock()
+
+	(*state.pluginArray)[state.arrayIdx] = newPlugin
+}
+
+func (state *PluginReloadState) ReloadPlugin(pluginsGlobals *PluginsGlobals, proxy *Proxy) error {
+	if state.triggerReload {
+		dlog.Debugf("Reloading plugin that watches file [%s]", state.fileName)
+
+		newPlugin, err := state.initNewPlugin(pluginsGlobals, proxy)
+		if err != nil {
+			return err
+		}
+
+		state.updatePlugin(pluginsGlobals, newPlugin)
+
+		state.triggerReload = false
+		dlog.Noticef("Plugin [%s] reloaded", newPlugin.Name())
+	}
+
+	return nil
+}
+
 func watchPluginFile(pluginsGlobals *PluginsGlobals, fileName string, pluginArray *[]Plugin, newPlugin func() Plugin) error {
 	pluginsGlobals.reloadMap[fileName] = &PluginReloadState{
-		pluginArray, len(*pluginArray) - 1, false, newPlugin,
+		fileName:      fileName,
+		pluginArray:   pluginArray,
+		arrayIdx:      len(*pluginArray) - 1,
+		triggerReload: false,
+		newPlugin:     newPlugin,
 	}
 
 	if err := pluginsGlobals.watcher.Add(fileName); err != nil {
@@ -157,23 +199,10 @@ func pluginReloader(pluginsGlobals *PluginsGlobals, proxy *Proxy) {
 	pluginsGlobals.reloadMutex.RLock()
 	defer pluginsGlobals.reloadMutex.RUnlock()
 
-	// handle all updated plugins that were flagged during debouncing
-	for k, v := range pluginsGlobals.reloadMap {
-		if v.triggerReload {
-			dlog.Debugf("Reloading plugin that watches file [%s]", k)
-
-			newPlugin := v.newPlugin()
-			if err := newPlugin.Init(proxy, &(*v.pluginArray)[v.arrayIdx]); err != nil {
-				dlog.Error(err)
-				continue
-			}
-
-			pluginsGlobals.Lock()
-			(*v.pluginArray)[v.arrayIdx] = newPlugin
-			pluginsGlobals.Unlock()
-
-			v.triggerReload = false
-			dlog.Noticef("Plugin [%s] reloaded", newPlugin.Name())
+	// handle all updated plugins that were flagged during the debouncing period
+	for _, state := range pluginsGlobals.reloadMap {
+		if err := state.ReloadPlugin(pluginsGlobals, proxy); err != nil {
+			dlog.Error(err)
 		}
 	}
 
@@ -182,8 +211,7 @@ func pluginReloader(pluginsGlobals *PluginsGlobals, proxy *Proxy) {
 
 func InitPluginsGlobals(pluginsGlobals *PluginsGlobals, proxy *Proxy) error {
 	if proxy.hotReloadPlugins {
-		err := initFileWatcher(pluginsGlobals, proxy)
-		if err != nil {
+		if err := initFileWatcher(pluginsGlobals, proxy); err != nil {
 			return err
 		}
 	}
@@ -219,11 +247,11 @@ func InitPluginsGlobals(pluginsGlobals *PluginsGlobals, proxy *Proxy) error {
 		}
 
 		plugin := p.newPlugin()
+		dlog.Noticef("Plugin [%s] enabled", plugin.Name())
 		*p.pluginArray = append(*p.pluginArray, plugin)
 
 		if proxy.hotReloadPlugins && (len(p.watchFileName) != 0) {
-			err := watchPluginFile(pluginsGlobals, p.watchFileName, p.pluginArray, p.newPlugin)
-			if err != nil {
+			if err := watchPluginFile(pluginsGlobals, p.watchFileName, p.pluginArray, p.newPlugin); err != nil {
 				return err
 			}
 		}
