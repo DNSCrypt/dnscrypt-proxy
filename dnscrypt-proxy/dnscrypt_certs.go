@@ -125,9 +125,9 @@ func FetchCurrentDNSCryptCert(proxy *Proxy, serverName *string, proto string, pk
 		copy(certInfo.ServerPk[:], serverPk[:])
 		copy(certInfo.MagicQuery[:], binCert[104:112])
 		if isNew {
-			dlog.Noticef("[%s] OK (crypto v%d) - rtt: %dms%s", *serverName, cryptoConstruction, rtt.Nanoseconds()/1000000, certCountStr)
+			dlog.Noticef("[%s] OK (DNSCrypt) - rtt: %dms%s", *serverName, rtt.Nanoseconds()/1000000, certCountStr)
 		} else {
-			dlog.Infof("[%s] OK (crypto v%d) - rtt: %dms%s", *serverName, cryptoConstruction, rtt.Nanoseconds()/1000000, certCountStr)
+			dlog.Infof("[%s] OK (DNSCrypt) - rtt: %dms%s", *serverName, rtt.Nanoseconds()/1000000, certCountStr)
 		}
 		certCountStr = " - additional certificate"
 	}
