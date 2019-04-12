@@ -185,7 +185,7 @@ cert_refresh_delay = 240
 ## People in China may need to use 114.114.114.114:53 here.
 ## Other popular options include 8.8.8.8 and 1.1.1.1.
 
-fallback_resolver = '9.9.9.9:53'
+fallback_resolver = '8.8.8.8:53'
 
 
 ## Never let dnscrypt-proxy try to use the system DNS settings;
