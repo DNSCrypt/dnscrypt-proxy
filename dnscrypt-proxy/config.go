@@ -277,6 +277,7 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 			dlog.Fatalf("Unable to use the proxy: [%v]", err)
 		}
 		proxy.xTransport.proxyDialer = &proxyDialer
+		proxy.mainProto = "tcp"
 	}
 
 	proxy.xTransport.rebuildTransport()
