@@ -200,10 +200,14 @@ func (xTransport *XTransport) Fetch(method string, url *url.URL, accept string, 
 	}
 	var err error
 	host := url.Host
+	resolveByProxy := false
+	if strings.HasSuffix(host, ".onion") {
+		resolveByProxy = true
+	}
 	xTransport.cachedIPs.RLock()
 	cachedIP := xTransport.cachedIPs.cache[host]
 	xTransport.cachedIPs.RUnlock()
-	if !xTransport.ignoreSystemDNS || len(cachedIP) > 0 {
+	if !xTransport.ignoreSystemDNS || len(cachedIP) > 0 || resolveByProxy {
 		var resp *http.Response
 		start := time.Now()
 		resp, err = client.Do(req)
@@ -242,7 +246,6 @@ func (xTransport *XTransport) Fetch(method string, url *url.URL, accept string, 
 	xTransport.cachedIPs.cache[host] = *foundIP
 	xTransport.cachedIPs.Unlock()
 	dlog.Debugf("[%s] IP address [%s] added to the cache", host, *foundIP)
-
 	start := time.Now()
 	resp, err := client.Do(req)
 	rtt := time.Since(start)
