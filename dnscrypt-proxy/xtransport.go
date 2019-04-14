@@ -126,7 +126,33 @@ func (xTransport *XTransport) rebuildTransport() {
 	xTransport.transport = transport
 }
 
-func (xTransport *XTransport) resolve(dnsClient *dns.Client, host string, resolver string) (*string, error) {
+func (xTransport *XTransport) resolveUsingSystem(host string) (*string, error) {
+	foundIPs, err := net.LookupHost(host)
+	if err != nil {
+		return nil, err
+	}
+	for _, ip := range foundIPs {
+		foundIP := net.ParseIP(ip)
+		if foundIP == nil {
+			continue
+		}
+		if xTransport.useIPv4 {
+			if ipv4 := foundIP.To4(); ipv4 != nil {
+				foundIPx := foundIP.String()
+				return &foundIPx, nil
+			}
+		}
+		if xTransport.useIPv6 {
+			if ipv6 := foundIP.To16(); ipv6 != nil {
+				foundIPx := "[" + foundIP.String() + "]"
+				return &foundIPx, nil
+			}
+		}
+	}
+	return nil, err
+}
+
+func (xTransport *XTransport) resolveUsingResolver(dnsClient *dns.Client, host string, resolver string) (*string, error) {
 	var foundIP *string
 	var err error
 	if xTransport.useIPv4 {
@@ -139,8 +165,7 @@ func (xTransport *XTransport) resolve(dnsClient *dns.Client, host string, resolv
 			for _, answer := range in.Answer {
 				if answer.Header().Rrtype == dns.TypeA {
 					foundIPx := answer.(*dns.A).A.String()
-					foundIP = &foundIPx
-					return foundIP, nil
+					return &foundIPx, nil
 				}
 			}
 		}
@@ -155,8 +180,7 @@ func (xTransport *XTransport) resolve(dnsClient *dns.Client, host string, resolv
 			for _, answer := range in.Answer {
 				if answer.Header().Rrtype == dns.TypeAAAA {
 					foundIPx := "[" + answer.(*dns.AAAA).AAAA.String() + "]"
-					foundIP = &foundIPx
-					return foundIP, nil
+					return &foundIPx, nil
 				}
 			}
 		}
@@ -201,51 +225,43 @@ func (xTransport *XTransport) Fetch(method string, url *url.URL, accept string, 
 	var err error
 	host := url.Host
 	resolveByProxy := false
-	if strings.HasSuffix(host, ".onion") {
+	if xTransport.proxyDialer != nil || xTransport.httpProxyFunction != nil {
 		resolveByProxy = true
 	}
-	xTransport.cachedIPs.RLock()
-	cachedIP := xTransport.cachedIPs.cache[host]
-	xTransport.cachedIPs.RUnlock()
-	if !xTransport.ignoreSystemDNS || len(cachedIP) > 0 || resolveByProxy {
-		var resp *http.Response
-		start := time.Now()
-		resp, err = client.Do(req)
-		rtt := time.Since(start)
-		if err == nil {
-			if resp == nil {
-				err = errors.New("Webserver returned an error")
-			} else if resp.StatusCode < 200 || resp.StatusCode > 299 {
-				err = fmt.Errorf("Webserver returned code %d", resp.StatusCode)
+	var foundIP *string
+	if !resolveByProxy && net.ParseIP(host) == nil {
+		xTransport.cachedIPs.RLock()
+		cachedIP := xTransport.cachedIPs.cache[host]
+		xTransport.cachedIPs.RUnlock()
+		if len(cachedIP) > 0 {
+			foundIP = &cachedIP
+		} else {
+			if !xTransport.ignoreSystemDNS {
+				foundIP, err = xTransport.resolveUsingSystem(host)
+			} else {
+				dlog.Debug("Ignoring system DNS")
 			}
-			return resp, rtt, err
+			if xTransport.ignoreSystemDNS || err != nil {
+				if xTransport.ignoreSystemDNS {
+					dlog.Debugf("Resolving [%s] using fallback resolver [%s]", host, xTransport.fallbackResolver)
+				} else {
+					dlog.Noticef("System DNS configuration not usable yet, exceptionally resolving [%s] using fallback resolver [%s]", host, xTransport.fallbackResolver)
+				}
+				dnsClient := new(dns.Client)
+				foundIP, err = xTransport.resolveUsingResolver(dnsClient, host, xTransport.fallbackResolver)
+			}
+			if foundIP == nil {
+				return nil, 0, fmt.Errorf("No IP found for [%s]", host)
+			}
+			if err != nil {
+				return nil, 0, err
+			}
+			xTransport.cachedIPs.Lock()
+			xTransport.cachedIPs.cache[host] = *foundIP
+			xTransport.cachedIPs.Unlock()
+			dlog.Debugf("[%s] IP address [%s] added to the cache", host, *foundIP)
 		}
-		(*xTransport.transport).CloseIdleConnections()
-		dlog.Debugf("[%s]: [%s]", req.URL, err)
-	} else {
-		dlog.Debug("Ignoring system DNS")
 	}
-	if len(cachedIP) > 0 && err != nil {
-		dlog.Debugf("IP for [%s] was cached to [%s], but connection failed: [%s]", host, cachedIP, err)
-		return nil, 0, err
-	}
-	if !xTransport.ignoreSystemDNS {
-		dlog.Noticef("System DNS configuration not usable yet, exceptionally resolving [%s] using fallback resolver [%s]", host, xTransport.fallbackResolver)
-	} else {
-		dlog.Debugf("Resolving [%s] using fallback resolver [%s]", host, xTransport.fallbackResolver)
-	}
-	dnsClient := new(dns.Client)
-	foundIP, err := xTransport.resolve(dnsClient, host, xTransport.fallbackResolver)
-	if err != nil {
-		return nil, 0, err
-	}
-	if foundIP == nil {
-		return nil, 0, fmt.Errorf("No IP found for [%s]", host)
-	}
-	xTransport.cachedIPs.Lock()
-	xTransport.cachedIPs.cache[host] = *foundIP
-	xTransport.cachedIPs.Unlock()
-	dlog.Debugf("[%s] IP address [%s] added to the cache", host, *foundIP)
 	start := time.Now()
 	resp, err := client.Do(req)
 	rtt := time.Since(start)
