@@ -3,7 +3,6 @@ package main
 import (
 	"crypto/sha512"
 	"encoding/binary"
-	"errors"
 	"sync"
 	"time"
 
@@ -12,8 +11,14 @@ import (
 )
 
 type CachedResponse struct {
-	expiration time.Time
+	since      time.Time
 	msg        dns.Msg
+}
+
+type CacheKey struct {
+	ckName  string
+	ckType  uint16
+	ckClass uint16
 }
 
 type CachedResponses struct {
@@ -48,32 +53,88 @@ func (plugin *PluginCacheResponse) Reload() error {
 }
 
 func (plugin *PluginCacheResponse) Eval(pluginsState *PluginsState, msg *dns.Msg) error {
-	plugin.cachedResponses = &cachedResponses
+	var err error
+	var answers map[CacheKey]([]dns.RR)
+
 	if msg.Rcode != dns.RcodeSuccess && msg.Rcode != dns.RcodeNameError && msg.Rcode != dns.RcodeNotAuth {
 		return nil
 	}
 	if msg.Truncated {
 		return nil
 	}
-	cacheKey, err := computeCacheKey(pluginsState, msg)
-	if err != nil {
-		return err
+
+	updateMsgTTLs( msg, pluginsState.cacheMinTTL, pluginsState.cacheMaxTTL, pluginsState.cacheNegMinTTL, pluginsState.cacheNegMaxTTL )
+
+	now := time.Now()
+
+	// group answers by cache key
+	for i := 0; i < len(msg.Answer); i++ {
+		if answers == nil {
+			answers = make(map[CacheKey]([]dns.RR))
+		}
+		cacheKey := rrToCacheKey( &msg.Answer[i] )
+		answers[*cacheKey] = append( answers[*cacheKey], msg.Answer[i] )
 	}
-	ttl := getMinTTL(msg, pluginsState.cacheMinTTL, pluginsState.cacheMaxTTL, pluginsState.cacheNegMinTTL, pluginsState.cacheNegMaxTTL)
-	cachedResponse := CachedResponse{
-		expiration: time.Now().Add(ttl),
-		msg:        *msg,
-	}
-	plugin.cachedResponses.Lock()
-	defer plugin.cachedResponses.Unlock()
+
+
+	plugin.cachedResponses = &cachedResponses
 	if plugin.cachedResponses.cache == nil {
 		plugin.cachedResponses.cache, err = lru.NewARC(pluginsState.cacheSize)
 		if err != nil {
 			return err
 		}
 	}
-	plugin.cachedResponses.cache.Add(cacheKey, cachedResponse)
-	updateTTL(msg, cachedResponse.expiration)
+
+	plugin.cachedResponses.Lock()
+	defer plugin.cachedResponses.Unlock()
+
+	for _ck, rrset := range answers {
+		var ck *CacheKey
+		var cachedResponse CachedResponse
+
+		if (msg.Question[0].Name == _ck.ckName &&
+			_ck.ckType == dns.TypeCNAME) {
+
+			// if this RR set is for same name as query
+			// name and this query is of type CNAME then
+			// cache the complete RR set
+
+			ck = questionToCacheKey(&msg.Question[0])
+
+			cachedResponse = CachedResponse{
+				since: now,
+				msg:   *msg,
+			}
+		} else {
+			ck = &_ck
+
+			msg1 := *msg
+			msg1.Answer = rrset
+
+			cachedResponse = CachedResponse{
+				since: now,
+				msg:   msg1,
+			}
+		}
+		cacheKey, err := computeCacheKey(pluginsState, ck)
+		if err != nil {
+			return err
+		}
+		plugin.cachedResponses.cache.Add(cacheKey, cachedResponse)
+	}
+
+	if answers == nil && len( msg.Ns ) > 0 {
+		ck := questionToCacheKey( &msg.Question[0] )
+		cacheKey, err := computeCacheKey(pluginsState, ck)
+		if err != nil {
+			return err
+		}
+		cachedResponse := CachedResponse{
+			since: now,
+			msg: *msg,
+		}
+		plugin.cachedResponses.cache.Add(cacheKey, cachedResponse)
+	}
 
 	return nil
 }
@@ -105,7 +166,11 @@ func (plugin *PluginCache) Reload() error {
 func (plugin *PluginCache) Eval(pluginsState *PluginsState, msg *dns.Msg) error {
 	plugin.cachedResponses = &cachedResponses
 
-	cacheKey, err := computeCacheKey(pluginsState, msg)
+	if len(msg.Question) != 1 {
+		// no questions present
+		return nil
+	}
+	cacheKey, err := computeCacheKey(pluginsState, questionToCacheKey(&msg.Question[0]))
 	if err != nil {
 		return nil
 	}
@@ -119,40 +184,54 @@ func (plugin *PluginCache) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 		return nil
 	}
 	cached := cachedAny.(CachedResponse)
-	if time.Now().After(cached.expiration) {
-		return nil
+	now := time.Now()
+	for _, rr := range cached.msg.Answer {
+		if (now.Sub( cached.since )) >= (time.Duration(rr.Header().Ttl) * time.Second) {
+			return nil
+		}
 	}
 
-	updateTTL(&cached.msg, cached.expiration)
-
-	synth := cached.msg
-	synth.Id = msg.Id
-	synth.Response = true
-	synth.Compress = true
-	synth.Question = msg.Question
-	pluginsState.synthResponse = &synth
+	synth := cached.msg.Copy()
+	(*synth).Question = msg.Question
+	(*synth).Id = msg.Id
+	(*synth).Response = true
+	(*synth).Compress = true
+	updateTTLs(synth, cached.since)
+ 	pluginsState.synthResponse = synth
 	pluginsState.action = PluginsActionSynth
 	return nil
 }
 
-func computeCacheKey(pluginsState *PluginsState, msg *dns.Msg) ([32]byte, error) {
-	questions := msg.Question
-	if len(questions) != 1 {
-		return [32]byte{}, errors.New("No question present")
-	}
-	question := questions[0]
+func computeCacheKey(pluginsState *PluginsState, key *CacheKey) ([32]byte, error) {
 	h := sha512.New512_256()
 	var tmp [5]byte
-	binary.LittleEndian.PutUint16(tmp[0:2], question.Qtype)
-	binary.LittleEndian.PutUint16(tmp[2:4], question.Qclass)
+	binary.LittleEndian.PutUint16(tmp[0:2], key.ckType)
+	binary.LittleEndian.PutUint16(tmp[2:4], key.ckClass)
 	if pluginsState.dnssec {
 		tmp[4] = 1
 	}
 	h.Write(tmp[:])
-	normalizedName := []byte(question.Name)
+	normalizedName := []byte(key.ckName)
 	NormalizeName(&normalizedName)
 	h.Write(normalizedName)
 	var sum [32]byte
 	h.Sum(sum[:0])
 	return sum, nil
+}
+
+func questionToCacheKey( q *dns.Question ) *CacheKey {
+	return &CacheKey {
+		ckName: q.Name,
+		ckType: q.Qtype,
+		ckClass: q.Qclass,
+	}
+}
+
+func rrToCacheKey( rr *dns.RR ) *CacheKey {
+	hdr := (*rr).Header()
+	return &CacheKey {
+		ckName: hdr.Name,
+		ckType: hdr.Rrtype,
+		ckClass: hdr.Class,
+	}
 }

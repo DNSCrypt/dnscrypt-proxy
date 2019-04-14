@@ -84,39 +84,56 @@ func StripTrailingDot(str string) string {
 	return str
 }
 
-func getMinTTL(msg *dns.Msg, minTTL uint32, maxTTL uint32, cacheNegMinTTL uint32, cacheNegMaxTTL uint32) time.Duration {
+func updateMsgTTLs(msg *dns.Msg, minTTL uint32, maxTTL uint32, cacheNegMinTTL uint32, cacheNegMaxTTL uint32) {
 	if (msg.Rcode != dns.RcodeSuccess && msg.Rcode != dns.RcodeNameError) || (len(msg.Answer) <= 0 && len(msg.Ns) <= 0) {
-		return time.Duration(cacheNegMinTTL) * time.Second
+		return
 	}
+
 	var ttl uint32
-	if msg.Rcode == dns.RcodeSuccess {
-		ttl = uint32(maxTTL)
-	} else {
-		ttl = uint32(cacheNegMaxTTL)
-	}
+
 	if len(msg.Answer) > 0 {
 		for _, rr := range msg.Answer {
+			if msg.Rcode == dns.RcodeSuccess {
+				ttl = uint32(maxTTL)
+			} else {
+				ttl = uint32(cacheNegMaxTTL)
+			}
 			if rr.Header().Ttl < ttl {
 				ttl = rr.Header().Ttl
 			}
+			if msg.Rcode == dns.RcodeSuccess {
+				if ttl < minTTL {
+					ttl = minTTL
+				}
+			} else {
+				if ttl < cacheNegMinTTL {
+					ttl = cacheNegMinTTL
+				}
+			}
+			rr.Header().Ttl = ttl
 		}
-	} else {
-		for _, rr := range msg.Ns {
-			if rr.Header().Ttl < ttl {
-				ttl = rr.Header().Ttl
+	}
+
+	for _, rr := range msg.Ns {
+		if msg.Rcode == dns.RcodeSuccess {
+			ttl = uint32(maxTTL)
+		} else {
+			ttl = uint32(cacheNegMaxTTL)
+		}
+		if rr.Header().Ttl < ttl {
+			ttl = rr.Header().Ttl
+		}
+		if msg.Rcode == dns.RcodeSuccess {
+			if ttl < minTTL {
+				ttl = minTTL
+			}
+		} else {
+			if ttl < cacheNegMinTTL {
+				ttl = cacheNegMinTTL
 			}
 		}
+		rr.Header().Ttl = ttl
 	}
-	if msg.Rcode == dns.RcodeSuccess {
-		if ttl < minTTL {
-			ttl = minTTL
-		}
-	} else {
-		if ttl < cacheNegMinTTL {
-			ttl = cacheNegMinTTL
-		}
-	}
-	return time.Duration(ttl) * time.Second
 }
 
 func setMaxTTL(msg *dns.Msg, ttl uint32) {
@@ -141,20 +158,15 @@ func setMaxTTL(msg *dns.Msg, ttl uint32) {
 	}
 }
 
-func updateTTL(msg *dns.Msg, expiration time.Time) {
-	ttl := uint32(time.Until(expiration) / time.Second)
+func updateTTLs(msg *dns.Msg, since time.Time)  {
+
+	ttl := uint32( time.Now().Sub( since ).Seconds() )
 
 	for _, rr := range msg.Answer {
-		rr.Header().Ttl = ttl
+		rr.Header().Ttl -= ttl
 	}
 	for _, rr := range msg.Ns {
-		rr.Header().Ttl = ttl
+		rr.Header().Ttl -= ttl
 	}
-	for _, rr := range msg.Extra {
-		header := rr.Header()
-		if header.Rrtype == dns.TypeOPT {
-			continue
-		}
-		rr.Header().Ttl = ttl
-	}
+
 }
