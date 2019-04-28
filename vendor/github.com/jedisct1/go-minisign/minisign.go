@@ -90,7 +90,7 @@ func (publicKey *PublicKey) Verify(bin []byte, signature Signature) (bool, error
 	if publicKey.SignatureAlgorithm != signature.SignatureAlgorithm {
 		return false, errors.New("Incompatible signature algorithm")
 	}
-	if signature.SignatureAlgorithm[0] != 0x45 && signature.SignatureAlgorithm[1] != 0x64 {
+	if signature.SignatureAlgorithm[0] != 0x45 || signature.SignatureAlgorithm[1] != 0x64 {
 		return false, errors.New("Unsupported signature algorithm")
 	}
 	if publicKey.KeyId != signature.KeyId {

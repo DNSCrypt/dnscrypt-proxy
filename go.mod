@@ -19,16 +19,17 @@ require (
 	github.com/jedisct1/dlog v0.0.0-20181221013014-794eb21b6ae8
 	github.com/jedisct1/go-clocksmith v0.0.0-20180307175859-c35da9bed550
 	github.com/jedisct1/go-dnsstamps v0.0.0-20190303171121-de46dd0ba576
-	github.com/jedisct1/go-minisign v0.0.0-20180516093733-f4dbde220b4f
+	github.com/jedisct1/go-minisign v0.0.0-20190420161605-5cc5b100fd4d
 	github.com/jedisct1/xsecretbox v0.0.0-20190218134741-855e18301bf0
 	github.com/k-sone/critbitgo v1.2.0
 	github.com/kardianos/service v1.0.0
 	github.com/kr/pretty v0.1.0 // indirect
 	github.com/miekg/dns v1.1.8
-	golang.org/x/crypto v0.0.0-20190325154230-a5d413f7728c
-	golang.org/x/net v0.0.0-20190328230028-74de082e2cca
-	golang.org/x/sync v0.0.0-20190227155943-e225da77a7e6 // indirect
-	golang.org/x/sys v0.0.0-20190329044733-9eb1bfa1ce65
+	golang.org/x/crypto v0.0.0-20190426145343-a29dc8fdc734
+	golang.org/x/net v0.0.0-20190424112056-4829fb13d2c6
+	golang.org/x/sync v0.0.0-20190423024810-112230192c58 // indirect
+	golang.org/x/sys v0.0.0-20190428183149-804c0c7841b5
+	golang.org/x/text v0.3.2 // indirect
 	gopkg.in/check.v1 v1.0.0-20180628173108-788fd7840127 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 	gopkg.in/yaml.v2 v2.2.2 // indirect
