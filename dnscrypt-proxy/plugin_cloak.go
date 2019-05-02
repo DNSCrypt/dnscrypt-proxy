@@ -151,8 +151,7 @@ func (plugin *PluginCloak) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 			}
 		}
 		plugin.Unlock()
-	} else {
-		plugin.RUnlock()
+		plugin.RLock()
 	}
 	var ip *net.IP
 	if question.Qtype == dns.TypeA {
@@ -166,6 +165,7 @@ func (plugin *PluginCloak) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 			ip = &cloakedName.ipv6[rand.Intn(ipLen)]
 		}
 	}
+	plugin.RUnlock()
 	synth, err := EmptyResponseFromMessage(msg)
 	if err != nil {
 		return err
