@@ -283,7 +283,12 @@ func (serversInfo *ServersInfo) fetchDoHServerInfo(proxy *Proxy, name string, st
 	if tls == nil || !tls.HandshakeComplete {
 		return ServerInfo{}, errors.New("TLS handshake failed")
 	}
-	dlog.Infof("[%s] TLS version: %x - Protocol: %v - Cipher suite: %v", name, tls.Version, tls.NegotiatedProtocol, tls.CipherSuite)
+	protocol := tls.NegotiatedProtocol
+	if len(protocol) == 0 {
+		protocol = "h1"
+		dlog.Warnf("[%s] does not support HTTP/2", name)
+	}
+	dlog.Infof("[%s] TLS version: %x - Protocol: %v - Cipher suite: %v", name, tls.Version, protocol, tls.CipherSuite)
 	showCerts := len(os.Getenv("SHOW_CERTS")) > 0
 	found := false
 	var wantedHash [32]byte
