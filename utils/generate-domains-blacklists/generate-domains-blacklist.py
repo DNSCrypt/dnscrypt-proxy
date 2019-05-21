@@ -5,8 +5,14 @@
 import argparse
 import re
 import sys
-import urllib2
 
+try:
+    import urllib2 as urllib
+    URLLIB_NEW = False
+except (ImportError, ModuleNotFoundError):
+    import urllib.request as urllib
+    from urllib.request import Request
+    URLLIB_NEW = True
 
 def parse_time_restricted_list(content):
     rx_comment = re.compile(r'^(#|$)')
@@ -81,22 +87,29 @@ def print_restricted_name(name, time_restrictions):
 
 def load_from_url(url):
     sys.stderr.write("Loading data from [{}]\n".format(url))
-    req = urllib2.Request(url)
+    req = urllib.Request(url)
     trusted = False
-    if req.get_type() == "file":
+
+    if URLLIB_NEW:
+        req_type = req.type
+    else:
+        req_type = req.get_type()
+    if req_type == "file":
         trusted = True
+
     response = None
     try:
-        response = urllib2.urlopen(req, timeout=int(args.timeout))
+        response = urllib.urlopen(req, timeout=int(args.timeout))
     except urllib2.URLError as err:
         raise Exception("[{}] could not be loaded: {}\n".format(url, err))
     if trusted is False and response.getcode() != 200:
         raise Exception("[{}] returned HTTP code {}\n".format(
             url, response.getcode()))
     content = response.read()
+    if URLLIB_NEW:
+        content = content.decode('utf-8', errors='replace')
 
     return (content, trusted)
-
 
 def name_cmp(name):
     parts = name.split(".")
