@@ -111,6 +111,7 @@ def load_from_url(url):
 
     return (content, trusted)
 
+
 def name_cmp(name):
     parts = name.split(".")
     parts.reverse()
