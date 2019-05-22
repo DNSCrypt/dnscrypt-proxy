@@ -100,7 +100,7 @@ def load_from_url(url):
     response = None
     try:
         response = urllib.urlopen(req, timeout=int(args.timeout))
-    except urllib2.URLError as err:
+    except urllib.URLError as err:
         raise Exception("[{}] could not be loaded: {}\n".format(url, err))
     if trusted is False and response.getcode() != 200:
         raise Exception("[{}] returned HTTP code {}\n".format(
