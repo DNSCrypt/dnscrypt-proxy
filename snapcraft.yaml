@@ -1,0 +1,25 @@
+name: dnscrypt-proxy
+version: '1.0'
+summary: A flexible DNS proxy, with support for encrypted DNS protocols
+description: |
+  A flexible DNS proxy, with support for encrypted DNS protocols.
+grade: stable
+confinement: strict
+base: core18
+parts:
+  dnscrypt-proxy:
+    plugin: go
+    source: https://github.com/jedisct1/dnscrypt-proxy.git
+    go-importpath: github.com/jedisct1/dnscrypt-proxy
+    build-packages:
+      - build-essential
+apps:
+  dnscrypt-proxy:
+    command: bin/dnscrypt-proxy
+    daemon: simple
+    restart-condition: on-abnormal
+    plugs:
+      - home
+      - network
+      - network-bind
+      - network-control
