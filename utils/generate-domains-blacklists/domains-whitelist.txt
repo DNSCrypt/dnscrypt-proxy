@@ -4,10 +4,12 @@ appsflyer.com
 azurewebsites.net
 cdnetworks.com
 cloudapp.net
+download.dnscrypt.info
 edgekey.net
 elasticbeanstalk.com
 github.com
 github.io
+raw.githubusercontent.com
 invalid
 j.mp
 l-msedge.net
