@@ -17,7 +17,7 @@ parts:
     plugin: dump
     source: .
     organize:
-      dnscrypt-proxy/example-dnscrypt-proxy.toml: etc/dnscrypt-proxy.toml
+      dnscrypt-proxy/*.toml: etc/
       dnscrypt-proxy/*.txt: etc/
     stage:
       - etc
