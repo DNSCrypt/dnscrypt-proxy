@@ -5,6 +5,7 @@ import (
 	"math/rand"
 	"net"
 	"strings"
+	"time"
 	"unicode"
 
 	"github.com/jedisct1/dlog"
@@ -92,7 +93,9 @@ func (plugin *PluginForward) Eval(pluginsState *PluginsState, msg *dns.Msg) erro
 		return nil
 	}
 	server := servers[rand.Intn(len(servers))]
+	reqStart := time.Now()
 	respMsg, err := dns.Exchange(msg, server)
+	pluginsState.forwardDuration = time.Now().Sub(reqStart)
 	if err != nil {
 		return err
 	}
