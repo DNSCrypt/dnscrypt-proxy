@@ -70,6 +70,8 @@ type PluginsState struct {
 	cacheMinTTL            uint32
 	cacheMaxTTL            uint32
 	questionMsg            *dns.Msg
+	ednsClientIP           net.IP
+	ednsClientMask         uint8
 	returnCode             PluginsReturnCode
 }
 
@@ -88,6 +90,7 @@ func InitPluginsGlobals(pluginsGlobals *PluginsGlobals, proxy *Proxy) error {
 		*queryPlugins = append(*queryPlugins, Plugin(new(PluginCloak)))
 	}
 	*queryPlugins = append(*queryPlugins, Plugin(new(PluginGetSetPayloadSize)))
+	*queryPlugins = append(*queryPlugins, Plugin(new(PluginEdns)))
 	if proxy.cache {
 		*queryPlugins = append(*queryPlugins, Plugin(new(PluginCache)))
 	}

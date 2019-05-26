@@ -221,6 +221,9 @@ log_files_max_age = 7
 # Maximum log files backups to keep (or 0 to keep all backups)
 log_files_max_backups = 1
 
+# Remove EDNS client subnet information from incoming requests
+remove_edns_client_subnet = false
+
 
 
 #########################

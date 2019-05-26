@@ -75,6 +75,7 @@ type Config struct {
 	OfflineMode              bool                       `toml:"offline_mode"`
 	HTTPProxyURL             string                     `toml:"http_proxy"`
 	RefusedCodeInResponses   bool                       `toml:"refused_code_in_responses"`
+	RemoveEdnsClientSubnet   bool                       `toml:"remove_edns_client_subnet"`
 }
 
 func newConfig() Config {
@@ -111,6 +112,7 @@ func newConfig() Config {
 		NetprobeTimeout:          60,
 		OfflineMode:              false,
 		RefusedCodeInResponses:   false,
+		RemoveEdnsClientSubnet:   false,
 	}
 }
 
@@ -283,6 +285,7 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 	proxy.xTransport.rebuildTransport()
 
 	proxy.refusedCodeInResponses = config.RefusedCodeInResponses
+	proxy.removeEdnsClientSubnet = config.RemoveEdnsClientSubnet
 	proxy.timeout = time.Duration(config.Timeout) * time.Millisecond
 	proxy.maxClients = config.MaxClients
 	proxy.mainProto = "udp"
