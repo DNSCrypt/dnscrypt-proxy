@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net"
 	"sync"
+	"time"
 
 	"github.com/jedisct1/dlog"
 	"github.com/miekg/dns"
@@ -70,6 +71,9 @@ type PluginsState struct {
 	cacheMinTTL            uint32
 	cacheMaxTTL            uint32
 	questionMsg            *dns.Msg
+	requestStart           time.Time
+	requestEnd             time.Time
+	forwardDuration        time.Duration
 	returnCode             PluginsReturnCode
 }
 
@@ -143,7 +147,7 @@ type Plugin interface {
 	Eval(pluginsState *PluginsState, msg *dns.Msg) error
 }
 
-func NewPluginsState(proxy *Proxy, clientProto string, clientAddr *net.Addr) PluginsState {
+func NewPluginsState(proxy *Proxy, clientProto string, clientAddr *net.Addr, start time.Time) PluginsState {
 	return PluginsState{
 		action:         PluginsActionForward,
 		maxPayloadSize: MaxDNSUDPPacketSize - ResponseOverhead,
@@ -155,6 +159,7 @@ func NewPluginsState(proxy *Proxy, clientProto string, clientAddr *net.Addr) Plu
 		cacheMinTTL:    proxy.cacheMinTTL,
 		cacheMaxTTL:    proxy.cacheMaxTTL,
 		questionMsg:    nil,
+		requestStart:   start,
 	}
 }
 
@@ -253,6 +258,7 @@ func (pluginsState *PluginsState) ApplyLoggingPlugins(pluginsGlobals *PluginsGlo
 	if len(*pluginsGlobals.loggingPlugins) == 0 {
 		return nil
 	}
+	pluginsState.requestEnd = time.Now()
 	questionMsg := pluginsState.questionMsg
 	if questionMsg == nil || len(questionMsg.Question) > 1 {
 		return errors.New("Unexpected number of questions")

@@ -206,12 +206,13 @@ func (proxy *Proxy) udpListener(clientPc *net.UDPConn) {
 		}
 		packet := buffer[:length]
 		go func() {
+			start := time.Now()
 			if !proxy.clientsCountInc() {
 				dlog.Warnf("Too many connections (max=%d)", proxy.maxClients)
 				return
 			}
 			defer proxy.clientsCountDec()
-			proxy.processIncomingQuery(proxy.serversInfo.getOne(), "udp", proxy.mainProto, packet, &clientAddr, clientPc)
+			proxy.processIncomingQuery(proxy.serversInfo.getOne(), "udp", proxy.mainProto, packet, &clientAddr, clientPc, start)
 		}()
 	}
 }
@@ -234,6 +235,7 @@ func (proxy *Proxy) tcpListener(acceptPc *net.TCPListener) {
 			continue
 		}
 		go func() {
+			start := time.Now()
 			defer clientPc.Close()
 			if !proxy.clientsCountInc() {
 				dlog.Warnf("Too many connections (max=%d)", proxy.maxClients)
@@ -246,7 +248,7 @@ func (proxy *Proxy) tcpListener(acceptPc *net.TCPListener) {
 				return
 			}
 			clientAddr := clientPc.RemoteAddr()
-			proxy.processIncomingQuery(proxy.serversInfo.getOne(), "tcp", "tcp", packet, &clientAddr, clientPc)
+			proxy.processIncomingQuery(proxy.serversInfo.getOne(), "tcp", "tcp", packet, &clientAddr, clientPc, start)
 		}()
 	}
 }
@@ -325,11 +327,11 @@ func (proxy *Proxy) clientsCountDec() {
 	}
 }
 
-func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto string, serverProto string, query []byte, clientAddr *net.Addr, clientPc net.Conn) {
+func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto string, serverProto string, query []byte, clientAddr *net.Addr, clientPc net.Conn, start time.Time) {
 	if len(query) < MinDNSPacketSize {
 		return
 	}
-	pluginsState := NewPluginsState(proxy, clientProto, clientAddr)
+	pluginsState := NewPluginsState(proxy, clientProto, clientAddr, start)
 	query, _ = pluginsState.ApplyQueryPlugins(&proxy.pluginsGlobals, query)
 	var response []byte
 	var err error
@@ -360,11 +362,13 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 				return
 			}
 			serverInfo.noticeBegin(proxy)
+			reqStart := time.Now()
 			if serverProto == "udp" {
 				response, err = proxy.exchangeWithUDPServer(serverInfo, sharedKey, encryptedQuery, clientNonce)
 			} else {
 				response, err = proxy.exchangeWithTCPServer(serverInfo, sharedKey, encryptedQuery, clientNonce)
 			}
+			pluginsState.forwardDuration = time.Now().Sub(reqStart)
 			if err != nil {
 				pluginsState.returnCode = PluginsReturnCodeServerError
 				pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
@@ -375,8 +379,9 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 			tid := TransactionID(query)
 			SetTransactionID(query, 0)
 			serverInfo.noticeBegin(proxy)
-			resp, _, err := proxy.xTransport.DoHQuery(serverInfo.useGet, serverInfo.URL, query, proxy.timeout)
+			resp, duration, err := proxy.xTransport.DoHQuery(serverInfo.useGet, serverInfo.URL, query, proxy.timeout)
 			SetTransactionID(query, tid)
+			pluginsState.forwardDuration = duration
 			if err != nil {
 				pluginsState.returnCode = PluginsReturnCodeServerError
 				pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
