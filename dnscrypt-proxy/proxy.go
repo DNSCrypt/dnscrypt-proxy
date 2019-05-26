@@ -351,7 +351,6 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 		pluginsState.returnCode = PluginsReturnCodeForward
 	}
 	if len(response) == 0 && serverInfo != nil {
-		var ttl *uint32
 		if serverInfo.Proto == stamps.StampProtoTypeDNSCrypt {
 			sharedKey, encryptedQuery, clientNonce, err := proxy.Encrypt(serverInfo, query, serverProto)
 			if err != nil {
@@ -396,25 +395,6 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 		} else {
 			dlog.Fatal("Unsupported protocol")
 		}
-		if len(response) < MinDNSPacketSize || len(response) > MaxDNSPacketSize {
-			pluginsState.returnCode = PluginsReturnCodeParseError
-			pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
-			serverInfo.noticeFailure(proxy)
-			return
-		}
-		response, err = pluginsState.ApplyResponsePlugins(&proxy.pluginsGlobals, response, ttl)
-		if err != nil {
-			pluginsState.returnCode = PluginsReturnCodeParseError
-			pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
-			serverInfo.noticeFailure(proxy)
-			return
-		}
-		if rcode := Rcode(response); rcode == 2 { // SERVFAIL
-			dlog.Infof("Server [%v] returned temporary error code [%v] -- Upstream server may be experiencing connectivity issues", serverInfo.Name, rcode)
-			serverInfo.noticeFailure(proxy)
-		} else {
-			serverInfo.noticeSuccess(proxy)
-		}
 	}
 	if len(response) < MinDNSPacketSize || len(response) > MaxDNSPacketSize {
 		pluginsState.returnCode = PluginsReturnCodeParseError
@@ -423,6 +403,26 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 			serverInfo.noticeFailure(proxy)
 		}
 		return
+	}
+	var ttl *uint32
+	response, err = pluginsState.ApplyResponsePlugins(&proxy.pluginsGlobals, response, ttl)
+	if err != nil {
+		pluginsState.returnCode = PluginsReturnCodeParseError
+		pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
+		if serverInfo != nil {
+			serverInfo.noticeFailure(proxy)
+		}
+		return
+	}
+	if rcode := Rcode(response); rcode == 2 { // SERVFAIL
+		dlog.Infof("Server [%v] returned temporary error code [%v] -- Upstream server may be experiencing connectivity issues", serverInfo.Name, rcode)
+		if serverInfo != nil {
+			serverInfo.noticeFailure(proxy)
+		}
+	} else {
+		if serverInfo != nil {
+			serverInfo.noticeSuccess(proxy)
+		}
 	}
 	if clientProto == "udp" {
 		if len(response) > MaxDNSUDPPacketSize {
