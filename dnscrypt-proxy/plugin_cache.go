@@ -132,6 +132,7 @@ func (plugin *PluginCache) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 	synth.Question = msg.Question
 	pluginsState.synthResponse = &synth
 	pluginsState.action = PluginsActionSynth
+	pluginsState.cacheHit = true
 	return nil
 }
 

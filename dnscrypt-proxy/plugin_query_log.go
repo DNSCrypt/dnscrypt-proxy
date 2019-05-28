@@ -84,8 +84,8 @@ func (plugin *PluginQueryLog) Eval(pluginsState *PluginsState, msg *dns.Msg) err
 		tsStr := fmt.Sprintf("[%d-%02d-%02d %02d:%02d:%02d]", year, int(month), day, hour, minute, second)
 		line = fmt.Sprintf("%s\t%s\t%s\t%s\t%s\t%d\n", tsStr, clientIPStr, StringQuote(qName), qType, returnCode, requestDuration/time.Millisecond)
 	} else if plugin.format == "ltsv" {
-		line = fmt.Sprintf("time:%d\thost:%s\tmessage:%s\ttype:%s\treturn:%s\tduration:%d\n",
-			time.Now().Unix(), clientIPStr, StringQuote(qName), qType, returnCode, requestDuration/time.Millisecond)
+		line = fmt.Sprintf("time:%d\thost:%s\tmessage:%s\ttype:%s\treturn:%s\tcacheHit:%v\tduration:%d\n",
+			time.Now().Unix(), clientIPStr, StringQuote(qName), qType, returnCode, pluginsState.cacheHit, requestDuration/time.Millisecond)
 	} else {
 		dlog.Fatalf("Unexpected log format: [%s]", plugin.format)
 	}
