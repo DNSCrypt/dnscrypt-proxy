@@ -20,6 +20,10 @@ import (
 	netproxy "golang.org/x/net/proxy"
 )
 
+const (
+	MaxTimeout = 3600
+)
+
 type Config struct {
 	LogLevel                 int      `toml:"log_level"`
 	LogFile                  *string  `toml:"log_file"`
@@ -539,13 +543,13 @@ func (config *Config) loadSource(proxy *Proxy, requiredProps stamps.ServerInform
 	source, sourceUrlsToPrefetch, err := NewSource(proxy.xTransport, cfgSource.URLs, cfgSource.MinisignKeyStr, cfgSource.CacheFile, cfgSource.FormatStr, time.Duration(cfgSource.RefreshDelay)*time.Hour)
 	proxy.urlsToPrefetch = append(proxy.urlsToPrefetch, sourceUrlsToPrefetch...)
 	if err != nil {
-		dlog.Criticalf("Unable to use source [%s]: [%s]", cfgSourceName, err)
-		return nil
+		dlog.Criticalf("Unable to retrieve source [%s]: [%s]", cfgSourceName, err)
+		return err
 	}
 	registeredServers, err := source.Parse(cfgSource.Prefix)
 	if err != nil {
 		dlog.Criticalf("Unable to use source [%s]: [%s]", cfgSourceName, err)
-		return nil
+		return err
 	}
 	for _, registeredServer := range registeredServers {
 		if len(config.ServerNames) > 0 {
@@ -611,8 +615,16 @@ func netProbe(address string, timeout int) error {
 		return err
 	}
 	retried := false
+	if timeout < 0 {
+		timeout = MaxTimeout
+	} else {
+		timeout = Max(MaxTimeout, timeout)
+	}
 	for tries := timeout; tries > 0; tries-- {
 		pc, err := net.DialUDP("udp", nil, remoteUDPAddr)
+		if err == nil {
+			_, err = pc.Write([]byte{})
+		}
 		if err != nil {
 			if !retried {
 				retried = true

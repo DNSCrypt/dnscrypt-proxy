@@ -198,8 +198,8 @@ ignore_system_dns = false
 ## initializing the proxy.
 ## Useful if the proxy is automatically started at boot, and network
 ## connectivity is not guaranteed to be immediately available.
-## Use 0 to disable.
-
+## Use 0 to not test for connectivity at all,
+## and -1 to wait as much as possible.
 netprobe_timeout = 60
 
 
