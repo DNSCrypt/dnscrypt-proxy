@@ -362,13 +362,11 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 				return
 			}
 			serverInfo.noticeBegin(proxy)
-			reqStart := time.Now()
 			if serverProto == "udp" {
 				response, err = proxy.exchangeWithUDPServer(serverInfo, sharedKey, encryptedQuery, clientNonce)
 			} else {
 				response, err = proxy.exchangeWithTCPServer(serverInfo, sharedKey, encryptedQuery, clientNonce)
 			}
-			pluginsState.forwardDuration = time.Now().Sub(reqStart)
 			if err != nil {
 				pluginsState.returnCode = PluginsReturnCodeServerError
 				pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
@@ -379,9 +377,8 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 			tid := TransactionID(query)
 			SetTransactionID(query, 0)
 			serverInfo.noticeBegin(proxy)
-			resp, duration, err := proxy.xTransport.DoHQuery(serverInfo.useGet, serverInfo.URL, query, proxy.timeout)
+			resp, _, err := proxy.xTransport.DoHQuery(serverInfo.useGet, serverInfo.URL, query, proxy.timeout)
 			SetTransactionID(query, tid)
-			pluginsState.forwardDuration = duration
 			if err != nil {
 				pluginsState.returnCode = PluginsReturnCodeServerError
 				pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)

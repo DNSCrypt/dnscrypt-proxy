@@ -73,7 +73,6 @@ type PluginsState struct {
 	questionMsg            *dns.Msg
 	requestStart           time.Time
 	requestEnd             time.Time
-	forwardDuration        time.Duration
 	returnCode             PluginsReturnCode
 }
 
