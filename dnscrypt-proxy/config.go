@@ -635,9 +635,7 @@ func netProbe(address string, timeout int) error {
 			continue
 		}
 		pc.Close()
-		if retried {
-			dlog.Notice("Network connectivity detected")
-		}
+		dlog.Notice("Network connectivity detected")
 		return nil
 	}
 	es := "Timeout while waiting for network connectivity"
