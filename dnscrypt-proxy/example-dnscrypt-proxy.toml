@@ -200,7 +200,19 @@ ignore_system_dns = false
 ## connectivity is not guaranteed to be immediately available.
 ## Use 0 to not test for connectivity at all,
 ## and -1 to wait as much as possible.
+
 netprobe_timeout = 60
+
+## Address and port to try initializing a connection to, just to check
+## if the network is up. It can be any address and any port, even if
+## there is nothing answering these on the other side. Just don't use
+## a local address, as the goal is to check for Internet connectivity.
+## On Windows, a datagram with a single, nul byte will be sent, only
+## when the system starts.
+## On other operating systems, the connection will be initialized
+## but nothing will be sent at all.
+
+netprobe_address = "9.9.9.9:53"
 
 
 ## Offline mode - Do not use any remote encrypted servers.
