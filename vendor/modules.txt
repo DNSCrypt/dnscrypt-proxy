@@ -6,9 +6,6 @@ github.com/VividCortex/ewma
 github.com/aead/chacha20/chacha
 # github.com/aead/poly1305 v0.0.0-20180717145839-3fee0db0b635
 github.com/aead/poly1305
-# github.com/agl/ed25519 v0.0.0-20170116200512-5312a6153412
-github.com/agl/ed25519
-github.com/agl/ed25519/edwards25519
 # github.com/coreos/go-systemd v0.0.0-20190321100706-95778dfbb74e
 github.com/coreos/go-systemd/activation
 github.com/coreos/go-systemd/daemon
@@ -18,7 +15,7 @@ github.com/dchest/safefile
 github.com/facebookgo/atomicfile
 # github.com/facebookgo/pidfile v0.0.0-20150612191647-f242e2999868
 github.com/facebookgo/pidfile
-# github.com/hashicorp/go-immutable-radix v1.0.0
+# github.com/hashicorp/go-immutable-radix v1.1.0
 github.com/hashicorp/go-immutable-radix
 # github.com/hashicorp/go-syslog v1.0.0
 github.com/hashicorp/go-syslog
@@ -39,9 +36,9 @@ github.com/jedisct1/xsecretbox
 github.com/k-sone/critbitgo
 # github.com/kardianos/service v1.0.0
 github.com/kardianos/service
-# github.com/miekg/dns v1.1.8
+# github.com/miekg/dns v1.1.13
 github.com/miekg/dns
-# golang.org/x/crypto v0.0.0-20190426145343-a29dc8fdc734
+# golang.org/x/crypto v0.0.0-20190530122614-20be4c3c3ed5
 golang.org/x/crypto/curve25519
 golang.org/x/crypto/ed25519
 golang.org/x/crypto/nacl/box
@@ -50,7 +47,7 @@ golang.org/x/crypto/ed25519/internal/edwards25519
 golang.org/x/crypto/salsa20/salsa
 golang.org/x/crypto/internal/subtle
 golang.org/x/crypto/poly1305
-# golang.org/x/net v0.0.0-20190424112056-4829fb13d2c6
+# golang.org/x/net v0.0.0-20190522155817-f3200d17e092
 golang.org/x/net/http2
 golang.org/x/net/proxy
 golang.org/x/net/ipv4
@@ -62,7 +59,7 @@ golang.org/x/net/internal/socks
 golang.org/x/net/bpf
 golang.org/x/net/internal/iana
 golang.org/x/net/internal/socket
-# golang.org/x/sys v0.0.0-20190428183149-804c0c7841b5
+# golang.org/x/sys v0.0.0-20190531175056-4c3a928424d2
 golang.org/x/sys/windows/svc/mgr
 golang.org/x/sys/windows/svc/eventlog
 golang.org/x/sys/windows/registry

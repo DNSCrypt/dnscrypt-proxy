@@ -35,9 +35,6 @@ func defaultMsgAcceptFunc(dh Header) MsgAcceptAction {
 		return MsgReject
 	}
 
-	if isZero := dh.Bits&_Z != 0; isZero {
-		return MsgReject
-	}
 	if dh.Qdcount != 1 {
 		return MsgReject
 	}
