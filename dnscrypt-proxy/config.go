@@ -309,7 +309,8 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 	case "ph":
 		lbStrategy = LBStrategyPH
 	case "fastest":
-		lbStrategy = LBStrategyFastest
+	case "first":
+		lbStrategy = LBStrategyFirst
 	case "random":
 		lbStrategy = LBStrategyRandom
 	default:

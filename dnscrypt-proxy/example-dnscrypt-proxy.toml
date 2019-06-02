@@ -118,7 +118,7 @@ keepalive = 30
 refused_code_in_responses = false
 
 
-## Load-balancing strategy: 'p2' (default), 'ph', 'fastest' or 'random'
+## Load-balancing strategy: 'p2' (default), 'ph', 'first' or 'random'
 
 # lb_strategy = 'p2'
 

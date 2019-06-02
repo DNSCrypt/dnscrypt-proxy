@@ -56,7 +56,7 @@ const (
 	LBStrategyNone = LBStrategy(iota)
 	LBStrategyP2
 	LBStrategyPH
-	LBStrategyFastest
+	LBStrategyFirst
 	LBStrategyRandom
 )
 
@@ -192,7 +192,7 @@ func (serversInfo *ServersInfo) getOne() *ServerInfo {
 		}
 	}
 	switch serversInfo.lbStrategy {
-	case LBStrategyFastest:
+	case LBStrategyFirst:
 		candidate = 0
 	case LBStrategyPH:
 		candidate = rand.Intn(Min(Min(serversCount, 2), serversCount/2))
