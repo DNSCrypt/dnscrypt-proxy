@@ -333,6 +333,9 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 	}
 	pluginsState := NewPluginsState(proxy, clientProto, clientAddr, start)
 	query, _ = pluginsState.ApplyQueryPlugins(&proxy.pluginsGlobals, query)
+	if len(query) < MinDNSPacketSize || len(query) > MaxDNSPacketSize {
+		return
+	}
 	var response []byte
 	var err error
 	if pluginsState.action != PluginsActionForward {
