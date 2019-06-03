@@ -1,3 +1,8 @@
+* Version 2.0.25
+ - The example IP address for network probes didn't work on Windows.
+The example configuration file has been updated and the fallback
+resolver IP is now used when no netprobe address has been configured.
+
 * Version 2.0.24
  - The query log now includes the time it took to complete the
 transaction, the name of the resolver that sent the response and if
