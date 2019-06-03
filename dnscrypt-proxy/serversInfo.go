@@ -106,6 +106,7 @@ func (serversInfo *ServersInfo) refreshServer(proxy *Proxy, name string, stamp s
 		dlog.Fatalf("[%s] != [%s]", name, newServer.Name)
 	}
 	newServer.rtt = ewma.NewMovingAverage(RTTEwmaDecay)
+	newServer.rtt.Set(float64(newServer.initialRtt))
 	serversInfo.Lock()
 	defer serversInfo.Unlock()
 	previousIndex = -1
@@ -343,10 +344,11 @@ func (serversInfo *ServersInfo) fetchDoHServerInfo(proxy *Proxy, name string, st
 		respBody[0] != 0xca || respBody[1] != 0xfe || respBody[4] != 0x00 || respBody[5] != 0x01 {
 		return ServerInfo{}, errors.New("Webserver returned an unexpected response")
 	}
+	xrtt := int(rtt.Nanoseconds() / 1000000)
 	if isNew {
-		dlog.Noticef("[%s] OK (DoH) - rtt: %dms", name, rtt.Nanoseconds()/1000000)
+		dlog.Noticef("[%s] OK (DoH) - rtt: %dms", name, xrtt)
 	} else {
-		dlog.Infof("[%s] OK (DoH) - rtt: %dms", name, rtt.Nanoseconds()/1000000)
+		dlog.Infof("[%s] OK (DoH) - rtt: %dms", name, xrtt)
 	}
 	return ServerInfo{
 		Proto:      stamps.StampProtoTypeDoH,
@@ -354,7 +356,7 @@ func (serversInfo *ServersInfo) fetchDoHServerInfo(proxy *Proxy, name string, st
 		Timeout:    proxy.timeout,
 		URL:        url,
 		HostName:   stamp.ProviderName,
-		initialRtt: int(rtt.Nanoseconds() / 1000000),
+		initialRtt: xrtt,
 		useGet:     useGet,
 	}, nil
 }
