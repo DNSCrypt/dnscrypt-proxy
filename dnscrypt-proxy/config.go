@@ -110,7 +110,7 @@ func newConfig() Config {
 		LogMaxBackups:            1,
 		TLSDisableSessionTickets: false,
 		TLSCipherSuite:           nil,
-		NetprobeAddress:          "9.9.9.9:53",
+		NetprobeAddress:          "255.255.255.0:53",
 		NetprobeTimeout:          60,
 		OfflineMode:              false,
 		RefusedCodeInResponses:   false,
