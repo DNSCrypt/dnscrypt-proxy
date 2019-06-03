@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"math/rand"
 	"net/http"
 	"net/url"
 	"os"
@@ -115,6 +116,7 @@ func newConfig() Config {
 		NetprobeTimeout:          60,
 		OfflineMode:              false,
 		RefusedCodeInResponses:   false,
+		LBEstimator:              true,
 	}
 }
 
@@ -519,6 +521,10 @@ func (config *Config) loadSources(proxy *Proxy) error {
 		}
 		proxy.registeredServers = append(proxy.registeredServers, RegisteredServer{name: serverName, stamp: stamp})
 	}
+	rand.Shuffle(len(proxy.registeredServers), func(i, j int) {
+		proxy.registeredServers[i], proxy.registeredServers[j] = proxy.registeredServers[j], proxy.registeredServers[i]
+	})
+
 	return nil
 }
 

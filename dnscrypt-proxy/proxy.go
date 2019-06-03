@@ -1,9 +1,9 @@
 package main
 
 import (
+	crypto_rand "crypto/rand"
 	"io"
 	"io/ioutil"
-	"math/rand"
 	"net"
 	"os"
 	"sync/atomic"
@@ -68,7 +68,7 @@ type Proxy struct {
 
 func (proxy *Proxy) StartProxy() {
 	proxy.questionSizeEstimator = NewQuestionSizeEstimator()
-	if _, err := rand.Read(proxy.proxySecretKey[:]); err != nil {
+	if _, err := crypto_rand.Read(proxy.proxySecretKey[:]); err != nil {
 		dlog.Fatal(err)
 	}
 	curve25519.ScalarBaseMult(&proxy.proxyPublicKey, &proxy.proxySecretKey)
@@ -332,7 +332,7 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 		return
 	}
 	pluginsState := NewPluginsState(proxy, clientProto, clientAddr, start)
-	query, _ = pluginsState.ApplyQueryPlugins(&proxy.pluginsGlobals, query)
+	query, _ = pluginsState.ApplyQueryPlugins(&proxy.pluginsGlobals, query, &serverInfo.Name)
 	if len(query) < MinDNSPacketSize || len(query) > MaxDNSPacketSize {
 		return
 	}
@@ -461,6 +461,6 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 
 func NewProxy() Proxy {
 	return Proxy{
-		serversInfo: ServersInfo{lbStrategy: DefaultLBStrategy, lbEstimator: true},
+		serversInfo: NewServersInfo(),
 	}
 }

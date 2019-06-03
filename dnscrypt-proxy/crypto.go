@@ -2,9 +2,10 @@ package main
 
 import (
 	"bytes"
-	"crypto/rand"
+	crypto_rand "crypto/rand"
 	"crypto/sha512"
 	"errors"
+	"math/rand"
 
 	"github.com/jedisct1/dlog"
 	"github.com/jedisct1/xsecretbox"
@@ -59,7 +60,7 @@ func ComputeSharedKey(cryptoConstruction CryptoConstruction, secretKey *[32]byte
 
 func (proxy *Proxy) Encrypt(serverInfo *ServerInfo, packet []byte, proto string) (sharedKey *[32]byte, encrypted []byte, clientNonce []byte, err error) {
 	nonce, clientNonce := make([]byte, NonceSize), make([]byte, HalfNonceSize)
-	rand.Read(clientNonce)
+	crypto_rand.Read(clientNonce)
 	copy(nonce, clientNonce)
 	var publicKey *[PublicKeySize]byte
 	if proxy.ephemeralKeys {

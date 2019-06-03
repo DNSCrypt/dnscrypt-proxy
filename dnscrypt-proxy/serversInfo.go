@@ -70,6 +70,10 @@ type ServersInfo struct {
 	lbEstimator       bool
 }
 
+func NewServersInfo() ServersInfo {
+	return ServersInfo{lbStrategy: DefaultLBStrategy, lbEstimator: true, registeredServers: make([]RegisteredServer, 0)}
+}
+
 func (serversInfo *ServersInfo) registerServer(proxy *Proxy, name string, stamp stamps.ServerStamp) error {
 	newRegisteredServer := RegisteredServer{name: name, stamp: stamp}
 	serversInfo.Lock()
@@ -175,9 +179,10 @@ func (serversInfo *ServersInfo) estimatorUpdate(candidate int) {
 		serversInfo.inner[candidate], serversInfo.inner[0] = serversInfo.inner[0], serversInfo.inner[candidate]
 		partialSort = true
 		dlog.Debugf("New preferred candidate: %v (rtt: %v vs previous: %v)", serversInfo.inner[0].Name, candidateRtt, currentBestRtt)
-	} else if candidateRtt >= currentBestRtt*4.0 {
+	} else if candidateRtt > 0 && candidateRtt >= currentBestRtt*4.0 {
 		if time.Since(serversInfo.inner[candidate].lastActionTS) > time.Duration(1*time.Minute) {
 			serversInfo.inner[candidate].rtt.Add(MinF(MaxF(candidateRtt/2.0, currentBestRtt*2.0), candidateRtt))
+			dlog.Debugf("Giving a new chance to candidate [%s], setting its RTT from %v to %v (best: %v)", serversInfo.inner[candidate].Name, candidateRtt, serversInfo.inner[candidate].rtt.Value(), currentBestRtt)
 			partialSort = true
 		}
 	}
