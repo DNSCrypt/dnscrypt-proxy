@@ -223,7 +223,7 @@ func (serversInfo *ServersInfo) getOne() *ServerInfo {
 		candidate = rand.Intn(Min(serversCount, 2))
 	}
 	serverInfo := serversInfo.inner[candidate]
-	dlog.Debugf("Using candidate [%s] rtt: %d", (*serverInfo).Name, int((*serverInfo).rtt.Value()))
+	dlog.Debugf("Using candidate [%s] RTT: %d", (*serverInfo).Name, int((*serverInfo).rtt.Value()))
 
 	return serverInfo
 }
