@@ -1,3 +1,23 @@
+* Version 2.0.24
+ - The query log now includes the time it took to complete the
+transaction, the name of the resolver that sent the response and if
+the response was served from the cache. Thanks to Ferdinand Holzer for
+his help!
+ - The list of resolvers, sorted by latency, is now printed after all
+the resolvers have been probed.
+ - The "fastest" load-balancing strategy has been renamed to "first".
+ - On Windows, a nul byte is sent to the netprobe address. This is
+required to check for connectivity on this platform. Thanks to Mathias
+Berchtold.
+ - The Malwaredomainlist URL was updated to directly parse the host
+list. Thanks to Encrypted.Town.
+ - The Python script to generate lists of blacklisted domains is now
+compatible both with Python 2 and Python 3. Thanks to Simon R.
+ - A warning is now displayed for DoH is requested but the server
+doesn't speak HTTP/2.
+ - A crash with loaded-balanced sets of cloaked names was fixed.
+Thanks to @inkblotadmirer for the report.
+
 * Version 2.0.23
  - Binaries for FreeBSD/armv7 are now available.
  - .onion servers are now automatically ignored if Tor routing is not
