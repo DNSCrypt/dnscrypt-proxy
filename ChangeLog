@@ -17,6 +17,8 @@ compatible both with Python 2 and Python 3. Thanks to Simon R.
 doesn't speak HTTP/2.
  - A crash with loaded-balanced sets of cloaked names was fixed.
 Thanks to @inkblotadmirer for the report.
+ - Resolvers are now tried in random order to avoid favoring the first
+ones at startup.
 
 * Version 2.0.23
  - Binaries for FreeBSD/armv7 are now available.
