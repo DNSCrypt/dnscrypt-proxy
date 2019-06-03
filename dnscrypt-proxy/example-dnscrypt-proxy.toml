@@ -122,6 +122,11 @@ refused_code_in_responses = false
 
 # lb_strategy = 'p2'
 
+## Set to `true` to constantly try to estimate the latency of all the resolvers
+## and adjust the load-balancing parameters accordingly, or to `false` to disable.
+
+# lb_estimator = true
+
 
 ## Log level (0-6, default: 2 - 0 is very verbose, 6 only contains fatal errors)
 

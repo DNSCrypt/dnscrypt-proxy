@@ -40,6 +40,7 @@ type Config struct {
 	CertIgnoreTimestamp      bool   `toml:"cert_ignore_timestamp"`
 	EphemeralKeys            bool   `toml:"dnscrypt_ephemeral_keys"`
 	LBStrategy               string `toml:"lb_strategy"`
+	LBEstimator              bool   `toml:"lb_estimator"`
 	BlockIPv6                bool   `toml:"block_ipv6"`
 	Cache                    bool
 	CacheSize                int                        `toml:"cache_size"`
@@ -317,6 +318,7 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 		dlog.Warnf("Unknown load balancing strategy: [%s]", config.LBStrategy)
 	}
 	proxy.serversInfo.lbStrategy = lbStrategy
+	proxy.serversInfo.lbEstimator = config.LBEstimator
 
 	proxy.listenAddresses = config.ListenAddresses
 	proxy.daemonize = config.Daemonize

@@ -67,6 +67,7 @@ type ServersInfo struct {
 	inner             []*ServerInfo
 	registeredServers []RegisteredServer
 	lbStrategy        LBStrategy
+	lbEstimator       bool
 }
 
 func (serversInfo *ServersInfo) registerServer(proxy *Proxy, name string, stamp stamps.ServerStamp) error {
@@ -142,6 +143,12 @@ func (serversInfo *ServersInfo) refresh(proxy *Proxy) (int, error) {
 		}
 	}
 	serversInfo.inner = inner
+
+	dlog.Notice("Sorted latencies:")
+	for i := 0; i < innerLen; i++ {
+		dlog.Noticef("- %5dms %s", inner[i].initialRtt, inner[i].Name)
+	}
+
 	if innerLen > 0 {
 		dlog.Noticef("Server with the lowest initial latency: %s (rtt: %dms)", inner[0].Name, inner[0].initialRtt)
 		proxy.certIgnoreTimestamp = false
@@ -157,17 +164,7 @@ func (serversInfo *ServersInfo) liveServers() int {
 	return liveServers
 }
 
-func (serversInfo *ServersInfo) getOne() *ServerInfo {
-	serversInfo.Lock()
-	defer serversInfo.Unlock()
-	serversCount := len(serversInfo.inner)
-	if serversCount <= 0 {
-		return nil
-	}
-	candidate := rand.Intn(serversCount)
-	if candidate == 0 {
-		return serversInfo.inner[candidate]
-	}
+func (serversInfo *ServersInfo) estimatorUpdate(candidate int) {
 	candidateRtt, currentBestRtt := serversInfo.inner[candidate].rtt.Value(), serversInfo.inner[0].rtt.Value()
 	if currentBestRtt < 0 {
 		currentBestRtt = candidateRtt
@@ -185,12 +182,30 @@ func (serversInfo *ServersInfo) getOne() *ServerInfo {
 		}
 	}
 	if partialSort {
+		serversCount := len(serversInfo.inner)
 		for i := 1; i < serversCount; i++ {
 			if serversInfo.inner[i-1].rtt.Value() > serversInfo.inner[i].rtt.Value() {
 				serversInfo.inner[i-1], serversInfo.inner[i] = serversInfo.inner[i], serversInfo.inner[i-1]
 			}
 		}
 	}
+}
+
+func (serversInfo *ServersInfo) getOne() *ServerInfo {
+	serversInfo.Lock()
+	defer serversInfo.Unlock()
+	serversCount := len(serversInfo.inner)
+	if serversCount <= 0 {
+		return nil
+	}
+	if serversInfo.lbEstimator {
+		candidate := rand.Intn(serversCount)
+		if candidate == 0 {
+			return serversInfo.inner[candidate]
+		}
+		serversInfo.estimatorUpdate(candidate)
+	}
+	var candidate int
 	switch serversInfo.lbStrategy {
 	case LBStrategyFirst:
 		candidate = 0
