@@ -217,7 +217,7 @@ netprobe_timeout = 60
 ## On other operating systems, the connection will be initialized
 ## but nothing will be sent at all.
 
-netprobe_address = "255.255.255.0:53"
+netprobe_address = "9.9.9.9:53"
 
 
 ## Offline mode - Do not use any remote encrypted servers.

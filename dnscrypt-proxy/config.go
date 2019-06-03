@@ -21,7 +21,8 @@ import (
 )
 
 const (
-	MaxTimeout = 3600
+	MaxTimeout             = 3600
+	DefaultNetprobeAddress = "9.9.9.9:53"
 )
 
 type Config struct {
@@ -112,7 +113,6 @@ func newConfig() Config {
 		LogMaxBackups:            1,
 		TLSDisableSessionTickets: false,
 		TLSCipherSuite:           nil,
-		NetprobeAddress:          "255.255.255.0:53",
 		NetprobeTimeout:          60,
 		OfflineMode:              false,
 		RefusedCodeInResponses:   false,
@@ -425,7 +425,13 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 			netprobeTimeout = *netprobeTimeoutOverride
 		}
 	})
-	NetProbe(config.NetprobeAddress, netprobeTimeout)
+	netprobeAddress := DefaultNetprobeAddress
+	if len(config.NetprobeAddress) > 0 {
+		netprobeAddress = config.NetprobeAddress
+	} else if len(config.FallbackResolver) > 0 {
+		netprobeAddress = config.FallbackResolver
+	}
+	NetProbe(netprobeAddress, netprobeTimeout)
 	if !config.OfflineMode {
 		if err := config.loadSources(proxy); err != nil {
 			return err
