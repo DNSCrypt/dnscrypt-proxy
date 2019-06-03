@@ -332,7 +332,11 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 		return
 	}
 	pluginsState := NewPluginsState(proxy, clientProto, clientAddr, start)
-	query, _ = pluginsState.ApplyQueryPlugins(&proxy.pluginsGlobals, query, &serverInfo.Name)
+	serverName := "-"
+	if serverInfo != nil {
+		serverName = serverInfo.Name
+	}
+	query, _ = pluginsState.ApplyQueryPlugins(&proxy.pluginsGlobals, query, serverName)
 	if len(query) < MinDNSPacketSize || len(query) > MaxDNSPacketSize {
 		return
 	}

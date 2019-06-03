@@ -164,11 +164,11 @@ func NewPluginsState(proxy *Proxy, clientProto string, clientAddr *net.Addr, sta
 	}
 }
 
-func (pluginsState *PluginsState) ApplyQueryPlugins(pluginsGlobals *PluginsGlobals, packet []byte, serverName *string) ([]byte, error) {
+func (pluginsState *PluginsState) ApplyQueryPlugins(pluginsGlobals *PluginsGlobals, packet []byte, serverName string) ([]byte, error) {
 	if len(*pluginsGlobals.queryPlugins) == 0 && len(*pluginsGlobals.loggingPlugins) == 0 {
 		return packet, nil
 	}
-	pluginsState.serverName = *serverName
+	pluginsState.serverName = serverName
 	pluginsState.action = PluginsActionForward
 	msg := dns.Msg{}
 	if err := msg.Unpack(packet); err != nil {

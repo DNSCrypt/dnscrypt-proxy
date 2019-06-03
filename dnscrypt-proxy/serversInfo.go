@@ -149,11 +149,12 @@ func (serversInfo *ServersInfo) refresh(proxy *Proxy) (int, error) {
 	}
 	serversInfo.inner = inner
 
-	dlog.Notice("Sorted latencies:")
-	for i := 0; i < innerLen; i++ {
-		dlog.Noticef("- %5dms %s", inner[i].initialRtt, inner[i].Name)
+	if innerLen > 1 {
+		dlog.Notice("Sorted latencies:")
+		for i := 0; i < innerLen; i++ {
+			dlog.Noticef("- %5dms %s", inner[i].initialRtt, inner[i].Name)
+		}
 	}
-
 	if innerLen > 0 {
 		dlog.Noticef("Server with the lowest initial latency: %s (rtt: %dms)", inner[0].Name, inner[0].initialRtt)
 		proxy.certIgnoreTimestamp = false
