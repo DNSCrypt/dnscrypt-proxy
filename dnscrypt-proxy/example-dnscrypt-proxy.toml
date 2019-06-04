@@ -543,5 +543,5 @@ cache_neg_max_ttl = 600
 
 [static]
 
-  # [static.'google']
-  # stamp = 'sdns://AgUAAAAAAAAAAAAOZG5zLmdvb2dsZS5jb20NL2V4cGVyaW1lbnRhbA'
+  # [static.'myserver']
+  # stamp = 'sdns:AQcAAAAAAAAAAAAQMi5kbnNjcnlwdC1jZXJ0Lg'
