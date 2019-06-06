@@ -202,6 +202,7 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 	configFile := flag.String("config", DefaultConfigFileName, "Path to the configuration file")
 	child := flag.Bool("child", false, "Invokes program as a child process")
 	netprobeTimeoutOverride := flag.Int("netprobe-timeout", 60, "Override the netprobe timeout")
+	showCerts := flag.Bool("show-certs", false, "print DoH certificate chain hashes")
 
 	flag.Parse()
 
@@ -431,7 +432,16 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 	} else if len(config.FallbackResolver) > 0 {
 		netprobeAddress = config.FallbackResolver
 	}
+	proxy.showCerts = *showCerts || len(os.Getenv("SHOW_CERTS")) > 0
+	if len(os.Getenv("SHOW_CERTS")) > 0 {
+		proxy.showCerts = true
+	}
+
+	if proxy.showCerts {
+		proxy.listenAddresses = nil
+	}
 	NetProbe(netprobeAddress, netprobeTimeout)
+
 	if !config.OfflineMode {
 		if err := config.loadSources(proxy); err != nil {
 			return err

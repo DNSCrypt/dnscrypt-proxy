@@ -10,7 +10,6 @@ import (
 	"math/rand"
 	"net"
 	"net/url"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -311,13 +310,13 @@ func (serversInfo *ServersInfo) fetchDoHServerInfo(proxy *Proxy, name string, st
 		dlog.Warnf("[%s] does not support HTTP/2", name)
 	}
 	dlog.Infof("[%s] TLS version: %x - Protocol: %v - Cipher suite: %v", name, tls.Version, protocol, tls.CipherSuite)
-	showCerts := len(os.Getenv("SHOW_CERTS")) > 0
+	showCerts := proxy.showCerts
 	found := false
 	var wantedHash [32]byte
 	for _, cert := range tls.PeerCertificates {
 		h := sha256.Sum256(cert.RawTBSCertificate)
 		if showCerts {
-			dlog.Infof("Advertised cert: [%s] [%x]", cert.Subject, h)
+			dlog.Noticef("Advertised cert: [%s] [%x]", cert.Subject, h)
 		} else {
 			dlog.Debugf("Advertised cert: [%s] [%x]", cert.Subject, h)
 		}
