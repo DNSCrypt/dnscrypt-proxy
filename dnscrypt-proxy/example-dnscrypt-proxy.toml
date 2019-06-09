@@ -117,6 +117,12 @@ keepalive = 30
 
 refused_code_in_responses = false
 
+## If refused_code_in_responses is `false`, use this optional setting
+## to redirect blocked respones to an IP address (e.g. pixelserv-tls)
+## instead of returning an HINFO record
+
+# respond_with_ip = '192.168.1.4'
+
 
 ## Load-balancing strategy: 'p2' (default), 'ph', 'first' or 'random'
 
