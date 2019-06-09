@@ -26,6 +26,7 @@ type PluginsGlobals struct {
 	responsePlugins        *[]Plugin
 	loggingPlugins         *[]Plugin
 	refusedCodeInResponses bool
+	respondWithIP          net.IP
 }
 
 type PluginsReturnCode int
@@ -136,6 +137,7 @@ func InitPluginsGlobals(pluginsGlobals *PluginsGlobals, proxy *Proxy) error {
 	(*pluginsGlobals).responsePlugins = responsePlugins
 	(*pluginsGlobals).loggingPlugins = loggingPlugins
 	(*pluginsGlobals).refusedCodeInResponses = proxy.refusedCodeInResponses
+	(*pluginsGlobals).respondWithIP = net.ParseIP(proxy.respondWithIP)
 	return nil
 }
 
@@ -186,7 +188,7 @@ func (pluginsState *PluginsState) ApplyQueryPlugins(pluginsGlobals *PluginsGloba
 			return packet, ret
 		}
 		if pluginsState.action == PluginsActionReject {
-			synth, err := RefusedResponseFromMessage(&msg, pluginsGlobals.refusedCodeInResponses)
+			synth, err := RefusedResponseFromMessage(&msg, pluginsGlobals.refusedCodeInResponses, pluginsGlobals.respondWithIP, pluginsState.cacheMinTTL)
 			if err != nil {
 				return nil, err
 			}
@@ -234,7 +236,7 @@ func (pluginsState *PluginsState) ApplyResponsePlugins(pluginsGlobals *PluginsGl
 			return packet, ret
 		}
 		if pluginsState.action == PluginsActionReject {
-			synth, err := RefusedResponseFromMessage(&msg, pluginsGlobals.refusedCodeInResponses)
+			synth, err := RefusedResponseFromMessage(&msg, pluginsGlobals.refusedCodeInResponses, pluginsGlobals.respondWithIP, pluginsState.cacheMinTTL)
 			if err != nil {
 				return nil, err
 			}
