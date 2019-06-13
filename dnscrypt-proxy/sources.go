@@ -27,7 +27,7 @@ const (
 )
 
 const (
-	SourcesUpdateDelay = time.Duration(24) * time.Hour
+	MinSourcesUpdateDelay = time.Duration(24) * time.Hour
 )
 
 type Source struct {
@@ -36,8 +36,11 @@ type Source struct {
 	in     string
 }
 
-func fetchFromCache(cacheFile string) (in string, expired bool, delayTillNextUpdate time.Duration, err error) {
+func fetchFromCache(cacheFile string, refreshDelay time.Duration) (in string, expired bool, delayTillNextUpdate time.Duration, err error) {
 	expired = false
+	if refreshDelay < MinSourcesUpdateDelay {
+		refreshDelay = MinSourcesUpdateDelay
+	}
 	fi, err := os.Stat(cacheFile)
 	if err != nil {
 		dlog.Debugf("Cache file [%s] not present", cacheFile)
@@ -45,9 +48,9 @@ func fetchFromCache(cacheFile string) (in string, expired bool, delayTillNextUpd
 		return
 	}
 	elapsed := time.Since(fi.ModTime())
-	if elapsed < SourcesUpdateDelay {
+	if elapsed < refreshDelay {
 		dlog.Debugf("Cache file [%s] is still fresh", cacheFile)
-		delayTillNextUpdate = SourcesUpdateDelay - elapsed
+		delayTillNextUpdate = refreshDelay - elapsed
 	} else {
 		dlog.Debugf("Cache file [%s] needs to be refreshed", cacheFile)
 		delayTillNextUpdate = time.Duration(0)
@@ -65,10 +68,10 @@ func fetchFromCache(cacheFile string) (in string, expired bool, delayTillNextUpd
 	return
 }
 
-func fetchWithCache(xTransport *XTransport, urlStr string, cacheFile string) (in string, cached bool, delayTillNextUpdate time.Duration, err error) {
+func fetchWithCache(xTransport *XTransport, urlStr string, cacheFile string, refreshDelay time.Duration) (in string, cached bool, delayTillNextUpdate time.Duration, err error) {
 	cached = false
 	expired := false
-	in, expired, delayTillNextUpdate, err = fetchFromCache(cacheFile)
+	in, expired, delayTillNextUpdate, err = fetchFromCache(cacheFile, refreshDelay)
 	if err == nil && !expired {
 		dlog.Debugf("Delay till next update: %v", delayTillNextUpdate)
 		cached = true
@@ -110,7 +113,7 @@ func fetchWithCache(xTransport *XTransport, urlStr string, cacheFile string) (in
 	err = nil
 	cached = false
 	in = string(bin)
-	delayTillNextUpdate = SourcesUpdateDelay
+	delayTillNextUpdate = refreshDelay
 	return
 }
 
@@ -125,7 +128,6 @@ type URLToPrefetch struct {
 }
 
 func NewSource(xTransport *XTransport, urls []string, minisignKeyStr string, cacheFile string, formatStr string, refreshDelay time.Duration) (Source, []URLToPrefetch, error) {
-	_ = refreshDelay
 	source := Source{urls: urls}
 	if formatStr == "v2" {
 		source.format = SourceFormatV2
@@ -146,14 +148,14 @@ func NewSource(xTransport *XTransport, urls []string, minisignKeyStr string, cac
 	var sigErr error
 	var preloadURL string
 	if len(urls) <= 0 {
-		in, cached, delayTillNextUpdate, err = fetchWithCache(xTransport, "", cacheFile)
-		sigStr, sigCached, sigDelayTillNextUpdate, sigErr = fetchWithCache(xTransport, "", sigCacheFile)
+		in, cached, delayTillNextUpdate, err = fetchWithCache(xTransport, "", cacheFile, refreshDelay)
+		sigStr, sigCached, sigDelayTillNextUpdate, sigErr = fetchWithCache(xTransport, "", sigCacheFile, refreshDelay)
 	} else {
 		preloadURL = urls[0]
 		for _, url := range urls {
 			sigURL := url + ".minisig"
-			in, cached, delayTillNextUpdate, err = fetchWithCache(xTransport, url, cacheFile)
-			sigStr, sigCached, sigDelayTillNextUpdate, sigErr = fetchWithCache(xTransport, sigURL, sigCacheFile)
+			in, cached, delayTillNextUpdate, err = fetchWithCache(xTransport, url, cacheFile, refreshDelay)
+			sigStr, sigCached, sigDelayTillNextUpdate, sigErr = fetchWithCache(xTransport, sigURL, sigCacheFile, refreshDelay)
 			if err == nil && sigErr == nil {
 				preloadURL = url
 				break
@@ -268,7 +270,7 @@ func (source *Source) parseV2(prefix string) ([]RegisteredServer, error) {
 }
 
 func PrefetchSourceURL(xTransport *XTransport, urlToPrefetch *URLToPrefetch) error {
-	in, cached, delayTillNextUpdate, err := fetchWithCache(xTransport, urlToPrefetch.url, urlToPrefetch.cacheFile)
+	in, cached, delayTillNextUpdate, err := fetchWithCache(xTransport, urlToPrefetch.url, urlToPrefetch.cacheFile, MinSourcesUpdateDelay)
 	if err == nil && !cached {
 		AtomicFileWrite(urlToPrefetch.cacheFile, []byte(in))
 	}
