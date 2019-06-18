@@ -81,6 +81,7 @@ type Config struct {
 	OfflineMode              bool                       `toml:"offline_mode"`
 	HTTPProxyURL             string                     `toml:"http_proxy"`
 	RefusedCodeInResponses   bool                       `toml:"refused_code_in_responses"`
+	DNS64                    DNS64Config                `toml:"dns64"`
 }
 
 func newConfig() Config {
@@ -161,6 +162,11 @@ type BlockIPConfig struct {
 	File    string `toml:"blacklist_file"`
 	LogFile string `toml:"log_file"`
 	Format  string `toml:"log_format"`
+}
+
+type DNS64Config struct {
+	Prefixes  []string `toml:"prefix"`
+	Resolvers []string `toml:"resolver"`
 }
 
 type ServerSummary struct {
@@ -401,6 +407,9 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 
 	proxy.forwardFile = config.ForwardFile
 	proxy.cloakFile = config.CloakFile
+
+	proxy.dns64Prefixes = config.DNS64.Prefixes
+	proxy.dns64Resolvers = config.DNS64.Resolvers
 
 	allWeeklyRanges, err := ParseAllWeeklyRanges(config.AllWeeklyRanges)
 	if err != nil {

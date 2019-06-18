@@ -65,6 +65,8 @@ type Proxy struct {
 	logMaxBackups                int
 	refusedCodeInResponses       bool
 	showCerts                    bool
+	dns64Prefixes                []string
+	dns64Resolvers               []string
 }
 
 func (proxy *Proxy) StartProxy() {
