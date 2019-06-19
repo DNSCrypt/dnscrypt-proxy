@@ -111,17 +111,12 @@ timeout = 2500
 keepalive = 30
 
 
-## Use the REFUSED return code for blocked responses
-## Setting this to `false` means that some responses will be lies.
-## Unfortunately, `false` appears to be required for Android 8+
+## Response for blocked queries.  Options are `refused`, `hinfo` (default) or
+## an IP address (e.g. local pixelserv-tls server).  Using the `hinfo` option
+## means that some responses will be lies. Unfortunately, the `hinfo` option
+## appears to be required for Android 8+
 
-refused_code_in_responses = false
-
-## If refused_code_in_responses is `false`, use this optional setting
-## to redirect blocked respones to an IP address (e.g. pixelserv-tls)
-## instead of returning an HINFO record
-
-# respond_with_ip = '192.168.1.4'
+# blocked_query_response = 'refused'
 
 
 ## Load-balancing strategy: 'p2' (default), 'ph', 'first' or 'random'

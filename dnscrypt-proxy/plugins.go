@@ -136,8 +136,21 @@ func InitPluginsGlobals(pluginsGlobals *PluginsGlobals, proxy *Proxy) error {
 	(*pluginsGlobals).queryPlugins = queryPlugins
 	(*pluginsGlobals).responsePlugins = responsePlugins
 	(*pluginsGlobals).loggingPlugins = loggingPlugins
-	(*pluginsGlobals).refusedCodeInResponses = proxy.refusedCodeInResponses
-	(*pluginsGlobals).respondWithIP = net.ParseIP(proxy.respondWithIP)
+
+	// blockedQueryResponse can be 'refused', 'hinfo' or an IP address
+	(*pluginsGlobals).respondWithIP = net.ParseIP(proxy.blockedQueryResponse)
+	if (*pluginsGlobals).respondWithIP == nil {
+		switch proxy.blockedQueryResponse {
+		case "refused":
+			(*pluginsGlobals).refusedCodeInResponses = true
+		case "hinfo":
+			(*pluginsGlobals).refusedCodeInResponses = false
+		default:
+			dlog.Noticef("Invalid blocked_query_response option [%s], defaulting to `hinfo`", proxy.blockedQueryResponse)
+			(*pluginsGlobals).refusedCodeInResponses = false
+		}
+	}
+
 	return nil
 }
 

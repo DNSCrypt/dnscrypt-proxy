@@ -81,7 +81,7 @@ type Config struct {
 	OfflineMode              bool                       `toml:"offline_mode"`
 	HTTPProxyURL             string                     `toml:"http_proxy"`
 	RefusedCodeInResponses   bool                       `toml:"refused_code_in_responses"`
-	RespondWithIP            string                     `toml:"respond_with_ip"`
+	BlockedQueryResponse     string                     `toml:"blocked_query_response"`
 }
 
 func newConfig() Config {
@@ -118,6 +118,7 @@ func newConfig() Config {
 		OfflineMode:              false,
 		RefusedCodeInResponses:   false,
 		LBEstimator:              true,
+		BlockedQueryResponse:     "hinfo",
 	}
 }
 
@@ -291,8 +292,15 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 
 	proxy.xTransport.rebuildTransport()
 
-	proxy.refusedCodeInResponses = config.RefusedCodeInResponses
-	proxy.respondWithIP = config.RespondWithIP
+	if md.IsDefined("refused_code_in_responses") {
+		dlog.Notice("config option `refused_code_in_responses` is deprecated, use `blocked_query_response`")
+		if config.RefusedCodeInResponses {
+			config.BlockedQueryResponse = "refused"
+		} else {
+			config.BlockedQueryResponse = "hinfo"
+		}
+	}
+	proxy.blockedQueryResponse = config.BlockedQueryResponse
 	proxy.timeout = time.Duration(config.Timeout) * time.Millisecond
 	proxy.maxClients = config.MaxClients
 	proxy.mainProto = "udp"

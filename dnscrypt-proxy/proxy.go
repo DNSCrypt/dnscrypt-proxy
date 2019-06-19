@@ -63,8 +63,7 @@ type Proxy struct {
 	logMaxSize                   int
 	logMaxAge                    int
 	logMaxBackups                int
-	refusedCodeInResponses       bool
-	respondWithIP                string
+	blockedQueryResponse         string
 	showCerts                    bool
 }
 
