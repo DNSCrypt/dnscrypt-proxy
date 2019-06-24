@@ -69,7 +69,6 @@ A not-so-up-to-date-list-that-may-be-actually-current:
 * https://github.com/semihalev/sdns
 * https://render.com
 * https://github.com/peterzen/goresolver
-* https://github.com/folbricht/routedns
 
 Send pull request if you want to be listed here.
 

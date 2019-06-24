@@ -10,6 +10,7 @@ github.com/aead/poly1305
 github.com/agl/ed25519
 github.com/agl/ed25519/edwards25519
 # github.com/cloudflare/circl v0.0.0-20190703103838-a2a93c3effc8
+# github.com/cloudflare/circl v0.0.0-20190621185434-0ba9a9382e8b
 github.com/cloudflare/circl/dh/x25519
 github.com/cloudflare/circl/math/fp25519
 github.com/cloudflare/circl/internal/conv
@@ -44,6 +45,7 @@ github.com/k-sone/critbitgo
 # github.com/kardianos/service v1.0.0
 github.com/kardianos/service
 # github.com/miekg/dns v1.1.15
+# github.com/miekg/dns v1.1.14 => github.com/z0w13/dns v1.1.14-0.20190624123604-362ce57eff6f
 github.com/miekg/dns
 # golang.org/x/crypto v0.0.0-20190701094942-4def268fd1a4
 golang.org/x/crypto/ed25519
