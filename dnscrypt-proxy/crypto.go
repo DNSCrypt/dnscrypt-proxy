@@ -7,9 +7,9 @@ import (
 	"errors"
 	"math/rand"
 
+	"github.com/cloudflare/circl/dh/x25519"
 	"github.com/jedisct1/dlog"
 	"github.com/jedisct1/xsecretbox"
-	"golang.org/x/crypto/curve25519"
 	"golang.org/x/crypto/nacl/box"
 	"golang.org/x/crypto/nacl/secretbox"
 )
@@ -70,7 +70,12 @@ func (proxy *Proxy) Encrypt(serverInfo *ServerInfo, packet []byte, proto string)
 		var ephSk [32]byte
 		h.Sum(ephSk[:0])
 		var xPublicKey [PublicKeySize]byte
-		curve25519.ScalarBaseMult(&xPublicKey, &ephSk)
+
+		var cfxPublicKey, cfephSk x25519.Key
+		copy(cfephSk[:], ephSk[:])
+		x25519.KeyGen(&cfxPublicKey, &cfephSk)
+		copy(xPublicKey[:], cfxPublicKey[:])
+
 		publicKey = &xPublicKey
 		xsharedKey := ComputeSharedKey(serverInfo.CryptoConstruction, &ephSk, &serverInfo.ServerPk, nil)
 		sharedKey = &xsharedKey
