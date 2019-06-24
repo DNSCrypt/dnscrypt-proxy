@@ -10,8 +10,8 @@ import (
 	"github.com/cloudflare/circl/dh/x25519"
 	"github.com/jedisct1/dlog"
 	"github.com/jedisct1/xsecretbox"
-	"golang.org/x/crypto/nacl/box"
 	"golang.org/x/crypto/nacl/secretbox"
+	"golang.org/x/crypto/salsa20/salsa"
 )
 
 const (
@@ -46,14 +46,18 @@ func unpad(packet []byte) ([]byte, error) {
 }
 
 func ComputeSharedKey(cryptoConstruction CryptoConstruction, secretKey *[32]byte, serverPk *[32]byte, providerName *string) (sharedKey [32]byte) {
+	var cfSharedKey, cfSecretKey, cfServerPk x25519.Key
+	copy(cfSecretKey[:], secretKey[:])
+	copy(cfServerPk[:], serverPk[:])
+	if !x25519.Shared(&cfSharedKey, &cfSecretKey, &cfServerPk) {
+		dlog.Criticalf("[%v] Weak public key", providerName)
+	}
+	copy(sharedKey[:], cfSharedKey[:])
 	if cryptoConstruction == XChacha20Poly1305 {
-		var err error
-		sharedKey, err = xsecretbox.SharedKey(*secretKey, *serverPk)
-		if err != nil {
-			dlog.Criticalf("[%v] Weak public key", providerName)
-		}
+		xsecretbox.HChaCha20(&sharedKey)
 	} else {
-		box.Precompute(&sharedKey, serverPk, secretKey)
+		var zeroNonce [16]byte
+		salsa.HSalsa20(&sharedKey, &zeroNonce, &sharedKey, &salsa.Sigma)
 	}
 	return
 }

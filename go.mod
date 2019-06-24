@@ -19,7 +19,7 @@ require (
 	github.com/jedisct1/go-clocksmith v0.0.0-20180307175859-c35da9bed550
 	github.com/jedisct1/go-dnsstamps v0.0.0-20190303171121-de46dd0ba576
 	github.com/jedisct1/go-minisign v0.0.0-20190420161605-5cc5b100fd4d
-	github.com/jedisct1/xsecretbox v0.0.0-20190624125055-a3cafe5c158c
+	github.com/jedisct1/xsecretbox v0.0.0-20190624171052-f55b79ae1214
 	github.com/k-sone/critbitgo v1.2.0
 	github.com/kardianos/service v1.0.0
 	github.com/kr/pretty v0.1.0 // indirect
@@ -27,7 +27,7 @@ require (
 	golang.org/x/crypto v0.0.0-20190621222207-cc06ce4a13d4
 	golang.org/x/net v0.0.0-20190620200207-3b0461eec859
 	golang.org/x/sync v0.0.0-20190423024810-112230192c58 // indirect
-	golang.org/x/sys v0.0.0-20190621203818-d432491b9138
+	golang.org/x/sys v0.0.0-20190624142023-c5567b49c5d0
 	golang.org/x/text v0.3.2 // indirect
 	gopkg.in/check.v1 v1.0.0-20180628173108-788fd7840127 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
