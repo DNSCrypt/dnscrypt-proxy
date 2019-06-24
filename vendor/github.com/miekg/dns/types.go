@@ -238,7 +238,7 @@ type ANY struct {
 
 func (rr *ANY) String() string { return rr.Hdr.String() }
 
-func (rr *ANY) parse(c *zlexer, origin, file string) *ParseError {
+func (rr *ANY) parse(c *zlexer, origin string) *ParseError {
 	panic("dns: internal error: parse should never be called on ANY")
 }
 
@@ -253,7 +253,7 @@ func (rr *NULL) String() string {
 	return ";" + rr.Hdr.String() + rr.Data
 }
 
-func (rr *NULL) parse(c *zlexer, origin, file string) *ParseError {
+func (rr *NULL) parse(c *zlexer, origin string) *ParseError {
 	panic("dns: internal error: parse should never be called on NULL")
 }
 

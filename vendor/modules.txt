@@ -13,7 +13,7 @@ github.com/agl/ed25519/edwards25519
 github.com/cloudflare/circl/dh/x25519
 github.com/cloudflare/circl/math/fp25519
 github.com/cloudflare/circl/internal/conv
-# github.com/coreos/go-systemd v0.0.0-20190321100706-95778dfbb74e
+# github.com/coreos/go-systemd v0.0.0-20190620071333-e64a0ec8b42a
 github.com/coreos/go-systemd/activation
 github.com/coreos/go-systemd/daemon
 # github.com/dchest/safefile v0.0.0-20151022103144-855e8d98f185
@@ -37,15 +37,15 @@ github.com/jedisct1/go-clocksmith
 github.com/jedisct1/go-dnsstamps
 # github.com/jedisct1/go-minisign v0.0.0-20190420161605-5cc5b100fd4d
 github.com/jedisct1/go-minisign
-# github.com/jedisct1/xsecretbox v0.0.0-20190218134741-855e18301bf0
+# github.com/jedisct1/xsecretbox v0.0.0-20190624125055-a3cafe5c158c
 github.com/jedisct1/xsecretbox
 # github.com/k-sone/critbitgo v1.2.0
 github.com/k-sone/critbitgo
 # github.com/kardianos/service v1.0.0
 github.com/kardianos/service
-# github.com/miekg/dns v1.1.13
+# github.com/miekg/dns v1.1.14
 github.com/miekg/dns
-# golang.org/x/crypto v0.0.0-20190530122614-20be4c3c3ed5
+# golang.org/x/crypto v0.0.0-20190621222207-cc06ce4a13d4
 golang.org/x/crypto/ed25519
 golang.org/x/crypto/nacl/box
 golang.org/x/crypto/nacl/secretbox
@@ -54,7 +54,7 @@ golang.org/x/crypto/ed25519/internal/edwards25519
 golang.org/x/crypto/salsa20/salsa
 golang.org/x/crypto/internal/subtle
 golang.org/x/crypto/poly1305
-# golang.org/x/net v0.0.0-20190603091049-60506f45cf65
+# golang.org/x/net v0.0.0-20190620200207-3b0461eec859
 golang.org/x/net/http2
 golang.org/x/net/proxy
 golang.org/x/net/ipv4
@@ -66,7 +66,7 @@ golang.org/x/net/internal/socks
 golang.org/x/net/bpf
 golang.org/x/net/internal/iana
 golang.org/x/net/internal/socket
-# golang.org/x/sys v0.0.0-20190602015325-4c4f7f33c9ed
+# golang.org/x/sys v0.0.0-20190621203818-d432491b9138
 golang.org/x/sys/windows/svc/mgr
 golang.org/x/sys/cpu
 golang.org/x/sys/windows/svc/eventlog
