@@ -10,6 +10,7 @@ import (
 	"github.com/jedisct1/dlog"
 	"github.com/miekg/dns"
 	"golang.org/x/crypto/ed25519"
+	netproxy "golang.org/x/net/proxy"
 )
 
 type CertInfo struct {
@@ -20,7 +21,7 @@ type CertInfo struct {
 	ForwardSecurity    bool
 }
 
-func FetchCurrentDNSCryptCert(proxy *Proxy, serverName *string, proto string, pk ed25519.PublicKey, serverAddress string, providerName string, isNew bool) (CertInfo, int, error) {
+func FetchCurrentDNSCryptCert(proxy *Proxy, serverName *string, proto string, pk ed25519.PublicKey, serverAddress string, providerName string, isNew bool, dialer netproxy.Dialer) (CertInfo, int, error) {
 	if len(pk) != ed25519.PublicKeySize {
 		return CertInfo{}, 0, errors.New("Invalid public key length")
 	}
@@ -32,7 +33,7 @@ func FetchCurrentDNSCryptCert(proxy *Proxy, serverName *string, proto string, pk
 	}
 	query := new(dns.Msg)
 	query.SetQuestion(providerName, dns.TypeTXT)
-	client := dns.Client{Net: proto, UDPSize: uint16(MaxDNSUDPPacketSize)}
+	client := dns.Client{Net: proto, UDPSize: uint16(MaxDNSUDPPacketSize), Dialer: dialer}
 	in, rtt, err := client.Exchange(query, serverAddress)
 	if err != nil {
 		dlog.Noticef("[%s] TIMEOUT", *serverName)
