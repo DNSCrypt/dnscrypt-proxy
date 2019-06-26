@@ -101,9 +101,8 @@ func (xTransport *XTransport) rebuildTransport() {
 			if xTransport.proxyDialer == nil {
 				dialer := &net.Dialer{Timeout: timeout, KeepAlive: timeout, DualStack: true}
 				return dialer.DialContext(ctx, network, addrStr)
-			} else {
-				return (*xTransport.proxyDialer).Dial(network, addrStr)
 			}
+			return (*xTransport.proxyDialer).Dial(network, addrStr)
 		},
 	}
 	if xTransport.httpProxyFunction != nil {
