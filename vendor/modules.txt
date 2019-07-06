@@ -9,7 +9,7 @@ github.com/aead/poly1305
 # github.com/agl/ed25519 v0.0.0-20170116200512-5312a6153412
 github.com/agl/ed25519
 github.com/agl/ed25519/edwards25519
-# github.com/cloudflare/circl v0.0.0-20190621185434-0ba9a9382e8b
+# github.com/cloudflare/circl v0.0.0-20190703103838-a2a93c3effc8
 github.com/cloudflare/circl/dh/x25519
 github.com/cloudflare/circl/math/fp25519
 github.com/cloudflare/circl/internal/conv
@@ -33,26 +33,26 @@ github.com/hashicorp/golang-lru/simplelru
 github.com/jedisct1/dlog
 # github.com/jedisct1/go-clocksmith v0.0.0-20180307175859-c35da9bed550
 github.com/jedisct1/go-clocksmith
-# github.com/jedisct1/go-dnsstamps v0.0.0-20190303171121-de46dd0ba576
+# github.com/jedisct1/go-dnsstamps v0.0.0-20190706155949-7da3858d1222
 github.com/jedisct1/go-dnsstamps
 # github.com/jedisct1/go-minisign v0.0.0-20190420161605-5cc5b100fd4d
 github.com/jedisct1/go-minisign
-# github.com/jedisct1/xsecretbox v0.0.0-20190624171052-f55b79ae1214
+# github.com/jedisct1/xsecretbox v0.0.0-20190624174246-857f633dd2c0
 github.com/jedisct1/xsecretbox
 # github.com/k-sone/critbitgo v1.2.0
 github.com/k-sone/critbitgo
 # github.com/kardianos/service v1.0.0
 github.com/kardianos/service
-# github.com/miekg/dns v1.1.14
+# github.com/miekg/dns v1.1.15
 github.com/miekg/dns
-# golang.org/x/crypto v0.0.0-20190621222207-cc06ce4a13d4
+# golang.org/x/crypto v0.0.0-20190701094942-4def268fd1a4
 golang.org/x/crypto/ed25519
 golang.org/x/crypto/nacl/secretbox
 golang.org/x/crypto/salsa20/salsa
 golang.org/x/crypto/ed25519/internal/edwards25519
 golang.org/x/crypto/internal/subtle
 golang.org/x/crypto/poly1305
-# golang.org/x/net v0.0.0-20190620200207-3b0461eec859
+# golang.org/x/net v0.0.0-20190628185345-da137c7871d7
 golang.org/x/net/http2
 golang.org/x/net/proxy
 golang.org/x/net/ipv4
@@ -64,7 +64,7 @@ golang.org/x/net/internal/socks
 golang.org/x/net/bpf
 golang.org/x/net/internal/iana
 golang.org/x/net/internal/socket
-# golang.org/x/sys v0.0.0-20190624142023-c5567b49c5d0
+# golang.org/x/sys v0.0.0-20190626221950-04f50cda93cb
 golang.org/x/sys/windows/svc/mgr
 golang.org/x/sys/cpu
 golang.org/x/sys/windows/svc/eventlog
