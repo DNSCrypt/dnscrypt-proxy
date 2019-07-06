@@ -533,7 +533,7 @@ func (config *Config) loadSources(proxy *Proxy) error {
 		}
 		stamp, err := stamps.NewServerStampFromString(staticConfig.Stamp)
 		if err != nil {
-			return err
+			dlog.Fatalf("Stamp error for the static [%s] definition: [%v]", serverName, err)
 		}
 		proxy.registeredServers = append(proxy.registeredServers, RegisteredServer{name: serverName, stamp: stamp})
 	}
