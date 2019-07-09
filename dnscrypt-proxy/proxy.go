@@ -2,6 +2,8 @@ package main
 
 import (
 	crypto_rand "crypto/rand"
+	"golang.org/x/net/ipv4"
+	"golang.org/x/net/ipv6"
 	"io"
 	"io/ioutil"
 	"net"
@@ -14,6 +16,22 @@ import (
 	clocksmith "github.com/jedisct1/go-clocksmith"
 	stamps "github.com/jedisct1/go-dnsstamps"
 )
+
+// This is the required size of the OOB buffer to pass to ReadMsgUDP.
+var udpOOBSize = func() int {
+	// We can't know whether we'll get an IPv4 control message or an
+	// IPv6 control message ahead of time. To get around this, we size
+	// the buffer equal to the largest of the two.
+
+	oob4 := ipv4.NewControlMessage(ipv4.FlagDst | ipv4.FlagInterface)
+	oob6 := ipv6.NewControlMessage(ipv6.FlagDst | ipv6.FlagInterface)
+
+	if len(oob4) > len(oob6) {
+		return len(oob4)
+	}
+
+	return len(oob6)
+}()
 
 type Proxy struct {
 	userName                     string
@@ -206,14 +224,21 @@ func (proxy *Proxy) prefetcher(urlsToPrefetch *[]URLToPrefetch) {
 }
 
 func (proxy *Proxy) udpListener(clientPc *net.UDPConn) {
+	err := setUDPSocketOptions(clientPc)
+	if err != nil {
+		dlog.Fatal(err)
+	}
+
 	defer clientPc.Close()
 	for {
 		buffer := make([]byte, MaxDNSPacketSize-1)
-		length, clientAddr, err := clientPc.ReadFrom(buffer)
+		oob := make([]byte, udpOOBSize)
+		length, oobn, _, clientAddr, err := clientPc.ReadMsgUDP(buffer, oob)
 		if err != nil {
 			return
 		}
 		packet := buffer[:length]
+		raddr := interface{}(clientAddr).(net.Addr)
 		go func() {
 			start := time.Now()
 			if !proxy.clientsCountInc() {
@@ -221,7 +246,7 @@ func (proxy *Proxy) udpListener(clientPc *net.UDPConn) {
 				return
 			}
 			defer proxy.clientsCountDec()
-			proxy.processIncomingQuery(proxy.serversInfo.getOne(), "udp", proxy.mainProto, packet, &clientAddr, clientPc, start)
+			proxy.processIncomingQuery(proxy.serversInfo.getOne(), "udp", proxy.mainProto, packet, oob[:oobn], &raddr, clientPc, start)
 		}()
 	}
 }
@@ -257,7 +282,7 @@ func (proxy *Proxy) tcpListener(acceptPc *net.TCPListener) {
 				return
 			}
 			clientAddr := clientPc.RemoteAddr()
-			proxy.processIncomingQuery(proxy.serversInfo.getOne(), "tcp", "tcp", packet, &clientAddr, clientPc, start)
+			proxy.processIncomingQuery(proxy.serversInfo.getOne(), "tcp", "tcp", packet, nil, &clientAddr, clientPc, start)
 		}()
 	}
 }
@@ -336,7 +361,7 @@ func (proxy *Proxy) clientsCountDec() {
 	}
 }
 
-func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto string, serverProto string, query []byte, clientAddr *net.Addr, clientPc net.Conn, start time.Time) {
+func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto string, serverProto string, query []byte, oob []byte, clientAddr *net.Addr, clientPc net.Conn, start time.Time) {
 	if len(query) < MinDNSPacketSize {
 		return
 	}
@@ -451,7 +476,9 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 				return
 			}
 		}
-		clientPc.(net.PacketConn).WriteTo(response, *clientAddr)
+		raddr := interface{}(*clientAddr).(*net.UDPAddr)
+		context := correctSource(oob)
+		clientPc.(*net.UDPConn).WriteMsgUDP(response, context, raddr)
 		if HasTCFlag(response) {
 			proxy.questionSizeEstimator.blindAdjust()
 		} else {
@@ -476,4 +503,52 @@ func NewProxy() Proxy {
 	return Proxy{
 		serversInfo: NewServersInfo(),
 	}
+}
+
+func setUDPSocketOptions(conn *net.UDPConn) error {
+	// Try setting the flags for both families and ignore the errors unless they
+	// both error.
+	err6 := ipv6.NewPacketConn(conn).SetControlMessage(ipv6.FlagDst|ipv6.FlagInterface, true)
+	err4 := ipv4.NewPacketConn(conn).SetControlMessage(ipv4.FlagDst|ipv4.FlagInterface, true)
+	if err6 != nil && err4 != nil {
+		return err4
+	}
+	return nil
+}
+
+// parseDstFromOOB takes oob data and returns the destination IP.
+func parseDstFromOOB(oob []byte) net.IP {
+	// Start with IPv6 and then fallback to IPv4
+	// TODO(fastest963): Figure out a way to prefer one or the other. Looking at
+	// the lvl of the header for a 0 or 41 isn't cross-platform.
+	cm6 := new(ipv6.ControlMessage)
+	if cm6.Parse(oob) == nil && cm6.Dst != nil {
+		return cm6.Dst
+	}
+	cm4 := new(ipv4.ControlMessage)
+	if cm4.Parse(oob) == nil && cm4.Dst != nil {
+		return cm4.Dst
+	}
+	return nil
+}
+
+// correctSource takes oob data and returns new oob data with the Src equal to the Dst
+func correctSource(oob []byte) []byte {
+	dst := parseDstFromOOB(oob)
+	if dst == nil {
+		return nil
+	}
+	// If the dst is definitely an IPv6, then use ipv6's ControlMessage to
+	// respond otherwise use ipv4's because ipv6's marshal ignores ipv4
+	// addresses.
+	if dst.To4() == nil {
+		cm := new(ipv6.ControlMessage)
+		cm.Src = dst
+		oob = cm.Marshal()
+	} else {
+		cm := new(ipv4.ControlMessage)
+		cm.Src = dst
+		oob = cm.Marshal()
+	}
+	return oob
 }
