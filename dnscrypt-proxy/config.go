@@ -260,6 +260,7 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 	proxy.xTransport.tlsDisableSessionTickets = config.TLSDisableSessionTickets
 	proxy.xTransport.tlsCipherSuite = config.TLSCipherSuite
 	proxy.xTransport.fallbackResolver = config.FallbackResolver
+	proxy.xTransport.mainProto = proxy.mainProto
 	if len(config.FallbackResolver) > 0 {
 		proxy.xTransport.ignoreSystemDNS = config.IgnoreSystemDNS
 	}

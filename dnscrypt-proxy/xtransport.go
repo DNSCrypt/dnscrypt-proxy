@@ -38,6 +38,7 @@ type XTransport struct {
 	timeout                  time.Duration
 	cachedIPs                CachedIPs
 	fallbackResolver         string
+	mainProto                string
 	ignoreSystemDNS          bool
 	useIPv4                  bool
 	useIPv6                  bool
@@ -56,6 +57,7 @@ func NewXTransport() *XTransport {
 		keepAlive:                DefaultKeepAlive,
 		timeout:                  DefaultTimeout,
 		fallbackResolver:         DefaultFallbackResolver,
+		mainProto:                "",
 		ignoreSystemDNS:          false,
 		useIPv4:                  true,
 		useIPv6:                  false,
@@ -249,8 +251,8 @@ func (xTransport *XTransport) Fetch(method string, url *url.URL, accept string, 
 				} else {
 					dlog.Noticef("System DNS configuration not usable yet, exceptionally resolving [%s] using fallback resolver [%s]", host, xTransport.fallbackResolver)
 				}
-				dnsClient := new(dns.Client)
-				foundIP, err = xTransport.resolveUsingResolver(dnsClient, host, xTransport.fallbackResolver)
+				dnsClient := dns.Client{Net: xTransport.mainProto}
+				foundIP, err = xTransport.resolveUsingResolver(&dnsClient, host, xTransport.fallbackResolver)
 			}
 			if foundIP == nil {
 				return nil, 0, fmt.Errorf("No IP found for [%s]", host)
