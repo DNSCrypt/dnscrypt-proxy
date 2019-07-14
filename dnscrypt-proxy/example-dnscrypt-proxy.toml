@@ -112,9 +112,9 @@ keepalive = 30
 
 
 ## Response for blocked queries.  Options are `refused`, `hinfo` (default) or
-## an IP address (e.g. local pixelserv-tls server).  Using the `hinfo` option
-## means that some responses will be lies. Unfortunately, the `hinfo` option
-## appears to be required for Android 8+
+## an IP response.  To give an IP response, use the format `a:<IPv4>,aaaa:<IPv6>`.
+## Using the `hinfo` option means that some responses will be lies.
+## Unfortunately, the `hinfo` option appears to be required for Android 8+
 
 # blocked_query_response = 'refused'
 
