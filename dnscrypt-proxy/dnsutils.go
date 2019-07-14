@@ -32,7 +32,7 @@ func EmptyResponseFromMessage(srcMsg *dns.Msg) (*dns.Msg, error) {
 	return dstMsg, nil
 }
 
-func RefusedResponseFromMessage(srcMsg *dns.Msg, refusedCode bool, ip net.IP, ttl uint32) (*dns.Msg, error) {
+func RefusedResponseFromMessage(srcMsg *dns.Msg, refusedCode bool, ipv4 net.IP, ipv6 net.IP, ttl uint32) (*dns.Msg, error) {
 	dstMsg, err := EmptyResponseFromMessage(srcMsg)
 	if err != nil {
 		return dstMsg, err
@@ -46,24 +46,21 @@ func RefusedResponseFromMessage(srcMsg *dns.Msg, refusedCode bool, ip net.IP, tt
 			question := questions[0]
 			sendHInfoResponse := true
 
-			if ip != nil {
-				if question.Qtype == dns.TypeA {
-					rr := new(dns.A)
-					rr.Hdr = dns.RR_Header{Name: question.Name, Rrtype: dns.TypeA, Class: dns.ClassINET, Ttl: ttl}
-					rr.A = ip.To4()
-					if rr.A != nil {
-						dstMsg.Answer = []dns.RR{rr}
-						sendHInfoResponse = false
-					}
-
-				} else if question.Qtype == dns.TypeAAAA {
-					rr := new(dns.AAAA)
-					rr.Hdr = dns.RR_Header{Name: question.Name, Rrtype: dns.TypeAAAA, Class: dns.ClassINET, Ttl: ttl}
-					rr.AAAA = ip.To16()
-					if rr.AAAA != nil {
-						dstMsg.Answer = []dns.RR{rr}
-						sendHInfoResponse = false
-					}
+			if ipv4 != nil && question.Qtype == dns.TypeA {
+				rr := new(dns.A)
+				rr.Hdr = dns.RR_Header{Name: question.Name, Rrtype: dns.TypeA, Class: dns.ClassINET, Ttl: ttl}
+				rr.A = ipv4.To4()
+				if rr.A != nil {
+					dstMsg.Answer = []dns.RR{rr}
+					sendHInfoResponse = false
+				}
+			} else if ipv6 != nil && question.Qtype == dns.TypeAAAA {
+				rr := new(dns.AAAA)
+				rr.Hdr = dns.RR_Header{Name: question.Name, Rrtype: dns.TypeAAAA, Class: dns.ClassINET, Ttl: ttl}
+				rr.AAAA = ipv6.To16()
+				if rr.AAAA != nil {
+					dstMsg.Answer = []dns.RR{rr}
+					sendHInfoResponse = false
 				}
 			}
 
