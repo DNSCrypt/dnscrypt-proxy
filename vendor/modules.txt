@@ -22,6 +22,8 @@ github.com/dchest/safefile
 github.com/facebookgo/atomicfile
 # github.com/facebookgo/pidfile v0.0.0-20150612191647-f242e2999868
 github.com/facebookgo/pidfile
+# github.com/fsnotify/fsnotify v1.4.7
+github.com/fsnotify/fsnotify
 # github.com/hashicorp/go-immutable-radix v1.1.0
 github.com/hashicorp/go-immutable-radix
 # github.com/hashicorp/go-syslog v1.0.0
