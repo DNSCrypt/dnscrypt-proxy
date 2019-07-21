@@ -164,7 +164,7 @@ func initFileWatcher(pluginsGlobals *PluginsGlobals, proxy *Proxy) error {
 					return
 				}
 
-				if event.Op&fsnotify.Write == fsnotify.Write {
+				if event.Op&fsnotify.Write == fsnotify.Write || event.Op&fsnotify.Create == fsnotify.Create {
 					dlog.Debugf("Plugin file [%s] has been modified", event.Name)
 
 					if reloadState, ok := pluginsGlobals.reloadMap[event.Name]; ok {
