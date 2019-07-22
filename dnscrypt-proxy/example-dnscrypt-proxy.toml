@@ -111,11 +111,12 @@ timeout = 2500
 keepalive = 30
 
 
-## Use the REFUSED return code for blocked responses
-## Setting this to `false` means that some responses will be lies.
-## Unfortunately, `false` appears to be required for Android 8+
+## Response for blocked queries.  Options are `refused`, `hinfo` (default) or
+## an IP response.  To give an IP response, use the format `a:<IPv4>,aaaa:<IPv6>`.
+## Using the `hinfo` option means that some responses will be lies.
+## Unfortunately, the `hinfo` option appears to be required for Android 8+
 
-refused_code_in_responses = false
+# blocked_query_response = 'refused'
 
 
 ## Load-balancing strategy: 'p2' (default), 'ph', 'first' or 'random'

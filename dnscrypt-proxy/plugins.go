@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"net"
+	"strings"
 	"sync"
 	"time"
 
@@ -26,6 +27,8 @@ type PluginsGlobals struct {
 	responsePlugins        *[]Plugin
 	loggingPlugins         *[]Plugin
 	refusedCodeInResponses bool
+	respondWithIPv4        net.IP
+	respondWithIPv6        net.IP
 }
 
 type PluginsReturnCode int
@@ -135,8 +138,57 @@ func InitPluginsGlobals(pluginsGlobals *PluginsGlobals, proxy *Proxy) error {
 	(*pluginsGlobals).queryPlugins = queryPlugins
 	(*pluginsGlobals).responsePlugins = responsePlugins
 	(*pluginsGlobals).loggingPlugins = loggingPlugins
-	(*pluginsGlobals).refusedCodeInResponses = proxy.refusedCodeInResponses
+
+	parseBlockedQueryResponse(proxy.blockedQueryResponse, pluginsGlobals)
+
 	return nil
+}
+
+// blockedQueryResponse can be 'refused', 'hinfo' or IP responses 'a:IPv4,aaaa:IPv6
+func parseBlockedQueryResponse(bockedResponse string, pluginsGlobals *PluginsGlobals) {
+	bockedResponse = strings.ReplaceAll(strings.ToLower(bockedResponse), " ", "")
+
+	if strings.HasPrefix(bockedResponse, "a:") {
+		blockedIPStrings := strings.Split(bockedResponse, ",")
+		(*pluginsGlobals).respondWithIPv4 = net.ParseIP(strings.TrimPrefix(blockedIPStrings[0], "a:"))
+
+		if (*pluginsGlobals).respondWithIPv4 == nil {
+			dlog.Notice("Error parsing IPv4 response given in blocked_query_response option, defaulting to `hinfo`")
+			(*pluginsGlobals).refusedCodeInResponses = false
+			return
+		}
+
+		if len(blockedIPStrings) > 1 {
+			if strings.HasPrefix(blockedIPStrings[1], "aaaa:") {
+				ipv6Response := strings.TrimPrefix(blockedIPStrings[1], "aaaa:")
+				if strings.HasPrefix(ipv6Response, "[") {
+					ipv6Response = strings.Trim(ipv6Response, "[]")
+				}
+				(*pluginsGlobals).respondWithIPv6 = net.ParseIP(ipv6Response)
+
+				if (*pluginsGlobals).respondWithIPv6 == nil {
+					dlog.Notice("Error parsing IPv6 response given in blocked_query_response option, defaulting to IPv4")
+				}
+			} else {
+				dlog.Noticef("Invalid IPv6 response given in blocked_query_response option [%s], the option should take the form 'a:<IPv4>,aaaa:<IPv6>'", blockedIPStrings[1])
+			}
+		}
+
+		if (*pluginsGlobals).respondWithIPv6 == nil {
+			(*pluginsGlobals).respondWithIPv6 = (*pluginsGlobals).respondWithIPv4
+		}
+
+	} else {
+		switch bockedResponse {
+		case "refused":
+			(*pluginsGlobals).refusedCodeInResponses = true
+		case "hinfo":
+			(*pluginsGlobals).refusedCodeInResponses = false
+		default:
+			dlog.Noticef("Invalid blocked_query_response option [%s], defaulting to `hinfo`", bockedResponse)
+			(*pluginsGlobals).refusedCodeInResponses = false
+		}
+	}
 }
 
 type Plugin interface {
@@ -186,7 +238,7 @@ func (pluginsState *PluginsState) ApplyQueryPlugins(pluginsGlobals *PluginsGloba
 			return packet, ret
 		}
 		if pluginsState.action == PluginsActionReject {
-			synth, err := RefusedResponseFromMessage(&msg, pluginsGlobals.refusedCodeInResponses)
+			synth, err := RefusedResponseFromMessage(&msg, pluginsGlobals.refusedCodeInResponses, pluginsGlobals.respondWithIPv4, pluginsGlobals.respondWithIPv6, pluginsState.cacheMinTTL)
 			if err != nil {
 				return nil, err
 			}
@@ -234,7 +286,7 @@ func (pluginsState *PluginsState) ApplyResponsePlugins(pluginsGlobals *PluginsGl
 			return packet, ret
 		}
 		if pluginsState.action == PluginsActionReject {
-			synth, err := RefusedResponseFromMessage(&msg, pluginsGlobals.refusedCodeInResponses)
+			synth, err := RefusedResponseFromMessage(&msg, pluginsGlobals.refusedCodeInResponses, pluginsGlobals.respondWithIPv4, pluginsGlobals.respondWithIPv6, pluginsState.cacheMinTTL)
 			if err != nil {
 				return nil, err
 			}
