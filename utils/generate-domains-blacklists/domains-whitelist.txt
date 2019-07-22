@@ -26,5 +26,4 @@ pusherapp.com
 revinate.com
 spotify.com
 tagcommander.com
-tracker.debian.org
 windows.net
