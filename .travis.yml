@@ -191,6 +191,7 @@ script:
 - cp ../LICENSE example-dnscrypt-proxy.toml example-*.txt android-x86_64/
 - zip -9 -r dnscrypt-proxy-android_x86_64-${TRAVIS_TAG:-dev}.zip android-x86_64
 
+after_success:
 - ls -l dnscrypt-proxy-*.tar.gz dnscrypt-proxy-*.zip
 
 deploy:
@@ -224,9 +225,6 @@ before_deploy:
 - echo '#' > /tmp/minisign.key
 - echo "$MINISIGN_SK" >> /tmp/minisign.key
 - echo | minisign -s /tmp/minisign.key -Sm dnscrypt-proxy-*.tar.gz dnscrypt-proxy-*.zip
-
-after_deploy:
-- ls -l dnscrypt-proxy-*.tar.gz dnscrypt-proxy-*.zip
 
 before_install:
 - NDK_VER=r18
