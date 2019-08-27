@@ -92,7 +92,7 @@ def print_restricted_name(name, time_restrictions):
 
 def load_from_url(url):
     sys.stderr.write("Loading data from [{}]\n".format(url))
-    req = urllib.Request(url)
+    req = urllib.Request(url=url, headers={"User-Agent": "dnscrypt-proxy"})
     trusted = False
 
     if URLLIB_NEW:
