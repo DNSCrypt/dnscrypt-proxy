@@ -1,3 +1,5 @@
+// Work around Mozilla's evil plan - https://sk.tl/3Ek6tzhq
+
 package main
 
 import (
