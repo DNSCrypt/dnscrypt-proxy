@@ -1,5 +1,3 @@
-// +build !windows,!linux
-
 package main
 
 import (
@@ -9,6 +7,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"syscall"
 
 	"golang.org/x/sys/unix"
 
@@ -55,14 +54,14 @@ func (proxy *Proxy) dropPrivilege(userStr string, fds []*os.File) {
 	dlog.Notice("Dropping privileges")
 
 	runtime.LockOSThread()
-	if err := unix.Setgroups([]int{}); err != nil {
-		dlog.Fatalf("Unable to drop additional groups: %s", err)
+	if _, _, rcode := syscall.RawSyscall(syscall.SYS_SETGROUPS, uintptr(0), uintptr(0), 0); rcode != 0 {
+		dlog.Fatalf("Unable to drop additional groups: [%s]", rcode.Error())
 	}
-	if err := unix.Setgid(gid); err != nil {
-		dlog.Fatalf("Unable to drop group privileges: %s", err)
+	if _, _, rcode := syscall.RawSyscall(syscall.SYS_SETGID, uintptr(gid), 0, 0); rcode != 0 {
+		dlog.Fatalf("Unable to drop group privileges: [%s]", rcode.Error())
 	}
-	if err := unix.Setuid(uid); err != nil {
-		dlog.Fatalf("Unable to drop user privileges: %s", err)
+	if _, _, rcode := syscall.RawSyscall(syscall.SYS_SETUID, uintptr(uid), 0, 0); rcode != 0 {
+		dlog.Fatalf("Unable to drop user privileges: [%s]", rcode.Error())
 	}
 	maxfd := uintptr(0)
 	for _, fd := range fds {
