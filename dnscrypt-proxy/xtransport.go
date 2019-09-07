@@ -224,7 +224,7 @@ func (xTransport *XTransport) Fetch(method string, url *url.URL, accept string, 
 		req.Body = bc
 	}
 	var err error
-	host := url.Host
+	host := ExtractHost(url.Host)
 	if xTransport.proxyDialer == nil && strings.HasSuffix(host, ".onion") {
 		return nil, 0, errors.New("Onion service is not reachable without Tor")
 	}

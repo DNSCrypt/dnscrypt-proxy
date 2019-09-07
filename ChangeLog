@@ -12,6 +12,9 @@ been set to `true`.
  - New command-line option: `-show-certs` to print DoH certificate
 hashes.
  - Solaris packages are now provided.
+ - DoH servers on a non-standard port, with stamps that don't include
+IP addresses, and without working system resolvers can now be properly
+bootstrapped.
 
 * Version 2.0.25
  - The example IP address for network probes didn't work on Windows.
