@@ -78,7 +78,7 @@ func NewServerStampFromString(stampStr string) (ServerStamp, error) {
 	if strings.HasPrefix(stampStr, "//") {
 		stampStr = stampStr[2:]
 	}
-	bin, err := base64.RawURLEncoding.DecodeString(stampStr)
+	bin, err := base64.RawURLEncoding.Strict().DecodeString(stampStr)
 	if err != nil {
 		return ServerStamp{}, err
 	}
