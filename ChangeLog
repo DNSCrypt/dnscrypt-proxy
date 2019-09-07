@@ -1,3 +1,17 @@
+* Version 2.0.26
+ - A new plugin was added to prevent Firefox from bypassing the system
+DNS settings.
+ - New configuration parameter to set how to respond to blocked
+queries: `blocked_query_response`. Responses can now be empty record
+sets, REFUSED response codes, or predefined IPv4 and/or IPv6 addresses.
+ - The `refused_code_in_responses` and `blocked_query_response` options
+have been folded into a new `blocked_query_response` option.
+ - The fallback resolver is now accessed using TCP if `force_tcp` has
+been set to `true`.
+ - CPU usage when enabling DNSCrypt ephemeral keys has been reduced.
+ - New command-line option: `-show-certs` to print DoH certificate
+hashes.
+
 * Version 2.0.25
  - The example IP address for network probes didn't work on Windows.
 The example configuration file has been updated and the fallback

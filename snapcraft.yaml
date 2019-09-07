@@ -1,5 +1,5 @@
 name: dnscrypt-proxy
-version: "2.0.25"
+version: "2.0.26"
 summary: A flexible DNS proxy, with support for encrypted DNS protocols
 description: |
   A flexible DNS proxy, with support for encrypted DNS protocols.
