@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	AppVersion            = "2.0.25"
+	AppVersion            = "2.0.26"
 	DefaultConfigFileName = "dnscrypt-proxy.toml"
 )
 
@@ -55,8 +55,6 @@ func main() {
 	if err := ConfigLoad(&app.proxy, svcFlag); err != nil {
 		dlog.Fatal(err)
 	}
-	dlog.Noticef("dnscrypt-proxy %s", AppVersion)
-
 	if len(*svcFlag) != 0 {
 		if svc == nil {
 			dlog.Fatal("Built-in service installation is not supported on this platform")

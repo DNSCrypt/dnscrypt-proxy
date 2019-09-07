@@ -451,6 +451,7 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 	if proxy.showCerts {
 		proxy.listenAddresses = nil
 	}
+	dlog.Noticef("dnscrypt-proxy %s", AppVersion)
 	NetProbe(netprobeAddress, netprobeTimeout)
 
 	if !config.OfflineMode {
