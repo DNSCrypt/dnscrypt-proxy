@@ -93,6 +93,13 @@ script:
 - tar czpvf dnscrypt-proxy-netbsd_amd64-${TRAVIS_TAG:-dev}.tar.gz netbsd-amd64
 
 - go clean
+- env GOOS=solaris GOARCH=amd64 go build -ldflags="-s -w"
+- mkdir solaris-amd64
+- ln dnscrypt-proxy solaris-amd64/
+- ln ../LICENSE example-dnscrypt-proxy.toml example-*.txt solaris-amd64/
+- tar czpvf dnscrypt-proxy-solaris_amd64-${TRAVIS_TAG:-dev}.tar.gz solaris-amd64
+
+- go clean
 - env CGO_ENABLED=0 GOOS=linux GOARCH=386 go build -ldflags="-s -w"
 - mkdir linux-i386
 - ln dnscrypt-proxy linux-i386/

@@ -11,6 +11,7 @@ been set to `true`.
  - CPU usage when enabling DNSCrypt ephemeral keys has been reduced.
  - New command-line option: `-show-certs` to print DoH certificate
 hashes.
+ - Solaris packages are now provided.
 
 * Version 2.0.25
  - The example IP address for network probes didn't work on Windows.
