@@ -230,6 +230,14 @@ netprobe_address = '9.9.9.9:53'
 # offline_mode = false
 
 
+## Additional data to attach to outgoing queries.
+## These strings will be added as TXT records to queries.
+## Do not use, except on servers explicitly asking for extra data
+## to be present.
+
+# query_meta = ["key1:value1", "key2:value2", "key3:value3"]
+
+
 ## Automatic log files rotation
 
 # Maximum log files size in MB

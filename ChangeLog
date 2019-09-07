@@ -15,6 +15,8 @@ hashes.
  - DoH servers on a non-standard port, with stamps that don't include
 IP addresses, and without working system resolvers can now be properly
 bootstrapped.
+ - A new option, `query_meta`, is now available to add optional records
+to client queries.
 
 * Version 2.0.25
  - The example IP address for network probes didn't work on Windows.

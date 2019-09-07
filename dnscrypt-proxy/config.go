@@ -82,6 +82,7 @@ type Config struct {
 	HTTPProxyURL             string                     `toml:"http_proxy"`
 	RefusedCodeInResponses   bool                       `toml:"refused_code_in_responses"`
 	BlockedQueryResponse     string                     `toml:"blocked_query_response"`
+	QueryMeta                []string                   `toml:"query_meta"`
 }
 
 func newConfig() Config {
@@ -350,6 +351,8 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 
 	proxy.cacheMinTTL = config.CacheMinTTL
 	proxy.cacheMaxTTL = config.CacheMaxTTL
+
+	proxy.queryMeta = config.QueryMeta
 
 	if len(config.QueryLog.Format) == 0 {
 		config.QueryLog.Format = "tsv"

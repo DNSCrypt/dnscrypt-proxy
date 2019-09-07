@@ -83,6 +83,10 @@ type PluginsState struct {
 
 func InitPluginsGlobals(pluginsGlobals *PluginsGlobals, proxy *Proxy) error {
 	queryPlugins := &[]Plugin{}
+
+	if len(proxy.queryMeta) != 0 {
+		*queryPlugins = append(*queryPlugins, Plugin(new(PluginQueryMeta)))
+	}
 	if len(proxy.whitelistNameFile) != 0 {
 		*queryPlugins = append(*queryPlugins, Plugin(new(PluginWhitelistName)))
 	}

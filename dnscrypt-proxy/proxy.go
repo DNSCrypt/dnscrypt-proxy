@@ -64,6 +64,7 @@ type Proxy struct {
 	logMaxAge                    int
 	logMaxBackups                int
 	blockedQueryResponse         string
+	queryMeta                    []string
 	showCerts                    bool
 }
 
