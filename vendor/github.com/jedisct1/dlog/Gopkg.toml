@@ -1,7 +1,0 @@
-[[constraint]]
-  branch = "master"
-  name = "github.com/hashicorp/go-syslog"
-
-[[constraint]]
-  branch = "master"
-  name = "golang.org/x/sys"

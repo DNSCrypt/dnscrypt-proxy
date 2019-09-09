@@ -11,13 +11,12 @@ require (
 	github.com/facebookgo/atomicfile v0.0.0-20151019160806-2de1f203e7d5 // indirect
 	github.com/facebookgo/pidfile v0.0.0-20150612191647-f242e2999868
 	github.com/hashicorp/go-immutable-radix v1.1.0
-	github.com/hashicorp/go-syslog v1.0.0 // indirect
 	github.com/hashicorp/golang-lru v0.5.3
-	github.com/jedisct1/dlog v0.0.0-20181221013014-794eb21b6ae8
+	github.com/jedisct1/dlog v0.0.0-20190909160351-692385b00b84
 	github.com/jedisct1/go-clocksmith v0.0.0-20190707124905-73e087c7979c
 	github.com/jedisct1/go-dnsstamps v0.0.0-20190803222545-08225c1155d6
-	github.com/jedisct1/go-minisign v0.0.0-20190420161605-5cc5b100fd4d
-	github.com/jedisct1/xsecretbox v0.0.0-20190624174246-857f633dd2c0
+	github.com/jedisct1/go-minisign v0.0.0-20190909160543-45766022959e
+	github.com/jedisct1/xsecretbox v0.0.0-20190909160646-b731c21297f9
 	github.com/k-sone/critbitgo v1.2.0
 	github.com/kardianos/service v1.0.0
 	github.com/miekg/dns v1.1.16

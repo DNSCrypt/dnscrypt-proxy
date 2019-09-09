@@ -4,24 +4,21 @@ import (
 	"errors"
 
 	"github.com/aead/chacha20/chacha"
-	"github.com/cloudflare/circl/dh/x25519"
+	"golang.org/x/crypto/curve25519"
 )
 
 // SharedKey computes a shared secret compatible with the one used by `crypto_box_xchacha20poly1305``
 func SharedKey(secretKey [32]byte, publicKey [32]byte) ([32]byte, error) {
 	var sharedKey [32]byte
-	var cfSharedKey, cfSecretKey, cfPublicKey x25519.Key
-	copy(cfSecretKey[:], secretKey[:])
-	copy(cfPublicKey[:], publicKey[:])
-	if !x25519.Shared(&cfSharedKey, &cfSecretKey, &cfPublicKey) {
+	curve25519.ScalarMult(&sharedKey, &secretKey, &publicKey)
+	c := byte(0)
+	for i := 0; i < 32; i++ {
+		c |= sharedKey[i]
+	}
+	if c == 0 {
 		return sharedKey, errors.New("weak public key")
 	}
-	HChaCha20(&sharedKey)
+	var nonce [16]byte
+	chacha.HChaCha20(&sharedKey, &nonce, &sharedKey)
 	return sharedKey, nil
-}
-
-// HChaCha20 - Hash the result of an X25519 key exchange in order to get a box-compatible shared secret
-func HChaCha20(sharedKey *[32]byte) {
-	var zeroNonce [16]byte
-	chacha.HChaCha20(sharedKey, &zeroNonce, sharedKey)
 }
