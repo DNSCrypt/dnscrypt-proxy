@@ -7,11 +7,11 @@ import (
 	"errors"
 	"math/rand"
 
-	"github.com/cloudflare/circl/dh/x25519"
 	"github.com/jedisct1/dlog"
 	"github.com/jedisct1/xsecretbox"
+	"golang.org/x/crypto/curve25519"
+	"golang.org/x/crypto/nacl/box"
 	"golang.org/x/crypto/nacl/secretbox"
-	"golang.org/x/crypto/salsa20/salsa"
 )
 
 const (
@@ -46,18 +46,14 @@ func unpad(packet []byte) ([]byte, error) {
 }
 
 func ComputeSharedKey(cryptoConstruction CryptoConstruction, secretKey *[32]byte, serverPk *[32]byte, providerName *string) (sharedKey [32]byte) {
-	var cfSharedKey, cfSecretKey, cfServerPk x25519.Key
-	copy(cfSecretKey[:], secretKey[:])
-	copy(cfServerPk[:], serverPk[:])
-	if !x25519.Shared(&cfSharedKey, &cfSecretKey, &cfServerPk) {
-		dlog.Criticalf("[%v] Weak public key", providerName)
-	}
-	copy(sharedKey[:], cfSharedKey[:])
 	if cryptoConstruction == XChacha20Poly1305 {
-		xsecretbox.HChaCha20(&sharedKey)
+		var err error
+		sharedKey, err = xsecretbox.SharedKey(*secretKey, *serverPk)
+		if err != nil {
+			dlog.Criticalf("[%v] Weak public key", providerName)
+		}
 	} else {
-		var zeroNonce [16]byte
-		salsa.HSalsa20(&sharedKey, &zeroNonce, &sharedKey, &salsa.Sigma)
+		box.Precompute(&sharedKey, serverPk, secretKey)
 	}
 	return
 }
@@ -74,12 +70,7 @@ func (proxy *Proxy) Encrypt(serverInfo *ServerInfo, packet []byte, proto string)
 		var ephSk [32]byte
 		h.Sum(ephSk[:0])
 		var xPublicKey [PublicKeySize]byte
-
-		var cfxPublicKey, cfephSk x25519.Key
-		copy(cfephSk[:], ephSk[:])
-		x25519.KeyGen(&cfxPublicKey, &cfephSk)
-		copy(xPublicKey[:], cfxPublicKey[:])
-
+		curve25519.ScalarBaseMult(&xPublicKey, &ephSk)
 		publicKey = &xPublicKey
 		xsharedKey := ComputeSharedKey(serverInfo.CryptoConstruction, &ephSk, &serverInfo.ServerPk, nil)
 		sharedKey = &xsharedKey

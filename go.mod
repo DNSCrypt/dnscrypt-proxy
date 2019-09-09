@@ -6,7 +6,7 @@ require (
 	github.com/BurntSushi/toml v0.3.1
 	github.com/VividCortex/ewma v1.1.1
 	github.com/agl/ed25519 v0.0.0-20170116200512-5312a6153412
-	github.com/cloudflare/circl v1.0.0
+	github.com/cloudflare/circl v1.0.0 // indirect
 	github.com/coreos/go-systemd v0.0.0-20190719114852-fd7a80b32e1f
 	github.com/dchest/safefile v0.0.0-20151022103144-855e8d98f185
 	github.com/facebookgo/atomicfile v0.0.0-20151019160806-2de1f203e7d5 // indirect
@@ -24,10 +24,10 @@ require (
 	github.com/kardianos/service v1.0.0
 	github.com/kr/pretty v0.1.0 // indirect
 	github.com/miekg/dns v1.1.16
-	golang.org/x/crypto v0.0.0-20190907121410-71b5226ff739
-	golang.org/x/net v0.0.0-20190827160401-ba9fcec4b297
+	golang.org/x/crypto v0.0.0-20190909091759-094676da4a83
+	golang.org/x/net v0.0.0-20190909003024-a7b16738d86b
 	golang.org/x/sync v0.0.0-20190423024810-112230192c58 // indirect
-	golang.org/x/sys v0.0.0-20190904154756-749cb33beabd
+	golang.org/x/sys v0.0.0-20190909082730-f460065e899a
 	golang.org/x/text v0.3.2 // indirect
 	gopkg.in/check.v1 v1.0.0-20190902080502-41f04d3bba15 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0

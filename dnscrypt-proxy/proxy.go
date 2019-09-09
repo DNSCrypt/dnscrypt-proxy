@@ -9,10 +9,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/cloudflare/circl/dh/x25519"
 	"github.com/jedisct1/dlog"
 	clocksmith "github.com/jedisct1/go-clocksmith"
 	stamps "github.com/jedisct1/go-dnsstamps"
+	"golang.org/x/crypto/curve25519"
 )
 
 type Proxy struct {
@@ -73,12 +73,7 @@ func (proxy *Proxy) StartProxy() {
 	if _, err := crypto_rand.Read(proxy.proxySecretKey[:]); err != nil {
 		dlog.Fatal(err)
 	}
-
-	var cfProxyPublicKey, cfProxySecretKey x25519.Key
-	copy(cfProxySecretKey[:], proxy.proxySecretKey[:])
-	x25519.KeyGen(&cfProxyPublicKey, &cfProxySecretKey)
-	copy(proxy.proxyPublicKey[:], cfProxyPublicKey[:])
-
+	curve25519.ScalarBaseMult(&proxy.proxyPublicKey, &proxy.proxySecretKey)
 	for _, registeredServer := range proxy.registeredServers {
 		proxy.serversInfo.registerServer(proxy, registeredServer.name, registeredServer.stamp)
 	}

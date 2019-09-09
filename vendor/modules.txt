@@ -11,8 +11,8 @@ github.com/agl/ed25519
 github.com/agl/ed25519/edwards25519
 # github.com/cloudflare/circl v1.0.0
 github.com/cloudflare/circl/dh/x25519
-github.com/cloudflare/circl/math/fp25519
 github.com/cloudflare/circl/internal/conv
+github.com/cloudflare/circl/math/fp25519
 # github.com/coreos/go-systemd v0.0.0-20190719114852-fd7a80b32e1f
 github.com/coreos/go-systemd/activation
 github.com/coreos/go-systemd/daemon
@@ -45,37 +45,39 @@ github.com/k-sone/critbitgo
 github.com/kardianos/service
 # github.com/miekg/dns v1.1.16
 github.com/miekg/dns
-# golang.org/x/crypto v0.0.0-20190907121410-71b5226ff739
+# golang.org/x/crypto v0.0.0-20190909091759-094676da4a83
+golang.org/x/crypto/curve25519
 golang.org/x/crypto/ed25519
-golang.org/x/crypto/nacl/secretbox
-golang.org/x/crypto/salsa20/salsa
 golang.org/x/crypto/ed25519/internal/edwards25519
 golang.org/x/crypto/internal/subtle
+golang.org/x/crypto/nacl/box
+golang.org/x/crypto/nacl/secretbox
 golang.org/x/crypto/poly1305
-# golang.org/x/net v0.0.0-20190827160401-ba9fcec4b297
-golang.org/x/net/http2
-golang.org/x/net/proxy
-golang.org/x/net/ipv4
-golang.org/x/net/ipv6
+golang.org/x/crypto/salsa20/salsa
+# golang.org/x/net v0.0.0-20190909003024-a7b16738d86b
+golang.org/x/net/bpf
 golang.org/x/net/http/httpguts
+golang.org/x/net/http2
 golang.org/x/net/http2/hpack
 golang.org/x/net/idna
-golang.org/x/net/internal/socks
-golang.org/x/net/bpf
 golang.org/x/net/internal/iana
 golang.org/x/net/internal/socket
-# golang.org/x/sys v0.0.0-20190904154756-749cb33beabd
-golang.org/x/sys/unix
-golang.org/x/sys/windows/svc/mgr
+golang.org/x/net/internal/socks
+golang.org/x/net/ipv4
+golang.org/x/net/ipv6
+golang.org/x/net/proxy
+# golang.org/x/sys v0.0.0-20190909082730-f460065e899a
 golang.org/x/sys/cpu
-golang.org/x/sys/windows/svc/eventlog
+golang.org/x/sys/unix
+golang.org/x/sys/windows
 golang.org/x/sys/windows/registry
 golang.org/x/sys/windows/svc
-golang.org/x/sys/windows
+golang.org/x/sys/windows/svc/eventlog
+golang.org/x/sys/windows/svc/mgr
 # golang.org/x/text v0.3.2
 golang.org/x/text/secure/bidirule
+golang.org/x/text/transform
 golang.org/x/text/unicode/bidi
 golang.org/x/text/unicode/norm
-golang.org/x/text/transform
 # gopkg.in/natefinch/lumberjack.v2 v2.0.0
 gopkg.in/natefinch/lumberjack.v2
