@@ -9,7 +9,7 @@ github.com/aead/poly1305
 # github.com/agl/ed25519 v0.0.0-20170116200512-5312a6153412
 github.com/agl/ed25519
 github.com/agl/ed25519/edwards25519
-# github.com/cloudflare/circl v1.0.0
+# github.com/cloudflare/circl v0.0.0-20190621185434-0ba9a9382e8b
 github.com/cloudflare/circl/dh/x25519
 github.com/cloudflare/circl/internal/conv
 github.com/cloudflare/circl/math/fp25519
@@ -74,7 +74,7 @@ golang.org/x/sys/windows/registry
 golang.org/x/sys/windows/svc
 golang.org/x/sys/windows/svc/eventlog
 golang.org/x/sys/windows/svc/mgr
-# golang.org/x/text v0.3.2
+# golang.org/x/text v0.3.0
 golang.org/x/text/secure/bidirule
 golang.org/x/text/transform
 golang.org/x/text/unicode/bidi
