@@ -1,3 +1,9 @@
+* Version 2.0.27
+ - The X25519 implementation was changed from using the Go standard
+implementation to using Cloudflare's CIRCL library. Unfortunately,
+CIRCL appears to be broken on big-endian systems. That change has been
+reverted.
+
 * Version 2.0.26
  - A new plugin was added to prevent Firefox from bypassing the system
 DNS settings.
