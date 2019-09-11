@@ -67,9 +67,13 @@ func (plugin *PluginQueryLog) Eval(pluginsState *PluginsState, msg *dns.Msg) err
 	}
 	qName := StripTrailingDot(question.Name)
 
-	switch pluginsState.returnCode {
-	case PluginsReturnCodeSynth, PluginsReturnCodeCloak, PluginsReturnCodeParseError:
+	if pluginsState.cacheHit {
 		pluginsState.serverName = "-"
+	} else {
+		switch pluginsState.returnCode {
+		case PluginsReturnCodeSynth, PluginsReturnCodeCloak, PluginsReturnCodeParseError:
+			pluginsState.serverName = "-"
+		}
 	}
 	returnCode, ok := PluginsReturnCodeToString[pluginsState.returnCode]
 	if !ok {
