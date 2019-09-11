@@ -1,6 +1,6 @@
-# ![dnscrypt-proxy 2](https://raw.github.com/jedisct1/dnscrypt-proxy/master/logo.png?3)
+# ![dnscrypt-proxy 2](https://raw.github.com/dnscrypt/dnscrypt-proxy/master/logo.png?3)
 
-[![Financial Contributors on Open Collective](https://opencollective.com/dnscrypt/all/badge.svg?label=financial+contributors)](https://opencollective.com/dnscrypt) [![DNSCrypt-Proxy Release](https://img.shields.io/github/release/jedisct1/dnscrypt-proxy.svg?label=Latest%20Release&style=popout)](https://github.com/jedisct1/dnscrypt-proxy/releases/latest)  [![Build Status](https://travis-ci.org/jedisct1/dnscrypt-proxy.svg?branch=master)](https://travis-ci.org/jedisct1/dnscrypt-proxy?branch=master) [![#dnscrypt-proxy:matrix.org](https://img.shields.io/matrix/dnscrypt-proxy:matrix.org.svg?label=DNSCrypt-Proxy%20Matrix%20Chat&server_fqdn=matrix.org&style=popout)](https://matrix.to/#/#dnscrypt-proxy:matrix.org)
+[![Financial Contributors on Open Collective](https://opencollective.com/dnscrypt/all/badge.svg?label=financial+contributors)](https://opencollective.com/dnscrypt) [![DNSCrypt-Proxy Release](https://img.shields.io/github/release/dnscrypt/dnscrypt-proxy.svg?label=Latest%20Release&style=popout)](https://github.com/dnscrypt/dnscrypt-proxy/releases/latest)  [![Build Status](https://travis-ci.org/dnscrypt/dnscrypt-proxy.svg?branch=master)](https://travis-ci.org/dnscrypt/dnscrypt-proxy?branch=master) [![#dnscrypt-proxy:matrix.org](https://img.shields.io/matrix/dnscrypt-proxy:matrix.org.svg?label=DNSCrypt-Proxy%20Matrix%20Chat&server_fqdn=matrix.org&style=popout)](https://matrix.to/#/#dnscrypt-proxy:matrix.org)
 
 ## Overview
 
@@ -13,7 +13,7 @@ A flexible DNS proxy, with support for modern encrypted DNS protocols such as [D
 * [DNS stamps](https://dnscrypt.info/stamps)
 * [FAQ](https://dnscrypt.info/faq)
 
-## [Download the latest release](https://github.com/jedisct1/dnscrypt-proxy/releases/latest)
+## [Download the latest release](https://github.com/dnscrypt/dnscrypt-proxy/releases/latest)
 
 Available as source code and pre-built binaries for most operating
 systems and architectures (see below).
@@ -62,14 +62,14 @@ Up-to-date, pre-built binaries are available for:
 * Windows
 * Windows 64 bit
 
-How to use these files, as well as how to verify their signatures, are documented in the [installation instructions](https://github.com/jedisct1/dnscrypt-proxy/wiki/installation).
+How to use these files, as well as how to verify their signatures, are documented in the [installation instructions](https://github.com/dnscrypt/dnscrypt-proxy/wiki/installation).
 
 ## Contributors
 
 ### Code Contributors
 
 This project exists thanks to all the people who contribute. [[Contribute](CONTRIBUTING.md)].
-<a href="https://github.com/jedisct1/dnscrypt-proxy/graphs/contributors"><img src="https://opencollective.com/dnscrypt/contributors.svg?width=890&button=false" /></a>
+<a href="https://github.com/dnscrypt/dnscrypt-proxy/graphs/contributors"><img src="https://opencollective.com/dnscrypt/contributors.svg?width=890&button=false" /></a>
 
 ### Financial Contributors
 

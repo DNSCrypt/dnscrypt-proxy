@@ -9,8 +9,8 @@ base: core18
 parts:
   dnscrypt-proxy:
     plugin: go
-    source: https://github.com/jedisct1/dnscrypt-proxy.git
-    go-importpath: github.com/jedisct1/dnscrypt-proxy
+    source: https://github.com/dnscrypt/dnscrypt-proxy.git
+    go-importpath: github.com/dnscrypt/dnscrypt-proxy
     build-packages:
       - gcc
   example-config-files:
