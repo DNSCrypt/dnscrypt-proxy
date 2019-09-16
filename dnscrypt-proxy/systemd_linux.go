@@ -10,10 +10,12 @@ import (
 func (proxy *Proxy) SystemDListeners() error {
 	files := activation.Files(true)
 
-	if len(files) > 0 && (len(proxy.userName) > 0 || proxy.child) {
-		dlog.Fatal("Systemd activated sockets are incompatible with privilege dropping. Remove activated sockets and fill `listen_addresses` in the dnscrypt-proxy configuration file instead.")
+	if len(files) > 0 {
+		if (len(proxy.userName) > 0 || proxy.child) {
+			dlog.Fatal("Systemd activated sockets are incompatible with privilege dropping. Remove activated sockets and fill `listen_addresses` in the dnscrypt-proxy configuration file instead.")
+		}
+		dlog.Warn("Systemd sockets are untested and unsupported - use at your own risk")
 	}
-
 	for i, file := range files {
 		if listener, err := net.FileListener(file); err == nil {
 			dlog.Noticef("Wiring systemd TCP socket #%d, %s, %s", i, file.Name(), listener.Addr())
