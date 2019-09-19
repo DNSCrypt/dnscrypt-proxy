@@ -66,6 +66,15 @@ func (plugin *PluginQueryLog) Eval(pluginsState *PluginsState, msg *dns.Msg) err
 		clientIPStr = (*pluginsState.clientAddr).(*net.TCPAddr).IP.String()
 	}
 	qName := StripTrailingDot(question.Name)
+
+	if pluginsState.cacheHit {
+		pluginsState.serverName = "-"
+	} else {
+		switch pluginsState.returnCode {
+		case PluginsReturnCodeSynth, PluginsReturnCodeCloak, PluginsReturnCodeParseError:
+			pluginsState.serverName = "-"
+		}
+	}
 	returnCode, ok := PluginsReturnCodeToString[pluginsState.returnCode]
 	if !ok {
 		returnCode = string(returnCode)
@@ -75,7 +84,6 @@ func (plugin *PluginQueryLog) Eval(pluginsState *PluginsState, msg *dns.Msg) err
 	if !pluginsState.requestStart.IsZero() && !pluginsState.requestEnd.IsZero() {
 		requestDuration = pluginsState.requestEnd.Sub(pluginsState.requestStart)
 	}
-
 	var line string
 	if plugin.format == "tsv" {
 		now := time.Now()

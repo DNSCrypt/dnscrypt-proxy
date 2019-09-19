@@ -92,6 +92,7 @@ func (plugin *PluginForward) Eval(pluginsState *PluginsState, msg *dns.Msg) erro
 		return nil
 	}
 	server := servers[rand.Intn(len(servers))]
+	pluginsState.serverName = server
 	respMsg, err := dns.Exchange(msg, server)
 	if err != nil {
 		return err
