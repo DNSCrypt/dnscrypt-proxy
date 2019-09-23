@@ -239,7 +239,7 @@ netprobe_address = '9.9.9.9:53'
 
 ## Automatic log files rotation
 
-# Maximum log files size in MB
+# Maximum log files size in MB - Set to 0 for unlimited.
 log_files_max_size = 10
 
 # How long to keep backup files, in days
@@ -336,6 +336,7 @@ cache_neg_max_ttl = 600
 [query_log]
 
   ## Path to the query log file (absolute, or relative to the same directory as the executable file)
+  ## Can be /dev/stdout to log to the standard output (and set log_files_max_size to 0)
 
   # file = 'query.log'
 
