@@ -34,7 +34,7 @@ var (
 	MinDNSPacketSize       = 12 + 5
 	MaxDNSPacketSize       = 4096
 	MaxDNSUDPPacketSize    = 1252
-	InitialMinQuestionSize = 256
+	InitialMinQuestionSize = 512
 )
 
 var (
