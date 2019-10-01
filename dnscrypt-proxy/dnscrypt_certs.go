@@ -96,7 +96,7 @@ func FetchCurrentDNSCryptCert(proxy *Proxy, serverName *string, proto string, pk
 		}
 		if !proxy.certIgnoreTimestamp {
 			if now > tsEnd || now < tsBegin {
-				dlog.Debugf("[%v] Certificate not valid at the current date", providerName)
+				dlog.Debugf("[%v] Certificate not valid at the current date (now: %v is not in [%v..%v])", providerName, now, tsBegin, tsEnd)
 				continue
 			}
 		}
