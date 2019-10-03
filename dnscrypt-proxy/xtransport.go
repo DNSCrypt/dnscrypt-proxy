@@ -154,7 +154,6 @@ func (xTransport *XTransport) resolveUsingSystem(host string) (*string, error) {
 }
 
 func (xTransport *XTransport) resolveUsingResolver(dnsClient *dns.Client, host string, resolver string) (*string, error) {
-	var foundIP *string
 	var err error
 	if xTransport.useIPv4 {
 		msg := new(dns.Msg)
@@ -165,13 +164,13 @@ func (xTransport *XTransport) resolveUsingResolver(dnsClient *dns.Client, host s
 		if err == nil {
 			for _, answer := range in.Answer {
 				if answer.Header().Rrtype == dns.TypeA {
-					foundIPx := answer.(*dns.A).A.String()
-					return &foundIPx, nil
+					foundIP := answer.(*dns.A).A.String()
+					return &foundIP, nil
 				}
 			}
 		}
 	}
-	if xTransport.useIPv6 && foundIP == nil {
+	if xTransport.useIPv6 {
 		msg := new(dns.Msg)
 		msg.SetQuestion(dns.Fqdn(host), dns.TypeAAAA)
 		msg.SetEdns0(4096, true)
@@ -180,8 +179,8 @@ func (xTransport *XTransport) resolveUsingResolver(dnsClient *dns.Client, host s
 		if err == nil {
 			for _, answer := range in.Answer {
 				if answer.Header().Rrtype == dns.TypeAAAA {
-					foundIPx := "[" + answer.(*dns.AAAA).AAAA.String() + "]"
-					return &foundIPx, nil
+					foundIP := "[" + answer.(*dns.AAAA).AAAA.String() + "]"
+					return &foundIP, nil
 				}
 			}
 		}
