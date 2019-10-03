@@ -13,6 +13,7 @@ import (
 	"github.com/jedisct1/dlog"
 	clocksmith "github.com/jedisct1/go-clocksmith"
 	stamps "github.com/jedisct1/go-dnsstamps"
+	"github.com/miekg/dns"
 	"golang.org/x/crypto/curve25519"
 )
 
@@ -453,7 +454,7 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 			serverInfo.noticeFailure(proxy)
 			return
 		}
-		if rcode := Rcode(response); rcode == 2 { // SERVFAIL
+		if rcode := Rcode(response); rcode == dns.RcodeServerFailure {
 			dlog.Infof("Server [%v] returned temporary error code [%v] -- Upstream server may be experiencing connectivity issues", serverInfo.Name, rcode)
 			serverInfo.noticeFailure(proxy)
 		} else {
