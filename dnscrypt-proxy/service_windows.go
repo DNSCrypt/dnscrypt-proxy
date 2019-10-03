@@ -11,4 +11,6 @@ func ServiceManagerStartNotify() error {
 	return nil
 }
 
-func ServiceManagerReadyNotify() {}
+func ServiceManagerReadyNotify() error {
+	return nil
+}
