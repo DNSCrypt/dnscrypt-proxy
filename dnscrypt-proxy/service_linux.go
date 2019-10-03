@@ -1,3 +1,5 @@
+// +build !android
+
 package main
 
 import "github.com/coreos/go-systemd/daemon"

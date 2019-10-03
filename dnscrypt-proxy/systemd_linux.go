@@ -1,3 +1,5 @@
+// +build !andoid
+
 package main
 
 import (
