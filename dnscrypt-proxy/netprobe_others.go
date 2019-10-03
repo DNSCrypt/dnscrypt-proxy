@@ -3,7 +3,6 @@
 package main
 
 import (
-	"errors"
 	"net"
 	"time"
 
@@ -39,7 +38,6 @@ func NetProbe(address string, timeout int) error {
 		dlog.Notice("Network connectivity detected")
 		return nil
 	}
-	es := "Timeout while waiting for network connectivity"
-	dlog.Error(es)
-	return errors.New(es)
+	dlog.Error("Timeout while waiting for network connectivity")
+	return nil
 }
