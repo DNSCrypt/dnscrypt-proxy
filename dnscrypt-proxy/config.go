@@ -465,10 +465,6 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 		netprobeAddress = config.FallbackResolver
 	}
 	proxy.showCerts = *showCerts || len(os.Getenv("SHOW_CERTS")) > 0
-	if len(os.Getenv("SHOW_CERTS")) > 0 {
-		proxy.showCerts = true
-	}
-
 	if proxy.showCerts {
 		proxy.listenAddresses = nil
 	}
