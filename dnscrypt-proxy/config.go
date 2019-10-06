@@ -587,8 +587,11 @@ func (config *Config) loadSource(proxy *Proxy, requiredProps stamps.ServerInform
 	}
 	registeredServers, err := source.Parse(cfgSource.Prefix)
 	if err != nil {
-		dlog.Criticalf("Unable to use source [%s]: [%s]", cfgSourceName, err)
-		return err
+		if len(registeredServers) == 0 {
+			dlog.Criticalf("Unable to use source [%s]: [%s]", cfgSourceName, err)
+			return err
+		}
+		dlog.Warnf("Error in source [%s]: [%s] -- Continuing with reduced server count [%d]", cfgSourceName, err, len(registeredServers))
 	}
 	for _, registeredServer := range registeredServers {
 		if len(config.ServerNames) > 0 {
