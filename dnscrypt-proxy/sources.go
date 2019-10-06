@@ -217,12 +217,19 @@ func (source *Source) Parse(prefix string) ([]RegisteredServer, error) {
 
 func (source *Source) parseV2(prefix string) ([]RegisteredServer, error) {
 	var registeredServers []RegisteredServer
+	var stampErrs []string
+	appendStampErr := func(format string, a ...interface{}) {
+		stampErr := fmt.Sprintf(format, a...)
+		stampErrs = append(stampErrs, stampErr)
+		dlog.Warn(stampErr)
+	}
 	in := string(source.in)
 	parts := strings.Split(in, "## ")
 	if len(parts) < 2 {
 		return registeredServers, fmt.Errorf("Invalid format for source at [%v]", source.urls)
 	}
 	parts = parts[1:]
+PartsLoop:
 	for _, part := range parts {
 		part = strings.TrimFunc(part, unicode.IsSpace)
 		subparts := strings.Split(part, "\n")
@@ -240,7 +247,8 @@ func (source *Source) parseV2(prefix string) ([]RegisteredServer, error) {
 			subpart = strings.TrimFunc(subpart, unicode.IsSpace)
 			if strings.HasPrefix(subpart, "sdns:") {
 				if len(stampStr) > 0 {
-					return registeredServers, fmt.Errorf("Multiple stamps for server [%s] in source from [%v]", name, source.urls)
+					appendStampErr("Multiple stamps for server [%s]", name)
+					continue PartsLoop
 				}
 				stampStr = subpart
 				continue
@@ -253,18 +261,22 @@ func (source *Source) parseV2(prefix string) ([]RegisteredServer, error) {
 			description += subpart
 		}
 		if len(stampStr) < 6 {
-			return registeredServers, fmt.Errorf("Missing stamp for server [%s] in source from [%v]", name, source.urls)
+			appendStampErr("Missing stamp for server [%s]", name)
+			continue
 		}
 		stamp, err := stamps.NewServerStampFromString(stampStr)
 		if err != nil {
-			dlog.Errorf("Invalid or unsupported stamp: [%v]", stampStr)
-			return registeredServers, err
+			appendStampErr("Invalid or unsupported stamp [%v]: %s", stampStr, err.Error())
+			continue
 		}
 		registeredServer := RegisteredServer{
 			name: name, stamp: stamp, description: description,
 		}
 		dlog.Debugf("Registered [%s] with stamp [%s]", name, stamp.String())
 		registeredServers = append(registeredServers, registeredServer)
+	}
+	if len(stampErrs) > 0 {
+		return registeredServers, fmt.Errorf("%s", strings.Join(stampErrs, ", "))
 	}
 	return registeredServers, nil
 }
