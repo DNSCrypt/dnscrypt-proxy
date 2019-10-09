@@ -240,9 +240,9 @@ func (pluginsState *PluginsState) ApplyQueryPlugins(pluginsGlobals *PluginsGloba
 	}
 	pluginsState.questionMsg = &msg
 	pluginsGlobals.RLock()
+	defer pluginsGlobals.RUnlock()
 	for _, plugin := range *pluginsGlobals.queryPlugins {
 		if ret := plugin.Eval(pluginsState, &msg); ret != nil {
-			pluginsGlobals.RUnlock()
 			pluginsState.action = PluginsActionDrop
 			return packet, ret
 		}
@@ -257,7 +257,6 @@ func (pluginsState *PluginsState) ApplyQueryPlugins(pluginsGlobals *PluginsGloba
 			break
 		}
 	}
-	pluginsGlobals.RUnlock()
 	packet2, err := msg.PackBuffer(packet)
 	if err != nil {
 		return packet, err
@@ -288,9 +287,9 @@ func (pluginsState *PluginsState) ApplyResponsePlugins(pluginsGlobals *PluginsGl
 		pluginsState.returnCode = PluginsReturnCodeResponseError
 	}
 	pluginsGlobals.RLock()
+	defer pluginsGlobals.RUnlock()
 	for _, plugin := range *pluginsGlobals.responsePlugins {
 		if ret := plugin.Eval(pluginsState, &msg); ret != nil {
-			pluginsGlobals.RUnlock()
 			pluginsState.action = PluginsActionDrop
 			return packet, ret
 		}
@@ -306,7 +305,6 @@ func (pluginsState *PluginsState) ApplyResponsePlugins(pluginsGlobals *PluginsGl
 			break
 		}
 	}
-	pluginsGlobals.RUnlock()
 	if ttl != nil {
 		setMaxTTL(&msg, *ttl)
 	}
@@ -327,12 +325,11 @@ func (pluginsState *PluginsState) ApplyLoggingPlugins(pluginsGlobals *PluginsGlo
 		return errors.New("Unexpected number of questions")
 	}
 	pluginsGlobals.RLock()
+	defer pluginsGlobals.RUnlock()
 	for _, plugin := range *pluginsGlobals.loggingPlugins {
 		if ret := plugin.Eval(pluginsState, questionMsg); ret != nil {
-			pluginsGlobals.RUnlock()
 			return ret
 		}
 	}
-	pluginsGlobals.RUnlock()
 	return nil
 }
