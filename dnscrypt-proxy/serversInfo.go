@@ -10,6 +10,7 @@ import (
 	"math/rand"
 	"net"
 	"net/url"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -139,17 +140,11 @@ func (serversInfo *ServersInfo) refresh(proxy *Proxy) (int, error) {
 		}
 	}
 	serversInfo.Lock()
+	sort.SliceStable(serversInfo.inner, func(i, j int) bool {
+		return serversInfo.inner[i].initialRtt < serversInfo.inner[j].initialRtt
+	})
 	inner := serversInfo.inner
 	innerLen := len(inner)
-	for i := 0; i < innerLen; i++ {
-		for j := i + 1; j < innerLen; j++ {
-			if inner[j].initialRtt < inner[i].initialRtt {
-				inner[j], inner[i] = inner[i], inner[j]
-			}
-		}
-	}
-	serversInfo.inner = inner
-
 	if innerLen > 1 {
 		dlog.Notice("Sorted latencies:")
 		for i := 0; i < innerLen; i++ {
