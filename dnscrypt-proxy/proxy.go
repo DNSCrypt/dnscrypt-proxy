@@ -501,8 +501,8 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 	pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
 }
 
-func NewProxy() Proxy {
-	return Proxy{
+func NewProxy() *Proxy {
+	return &Proxy{
 		serversInfo: NewServersInfo(),
 	}
 }

@@ -82,7 +82,7 @@ type PluginsState struct {
 	serverName                       string
 }
 
-func InitPluginsGlobals(pluginsGlobals *PluginsGlobals, proxy *Proxy) error {
+func (proxy *Proxy) InitPluginsGlobals() error {
 	queryPlugins := &[]Plugin{}
 
 	if len(proxy.queryMeta) != 0 {
@@ -143,11 +143,11 @@ func InitPluginsGlobals(pluginsGlobals *PluginsGlobals, proxy *Proxy) error {
 		}
 	}
 
-	(*pluginsGlobals).queryPlugins = queryPlugins
-	(*pluginsGlobals).responsePlugins = responsePlugins
-	(*pluginsGlobals).loggingPlugins = loggingPlugins
+	proxy.pluginsGlobals.queryPlugins = queryPlugins
+	proxy.pluginsGlobals.responsePlugins = responsePlugins
+	proxy.pluginsGlobals.loggingPlugins = loggingPlugins
 
-	parseBlockedQueryResponse(proxy.blockedQueryResponse, pluginsGlobals)
+	parseBlockedQueryResponse(proxy.blockedQueryResponse, &proxy.pluginsGlobals)
 
 	return nil
 }

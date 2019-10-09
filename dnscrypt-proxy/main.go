@@ -22,7 +22,7 @@ const (
 type App struct {
 	wg    sync.WaitGroup
 	quit  chan struct{}
-	proxy Proxy
+	proxy *Proxy
 }
 
 func main() {
@@ -52,7 +52,7 @@ func main() {
 	}
 	app.proxy = NewProxy()
 	_ = ServiceManagerStartNotify()
-	if err := ConfigLoad(&app.proxy, svcFlag); err != nil {
+	if err := ConfigLoad(app.proxy, svcFlag); err != nil {
 		dlog.Fatal(err)
 	}
 	if len(*svcFlag) != 0 {
@@ -85,29 +85,27 @@ func main() {
 }
 
 func (app *App) Start(service service.Service) error {
-	proxy := &app.proxy
-	if err := InitPluginsGlobals(&proxy.pluginsGlobals, proxy); err != nil {
+	if err := app.proxy.InitPluginsGlobals(); err != nil {
 		dlog.Fatal(err)
 	}
 	app.quit = make(chan struct{})
 	app.wg.Add(1)
 	if service != nil {
 		go func() {
-			app.AppMain(proxy)
+			app.AppMain()
 		}()
 	} else {
-		app.AppMain(proxy)
+		app.AppMain()
 	}
 	return nil
 }
 
-func (app *App) AppMain(proxy *Proxy) {
+func (app *App) AppMain() {
 	pidfile.Write()
-	proxy.StartProxy()
+	app.proxy.StartProxy()
 	<-app.quit
 	dlog.Notice("Quit signal received...")
 	app.wg.Done()
-
 }
 
 func (app *App) Stop(service service.Service) error {
