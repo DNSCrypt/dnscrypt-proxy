@@ -158,17 +158,9 @@ func (serversInfo *ServersInfo) refresh(proxy *Proxy) (int, error) {
 	}
 	if innerLen > 0 {
 		dlog.Noticef("Server with the lowest initial latency: %s (rtt: %dms)", inner[0].Name, inner[0].initialRtt)
-		proxy.certIgnoreTimestamp = false
 	}
 	serversInfo.Unlock()
 	return liveServers, err
-}
-
-func (serversInfo *ServersInfo) liveServers() int {
-	serversInfo.RLock()
-	liveServers := len(serversInfo.inner)
-	serversInfo.RUnlock()
-	return liveServers
 }
 
 func (serversInfo *ServersInfo) estimatorUpdate(candidate int) {
