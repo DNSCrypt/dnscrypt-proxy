@@ -76,7 +76,7 @@ func NewServersInfo() ServersInfo {
 	return ServersInfo{lbStrategy: DefaultLBStrategy, lbEstimator: true, registeredServers: make([]RegisteredServer, 0)}
 }
 
-func (serversInfo *ServersInfo) registerServer(proxy *Proxy, name string, stamp stamps.ServerStamp) error {
+func (serversInfo *ServersInfo) registerServer(name string, stamp stamps.ServerStamp) error {
 	newRegisteredServer := RegisteredServer{name: name, stamp: stamp}
 	serversInfo.Lock()
 	defer serversInfo.Unlock()

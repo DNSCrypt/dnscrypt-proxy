@@ -78,7 +78,7 @@ func (proxy *Proxy) StartProxy() {
 	}
 	curve25519.ScalarBaseMult(&proxy.proxyPublicKey, &proxy.proxySecretKey)
 	for _, registeredServer := range proxy.registeredServers {
-		proxy.serversInfo.registerServer(proxy, registeredServer.name, registeredServer.stamp)
+		proxy.serversInfo.registerServer(registeredServer.name, registeredServer.stamp)
 	}
 
 	for _, listenAddrStr := range proxy.listenAddresses {
