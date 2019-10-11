@@ -143,25 +143,6 @@ func StringStripSpaces(str string) string {
 	}, str)
 }
 
-func ExtractPort(str string, defaultPort int) int {
-	port := defaultPort
-	if idx := strings.LastIndex(str, ":"); idx >= 0 && idx < len(str)-1 {
-		if portX, err := strconv.Atoi(str[idx+1:]); err == nil {
-			port = portX
-		}
-	}
-	return port
-}
-
-func ExtractHost(str string) string {
-	if idx := strings.LastIndex(str, ":"); idx >= 0 && idx < len(str)-1 {
-		if _, err := strconv.Atoi(str[idx+1:]); err == nil {
-			str = str[:idx]
-		}
-	}
-	return str
-}
-
 func ExtractHostAndPort(str string, defaultPort int) (host string, port int) {
 	host, port = str, defaultPort
 	if idx := strings.LastIndex(str, ":"); idx >= 0 && idx < len(str)-1 {

@@ -502,7 +502,8 @@ func (config *Config) printRegisteredServers(proxy *Proxy, jsonOutput bool) {
 	var summary []ServerSummary
 	for _, registeredServer := range proxy.registeredServers {
 		addrStr, port := registeredServer.stamp.ServerAddrStr, stamps.DefaultPort
-		port = ExtractPort(addrStr, port)
+		var hostAddr string
+		hostAddr, port = ExtractHostAndPort(addrStr, port)
 		addrs := make([]string, 0)
 		if registeredServer.stamp.Proto == stamps.StampProtoTypeDoH && len(registeredServer.stamp.ProviderName) > 0 {
 			providerName := registeredServer.stamp.ProviderName
@@ -511,7 +512,7 @@ func (config *Config) printRegisteredServers(proxy *Proxy, jsonOutput bool) {
 			addrs = append(addrs, host)
 		}
 		if len(addrStr) > 0 {
-			addrs = append(addrs, ExtractHost(addrStr))
+			addrs = append(addrs, hostAddr)
 		}
 		serverSummary := ServerSummary{
 			Name:        registeredServer.name,
