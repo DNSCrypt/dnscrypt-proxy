@@ -3,6 +3,7 @@
 package main
 
 import (
+	"fmt"
 	"net"
 
 	"github.com/coreos/go-systemd/activation"
@@ -19,14 +20,20 @@ func (proxy *Proxy) SystemDListeners() error {
 		dlog.Warn("Systemd sockets are untested and unsupported - use at your own risk")
 	}
 	for i, file := range files {
+		defer file.Close()
+		ok := false
 		if listener, err := net.FileListener(file); err == nil {
 			dlog.Noticef("Wiring systemd TCP socket #%d, %s, %s", i, file.Name(), listener.Addr())
+			ok = true
 			go proxy.tcpListener(listener.(*net.TCPListener))
 		} else if pc, err := net.FilePacketConn(file); err == nil {
 			dlog.Noticef("Wiring systemd UDP socket #%d, %s, %s", i, file.Name(), pc.LocalAddr())
+			ok = true
 			go proxy.udpListener(pc.(*net.UDPConn))
 		}
-		file.Close()
+		if !ok {
+			return fmt.Errorf("Could not wire systemd socket #%d, %s", i, file.Name())
+		}
 	}
 
 	return nil
