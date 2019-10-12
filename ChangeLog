@@ -1,3 +1,16 @@
+* Version 2.0.28
+ - Invalid server entries are now skipped instead of preventing a
+source from being used. Thanks to Alison Winters for the contribution!
+ - Truncated responses are immediately retried over TCP instead of
+waiting for the client to retry. This reduces the latency for large
+responses.
+ - Responses sent to the local network are assumed to support at least
+1252 bytes packets, and use optional information from EDNS up to 4096
+bytes. This also reduces latency.
+ - Logging improvements: servers are not logged for cached, synthetic
+and cloaked responses. And the forwarder is logged instead of the
+regular server for forwarded responses.
+
 * Version 2.0.27
  - The X25519 implementation was changed from using the Go standard
 implementation to using Cloudflare's CIRCL library. Unfortunately,
