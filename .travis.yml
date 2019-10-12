@@ -212,7 +212,7 @@ deploy:
   file_glob: true
   skip_cleanup: true
   on:
-    repo: jedisct1/dnscrypt-proxy
+    repo: DNSCrypt/dnscrypt-proxy
     tags: true
 
 before_deploy:
