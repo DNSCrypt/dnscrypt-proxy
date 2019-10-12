@@ -154,7 +154,7 @@ func InitPluginsGlobals(pluginsGlobals *PluginsGlobals, proxy *Proxy) error {
 
 // blockedQueryResponse can be 'refused', 'hinfo' or IP responses 'a:IPv4,aaaa:IPv6
 func parseBlockedQueryResponse(blockedResponse string, pluginsGlobals *PluginsGlobals) {
-	blockedResponse = strings.ReplaceAll(strings.ToLower(blockedResponse), " ", "")
+	blockedResponse = StringStripSpaces(strings.ToLower(blockedResponse))
 
 	if strings.HasPrefix(blockedResponse, "a:") {
 		blockedIPStrings := strings.Split(blockedResponse, ",")

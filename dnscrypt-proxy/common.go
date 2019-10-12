@@ -134,6 +134,15 @@ func StringQuote(str string) string {
 	return str[1 : len(str)-1]
 }
 
+func StringStripSpaces(str string) string {
+	return strings.Map(func(r rune) rune {
+		if unicode.IsSpace(r) {
+			return -1
+		}
+		return r
+	}, str)
+}
+
 func ExtractPort(str string, defaultPort int) int {
 	port := defaultPort
 	if idx := strings.LastIndex(str, ":"); idx >= 0 && idx < len(str)-1 {
