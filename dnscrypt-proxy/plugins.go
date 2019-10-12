@@ -153,11 +153,11 @@ func InitPluginsGlobals(pluginsGlobals *PluginsGlobals, proxy *Proxy) error {
 }
 
 // blockedQueryResponse can be 'refused', 'hinfo' or IP responses 'a:IPv4,aaaa:IPv6
-func parseBlockedQueryResponse(bockedResponse string, pluginsGlobals *PluginsGlobals) {
-	bockedResponse = strings.ReplaceAll(strings.ToLower(bockedResponse), " ", "")
+func parseBlockedQueryResponse(blockedResponse string, pluginsGlobals *PluginsGlobals) {
+	blockedResponse = strings.ReplaceAll(strings.ToLower(blockedResponse), " ", "")
 
-	if strings.HasPrefix(bockedResponse, "a:") {
-		blockedIPStrings := strings.Split(bockedResponse, ",")
+	if strings.HasPrefix(blockedResponse, "a:") {
+		blockedIPStrings := strings.Split(blockedResponse, ",")
 		(*pluginsGlobals).respondWithIPv4 = net.ParseIP(strings.TrimPrefix(blockedIPStrings[0], "a:"))
 
 		if (*pluginsGlobals).respondWithIPv4 == nil {
@@ -187,13 +187,13 @@ func parseBlockedQueryResponse(bockedResponse string, pluginsGlobals *PluginsGlo
 		}
 
 	} else {
-		switch bockedResponse {
+		switch blockedResponse {
 		case "refused":
 			(*pluginsGlobals).refusedCodeInResponses = true
 		case "hinfo":
 			(*pluginsGlobals).refusedCodeInResponses = false
 		default:
-			dlog.Noticef("Invalid blocked_query_response option [%s], defaulting to `hinfo`", bockedResponse)
+			dlog.Noticef("Invalid blocked_query_response option [%s], defaulting to `hinfo`", blockedResponse)
 			(*pluginsGlobals).refusedCodeInResponses = false
 		}
 	}
