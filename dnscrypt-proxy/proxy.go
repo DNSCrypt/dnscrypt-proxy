@@ -443,7 +443,7 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 		return
 	}
 	if clientProto == "udp" {
-		if len(response) > MaxDNSUDPPacketSize {
+		if len(response) > pluginsState.maxUnencryptedUDPSafePayloadSize {
 			response, err = TruncatedResponse(response)
 			if err != nil {
 				pluginsState.returnCode = PluginsReturnCodeParseError
