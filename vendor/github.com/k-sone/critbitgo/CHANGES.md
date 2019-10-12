@@ -1,3 +1,7 @@
+## 1.3.0 (2019/09/30)
+
+- Add Net.Walk [#9](https://github.com/k-sone/critbitgo/pull/9)
+
 ## 1.2.0 (2018/04/25)
 
 - Add ContainedIP() as fast way to check an IP [#7](https://github.com/k-sone/critbitgo/pull/7)

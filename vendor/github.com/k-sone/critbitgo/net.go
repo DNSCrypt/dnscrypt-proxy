@@ -189,6 +189,20 @@ func lookup(p *node, key []byte, backtracking bool) *node {
 	}
 }
 
+// Walk iterates routes from a given route.
+// handle is called with arguments route and value (if handle returns `false`, the iteration is aborted)
+func (n *Net) Walk(r *net.IPNet, handle func(*net.IPNet, interface{}) bool) {
+	var key []byte
+	if r != nil {
+		if ip, _, err := netValidateIPNet(r); err == nil {
+			key = netIPNetToKey(ip, r.Mask)
+		}
+	}
+	n.trie.Walk(key, func(key []byte, value interface{}) bool {
+		return handle(netKeyToIPNet(key), value)
+	})
+}
+
 // Deletes all routes.
 func (n *Net) Clear() {
 	n.trie.Clear()

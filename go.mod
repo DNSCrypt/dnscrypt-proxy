@@ -17,12 +17,12 @@ require (
 	github.com/jedisct1/go-dnsstamps v0.0.0-20190803222545-08225c1155d6
 	github.com/jedisct1/go-minisign v0.0.0-20190909160543-45766022959e
 	github.com/jedisct1/xsecretbox v0.0.0-20190909160646-b731c21297f9
-	github.com/k-sone/critbitgo v1.2.0
+	github.com/k-sone/critbitgo v1.3.0
 	github.com/kardianos/service v1.0.0
-	github.com/miekg/dns v1.1.16
-	golang.org/x/crypto v0.0.0-20190909091759-094676da4a83
-	golang.org/x/net v0.0.0-20190909003024-a7b16738d86b
-	golang.org/x/sys v0.0.0-20190909082730-f460065e899a
+	github.com/miekg/dns v1.1.22
+	golang.org/x/crypto v0.0.0-20191011191535-87dc89f01550
+	golang.org/x/net v0.0.0-20191011234655-491137f69257
+	golang.org/x/sys v0.0.0-20191010194322-b09406accb47
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 	gopkg.in/yaml.v2 v2.2.2 // indirect
 )
