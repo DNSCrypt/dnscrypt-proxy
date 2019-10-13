@@ -43,6 +43,8 @@ type ServerInfo struct {
 	HostName           string
 	UDPAddr            *net.UDPAddr
 	TCPAddr            *net.TCPAddr
+	RelayUDPAddr       *net.UDPAddr
+	RelayTCPAddr       *net.TCPAddr
 	lastActionTS       time.Time
 	rtt                ewma.MovingAverage
 	initialRtt         int
@@ -258,6 +260,40 @@ func (serversInfo *ServersInfo) fetchDNSCryptServerInfo(proxy *Proxy, name strin
 	if err != nil {
 		return ServerInfo{}, err
 	}
+	var relayUDPAddr *net.UDPAddr
+	var relayTCPAddr *net.TCPAddr
+	routes := proxy.routes
+	if routes != nil {
+		if relayName, ok := (*routes)[name]; ok {
+			var relayCandidateStamp *stamps.ServerStamp
+			if stamp, err = stamps.NewServerStampFromString(relayName); err == nil {
+				relayCandidateStamp = &stamp
+			} else if _, err := net.ResolveUDPAddr("udp", relayName); err == nil {
+				relayCandidateStamp = &stamps.ServerStamp{
+					ServerAddrStr: relayName,
+					Proto:         stamps.StampProtoTypeDNSCrypt,
+				}
+			} else {
+				for _, registeredServer := range proxy.registeredServers {
+					if registeredServer.name == relayName {
+						relayCandidateStamp = &registeredServer.stamp
+					}
+				}
+			}
+			if relayCandidateStamp != nil && relayCandidateStamp.Proto == stamps.StampProtoTypeDNSCrypt {
+				relayUDPAddr, err = net.ResolveUDPAddr("udp", relayCandidateStamp.ServerAddrStr)
+				if err != nil {
+					return ServerInfo{}, err
+				}
+				relayTCPAddr, err = net.ResolveTCPAddr("tcp", relayCandidateStamp.ServerAddrStr)
+				if err != nil {
+					return ServerInfo{}, err
+				}
+			} else {
+				dlog.Errorf("Invalid relay [%v] for server [%v]", relayName, name)
+			}
+		}
+	}
 	return ServerInfo{
 		Proto:              stamps.StampProtoTypeDNSCrypt,
 		MagicQuery:         certInfo.MagicQuery,
@@ -268,6 +304,8 @@ func (serversInfo *ServersInfo) fetchDNSCryptServerInfo(proxy *Proxy, name strin
 		Timeout:            proxy.timeout,
 		UDPAddr:            remoteUDPAddr,
 		TCPAddr:            remoteTCPAddr,
+		RelayUDPAddr:       relayUDPAddr,
+		RelayTCPAddr:       relayTCPAddr,
 		initialRtt:         rtt,
 	}, nil
 }

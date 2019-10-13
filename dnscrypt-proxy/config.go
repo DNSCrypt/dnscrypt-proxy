@@ -83,6 +83,7 @@ type Config struct {
 	RefusedCodeInResponses   bool                       `toml:"refused_code_in_responses"`
 	BlockedQueryResponse     string                     `toml:"blocked_query_response"`
 	QueryMeta                []string                   `toml:"query_meta"`
+	AnonymizedDNS            AnonymizedDNSConfig        `toml:"anonymized_dns"`
 }
 
 func newConfig() Config {
@@ -164,6 +165,15 @@ type BlockIPConfig struct {
 	File    string `toml:"blacklist_file"`
 	LogFile string `toml:"log_file"`
 	Format  string `toml:"log_format"`
+}
+
+type AnonymizedDNSRouteConfig struct {
+	ServerName string `toml:"server_name"`
+	RelayName  string `toml:"via"`
+}
+
+type AnonymizedDNSConfig struct {
+	Routes []AnonymizedDNSRouteConfig `toml:"routes"`
 }
 
 type ServerSummary struct {
@@ -421,6 +431,15 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 		return err
 	}
 	proxy.allWeeklyRanges = allWeeklyRanges
+
+	if configRoutes := config.AnonymizedDNS.Routes; configRoutes != nil {
+		routes := make(map[string]string)
+		for _, configRoute := range configRoutes {
+			routes[configRoute.ServerName] = configRoute.RelayName
+			dlog.Debugf("Routing server [%s] via [%s]", configRoute.ServerName, configRoute.RelayName)
+		}
+		proxy.routes = &routes
+	}
 
 	if *listAll {
 		config.ServerNames = nil
