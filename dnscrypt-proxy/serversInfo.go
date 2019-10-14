@@ -271,7 +271,7 @@ func (serversInfo *ServersInfo) fetchDNSCryptServerInfo(proxy *Proxy, name strin
 			} else if _, err := net.ResolveUDPAddr("udp", relayName); err == nil {
 				relayCandidateStamp = &stamps.ServerStamp{
 					ServerAddrStr: relayName,
-					Proto:         stamps.StampProtoTypeDNSCrypt,
+					Proto:         stamps.StampProtoTypeDNSCryptRelay,
 				}
 			} else {
 				for _, registeredServer := range proxy.registeredServers {
@@ -280,7 +280,9 @@ func (serversInfo *ServersInfo) fetchDNSCryptServerInfo(proxy *Proxy, name strin
 					}
 				}
 			}
-			if relayCandidateStamp != nil && relayCandidateStamp.Proto == stamps.StampProtoTypeDNSCrypt {
+			if relayCandidateStamp != nil &&
+				(relayCandidateStamp.Proto == stamps.StampProtoTypeDNSCrypt ||
+					relayCandidateStamp.Proto == stamps.StampProtoTypeDNSCryptRelay) {
 				relayUDPAddr, err = net.ResolveUDPAddr("udp", relayCandidateStamp.ServerAddrStr)
 				if err != nil {
 					return ServerInfo{}, err
