@@ -488,6 +488,13 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 		config.printRegisteredServers(proxy, *jsonOutput)
 		os.Exit(0)
 	}
+	if proxy.routes != nil && len(*proxy.routes) > 0 {
+		for _, server := range proxy.registeredServers {
+			if via, ok := (*proxy.routes)[server.name]; ok {
+				dlog.Noticef("Anonymized DNS: routing [%v] via [%v]", server.name, via)
+			}
+		}
+	}
 	if *check {
 		dlog.Notice("Configuration successfully checked")
 		os.Exit(0)
