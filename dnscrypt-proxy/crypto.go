@@ -87,6 +87,9 @@ func (proxy *Proxy) Encrypt(serverInfo *ServerInfo, packet []byte, proto string)
 		minQuestionSize += int(xpad[0])
 	}
 	paddedLength := Min(MaxDNSUDPPacketSize, (Max(minQuestionSize, QueryOverhead)+63) & ^63)
+	if serverInfo.RelayUDPAddr != nil && proto == "tcp" {
+		paddedLength = MaxDNSPacketSize
+	}
 	if QueryOverhead+len(packet)+1 > paddedLength {
 		err = errors.New("Question too large; cannot be padded")
 		return
