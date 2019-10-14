@@ -20,7 +20,7 @@ systems and architectures (see below).
 
 ## Features
 
-* DNS traffic encryption and authentication. Supports DNS-over-HTTPS (DoH) using TLS 1.3, and DNSCrypt.
+* DNS traffic encryption and authentication. Supports DNS-over-HTTPS (DoH) using TLS 1.3, DNSCrypt and Anonymized DNS.
 * DNS query monitoring, with separate log files for regular and suspicious queries
 * Filtering: block ads, malware, and other unwanted content. Compatible with all DNS services
 * Time-based filtering, with a flexible weekly schedule
