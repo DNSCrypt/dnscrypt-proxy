@@ -66,7 +66,7 @@ type Proxy struct {
 	logMaxBackups                int
 	blockedQueryResponse         string
 	queryMeta                    []string
-	routes                       *map[string]string
+	routes                       *map[string][]string
 	showCerts                    bool
 }
 

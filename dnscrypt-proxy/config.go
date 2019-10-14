@@ -168,8 +168,8 @@ type BlockIPConfig struct {
 }
 
 type AnonymizedDNSRouteConfig struct {
-	ServerName string `toml:"server_name"`
-	RelayName  string `toml:"via"`
+	ServerName string   `toml:"server_name"`
+	RelayNames []string `toml:"via"`
 }
 
 type AnonymizedDNSConfig struct {
@@ -433,10 +433,9 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 	proxy.allWeeklyRanges = allWeeklyRanges
 
 	if configRoutes := config.AnonymizedDNS.Routes; configRoutes != nil {
-		routes := make(map[string]string)
+		routes := make(map[string][]string)
 		for _, configRoute := range configRoutes {
-			routes[configRoute.ServerName] = configRoute.RelayName
-			dlog.Debugf("Routing server [%s] via [%s]", configRoute.ServerName, configRoute.RelayName)
+			routes[configRoute.ServerName] = configRoute.RelayNames
 		}
 		proxy.routes = &routes
 	}
@@ -491,7 +490,7 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 	if proxy.routes != nil && len(*proxy.routes) > 0 {
 		for _, server := range proxy.registeredServers {
 			if via, ok := (*proxy.routes)[server.name]; ok {
-				dlog.Noticef("Anonymized DNS: routing [%v] via [%v]", server.name, via)
+				dlog.Noticef("Anonymized DNS: routing [%v] via %v", server.name, via)
 			}
 		}
 	}

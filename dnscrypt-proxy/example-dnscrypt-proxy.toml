@@ -546,6 +546,23 @@ cache_neg_max_ttl = 600
   #  minisign_key = 'RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3'
 
 
+################################
+#        Anonymized DNS        #
+################################
+
+[anonymized_dns]
+
+## Define one or more routes, i.e. indirect ways to reach servers.
+## A set of possible relay servers is assigned to each DNS resolver.
+## A relay can be specified as a DNS Stamp (either a relay stamp, or a
+## DNSCrypt stamp), an IP:port, a hostname:port, or a server name, if
+## the server is in the servers_list.
+
+# routes = [
+#    { server_name='comodo-02', via=['sdns://gRIxMzcuNzQuMjIzLjIzNDo0NDM'] },
+#    { server_name='quad9-dnscrypt-ip4-nofilter-pri', via=['sdns://gRIxMzcuNzQuMjIzLjIzNDo0NDM'] }
+# ]
+
 
 ## Optional, local, static list of additional servers
 ## Mostly useful for testing your own servers.

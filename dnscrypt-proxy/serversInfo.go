@@ -264,9 +264,16 @@ func (serversInfo *ServersInfo) fetchDNSCryptServerInfo(proxy *Proxy, name strin
 	var relayTCPAddr *net.TCPAddr
 	routes := proxy.routes
 	if routes != nil {
-		if relayName, ok := (*routes)[name]; ok {
+		if relayNames, ok := (*routes)[name]; ok {
+			var relayName string
+			if len(relayNames) > 0 {
+				candidate := rand.Intn(len(relayNames))
+				relayName = relayNames[candidate]
+			}
 			var relayCandidateStamp *stamps.ServerStamp
-			if stamp, err = stamps.NewServerStampFromString(relayName); err == nil {
+			if len(relayName) == 0 {
+				dlog.Errorf("Route declared for [%v] but an empty relay list", name)
+			} else if stamp, err = stamps.NewServerStampFromString(relayName); err == nil {
 				relayCandidateStamp = &stamp
 			} else if _, err := net.ResolveUDPAddr("udp", relayName); err == nil {
 				relayCandidateStamp = &stamps.ServerStamp{
