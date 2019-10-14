@@ -249,9 +249,9 @@ func newDNSCryptRelayStamp(bin []byte) (ServerStamp, error) {
 		return stamp, errors.New("Stamp is too short")
 	}
 	binLen := len(bin)
-	pos := 0
+	pos := 1
 	length := int(bin[pos])
-	if 1+length >= binLen-pos {
+	if 1+length > binLen-pos {
 		return stamp, errors.New("Invalid stamp")
 	}
 	pos++

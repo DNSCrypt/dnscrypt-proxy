@@ -14,7 +14,7 @@ require (
 	github.com/hashicorp/golang-lru v0.5.3
 	github.com/jedisct1/dlog v0.0.0-20190909160351-692385b00b84
 	github.com/jedisct1/go-clocksmith v0.0.0-20190707124905-73e087c7979c
-	github.com/jedisct1/go-dnsstamps v0.0.0-20191014002100-c2d13697a562
+	github.com/jedisct1/go-dnsstamps v0.0.0-20191014084838-3e6e00f2b602
 	github.com/jedisct1/go-minisign v0.0.0-20190909160543-45766022959e
 	github.com/jedisct1/xsecretbox v0.0.0-20190909160646-b731c21297f9
 	github.com/k-sone/critbitgo v1.3.0
