@@ -254,7 +254,7 @@ func (proxy *Proxy) tcpListener(acceptPc *net.TCPListener) {
 			defer proxy.clientsCountDec()
 			clientPc.SetDeadline(time.Now().Add(proxy.timeout))
 			packet, err := ReadPrefixed(&clientPc)
-			if err != nil || len(packet) < MinDNSPacketSize {
+			if err != nil {
 				return
 			}
 			clientAddr := clientPc.RemoteAddr()
