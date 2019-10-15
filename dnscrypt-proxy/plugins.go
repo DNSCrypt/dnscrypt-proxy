@@ -244,9 +244,9 @@ func (pluginsState *PluginsState) ApplyQueryPlugins(pluginsGlobals *PluginsGloba
 	pluginsGlobals.RLock()
 	defer pluginsGlobals.RUnlock()
 	for _, plugin := range *pluginsGlobals.queryPlugins {
-		if ret := plugin.Eval(pluginsState, &msg); ret != nil {
+		if err := plugin.Eval(pluginsState, &msg); err != nil {
 			pluginsState.action = PluginsActionDrop
-			return packet, ret
+			return packet, err
 		}
 		if pluginsState.action == PluginsActionReject {
 			synth, err := RefusedResponseFromMessage(&msg, pluginsGlobals.refusedCodeInResponses, pluginsGlobals.respondWithIPv4, pluginsGlobals.respondWithIPv6, pluginsState.cacheMinTTL)
@@ -291,9 +291,9 @@ func (pluginsState *PluginsState) ApplyResponsePlugins(pluginsGlobals *PluginsGl
 	pluginsGlobals.RLock()
 	defer pluginsGlobals.RUnlock()
 	for _, plugin := range *pluginsGlobals.responsePlugins {
-		if ret := plugin.Eval(pluginsState, &msg); ret != nil {
+		if err := plugin.Eval(pluginsState, &msg); err != nil {
 			pluginsState.action = PluginsActionDrop
-			return packet, ret
+			return packet, err
 		}
 		if pluginsState.action == PluginsActionReject {
 			synth, err := RefusedResponseFromMessage(&msg, pluginsGlobals.refusedCodeInResponses, pluginsGlobals.respondWithIPv4, pluginsGlobals.respondWithIPv6, pluginsState.cacheMinTTL)
@@ -329,8 +329,8 @@ func (pluginsState *PluginsState) ApplyLoggingPlugins(pluginsGlobals *PluginsGlo
 	pluginsGlobals.RLock()
 	defer pluginsGlobals.RUnlock()
 	for _, plugin := range *pluginsGlobals.loggingPlugins {
-		if ret := plugin.Eval(pluginsState, questionMsg); ret != nil {
-			return ret
+		if err := plugin.Eval(pluginsState, questionMsg); err != nil {
+			return err
 		}
 	}
 	return nil
