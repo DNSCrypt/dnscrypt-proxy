@@ -211,6 +211,10 @@ func (xTransport *XTransport) Fetch(method string, url *url.URL, accept string, 
 		url2.RawQuery = qs.Encode()
 		url = &url2
 	}
+	host, _ := ExtractHostAndPort(url.Host, 0)
+	if xTransport.proxyDialer == nil && strings.HasSuffix(host, ".onion") {
+		return nil, 0, errors.New("Onion service is not reachable without Tor")
+	}
 	req := &http.Request{
 		Method: method,
 		URL:    url,
@@ -223,10 +227,6 @@ func (xTransport *XTransport) Fetch(method string, url *url.URL, accept string, 
 		req.Body = bc
 	}
 	var err error
-	host, _ := ExtractHostAndPort(url.Host, 0)
-	if xTransport.proxyDialer == nil && strings.HasSuffix(host, ".onion") {
-		return nil, 0, errors.New("Onion service is not reachable without Tor")
-	}
 	resolveByProxy := false
 	if xTransport.proxyDialer != nil || xTransport.httpProxyFunction != nil {
 		resolveByProxy = true
