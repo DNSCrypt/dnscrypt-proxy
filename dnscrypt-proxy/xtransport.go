@@ -272,7 +272,7 @@ func (xTransport *XTransport) Fetch(method string, url *url.URL, accept string, 
 		if resp == nil {
 			err = errors.New("Webserver returned an error")
 		} else if resp.StatusCode < 200 || resp.StatusCode > 299 {
-			err = fmt.Errorf("Webserver returned code %d", resp.StatusCode)
+			err = errors.New(resp.Status)
 		}
 	} else {
 		(*xTransport.transport).CloseIdleConnections()
