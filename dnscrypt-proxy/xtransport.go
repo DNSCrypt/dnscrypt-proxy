@@ -223,8 +223,7 @@ func (xTransport *XTransport) Fetch(method string, url *url.URL, accept string, 
 	}
 	if body != nil {
 		req.ContentLength = int64(len(*body))
-		bc := ioutil.NopCloser(bytes.NewReader(*body))
-		req.Body = bc
+		req.Body = ioutil.NopCloser(bytes.NewReader(*body))
 	}
 	var err error
 	resolveByProxy := false
