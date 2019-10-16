@@ -158,7 +158,7 @@ func (xTransport *XTransport) resolveUsingResolver(dnsClient *dns.Client, host s
 	if xTransport.useIPv4 {
 		msg := new(dns.Msg)
 		msg.SetQuestion(dns.Fqdn(host), dns.TypeA)
-		msg.SetEdns0(4096, true)
+		msg.SetEdns0(uint16(MaxDNSPacketSize), true)
 		var in *dns.Msg
 		in, _, err = dnsClient.Exchange(msg, resolver)
 		if err == nil {
@@ -173,7 +173,7 @@ func (xTransport *XTransport) resolveUsingResolver(dnsClient *dns.Client, host s
 	if xTransport.useIPv6 {
 		msg := new(dns.Msg)
 		msg.SetQuestion(dns.Fqdn(host), dns.TypeAAAA)
-		msg.SetEdns0(4096, true)
+		msg.SetEdns0(uint16(MaxDNSPacketSize), true)
 		var in *dns.Msg
 		in, _, err = dnsClient.Exchange(msg, resolver)
 		if err == nil {
