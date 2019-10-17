@@ -45,7 +45,7 @@ func FetchCurrentDNSCryptCert(proxy *Proxy, serverName *string, proto string, pk
 	for _, answerRr := range in.Answer {
 		var txt string
 		if t, ok := answerRr.(*dns.TXT); !ok {
-			dlog.Warnf("[%v] Certificate not found", providerName)
+			dlog.Noticef("[%v] Extra record of type [%v] found in certificate", providerName, answerRr.Header().Rrtype)
 			continue
 		} else {
 			txt = strings.Join(t.Txt, "")
