@@ -293,6 +293,9 @@ block_ipv6 = false
 
 # cloaking_rules = 'cloaking-rules.txt'
 
+## TTL used when serving entries in cloaking-rules.txt
+
+# cloak_ttl = 600
 
 
 ###########################
@@ -328,7 +331,9 @@ cache_neg_min_ttl = 60
 
 cache_neg_max_ttl = 600
 
+## TTL when dnscryp-proxy does reject entry
 
+# neg_ttl = 600
 
 ###############################
 #        Query logging        #

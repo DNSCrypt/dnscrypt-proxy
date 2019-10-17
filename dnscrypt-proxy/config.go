@@ -52,6 +52,8 @@ type Config struct {
 	CacheNegMaxTTL           uint32                     `toml:"cache_neg_max_ttl"`
 	CacheMinTTL              uint32                     `toml:"cache_min_ttl"`
 	CacheMaxTTL              uint32                     `toml:"cache_max_ttl"`
+	NegTTL                   uint32                     `toml:"neg_ttl"`
+	CloakTTL                 uint32                     `toml:"cloak_ttl"`
 	QueryLog                 QueryLogConfig             `toml:"query_log"`
 	NxLog                    NxLogConfig                `toml:"nx_log"`
 	BlockName                BlockNameConfig            `toml:"blacklist"`
@@ -103,6 +105,8 @@ func newConfig() Config {
 		CacheNegMaxTTL:           600,
 		CacheMinTTL:              60,
 		CacheMaxTTL:              86400,
+		NegTTL:                   600,
+		CloakTTL:                 600,
 		SourceRequireNoLog:       true,
 		SourceRequireNoFilter:    true,
 		SourceIPv4:               true,
@@ -365,6 +369,8 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 
 	proxy.cacheMinTTL = config.CacheMinTTL
 	proxy.cacheMaxTTL = config.CacheMaxTTL
+	proxy.negTTL = config.NegTTL
+	proxy.cloakTTL = config.CloakTTL
 
 	proxy.queryMeta = config.QueryMeta
 

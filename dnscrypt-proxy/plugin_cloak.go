@@ -41,7 +41,7 @@ func (plugin *PluginCloak) Init(proxy *Proxy) error {
 	if err != nil {
 		return err
 	}
-	plugin.ttl = proxy.cacheMinTTL
+	plugin.ttl = proxy.cloakTTL
 	plugin.patternMatcher = NewPatternPatcher()
 	cloakedNames := make(map[string]*CloakedName)
 	for lineNo, line := range strings.Split(string(bin), "\n") {
