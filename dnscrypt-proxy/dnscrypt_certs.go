@@ -43,7 +43,14 @@ func FetchCurrentDNSCryptCert(proxy *Proxy, serverName *string, proto string, pk
 	highestSerial := uint32(0)
 	var certCountStr string
 	for _, answerRr := range in.Answer {
-		binCert, err := packTxtString(strings.Join(answerRr.(*dns.TXT).Txt, ""))
+		var txt string
+		if t, ok := answerRr.(*dns.TXT); !ok {
+			dlog.Warnf("[%v] Certificate not found", providerName)
+			continue
+		} else {
+			txt = strings.Join(t.Txt, "")
+		}
+		binCert, err := packTxtString(txt)
 		if err != nil {
 			dlog.Warnf("[%v] Unable to unpack the certificate", providerName)
 			continue
