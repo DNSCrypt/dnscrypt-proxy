@@ -109,21 +109,20 @@ func (serversInfo *ServersInfo) refreshServer(proxy *Proxy, name string, stamp s
 	}
 	newServer.rtt = ewma.NewMovingAverage(RTTEwmaDecay)
 	newServer.rtt.Set(float64(newServer.initialRtt))
+	isNew := true
 	serversInfo.Lock()
-	defer serversInfo.Unlock()
-	previousIndex = -1
 	for i, oldServer := range serversInfo.inner {
 		if oldServer.Name == name {
-			previousIndex = i
+			serversInfo.inner[i] = &newServer
+			isNew = false
 			break
 		}
 	}
-	if previousIndex >= 0 {
-		serversInfo.inner[previousIndex] = &newServer
-		return nil
+	if isNew {
+		serversInfo.inner = append(serversInfo.inner, &newServer)
+		serversInfo.registeredServers = append(serversInfo.registeredServers, RegisteredServer{name: name, stamp: stamp})
 	}
-	serversInfo.inner = append(serversInfo.inner, &newServer)
-	serversInfo.registeredServers = append(serversInfo.registeredServers, RegisteredServer{name: name, stamp: stamp})
+	serversInfo.Unlock()
 	return nil
 }
 
