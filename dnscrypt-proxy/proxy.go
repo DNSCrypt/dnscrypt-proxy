@@ -157,7 +157,9 @@ func (proxy *Proxy) StartProxy() {
 		dlog.Fatal(err)
 	}
 	liveServers, err := proxy.serversInfo.refresh(proxy)
-	proxy.certIgnoreTimestamp = !(liveServers > 0)
+	if liveServers > 0 {
+		proxy.certIgnoreTimestamp = false
+	}
 	if proxy.showCerts {
 		os.Exit(0)
 	}
@@ -180,7 +182,9 @@ func (proxy *Proxy) StartProxy() {
 				}
 				clocksmith.Sleep(delay)
 				liveServers, _ = proxy.serversInfo.refresh(proxy)
-				proxy.certIgnoreTimestamp = !(liveServers > 0)
+				if liveServers > 0 {
+					proxy.certIgnoreTimestamp = false
+				}
 			}
 		}()
 	}
