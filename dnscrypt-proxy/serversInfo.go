@@ -100,7 +100,7 @@ func (serversInfo *ServersInfo) refreshServer(proxy *Proxy, name string, stamp s
 		}
 	}
 	serversInfo.RUnlock()
-	newServer, err := serversInfo.fetchServerInfo(proxy, name, stamp, previousIndex < 0)
+	newServer, err := fetchServerInfo(proxy, name, stamp, previousIndex < 0)
 	if err != nil {
 		return err
 	}
@@ -216,16 +216,16 @@ func (serversInfo *ServersInfo) getOne() *ServerInfo {
 	return serverInfo
 }
 
-func (serversInfo *ServersInfo) fetchServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, isNew bool) (ServerInfo, error) {
+func fetchServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, isNew bool) (ServerInfo, error) {
 	if stamp.Proto == stamps.StampProtoTypeDNSCrypt {
-		return serversInfo.fetchDNSCryptServerInfo(proxy, name, stamp, isNew)
+		return fetchDNSCryptServerInfo(proxy, name, stamp, isNew)
 	} else if stamp.Proto == stamps.StampProtoTypeDoH {
-		return serversInfo.fetchDoHServerInfo(proxy, name, stamp, isNew)
+		return fetchDoHServerInfo(proxy, name, stamp, isNew)
 	}
 	return ServerInfo{}, errors.New("Unsupported protocol")
 }
 
-func (serversInfo *ServersInfo) fetchDNSCryptServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, isNew bool) (ServerInfo, error) {
+func fetchDNSCryptServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, isNew bool) (ServerInfo, error) {
 	if len(stamp.ServerPk) != ed25519.PublicKeySize {
 		serverPk, err := hex.DecodeString(strings.Replace(string(stamp.ServerPk), ":", "", -1))
 		if err != nil || len(serverPk) != ed25519.PublicKeySize {
@@ -305,7 +305,7 @@ func (serversInfo *ServersInfo) fetchDNSCryptServerInfo(proxy *Proxy, name strin
 	}, nil
 }
 
-func (serversInfo *ServersInfo) fetchDoHServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, isNew bool) (ServerInfo, error) {
+func fetchDoHServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, isNew bool) (ServerInfo, error) {
 	if len(stamp.ServerAddrStr) > 0 {
 		addrStr := stamp.ServerAddrStr
 		ipOnly := addrStr[:strings.LastIndex(addrStr, ":")]
