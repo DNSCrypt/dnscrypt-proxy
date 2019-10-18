@@ -101,7 +101,7 @@ func newConfig() Config {
 		CacheNegMinTTL:           60,
 		CacheNegMaxTTL:           600,
 		CacheMinTTL:              60,
-		CacheMaxTTL:              8600,
+		CacheMaxTTL:              86400,
 		SourceRequireNoLog:       true,
 		SourceRequireNoFilter:    true,
 		SourceIPv4:               true,
