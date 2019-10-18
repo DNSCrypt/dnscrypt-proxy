@@ -460,7 +460,7 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 			serverInfo.noticeFailure(proxy)
 			return
 		}
-		if rcode := Rcode(response); rcode == dns.RcodeServerFailure {
+		if rcode := Rcode(response); rcode == dns.RcodeServerFailure { // SERVFAIL
 			dlog.Infof("Server [%v] returned temporary error code [%v] -- Upstream server may be experiencing connectivity issues", serverInfo.Name, rcode)
 			serverInfo.noticeFailure(proxy)
 		} else {
