@@ -469,10 +469,10 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 		proxy.listenAddresses = nil
 	}
 	dlog.Noticef("dnscrypt-proxy %s", AppVersion)
+	if err := NetProbe(netprobeAddress, netprobeTimeout); err != nil {
+		return err
+	}
 	if !config.OfflineMode {
-		if err := NetProbe(netprobeAddress, netprobeTimeout); err != nil {
-			return err
-		}
 		if err := config.loadSources(proxy); err != nil {
 			return err
 		}
