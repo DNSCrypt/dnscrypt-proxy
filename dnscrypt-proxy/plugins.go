@@ -44,6 +44,7 @@ const (
 	PluginsReturnCodeResponseError
 	PluginsReturnCodeServerError
 	PluginsReturnCodeCloak
+	PluginsReturnCodeServerTimeout
 )
 
 var PluginsReturnCodeToString = map[PluginsReturnCode]string{
@@ -57,6 +58,7 @@ var PluginsReturnCodeToString = map[PluginsReturnCode]string{
 	PluginsReturnCodeResponseError: "RESPONSE_ERROR",
 	PluginsReturnCodeServerError:   "SERVER_ERROR",
 	PluginsReturnCodeCloak:         "CLOAK",
+	PluginsReturnCodeServerTimeout: "SERVER_TIMEOUT",
 }
 
 type PluginsState struct {
