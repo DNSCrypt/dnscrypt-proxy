@@ -234,20 +234,9 @@ func fetchDNSCryptServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp
 		dlog.Warnf("Public key [%s] shouldn't be hex-encoded any more", string(stamp.ServerPk))
 		stamp.ServerPk = serverPk
 	}
-	certInfo, rtt, err := FetchCurrentDNSCryptCert(proxy, &name, proxy.mainProto, stamp.ServerPk, stamp.ServerAddrStr, stamp.ProviderName, isNew)
-	if err != nil {
-		return ServerInfo{}, err
-	}
-	remoteUDPAddr, err := net.ResolveUDPAddr("udp", stamp.ServerAddrStr)
-	if err != nil {
-		return ServerInfo{}, err
-	}
-	remoteTCPAddr, err := net.ResolveTCPAddr("tcp", stamp.ServerAddrStr)
-	if err != nil {
-		return ServerInfo{}, err
-	}
 	var relayUDPAddr *net.UDPAddr
 	var relayTCPAddr *net.TCPAddr
+	var err error
 	routes := proxy.routes
 	if routes != nil {
 		if relayNames, ok := (*routes)[name]; ok {
@@ -259,8 +248,8 @@ func fetchDNSCryptServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp
 			var relayCandidateStamp *stamps.ServerStamp
 			if len(relayName) == 0 {
 				dlog.Errorf("Route declared for [%v] but an empty relay list", name)
-			} else if stamp, err = stamps.NewServerStampFromString(relayName); err == nil {
-				relayCandidateStamp = &stamp
+			} else if relayStamp, err := stamps.NewServerStampFromString(relayName); err == nil {
+				relayCandidateStamp = &relayStamp
 			} else if _, err := net.ResolveUDPAddr("udp", relayName); err == nil {
 				relayCandidateStamp = &stamps.ServerStamp{
 					ServerAddrStr: relayName,
@@ -288,6 +277,18 @@ func fetchDNSCryptServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp
 				dlog.Errorf("Invalid relay [%v] for server [%v]", relayName, name)
 			}
 		}
+	}
+	certInfo, rtt, err := FetchCurrentDNSCryptCert(proxy, &name, proxy.mainProto, stamp.ServerPk, stamp.ServerAddrStr, stamp.ProviderName, isNew, relayUDPAddr, relayTCPAddr)
+	if err != nil {
+		return ServerInfo{}, err
+	}
+	remoteUDPAddr, err := net.ResolveUDPAddr("udp", stamp.ServerAddrStr)
+	if err != nil {
+		return ServerInfo{}, err
+	}
+	remoteTCPAddr, err := net.ResolveTCPAddr("tcp", stamp.ServerAddrStr)
+	if err != nil {
+		return ServerInfo{}, err
 	}
 	return ServerInfo{
 		Proto:              stamps.StampProtoTypeDNSCrypt,

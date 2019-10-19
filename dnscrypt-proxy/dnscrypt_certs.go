@@ -21,7 +21,7 @@ type CertInfo struct {
 	ForwardSecurity    bool
 }
 
-func FetchCurrentDNSCryptCert(proxy *Proxy, serverName *string, proto string, pk ed25519.PublicKey, serverAddress string, providerName string, isNew bool) (CertInfo, int, error) {
+func FetchCurrentDNSCryptCert(proxy *Proxy, serverName *string, proto string, pk ed25519.PublicKey, serverAddress string, providerName string, isNew bool, relayUDPAddr *net.UDPAddr, relayTCPAddr *net.TCPAddr) (CertInfo, int, error) {
 	if len(pk) != ed25519.PublicKeySize {
 		return CertInfo{}, 0, errors.New("Invalid public key length")
 	}
@@ -33,7 +33,7 @@ func FetchCurrentDNSCryptCert(proxy *Proxy, serverName *string, proto string, pk
 	}
 	query := new(dns.Msg)
 	query.SetQuestion(providerName, dns.TypeTXT)
-	in, rtt, err := dnsExchange(proxy, proto, query, serverAddress)
+	in, rtt, err := dnsExchange(proxy, proto, query, serverAddress, relayUDPAddr, relayTCPAddr)
 	if err != nil {
 		dlog.Noticef("[%s] TIMEOUT", *serverName)
 		return CertInfo{}, 0, err
@@ -179,7 +179,7 @@ func packTxtString(s string) ([]byte, error) {
 	return msg, nil
 }
 
-func dnsExchange(proxy *Proxy, proto string, query *dns.Msg, serverAddress string) (*dns.Msg, time.Duration, error) {
+func dnsExchange(proxy *Proxy, proto string, query *dns.Msg, serverAddress string, relayUDPAddr *net.UDPAddr, relayTCPAddr *net.TCPAddr) (*dns.Msg, time.Duration, error) {
 	var packet []byte
 	var rtt time.Duration
 	if proto == "udp" {
@@ -203,8 +203,13 @@ func dnsExchange(proxy *Proxy, proto string, query *dns.Msg, serverAddress strin
 		if err != nil {
 			return nil, 0, err
 		}
+		upstreamAddr := udpAddr
+		if relayUDPAddr != nil {
+			proxy.prepareForRelay(udpAddr.IP, udpAddr.Port, &binQuery)
+			upstreamAddr = relayUDPAddr
+		}
 		now := time.Now()
-		pc, err := net.DialUDP("udp", nil, udpAddr)
+		pc, err := net.DialUDP("udp", nil, upstreamAddr)
 		if err != nil {
 			return nil, 0, err
 		}
