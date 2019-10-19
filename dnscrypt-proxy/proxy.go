@@ -417,7 +417,11 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 				response, err = proxy.exchangeWithTCPServer(serverInfo, sharedKey, encryptedQuery, clientNonce)
 			}
 			if err != nil {
-				pluginsState.returnCode = PluginsReturnCodeServerError
+				if neterr, ok := err.(net.Error); ok && neterr.Timeout() {
+					pluginsState.returnCode = PluginsReturnCodeServerTimeout
+				} else {
+					pluginsState.returnCode = PluginsReturnCodeServerError
+				}
 				pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
 				serverInfo.noticeFailure(proxy)
 				return
