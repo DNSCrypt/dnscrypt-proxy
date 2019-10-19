@@ -298,6 +298,7 @@ func (proxy *Proxy) exchangeWithUDPServer(serverInfo *ServerInfo, sharedKey *[32
 	if err != nil {
 		return nil, err
 	}
+	defer pc.Close()
 	pc.SetDeadline(time.Now().Add(serverInfo.Timeout))
 	if serverInfo.RelayUDPAddr != nil {
 		proxy.prepareForRelay(serverInfo.UDPAddr.IP, serverInfo.UDPAddr.Port, &encryptedQuery)
@@ -305,7 +306,6 @@ func (proxy *Proxy) exchangeWithUDPServer(serverInfo *ServerInfo, sharedKey *[32
 	pc.Write(encryptedQuery)
 	encryptedResponse := make([]byte, MaxDNSPacketSize)
 	length, err := pc.Read(encryptedResponse)
-	pc.Close()
 	if err != nil {
 		return nil, err
 	}
@@ -329,6 +329,7 @@ func (proxy *Proxy) exchangeWithTCPServer(serverInfo *ServerInfo, sharedKey *[32
 	if err != nil {
 		return nil, err
 	}
+	defer pc.Close()
 	pc.SetDeadline(time.Now().Add(serverInfo.Timeout))
 	if serverInfo.RelayTCPAddr != nil {
 		proxy.prepareForRelay(serverInfo.TCPAddr.IP, serverInfo.TCPAddr.Port, &encryptedQuery)
@@ -339,7 +340,6 @@ func (proxy *Proxy) exchangeWithTCPServer(serverInfo *ServerInfo, sharedKey *[32
 	}
 	pc.Write(encryptedQuery)
 	encryptedResponse, err := ReadPrefixed(&pc)
-	pc.Close()
 	if err != nil {
 		return nil, err
 	}
