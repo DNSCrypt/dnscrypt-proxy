@@ -68,6 +68,10 @@ func NewXTransport() *XTransport {
 	return &xTransport
 }
 
+func ParseIP(ipStr string) net.IP {
+	return net.ParseIP(strings.TrimRight(strings.TrimLeft(ipStr, "["), "]"))
+}
+
 func (xTransport *XTransport) clearCache() {
 	xTransport.cachedIPs.Lock()
 	xTransport.cachedIPs.cache = make(map[string]string)
@@ -232,7 +236,7 @@ func (xTransport *XTransport) Fetch(method string, url *url.URL, accept string, 
 		resolveByProxy = true
 	}
 	var foundIP *string
-	if !resolveByProxy && net.ParseIP(host) == nil {
+	if !resolveByProxy && ParseIP(host) == nil {
 		xTransport.cachedIPs.RLock()
 		cachedIP := xTransport.cachedIPs.cache[host]
 		xTransport.cachedIPs.RUnlock()
