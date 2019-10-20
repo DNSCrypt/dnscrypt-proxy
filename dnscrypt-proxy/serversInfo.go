@@ -225,7 +225,10 @@ func fetchServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, isNew 
 	return ServerInfo{}, errors.New("Unsupported protocol")
 }
 
-func route(proxy *Proxy, name string) (*net.UDPAddr, *net.TCPAddr, error) {
+func route(proxy *Proxy, name string, stamp *stamps.ServerStamp) (*net.UDPAddr, *net.TCPAddr, error) {
+	if !strings.HasPrefix(stamp.ProviderName, "2.dnscrypt-cert.") {
+		return nil, nil, fmt.Errorf("[%v] uses a non-standard provider name - anonymized DNS will not work with this server", name)
+	}
 	routes := proxy.routes
 	if routes == nil {
 		return nil, nil, nil
@@ -293,7 +296,7 @@ func fetchDNSCryptServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp
 		dlog.Warnf("Public key [%s] shouldn't be hex-encoded any more", string(stamp.ServerPk))
 		stamp.ServerPk = serverPk
 	}
-	relayUDPAddr, relayTCPAddr, err := route(proxy, name)
+	relayUDPAddr, relayTCPAddr, err := route(proxy, name, &stamp)
 	if err != nil {
 		return ServerInfo{}, err
 	}

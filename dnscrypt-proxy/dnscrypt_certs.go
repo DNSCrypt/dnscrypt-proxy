@@ -33,7 +33,7 @@ func FetchCurrentDNSCryptCert(proxy *Proxy, serverName *string, proto string, pk
 	}
 	query := new(dns.Msg)
 	query.SetQuestion(providerName, dns.TypeTXT)
-	in, rtt, err := dnsExchange(proxy, proto, query, serverAddress, relayUDPAddr, relayTCPAddr)
+	in, rtt, err := dnsExchange(proxy, proto, query, serverAddress, relayUDPAddr, relayTCPAddr, serverName)
 	if err != nil {
 		dlog.Noticef("[%s] TIMEOUT", *serverName)
 		return CertInfo{}, 0, err
@@ -179,11 +179,14 @@ func packTxtString(s string) ([]byte, error) {
 	return msg, nil
 }
 
-func dnsExchange(proxy *Proxy, proto string, query *dns.Msg, serverAddress string, relayUDPAddr *net.UDPAddr, relayTCPAddr *net.TCPAddr) (*dns.Msg, time.Duration, error) {
+func dnsExchange(proxy *Proxy, proto string, query *dns.Msg, serverAddress string, relayUDPAddr *net.UDPAddr, relayTCPAddr *net.TCPAddr, serverName *string) (*dns.Msg, time.Duration, error) {
 	response, ttl, err := _dnsExchange(proxy, proto, query, serverAddress, relayUDPAddr, relayTCPAddr)
 	if err != nil && relayUDPAddr != nil {
-		dlog.Warnf("Unable to get a certificate via relay [%v], retrying over a direct connection", relayUDPAddr.IP)
+		dlog.Debugf("Unable to get a certificate for [%v] via relay [%v], retrying over a direct connection", *serverName, relayUDPAddr.IP)
 		response, ttl, err = _dnsExchange(proxy, proto, query, serverAddress, nil, nil)
+		if err == nil {
+			dlog.Infof("Direct certificate retrieval for [%v] succeeded", *serverName)
+		}
 	}
 	return response, ttl, err
 }
