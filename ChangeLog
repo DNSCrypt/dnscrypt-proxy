@@ -1,3 +1,12 @@
+* Version 2.0.29
+ - Support for Anonymized DNSCrypt has been added.
+ - Latency with large responses has actually been reduced.
+ - DNSCrypt certificates can now be retrieved over Tor, proxies, and
+ DNS relays.
+ - Improved server error reporting (thanks to Alison Winters)
+ - Quite a lot of internal improvements and bug fixes have been made,
+ thanks to Markus Linnala.
+
 * Version 2.0.28
  - Invalid server entries are now skipped instead of preventing a
 source from being used. Thanks to Alison Winters for the contribution!
