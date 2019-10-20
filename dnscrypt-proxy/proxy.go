@@ -412,7 +412,12 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 			if serverProto == "udp" {
 				response, err = proxy.exchangeWithUDPServer(serverInfo, sharedKey, encryptedQuery, clientNonce)
 				if err == nil && len(response) >= MinDNSPacketSize && response[2]&0x02 == 0x02 {
-					dlog.Debug("Truncated response over UDP, retrying over TCP")
+					serverProto = "tcp"
+					sharedKey, encryptedQuery, clientNonce, err := proxy.Encrypt(serverInfo, query, serverProto)
+					if err != nil {
+						pluginsState.returnCode = PluginsReturnCodeParseError
+						pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
+					}
 					response, err = proxy.exchangeWithTCPServer(serverInfo, sharedKey, encryptedQuery, clientNonce)
 				}
 			} else {
