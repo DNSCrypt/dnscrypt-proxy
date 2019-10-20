@@ -193,8 +193,8 @@ func _dnsExchange(proxy *Proxy, proto string, query *dns.Msg, serverAddress stri
 	var rtt time.Duration
 	if proto == "udp" {
 		qNameLen, padding := len(query.Question[0].Name), 0
-		if qNameLen < 256 {
-			padding = 256 - qNameLen
+		if qNameLen < 480 {
+			padding = 480 - qNameLen
 		}
 		if padding > 0 {
 			opt := new(dns.OPT)
