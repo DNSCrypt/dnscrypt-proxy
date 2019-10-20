@@ -1,4 +1,4 @@
-// +build !andoid
+// +build !android
 
 package main
 
