@@ -157,7 +157,11 @@ func (serversInfo *ServersInfo) refresh(proxy *Proxy) (int, error) {
 	return liveServers, err
 }
 
-func (serversInfo *ServersInfo) estimatorUpdate(candidate int) {
+func (serversInfo *ServersInfo) estimatorUpdate() {
+	candidate := rand.Intn(len(serversInfo.inner))
+	if candidate == 0 {
+		return
+	}
 	candidateRtt, currentBestRtt := serversInfo.inner[candidate].rtt.Value(), serversInfo.inner[0].rtt.Value()
 	if currentBestRtt < 0 {
 		currentBestRtt = candidateRtt
@@ -193,11 +197,7 @@ func (serversInfo *ServersInfo) getOne() *ServerInfo {
 		return nil
 	}
 	if serversInfo.lbEstimator {
-		candidate := rand.Intn(serversCount)
-		if candidate == 0 {
-			return serversInfo.inner[candidate]
-		}
-		serversInfo.estimatorUpdate(candidate)
+		serversInfo.estimatorUpdate()
 	}
 	var candidate int
 	switch serversInfo.lbStrategy {
