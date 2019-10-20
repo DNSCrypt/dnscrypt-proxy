@@ -53,6 +53,9 @@ type XTransport struct {
 }
 
 func NewXTransport() *XTransport {
+	if err := CheckResolver(DefaultFallbackResolver); err != nil {
+		panic("DefaultFallbackResolver does not parse")
+	}
 	xTransport := XTransport{
 		cachedIPs:                CachedIPs{cache: make(map[string]string)},
 		keepAlive:                DefaultKeepAlive,
