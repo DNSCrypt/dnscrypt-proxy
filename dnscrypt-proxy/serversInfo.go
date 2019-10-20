@@ -204,7 +204,7 @@ func (serversInfo *ServersInfo) getOne() *ServerInfo {
 	case LBStrategyFirst:
 		candidate = 0
 	case LBStrategyPH:
-		candidate = rand.Intn(Min(Min(serversCount, 2), serversCount/2))
+		candidate = rand.Intn(Max(Min(serversCount, 2), serversCount/2))
 	case LBStrategyRandom:
 		candidate = rand.Intn(serversCount)
 	default:
