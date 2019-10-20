@@ -415,7 +415,7 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 					sharedKey, encryptedQuery, clientNonce, err := proxy.Encrypt(serverInfo, query, serverProto)
 					if err != nil {
 						pluginsState.returnCode = PluginsReturnCodeParseError
-						pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
+						return
 					}
 					response, err = proxy.exchangeWithTCPServer(serverInfo, sharedKey, encryptedQuery, clientNonce)
 				}
