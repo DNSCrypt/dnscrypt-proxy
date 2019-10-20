@@ -226,9 +226,6 @@ func fetchServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, isNew 
 }
 
 func route(proxy *Proxy, name string, stamp *stamps.ServerStamp) (*net.UDPAddr, *net.TCPAddr, error) {
-	if !strings.HasPrefix(stamp.ProviderName, "2.dnscrypt-cert.") {
-		return nil, nil, fmt.Errorf("[%v] uses a non-standard provider name - anonymized DNS will not work with this server", name)
-	}
 	routes := proxy.routes
 	if routes == nil {
 		return nil, nil, nil
