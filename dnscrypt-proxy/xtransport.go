@@ -25,7 +25,11 @@ import (
 	netproxy "golang.org/x/net/proxy"
 )
 
-const DefaultFallbackResolver = "9.9.9.9:53"
+const (
+	DefaultFallbackResolver = "9.9.9.9:53"
+	DefaultKeepAlive        = 5 * time.Second
+	DefaultTimeout          = 30 * time.Second
+)
 
 type CachedIPs struct {
 	sync.RWMutex
@@ -47,9 +51,6 @@ type XTransport struct {
 	proxyDialer              *netproxy.Dialer
 	httpProxyFunction        func(*http.Request) (*url.URL, error)
 }
-
-var DefaultKeepAlive = 5 * time.Second
-var DefaultTimeout = 30 * time.Second
 
 func NewXTransport() *XTransport {
 	xTransport := XTransport{
