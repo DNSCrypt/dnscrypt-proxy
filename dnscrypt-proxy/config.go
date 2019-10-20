@@ -58,7 +58,7 @@ type Config struct {
 	BlockIP                  BlockIPConfig              `toml:"ip_blacklist"`
 	ForwardFile              string                     `toml:"forwarding_rules"`
 	CloakFile                string                     `toml:"cloaking_rules"`
-	ServersConfig            map[string]StaticConfig    `toml:"static"`
+	StaticsConfig            map[string]StaticConfig    `toml:"static"`
 	SourcesConfig            map[string]SourceConfig    `toml:"sources"`
 	SourceRequireDNSSEC      bool                       `toml:"require_dnssec"`
 	SourceRequireNoLog       bool                       `toml:"require_nolog"`
@@ -570,12 +570,12 @@ func (config *Config) loadSources(proxy *Proxy) error {
 		}
 	}
 	if len(config.ServerNames) == 0 {
-		for serverName := range config.ServersConfig {
+		for serverName := range config.StaticsConfig {
 			config.ServerNames = append(config.ServerNames, serverName)
 		}
 	}
 	for _, serverName := range config.ServerNames {
-		staticConfig, ok := config.ServersConfig[serverName]
+		staticConfig, ok := config.StaticsConfig[serverName]
 		if !ok {
 			continue
 		}
