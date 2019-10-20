@@ -11,6 +11,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -272,11 +273,14 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 	proxy.xTransport = NewXTransport()
 	proxy.xTransport.tlsDisableSessionTickets = config.TLSDisableSessionTickets
 	proxy.xTransport.tlsCipherSuite = config.TLSCipherSuite
-	proxy.xTransport.fallbackResolver = config.FallbackResolver
 	proxy.xTransport.mainProto = proxy.mainProto
 	if len(config.FallbackResolver) > 0 {
+		if err := CheckResolver(config.FallbackResolver); err != nil {
+			dlog.Fatalf("fallback_resolver [%v]", err)
+		}
 		proxy.xTransport.ignoreSystemDNS = config.IgnoreSystemDNS
 	}
+	proxy.xTransport.fallbackResolver = config.FallbackResolver
 	proxy.xTransport.useIPv4 = config.SourceIPv4
 	proxy.xTransport.useIPv6 = config.SourceIPv6
 	proxy.xTransport.keepAlive = time.Duration(config.KeepAlive) * time.Second
@@ -689,4 +693,16 @@ func cdLocal() {
 		return
 	}
 	os.Chdir(filepath.Dir(exeFileName))
+}
+
+func CheckResolver(resolver string) error {
+	host, port := ExtractHostAndPort(resolver, -1)
+	if ip := ParseIP(host); ip == nil {
+		return fmt.Errorf("Host does not parse as IP '%s'", resolver)
+	} else if port == -1 {
+		return fmt.Errorf("Port missing '%s'", resolver)
+	} else if _, err := strconv.ParseUint(strconv.Itoa(port), 10, 16); err != nil {
+		return fmt.Errorf("Port does not parse '%s' [%v]", resolver, err)
+	}
+	return nil
 }
