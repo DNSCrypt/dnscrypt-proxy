@@ -6,6 +6,8 @@
  - Improved server error reporting (thanks to Alison Winters)
  - Quite a lot of internal improvements and bug fixes have been made,
  thanks to Markus Linnala.
+ - Support for systemd watchdog has been added (thanks, Markus!)
+ - Logging was improved.
 
 * Version 2.0.28
  - Invalid server entries are now skipped instead of preventing a
