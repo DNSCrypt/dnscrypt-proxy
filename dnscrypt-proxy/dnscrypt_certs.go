@@ -248,11 +248,16 @@ func _dnsExchange(proxy *Proxy, proto string, query *dns.Msg, serverAddress stri
 		if err != nil {
 			return nil, 0, err
 		}
+		upstreamAddr := tcpAddr
+		if relayUDPAddr != nil {
+			proxy.prepareForRelay(tcpAddr.IP, tcpAddr.Port, &binQuery)
+			upstreamAddr = relayTCPAddr
+		}
 		now := time.Now()
 		var pc net.Conn
 		proxyDialer := proxy.xTransport.proxyDialer
 		if proxyDialer == nil {
-			pc, err = net.DialTCP("tcp", nil, tcpAddr)
+			pc, err = net.DialTCP("tcp", nil, upstreamAddr)
 		} else {
 			pc, err = (*proxyDialer).Dial("tcp", tcpAddr.String())
 		}

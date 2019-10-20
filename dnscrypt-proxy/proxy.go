@@ -325,7 +325,7 @@ func (proxy *Proxy) exchangeWithTCPServer(serverInfo *ServerInfo, sharedKey *[32
 	if proxyDialer == nil {
 		pc, err = net.DialTCP("tcp", nil, upstreamAddr)
 	} else {
-		pc, err = (*proxyDialer).Dial("tcp", upstreamAddr.String())
+		pc, err = (*proxyDialer).Dial("tcp", serverInfo.TCPAddr.String())
 	}
 	if err != nil {
 		return nil, err
