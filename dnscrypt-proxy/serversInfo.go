@@ -225,6 +225,55 @@ func fetchServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, isNew 
 	return ServerInfo{}, errors.New("Unsupported protocol")
 }
 
+func route(proxy *Proxy, name string) (*net.UDPAddr, *net.TCPAddr, error) {
+	routes := proxy.routes
+	if routes == nil {
+		return nil, nil, nil
+	}
+	relayNames, ok := (*routes)[name]
+	if !ok {
+		return nil, nil, nil
+	}
+	var relayName string
+	if len(relayNames) > 0 {
+		candidate := rand.Intn(len(relayNames))
+		relayName = relayNames[candidate]
+	}
+	var relayCandidateStamp *stamps.ServerStamp
+	if len(relayName) == 0 {
+		return nil, nil, fmt.Errorf("Route declared for [%v] but an empty relay list", name)
+	} else if relayStamp, err := stamps.NewServerStampFromString(relayName); err == nil {
+		relayCandidateStamp = &relayStamp
+	} else if _, err := net.ResolveUDPAddr("udp", relayName); err == nil {
+		relayCandidateStamp = &stamps.ServerStamp{
+			ServerAddrStr: relayName,
+			Proto:         stamps.StampProtoTypeDNSCryptRelay,
+		}
+	} else {
+		for _, registeredServer := range proxy.registeredServers {
+			if registeredServer.name == relayName {
+				relayCandidateStamp = &registeredServer.stamp
+			}
+		}
+	}
+	if relayCandidateStamp == nil {
+		return nil, nil, fmt.Errorf("Undefined relay [%v] for server [%v]", relayName, name)
+	}
+	if relayCandidateStamp.Proto == stamps.StampProtoTypeDNSCrypt ||
+		relayCandidateStamp.Proto == stamps.StampProtoTypeDNSCryptRelay {
+		relayUDPAddr, err := net.ResolveUDPAddr("udp", relayCandidateStamp.ServerAddrStr)
+		if err != nil {
+			return nil, nil, err
+		}
+		relayTCPAddr, err := net.ResolveTCPAddr("tcp", relayCandidateStamp.ServerAddrStr)
+		if err != nil {
+			return nil, nil, err
+		}
+		return relayUDPAddr, relayTCPAddr, nil
+	}
+	return nil, nil, fmt.Errorf("Invalid relay [%v] for server [%v]", relayName, name)
+}
+
 func fetchDNSCryptServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, isNew bool) (ServerInfo, error) {
 	if len(stamp.ServerPk) != ed25519.PublicKeySize {
 		serverPk, err := hex.DecodeString(strings.Replace(string(stamp.ServerPk), ":", "", -1))
@@ -234,49 +283,10 @@ func fetchDNSCryptServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp
 		dlog.Warnf("Public key [%s] shouldn't be hex-encoded any more", string(stamp.ServerPk))
 		stamp.ServerPk = serverPk
 	}
-	var relayUDPAddr *net.UDPAddr
-	var relayTCPAddr *net.TCPAddr
-	var err error
-	routes := proxy.routes
-	if routes != nil {
-		if relayNames, ok := (*routes)[name]; ok {
-			var relayName string
-			if len(relayNames) > 0 {
-				candidate := rand.Intn(len(relayNames))
-				relayName = relayNames[candidate]
-			}
-			var relayCandidateStamp *stamps.ServerStamp
-			if len(relayName) == 0 {
-				dlog.Errorf("Route declared for [%v] but an empty relay list", name)
-			} else if relayStamp, err := stamps.NewServerStampFromString(relayName); err == nil {
-				relayCandidateStamp = &relayStamp
-			} else if _, err := net.ResolveUDPAddr("udp", relayName); err == nil {
-				relayCandidateStamp = &stamps.ServerStamp{
-					ServerAddrStr: relayName,
-					Proto:         stamps.StampProtoTypeDNSCryptRelay,
-				}
-			} else {
-				for _, registeredServer := range proxy.registeredServers {
-					if registeredServer.name == relayName {
-						relayCandidateStamp = &registeredServer.stamp
-					}
-				}
-			}
-			if relayCandidateStamp != nil &&
-				(relayCandidateStamp.Proto == stamps.StampProtoTypeDNSCrypt ||
-					relayCandidateStamp.Proto == stamps.StampProtoTypeDNSCryptRelay) {
-				relayUDPAddr, err = net.ResolveUDPAddr("udp", relayCandidateStamp.ServerAddrStr)
-				if err != nil {
-					return ServerInfo{}, err
-				}
-				relayTCPAddr, err = net.ResolveTCPAddr("tcp", relayCandidateStamp.ServerAddrStr)
-				if err != nil {
-					return ServerInfo{}, err
-				}
-			} else {
-				dlog.Errorf("Invalid relay [%v] for server [%v]", relayName, name)
-			}
-		}
+	relayUDPAddr, relayTCPAddr, err := route(proxy, name)
+	if err != nil {
+		dlog.Error(err)
+		return ServerInfo{}, err
 	}
 	certInfo, rtt, err := FetchCurrentDNSCryptCert(proxy, &name, proxy.mainProto, stamp.ServerPk, stamp.ServerAddrStr, stamp.ProviderName, isNew, relayUDPAddr, relayTCPAddr)
 	if err != nil {

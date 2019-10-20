@@ -180,6 +180,15 @@ func packTxtString(s string) ([]byte, error) {
 }
 
 func dnsExchange(proxy *Proxy, proto string, query *dns.Msg, serverAddress string, relayUDPAddr *net.UDPAddr, relayTCPAddr *net.TCPAddr) (*dns.Msg, time.Duration, error) {
+	response, ttl, err := _dnsExchange(proxy, proto, query, serverAddress, relayUDPAddr, relayTCPAddr)
+	if err != nil && relayUDPAddr != nil {
+		dlog.Warnf("Unable to get a certificate via relay [%v], retrying over a direct connection", relayUDPAddr.IP)
+		response, ttl, err = _dnsExchange(proxy, proto, query, serverAddress, nil, nil)
+	}
+	return response, ttl, err
+}
+
+func _dnsExchange(proxy *Proxy, proto string, query *dns.Msg, serverAddress string, relayUDPAddr *net.UDPAddr, relayTCPAddr *net.TCPAddr) (*dns.Msg, time.Duration, error) {
 	var packet []byte
 	var rtt time.Duration
 	if proto == "udp" {
