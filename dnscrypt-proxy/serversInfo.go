@@ -328,9 +328,9 @@ func fetchDNSCryptServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp
 func fetchDoHServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, isNew bool) (ServerInfo, error) {
 	if len(stamp.ServerAddrStr) > 0 {
 		ipOnly, _ := ExtractHostAndPort(stamp.ServerAddrStr, -1)
-		proxy.xTransport.cachedIPs.Lock()
-		proxy.xTransport.cachedIPs.cache[stamp.ProviderName] = ipOnly
-		proxy.xTransport.cachedIPs.Unlock()
+		if ip := ParseIP(ipOnly); ip != nil {
+			proxy.xTransport.saveCachedIP(stamp.ProviderName, ip, -1*time.Second)
+		}
 	}
 	url := &url.URL{
 		Scheme: "https",
