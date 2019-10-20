@@ -561,14 +561,28 @@ cache_neg_max_ttl = 600
 
 [anonymized_dns]
 
-## Define one or more routes, i.e. indirect ways to reach servers.
-## A set of possible relay servers is assigned to each DNS resolver.
+## Routes are indirect ways to reach DNSCrypt servers.
+##
+## A route maps a server name ("server_name") to one or more relays that will be
+## used to connect to that server.
+##
 ## A relay can be specified as a DNS Stamp (either a relay stamp, or a
-## DNSCrypt stamp), an IP:port, a hostname:port, or a server name, if
-## the server is in the servers_list.
+## DNSCrypt stamp), an IP:port, a hostname:port, or a server name.
+##
+## The following example routes "comodo-02" via `anon-kama` or `anon-ibksturm`,
+## and "quad9-dnscrypt-ip4-nofilter-pri" via the relay whose relay DNS stamp
+## is "sdns://gRIxMzcuNzQuMjIzLjIzNDo0NDM".
+## These are just example routes. Review the list of available relays from the
+## "relays.md` file, and, for each server you want to use, define the relays you
+## want connections to go through.
+##
+## Carefully choose relays and servers so that the are run by different entities.
+##
+## "server_name" can also be set to "*" to define a default route, but this is not
+## recommended. if you do so, keep "server_names" short and distinct from relays.
 
 # routes = [
-#    { server_name='comodo-02', via=['sdns://gRIxMzcuNzQuMjIzLjIzNDo0NDM'] },
+#    { server_name='comodo-02', via=['anon-kama', 'anon-ibksturm'] },
 #    { server_name='quad9-dnscrypt-ip4-nofilter-pri', via=['sdns://gRIxMzcuNzQuMjIzLjIzNDo0NDM'] }
 # ]
 

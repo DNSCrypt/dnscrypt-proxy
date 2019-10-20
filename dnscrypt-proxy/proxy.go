@@ -33,6 +33,7 @@ type Proxy struct {
 	listenAddresses              []string
 	daemonize                    bool
 	registeredServers            []RegisteredServer
+	registeredRelays             []RegisteredServer
 	pluginBlockIPv6              bool
 	cache                        bool
 	cacheSize                    int

@@ -232,6 +232,9 @@ func route(proxy *Proxy, name string) (*net.UDPAddr, *net.TCPAddr, error) {
 	}
 	relayNames, ok := (*routes)[name]
 	if !ok {
+		relayNames, ok = (*routes)["*"]
+	}
+	if !ok {
 		return nil, nil, nil
 	}
 	var relayName string
@@ -250,9 +253,16 @@ func route(proxy *Proxy, name string) (*net.UDPAddr, *net.TCPAddr, error) {
 			Proto:         stamps.StampProtoTypeDNSCryptRelay,
 		}
 	} else {
+		for _, registeredServer := range proxy.registeredRelays {
+			if registeredServer.name == relayName {
+				relayCandidateStamp = &registeredServer.stamp
+				break
+			}
+		}
 		for _, registeredServer := range proxy.registeredServers {
 			if registeredServer.name == relayName {
 				relayCandidateStamp = &registeredServer.stamp
+				break
 			}
 		}
 	}
@@ -285,7 +295,6 @@ func fetchDNSCryptServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp
 	}
 	relayUDPAddr, relayTCPAddr, err := route(proxy, name)
 	if err != nil {
-		dlog.Error(err)
 		return ServerInfo{}, err
 	}
 	certInfo, rtt, err := FetchCurrentDNSCryptCert(proxy, &name, proxy.mainProto, stamp.ServerPk, stamp.ServerAddrStr, stamp.ProviderName, isNew, relayUDPAddr, relayTCPAddr)

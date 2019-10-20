@@ -485,9 +485,22 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 		os.Exit(0)
 	}
 	if proxy.routes != nil && len(*proxy.routes) > 0 {
+		hasSpecificRoutes := false
 		for _, server := range proxy.registeredServers {
 			if via, ok := (*proxy.routes)[server.name]; ok {
-				dlog.Noticef("Anonymized DNS: routing [%v] via %v", server.name, via)
+				if server.stamp.Proto != stamps.StampProtoTypeDNSCrypt {
+					dlog.Errorf("DNS anonymization is only supported with the DNSCrypt protocol - Connections to [%v] cannot be anonymized", server.name)
+				} else {
+					dlog.Noticef("Anonymized DNS: routing [%v] via %v", server.name, via)
+				}
+				hasSpecificRoutes = true
+			}
+		}
+		if via, ok := (*proxy.routes)["*"]; ok {
+			if hasSpecificRoutes {
+				dlog.Noticef("Anonymized DNS: routing everything else via %v", via)
+			} else {
+				dlog.Noticef("Anonymized DNS: routing everything via %v", via)
 			}
 		}
 	}
@@ -617,12 +630,14 @@ func (config *Config) loadSource(proxy *Proxy, requiredProps stamps.ServerInform
 		dlog.Warnf("Error in source [%s]: [%s] -- Continuing with reduced server count [%d]", cfgSourceName, err, len(registeredServers))
 	}
 	for _, registeredServer := range registeredServers {
-		if len(config.ServerNames) > 0 {
-			if !includesName(config.ServerNames, registeredServer.name) {
+		if registeredServer.stamp.Proto != stamps.StampProtoTypeDNSCryptRelay {
+			if len(config.ServerNames) > 0 {
+				if !includesName(config.ServerNames, registeredServer.name) {
+					continue
+				}
+			} else if registeredServer.stamp.Props&requiredProps != requiredProps {
 				continue
 			}
-		} else if registeredServer.stamp.Props&requiredProps != requiredProps {
-			continue
 		}
 		if includesName(config.DisabledServerNames, registeredServer.name) {
 			continue
@@ -639,12 +654,17 @@ func (config *Config) loadSource(proxy *Proxy, requiredProps stamps.ServerInform
 				continue
 			}
 		}
-		if !((config.SourceDNSCrypt && registeredServer.stamp.Proto == stamps.StampProtoTypeDNSCrypt) ||
-			(config.SourceDoH && registeredServer.stamp.Proto == stamps.StampProtoTypeDoH)) {
-			continue
+		if registeredServer.stamp.Proto == stamps.StampProtoTypeDNSCryptRelay {
+			dlog.Debugf("Adding [%s] to the set of available relays", registeredServer.name)
+			proxy.registeredRelays = append(proxy.registeredRelays, registeredServer)
+		} else {
+			if !((config.SourceDNSCrypt && registeredServer.stamp.Proto == stamps.StampProtoTypeDNSCrypt) ||
+				(config.SourceDoH && registeredServer.stamp.Proto == stamps.StampProtoTypeDoH)) {
+				continue
+			}
+			dlog.Debugf("Adding [%s] to the set of wanted resolvers", registeredServer.name)
+			proxy.registeredServers = append(proxy.registeredServers, registeredServer)
 		}
-		dlog.Debugf("Adding [%s] to the set of wanted resolvers", registeredServer.name)
-		proxy.registeredServers = append(proxy.registeredServers, registeredServer)
 	}
 	return nil
 }
