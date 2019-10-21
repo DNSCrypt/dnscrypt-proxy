@@ -82,7 +82,7 @@ func ParseIP(ipStr string) net.IP {
 }
 
 // If ttl < 0, never expire
-// ttl is set always at least xTransport.timeout otherwise
+// Otherwise, ttl is set to max(ttl, xTransport.timeout)
 func (xTransport *XTransport) saveCachedIP(host string, ip net.IP, ttl time.Duration) {
 	xTransport.cachedIPs.Lock()
 	item := &CachedIPItem{ip: ip, ttl: time.Time{}}
@@ -96,15 +96,14 @@ func (xTransport *XTransport) saveCachedIP(host string, ip net.IP, ttl time.Dura
 	xTransport.cachedIPs.Unlock()
 }
 
-// If expire is true, remove data if expired
-func (xTransport *XTransport) loadCachedIP(host string, expire bool) (net.IP, bool) {
+func (xTransport *XTransport) loadCachedIP(host string, deleteIfExpired bool) (net.IP, bool) {
 	xTransport.cachedIPs.Lock()
 	defer xTransport.cachedIPs.Unlock()
 	item, ok := xTransport.cachedIPs.cache[host]
 	if !ok {
 		return nil, false
 	}
-	if expire && !item.ttl.IsZero() && time.Until(item.ttl) < 0 {
+	if deleteIfExpired && !item.ttl.IsZero() && time.Until(item.ttl) < 0 {
 		delete(xTransport.cachedIPs.cache, host)
 		return nil, false
 	}
