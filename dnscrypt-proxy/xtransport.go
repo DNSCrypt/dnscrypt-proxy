@@ -33,8 +33,8 @@ const (
 )
 
 type CachedIPItem struct {
-	ip  net.IP
-	ttl time.Time
+	ip         net.IP
+	expiration *time.Time
 }
 
 type CachedIPs struct {
@@ -84,12 +84,13 @@ func ParseIP(ipStr string) net.IP {
 // If ttl < 0, never expire
 // Otherwise, ttl is set to max(ttl, xTransport.timeout)
 func (xTransport *XTransport) saveCachedIP(host string, ip net.IP, ttl time.Duration) {
-	item := &CachedIPItem{ip: ip, ttl: time.Time{}}
+	item := &CachedIPItem{ip: ip, expiration: nil}
 	if ttl >= 0 {
 		if ttl < xTransport.timeout {
 			ttl = xTransport.timeout
 		}
-		item.ttl = time.Now().Add(ttl)
+		expiration := time.Now().Add(ttl)
+		item.expiration = &expiration
 	}
 	xTransport.cachedIPs.Lock()
 	xTransport.cachedIPs.cache[host] = item
@@ -103,8 +104,8 @@ func (xTransport *XTransport) loadCachedIP(host string, deleteIfExpired bool) (n
 	if !ok {
 		return nil, false
 	}
-	ttl := item.ttl
-	if deleteIfExpired && !ttl.IsZero() && time.Until(ttl) < 0 {
+	expiration := item.expiration
+	if deleteIfExpired && expiration != nil && time.Until(*expiration) < 0 {
 		xTransport.cachedIPs.Lock()
 		delete(xTransport.cachedIPs.cache, host)
 		xTransport.cachedIPs.Unlock()
