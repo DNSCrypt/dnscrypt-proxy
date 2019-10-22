@@ -41,6 +41,8 @@ type Proxy struct {
 	cacheNegMaxTTL               uint32
 	cacheMinTTL                  uint32
 	cacheMaxTTL                  uint32
+	rejectTTL                    uint32
+	cloakTTL                     uint32
 	queryLogFile                 string
 	queryLogFormat               string
 	queryLogIgnoredQtypes        []string

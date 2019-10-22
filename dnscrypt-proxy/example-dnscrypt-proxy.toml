@@ -266,6 +266,12 @@ log_files_max_backups = 1
 block_ipv6 = false
 
 
+## TTL for synthetic responses sent when a request has been blocked (due to
+## IPv6 or blacklists).
+
+reject_ttl = 600
+
+
 
 ##################################################################################
 #        Route queries for specific domains to a dedicated set of servers        #
@@ -293,6 +299,9 @@ block_ipv6 = false
 
 # cloaking_rules = 'cloaking-rules.txt'
 
+## TTL used when serving entries in cloaking-rules.txt
+
+# cloak_ttl = 600
 
 
 ###########################

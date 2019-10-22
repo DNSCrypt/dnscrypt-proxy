@@ -191,9 +191,9 @@ func (serversInfo *ServersInfo) estimatorUpdate() {
 
 func (serversInfo *ServersInfo) getOne() *ServerInfo {
 	serversInfo.Lock()
-	defer serversInfo.Unlock()
 	serversCount := len(serversInfo.inner)
 	if serversCount <= 0 {
+		serversInfo.Unlock()
 		return nil
 	}
 	if serversInfo.lbEstimator {
@@ -211,6 +211,7 @@ func (serversInfo *ServersInfo) getOne() *ServerInfo {
 		candidate = rand.Intn(Min(serversCount, 2))
 	}
 	serverInfo := serversInfo.inner[candidate]
+	serversInfo.Unlock()
 	dlog.Debugf("Using candidate [%s] RTT: %d", (*serverInfo).Name, int((*serverInfo).rtt.Value()))
 
 	return serverInfo
@@ -328,9 +329,9 @@ func fetchDNSCryptServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp
 func fetchDoHServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, isNew bool) (ServerInfo, error) {
 	if len(stamp.ServerAddrStr) > 0 {
 		ipOnly, _ := ExtractHostAndPort(stamp.ServerAddrStr, -1)
-		proxy.xTransport.cachedIPs.Lock()
-		proxy.xTransport.cachedIPs.cache[stamp.ProviderName] = ipOnly
-		proxy.xTransport.cachedIPs.Unlock()
+		if ip := ParseIP(ipOnly); ip != nil {
+			proxy.xTransport.saveCachedIP(stamp.ProviderName, ip, -1*time.Second)
+		}
 	}
 	url := &url.URL{
 		Scheme: "https",

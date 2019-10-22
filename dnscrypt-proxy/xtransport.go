@@ -8,8 +8,8 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"io/ioutil"
+	"math/rand"
 	"net"
 	"net/http"
 	"net/url"
@@ -25,11 +25,21 @@ import (
 	netproxy "golang.org/x/net/proxy"
 )
 
-const DefaultFallbackResolver = "9.9.9.9:53"
+const (
+	DefaultFallbackResolver = "9.9.9.9:53"
+	DefaultKeepAlive        = 5 * time.Second
+	DefaultTimeout          = 30 * time.Second
+	SystemResolverTTL       = 24 * time.Hour
+)
+
+type CachedIPItem struct {
+	ip         net.IP
+	expiration *time.Time
+}
 
 type CachedIPs struct {
 	sync.RWMutex
-	cache map[string]string
+	cache map[string]*CachedIPItem
 }
 
 type XTransport struct {
@@ -48,12 +58,12 @@ type XTransport struct {
 	httpProxyFunction        func(*http.Request) (*url.URL, error)
 }
 
-var DefaultKeepAlive = 5 * time.Second
-var DefaultTimeout = 30 * time.Second
-
 func NewXTransport() *XTransport {
+	if err := CheckResolver(DefaultFallbackResolver); err != nil {
+		panic("DefaultFallbackResolver does not parse")
+	}
 	xTransport := XTransport{
-		cachedIPs:                CachedIPs{cache: make(map[string]string)},
+		cachedIPs:                CachedIPs{cache: make(map[string]*CachedIPItem)},
 		keepAlive:                DefaultKeepAlive,
 		timeout:                  DefaultTimeout,
 		fallbackResolver:         DefaultFallbackResolver,
@@ -67,11 +77,41 @@ func NewXTransport() *XTransport {
 	return &xTransport
 }
 
-func (xTransport *XTransport) clearCache() {
+func ParseIP(ipStr string) net.IP {
+	return net.ParseIP(strings.TrimRight(strings.TrimLeft(ipStr, "["), "]"))
+}
+
+// If ttl < 0, never expire
+// Otherwise, ttl is set to max(ttl, xTransport.timeout)
+func (xTransport *XTransport) saveCachedIP(host string, ip net.IP, ttl time.Duration) {
+	item := &CachedIPItem{ip: ip, expiration: nil}
+	if ttl >= 0 {
+		if ttl < xTransport.timeout {
+			ttl = xTransport.timeout
+		}
+		expiration := time.Now().Add(ttl)
+		item.expiration = &expiration
+	}
 	xTransport.cachedIPs.Lock()
-	xTransport.cachedIPs.cache = make(map[string]string)
+	xTransport.cachedIPs.cache[host] = item
 	xTransport.cachedIPs.Unlock()
-	dlog.Info("IP cache cleared")
+}
+
+func (xTransport *XTransport) loadCachedIP(host string, deleteIfExpired bool) (net.IP, bool) {
+	xTransport.cachedIPs.RLock()
+	item, ok := xTransport.cachedIPs.cache[host]
+	xTransport.cachedIPs.RUnlock()
+	if !ok {
+		return nil, false
+	}
+	expiration := item.expiration
+	if deleteIfExpired && expiration != nil && time.Until(*expiration) < 0 {
+		xTransport.cachedIPs.Lock()
+		delete(xTransport.cachedIPs.cache, host)
+		xTransport.cachedIPs.Unlock()
+		return nil, false
+	}
+	return item.ip, ok
 }
 
 func (xTransport *XTransport) rebuildTransport() {
@@ -91,11 +131,9 @@ func (xTransport *XTransport) rebuildTransport() {
 		DialContext: func(ctx context.Context, network, addrStr string) (net.Conn, error) {
 			host, port := ExtractHostAndPort(addrStr, stamps.DefaultPort)
 			ipOnly := host
-			xTransport.cachedIPs.RLock()
-			cachedIP := xTransport.cachedIPs.cache[host]
-			xTransport.cachedIPs.RUnlock()
-			if len(cachedIP) > 0 {
-				ipOnly = cachedIP
+			cachedIP, ok := xTransport.loadCachedIP(host, false)
+			if ok {
+				ipOnly = cachedIP.String()
 			} else {
 				dlog.Debugf("[%s] IP address was not cached", host)
 			}
@@ -127,46 +165,53 @@ func (xTransport *XTransport) rebuildTransport() {
 	xTransport.transport = transport
 }
 
-func (xTransport *XTransport) resolveUsingSystem(host string) (*string, error) {
-	foundIPs, err := net.LookupHost(host)
+func (xTransport *XTransport) resolveUsingSystem(host string) (ip net.IP, ttl time.Duration, err error) {
+	ttl = SystemResolverTTL
+	var foundIPs []string
+	foundIPs, err = net.LookupHost(host)
 	if err != nil {
-		return nil, err
+		return
 	}
+	ips := make([]net.IP, 0)
 	for _, ip := range foundIPs {
-		foundIP := net.ParseIP(ip)
-		if foundIP == nil {
-			continue
-		}
-		if xTransport.useIPv4 {
-			if ipv4 := foundIP.To4(); ipv4 != nil {
-				foundIPx := foundIP.String()
-				return &foundIPx, nil
+		if foundIP := net.ParseIP(ip); foundIP != nil {
+			if xTransport.useIPv4 {
+				if ipv4 := foundIP.To4(); ipv4 != nil {
+					ips = append(ips, foundIP)
+				}
 			}
-		}
-		if xTransport.useIPv6 {
-			if ipv6 := foundIP.To16(); ipv6 != nil {
-				foundIPx := "[" + foundIP.String() + "]"
-				return &foundIPx, nil
+			if xTransport.useIPv6 {
+				if ipv6 := foundIP.To16(); ipv6 != nil {
+					ips = append(ips, foundIP)
+				}
 			}
 		}
 	}
-	return nil, err
+	if len(ips) > 0 {
+		ip = ips[rand.Intn(len(ips))]
+	}
+	return
 }
 
-func (xTransport *XTransport) resolveUsingResolver(dnsClient *dns.Client, host string, resolver string) (*string, error) {
-	var err error
+func (xTransport *XTransport) resolveUsingResolver(proto, host string, resolver string) (ip net.IP, ttl time.Duration, err error) {
+	dnsClient := dns.Client{Net: proto}
 	if xTransport.useIPv4 {
 		msg := new(dns.Msg)
 		msg.SetQuestion(dns.Fqdn(host), dns.TypeA)
 		msg.SetEdns0(uint16(MaxDNSPacketSize), true)
 		var in *dns.Msg
-		in, _, err = dnsClient.Exchange(msg, resolver)
-		if err == nil {
+		if in, _, err = dnsClient.Exchange(msg, resolver); err == nil {
+			answers := make([]dns.RR, 0)
 			for _, answer := range in.Answer {
 				if answer.Header().Rrtype == dns.TypeA {
-					foundIP := answer.(*dns.A).A.String()
-					return &foundIP, nil
+					answers = append(answers, answer)
 				}
+			}
+			if len(answers) > 0 {
+				answer := answers[rand.Intn(len(answers))]
+				ip = answer.(*dns.A).A
+				ttl = time.Duration(answer.Header().Ttl) * time.Second
+				return
 			}
 		}
 	}
@@ -175,17 +220,62 @@ func (xTransport *XTransport) resolveUsingResolver(dnsClient *dns.Client, host s
 		msg.SetQuestion(dns.Fqdn(host), dns.TypeAAAA)
 		msg.SetEdns0(uint16(MaxDNSPacketSize), true)
 		var in *dns.Msg
-		in, _, err = dnsClient.Exchange(msg, resolver)
-		if err == nil {
+		if in, _, err = dnsClient.Exchange(msg, resolver); err == nil {
+			answers := make([]dns.RR, 0)
 			for _, answer := range in.Answer {
 				if answer.Header().Rrtype == dns.TypeAAAA {
-					foundIP := "[" + answer.(*dns.AAAA).AAAA.String() + "]"
-					return &foundIP, nil
+					answers = append(answers, answer)
 				}
+			}
+			if len(answers) > 0 {
+				answer := answers[rand.Intn(len(answers))]
+				ip = answer.(*dns.AAAA).AAAA
+				ttl = time.Duration(answer.Header().Ttl) * time.Second
+				return
 			}
 		}
 	}
-	return nil, err
+	return
+}
+
+func (xTransport *XTransport) resolveHost(host string) (err error) {
+	if xTransport.proxyDialer != nil || xTransport.httpProxyFunction != nil {
+		return
+	}
+	if ParseIP(host) != nil {
+		return
+	}
+	if _, ok := xTransport.loadCachedIP(host, true); ok {
+		return
+	}
+	var foundIP net.IP
+	var ttl time.Duration
+	if !xTransport.ignoreSystemDNS {
+		foundIP, ttl, err = xTransport.resolveUsingSystem(host)
+	}
+	if xTransport.ignoreSystemDNS || err != nil {
+		protos := []string{"udp", "tcp"}
+		if xTransport.mainProto == "tcp" {
+			protos = []string{"tcp", "udp"}
+		}
+		for _, proto := range protos {
+			if err != nil {
+				dlog.Noticef("System DNS configuration not usable yet, exceptionally resolving [%s] using resolver %s[%s]", host, proto, xTransport.fallbackResolver)
+			} else {
+				dlog.Debugf("Resolving [%s] using resolver %s[%s]", host, proto, xTransport.fallbackResolver)
+			}
+			foundIP, ttl, err = xTransport.resolveUsingResolver(proto, host, xTransport.fallbackResolver)
+			if err == nil {
+				break
+			}
+		}
+	}
+	if err != nil {
+		return
+	}
+	xTransport.saveCachedIP(host, foundIP, ttl)
+	dlog.Debugf("[%s] IP address [%s] added to the cache, valid until %v", host, foundIP, ttl)
+	return
 }
 
 func (xTransport *XTransport) Fetch(method string, url *url.URL, accept string, contentType string, body *[]byte, timeout time.Duration, padding *string) (*http.Response, time.Duration, error) {
@@ -215,6 +305,9 @@ func (xTransport *XTransport) Fetch(method string, url *url.URL, accept string, 
 	if xTransport.proxyDialer == nil && strings.HasSuffix(host, ".onion") {
 		return nil, 0, errors.New("Onion service is not reachable without Tor")
 	}
+	if err := xTransport.resolveHost(host); err != nil {
+		return nil, 0, err
+	}
 	req := &http.Request{
 		Method: method,
 		URL:    url,
@@ -224,45 +317,6 @@ func (xTransport *XTransport) Fetch(method string, url *url.URL, accept string, 
 	if body != nil {
 		req.ContentLength = int64(len(*body))
 		req.Body = ioutil.NopCloser(bytes.NewReader(*body))
-	}
-	var err error
-	resolveByProxy := false
-	if xTransport.proxyDialer != nil || xTransport.httpProxyFunction != nil {
-		resolveByProxy = true
-	}
-	var foundIP *string
-	if !resolveByProxy && net.ParseIP(host) == nil {
-		xTransport.cachedIPs.RLock()
-		cachedIP := xTransport.cachedIPs.cache[host]
-		xTransport.cachedIPs.RUnlock()
-		if len(cachedIP) > 0 {
-			foundIP = &cachedIP
-		} else {
-			if !xTransport.ignoreSystemDNS {
-				foundIP, err = xTransport.resolveUsingSystem(host)
-			} else {
-				dlog.Debug("Ignoring system DNS")
-			}
-			if xTransport.ignoreSystemDNS || err != nil {
-				if xTransport.ignoreSystemDNS {
-					dlog.Debugf("Resolving [%s] using fallback resolver [%s]", host, xTransport.fallbackResolver)
-				} else {
-					dlog.Noticef("System DNS configuration not usable yet, exceptionally resolving [%s] using fallback resolver [%s]", host, xTransport.fallbackResolver)
-				}
-				dnsClient := dns.Client{Net: xTransport.mainProto}
-				foundIP, err = xTransport.resolveUsingResolver(&dnsClient, host, xTransport.fallbackResolver)
-			}
-			if foundIP == nil {
-				return nil, 0, fmt.Errorf("No IP found for [%s]", host)
-			}
-			if err != nil {
-				return nil, 0, err
-			}
-			xTransport.cachedIPs.Lock()
-			xTransport.cachedIPs.cache[host] = *foundIP
-			xTransport.cachedIPs.Unlock()
-			dlog.Debugf("[%s] IP address [%s] added to the cache", host, *foundIP)
-		}
 	}
 	start := time.Now()
 	resp, err := client.Do(req)

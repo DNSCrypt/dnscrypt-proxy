@@ -65,14 +65,15 @@ func (plugin *PluginCacheResponse) Eval(pluginsState *PluginsState, msg *dns.Msg
 		msg:        *msg,
 	}
 	plugin.cachedResponses.Lock()
-	defer plugin.cachedResponses.Unlock()
 	if plugin.cachedResponses.cache == nil {
 		plugin.cachedResponses.cache, err = lru.NewARC(pluginsState.cacheSize)
 		if err != nil {
+			plugin.cachedResponses.Unlock()
 			return err
 		}
 	}
 	plugin.cachedResponses.cache.Add(cacheKey, cachedResponse)
+	plugin.cachedResponses.Unlock()
 	updateTTL(msg, cachedResponse.expiration)
 
 	return nil
