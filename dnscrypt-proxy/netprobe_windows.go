@@ -19,7 +19,7 @@ func NetProbe(address string, timeout int) error {
 	if timeout < 0 {
 		timeout = MaxTimeout
 	} else {
-		timeout = Max(MaxTimeout, timeout)
+		timeout = Min(MaxTimeout, timeout)
 	}
 	for tries := timeout; tries > 0; tries-- {
 		pc, err := net.DialUDP("udp", nil, remoteUDPAddr)
