@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"os/signal"
 	"sync"
+	"syscall"
 
 	"github.com/facebookgo/pidfile"
 	"github.com/jedisct1/dlog"
@@ -44,7 +46,9 @@ func main() {
 		WorkingDirectory: pwd,
 	}
 	svcFlag := flag.String("service", "", fmt.Sprintf("Control the system service: %q", service.ControlAction))
-	app := &App{}
+	app := &App{
+		quit: make(chan struct{}),
+	}
 	svc, err := service.New(app, svcConfig)
 	if err != nil {
 		svc = nil
@@ -75,43 +79,49 @@ func main() {
 		}
 		return
 	}
+	app.wg.Add(1)
 	if svc != nil {
 		if err = svc.Run(); err != nil {
 			dlog.Fatal(err)
 		}
 	} else {
-		app.Start(nil)
+		app.signalWatch()
+		app.appMain()
 	}
+	app.wg.Wait()
+	dlog.Notice("Stopped.")
 }
 
 func (app *App) Start(service service.Service) error {
 	if err := app.proxy.InitPluginsGlobals(); err != nil {
 		dlog.Fatal(err)
 	}
-	app.quit = make(chan struct{})
-	app.wg.Add(1)
-	if service != nil {
-		go func() {
-			app.AppMain()
-		}()
-	} else {
-		app.AppMain()
-	}
+	go app.appMain()
 	return nil
-}
-
-func (app *App) AppMain() {
-	pidfile.Write()
-	app.proxy.StartProxy()
-	<-app.quit
-	dlog.Notice("Quit signal received...")
-	app.wg.Done()
 }
 
 func (app *App) Stop(service service.Service) error {
 	if pidFilePath := pidfile.GetPidfilePath(); len(pidFilePath) > 1 {
 		os.Remove(pidFilePath)
 	}
-	dlog.Notice("Stopped.")
+	dlog.Notice("Quit signal received...")
+	close(app.quit)
 	return nil
+}
+
+func (app *App) appMain() {
+	pidfile.Write()
+	app.proxy.StartProxy()
+	<-app.quit
+	app.wg.Done()
+}
+
+func (app *App) signalWatch() {
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-quit
+		signal.Stop(quit)
+		close(app.quit)
+	}()
 }
