@@ -191,6 +191,7 @@ type ServerSummary struct {
 	NoLog       bool     `json:"nolog"`
 	NoFilter    bool     `json:"nofilter"`
 	Description string   `json:"description,omitempty"`
+	Stamp       string   `json:"stamp"`
 }
 
 func findConfigFile(configFile *string) (string, error) {
@@ -547,6 +548,7 @@ func (config *Config) printRegisteredServers(proxy *Proxy, jsonOutput bool) {
 			NoLog:       registeredServer.stamp.Props&stamps.ServerInformalPropertyNoLog != 0,
 			NoFilter:    registeredServer.stamp.Props&stamps.ServerInformalPropertyNoFilter != 0,
 			Description: registeredServer.description,
+			Stamp:       registeredServer.stamp.String()
 		}
 		if jsonOutput {
 			summary = append(summary, serverSummary)
