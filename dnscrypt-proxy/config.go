@@ -548,7 +548,7 @@ func (config *Config) printRegisteredServers(proxy *Proxy, jsonOutput bool) {
 			NoLog:       registeredServer.stamp.Props&stamps.ServerInformalPropertyNoLog != 0,
 			NoFilter:    registeredServer.stamp.Props&stamps.ServerInformalPropertyNoFilter != 0,
 			Description: registeredServer.description,
-			Stamp:       registeredServer.stamp.String()
+			Stamp:       registeredServer.stamp.String(),
 		}
 		if jsonOutput {
 			summary = append(summary, serverSummary)
