@@ -477,7 +477,7 @@ func ConfigLoad(proxy *Proxy, svcFlag *string) error {
 	}
 	proxy.showCerts = *showCerts || len(os.Getenv("SHOW_CERTS")) > 0
 	if proxy.showCerts {
-		proxy.listenAddresses = nil
+		proxy.listenAddresses = proxy.listenAddresses[0:0]
 	}
 	dlog.Noticef("dnscrypt-proxy %s", AppVersion)
 	if err := NetProbe(netprobeAddress, netprobeTimeout); err != nil {
@@ -628,11 +628,11 @@ func (config *Config) loadSource(proxy *Proxy, requiredProps stamps.ServerInform
 		cfgSource.RefreshDelay = 72
 	}
 	source, sourceUrlsToPrefetch, err := NewSource(proxy.xTransport, cfgSource.URLs, cfgSource.MinisignKeyStr, cfgSource.CacheFile, cfgSource.FormatStr, time.Duration(cfgSource.RefreshDelay)*time.Hour)
-	proxy.urlsToPrefetch = append(proxy.urlsToPrefetch, sourceUrlsToPrefetch...)
 	if err != nil {
 		dlog.Criticalf("Unable to retrieve source [%s]: [%s]", cfgSourceName, err)
 		return err
 	}
+	proxy.urlsToPrefetch = append(proxy.urlsToPrefetch, sourceUrlsToPrefetch...)
 	registeredServers, err := source.Parse(cfgSource.Prefix)
 	if err != nil {
 		if len(registeredServers) == 0 {
