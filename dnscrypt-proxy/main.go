@@ -111,8 +111,7 @@ func (app *App) Stop(service service.Service) error {
 
 func (app *App) appMain() {
 	pidfile.Write()
-	app.proxy.StartProxy()
-	<-app.quit
+	app.proxy.StartProxy(app.quit)
 	app.wg.Done()
 }
 
