@@ -32,7 +32,6 @@ type RegisteredServer struct {
 }
 
 type ServerInfo struct {
-	sync.RWMutex
 	Proto              stamps.StampProtoType
 	MagicQuery         [8]byte
 	ServerPk           [32]byte
@@ -158,6 +157,7 @@ func (serversInfo *ServersInfo) refresh(proxy *Proxy) (int, error) {
 }
 
 func (serversInfo *ServersInfo) estimatorUpdate() {
+	// serversInfo.RWMutex is assumed to be Locked
 	candidate := rand.Intn(len(serversInfo.inner))
 	if candidate == 0 {
 		return
@@ -191,9 +191,9 @@ func (serversInfo *ServersInfo) estimatorUpdate() {
 
 func (serversInfo *ServersInfo) getOne() *ServerInfo {
 	serversInfo.Lock()
+	defer serversInfo.Unlock()
 	serversCount := len(serversInfo.inner)
 	if serversCount <= 0 {
-		serversInfo.Unlock()
 		return nil
 	}
 	if serversInfo.lbEstimator {
@@ -211,7 +211,6 @@ func (serversInfo *ServersInfo) getOne() *ServerInfo {
 		candidate = rand.Intn(Min(serversCount, 2))
 	}
 	serverInfo := serversInfo.inner[candidate]
-	serversInfo.Unlock()
 	dlog.Debugf("Using candidate [%s] RTT: %d", (*serverInfo).Name, int((*serverInfo).rtt.Value()))
 
 	return serverInfo
@@ -415,24 +414,24 @@ func fetchDoHServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, isN
 }
 
 func (serverInfo *ServerInfo) noticeFailure(proxy *Proxy) {
-	serverInfo.Lock()
+	proxy.serversInfo.Lock()
 	serverInfo.rtt.Add(float64(proxy.timeout.Nanoseconds() / 1000000))
-	serverInfo.Unlock()
+	proxy.serversInfo.Unlock()
 }
 
 func (serverInfo *ServerInfo) noticeBegin(proxy *Proxy) {
-	serverInfo.Lock()
+	proxy.serversInfo.Lock()
 	serverInfo.lastActionTS = time.Now()
-	serverInfo.Unlock()
+	proxy.serversInfo.Unlock()
 }
 
 func (serverInfo *ServerInfo) noticeSuccess(proxy *Proxy) {
 	now := time.Now()
-	serverInfo.Lock()
+	proxy.serversInfo.Lock()
 	elapsed := now.Sub(serverInfo.lastActionTS)
 	elapsedMs := elapsed.Nanoseconds() / 1000000
 	if elapsedMs > 0 && elapsed < proxy.timeout {
 		serverInfo.rtt.Add(float64(elapsedMs))
 	}
-	serverInfo.Unlock()
+	proxy.serversInfo.Unlock()
 }
