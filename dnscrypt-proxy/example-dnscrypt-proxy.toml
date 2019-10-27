@@ -581,12 +581,14 @@ cache_neg_max_ttl = 600
 ## A relay can be specified as a DNS Stamp (either a relay stamp, or a
 ## DNSCrypt stamp), an IP:port, a hostname:port, or a server name.
 ##
-## The following example routes "comodo-02" via `anon-kama` or `anon-ibksturm`,
-## and "quad9-dnscrypt-ip4-nofilter-pri" via the relay whose relay DNS stamp
+## The following example routes "example-server-1" via `anon-example-1` or `anon-example-2``,
+## and "example-server-2" via the relay whose relay DNS stamp
 ## is "sdns://gRIxMzcuNzQuMjIzLjIzNDo0NDM".
-## These are just example routes. Review the list of available relays from the
-## "relays.md` file, and, for each server you want to use, define the relays you
-## want connections to go through.
+##
+## !!! THESE ARE JUST EXAMPLES !!!
+##
+## Review the list of available relays from the "relays.md` file, and, for each
+## server you want to use, define the relays you want connections to go through.
 ##
 ## Carefully choose relays and servers so that the are run by different entities.
 ##
@@ -594,8 +596,8 @@ cache_neg_max_ttl = 600
 ## recommended. if you do so, keep "server_names" short and distinct from relays.
 
 # routes = [
-#    { server_name='comodo-02', via=['anon-kama', 'anon-ibksturm'] },
-#    { server_name='quad9-dnscrypt-ip4-nofilter-pri', via=['sdns://gRIxMzcuNzQuMjIzLjIzNDo0NDM'] }
+#    { server_name='example-server-1', via=['anon-example-1', 'anon-example-2'] },
+#    { server_name='example-server-2', via=['sdns://gRIxMzcuNzQuMjIzLjIzNDo0NDM'] }
 # ]
 
 
