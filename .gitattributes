@@ -1,0 +1,3 @@
+*               text=auto
+*.go            text        diff=golang
+*.bat           text        eol=crlf
