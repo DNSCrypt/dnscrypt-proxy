@@ -25,6 +25,7 @@ type App struct {
 	wg    sync.WaitGroup
 	quit  chan struct{}
 	proxy *Proxy
+	flags *ConfigFlags
 }
 
 func main() {
@@ -70,7 +71,8 @@ func main() {
 	}
 
 	app := &App{
-		quit: make(chan struct{}),
+		quit:  make(chan struct{}),
+		flags: &flags,
 	}
 	svc, err := service.New(app, svcConfig)
 	if err != nil {
@@ -79,9 +81,6 @@ func main() {
 	}
 	app.proxy = NewProxy()
 	_ = ServiceManagerStartNotify()
-	if err := ConfigLoad(app.proxy, &flags); err != nil {
-		dlog.Fatal(err)
-	}
 	if len(*svcFlag) != 0 {
 		if svc == nil {
 			dlog.Fatal("Built-in service installation is not supported on this platform")
@@ -108,6 +107,9 @@ func main() {
 			dlog.Fatal(err)
 		}
 	} else {
+		if err := ConfigLoad(app.proxy, &flags); err != nil {
+			dlog.Fatal(err)
+		}
 		app.signalWatch()
 		app.appMain()
 	}
@@ -116,10 +118,15 @@ func main() {
 }
 
 func (app *App) Start(service service.Service) error {
-	if err := app.proxy.InitPluginsGlobals(); err != nil {
-		dlog.Fatal(err)
-	}
-	go app.appMain()
+	go func() {
+		if err := ConfigLoad(app.proxy, app.flags); err != nil {
+			dlog.Fatal(err)
+		}
+		if err := app.proxy.InitPluginsGlobals(); err != nil {
+			dlog.Fatal(err)
+		}
+		app.appMain()
+	}()
 	return nil
 }
 
