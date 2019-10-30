@@ -225,7 +225,7 @@ func findConfigFile(configFile *string) (string, error) {
 func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	foundConfigFile, err := findConfigFile(flags.ConfigFile)
 	if err != nil {
-		dlog.Fatalf("Unable to load the configuration file [%s] -- Maybe use the -config command-line switch?", flags.ConfigFile)
+		dlog.Fatalf("Unable to load the configuration file [%s] -- Maybe use the -config command-line switch?", *flags.ConfigFile)
 	}
 	config := newConfig()
 	md, err := toml.DecodeFile(foundConfigFile, &config)
