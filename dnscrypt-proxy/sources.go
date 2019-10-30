@@ -32,14 +32,14 @@ const (
 type Source struct {
 	urls        []string
 	format      SourceFormat
-	in          string
+	in          []byte
 	minisignKey *minisign.PublicKey
 }
 
-func (source *Source) checkSignature(bin, sig string) (err error) {
+func (source *Source) checkSignature(bin, sig []byte) (err error) {
 	var signature minisign.Signature
-	if signature, err = minisign.DecodeSignature(sig); err == nil {
-		_, err = source.minisignKey.Verify([]byte(bin), signature)
+	if signature, err = minisign.DecodeSignature(string(sig)); err == nil {
+		_, err = source.minisignKey.Verify(bin, signature)
 	}
 	return
 }
@@ -47,7 +47,7 @@ func (source *Source) checkSignature(bin, sig string) (err error) {
 // timeNow can be replaced by tests to provide a static value
 var timeNow = time.Now
 
-func fetchFromCache(cacheFile string, refreshDelay time.Duration) (in string, expired bool, delayTillNextUpdate time.Duration, err error) {
+func fetchFromCache(cacheFile string, refreshDelay time.Duration) (bin []byte, expired bool, delayTillNextUpdate time.Duration, err error) {
 	expired = false
 	delayTillNextUpdate = time.Duration(0)
 	if refreshDelay < MinSourcesUpdateDelay {
@@ -58,12 +58,9 @@ func fetchFromCache(cacheFile string, refreshDelay time.Duration) (in string, ex
 		dlog.Debugf("Cache file [%s] not present", cacheFile)
 		return
 	}
-	var bin []byte
-	bin, err = ioutil.ReadFile(cacheFile)
-	if err != nil {
+	if bin, err = ioutil.ReadFile(cacheFile); err != nil {
 		return
 	}
-	in = string(bin)
 	elapsed := timeNow().Sub(fi.ModTime())
 	if elapsed < refreshDelay {
 		dlog.Debugf("Cache file [%s] is still fresh", cacheFile)
@@ -84,9 +81,9 @@ func fetchFromURL(xTransport *XTransport, u *url.URL) (bin []byte, err error) {
 	return
 }
 
-func fetchWithCache(xTransport *XTransport, urlStr string, cacheFile string, refreshDelay time.Duration) (in string, delayTillNextUpdate time.Duration, err error) {
+func fetchWithCache(xTransport *XTransport, urlStr string, cacheFile string, refreshDelay time.Duration) (bin []byte, delayTillNextUpdate time.Duration, err error) {
 	expired := false
-	in, expired, delayTillNextUpdate, err = fetchFromCache(cacheFile, refreshDelay)
+	bin, expired, delayTillNextUpdate, err = fetchFromCache(cacheFile, refreshDelay)
 	if err == nil && !expired {
 		dlog.Debugf("Delay till next update: %v", delayTillNextUpdate)
 		return
@@ -104,7 +101,6 @@ func fetchWithCache(xTransport *XTransport, urlStr string, cacheFile string, ref
 	if u, err = url.Parse(urlStr); err != nil {
 		return
 	}
-	var bin []byte
 	if bin, err = fetchFromURL(xTransport, u); err != nil {
 		return
 	}
@@ -113,7 +109,6 @@ func fetchWithCache(xTransport *XTransport, urlStr string, cacheFile string, ref
 			dlog.Warnf("%s: %s", absPath, err)
 		}
 	}
-	in = string(bin)
 	delayTillNextUpdate = MinSourcesUpdateDelay
 	return
 }
@@ -144,19 +139,19 @@ func NewSource(xTransport *XTransport, urls []string, minisignKeyStr string, cac
 	now := timeNow()
 	sigCacheFile := cacheFile + ".minisig"
 
-	var sigStr, in string
+	var bin, sig []byte
 	var delayTillNextUpdate, sigDelayTillNextUpdate time.Duration
 	var err, sigErr error
 	var preloadURL string
 	if len(urls) <= 0 {
-		in, delayTillNextUpdate, err = fetchWithCache(xTransport, "", cacheFile, refreshDelay)
-		sigStr, sigDelayTillNextUpdate, sigErr = fetchWithCache(xTransport, "", sigCacheFile, refreshDelay)
+		bin, delayTillNextUpdate, err = fetchWithCache(xTransport, "", cacheFile, refreshDelay)
+		sig, sigDelayTillNextUpdate, sigErr = fetchWithCache(xTransport, "", sigCacheFile, refreshDelay)
 	} else {
 		preloadURL = urls[0]
 		for _, url := range urls {
 			sigURL := url + ".minisig"
-			in, delayTillNextUpdate, err = fetchWithCache(xTransport, url, cacheFile, refreshDelay)
-			sigStr, sigDelayTillNextUpdate, sigErr = fetchWithCache(xTransport, sigURL, sigCacheFile, refreshDelay)
+			bin, delayTillNextUpdate, err = fetchWithCache(xTransport, url, cacheFile, refreshDelay)
+			sig, sigDelayTillNextUpdate, sigErr = fetchWithCache(xTransport, sigURL, sigCacheFile, refreshDelay)
 			if err == nil && sigErr == nil {
 				preloadURL = url
 				break
@@ -177,11 +172,11 @@ func NewSource(xTransport *XTransport, urls []string, minisignKeyStr string, cac
 		return source, urlsToPrefetch, err
 	}
 
-	if err = source.checkSignature(in, sigStr); err != nil {
+	if err = source.checkSignature(bin, sig); err != nil {
 		return source, urlsToPrefetch, err
 	}
 	dlog.Noticef("Source [%s] loaded", cacheFile)
-	source.in = in
+	source.in = bin
 	return source, urlsToPrefetch, nil
 }
 
