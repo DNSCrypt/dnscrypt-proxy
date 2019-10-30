@@ -49,31 +49,27 @@ var timeNow = time.Now
 
 func fetchFromCache(cacheFile string, refreshDelay time.Duration) (in string, expired bool, delayTillNextUpdate time.Duration, err error) {
 	expired = false
+	delayTillNextUpdate = time.Duration(0)
 	if refreshDelay < MinSourcesUpdateDelay {
 		refreshDelay = MinSourcesUpdateDelay
 	}
 	fi, err := os.Stat(cacheFile)
 	if err != nil {
 		dlog.Debugf("Cache file [%s] not present", cacheFile)
-		delayTillNextUpdate = time.Duration(0)
 		return
 	}
+	var bin []byte
+	bin, err = ioutil.ReadFile(cacheFile)
+	if err != nil {
+		return
+	}
+	in = string(bin)
 	elapsed := timeNow().Sub(fi.ModTime())
 	if elapsed < refreshDelay {
 		dlog.Debugf("Cache file [%s] is still fresh", cacheFile)
 		delayTillNextUpdate = MinSourcesUpdateDelay - elapsed
 	} else {
 		dlog.Debugf("Cache file [%s] needs to be refreshed", cacheFile)
-		delayTillNextUpdate = time.Duration(0)
-	}
-	var bin []byte
-	bin, err = ioutil.ReadFile(cacheFile)
-	if err != nil {
-		delayTillNextUpdate = time.Duration(0)
-		return
-	}
-	in = string(bin)
-	if delayTillNextUpdate <= time.Duration(0) {
 		expired = true
 	}
 	return
