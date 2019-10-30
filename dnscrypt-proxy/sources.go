@@ -30,9 +30,18 @@ const (
 )
 
 type Source struct {
-	urls   []string
-	format SourceFormat
-	in     string
+	urls        []string
+	format      SourceFormat
+	in          string
+	minisignKey *minisign.PublicKey
+}
+
+func (source *Source) checkSignature(bin, sig string) (err error) {
+	var signature minisign.Signature
+	if signature, err = minisign.DecodeSignature(sig); err == nil {
+		_, err = source.minisignKey.Verify([]byte(bin), signature)
+	}
+	return
 }
 
 // timeNow can be replaced by tests to provide a static value
@@ -130,18 +139,19 @@ func NewSource(xTransport *XTransport, urls []string, minisignKeyStr string, cac
 	} else {
 		return source, []URLToPrefetch{}, fmt.Errorf("Unsupported source format: [%s]", formatStr)
 	}
-	minisignKey, err := minisign.NewPublicKey(minisignKeyStr)
-	if err != nil {
-		return source, []URLToPrefetch{}, err
+	urlsToPrefetch := []URLToPrefetch{}
+	if minisignKey, err := minisign.NewPublicKey(minisignKeyStr); err == nil {
+		source.minisignKey = &minisignKey
+	} else {
+		return source, urlsToPrefetch, err
 	}
 	now := timeNow()
-	urlsToPrefetch := []URLToPrefetch{}
 	sigCacheFile := cacheFile + ".minisig"
 
 	var sigStr, in string
 	var cached, sigCached bool
 	var delayTillNextUpdate, sigDelayTillNextUpdate time.Duration
-	var sigErr error
+	var err, sigErr error
 	var preloadURL string
 	if len(urls) <= 0 {
 		in, cached, delayTillNextUpdate, err = fetchWithCache(xTransport, "", cacheFile, refreshDelay)
@@ -172,16 +182,7 @@ func NewSource(xTransport *XTransport, urls []string, minisignKeyStr string, cac
 		return source, urlsToPrefetch, err
 	}
 
-	signature, err := minisign.DecodeSignature(sigStr)
-	if err != nil {
-		os.Remove(cacheFile)
-		os.Remove(sigCacheFile)
-		return source, urlsToPrefetch, err
-	}
-	res, err := minisignKey.Verify([]byte(in), signature)
-	if err != nil || !res {
-		os.Remove(cacheFile)
-		os.Remove(sigCacheFile)
+	if err = source.checkSignature(in, sigStr); err != nil {
 		return source, urlsToPrefetch, err
 	}
 	if !cached {
