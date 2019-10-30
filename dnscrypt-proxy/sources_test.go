@@ -55,7 +55,8 @@ type SourceTestData struct {
 
 type SourceTestExpect struct {
 	success, download bool
-	in, cachePath     string
+	in                []byte
+	cachePath         string
 	cache             []SourceFixture
 	refresh           time.Time
 	urls              []string
@@ -248,9 +249,9 @@ func prepSourceTestCache(t *testing.T, d *SourceTestData, e *SourceTestExpect, s
 	e.cache = []SourceFixture{d.fixtures[state][source], d.fixtures[state][source+".minisig"]}
 	switch state {
 	case TestStateCorrect:
-		e.in, e.success, e.refresh = string(e.cache[0].content), true, d.timeUpd
+		e.in, e.success, e.refresh = e.cache[0].content, true, d.timeUpd
 	case TestStateExpired:
-		e.in = string(e.cache[0].content)
+		e.in = e.cache[0].content
 	case TestStatePartial, TestStatePartialSig:
 		e.err = "signature"
 	case TestStateMissing, TestStateMissingSig:
@@ -269,7 +270,7 @@ func prepSourceTestDownload(t *testing.T, d *SourceTestData, e *SourceTestExpect
 				switch state {
 				case TestStateCorrect:
 					e.cache = []SourceFixture{d.fixtures[state][source], d.fixtures[state][source+".minisig"]}
-					e.in, e.success, e.refresh = string(e.cache[0].content), true, d.timeUpd
+					e.in, e.success, e.refresh = e.cache[0].content, true, d.timeUpd
 					fallthrough
 				case TestStateMissingSig, TestStatePartial, TestStatePartialSig, TestStateReadSigErr:
 					d.reqExpect[path+".minisig"]++
