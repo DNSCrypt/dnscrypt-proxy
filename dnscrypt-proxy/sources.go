@@ -84,17 +84,12 @@ func fetchFromURL(xTransport *XTransport, u *url.URL) (bin []byte, err error) {
 	return
 }
 
-func fetchWithCache(xTransport *XTransport, urlStr string, cacheFile string, refreshDelay time.Duration) (in string, cached bool, delayTillNextUpdate time.Duration, err error) {
-	cached = false
+func fetchWithCache(xTransport *XTransport, urlStr string, cacheFile string, refreshDelay time.Duration) (in string, delayTillNextUpdate time.Duration, err error) {
 	expired := false
 	in, expired, delayTillNextUpdate, err = fetchFromCache(cacheFile, refreshDelay)
 	if err == nil && !expired {
 		dlog.Debugf("Delay till next update: %v", delayTillNextUpdate)
-		cached = true
 		return
-	}
-	if expired {
-		cached = true
 	}
 	if len(urlStr) == 0 {
 		if !expired {
@@ -113,7 +108,11 @@ func fetchWithCache(xTransport *XTransport, urlStr string, cacheFile string, ref
 	if bin, err = fetchFromURL(xTransport, u); err != nil {
 		return
 	}
-	cached = false
+	if err = AtomicFileWrite(cacheFile, bin); err != nil {
+		if absPath, err2 := filepath.Abs(cacheFile); err2 == nil {
+			dlog.Warnf("%s: %s", absPath, err)
+		}
+	}
 	in = string(bin)
 	delayTillNextUpdate = MinSourcesUpdateDelay
 	return
@@ -146,19 +145,18 @@ func NewSource(xTransport *XTransport, urls []string, minisignKeyStr string, cac
 	sigCacheFile := cacheFile + ".minisig"
 
 	var sigStr, in string
-	var cached, sigCached bool
 	var delayTillNextUpdate, sigDelayTillNextUpdate time.Duration
 	var err, sigErr error
 	var preloadURL string
 	if len(urls) <= 0 {
-		in, cached, delayTillNextUpdate, err = fetchWithCache(xTransport, "", cacheFile, refreshDelay)
-		sigStr, sigCached, sigDelayTillNextUpdate, sigErr = fetchWithCache(xTransport, "", sigCacheFile, refreshDelay)
+		in, delayTillNextUpdate, err = fetchWithCache(xTransport, "", cacheFile, refreshDelay)
+		sigStr, sigDelayTillNextUpdate, sigErr = fetchWithCache(xTransport, "", sigCacheFile, refreshDelay)
 	} else {
 		preloadURL = urls[0]
 		for _, url := range urls {
 			sigURL := url + ".minisig"
-			in, cached, delayTillNextUpdate, err = fetchWithCache(xTransport, url, cacheFile, refreshDelay)
-			sigStr, sigCached, sigDelayTillNextUpdate, sigErr = fetchWithCache(xTransport, sigURL, sigCacheFile, refreshDelay)
+			in, delayTillNextUpdate, err = fetchWithCache(xTransport, url, cacheFile, refreshDelay)
+			sigStr, sigDelayTillNextUpdate, sigErr = fetchWithCache(xTransport, sigURL, sigCacheFile, refreshDelay)
 			if err == nil && sigErr == nil {
 				preloadURL = url
 				break
@@ -181,20 +179,6 @@ func NewSource(xTransport *XTransport, urls []string, minisignKeyStr string, cac
 
 	if err = source.checkSignature(in, sigStr); err != nil {
 		return source, urlsToPrefetch, err
-	}
-	if !cached {
-		if err = AtomicFileWrite(cacheFile, []byte(in)); err != nil {
-			if absPath, err2 := filepath.Abs(cacheFile); err2 == nil {
-				dlog.Warnf("%s: %s", absPath, err)
-			}
-		}
-	}
-	if !sigCached {
-		if err = AtomicFileWrite(sigCacheFile, []byte(sigStr)); err != nil {
-			if absPath, err2 := filepath.Abs(sigCacheFile); err2 == nil {
-				dlog.Warnf("%s: %s", absPath, err)
-			}
-		}
 	}
 	dlog.Noticef("Source [%s] loaded", cacheFile)
 	source.in = in
@@ -276,10 +260,7 @@ PartsLoop:
 }
 
 func PrefetchSourceURL(xTransport *XTransport, urlToPrefetch *URLToPrefetch) error {
-	in, cached, delayTillNextUpdate, err := fetchWithCache(xTransport, urlToPrefetch.url, urlToPrefetch.cacheFile, MinSourcesUpdateDelay)
-	if err == nil && !cached {
-		AtomicFileWrite(urlToPrefetch.cacheFile, []byte(in))
-	}
+	_, delayTillNextUpdate, err := fetchWithCache(xTransport, urlToPrefetch.url, urlToPrefetch.cacheFile, MinSourcesUpdateDelay)
 	urlToPrefetch.when = timeNow().Add(delayTillNextUpdate)
 	return err
 }
