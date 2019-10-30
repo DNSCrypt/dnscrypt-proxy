@@ -1,3 +1,6 @@
 *               text=auto
 *.go            text        diff=golang
 *.bat           text        eol=crlf
+
+# Ensure test fixtures don't get mangled
+**/testdata/**  -text
