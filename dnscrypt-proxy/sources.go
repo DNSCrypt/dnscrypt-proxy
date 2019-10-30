@@ -79,6 +79,15 @@ func fetchFromCache(cacheFile string, refreshDelay time.Duration) (in string, ex
 	return
 }
 
+func fetchFromURL(xTransport *XTransport, u *url.URL) (bin []byte, err error) {
+	var resp *http.Response
+	if resp, _, err = xTransport.Get(u, "", DefaultTimeout); err == nil {
+		bin, err = ioutil.ReadAll(io.LimitReader(resp.Body, MaxHTTPBodyLength))
+		resp.Body.Close()
+	}
+	return
+}
+
 func fetchWithCache(xTransport *XTransport, urlStr string, cacheFile string, refreshDelay time.Duration) (in string, cached bool, delayTillNextUpdate time.Duration, err error) {
 	cached = false
 	expired := false
@@ -98,24 +107,16 @@ func fetchWithCache(xTransport *XTransport, urlStr string, cacheFile string, ref
 		return
 	}
 
-	var resp *http.Response
 	dlog.Infof("Loading source information from URL [%s]", urlStr)
 
-	url, err := url.Parse(urlStr)
-	if err != nil {
-		return
-	}
-	resp, _, err = xTransport.Get(url, "", 30*time.Second)
-	if err != nil {
+	var u *url.URL
+	if u, err = url.Parse(urlStr); err != nil {
 		return
 	}
 	var bin []byte
-	bin, err = ioutil.ReadAll(io.LimitReader(resp.Body, MaxHTTPBodyLength))
-	resp.Body.Close()
-	if err != nil {
+	if bin, err = fetchFromURL(xTransport, u); err != nil {
 		return
 	}
-	err = nil
 	cached = false
 	in = string(bin)
 	delayTillNextUpdate = MinSourcesUpdateDelay
