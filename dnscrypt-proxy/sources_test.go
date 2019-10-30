@@ -255,7 +255,7 @@ func prepSourceTestCache(t *testing.T, d *SourceTestData, e *SourceTestExpect, s
 	case TestStatePartial, TestStatePartialSig:
 		e.err = "signature"
 	case TestStateMissing, TestStateMissingSig:
-		e.err = "not present"
+		e.err = "stat"
 	case TestStateOpenErr, TestStateOpenSigErr:
 		e.err = os.ErrPermission.Error()
 	}
@@ -302,8 +302,6 @@ func prepSourceTestDownload(t *testing.T, d *SourceTestData, e *SourceTestExpect
 		if e.success {
 			e.err = ""
 		}
-	} else if !e.success {
-		e.err = "no URL"
 	}
 }
 
