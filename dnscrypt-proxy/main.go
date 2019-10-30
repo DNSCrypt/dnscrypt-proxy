@@ -86,7 +86,7 @@ func main() {
 		}
 	} else {
 		app.signalWatch()
-		app.appMain()
+		app.Start(nil)
 	}
 	app.wg.Wait()
 	dlog.Notice("Stopped.")
