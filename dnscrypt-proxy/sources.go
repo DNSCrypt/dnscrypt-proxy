@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -95,13 +94,7 @@ func fetchWithCache(xTransport *XTransport, urlStr string, cacheFile string, ref
 		return
 	}
 	resp, _, err = xTransport.Get(url, "", 30*time.Second)
-	if err == nil && resp != nil && (resp.StatusCode < 200 || resp.StatusCode > 299) {
-		err = fmt.Errorf("Webserver returned code %d", resp.StatusCode)
-		return
-	} else if err != nil {
-		return
-	} else if resp == nil {
-		err = errors.New("Webserver returned an error")
+	if err != nil {
 		return
 	}
 	var bin []byte
