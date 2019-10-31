@@ -72,6 +72,25 @@ func (source *Source) fetchFromCache() (bin, sig []byte, delayTillNextUpdate tim
 	return
 }
 
+func (source *Source) writeToCache(bin, sig []byte) (err error) {
+	f := source.cacheFile
+	defer func() {
+		if err != nil {
+			if absPath, err2 := filepath.Abs(f); err2 == nil {
+				f = absPath
+			}
+			dlog.Warnf("%s: %s", f, err)
+		}
+	}()
+	if err = safefile.WriteFile(f, bin, 0644); err != nil {
+		return
+	}
+	if err = safefile.WriteFile(f+".minisig", sig, 0644); err != nil {
+		return
+	}
+	return
+}
+
 func fetchFromURL(xTransport *XTransport, u *url.URL) (bin []byte, err error) {
 	var resp *http.Response
 	if resp, _, err = xTransport.Get(u, "", DefaultTimeout); err == nil {
@@ -109,22 +128,9 @@ func (source *Source) fetchWithCache(xTransport *XTransport, urlStr string) (bin
 	if sig, err = fetchFromURL(xTransport, sigURL); err != nil {
 		return
 	}
-	if err = AtomicFileWrite(source.cacheFile, bin); err != nil {
-		if absPath, err2 := filepath.Abs(source.cacheFile); err2 == nil {
-			dlog.Warnf("%s: %s", absPath, err)
-		}
-	}
-	if err = AtomicFileWrite(source.cacheFile+".minisig", sig); err != nil {
-		if absPath, err2 := filepath.Abs(source.cacheFile + ".minisig"); err2 == nil {
-			dlog.Warnf("%s: %s", absPath, err)
-		}
-	}
+	source.writeToCache(bin, sig) // ignore error: not fatal
 	delayTillNextUpdate = source.prefetchDelay
 	return
-}
-
-func AtomicFileWrite(file string, data []byte) error {
-	return safefile.WriteFile(file, data, 0644)
 }
 
 type URLToPrefetch struct {
