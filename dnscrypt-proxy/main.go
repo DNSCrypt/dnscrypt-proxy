@@ -109,11 +109,13 @@ func main() {
 }
 
 func (app *App) Start(service service.Service) error {
+	app.proxy.wg.Add(1)
 	go app.appMain()
 	return nil
 }
 
 func (app *App) Stop(service service.Service) error {
+	defer app.proxy.wg.Done()
 	if pidFilePath := pidfile.GetPidfilePath(); len(pidFilePath) > 1 {
 		os.Remove(pidFilePath)
 	}
@@ -139,6 +141,6 @@ func (app *App) signalWatch() {
 	go func() {
 		<-quit
 		signal.Stop(quit)
-		app.proxy.Stop()
+		app.Stop(nil)
 	}()
 }
