@@ -308,7 +308,8 @@ func setupSourceTestCase(t *testing.T, d *SourceTestData, i int,
 		cachePath: filepath.Join(d.tempDir, id),
 		refresh:   d.timeNow,
 	}
-	e.Source = &Source{urls: []string{}, prefetch: []*URLToPrefetch{}, format: SourceFormatV2, minisignKey: d.key, cacheFile: e.cachePath}
+	e.Source = &Source{urls: []string{}, prefetch: []*URLToPrefetch{}, format: SourceFormatV2, minisignKey: d.key,
+		cacheFile: e.cachePath, cacheTTL: DefaultPrefetchDelay * 3, prefetchDelay: DefaultPrefetchDelay}
 	if cacheTest != nil {
 		prepSourceTestCache(t, d, e, d.sources[i], *cacheTest)
 		i = (i + 1) % len(d.sources) // make the cached and downloaded fixtures different
@@ -338,9 +339,9 @@ func TestNewSource(t *testing.T) {
 		e            *SourceTestExpect
 	}{
 		{"old format", d.keyStr, "v1", DefaultPrefetchDelay * 3, &SourceTestExpect{
-			Source: &Source{}, err: "Unsupported source format"}},
+			Source: &Source{cacheTTL: DefaultPrefetchDelay * 3, prefetchDelay: DefaultPrefetchDelay}, err: "Unsupported source format"}},
 		{"invalid public key", "", "v2", DefaultPrefetchDelay * 3, &SourceTestExpect{
-			Source: &Source{}, err: "Invalid encoded public key"}},
+			Source: &Source{cacheTTL: DefaultPrefetchDelay * 3, prefetchDelay: DefaultPrefetchDelay}, err: "Invalid encoded public key"}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := NewSource(d.xTransport, tt.e.Source.urls, tt.key, tt.e.cachePath, tt.v, tt.refresh)
