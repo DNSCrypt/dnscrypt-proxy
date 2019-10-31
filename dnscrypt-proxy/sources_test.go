@@ -292,12 +292,14 @@ func prepSourceTestDownload(t *testing.T, d *SourceTestData, e *SourceTestExpect
 			}
 			e.Source.urls = append(e.Source.urls, d.server.URL+path)
 			if state != TestStatePathErr {
-				e.Source.prefetch = append(e.Source.prefetch, &URLToPrefetch{d.server.URL + path, e.refresh})
+				e.Source.prefetch = append(e.Source.prefetch, &URLToPrefetch{d.server.URL + path})
 			}
 		}
 		if e.success {
 			e.err = ""
 		}
+	} else {
+		e.refresh = time.Time{}
 	}
 }
 
@@ -315,6 +317,7 @@ func setupSourceTestCase(t *testing.T, d *SourceTestData, i int,
 		i = (i + 1) % len(d.sources) // make the cached and downloaded fixtures different
 	}
 	prepSourceTestDownload(t, d, e, d.sources[i], downloadTest)
+	e.Source.refresh = e.refresh
 	return
 }
 
@@ -389,8 +392,8 @@ func TestPrefetchSources(t *testing.T) {
 			_, e := setupSourceTestCase(t, d, i, nil, downloadTest)
 			sources = append(sources, e.Source)
 			expects = append(expects, e)
-			for _, pf := range e.Source.prefetch {
-				pf.when = d.timeOld
+			if !e.Source.refresh.IsZero() {
+				e.Source.refresh = d.timeOld
 			}
 			if e.download {
 				e.refresh = d.timeUpd
