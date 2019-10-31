@@ -208,9 +208,9 @@ func setupSourceTest(t *testing.T) (func(), *SourceTestData) {
 		"correct": {TestStateCorrect},
 		//"partial":              {TestStatePartial},    // TODO: failed signature verification should not count as successfully prefetched
 		//"partial-sig":          {TestStatePartialSig}, // TODO: failed signature verification should not count as successfully prefetched
-		//"missing":              {TestStateMissing},    // TODO: a list download failure should not cause an attempt to download the signature for that URL
+		"missing": {TestStateMissing},
 		//"missing-sig":          {TestStateMissingSig}, // TODO: failed signature verification should not count as successfully prefetched
-		//"read-err":             {TestStateReadErr},    // TODO: a list download failure should not cause an attempt to download the signature for that URL
+		"read-err": {TestStateReadErr},
 		//"read-sig-err":         {TestStateReadSigErr}, // TODO: failed signature verification should not count as successfully prefetched
 		"open-err": {TestStateOpenErr},
 		//"open-sig-err":         {TestStateOpenSigErr},                   // TODO: failed signature verification should not count as successfully prefetched
@@ -293,7 +293,6 @@ func prepSourceTestDownload(t *testing.T, d *SourceTestData, e *SourceTestExpect
 			e.Source.urls = append(e.Source.urls, d.server.URL+path)
 			if state != TestStatePathErr {
 				e.Source.prefetch = append(e.Source.prefetch, &URLToPrefetch{d.server.URL + path, e.cachePath, e.refresh})
-				e.Source.prefetch = append(e.Source.prefetch, &URLToPrefetch{d.server.URL + path + ".minisig", e.cachePath + ".minisig", e.refresh})
 			}
 		}
 		if e.success {
