@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"os"
 	"os/signal"
+	"sync"
 
 	"github.com/facebookgo/pidfile"
 	"github.com/jedisct1/dlog"
@@ -20,6 +21,8 @@ const (
 )
 
 type App struct {
+	wg    sync.WaitGroup
+	quit  chan struct{}
 	proxy *Proxy
 	flags *ConfigFlags
 }
@@ -67,6 +70,7 @@ func main() {
 	}
 
 	app := &App{
+		quit:  make(chan struct{}),
 		flags: &flags,
 	}
 	svc, err := service.New(app, svcConfig)
@@ -96,6 +100,7 @@ func main() {
 		}
 		return
 	}
+	app.wg.Add(1)
 	if svc != nil {
 		if err = svc.Run(); err != nil {
 			dlog.Fatal(err)
@@ -107,7 +112,7 @@ func main() {
 		app.signalWatch()
 		app.Start(nil)
 	}
-	app.proxy.ConnCloseWait()
+	app.wg.Wait()
 	dlog.Notice("Stopped.")
 }
 
@@ -129,13 +134,14 @@ func (app *App) Stop(service service.Service) error {
 		os.Remove(pidFilePath)
 	}
 	dlog.Notice("Quit signal received...")
-	app.proxy.Stop()
+	close(app.quit)
 	return nil
 }
 
 func (app *App) appMain() {
 	pidfile.Write()
-	app.proxy.StartProxy()
+	app.proxy.StartProxy(app.quit)
+	app.wg.Done()
 }
 
 func (app *App) signalWatch() {
@@ -144,6 +150,6 @@ func (app *App) signalWatch() {
 	go func() {
 		<-quit
 		signal.Stop(quit)
-		app.proxy.Stop()
+		close(app.quit)
 	}()
 }

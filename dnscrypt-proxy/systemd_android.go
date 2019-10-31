@@ -2,6 +2,11 @@
 
 package main
 
-func (proxy *Proxy) SystemDListeners() error {
-	return nil
+import (
+	"io"
+	"io/ioutil"
+)
+
+func (proxy *Proxy) SystemDListeners() (io.Closer, error) {
+	return ioutil.NopCloser(nil), nil
 }
