@@ -133,7 +133,11 @@ func (xTransport *XTransport) rebuildTransport() {
 			ipOnly := host
 			cachedIP, ok := xTransport.loadCachedIP(host, false)
 			if ok {
-				ipOnly = cachedIP.String()
+				if ipv4 := cachedIP.To4(); ipv4 != nil {
+					ipOnly = ipv4.String()
+				} else {
+					ipOnly = "[" + cachedIP.String() + "]"
+				}
 			} else {
 				dlog.Debugf("[%s] IP address was not cached", host)
 			}
