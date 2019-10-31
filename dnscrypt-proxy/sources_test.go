@@ -292,7 +292,7 @@ func prepSourceTestDownload(t *testing.T, d *SourceTestData, e *SourceTestExpect
 			}
 			e.Source.urls = append(e.Source.urls, d.server.URL+path)
 			if state != TestStatePathErr {
-				e.Source.prefetch = append(e.Source.prefetch, &URLToPrefetch{d.server.URL + path, e.cachePath, e.refresh})
+				e.Source.prefetch = append(e.Source.prefetch, &URLToPrefetch{d.server.URL + path, e.refresh})
 			}
 		}
 		if e.success {
@@ -307,8 +307,8 @@ func setupSourceTestCase(t *testing.T, d *SourceTestData, i int,
 	e = &SourceTestExpect{
 		cachePath: filepath.Join(d.tempDir, id),
 		refresh:   d.timeNow,
-		Source:    &Source{urls: []string{}, prefetch: []*URLToPrefetch{}, format: SourceFormatV2, minisignKey: d.key},
 	}
+	e.Source = &Source{urls: []string{}, prefetch: []*URLToPrefetch{}, format: SourceFormatV2, minisignKey: d.key, cacheFile: e.cachePath}
 	if cacheTest != nil {
 		prepSourceTestCache(t, d, e, d.sources[i], *cacheTest)
 		i = (i + 1) % len(d.sources) // make the cached and downloaded fixtures different

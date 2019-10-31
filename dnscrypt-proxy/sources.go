@@ -36,6 +36,7 @@ type Source struct {
 	format      SourceFormat
 	in          []byte
 	minisignKey *minisign.PublicKey
+	cacheFile   string
 }
 
 func (source *Source) checkSignature(bin, sig []byte) (err error) {
@@ -129,13 +130,12 @@ func AtomicFileWrite(file string, data []byte) error {
 }
 
 type URLToPrefetch struct {
-	url       string
-	cacheFile string
-	when      time.Time
+	url  string
+	when time.Time
 }
 
 func NewSource(xTransport *XTransport, urls []string, minisignKeyStr string, cacheFile string, formatStr string, refreshDelay time.Duration) (source *Source, err error) {
-	source = &Source{urls: urls}
+	source = &Source{urls: urls, cacheFile: cacheFile}
 	if formatStr == "v2" {
 		source.format = SourceFormatV2
 	} else {
@@ -167,7 +167,7 @@ func NewSource(xTransport *XTransport, urls []string, minisignKeyStr string, cac
 	}
 	if len(preloadURL) > 0 {
 		url := preloadURL
-		source.prefetch = append(source.prefetch, &URLToPrefetch{url: url, cacheFile: cacheFile, when: now.Add(delayTillNextUpdate)})
+		source.prefetch = append(source.prefetch, &URLToPrefetch{url: url, when: now.Add(delayTillNextUpdate)})
 	}
 	if err != nil {
 		return
@@ -188,14 +188,15 @@ func PrefetchSources(xTransport *XTransport, sources []*Source) time.Duration {
 		for _, urlToPrefetch := range source.prefetch {
 			if now.After(urlToPrefetch.when) {
 				dlog.Debugf("Prefetching [%s]", urlToPrefetch.url)
-				if err := PrefetchSourceURL(xTransport, urlToPrefetch); err != nil {
-					dlog.Debugf("Prefetching [%s] failed: %s", urlToPrefetch.url, err)
-				} else {
-					dlog.Debugf("Prefetching [%s] succeeded. Next refresh scheduled for %v", urlToPrefetch.url, urlToPrefetch.when)
-					delay := urlToPrefetch.when.Sub(now)
-					if delay >= MinimumPrefetchInterval && (interval == MinimumPrefetchInterval || interval > delay) {
-						interval = delay
-					}
+				_, _, delay, err := fetchWithCache(xTransport, urlToPrefetch.url, source.cacheFile, DefaultPrefetchDelay)
+				if err != nil {
+					dlog.Debugf("Prefetching [%s] failed: %v", urlToPrefetch.url, err)
+					continue
+				}
+				dlog.Debugf("Prefetching [%s] succeeded. Next refresh scheduled for %v", urlToPrefetch.url, urlToPrefetch.when)
+				urlToPrefetch.when = now.Add(delay)
+				if delay >= MinimumPrefetchInterval && (interval == MinimumPrefetchInterval || interval > delay) {
+					interval = delay
 				}
 			}
 		}
@@ -275,10 +276,4 @@ PartsLoop:
 		return registeredServers, fmt.Errorf("%s", strings.Join(stampErrs, ", "))
 	}
 	return registeredServers, nil
-}
-
-func PrefetchSourceURL(xTransport *XTransport, urlToPrefetch *URLToPrefetch) error {
-	_, _, delayTillNextUpdate, err := fetchWithCache(xTransport, urlToPrefetch.url, urlToPrefetch.cacheFile, DefaultPrefetchDelay)
-	urlToPrefetch.when = timeNow().Add(delayTillNextUpdate)
-	return err
 }
