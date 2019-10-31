@@ -55,12 +55,9 @@ type SourceTestData struct {
 
 type SourceTestExpect struct {
 	success, download bool
-	in                []byte
 	cachePath         string
 	cache             []SourceFixture
 	refresh           time.Time
-	urls              []string
-	prefetchUrls      []URLToPrefetch
 	Source            *Source
 	err               string
 }
@@ -249,9 +246,9 @@ func prepSourceTestCache(t *testing.T, d *SourceTestData, e *SourceTestExpect, s
 	e.cache = []SourceFixture{d.fixtures[state][source], d.fixtures[state][source+".minisig"]}
 	switch state {
 	case TestStateCorrect:
-		e.in, e.success, e.refresh = e.cache[0].content, true, d.timeUpd
+		e.Source.in, e.success, e.refresh = e.cache[0].content, true, d.timeUpd
 	case TestStateExpired:
-		e.in = e.cache[0].content
+		e.Source.in = e.cache[0].content
 	case TestStatePartial, TestStatePartialSig:
 		e.err = "signature"
 	case TestStateMissing, TestStateMissingSig:
@@ -270,7 +267,7 @@ func prepSourceTestDownload(t *testing.T, d *SourceTestData, e *SourceTestExpect
 				switch state {
 				case TestStateCorrect:
 					e.cache = []SourceFixture{d.fixtures[state][source], d.fixtures[state][source+".minisig"]}
-					e.in, e.success, e.refresh = e.cache[0].content, true, d.timeUpd
+					e.Source.in, e.success, e.refresh = e.cache[0].content, true, d.timeUpd
 					fallthrough
 				case TestStateMissingSig, TestStatePartial, TestStatePartialSig, TestStateReadSigErr:
 					d.reqExpect[path+".minisig"]++
@@ -293,10 +290,10 @@ func prepSourceTestDownload(t *testing.T, d *SourceTestData, e *SourceTestExpect
 				path = "..." + path // non-numeric port fails URL parsing
 				e.err = "parse"
 			}
-			e.urls = append(e.urls, d.server.URL+path)
+			e.Source.urls = append(e.Source.urls, d.server.URL+path)
 			if state != TestStatePathErr {
-				e.prefetchUrls = append(e.prefetchUrls, URLToPrefetch{d.server.URL + path, e.cachePath, e.refresh})
-				e.prefetchUrls = append(e.prefetchUrls, URLToPrefetch{d.server.URL + path + ".minisig", e.cachePath + ".minisig", e.refresh})
+				e.Source.prefetch = append(e.Source.prefetch, &URLToPrefetch{d.server.URL + path, e.cachePath, e.refresh})
+				e.Source.prefetch = append(e.Source.prefetch, &URLToPrefetch{d.server.URL + path + ".minisig", e.cachePath + ".minisig", e.refresh})
 			}
 		}
 		if e.success {
@@ -309,32 +306,29 @@ func setupSourceTestCase(t *testing.T, d *SourceTestData, i int,
 	cacheTest *SourceTestState, downloadTest []SourceTestState) (id string, e *SourceTestExpect) {
 	id = strconv.Itoa(d.n) + "-" + strconv.Itoa(i)
 	e = &SourceTestExpect{
-		cachePath:    filepath.Join(d.tempDir, id),
-		refresh:      d.timeNow,
-		urls:         []string{},
-		prefetchUrls: []URLToPrefetch{},
+		cachePath: filepath.Join(d.tempDir, id),
+		refresh:   d.timeNow,
+		Source:    &Source{urls: []string{}, prefetch: []*URLToPrefetch{}, format: SourceFormatV2, minisignKey: d.key},
 	}
 	if cacheTest != nil {
 		prepSourceTestCache(t, d, e, d.sources[i], *cacheTest)
 		i = (i + 1) % len(d.sources) // make the cached and downloaded fixtures different
 	}
 	prepSourceTestDownload(t, d, e, d.sources[i], downloadTest)
-	e.Source = &Source{e.urls, SourceFormatV2, e.in, d.key}
 	return
 }
 
 func TestNewSource(t *testing.T) {
 	teardown, d := setupSourceTest(t)
 	defer teardown()
-	doTest := func(t *testing.T, e *SourceTestExpect, got Source, urls []URLToPrefetch, err error) {
+	doTest := func(t *testing.T, e *SourceTestExpect, got Source, err error) {
 		c := check.T(t)
 		if len(e.err) > 0 {
 			c.Match(err, e.err, "Unexpected error")
 		} else {
 			c.Nil(err, "Unexpected error")
 		}
-		c.DeepEqual(got, *e.Source, "Unexpected return Source")
-		c.DeepEqual(urls, e.prefetchUrls, "Unexpected return prefetch URLs")
+		c.DeepEqual(got, *e.Source, "Unexpected return")
 		checkTestServer(c, d)
 		checkSourceCache(c, e.cachePath, e.cache)
 	}
@@ -345,13 +339,13 @@ func TestNewSource(t *testing.T) {
 		e            *SourceTestExpect
 	}{
 		{"old format", d.keyStr, "v1", MinSourcesUpdateDelay * 3, &SourceTestExpect{
-			Source: &Source{urls: nil}, prefetchUrls: []URLToPrefetch{}, err: "Unsupported source format"}},
+			Source: &Source{}, err: "Unsupported source format"}},
 		{"invalid public key", "", "v2", MinSourcesUpdateDelay * 3, &SourceTestExpect{
-			Source: &Source{urls: nil}, prefetchUrls: []URLToPrefetch{}, err: "Invalid encoded public key"}},
+			Source: &Source{}, err: "Invalid encoded public key"}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			got, urls, err := NewSource(d.xTransport, tt.e.urls, tt.key, tt.e.cachePath, tt.v, tt.refresh)
-			doTest(t, tt.e, got, urls, err)
+			got, err := NewSource(d.xTransport, tt.e.Source.urls, tt.key, tt.e.cachePath, tt.v, tt.refresh)
+			doTest(t, tt.e, got, err)
 		})
 	}
 	for cacheTestName, cacheTest := range d.cacheTests {
@@ -360,8 +354,8 @@ func TestNewSource(t *testing.T) {
 			for i := range d.sources {
 				id, e := setupSourceTestCase(t, d, i, &cacheTest, downloadTest)
 				t.Run("cache "+cacheTestName+", download "+downloadTestName+"/"+id, func(t *testing.T) {
-					got, urls, err := NewSource(d.xTransport, e.urls, d.keyStr, e.cachePath, "v2", MinSourcesUpdateDelay*3)
-					doTest(t, e, got, urls, err)
+					got, err := NewSource(d.xTransport, e.Source.urls, d.keyStr, e.cachePath, "v2", MinSourcesUpdateDelay*3)
+					doTest(t, e, got, err)
 				})
 			}
 		}
@@ -374,7 +368,7 @@ func TestPrefetchSourceURL(t *testing.T) {
 	doTest := func(t *testing.T, expects []*SourceTestExpect) {
 		c := check.T(t)
 		for _, e := range expects {
-			for _, url := range e.urls {
+			for _, url := range e.Source.urls {
 				for _, suffix := range []string{"", ".minisig"} {
 					pf := &URLToPrefetch{url + suffix, e.cachePath + suffix, d.timeOld}
 					PrefetchSourceURL(d.xTransport, pf)

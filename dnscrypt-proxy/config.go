@@ -613,12 +613,12 @@ func (config *Config) loadSource(proxy *Proxy, requiredProps stamps.ServerInform
 	if cfgSource.RefreshDelay <= 0 {
 		cfgSource.RefreshDelay = 72
 	}
-	source, sourceUrlsToPrefetch, err := NewSource(proxy.xTransport, cfgSource.URLs, cfgSource.MinisignKeyStr, cfgSource.CacheFile, cfgSource.FormatStr, time.Duration(cfgSource.RefreshDelay)*time.Hour)
-	proxy.urlsToPrefetch = append(proxy.urlsToPrefetch, sourceUrlsToPrefetch...)
+	source, err := NewSource(proxy.xTransport, cfgSource.URLs, cfgSource.MinisignKeyStr, cfgSource.CacheFile, cfgSource.FormatStr, time.Duration(cfgSource.RefreshDelay)*time.Hour)
 	if err != nil {
 		dlog.Criticalf("Unable to retrieve source [%s]: [%s]", cfgSourceName, err)
 		return err
 	}
+	proxy.urlsToPrefetch = append(proxy.urlsToPrefetch, source.prefetch...)
 	registeredServers, err := source.Parse(cfgSource.Prefix)
 	if err != nil {
 		if len(registeredServers) == 0 {

@@ -31,6 +31,7 @@ const (
 
 type Source struct {
 	urls        []string
+	prefetch    []*URLToPrefetch
 	format      SourceFormat
 	in          []byte
 	minisignKey *minisign.PublicKey
@@ -118,21 +119,21 @@ type URLToPrefetch struct {
 	when      time.Time
 }
 
-func NewSource(xTransport *XTransport, urls []string, minisignKeyStr string, cacheFile string, formatStr string, refreshDelay time.Duration) (source Source, urlsToPrefetch []URLToPrefetch, err error) {
+func NewSource(xTransport *XTransport, urls []string, minisignKeyStr string, cacheFile string, formatStr string, refreshDelay time.Duration) (source Source, err error) {
 	source = Source{urls: urls}
-	urlsToPrefetch = []URLToPrefetch{}
 	if formatStr == "v2" {
 		source.format = SourceFormatV2
 	} else {
-		return source, []URLToPrefetch{}, fmt.Errorf("Unsupported source format: [%s]", formatStr)
+		return source, fmt.Errorf("Unsupported source format: [%s]", formatStr)
 	}
 	if minisignKey, err := minisign.NewPublicKey(minisignKeyStr); err == nil {
 		source.minisignKey = &minisignKey
 	} else {
-		return source, urlsToPrefetch, err
+		return source, err
 	}
 	now := timeNow()
 	sigCacheFile := cacheFile + ".minisig"
+	source.prefetch = []*URLToPrefetch{}
 
 	var bin, sig []byte
 	var delayTillNextUpdate, sigDelayTillNextUpdate time.Duration
@@ -157,8 +158,8 @@ func NewSource(xTransport *XTransport, urls []string, minisignKeyStr string, cac
 	if len(preloadURL) > 0 {
 		url := preloadURL
 		sigURL := url + ".minisig"
-		urlsToPrefetch = append(urlsToPrefetch, URLToPrefetch{url: url, cacheFile: cacheFile, when: now.Add(delayTillNextUpdate)})
-		urlsToPrefetch = append(urlsToPrefetch, URLToPrefetch{url: sigURL, cacheFile: sigCacheFile, when: now.Add(sigDelayTillNextUpdate)})
+		source.prefetch = append(source.prefetch, &URLToPrefetch{url: url, cacheFile: cacheFile, when: now.Add(delayTillNextUpdate)})
+		source.prefetch = append(source.prefetch, &URLToPrefetch{url: sigURL, cacheFile: sigCacheFile, when: now.Add(sigDelayTillNextUpdate)})
 	}
 	if sigErr != nil && err == nil {
 		err = sigErr
