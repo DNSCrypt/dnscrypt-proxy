@@ -416,7 +416,7 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 				response, err = proxy.exchangeWithUDPServer(serverInfo, sharedKey, encryptedQuery, clientNonce)
 				if err == nil && len(response) >= MinDNSPacketSize && response[2]&0x02 == 0x02 {
 					serverProto = "tcp"
-					sharedKey, encryptedQuery, clientNonce, err := proxy.Encrypt(serverInfo, query, serverProto)
+					sharedKey, encryptedQuery, clientNonce, err = proxy.Encrypt(serverInfo, query, serverProto)
 					if err != nil {
 						pluginsState.returnCode = PluginsReturnCodeParseError
 						return
