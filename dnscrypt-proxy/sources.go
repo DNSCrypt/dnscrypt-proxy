@@ -26,7 +26,8 @@ const (
 )
 
 const (
-	MinSourcesUpdateDelay = time.Duration(24) * time.Hour
+	DefaultPrefetchDelay    time.Duration = 24 * time.Hour
+	MinimumPrefetchInterval time.Duration = 10 * time.Minute
 )
 
 type Source struct {
@@ -50,8 +51,8 @@ var timeNow = time.Now
 
 func fetchFromCache(cacheFile string, refreshDelay time.Duration) (bin []byte, delayTillNextUpdate time.Duration, err error) {
 	delayTillNextUpdate = time.Duration(0)
-	if refreshDelay < MinSourcesUpdateDelay {
-		refreshDelay = MinSourcesUpdateDelay
+	if refreshDelay < DefaultPrefetchDelay {
+		refreshDelay = DefaultPrefetchDelay
 	}
 	var fi os.FileInfo
 	if fi, err = os.Stat(cacheFile); err != nil {
@@ -62,7 +63,7 @@ func fetchFromCache(cacheFile string, refreshDelay time.Duration) (bin []byte, d
 	}
 	if elapsed := timeNow().Sub(fi.ModTime()); elapsed < refreshDelay {
 		dlog.Debugf("Cache file [%s] is still fresh", cacheFile)
-		delayTillNextUpdate = MinSourcesUpdateDelay - elapsed
+		delayTillNextUpdate = DefaultPrefetchDelay - elapsed
 	} else {
 		dlog.Debugf("Cache file [%s] needs to be refreshed", cacheFile)
 	}
@@ -105,7 +106,7 @@ func fetchWithCache(xTransport *XTransport, urlStr string, cacheFile string, ref
 			dlog.Warnf("%s: %s", absPath, err)
 		}
 	}
-	delayTillNextUpdate = MinSourcesUpdateDelay
+	delayTillNextUpdate = DefaultPrefetchDelay
 	return
 }
 
@@ -178,6 +179,7 @@ func NewSource(xTransport *XTransport, urls []string, minisignKeyStr string, cac
 
 func PrefetchSources(xTransport *XTransport, sources []*Source) time.Duration {
 	now := timeNow()
+	interval := MinimumPrefetchInterval
 	for _, source := range sources {
 		for _, urlToPrefetch := range source.prefetch {
 			if now.After(urlToPrefetch.when) {
@@ -186,11 +188,15 @@ func PrefetchSources(xTransport *XTransport, sources []*Source) time.Duration {
 					dlog.Debugf("Prefetching [%s] failed: %s", urlToPrefetch.url, err)
 				} else {
 					dlog.Debugf("Prefetching [%s] succeeded. Next refresh scheduled for %v", urlToPrefetch.url, urlToPrefetch.when)
+					delay := urlToPrefetch.when.Sub(now)
+					if delay >= MinimumPrefetchInterval && (interval == MinimumPrefetchInterval || interval > delay) {
+						interval = delay
+					}
 				}
 			}
 		}
 	}
-	return 60 * time.Second
+	return interval
 }
 
 func (source *Source) Parse(prefix string) ([]RegisteredServer, error) {
@@ -268,7 +274,7 @@ PartsLoop:
 }
 
 func PrefetchSourceURL(xTransport *XTransport, urlToPrefetch *URLToPrefetch) error {
-	_, delayTillNextUpdate, err := fetchWithCache(xTransport, urlToPrefetch.url, urlToPrefetch.cacheFile, MinSourcesUpdateDelay)
+	_, delayTillNextUpdate, err := fetchWithCache(xTransport, urlToPrefetch.url, urlToPrefetch.cacheFile, DefaultPrefetchDelay)
 	urlToPrefetch.when = timeNow().Add(delayTillNextUpdate)
 	return err
 }
