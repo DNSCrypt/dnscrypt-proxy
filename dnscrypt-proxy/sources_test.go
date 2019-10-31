@@ -321,14 +321,14 @@ func setupSourceTestCase(t *testing.T, d *SourceTestData, i int,
 func TestNewSource(t *testing.T) {
 	teardown, d := setupSourceTest(t)
 	defer teardown()
-	doTest := func(t *testing.T, e *SourceTestExpect, got Source, err error) {
+	doTest := func(t *testing.T, e *SourceTestExpect, got *Source, err error) {
 		c := check.T(t)
 		if len(e.err) > 0 {
 			c.Match(err, e.err, "Unexpected error")
 		} else {
 			c.Nil(err, "Unexpected error")
 		}
-		c.DeepEqual(got, *e.Source, "Unexpected return")
+		c.DeepEqual(got, e.Source, "Unexpected return")
 		checkTestServer(c, d)
 		checkSourceCache(c, e.cachePath, e.cache)
 	}

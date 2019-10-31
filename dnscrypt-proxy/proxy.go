@@ -60,7 +60,7 @@ type Proxy struct {
 	forwardFile                  string
 	cloakFile                    string
 	pluginsGlobals               PluginsGlobals
-	urlsToPrefetch               []*URLToPrefetch
+	sources                      []*Source
 	clientsCount                 uint32
 	maxClients                   uint32
 	xTransport                   *XTransport
@@ -177,7 +177,11 @@ func (proxy *Proxy) StartProxy() {
 		dlog.Error(err)
 		dlog.Notice("dnscrypt-proxy is waiting for at least one server to be reachable")
 	}
-	proxy.prefetcher(proxy.urlsToPrefetch)
+	go func() {
+		for {
+			clocksmith.Sleep(PrefetchSources(proxy.xTransport, proxy.sources))
+		}
+	}()
 	if len(proxy.serversInfo.registeredServers) > 0 {
 		go func() {
 			for {
@@ -193,25 +197,6 @@ func (proxy *Proxy) StartProxy() {
 			}
 		}()
 	}
-}
-
-func (proxy *Proxy) prefetcher(urlsToPrefetch []*URLToPrefetch) {
-	go func() {
-		for {
-			now := time.Now()
-			for _, urlToPrefetch := range urlsToPrefetch {
-				if now.After(urlToPrefetch.when) {
-					dlog.Debugf("Prefetching [%s]", urlToPrefetch.url)
-					if err := PrefetchSourceURL(proxy.xTransport, urlToPrefetch); err != nil {
-						dlog.Debugf("Prefetching [%s] failed: %s", urlToPrefetch.url, err)
-					} else {
-						dlog.Debugf("Prefetching [%s] succeeded. Next refresh scheduled for %v", urlToPrefetch.url, urlToPrefetch.when)
-					}
-				}
-			}
-			clocksmith.Sleep(60 * time.Second)
-		}
-	}()
 }
 
 func (proxy *Proxy) udpListener(clientPc *net.UDPConn) {

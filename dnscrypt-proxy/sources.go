@@ -119,8 +119,8 @@ type URLToPrefetch struct {
 	when      time.Time
 }
 
-func NewSource(xTransport *XTransport, urls []string, minisignKeyStr string, cacheFile string, formatStr string, refreshDelay time.Duration) (source Source, err error) {
-	source = Source{urls: urls}
+func NewSource(xTransport *XTransport, urls []string, minisignKeyStr string, cacheFile string, formatStr string, refreshDelay time.Duration) (source *Source, err error) {
+	source = &Source{urls: urls}
 	if formatStr == "v2" {
 		source.format = SourceFormatV2
 	} else {
@@ -174,6 +174,23 @@ func NewSource(xTransport *XTransport, urls []string, minisignKeyStr string, cac
 	dlog.Noticef("Source [%s] loaded", cacheFile)
 	source.in = bin
 	return
+}
+
+func PrefetchSources(xTransport *XTransport, sources []*Source) time.Duration {
+	now := timeNow()
+	for _, source := range sources {
+		for _, urlToPrefetch := range source.prefetch {
+			if now.After(urlToPrefetch.when) {
+				dlog.Debugf("Prefetching [%s]", urlToPrefetch.url)
+				if err := PrefetchSourceURL(xTransport, urlToPrefetch); err != nil {
+					dlog.Debugf("Prefetching [%s] failed: %s", urlToPrefetch.url, err)
+				} else {
+					dlog.Debugf("Prefetching [%s] succeeded. Next refresh scheduled for %v", urlToPrefetch.url, urlToPrefetch.when)
+				}
+			}
+		}
+	}
+	return 60 * time.Second
 }
 
 func (source *Source) Parse(prefix string) ([]RegisteredServer, error) {
