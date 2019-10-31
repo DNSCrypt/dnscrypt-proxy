@@ -60,7 +60,7 @@ type Proxy struct {
 	forwardFile                  string
 	cloakFile                    string
 	pluginsGlobals               PluginsGlobals
-	urlsToPrefetch               []URLToPrefetch
+	urlsToPrefetch               []*URLToPrefetch
 	clientsCount                 uint32
 	maxClients                   uint32
 	xTransport                   *XTransport
@@ -177,7 +177,7 @@ func (proxy *Proxy) StartProxy() {
 		dlog.Error(err)
 		dlog.Notice("dnscrypt-proxy is waiting for at least one server to be reachable")
 	}
-	proxy.prefetcher(&proxy.urlsToPrefetch)
+	proxy.prefetcher(proxy.urlsToPrefetch)
 	if len(proxy.serversInfo.registeredServers) > 0 {
 		go func() {
 			for {
@@ -195,12 +195,11 @@ func (proxy *Proxy) StartProxy() {
 	}
 }
 
-func (proxy *Proxy) prefetcher(urlsToPrefetch *[]URLToPrefetch) {
+func (proxy *Proxy) prefetcher(urlsToPrefetch []*URLToPrefetch) {
 	go func() {
 		for {
 			now := time.Now()
-			for i := range *urlsToPrefetch {
-				urlToPrefetch := &(*urlsToPrefetch)[i]
+			for _, urlToPrefetch := range urlsToPrefetch {
 				if now.After(urlToPrefetch.when) {
 					dlog.Debugf("Prefetching [%s]", urlToPrefetch.url)
 					if err := PrefetchSourceURL(proxy.xTransport, urlToPrefetch); err != nil {
