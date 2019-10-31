@@ -127,19 +127,19 @@ type URLToPrefetch struct {
 	when      time.Time
 }
 
-func NewSource(xTransport *XTransport, urls []string, minisignKeyStr string, cacheFile string, formatStr string, refreshDelay time.Duration) (Source, []*URLToPrefetch, error) {
-	urlsToPrefetch := []*URLToPrefetch{}
+func NewSource(xTransport *XTransport, urls []string, minisignKeyStr string, cacheFile string, formatStr string, refreshDelay time.Duration) (Source, []URLToPrefetch, error) {
 	source := Source{urls: urls}
 	if formatStr == "v2" {
 		source.format = SourceFormatV2
 	} else {
-		return source, urlsToPrefetch, fmt.Errorf("Unsupported source format: [%s]", formatStr)
+		return source, []URLToPrefetch{}, fmt.Errorf("Unsupported source format: [%s]", formatStr)
 	}
 	minisignKey, err := minisign.NewPublicKey(minisignKeyStr)
 	if err != nil {
-		return source, urlsToPrefetch, err
+		return source, []URLToPrefetch{}, err
 	}
 	now := time.Now()
+	urlsToPrefetch := []URLToPrefetch{}
 	sigCacheFile := cacheFile + ".minisig"
 
 	var sigStr, in string
@@ -166,8 +166,8 @@ func NewSource(xTransport *XTransport, urls []string, minisignKeyStr string, cac
 	if len(preloadURL) > 0 {
 		url := preloadURL
 		sigURL := url + ".minisig"
-		urlsToPrefetch = append(urlsToPrefetch, &URLToPrefetch{url: url, cacheFile: cacheFile, when: now.Add(delayTillNextUpdate)})
-		urlsToPrefetch = append(urlsToPrefetch, &URLToPrefetch{url: sigURL, cacheFile: sigCacheFile, when: now.Add(sigDelayTillNextUpdate)})
+		urlsToPrefetch = append(urlsToPrefetch, URLToPrefetch{url: url, cacheFile: cacheFile, when: now.Add(delayTillNextUpdate)})
+		urlsToPrefetch = append(urlsToPrefetch, URLToPrefetch{url: sigURL, cacheFile: sigCacheFile, when: now.Add(sigDelayTillNextUpdate)})
 	}
 	if sigErr != nil && err == nil {
 		err = sigErr

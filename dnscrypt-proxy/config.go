@@ -194,17 +194,6 @@ type ServerSummary struct {
 	Stamp       string   `json:"stamp"`
 }
 
-type ConfigFlags struct {
-	List                    *bool
-	ListAll                 *bool
-	JsonOutput              *bool
-	Check                   *bool
-	ConfigFile              *string
-	Child                   *bool
-	NetprobeTimeoutOverride *int
-	ShowCerts               *bool
-}
-
 func findConfigFile(configFile *string) (string, error) {
 	if _, err := os.Stat(*configFile); os.IsNotExist(err) {
 		cdLocal()
@@ -222,10 +211,35 @@ func findConfigFile(configFile *string) (string, error) {
 	return path.Join(pwd, *configFile), nil
 }
 
-func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
-	foundConfigFile, err := findConfigFile(flags.ConfigFile)
+func ConfigLoad(proxy *Proxy, svcFlag *string) error {
+	version := flag.Bool("version", false, "print current proxy version")
+	resolve := flag.String("resolve", "", "resolve a name using system libraries")
+	list := flag.Bool("list", false, "print the list of available resolvers for the enabled filters")
+	listAll := flag.Bool("list-all", false, "print the complete list of available resolvers, ignoring filters")
+	jsonOutput := flag.Bool("json", false, "output list as JSON")
+	check := flag.Bool("check", false, "check the configuration file and exit")
+	configFile := flag.String("config", DefaultConfigFileName, "Path to the configuration file")
+	child := flag.Bool("child", false, "Invokes program as a child process")
+	netprobeTimeoutOverride := flag.Int("netprobe-timeout", 60, "Override the netprobe timeout")
+	showCerts := flag.Bool("show-certs", false, "print DoH certificate chain hashes")
+
+	flag.Parse()
+
+	if *svcFlag == "stop" || *svcFlag == "uninstall" {
+		return nil
+	}
+	if *version {
+		fmt.Println(AppVersion)
+		os.Exit(0)
+	}
+	if resolve != nil && len(*resolve) > 0 {
+		Resolve(*resolve)
+		os.Exit(0)
+	}
+
+	foundConfigFile, err := findConfigFile(configFile)
 	if err != nil {
-		dlog.Fatalf("Unable to load the configuration file [%s] -- Maybe use the -config command-line switch?", *flags.ConfigFile)
+		dlog.Fatalf("Unable to load the configuration file [%s] -- Maybe use the -config command-line switch?", *configFile)
 	}
 	config := newConfig()
 	md, err := toml.DecodeFile(foundConfigFile, &config)
@@ -247,7 +261,7 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 		dlog.UseSyslog(true)
 	} else if config.LogFile != nil {
 		dlog.UseLogFile(*config.LogFile)
-		if !*flags.Child {
+		if !*child {
 			FileDescriptors = append(FileDescriptors, dlog.GetFileDescriptor())
 		} else {
 			FileDescriptorNum++
@@ -260,7 +274,7 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 
 	proxy.userName = config.UserName
 
-	proxy.child = *flags.Child
+	proxy.child = *child
 	proxy.xTransport = NewXTransport()
 	proxy.xTransport.tlsDisableSessionTickets = config.TLSDisableSessionTickets
 	proxy.xTransport.tlsCipherSuite = config.TLSCipherSuite
@@ -437,7 +451,7 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 		proxy.routes = &routes
 	}
 
-	if *flags.ListAll {
+	if *listAll {
 		config.ServerNames = nil
 		config.DisabledServerNames = nil
 		config.SourceRequireDNSSEC = false
@@ -451,8 +465,8 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 
 	netprobeTimeout := config.NetprobeTimeout
 	flag.Visit(func(flag *flag.Flag) {
-		if flag.Name == "netprobe-timeout" && flags.NetprobeTimeoutOverride != nil {
-			netprobeTimeout = *flags.NetprobeTimeoutOverride
+		if flag.Name == "netprobe-timeout" && netprobeTimeoutOverride != nil {
+			netprobeTimeout = *netprobeTimeoutOverride
 		}
 	})
 	netprobeAddress := DefaultNetprobeAddress
@@ -461,9 +475,9 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	} else if len(config.FallbackResolver) > 0 {
 		netprobeAddress = config.FallbackResolver
 	}
-	proxy.showCerts = *flags.ShowCerts || len(os.Getenv("SHOW_CERTS")) > 0
+	proxy.showCerts = *showCerts || len(os.Getenv("SHOW_CERTS")) > 0
 	if proxy.showCerts {
-		proxy.listenAddresses = proxy.listenAddresses[0:0]
+		proxy.listenAddresses = nil
 	}
 	dlog.Noticef("dnscrypt-proxy %s", AppVersion)
 	if err := NetProbe(netprobeAddress, netprobeTimeout); err != nil {
@@ -477,8 +491,8 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 			return errors.New("No servers configured")
 		}
 	}
-	if *flags.List || *flags.ListAll {
-		config.printRegisteredServers(proxy, *flags.JsonOutput)
+	if *list || *listAll {
+		config.printRegisteredServers(proxy, *jsonOutput)
 		os.Exit(0)
 	}
 	if proxy.routes != nil && len(*proxy.routes) > 0 {
@@ -501,7 +515,7 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 			}
 		}
 	}
-	if *flags.Check {
+	if *check {
 		dlog.Notice("Configuration successfully checked")
 		os.Exit(0)
 	}
@@ -614,11 +628,11 @@ func (config *Config) loadSource(proxy *Proxy, requiredProps stamps.ServerInform
 		cfgSource.RefreshDelay = 72
 	}
 	source, sourceUrlsToPrefetch, err := NewSource(proxy.xTransport, cfgSource.URLs, cfgSource.MinisignKeyStr, cfgSource.CacheFile, cfgSource.FormatStr, time.Duration(cfgSource.RefreshDelay)*time.Hour)
+	proxy.urlsToPrefetch = append(proxy.urlsToPrefetch, sourceUrlsToPrefetch...)
 	if err != nil {
 		dlog.Criticalf("Unable to retrieve source [%s]: [%s]", cfgSourceName, err)
 		return err
 	}
-	proxy.urlsToPrefetch = append(proxy.urlsToPrefetch, sourceUrlsToPrefetch...)
 	registeredServers, err := source.Parse(cfgSource.Prefix)
 	if err != nil {
 		if len(registeredServers) == 0 {

@@ -60,7 +60,7 @@ type Proxy struct {
 	forwardFile                  string
 	cloakFile                    string
 	pluginsGlobals               PluginsGlobals
-	urlsToPrefetch               []*URLToPrefetch
+	urlsToPrefetch               []URLToPrefetch
 	clientsCount                 uint32
 	maxClients                   uint32
 	xTransport                   *XTransport
@@ -74,7 +74,7 @@ type Proxy struct {
 	showCerts                    bool
 }
 
-func (proxy *Proxy) StartProxy(quit <-chan struct{}) {
+func (proxy *Proxy) StartProxy() {
 	proxy.questionSizeEstimator = NewQuestionSizeEstimator()
 	if _, err := crypto_rand.Read(proxy.proxySecretKey[:]); err != nil {
 		dlog.Fatal(err)
@@ -96,16 +96,12 @@ func (proxy *Proxy) StartProxy(quit <-chan struct{}) {
 
 		// if 'userName' is not set, continue as before
 		if !(len(proxy.userName) > 0) {
-			udpCloser, err := proxy.udpListenerFromAddr(listenUDPAddr)
-			if err != nil {
+			if err := proxy.udpListenerFromAddr(listenUDPAddr); err != nil {
 				dlog.Fatal(err)
 			}
-			tcpCloser, err := proxy.tcpListenerFromAddr(listenTCPAddr)
-			if err != nil {
+			if err := proxy.tcpListenerFromAddr(listenTCPAddr); err != nil {
 				dlog.Fatal(err)
 			}
-			defer udpCloser.Close()
-			defer tcpCloser.Close()
 		} else {
 			// if 'userName' is set and we are the parent process
 			if !proxy.child {
@@ -160,11 +156,9 @@ func (proxy *Proxy) StartProxy(quit <-chan struct{}) {
 	if len(proxy.userName) > 0 && !proxy.child {
 		proxy.dropPrivilege(proxy.userName, FileDescriptors)
 	}
-	sdc, err := proxy.SystemDListeners()
-	if err != nil {
+	if err := proxy.SystemDListeners(); err != nil {
 		dlog.Fatal(err)
 	}
-	defer sdc.Close()
 	liveServers, err := proxy.serversInfo.refresh(proxy)
 	if liveServers > 0 {
 		proxy.certIgnoreTimestamp = false
@@ -183,7 +177,7 @@ func (proxy *Proxy) StartProxy(quit <-chan struct{}) {
 		dlog.Error(err)
 		dlog.Notice("dnscrypt-proxy is waiting for at least one server to be reachable")
 	}
-	go proxy.prefetcher()
+	proxy.prefetcher(&proxy.urlsToPrefetch)
 	if len(proxy.serversInfo.registeredServers) > 0 {
 		go func() {
 			for {
@@ -199,27 +193,30 @@ func (proxy *Proxy) StartProxy(quit <-chan struct{}) {
 			}
 		}()
 	}
-	<-quit
 }
 
-func (proxy *Proxy) prefetcher() {
-	for {
-		now := time.Now()
-		for _, urlToPrefetch := range proxy.urlsToPrefetch {
-			if now.After(urlToPrefetch.when) {
-				dlog.Debugf("Prefetching [%s]", urlToPrefetch.url)
-				if err := PrefetchSourceURL(proxy.xTransport, urlToPrefetch); err != nil {
-					dlog.Debugf("Prefetching [%s] failed: %s", urlToPrefetch.url, err)
-				} else {
-					dlog.Debugf("Prefetching [%s] succeeded. Next refresh scheduled for %v", urlToPrefetch.url, urlToPrefetch.when)
+func (proxy *Proxy) prefetcher(urlsToPrefetch *[]URLToPrefetch) {
+	go func() {
+		for {
+			now := time.Now()
+			for i := range *urlsToPrefetch {
+				urlToPrefetch := &(*urlsToPrefetch)[i]
+				if now.After(urlToPrefetch.when) {
+					dlog.Debugf("Prefetching [%s]", urlToPrefetch.url)
+					if err := PrefetchSourceURL(proxy.xTransport, urlToPrefetch); err != nil {
+						dlog.Debugf("Prefetching [%s] failed: %s", urlToPrefetch.url, err)
+					} else {
+						dlog.Debugf("Prefetching [%s] succeeded. Next refresh scheduled for %v", urlToPrefetch.url, urlToPrefetch.when)
+					}
 				}
 			}
+			clocksmith.Sleep(60 * time.Second)
 		}
-		clocksmith.Sleep(60 * time.Second)
-	}
+	}()
 }
 
 func (proxy *Proxy) udpListener(clientPc *net.UDPConn) {
+	defer clientPc.Close()
 	for {
 		buffer := make([]byte, MaxDNSPacketSize-1)
 		length, clientAddr, err := clientPc.ReadFrom(buffer)
@@ -239,17 +236,18 @@ func (proxy *Proxy) udpListener(clientPc *net.UDPConn) {
 	}
 }
 
-func (proxy *Proxy) udpListenerFromAddr(listenAddr *net.UDPAddr) (io.Closer, error) {
+func (proxy *Proxy) udpListenerFromAddr(listenAddr *net.UDPAddr) error {
 	clientPc, err := net.ListenUDP("udp", listenAddr)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	dlog.Noticef("Now listening to %v [UDP]", listenAddr)
 	go proxy.udpListener(clientPc)
-	return clientPc, nil
+	return nil
 }
 
 func (proxy *Proxy) tcpListener(acceptPc *net.TCPListener) {
+	defer acceptPc.Close()
 	for {
 		clientPc, err := acceptPc.Accept()
 		if err != nil {
@@ -274,14 +272,14 @@ func (proxy *Proxy) tcpListener(acceptPc *net.TCPListener) {
 	}
 }
 
-func (proxy *Proxy) tcpListenerFromAddr(listenAddr *net.TCPAddr) (io.Closer, error) {
+func (proxy *Proxy) tcpListenerFromAddr(listenAddr *net.TCPAddr) error {
 	acceptPc, err := net.ListenTCP("tcp", listenAddr)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	dlog.Noticef("Now listening to %v [TCP]", listenAddr)
 	go proxy.tcpListener(acceptPc)
-	return acceptPc, nil
+	return nil
 }
 
 func (proxy *Proxy) prepareForRelay(ip net.IP, port int, encryptedQuery *[]byte) {
@@ -416,7 +414,7 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 				response, err = proxy.exchangeWithUDPServer(serverInfo, sharedKey, encryptedQuery, clientNonce)
 				if err == nil && len(response) >= MinDNSPacketSize && response[2]&0x02 == 0x02 {
 					serverProto = "tcp"
-					sharedKey, encryptedQuery, clientNonce, err = proxy.Encrypt(serverInfo, query, serverProto)
+					sharedKey, encryptedQuery, clientNonce, err := proxy.Encrypt(serverInfo, query, serverProto)
 					if err != nil {
 						pluginsState.returnCode = PluginsReturnCodeParseError
 						return
