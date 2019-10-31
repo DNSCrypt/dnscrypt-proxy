@@ -618,7 +618,7 @@ func (config *Config) loadSource(proxy *Proxy, requiredProps stamps.ServerInform
 		dlog.Criticalf("Unable to retrieve source [%s]: [%s]", cfgSourceName, err)
 		return err
 	}
-	proxy.urlsToPrefetch = append(proxy.urlsToPrefetch, source.prefetch...)
+	proxy.sources = append(proxy.sources, source)
 	registeredServers, err := source.Parse(cfgSource.Prefix)
 	if err != nil {
 		if len(registeredServers) == 0 {
