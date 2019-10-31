@@ -1,3 +1,7 @@
+* Version 2.0.31
+ - This version fixes another regression introduced in version 2.0.29,
+where DoH server couldn't be reached over IPv6 any more.
+
 * Version 2.0.30
  - This version fixes a startup issue introduced in version 2.0.29,
 on systems for which the service cannot be automatically installed
