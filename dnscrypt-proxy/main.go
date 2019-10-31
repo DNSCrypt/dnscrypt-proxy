@@ -8,7 +8,6 @@ import (
 	"math/rand"
 	"os"
 	"os/signal"
-	"syscall"
 
 	"github.com/facebookgo/pidfile"
 	"github.com/jedisct1/dlog"
@@ -141,7 +140,7 @@ func (app *App) appMain() {
 
 func (app *App) signalWatch() {
 	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	signal.Notify(quit, os.Interrupt, os.Kill)
 	go func() {
 		<-quit
 		signal.Stop(quit)
