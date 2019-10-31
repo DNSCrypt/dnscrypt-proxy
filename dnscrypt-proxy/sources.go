@@ -97,13 +97,13 @@ func fetchWithCache(xTransport *XTransport, urlStr string, cacheFile string, ref
 
 	dlog.Infof("Loading source information from URL [%s]", urlStr)
 
-	var srcURL, sigURL *url.URL
+	var srcURL *url.URL
 	if srcURL, err = url.Parse(urlStr); err != nil {
 		return
 	}
-	if sigURL, err = url.Parse(urlStr + ".minisig"); err != nil {
-		return
-	}
+	sigURL := &url.URL{}
+	*sigURL = *srcURL // deep copy to avoid parsing twice
+	sigURL.Path += ".minisig"
 	if bin, err = fetchFromURL(xTransport, srcURL); err != nil {
 		return
 	}
