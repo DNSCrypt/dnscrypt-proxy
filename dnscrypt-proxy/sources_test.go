@@ -228,8 +228,8 @@ func setupSourceTest(t *testing.T) (func(), *SourceTestData) {
 	}
 	d.xTransport.rebuildTransport()
 	d.timeNow = time.Now().AddDate(0, 0, 0)
-	d.timeOld = d.timeNow.Add(MinSourcesUpdateDelay * -4)
-	d.timeUpd = d.timeNow.Add(MinSourcesUpdateDelay)
+	d.timeOld = d.timeNow.Add(DefaultPrefetchDelay * -4)
+	d.timeUpd = d.timeNow.Add(DefaultPrefetchDelay)
 	timeNow = func() time.Time { return d.timeNow } // originally defined in sources.go, replaced during testing to ensure consistent results
 	makeTempDir(t, d)
 	makeTestServer(t, d)
@@ -267,7 +267,7 @@ func prepSourceTestDownload(t *testing.T, d *SourceTestData, e *SourceTestExpect
 				switch state {
 				case TestStateCorrect:
 					e.cache = []SourceFixture{d.fixtures[state][source], d.fixtures[state][source+".minisig"]}
-					e.Source.in, e.success, e.refresh = e.cache[0].content, true, d.timeUpd
+					e.Source.in, e.success, e.download, e.refresh = e.cache[0].content, true, true, d.timeUpd
 					fallthrough
 				case TestStateMissingSig, TestStatePartial, TestStatePartialSig, TestStateReadSigErr:
 					d.reqExpect[path+".minisig"]++
@@ -321,7 +321,7 @@ func setupSourceTestCase(t *testing.T, d *SourceTestData, i int,
 func TestNewSource(t *testing.T) {
 	teardown, d := setupSourceTest(t)
 	defer teardown()
-	doTest := func(t *testing.T, e *SourceTestExpect, got *Source, err error) {
+	checkResult := func(t *testing.T, e *SourceTestExpect, got *Source, err error) {
 		c := check.T(t)
 		if len(e.err) > 0 {
 			c.Match(err, e.err, "Unexpected error")
@@ -338,14 +338,14 @@ func TestNewSource(t *testing.T) {
 		refresh      time.Duration
 		e            *SourceTestExpect
 	}{
-		{"old format", d.keyStr, "v1", MinSourcesUpdateDelay * 3, &SourceTestExpect{
+		{"old format", d.keyStr, "v1", DefaultPrefetchDelay * 3, &SourceTestExpect{
 			Source: &Source{}, err: "Unsupported source format"}},
-		{"invalid public key", "", "v2", MinSourcesUpdateDelay * 3, &SourceTestExpect{
+		{"invalid public key", "", "v2", DefaultPrefetchDelay * 3, &SourceTestExpect{
 			Source: &Source{}, err: "Invalid encoded public key"}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := NewSource(d.xTransport, tt.e.Source.urls, tt.key, tt.e.cachePath, tt.v, tt.refresh)
-			doTest(t, tt.e, got, err)
+			checkResult(t, tt.e, got, err)
 		})
 	}
 	for cacheTestName, cacheTest := range d.cacheTests {
@@ -354,28 +354,28 @@ func TestNewSource(t *testing.T) {
 			for i := range d.sources {
 				id, e := setupSourceTestCase(t, d, i, &cacheTest, downloadTest)
 				t.Run("cache "+cacheTestName+", download "+downloadTestName+"/"+id, func(t *testing.T) {
-					got, err := NewSource(d.xTransport, e.Source.urls, d.keyStr, e.cachePath, "v2", MinSourcesUpdateDelay*3)
-					doTest(t, e, got, err)
+					got, err := NewSource(d.xTransport, e.Source.urls, d.keyStr, e.cachePath, "v2", DefaultPrefetchDelay*3)
+					checkResult(t, e, got, err)
 				})
 			}
 		}
 	}
 }
 
-func TestPrefetchSourceURL(t *testing.T) {
+func TestPrefetchSources(t *testing.T) {
 	teardown, d := setupSourceTest(t)
 	defer teardown()
-	doTest := func(t *testing.T, expects []*SourceTestExpect) {
+	checkResult := func(t *testing.T, expects []*SourceTestExpect, got time.Duration) {
 		c := check.T(t)
+		expectDelay := MinimumPrefetchInterval
 		for _, e := range expects {
-			for _, url := range e.Source.urls {
-				for _, suffix := range []string{"", ".minisig"} {
-					pf := &URLToPrefetch{url + suffix, e.cachePath + suffix, d.timeOld}
-					PrefetchSourceURL(d.xTransport, pf)
-					c.InDelta(pf.when, e.refresh, time.Second, "Unexpected prefetch refresh time")
-				}
+			if e.refresh.After(d.timeNow) {
+				expectDelay = e.refresh.Sub(d.timeNow)
+			} else if e.download {
+				expectDelay = DefaultPrefetchDelay
 			}
 		}
+		c.InDelta(got, expectDelay, time.Second, "Unexpected return")
 		checkTestServer(c, d)
 		for _, e := range expects {
 			checkSourceCache(c, e.cachePath, e.cache)
@@ -383,13 +383,22 @@ func TestPrefetchSourceURL(t *testing.T) {
 	}
 	for downloadTestName, downloadTest := range d.downloadTests {
 		d.n++
+		sources := []*Source{}
 		expects := []*SourceTestExpect{}
 		for i := range d.sources {
 			_, e := setupSourceTestCase(t, d, i, nil, downloadTest)
+			sources = append(sources, e.Source)
 			expects = append(expects, e)
+			for _, pf := range e.Source.prefetch {
+				pf.when = d.timeOld
+			}
+			if e.download {
+				e.refresh = d.timeUpd
+			}
 		}
 		t.Run("download "+downloadTestName, func(t *testing.T) {
-			doTest(t, expects)
+			got := PrefetchSources(d.xTransport, sources)
+			checkResult(t, expects, got)
 		})
 	}
 }
