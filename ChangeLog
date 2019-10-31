@@ -1,6 +1,11 @@
 * Version 2.0.31
  - This version fixes another regression introduced in version 2.0.29,
 where DoH server couldn't be reached over IPv6 any more.
+ - The Windows service now returns immediately, so that it doesn't get
+killed by the service manager if porbing the servers list takes too
+long. Great contribution from Alison Winters!
+ - The proxy can be interrupted again while servers are being
+benchmarked.
 
 * Version 2.0.30
  - This version fixes a startup issue introduced in version 2.0.29,
