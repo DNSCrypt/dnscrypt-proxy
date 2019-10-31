@@ -101,9 +101,6 @@ func main() {
 			dlog.Fatal(err)
 		}
 	} else {
-		if err := ConfigLoad(app.proxy, &flags); err != nil {
-			dlog.Fatal(err)
-		}
 		app.signalWatch()
 		app.Start(nil)
 	}
