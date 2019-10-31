@@ -109,7 +109,15 @@ func main() {
 }
 
 func (app *App) Start(service service.Service) error {
-	go app.appMain()
+	go func() {
+		if err := ConfigLoad(app.proxy, app.flags); err != nil {
+			dlog.Fatal(err)
+		}
+		if err := app.proxy.InitPluginsGlobals(); err != nil {
+			dlog.Fatal(err)
+		}
+		app.appMain()
+	}()
 	return nil
 }
 
@@ -123,12 +131,6 @@ func (app *App) Stop(service service.Service) error {
 }
 
 func (app *App) appMain() {
-	if err := ConfigLoad(app.proxy, app.flags); err != nil {
-		dlog.Fatal(err)
-	}
-	if err := app.proxy.InitPluginsGlobals(); err != nil {
-		dlog.Fatal(err)
-	}
 	pidfile.Write()
 	app.proxy.StartProxy()
 }
