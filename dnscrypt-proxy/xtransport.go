@@ -97,21 +97,21 @@ func (xTransport *XTransport) saveCachedIP(host string, ip net.IP, ttl time.Dura
 	xTransport.cachedIPs.Unlock()
 }
 
-func (xTransport *XTransport) loadCachedIP(host string, deleteIfExpired bool) (net.IP, bool) {
+func (xTransport *XTransport) loadCachedIP(host string) (ip net.IP, expired bool) {
+	ip = nil
+	expired = false
 	xTransport.cachedIPs.RLock()
 	item, ok := xTransport.cachedIPs.cache[host]
 	xTransport.cachedIPs.RUnlock()
 	if !ok {
-		return nil, false
+		return
 	}
+	ip = item.ip
 	expiration := item.expiration
-	if deleteIfExpired && expiration != nil && time.Until(*expiration) < 0 {
-		xTransport.cachedIPs.Lock()
-		delete(xTransport.cachedIPs.cache, host)
-		xTransport.cachedIPs.Unlock()
-		return nil, false
+	if expiration != nil && time.Until(*expiration) < 0 {
+		expired = true
 	}
-	return item.ip, ok
+	return
 }
 
 func (xTransport *XTransport) rebuildTransport() {
@@ -131,8 +131,8 @@ func (xTransport *XTransport) rebuildTransport() {
 		DialContext: func(ctx context.Context, network, addrStr string) (net.Conn, error) {
 			host, port := ExtractHostAndPort(addrStr, stamps.DefaultPort)
 			ipOnly := host
-			cachedIP, ok := xTransport.loadCachedIP(host, false)
-			if ok {
+			cachedIP, _ := xTransport.loadCachedIP(host)
+			if cachedIP == nil {
 				if ipv4 := cachedIP.To4(); ipv4 != nil {
 					ipOnly = ipv4.String()
 				} else {
@@ -249,7 +249,8 @@ func (xTransport *XTransport) resolveHost(host string) (err error) {
 	if ParseIP(host) != nil {
 		return
 	}
-	if _, ok := xTransport.loadCachedIP(host, true); ok {
+	cachedIP, expired := xTransport.loadCachedIP(host)
+	if !expired {
 		return
 	}
 	var foundIP net.IP
@@ -275,7 +276,11 @@ func (xTransport *XTransport) resolveHost(host string) (err error) {
 		}
 	}
 	if err != nil {
-		return
+		if cachedIP != nil {
+			foundIP = cachedIP
+		} else {
+			return
+		}
 	}
 	xTransport.saveCachedIP(host, foundIP, ttl)
 	dlog.Debugf("[%s] IP address [%s] added to the cache, valid until %v", host, foundIP, ttl)
