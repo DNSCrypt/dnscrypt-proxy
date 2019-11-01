@@ -8,7 +8,7 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/hashicorp/go-immutable-radix"
+	iradix "github.com/hashicorp/go-immutable-radix"
 	"github.com/jedisct1/dlog"
 	"github.com/miekg/dns"
 	"gopkg.in/natefinch/lumberjack.v2"
