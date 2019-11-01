@@ -251,10 +251,7 @@ func (pluginsState *PluginsState) ApplyQueryPlugins(pluginsGlobals *PluginsGloba
 			return packet, err
 		}
 		if pluginsState.action == PluginsActionReject {
-			synth, err := RefusedResponseFromMessage(&msg, pluginsGlobals.refusedCodeInResponses, pluginsGlobals.respondWithIPv4, pluginsGlobals.respondWithIPv6, pluginsState.rejectTTL)
-			if err != nil {
-				return nil, err
-			}
+			synth := RefusedResponseFromMessage(&msg, pluginsGlobals.refusedCodeInResponses, pluginsGlobals.respondWithIPv4, pluginsGlobals.respondWithIPv6, pluginsState.rejectTTL)
 			pluginsState.synthResponse = synth
 		}
 		if pluginsState.action != PluginsActionForward {
@@ -298,10 +295,7 @@ func (pluginsState *PluginsState) ApplyResponsePlugins(pluginsGlobals *PluginsGl
 			return packet, err
 		}
 		if pluginsState.action == PluginsActionReject {
-			synth, err := RefusedResponseFromMessage(&msg, pluginsGlobals.refusedCodeInResponses, pluginsGlobals.respondWithIPv4, pluginsGlobals.respondWithIPv6, pluginsState.rejectTTL)
-			if err != nil {
-				return nil, err
-			}
+			synth := RefusedResponseFromMessage(&msg, pluginsGlobals.refusedCodeInResponses, pluginsGlobals.respondWithIPv4, pluginsGlobals.respondWithIPv6, pluginsState.rejectTTL)
 			dlog.Infof("Blocking [%s]", synth.Question[0].Name)
 			pluginsState.synthResponse = synth
 		}

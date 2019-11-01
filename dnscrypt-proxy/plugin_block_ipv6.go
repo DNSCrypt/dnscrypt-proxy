@@ -37,10 +37,7 @@ func (plugin *PluginBlockIPv6) Eval(pluginsState *PluginsState, msg *dns.Msg) er
 	if question.Qclass != dns.ClassINET || question.Qtype != dns.TypeAAAA {
 		return nil
 	}
-	synth, err := EmptyResponseFromMessage(msg)
-	if err != nil {
-		return err
-	}
+	synth := EmptyResponseFromMessage(msg)
 	hinfo := new(dns.HINFO)
 	hinfo.Hdr = dns.RR_Header{Name: question.Name, Rrtype: dns.TypeHINFO,
 		Class: dns.ClassINET, Ttl: 86400}

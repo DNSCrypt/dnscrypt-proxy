@@ -54,11 +54,7 @@ func FetchCurrentDNSCryptCert(proxy *Proxy, serverName *string, proto string, pk
 		} else {
 			txt = strings.Join(t.Txt, "")
 		}
-		binCert, err := packTxtString(txt)
-		if err != nil {
-			dlog.Warnf("[%v] Unable to unpack the certificate", providerName)
-			continue
-		}
+		binCert := packTxtString(txt)
 		if len(binCert) < 124 {
 			dlog.Warnf("[%v] Certificate too short", providerName)
 			continue
@@ -154,7 +150,7 @@ func dddToByte(s []byte) byte {
 	return byte((s[0]-'0')*100 + (s[1]-'0')*10 + (s[2] - '0'))
 }
 
-func packTxtString(s string) ([]byte, error) {
+func packTxtString(s string) []byte {
 	bs := make([]byte, len(s))
 	msg := make([]byte, 0)
 	copy(bs, s)
@@ -180,7 +176,7 @@ func packTxtString(s string) ([]byte, error) {
 			msg = append(msg, bs[i])
 		}
 	}
-	return msg, nil
+	return msg
 }
 
 func dnsExchange(proxy *Proxy, proto string, query *dns.Msg, serverAddress string, relayUDPAddr *net.UDPAddr, relayTCPAddr *net.TCPAddr, serverName *string) (*dns.Msg, time.Duration, error) {
