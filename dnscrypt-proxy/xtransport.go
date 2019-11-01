@@ -59,7 +59,7 @@ type XTransport struct {
 }
 
 func NewXTransport() *XTransport {
-	if err := IsIPAndPort(DefaultFallbackResolver); err != nil {
+	if err := isIPAndPort(DefaultFallbackResolver); err != nil {
 		panic("DefaultFallbackResolver does not parse")
 	}
 	xTransport := XTransport{

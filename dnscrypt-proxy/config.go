@@ -266,7 +266,7 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	proxy.xTransport.tlsCipherSuite = config.TLSCipherSuite
 	proxy.xTransport.mainProto = proxy.mainProto
 	if len(config.FallbackResolver) > 0 {
-		if err := IsIPAndPort(config.FallbackResolver); err != nil {
+		if err := isIPAndPort(config.FallbackResolver); err != nil {
 			dlog.Fatalf("fallback_resolver [%v]", err)
 		}
 		proxy.xTransport.ignoreSystemDNS = config.IgnoreSystemDNS
@@ -689,7 +689,7 @@ func cdLocal() {
 	os.Chdir(filepath.Dir(exeFileName))
 }
 
-func IsIPAndPort(addrStr string) error {
+func isIPAndPort(addrStr string) error {
 	host, port := ExtractHostAndPort(addrStr, -1)
 	if ip := ParseIP(host); ip == nil {
 		return fmt.Errorf("Host does not parse as IP '%s'", addrStr)
