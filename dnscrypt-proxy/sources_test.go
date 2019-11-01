@@ -291,9 +291,6 @@ func prepSourceTestDownload(t *testing.T, d *SourceTestData, e *SourceTestExpect
 				e.err = "parse"
 			}
 			e.Source.urls = append(e.Source.urls, d.server.URL+path)
-			if state != TestStatePathErr {
-				e.Source.prefetch = append(e.Source.prefetch, &URLToPrefetch{d.server.URL + path})
-			}
 		}
 		if e.success {
 			e.err = ""
@@ -310,7 +307,7 @@ func setupSourceTestCase(t *testing.T, d *SourceTestData, i int,
 		cachePath: filepath.Join(d.tempDir, id),
 		refresh:   d.timeNow,
 	}
-	e.Source = &Source{urls: []string{}, prefetch: []*URLToPrefetch{}, format: SourceFormatV2, minisignKey: d.key,
+	e.Source = &Source{urls: []string{}, format: SourceFormatV2, minisignKey: d.key,
 		cacheFile: e.cachePath, cacheTTL: DefaultPrefetchDelay * 3, prefetchDelay: DefaultPrefetchDelay}
 	if cacheTest != nil {
 		prepSourceTestCache(t, d, e, d.sources[i], *cacheTest)
