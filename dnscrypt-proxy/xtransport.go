@@ -242,7 +242,7 @@ func (xTransport *XTransport) resolveUsingResolver(proto, host string, resolver 
 	return
 }
 
-func (xTransport *XTransport) resolveHostWithCache(host string) (err error) {
+func (xTransport *XTransport) resolveWithCache(host string) (err error) {
 	if xTransport.proxyDialer != nil || xTransport.httpProxyFunction != nil {
 		return
 	}
@@ -314,7 +314,7 @@ func (xTransport *XTransport) Fetch(method string, url *url.URL, accept string, 
 	if xTransport.proxyDialer == nil && strings.HasSuffix(host, ".onion") {
 		return nil, 0, errors.New("Onion service is not reachable without Tor")
 	}
-	if err := xTransport.resolveHostWithCache(host); err != nil {
+	if err := xTransport.resolveWithCache(host); err != nil {
 		return nil, 0, err
 	}
 	req := &http.Request{
