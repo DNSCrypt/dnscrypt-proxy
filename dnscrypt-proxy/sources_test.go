@@ -194,8 +194,8 @@ func checkTestServer(c *check.C, d *SourceTestData) {
 func setupSourceTest(t *testing.T) (func(), *SourceTestData) {
 	d := &SourceTestData{n: -1, xTransport: NewXTransport()}
 	d.cacheTests = map[string]SourceTestState{ // determines cache files written to disk before each call
-		"correct": TestStateCorrect,
-		//"expired":      TestStateExpired,    // TODO: an expired cache should be used if no download passes signature verification
+		"correct":      TestStateCorrect,
+		"expired":      TestStateExpired,
 		"partial":      TestStatePartial,
 		"partial-sig":  TestStatePartialSig,
 		"missing":      TestStateMissing,

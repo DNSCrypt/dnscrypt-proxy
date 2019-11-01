@@ -52,7 +52,7 @@ func (source *Source) checkSignature(bin, sig []byte) (err error) {
 // timeNow can be replaced by tests to provide a static value
 var timeNow = time.Now
 
-func (source *Source) fetchFromCache() (delay time.Duration, err error) {
+func (source *Source) fetchFromCache(now time.Time) (delay time.Duration, err error) {
 	var bin, sig []byte
 	if bin, err = ioutil.ReadFile(source.cacheFile); err != nil {
 		return
@@ -68,7 +68,7 @@ func (source *Source) fetchFromCache() (delay time.Duration, err error) {
 	if fi, err = os.Stat(source.cacheFile); err != nil {
 		return
 	}
-	if elapsed := timeNow().Sub(fi.ModTime()); elapsed < source.cacheTTL {
+	if elapsed := now.Sub(fi.ModTime()); elapsed < source.cacheTTL {
 		delay = source.prefetchDelay - elapsed
 		dlog.Debugf("Source [%s] cache file [%s] is still fresh, next update: %v", source.name, source.cacheFile, delay)
 	} else {
@@ -105,15 +105,20 @@ func fetchFromURL(xTransport *XTransport, u *url.URL) (bin []byte, err error) {
 	return
 }
 
-func (source *Source) fetchWithCache(xTransport *XTransport) (delay time.Duration, err error) {
-	if delay, err = source.fetchFromCache(); err != nil {
+func (source *Source) fetchWithCache(xTransport *XTransport, now time.Time) (delay time.Duration, err error) {
+	if delay, err = source.fetchFromCache(now); err != nil {
 		if len(source.urls) == 0 {
 			dlog.Errorf("Source [%s] cache file [%s] not present and no URL given", source.name, source.cacheFile)
 			return
 		}
 		dlog.Debugf("Source [%s] cache file [%s] not present", source.name, source.cacheFile)
 	}
-	if delay > 0 {
+	if len(source.urls) > 0 {
+		defer func() {
+			source.refresh = now.Add(delay)
+		}()
+	}
+	if len(source.urls) == 0 || delay > 0 {
 		return
 	}
 	delay = MinimumPrefetchInterval
@@ -166,16 +171,7 @@ func NewSource(name string, xTransport *XTransport, urls []string, minisignKeySt
 	} else {
 		return source, err
 	}
-	now := timeNow()
-
-	var delay time.Duration
-	if len(urls) <= 0 {
-		delay, err = source.fetchWithCache(xTransport)
-	} else {
-		delay, err = source.fetchWithCache(xTransport)
-		source.refresh = now.Add(delay)
-	}
-	if err != nil {
+	if _, err = source.fetchWithCache(xTransport, timeNow()); err != nil {
 		return
 	}
 	dlog.Noticef("Source [%s] loaded", name)
@@ -191,11 +187,10 @@ func PrefetchSources(xTransport *XTransport, sources []*Source) time.Duration {
 			continue
 		}
 		dlog.Debugf("Prefetching [%s]", source.name)
-		if delay, err := source.fetchWithCache(xTransport); err != nil {
+		if delay, err := source.fetchWithCache(xTransport, now); err != nil {
 			dlog.Debugf("Prefetching [%s] failed: %v", source.name, err)
 		} else {
 			dlog.Debugf("Prefetching [%s] succeeded, next update: %v", source.name, delay)
-			source.refresh = now.Add(delay)
 			if delay >= MinimumPrefetchInterval && (interval == MinimumPrefetchInterval || interval > delay) {
 				interval = delay
 			}
