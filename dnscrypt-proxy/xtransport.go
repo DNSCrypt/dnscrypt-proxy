@@ -86,8 +86,8 @@ func ParseIP(ipStr string) net.IP {
 func (xTransport *XTransport) saveCachedIP(host string, ip net.IP, ttl time.Duration) {
 	item := &CachedIPItem{ip: ip, expiration: nil}
 	if ttl >= 0 {
-		if ttl < xTransport.timeout {
-			ttl = xTransport.timeout
+		if ttl < SystemResolverTTL {
+			ttl = SystemResolverTTL
 		}
 		expiration := time.Now().Add(ttl)
 		item.expiration = &expiration
