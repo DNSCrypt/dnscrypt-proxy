@@ -54,12 +54,12 @@ type SourceTestData struct {
 }
 
 type SourceTestExpect struct {
-	success, download bool
-	cachePath         string
-	cache             []SourceFixture
-	refresh           time.Time
-	Source            *Source
-	err               string
+	success   bool
+	cachePath string
+	cache     []SourceFixture
+	Source    *Source
+	delay     time.Duration
+	err       string
 }
 
 func readFixture(t *testing.T, name string) []byte {
@@ -246,7 +246,7 @@ func prepSourceTestCache(t *testing.T, d *SourceTestData, e *SourceTestExpect, s
 	e.cache = []SourceFixture{d.fixtures[state][source], d.fixtures[state][source+".minisig"]}
 	switch state {
 	case TestStateCorrect:
-		e.Source.in, e.success, e.refresh = e.cache[0].content, true, d.timeUpd
+		e.Source.in, e.success = e.cache[0].content, true
 	case TestStateExpired:
 		e.Source.in = e.cache[0].content
 	case TestStatePartial, TestStatePartialSig:
@@ -267,7 +267,7 @@ func prepSourceTestDownload(t *testing.T, d *SourceTestData, e *SourceTestExpect
 				switch state {
 				case TestStateCorrect:
 					e.cache = []SourceFixture{d.fixtures[state][source], d.fixtures[state][source+".minisig"]}
-					e.Source.in, e.success, e.download, e.refresh = e.cache[0].content, true, true, d.timeUpd
+					e.Source.in, e.success = e.cache[0].content, true
 					fallthrough
 				case TestStateMissingSig, TestStatePartial, TestStatePartialSig, TestStateReadSigErr:
 					d.reqExpect[path+".minisig"]++
@@ -294,9 +294,11 @@ func prepSourceTestDownload(t *testing.T, d *SourceTestData, e *SourceTestExpect
 		}
 		if e.success {
 			e.err = ""
+			e.delay = DefaultPrefetchDelay
+		} else {
+			e.delay = MinimumPrefetchInterval
 		}
-	} else {
-		e.refresh = time.Time{}
+		e.Source.refresh = d.timeNow.Add(e.delay)
 	}
 }
 
@@ -305,7 +307,6 @@ func setupSourceTestCase(t *testing.T, d *SourceTestData, i int,
 	id = strconv.Itoa(d.n) + "-" + strconv.Itoa(i)
 	e = &SourceTestExpect{
 		cachePath: filepath.Join(d.tempDir, id),
-		refresh:   d.timeNow,
 	}
 	e.Source = &Source{urls: []string{}, format: SourceFormatV2, minisignKey: d.key,
 		cacheFile: e.cachePath, cacheTTL: DefaultPrefetchDelay * 3, prefetchDelay: DefaultPrefetchDelay}
@@ -314,7 +315,6 @@ func setupSourceTestCase(t *testing.T, d *SourceTestData, i int,
 		i = (i + 1) % len(d.sources) // make the cached and downloaded fixtures different
 	}
 	prepSourceTestDownload(t, d, e, d.sources[i], downloadTest)
-	e.Source.refresh = e.refresh
 	return
 }
 
@@ -369,10 +369,8 @@ func TestPrefetchSources(t *testing.T) {
 		c := check.T(t)
 		expectDelay := MinimumPrefetchInterval
 		for _, e := range expects {
-			if e.refresh.After(d.timeNow) {
-				expectDelay = e.refresh.Sub(d.timeNow)
-			} else if e.download {
-				expectDelay = DefaultPrefetchDelay
+			if e.delay >= MinimumPrefetchInterval && (expectDelay == MinimumPrefetchInterval || expectDelay > e.delay) {
+				expectDelay = e.delay
 			}
 		}
 		c.InDelta(got, expectDelay, time.Second, "Unexpected return")
@@ -381,6 +379,7 @@ func TestPrefetchSources(t *testing.T) {
 			checkSourceCache(c, e.cachePath, e.cache)
 		}
 	}
+	timeNow = func() time.Time { return d.timeUpd } // since the fixtures are prepared using real now, make the tested code think it's the future
 	for downloadTestName, downloadTest := range d.downloadTests {
 		d.n++
 		sources := []*Source{}
@@ -389,12 +388,6 @@ func TestPrefetchSources(t *testing.T) {
 			_, e := setupSourceTestCase(t, d, i, nil, downloadTest)
 			sources = append(sources, e.Source)
 			expects = append(expects, e)
-			if !e.Source.refresh.IsZero() {
-				e.Source.refresh = d.timeOld
-			}
-			if e.download {
-				e.refresh = d.timeUpd
-			}
 		}
 		t.Run("download "+downloadTestName, func(t *testing.T) {
 			got := PrefetchSources(d.xTransport, sources)

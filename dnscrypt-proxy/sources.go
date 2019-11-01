@@ -52,7 +52,6 @@ func (source *Source) checkSignature(bin, sig []byte) (err error) {
 var timeNow = time.Now
 
 func (source *Source) fetchFromCache() (delayTillNextUpdate time.Duration, err error) {
-	delayTillNextUpdate = 0
 	var bin, sig []byte
 	if bin, err = ioutil.ReadFile(source.cacheFile); err != nil {
 		return
@@ -69,8 +68,8 @@ func (source *Source) fetchFromCache() (delayTillNextUpdate time.Duration, err e
 		return
 	}
 	if elapsed := timeNow().Sub(fi.ModTime()); elapsed < source.cacheTTL {
-		dlog.Debugf("Cache file [%s] is still fresh", source.cacheFile)
 		delayTillNextUpdate = source.prefetchDelay - elapsed
+		dlog.Debugf("Cache file [%s] is still fresh, next update: %v", source.cacheFile, delayTillNextUpdate)
 	} else {
 		dlog.Debugf("Cache file [%s] needs to be refreshed", source.cacheFile)
 	}
@@ -117,7 +116,7 @@ func (source *Source) fetchWithCache(xTransport *XTransport, urlStr string) (del
 		dlog.Debugf("Delay till next update: %v", delayTillNextUpdate)
 		return
 	}
-
+	delayTillNextUpdate = MinimumPrefetchInterval
 	dlog.Infof("Loading source information from URL [%s]", urlStr)
 
 	var srcURL *url.URL
