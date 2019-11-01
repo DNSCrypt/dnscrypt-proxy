@@ -59,7 +59,7 @@ func (plugin *PluginWhitelistName) Init(proxy *Proxy) error {
 				weeklyRanges = &weeklyRangesX
 			}
 		}
-		if _, err := plugin.patternMatcher.Add(line, weeklyRanges, lineNo+1); err != nil {
+		if err := plugin.patternMatcher.Add(line, weeklyRanges, lineNo+1); err != nil {
 			dlog.Error(err)
 			continue
 		}
