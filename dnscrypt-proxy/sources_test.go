@@ -54,12 +54,11 @@ type SourceTestData struct {
 }
 
 type SourceTestExpect struct {
-	success   bool
-	cachePath string
-	cache     []SourceFixture
-	Source    *Source
-	delay     time.Duration
-	err       string
+	success        bool
+	err, cachePath string
+	cache          []SourceFixture
+	Source         *Source
+	delay          time.Duration
 }
 
 func readFixture(t *testing.T, name string) []byte {
@@ -308,7 +307,7 @@ func setupSourceTestCase(t *testing.T, d *SourceTestData, i int,
 	e = &SourceTestExpect{
 		cachePath: filepath.Join(d.tempDir, id),
 	}
-	e.Source = &Source{urls: []string{}, format: SourceFormatV2, minisignKey: d.key,
+	e.Source = &Source{name: id, urls: []string{}, format: SourceFormatV2, minisignKey: d.key,
 		cacheFile: e.cachePath, cacheTTL: DefaultPrefetchDelay * 3, prefetchDelay: DefaultPrefetchDelay}
 	if cacheTest != nil {
 		prepSourceTestCache(t, d, e, d.sources[i], *cacheTest)
@@ -334,17 +333,17 @@ func TestNewSource(t *testing.T) {
 	}
 	d.n++
 	for _, tt := range []struct {
-		name, key, v string
-		refresh      time.Duration
-		e            *SourceTestExpect
+		v, key  string
+		refresh time.Duration
+		e       *SourceTestExpect
 	}{
-		{"old format", d.keyStr, "v1", DefaultPrefetchDelay * 3, &SourceTestExpect{
-			Source: &Source{cacheTTL: DefaultPrefetchDelay * 3, prefetchDelay: DefaultPrefetchDelay}, err: "Unsupported source format"}},
-		{"invalid public key", "", "v2", DefaultPrefetchDelay * 3, &SourceTestExpect{
-			Source: &Source{cacheTTL: DefaultPrefetchDelay * 3, prefetchDelay: DefaultPrefetchDelay}, err: "Invalid encoded public key"}},
+		{"v1", d.keyStr, DefaultPrefetchDelay * 2, &SourceTestExpect{err: "Unsupported source format",
+			Source: &Source{name: "old format", cacheTTL: DefaultPrefetchDelay * 2, prefetchDelay: DefaultPrefetchDelay}}},
+		{"v2", "", DefaultPrefetchDelay * 3, &SourceTestExpect{err: "Invalid encoded public key",
+			Source: &Source{name: "invalid public key", cacheTTL: DefaultPrefetchDelay * 3, prefetchDelay: DefaultPrefetchDelay}}},
 	} {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := NewSource(d.xTransport, tt.e.Source.urls, tt.key, tt.e.cachePath, tt.v, tt.refresh)
+		t.Run(tt.e.Source.name, func(t *testing.T) {
+			got, err := NewSource(tt.e.Source.name, d.xTransport, tt.e.Source.urls, tt.key, tt.e.cachePath, tt.v, tt.refresh)
 			checkResult(t, tt.e, got, err)
 		})
 	}
@@ -354,7 +353,7 @@ func TestNewSource(t *testing.T) {
 			for i := range d.sources {
 				id, e := setupSourceTestCase(t, d, i, &cacheTest, downloadTest)
 				t.Run("cache "+cacheTestName+", download "+downloadTestName+"/"+id, func(t *testing.T) {
-					got, err := NewSource(d.xTransport, e.Source.urls, d.keyStr, e.cachePath, "v2", DefaultPrefetchDelay*3)
+					got, err := NewSource(id, d.xTransport, e.Source.urls, d.keyStr, e.cachePath, "v2", DefaultPrefetchDelay*3)
 					checkResult(t, e, got, err)
 				})
 			}
