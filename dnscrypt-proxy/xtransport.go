@@ -30,6 +30,7 @@ const (
 	DefaultKeepAlive        = 5 * time.Second
 	DefaultTimeout          = 30 * time.Second
 	SystemResolverTTL       = 24 * time.Hour
+	ExpiredCachedIPGraceTTL = 1 * time.Minute
 )
 
 type CachedIPItem struct {
@@ -98,8 +99,7 @@ func (xTransport *XTransport) saveCachedIP(host string, ip net.IP, ttl time.Dura
 }
 
 func (xTransport *XTransport) loadCachedIP(host string) (ip net.IP, expired bool) {
-	ip = nil
-	expired = false
+	ip, expired = nil, false
 	xTransport.cachedIPs.RLock()
 	item, ok := xTransport.cachedIPs.cache[host]
 	xTransport.cachedIPs.RUnlock()
@@ -131,6 +131,8 @@ func (xTransport *XTransport) rebuildTransport() {
 		DialContext: func(ctx context.Context, network, addrStr string) (net.Conn, error) {
 			host, port := ExtractHostAndPort(addrStr, stamps.DefaultPort)
 			ipOnly := host
+			// resolveWithCache() is always called in `Fetch()` before the `Dial()`
+			// method is used, so that a cached entry must be present at this point.
 			cachedIP, _ := xTransport.loadCachedIP(host)
 			if cachedIP == nil {
 				if ipv4 := cachedIP.To4(); ipv4 != nil {
@@ -242,6 +244,7 @@ func (xTransport *XTransport) resolveUsingResolver(proto, host string, resolver 
 	return
 }
 
+// Return a cached entry, or resolve a name and update the cache
 func (xTransport *XTransport) resolveWithCache(host string) (err error) {
 	if xTransport.proxyDialer != nil || xTransport.httpProxyFunction != nil {
 		return
@@ -278,6 +281,7 @@ func (xTransport *XTransport) resolveWithCache(host string) (err error) {
 	if err != nil {
 		if cachedIP != nil {
 			foundIP = cachedIP
+			ttl = ExpiredCachedIPGraceTTL
 		} else {
 			return
 		}
