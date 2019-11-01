@@ -105,9 +105,9 @@ func fetchFromURL(xTransport *XTransport, u *url.URL) (bin []byte, err error) {
 	return
 }
 
-func (source *Source) fetchWithCache(xTransport *XTransport, urlStr string) (delay time.Duration, err error) {
+func (source *Source) fetchWithCache(xTransport *XTransport) (delay time.Duration, err error) {
 	if delay, err = source.fetchFromCache(); err != nil {
-		if len(urlStr) == 0 {
+		if len(source.urls) == 0 {
 			dlog.Errorf("Source [%s] cache file [%s] not present and no URL given", source.name, source.cacheFile)
 			return
 		}
@@ -117,23 +117,31 @@ func (source *Source) fetchWithCache(xTransport *XTransport, urlStr string) (del
 		return
 	}
 	delay = MinimumPrefetchInterval
-	dlog.Infof("Source [%s] loading from URL [%s]", source.name, urlStr)
-
-	var srcURL *url.URL
-	if srcURL, err = url.Parse(urlStr); err != nil {
-		return
-	}
-	sigURL := &url.URL{}
-	*sigURL = *srcURL // deep copy to avoid parsing twice
-	sigURL.Path += ".minisig"
 	var bin, sig []byte
-	if bin, err = fetchFromURL(xTransport, srcURL); err != nil {
-		return
+	for _, urlStr := range source.urls {
+		dlog.Infof("Source [%s] loading from URL [%s]", source.name, urlStr)
+		var srcURL *url.URL
+		if srcURL, err = url.Parse(urlStr); err != nil {
+			dlog.Debugf("Source [%s] failed to parse URL [%s]", source.name, urlStr)
+			continue
+		}
+		sigURL := &url.URL{}
+		*sigURL = *srcURL // deep copy to avoid parsing twice
+		sigURL.Path += ".minisig"
+		if bin, err = fetchFromURL(xTransport, srcURL); err != nil {
+			dlog.Debugf("Source [%s] failed to download from URL [%s]", source.name, srcURL)
+			continue
+		}
+		if sig, err = fetchFromURL(xTransport, sigURL); err != nil {
+			dlog.Debugf("Source [%s] failed to download signature from URL [%s]", source.name, sigURL)
+			continue
+		}
+		if err = source.checkSignature(bin, sig); err == nil {
+			break // valid signature
+		} // above err check inverted to make use of implicit continue
+		dlog.Debugf("Source [%s] failed signature check using URL [%s]", source.name, urlStr)
 	}
-	if sig, err = fetchFromURL(xTransport, sigURL); err != nil {
-		return
-	}
-	if err = source.checkSignature(bin, sig); err != nil {
+	if err != nil {
 		return
 	}
 	source.in = bin
@@ -162,15 +170,9 @@ func NewSource(name string, xTransport *XTransport, urls []string, minisignKeySt
 
 	var delay time.Duration
 	if len(urls) <= 0 {
-		delay, err = source.fetchWithCache(xTransport, "")
+		delay, err = source.fetchWithCache(xTransport)
 	} else {
-		for _, url := range urls {
-			delay, err = source.fetchWithCache(xTransport, url)
-			if err == nil {
-				break
-			}
-			dlog.Infof("Source [%s] failed to load from [%s]", name, url)
-		}
+		delay, err = source.fetchWithCache(xTransport)
 		source.refresh = now.Add(delay)
 	}
 	if err != nil {
@@ -189,16 +191,13 @@ func PrefetchSources(xTransport *XTransport, sources []*Source) time.Duration {
 			continue
 		}
 		dlog.Debugf("Prefetching [%s]", source.name)
-		for _, u := range source.urls {
-			if delay, err := source.fetchWithCache(xTransport, u); err != nil {
-				dlog.Debugf("Prefetching [%s] from [%s] failed: %v", source.name, u, err)
-			} else {
-				dlog.Debugf("Prefetching [%s] succeeded, next update: %v", source.name, delay)
-				source.refresh = now.Add(delay)
-				if delay >= MinimumPrefetchInterval && (interval == MinimumPrefetchInterval || interval > delay) {
-					interval = delay
-				}
-				break
+		if delay, err := source.fetchWithCache(xTransport); err != nil {
+			dlog.Debugf("Prefetching [%s] failed: %v", source.name, err)
+		} else {
+			dlog.Debugf("Prefetching [%s] succeeded, next update: %v", source.name, delay)
+			source.refresh = now.Add(delay)
+			if delay >= MinimumPrefetchInterval && (interval == MinimumPrefetchInterval || interval > delay) {
+				interval = delay
 			}
 		}
 	}
