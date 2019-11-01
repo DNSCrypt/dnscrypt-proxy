@@ -46,10 +46,7 @@ func (plugin *PluginFirefox) Eval(pluginsState *PluginsState, msg *dns.Msg) erro
 	if qName != "use-application-dns.net." && !strings.HasSuffix(qName, ".use-application-dns.net.") {
 		return nil
 	}
-	synth, err := EmptyResponseFromMessage(msg)
-	if err != nil {
-		return err
-	}
+	synth := EmptyResponseFromMessage(msg)
 	synth.Rcode = dns.RcodeNameError
 	pluginsState.synthResponse = synth
 	pluginsState.action = PluginsActionSynth

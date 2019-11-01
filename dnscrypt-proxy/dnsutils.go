@@ -23,20 +23,17 @@ func TruncatedResponse(packet []byte) ([]byte, error) {
 	return dstMsg.Pack()
 }
 
-func EmptyResponseFromMessage(srcMsg *dns.Msg) (*dns.Msg, error) {
+func EmptyResponseFromMessage(srcMsg *dns.Msg) *dns.Msg {
 	dstMsg := srcMsg
 	dstMsg.Response = true
 	dstMsg.Answer = make([]dns.RR, 0)
 	dstMsg.Ns = make([]dns.RR, 0)
 	dstMsg.Extra = make([]dns.RR, 0)
-	return dstMsg, nil
+	return dstMsg
 }
 
-func RefusedResponseFromMessage(srcMsg *dns.Msg, refusedCode bool, ipv4 net.IP, ipv6 net.IP, ttl uint32) (*dns.Msg, error) {
-	dstMsg, err := EmptyResponseFromMessage(srcMsg)
-	if err != nil {
-		return dstMsg, err
-	}
+func RefusedResponseFromMessage(srcMsg *dns.Msg, refusedCode bool, ipv4 net.IP, ipv6 net.IP, ttl uint32) *dns.Msg {
+	dstMsg := EmptyResponseFromMessage(srcMsg)
 	if refusedCode {
 		dstMsg.Rcode = dns.RcodeRefused
 	} else {
@@ -74,7 +71,7 @@ func RefusedResponseFromMessage(srcMsg *dns.Msg, refusedCode bool, ipv4 net.IP, 
 			}
 		}
 	}
-	return dstMsg, nil
+	return dstMsg
 }
 
 func HasTCFlag(packet []byte) bool {

@@ -166,10 +166,7 @@ func (plugin *PluginCloak) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 		}
 	}
 	plugin.RUnlock()
-	synth, err := EmptyResponseFromMessage(msg)
-	if err != nil {
-		return err
-	}
+	synth := EmptyResponseFromMessage(msg)
 	if ip == nil {
 		synth.Answer = []dns.RR{}
 	} else if question.Qtype == dns.TypeA {
