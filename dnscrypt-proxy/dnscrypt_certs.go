@@ -249,7 +249,7 @@ func _dnsExchange(proxy *Proxy, proto string, query *dns.Msg, serverAddress stri
 			return nil, 0, err
 		}
 		upstreamAddr := tcpAddr
-		if relayUDPAddr != nil {
+		if relayTCPAddr != nil {
 			proxy.prepareForRelay(tcpAddr.IP, tcpAddr.Port, &binQuery)
 			upstreamAddr = relayTCPAddr
 		}
