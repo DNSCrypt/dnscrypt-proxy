@@ -32,7 +32,7 @@ const (
 
 type Source struct {
 	name                    string
-	urls                    []string
+	urls                    []*url.URL
 	format                  SourceFormat
 	in                      []byte
 	minisignKey             *minisign.PublicKey
@@ -96,6 +96,16 @@ func (source *Source) writeToCache(bin, sig []byte) (err error) {
 	return
 }
 
+func (source *Source) parseURLs(urls []string) {
+	for _, urlStr := range urls {
+		if srcURL, err := url.Parse(urlStr); err != nil {
+			dlog.Warnf("Source [%s] failed to parse URL [%s]", source.name, urlStr)
+		} else {
+			source.urls = append(source.urls, srcURL)
+		}
+	}
+}
+
 func fetchFromURL(xTransport *XTransport, u *url.URL) (bin []byte, err error) {
 	var resp *http.Response
 	if resp, _, err = xTransport.Get(u, "", DefaultTimeout); err == nil {
@@ -108,7 +118,7 @@ func fetchFromURL(xTransport *XTransport, u *url.URL) (bin []byte, err error) {
 func (source *Source) fetchWithCache(xTransport *XTransport, now time.Time) (delay time.Duration, err error) {
 	if delay, err = source.fetchFromCache(now); err != nil {
 		if len(source.urls) == 0 {
-			dlog.Errorf("Source [%s] cache file [%s] not present and no URL given", source.name, source.cacheFile)
+			dlog.Errorf("Source [%s] cache file [%s] not present and no valid URL", source.name, source.cacheFile)
 			return
 		}
 		dlog.Debugf("Source [%s] cache file [%s] not present", source.name, source.cacheFile)
@@ -123,13 +133,8 @@ func (source *Source) fetchWithCache(xTransport *XTransport, now time.Time) (del
 	}
 	delay = MinimumPrefetchInterval
 	var bin, sig []byte
-	for _, urlStr := range source.urls {
-		dlog.Infof("Source [%s] loading from URL [%s]", source.name, urlStr)
-		var srcURL *url.URL
-		if srcURL, err = url.Parse(urlStr); err != nil {
-			dlog.Debugf("Source [%s] failed to parse URL [%s]", source.name, urlStr)
-			continue
-		}
+	for _, srcURL := range source.urls {
+		dlog.Infof("Source [%s] loading from URL [%s]", source.name, srcURL)
 		sigURL := &url.URL{}
 		*sigURL = *srcURL // deep copy to avoid parsing twice
 		sigURL.Path += ".minisig"
@@ -144,7 +149,7 @@ func (source *Source) fetchWithCache(xTransport *XTransport, now time.Time) (del
 		if err = source.checkSignature(bin, sig); err == nil {
 			break // valid signature
 		} // above err check inverted to make use of implicit continue
-		dlog.Debugf("Source [%s] failed signature check using URL [%s]", source.name, urlStr)
+		dlog.Debugf("Source [%s] failed signature check using URL [%s]", source.name, srcURL)
 	}
 	if err != nil {
 		return
@@ -160,7 +165,7 @@ func NewSource(name string, xTransport *XTransport, urls []string, minisignKeySt
 	if refreshDelay < DefaultPrefetchDelay {
 		refreshDelay = DefaultPrefetchDelay
 	}
-	source = &Source{name: name, urls: urls, cacheFile: cacheFile, cacheTTL: refreshDelay, prefetchDelay: DefaultPrefetchDelay}
+	source = &Source{name: name, urls: []*url.URL{}, cacheFile: cacheFile, cacheTTL: refreshDelay, prefetchDelay: DefaultPrefetchDelay}
 	if formatStr == "v2" {
 		source.format = SourceFormatV2
 	} else {
@@ -171,10 +176,10 @@ func NewSource(name string, xTransport *XTransport, urls []string, minisignKeySt
 	} else {
 		return source, err
 	}
-	if _, err = source.fetchWithCache(xTransport, timeNow()); err != nil {
-		return
+	source.parseURLs(urls)
+	if _, err = source.fetchWithCache(xTransport, timeNow()); err == nil {
+		dlog.Noticef("Source [%s] loaded", name)
 	}
-	dlog.Noticef("Source [%s] loaded", name)
 	return
 }
 
