@@ -197,32 +197,32 @@ func setupSourceTest(t *testing.T) (func(), *SourceTestData) {
 	d.cacheTests = map[string]SourceTestState{ // determines cache files written to disk before each call
 		"correct": TestStateCorrect,
 		//"expired":      TestStateExpired,    // TODO: an expired cache should be used if no download passes signature verification
-		//"partial":      TestStatePartial,    // TODO: failed signature verification should not abort before trying additional URLs
-		//"partial-sig":  TestStatePartialSig, // TODO: failed signature verification should not abort before trying additional URLs
-		"missing": TestStateMissing,
-		//"missing-sig":  TestStateMissingSig, // TODO: a cache without a signature should cause an attempt to download both files (not just the signature)
-		"open-err": TestStateOpenErr,
-		//"open-sig-err": TestStateOpenSigErr, // TODO: a cache without a signature should cause an attempt to download both files (not just the signature)
+		"partial":      TestStatePartial,
+		"partial-sig":  TestStatePartialSig,
+		"missing":      TestStateMissing,
+		"missing-sig":  TestStateMissingSig,
+		"open-err":     TestStateOpenErr,
+		"open-sig-err": TestStateOpenSigErr,
 	}
 	d.downloadTests = map[string][]SourceTestState{ // determines the list of URLs passed in each call and how they will respond
-		"correct": {TestStateCorrect},
-		//"partial":              {TestStatePartial},    // TODO: failed signature verification should not count as successfully prefetched
-		//"partial-sig":          {TestStatePartialSig}, // TODO: failed signature verification should not count as successfully prefetched
-		"missing": {TestStateMissing},
-		//"missing-sig":          {TestStateMissingSig}, // TODO: failed signature verification should not count as successfully prefetched
-		"read-err": {TestStateReadErr},
-		//"read-sig-err":         {TestStateReadSigErr}, // TODO: failed signature verification should not count as successfully prefetched
-		"open-err": {TestStateOpenErr},
-		//"open-sig-err":         {TestStateOpenSigErr},                   // TODO: failed signature verification should not count as successfully prefetched
+		"correct":      {TestStateCorrect},
+		"partial":      {TestStatePartial},
+		"partial-sig":  {TestStatePartialSig},
+		"missing":      {TestStateMissing},
+		"missing-sig":  {TestStateMissingSig},
+		"read-err":     {TestStateReadErr},
+		"read-sig-err": {TestStateReadSigErr},
+		"open-err":     {TestStateOpenErr},
+		"open-sig-err": {TestStateOpenSigErr},
 		//"path-err":             {TestStatePathErr},                      // TODO: invalid URLs should not be included in the prefetch list
-		//"partial,correct":      {TestStatePartial, TestStateCorrect},    // TODO: all URLs should be included in the prefetch list, failed signature verification should not abort before trying additional URLs
-		//"partial-sig,correct":  {TestStatePartialSig, TestStateCorrect}, // TODO: all URLs should be included in the prefetch list, failed signature verification should not abort before trying additional URLs
-		//"missing,correct":      {TestStateMissing, TestStateCorrect},    // TODO: all URLs should be included in the prefetch list
-		//"missing-sig,correct":  {TestStateMissingSig, TestStateCorrect}, // TODO: all URLs should be included in the prefetch list, failed signature verification should not abort before trying additional URLs
-		//"read-err,correct":     {TestStateReadErr, TestStateCorrect},    // TODO: all URLs should be included in the prefetch list
-		//"read-sig-err,correct": {TestStateReadSigErr, TestStateCorrect}, // TODO: all URLs should be included in the prefetch list, failed signature verification should not abort before trying additional URLs
-		//"open-err,correct":     {TestStateOpenErr, TestStateCorrect},    // TODO: all URLs should be included in the prefetch list
-		//"open-sig-err,correct": {TestStateOpenSigErr, TestStateCorrect}, // TODO: all URLs should be included in the prefetch list, failed signature verification should not abort before trying additional URLs
+		"partial,correct":      {TestStatePartial, TestStateCorrect},
+		"partial-sig,correct":  {TestStatePartialSig, TestStateCorrect},
+		"missing,correct":      {TestStateMissing, TestStateCorrect},
+		"missing-sig,correct":  {TestStateMissingSig, TestStateCorrect},
+		"read-err,correct":     {TestStateReadErr, TestStateCorrect},
+		"read-sig-err,correct": {TestStateReadSigErr, TestStateCorrect},
+		"open-err,correct":     {TestStateOpenErr, TestStateCorrect},
+		"open-sig-err,correct": {TestStateOpenSigErr, TestStateCorrect},
 		//"path-err,correct":     {TestStatePathErr, TestStateCorrect},    // TODO: invalid URLs should not be included in the prefetch list
 		"no-urls": {},
 	}
@@ -252,7 +252,7 @@ func prepSourceTestCache(t *testing.T, d *SourceTestData, e *SourceTestExpect, s
 	case TestStatePartial, TestStatePartialSig:
 		e.err = "signature"
 	case TestStateMissing, TestStateMissingSig:
-		e.err = "stat"
+		e.err = "open"
 	case TestStateOpenErr, TestStateOpenSigErr:
 		e.err = os.ErrPermission.Error()
 	}
