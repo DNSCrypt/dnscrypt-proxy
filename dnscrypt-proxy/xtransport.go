@@ -83,7 +83,7 @@ func ParseIP(ipStr string) net.IP {
 }
 
 // If ttl < 0, never expire
-// Otherwise, ttl is set to max(ttl, xTransport.timeout)
+// Otherwise, ttl is set to max(ttl, SystemResolverTTL)
 func (xTransport *XTransport) saveCachedIP(host string, ip net.IP, ttl time.Duration) {
 	item := &CachedIPItem{ip: ip, expiration: nil}
 	if ttl >= 0 {
