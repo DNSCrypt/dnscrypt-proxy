@@ -253,7 +253,7 @@ func (xTransport *XTransport) resolveWithCache(host string) (err error) {
 		return
 	}
 	cachedIP, expired := xTransport.loadCachedIP(host)
-	if !expired {
+	if cachedIP != nil && !expired {
 		return
 	}
 	var foundIP net.IP
