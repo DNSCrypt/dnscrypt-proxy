@@ -325,6 +325,10 @@ func fetchDNSCryptServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp
 }
 
 func fetchDoHServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, isNew bool) (ServerInfo, error) {
+	// If an IP has been provided, use it forever.
+	// Or else, if the fallback server and the DoH server are operated
+	// by the same entity, it could provide a unique IPv6 for each client
+	// in order to fingerprint clients across multiple IP addresses.
 	if len(stamp.ServerAddrStr) > 0 {
 		ipOnly, _ := ExtractHostAndPort(stamp.ServerAddrStr, -1)
 		if ip := ParseIP(ipOnly); ip != nil {
