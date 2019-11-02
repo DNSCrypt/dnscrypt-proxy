@@ -134,7 +134,7 @@ func (xTransport *XTransport) rebuildTransport() {
 			// resolveWithCache() is always called in `Fetch()` before the `Dial()`
 			// method is used, so that a cached entry must be present at this point.
 			cachedIP, _ := xTransport.loadCachedIP(host)
-			if cachedIP == nil {
+			if cachedIP != nil {
 				if ipv4 := cachedIP.To4(); ipv4 != nil {
 					ipOnly = ipv4.String()
 				} else {
