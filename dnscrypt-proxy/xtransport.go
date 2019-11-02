@@ -29,8 +29,9 @@ const (
 	DefaultFallbackResolver = "9.9.9.9:53"
 	DefaultKeepAlive        = 5 * time.Second
 	DefaultTimeout          = 30 * time.Second
-	SystemResolverTTL       = 24 * time.Hour
-	ExpiredCachedIPGraceTTL = 1 * time.Minute
+	SystemRresolverIPTTL    = 24 * time.Hour
+	MinRresolverIPTTL       = 8 * time.Hour
+	ExpiredCachedIPGraceTTL = 5 * time.Minute
 )
 
 type CachedIPItem struct {
@@ -83,12 +84,12 @@ func ParseIP(ipStr string) net.IP {
 }
 
 // If ttl < 0, never expire
-// Otherwise, ttl is set to max(ttl, SystemResolverTTL)
+// Otherwise, ttl is set to max(ttl, MinRresolverIPTTL)
 func (xTransport *XTransport) saveCachedIP(host string, ip net.IP, ttl time.Duration) {
 	item := &CachedIPItem{ip: ip, expiration: nil}
 	if ttl >= 0 {
-		if ttl < SystemResolverTTL {
-			ttl = SystemResolverTTL
+		if ttl < MinRresolverIPTTL {
+			ttl = MinRresolverIPTTL
 		}
 		expiration := time.Now().Add(ttl)
 		item.expiration = &expiration
@@ -172,7 +173,7 @@ func (xTransport *XTransport) rebuildTransport() {
 }
 
 func (xTransport *XTransport) resolveUsingSystem(host string) (ip net.IP, ttl time.Duration, err error) {
-	ttl = SystemResolverTTL
+	ttl = SystemRresolverIPTTL
 	var foundIPs []string
 	foundIPs, err = net.LookupHost(host)
 	if err != nil {
@@ -278,6 +279,9 @@ func (xTransport *XTransport) resolveWithCache(host string) (err error) {
 			}
 		}
 	}
+	if ttl < MinRresolverIPTTL {
+		ttl = MinRresolverIPTTL
+	}
 	if err != nil {
 		if cachedIP != nil {
 			foundIP = cachedIP
@@ -287,7 +291,7 @@ func (xTransport *XTransport) resolveWithCache(host string) (err error) {
 		}
 	}
 	xTransport.saveCachedIP(host, foundIP, ttl)
-	dlog.Debugf("[%s] IP address [%s] added to the cache, valid until %v", host, foundIP, ttl)
+	dlog.Debugf("[%s] IP address [%s] added to the cache, valid for %v", host, foundIP, ttl)
 	return
 }
 
