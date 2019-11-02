@@ -79,21 +79,25 @@ func (source *Source) fetchFromCache(now time.Time) (delay time.Duration, err er
 
 func (source *Source) writeToCache(bin, sig []byte) (err error) {
 	f := source.cacheFile
-	defer func() {
-		if err != nil {
-			if absPath, err2 := filepath.Abs(f); err2 == nil {
-				f = absPath
-			}
-			dlog.Warnf("%s: %s", f, err)
-		}
-	}()
-	if err = safefile.WriteFile(f, bin, 0644); err != nil {
+	var fSrc, fSig *safefile.File
+	if fSrc, err = safefile.Create(f, 0644); err != nil {
 		return
 	}
-	if err = safefile.WriteFile(f+".minisig", sig, 0644); err != nil {
+	defer fSrc.Close()
+	if fSig, err = safefile.Create(f+".minisig", 0644); err != nil {
 		return
 	}
-	return
+	defer fSig.Close()
+	if _, err = fSrc.Write(bin); err != nil {
+		return
+	}
+	if _, err = fSig.Write(sig); err != nil {
+		return
+	}
+	if err = fSrc.Commit(); err != nil {
+		return
+	}
+	return fSig.Commit()
 }
 
 func (source *Source) parseURLs(urls []string) {
@@ -155,7 +159,13 @@ func (source *Source) fetchWithCache(xTransport *XTransport, now time.Time) (del
 		return
 	}
 	source.in = bin
-	source.writeToCache(bin, sig) // ignore error: not fatal
+	if writeErr := source.writeToCache(bin, sig); writeErr != nil { // an error here isn't fatal
+		f := source.cacheFile
+		if absPath, absErr := filepath.Abs(f); absErr == nil {
+			f = absPath
+		}
+		dlog.Warnf("%s: %s", f, writeErr)
+	}
 	delay = source.prefetchDelay
 	return
 }
