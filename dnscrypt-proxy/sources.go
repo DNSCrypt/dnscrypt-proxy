@@ -35,6 +35,9 @@ type Source struct {
 	in     string
 }
 
+// timeNow can be replaced by tests to provide a static value
+var timeNow = time.Now
+
 func fetchFromCache(cacheFile string, refreshDelay time.Duration) (in string, expired bool, delayTillNextUpdate time.Duration, err error) {
 	expired = false
 	if refreshDelay < MinSourcesUpdateDelay {
@@ -46,10 +49,10 @@ func fetchFromCache(cacheFile string, refreshDelay time.Duration) (in string, ex
 		delayTillNextUpdate = time.Duration(0)
 		return
 	}
-	elapsed := time.Since(fi.ModTime())
+	elapsed := timeNow().Sub(fi.ModTime())
 	if elapsed < refreshDelay {
 		dlog.Debugf("Cache file [%s] is still fresh", cacheFile)
-		delayTillNextUpdate = refreshDelay - elapsed
+		delayTillNextUpdate = MinSourcesUpdateDelay - elapsed
 	} else {
 		dlog.Debugf("Cache file [%s] needs to be refreshed", cacheFile)
 		delayTillNextUpdate = time.Duration(0)
@@ -106,7 +109,7 @@ func fetchWithCache(xTransport *XTransport, urlStr string, cacheFile string, ref
 	err = nil
 	cached = false
 	in = string(bin)
-	delayTillNextUpdate = refreshDelay
+	delayTillNextUpdate = MinSourcesUpdateDelay
 	return
 }
 
@@ -131,7 +134,7 @@ func NewSource(xTransport *XTransport, urls []string, minisignKeyStr string, cac
 	if err != nil {
 		return source, []URLToPrefetch{}, err
 	}
-	now := time.Now()
+	now := timeNow()
 	urlsToPrefetch := []URLToPrefetch{}
 	sigCacheFile := cacheFile + ".minisig"
 
@@ -279,6 +282,6 @@ func PrefetchSourceURL(xTransport *XTransport, urlToPrefetch *URLToPrefetch) err
 	if err == nil && !cached {
 		AtomicFileWrite(urlToPrefetch.cacheFile, []byte(in))
 	}
-	urlToPrefetch.when = time.Now().Add(delayTillNextUpdate)
+	urlToPrefetch.when = timeNow().Add(delayTillNextUpdate)
 	return err
 }
