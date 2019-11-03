@@ -315,12 +315,12 @@ cache = true
 
 ## Cache size
 
-cache_size = 512
+cache_size = 1024
 
 
 ## Minimum TTL for cached entries
 
-cache_min_ttl = 600
+cache_min_ttl = 2400
 
 
 ## Maximum TTL for cached entries
