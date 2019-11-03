@@ -128,7 +128,7 @@ func loadFixtures(t *testing.T, d *SourceTestData) {
 	for _, source := range d.sources {
 		for _, suffix := range [...]string{"", ".minisig"} {
 			file := source + suffix
-			d.fixtures[TestStateCorrect][file] = SourceFixture{suffix: suffix, content: readFixture(t, filepath.Join("sources", file))}
+			d.fixtures[TestStateCorrect][file] = SourceFixture{suffix: suffix, content: readFixture(t, filepath.Join("sources", file)), mtime: d.timeNow}
 			for _, state := range [...]SourceTestState{TestStateExpired, TestStatePartial, TestStateReadErr, TestStateOpenErr,
 				TestStatePartialSig, TestStateMissingSig, TestStateReadSigErr, TestStateOpenSigErr} {
 				if _, ok := d.fixtures[state]; !ok {
@@ -141,7 +141,7 @@ func loadFixtures(t *testing.T, d *SourceTestData) {
 						continue
 					}
 				}
-				f := SourceFixture{suffix: suffix}
+				f := SourceFixture{suffix: suffix, mtime: d.timeNow}
 				switch state {
 				case TestStateExpired:
 					f.content, f.mtime = d.fixtures[TestStateCorrect][file].content, d.timeOld
@@ -197,13 +197,13 @@ func checkTestServer(c *check.C, d *SourceTestData) {
 func setupSourceTest(t *testing.T) (func(), *SourceTestData) {
 	d := &SourceTestData{n: -1, xTransport: NewXTransport()}
 	d.cacheTests = map[string]SourceTestState{ // determines cache files written to disk before each call
-		//"correct":      TestStateCorrect,    // TODO: millisecond-level timing inconsistencies should not fail tests
+		"correct": TestStateCorrect,
 		//"expired":      TestStateExpired,    // TODO: an expired cache should be used if no download passes signature verification
 		//"partial":      TestStatePartial,    // TODO: failed signature verification should not abort before trying additional URLs and should not destroy the cache
 		//"partial-sig":  TestStatePartialSig, // TODO: failed signature verification should not abort before trying additional URLs and should not destroy the cache
-		//"missing":      TestStateMissing,    // TODO: millisecond-level timing inconsistencies should not fail tests
+		"missing": TestStateMissing,
 		//"missing-sig":  TestStateMissingSig, // TODO: a cache without a signature should cause an attempt to download both files (not just the signature), failed signature verification should not destroy the cache
-		//"open-err":     TestStateOpenErr,    // TODO: millisecond-level timing inconsistencies should not fail tests
+		"open-err": TestStateOpenErr,
 		//"open-sig-err": TestStateOpenSigErr, // TODO: a cache without a signature should cause an attempt to download both files (not just the signature), failed signature verification should not destroy the cache
 	}
 	d.downloadTests = map[string][]SourceTestState{ // determines the list of URLs passed in each call and how they will respond
@@ -229,9 +229,10 @@ func setupSourceTest(t *testing.T) (func(), *SourceTestData) {
 		"no-urls": {},
 	}
 	d.xTransport.rebuildTransport()
-	d.timeNow = time.Now()
+	d.timeNow = time.Now().AddDate(0, 0, 0)
 	d.timeOld = d.timeNow.Add(MinSourcesUpdateDelay * -4)
 	d.timeUpd = d.timeNow.Add(MinSourcesUpdateDelay)
+	timeNow = func() time.Time { return d.timeNow } // originally defined in sources.go, replaced during testing to ensure consistent results
 	makeTempDir(t, d)
 	makeTestServer(t, d)
 	loadSnakeoil(t, d)
@@ -249,7 +250,7 @@ func prepSourceTestCache(t *testing.T, d *SourceTestData, e *SourceTestExpect, s
 	case TestStateCorrect:
 		e.in, e.success, e.refresh = string(e.cache[0].content), true, d.timeUpd
 	case TestStateExpired:
-		e.in, e.success = string(e.cache[0].content), true
+		e.in = string(e.cache[0].content)
 	case TestStatePartial, TestStatePartialSig:
 		e.err = "signature"
 	case TestStateMissing, TestStateMissingSig:
@@ -264,11 +265,11 @@ func prepSourceTestDownload(t *testing.T, d *SourceTestData, e *SourceTestExpect
 	if len(downloadTest) > 0 {
 		for _, state := range downloadTest {
 			path := "/" + strconv.FormatUint(uint64(state), 10) + "/" + source
-			if !e.success || !e.refresh.After(d.timeNow) {
+			if !e.success {
 				switch state {
 				case TestStateCorrect:
 					e.cache = []SourceFixture{d.fixtures[state][source], d.fixtures[state][source+".minisig"]}
-					e.in, e.success, e.err, e.refresh = string(e.cache[0].content), true, "", d.timeUpd
+					e.in, e.success, e.refresh = string(e.cache[0].content), true, d.timeUpd
 					fallthrough
 				case TestStateMissingSig, TestStatePartial, TestStatePartialSig, TestStateReadSigErr:
 					d.reqExpect[path+".minisig"]++
@@ -297,6 +298,11 @@ func prepSourceTestDownload(t *testing.T, d *SourceTestData, e *SourceTestExpect
 				e.prefetchUrls = append(e.prefetchUrls, URLToPrefetch{d.server.URL + path + ".minisig", e.cachePath + ".minisig", e.refresh})
 			}
 		}
+		if e.success {
+			e.err = ""
+		}
+	} else if !e.success {
+		e.err = "no URL"
 	}
 }
 
