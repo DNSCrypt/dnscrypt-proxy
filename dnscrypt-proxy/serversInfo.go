@@ -190,9 +190,9 @@ func (serversInfo *ServersInfo) estimatorUpdate() {
 
 func (serversInfo *ServersInfo) getOne() *ServerInfo {
 	serversInfo.Lock()
-	defer serversInfo.Unlock()
 	serversCount := len(serversInfo.inner)
 	if serversCount <= 0 {
+		serversInfo.Unlock()
 		return nil
 	}
 	if serversInfo.lbEstimator {
@@ -211,6 +211,7 @@ func (serversInfo *ServersInfo) getOne() *ServerInfo {
 	}
 	serverInfo := serversInfo.inner[candidate]
 	dlog.Debugf("Using candidate [%s] RTT: %d", (*serverInfo).Name, int((*serverInfo).rtt.Value()))
+	serversInfo.Unlock()
 
 	return serverInfo
 }
