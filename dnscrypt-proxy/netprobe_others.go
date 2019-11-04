@@ -10,7 +10,7 @@ import (
 )
 
 func NetProbe(address string, timeout int) error {
-	if len(address) <= 0 || timeout <= 0 {
+	if len(address) <= 0 || timeout == 0 {
 		return nil
 	}
 	remoteUDPAddr, err := net.ResolveUDPAddr("udp", address)
