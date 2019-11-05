@@ -29,7 +29,11 @@ func (questionSizeEstimator *QuestionSizeEstimator) MinQuestionSize() int {
 
 func (questionSizeEstimator *QuestionSizeEstimator) blindAdjust() {
 	questionSizeEstimator.Lock()
-	questionSizeEstimator.minQuestionSize = Min(MaxDNSUDPPacketSize, questionSizeEstimator.minQuestionSize*2)
+	if MaxDNSUDPPacketSize-questionSizeEstimator.minQuestionSize < questionSizeEstimator.minQuestionSize {
+		questionSizeEstimator.minQuestionSize = MaxDNSUDPPacketSize
+	} else {
+		questionSizeEstimator.minQuestionSize *= 2
+	}
 	questionSizeEstimator.ewma.Set(float64(questionSizeEstimator.minQuestionSize))
 	questionSizeEstimator.Unlock()
 }
