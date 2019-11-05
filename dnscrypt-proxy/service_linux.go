@@ -25,9 +25,6 @@ func systemDWatchdog() error {
 	refreshInterval := watchdogFailureDelay / 3
 	go func() {
 		for {
-			// TODO There could be other checks this just
-			// checks program is not totally stuck and can
-			// run this goroutine
 			daemon.SdNotify(false, "WATCHDOG=1")
 			clocksmith.Sleep(refreshInterval)
 		}
