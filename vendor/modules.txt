@@ -9,7 +9,7 @@ github.com/aead/poly1305
 # github.com/agl/ed25519 v0.0.0-20170116200512-5312a6153412
 github.com/agl/ed25519
 github.com/agl/ed25519/edwards25519
-# github.com/coreos/go-systemd v0.0.0-20190719114852-fd7a80b32e1f
+# github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf
 github.com/coreos/go-systemd/activation
 github.com/coreos/go-systemd/daemon
 # github.com/dchest/safefile v0.0.0-20151022103144-855e8d98f185
@@ -35,7 +35,7 @@ github.com/jedisct1/go-dnsstamps
 github.com/jedisct1/go-minisign
 # github.com/jedisct1/xsecretbox v0.0.0-20190909160646-b731c21297f9
 github.com/jedisct1/xsecretbox
-# github.com/k-sone/critbitgo v1.3.0
+# github.com/k-sone/critbitgo v1.4.0
 github.com/k-sone/critbitgo
 # github.com/kardianos/service v1.0.0
 github.com/kardianos/service
@@ -50,7 +50,7 @@ golang.org/x/crypto/nacl/box
 golang.org/x/crypto/nacl/secretbox
 golang.org/x/crypto/poly1305
 golang.org/x/crypto/salsa20/salsa
-# golang.org/x/net v0.0.0-20191028085509-fe3aa8a45271
+# golang.org/x/net v0.0.0-20191101175033-0deb6923b6d9
 golang.org/x/net/bpf
 golang.org/x/net/http/httpguts
 golang.org/x/net/http2
@@ -62,7 +62,7 @@ golang.org/x/net/internal/socks
 golang.org/x/net/ipv4
 golang.org/x/net/ipv6
 golang.org/x/net/proxy
-# golang.org/x/sys v0.0.0-20191029155521-f43be2a4598c
+# golang.org/x/sys v0.0.0-20191104094858-e8c54fb511f6
 golang.org/x/sys/cpu
 golang.org/x/sys/unix
 golang.org/x/sys/windows

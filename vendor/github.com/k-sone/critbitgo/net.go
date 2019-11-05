@@ -203,6 +203,74 @@ func (n *Net) Walk(r *net.IPNet, handle func(*net.IPNet, interface{}) bool) {
 	})
 }
 
+// WalkPrefix interates routes that have a given prefix.
+// handle is called with arguments route and value (if handle returns `false`, the iteration is aborted)
+func (n *Net) WalkPrefix(r *net.IPNet, handle func(*net.IPNet, interface{}) bool) {
+	var prefix []byte
+	var div int
+	var bit uint
+	if r != nil {
+		if ip, _, err := netValidateIPNet(r); err == nil {
+			prefix = netIPNetToKey(ip, r.Mask)
+			mask := prefix[len(prefix)-1]
+			div = int(mask >> 3)
+			if mod := uint(mask & 0x07); mod != 0 {
+				bit = 8 - mod
+			}
+		}
+	}
+	wrapper := func(key []byte, value interface{}) bool {
+		if bit != 0 {
+			if prefix[div]>>bit != key[div]>>bit {
+				return false
+			}
+		}
+		return handle(netKeyToIPNet(key), value)
+	}
+	n.trie.Allprefixed(prefix[0:div], wrapper)
+}
+
+func walkMatch(p *node, key []byte, handle func(*net.IPNet, interface{}) bool) bool {
+	if p.internal != nil {
+		if !walkMatch(&p.internal.child[0], key, handle) {
+			return false
+		}
+
+		if p.internal.offset >= len(key)-1 || key[p.internal.offset]&p.internal.bit > 0 {
+			return walkMatch(&p.internal.child[1], key, handle)
+		}
+		return true
+	}
+
+	mask := p.external.key[len(p.external.key)-1]
+	if key[len(key)-1] < mask {
+		return true
+	}
+
+	div := int(mask >> 3)
+	for i := 0; i < div; i++ {
+		if p.external.key[i] != key[i] {
+			return true
+		}
+	}
+
+	if mod := uint(mask & 0x07); mod > 0 {
+		bit := 8 - mod
+		if p.external.key[div] != key[div]&(0xff>>bit<<bit) {
+			return true
+		}
+	}
+	return handle(netKeyToIPNet(p.external.key), p.external.value)
+}
+
+// WalkMatch interates routes that match a given route.
+// handle is called with arguments route and value (if handle returns `false`, the iteration is aborted)
+func (n *Net) WalkMatch(r *net.IPNet, handle func(*net.IPNet, interface{}) bool) {
+	if n.trie.size > 0 {
+		walkMatch(&n.trie.root, netIPNetToKey(r.IP, r.Mask), handle)
+	}
+}
+
 // Deletes all routes.
 func (n *Net) Clear() {
 	n.trie.Clear()
