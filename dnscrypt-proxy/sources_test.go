@@ -84,10 +84,11 @@ func writeSourceCache(t *testing.T, basePath string, fixtures []SourceFixture) {
 		if err := ioutil.WriteFile(path, f.content, perms); err != nil {
 			t.Fatalf("Unable to write cache file %s: %v", path, err)
 		}
-		if !f.mtime.IsZero() {
-			if err := os.Chtimes(path, f.mtime, f.mtime); err != nil {
-				t.Fatalf("Unable to touch cache file %s to %v: %v", path, f.mtime, err)
-			}
+		if f.mtime.IsZero() {
+			continue
+		}
+		if err := os.Chtimes(path, f.mtime, f.mtime); err != nil {
+			t.Fatalf("Unable to touch cache file %s to %v: %v", path, f.mtime, err)
 		}
 	}
 }
@@ -122,36 +123,52 @@ func loadTestSourceNames(t *testing.T, d *SourceTestData) {
 	}
 }
 
+func generateFixtureState(t *testing.T, d *SourceTestData, suffix, file string, state SourceTestState) {
+	if _, ok := d.fixtures[state]; !ok {
+		d.fixtures[state] = map[string]SourceFixture{}
+	}
+	if suffix != ".minisig" {
+		switch state {
+		case TestStatePartialSig, TestStateMissingSig, TestStateReadSigErr, TestStateOpenSigErr:
+			d.fixtures[state][file] = d.fixtures[TestStateCorrect][file]
+			return
+		}
+	}
+	f := SourceFixture{suffix: suffix, mtime: d.timeNow}
+	switch state {
+	case TestStateExpired:
+		f.content, f.mtime = d.fixtures[TestStateCorrect][file].content, d.timeOld
+	case TestStatePartial, TestStatePartialSig:
+		f.content = d.fixtures[TestStateCorrect][file].content[:1]
+	case TestStateReadErr, TestStateReadSigErr:
+		f.content, f.length = []byte{}, "1"
+	case TestStateOpenErr, TestStateOpenSigErr:
+		f.content, f.perms = d.fixtures[TestStateCorrect][file].content[:1], 0200
+	}
+	d.fixtures[state][file] = f
+}
+
 func loadFixtures(t *testing.T, d *SourceTestData) {
 	d.fixtures = map[SourceTestState]map[string]SourceFixture{TestStateCorrect: map[string]SourceFixture{}}
 	for _, source := range d.sources {
 		for _, suffix := range [...]string{"", ".minisig"} {
 			file := source + suffix
-			d.fixtures[TestStateCorrect][file] = SourceFixture{suffix: suffix, content: readFixture(t, filepath.Join("sources", file)), mtime: d.timeNow}
-			for _, state := range [...]SourceTestState{TestStateExpired, TestStatePartial, TestStateReadErr, TestStateOpenErr,
-				TestStatePartialSig, TestStateMissingSig, TestStateReadSigErr, TestStateOpenSigErr} {
-				if _, ok := d.fixtures[state]; !ok {
-					d.fixtures[state] = map[string]SourceFixture{}
-				}
-				switch state {
-				case TestStatePartialSig, TestStateMissingSig, TestStateReadSigErr, TestStateOpenSigErr:
-					if suffix != ".minisig" {
-						d.fixtures[state][file] = d.fixtures[TestStateCorrect][file]
-						continue
-					}
-				}
-				f := SourceFixture{suffix: suffix, mtime: d.timeNow}
-				switch state {
-				case TestStateExpired:
-					f.content, f.mtime = d.fixtures[TestStateCorrect][file].content, d.timeOld
-				case TestStatePartial, TestStatePartialSig:
-					f.content = d.fixtures[TestStateCorrect][file].content[:1]
-				case TestStateReadErr, TestStateReadSigErr:
-					f.content, f.length = []byte{}, "1"
-				case TestStateOpenErr, TestStateOpenSigErr:
-					f.content, f.perms = d.fixtures[TestStateCorrect][file].content[:1], 0200
-				}
-				d.fixtures[state][file] = f
+			d.fixtures[TestStateCorrect][file] = SourceFixture{
+				suffix:  suffix,
+				content: readFixture(t, filepath.Join("sources", file)),
+				mtime:   d.timeNow,
+			}
+			for _, state := range [...]SourceTestState{
+				TestStateExpired,
+				TestStatePartial,
+				TestStateReadErr,
+				TestStateOpenErr,
+				TestStatePartialSig,
+				TestStateMissingSig,
+				TestStateReadSigErr,
+				TestStateOpenSigErr,
+			} {
+				generateFixtureState(t, d, suffix, file, state)
 			}
 		}
 	}
@@ -261,51 +278,53 @@ func prepSourceTestCache(t *testing.T, d *SourceTestData, e *SourceTestExpect, s
 }
 
 func prepSourceTestDownload(t *testing.T, d *SourceTestData, e *SourceTestExpect, source string, downloadTest []SourceTestState) {
-	if len(downloadTest) > 0 {
-		for _, state := range downloadTest {
-			path := "/" + strconv.FormatUint(uint64(state), 10) + "/" + source
-			if !e.success {
-				switch state {
-				case TestStateCorrect:
-					e.cache = []SourceFixture{d.fixtures[state][source], d.fixtures[state][source+".minisig"]}
-					e.Source.in, e.success = e.cache[0].content, true
-					fallthrough
-				case TestStateMissingSig, TestStatePartial, TestStatePartialSig, TestStateReadSigErr:
-					d.reqExpect[path+".minisig"]++
-					fallthrough
-				case TestStateMissing, TestStateReadErr:
-					d.reqExpect[path]++
-				}
-			}
-			switch state {
-			case TestStateMissing, TestStateMissingSig:
-				e.err = "404 Not Found"
-			case TestStatePartial, TestStatePartialSig:
-				e.err = "signature"
-			case TestStateReadErr, TestStateReadSigErr:
-				e.err = "unexpected EOF"
-			case TestStateOpenErr, TestStateOpenSigErr:
-				path = "00000" + path // high numeric port is parsed but then fails to connect
-				e.err = "invalid port"
-			case TestStatePathErr:
-				path = "..." + path // non-numeric port fails URL parsing
-			}
-			if u, err := url.Parse(d.server.URL + path); err == nil {
-				e.Source.urls = append(e.Source.urls, u)
-			}
-			e.urls = append(e.urls, d.server.URL+path)
+	if len(downloadTest) == 0 {
+		return
+	}
+	for _, state := range downloadTest {
+		path := "/" + strconv.FormatUint(uint64(state), 10) + "/" + source
+		switch state {
+		case TestStateMissing, TestStateMissingSig:
+			e.err = "404 Not Found"
+		case TestStatePartial, TestStatePartialSig:
+			e.err = "signature"
+		case TestStateReadErr, TestStateReadSigErr:
+			e.err = "unexpected EOF"
+		case TestStateOpenErr, TestStateOpenSigErr:
+			path = "00000" + path // high numeric port is parsed but then fails to connect
+			e.err = "invalid port"
+		case TestStatePathErr:
+			path = "..." + path // non-numeric port fails URL parsing
 		}
+		if u, err := url.Parse(d.server.URL + path); err == nil {
+			e.Source.urls = append(e.Source.urls, u)
+		}
+		e.urls = append(e.urls, d.server.URL+path)
 		if e.success {
-			e.err = ""
-			e.delay = DefaultPrefetchDelay
-		} else {
-			e.delay = MinimumPrefetchInterval
+			continue
 		}
-		if len(e.Source.urls) > 0 {
-			e.Source.refresh = d.timeNow.Add(e.delay)
-		} else {
-			e.success = false
+		switch state {
+		case TestStateCorrect:
+			e.cache = []SourceFixture{d.fixtures[state][source], d.fixtures[state][source+".minisig"]}
+			e.Source.in, e.success = e.cache[0].content, true
+			fallthrough
+		case TestStateMissingSig, TestStatePartial, TestStatePartialSig, TestStateReadSigErr:
+			d.reqExpect[path+".minisig"]++
+			fallthrough
+		case TestStateMissing, TestStateReadErr:
+			d.reqExpect[path]++
 		}
+	}
+	if e.success {
+		e.err = ""
+		e.delay = DefaultPrefetchDelay
+	} else {
+		e.delay = MinimumPrefetchInterval
+	}
+	if len(e.Source.urls) > 0 {
+		e.Source.refresh = d.timeNow.Add(e.delay)
+	} else {
+		e.success = false
 	}
 }
 
