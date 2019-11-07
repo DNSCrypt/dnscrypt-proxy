@@ -13,8 +13,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jedisct1/go-minisign"
+	"github.com/hectane/go-acl"
 	"github.com/powerman/check"
+
+	"github.com/jedisct1/go-minisign"
 )
 
 type SourceFixture struct {
@@ -84,6 +86,9 @@ func writeSourceCache(t *testing.T, basePath string, fixtures []SourceFixture) {
 		if err := ioutil.WriteFile(path, f.content, perms); err != nil {
 			t.Fatalf("Unable to write cache file %s: %v", path, err)
 		}
+		if err := acl.Chmod(path, perms); err != nil {
+			t.Fatalf("Unable to set permissions on cache file %s: %v", path, err)
+		}
 		if f.mtime.IsZero() {
 			continue
 		}
@@ -96,7 +101,7 @@ func writeSourceCache(t *testing.T, basePath string, fixtures []SourceFixture) {
 func checkSourceCache(c *check.C, basePath string, fixtures []SourceFixture) {
 	for _, f := range fixtures {
 		path := basePath + f.suffix
-		_ = os.Chmod(path, 0644) // don't worry if this fails, reading it will catch the same problem
+		_ = acl.Chmod(path, 0644) // don't worry if this fails, reading it will catch the same problem
 		got, err := ioutil.ReadFile(path)
 		c.DeepEqual(got, f.content, "Cache file '%s', err %v", path, err)
 	}
@@ -269,10 +274,8 @@ func prepSourceTestCache(t *testing.T, d *SourceTestData, e *SourceTestExpect, s
 		e.Source.in = e.cache[0].content
 	case TestStatePartial, TestStatePartialSig:
 		e.err = "signature"
-	case TestStateMissing, TestStateMissingSig:
+	case TestStateMissing, TestStateMissingSig, TestStateOpenErr, TestStateOpenSigErr:
 		e.err = "open"
-	case TestStateOpenErr, TestStateOpenSigErr:
-		e.err = os.ErrPermission.Error()
 	}
 	writeSourceCache(t, e.cachePath, e.cache)
 }
