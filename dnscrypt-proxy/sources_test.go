@@ -154,7 +154,7 @@ func generateFixtureState(t *testing.T, d *SourceTestData, suffix, file string, 
 }
 
 func loadFixtures(t *testing.T, d *SourceTestData) {
-	d.fixtures = map[SourceTestState]map[string]SourceFixture{TestStateCorrect: map[string]SourceFixture{}}
+	d.fixtures = map[SourceTestState]map[string]SourceFixture{TestStateCorrect: {}}
 	for _, source := range d.sources {
 		for _, suffix := range [...]string{"", ".minisig"} {
 			file := source + suffix
