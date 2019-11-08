@@ -313,7 +313,7 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	if config.ForceTCP {
 		proxy.mainProto = "tcp"
 	}
-	proxy.certRefreshDelay = time.Duration(config.CertRefreshDelay) * time.Minute
+	proxy.certRefreshDelay = time.Duration(Max(60, config.CertRefreshDelay)) * time.Minute
 	proxy.certRefreshDelayAfterFailure = time.Duration(10 * time.Second)
 	proxy.certIgnoreTimestamp = config.CertIgnoreTimestamp
 	proxy.ephemeralKeys = config.EphemeralKeys
