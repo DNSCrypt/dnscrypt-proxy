@@ -77,7 +77,7 @@ func (source *Source) fetchFromCache(now time.Time) (delay time.Duration, err er
 	return
 }
 
-func (source *Source) writeToCache(bin, sig []byte) (err error) {
+func (source *Source) writeToCache(bin, sig []byte, now time.Time) (err error) {
 	f := source.cacheFile
 	var fSrc, fSig *safefile.File
 	if fSrc, err = safefile.Create(f, 0644); err != nil {
@@ -97,7 +97,10 @@ func (source *Source) writeToCache(bin, sig []byte) (err error) {
 	if err = fSrc.Commit(); err != nil {
 		return
 	}
-	return fSig.Commit()
+	if err = fSig.Commit(); err != nil {
+		return
+	}
+	return os.Chtimes(f, now, now)
 }
 
 func (source *Source) parseURLs(urls []string) {
@@ -159,7 +162,7 @@ func (source *Source) fetchWithCache(xTransport *XTransport, now time.Time) (del
 		return
 	}
 	source.in = bin
-	if writeErr := source.writeToCache(bin, sig); writeErr != nil { // an error here isn't fatal
+	if writeErr := source.writeToCache(bin, sig, now); writeErr != nil { // an error here isn't fatal
 		f := source.cacheFile
 		if absPath, absErr := filepath.Abs(f); absErr == nil {
 			f = absPath
