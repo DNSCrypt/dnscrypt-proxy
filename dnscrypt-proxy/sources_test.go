@@ -60,6 +60,7 @@ type SourceTestExpect struct {
 	success        bool
 	err, cachePath string
 	cache          []SourceFixture
+	mtime          time.Time
 	urls           []string
 	Source         *Source
 	delay          time.Duration
@@ -73,12 +74,12 @@ func readFixture(t *testing.T, name string) []byte {
 	return bin
 }
 
-func writeSourceCache(t *testing.T, basePath string, fixtures []SourceFixture) {
-	for _, f := range fixtures {
+func writeSourceCache(t *testing.T, e *SourceTestExpect) {
+	for _, f := range e.cache {
 		if f.content == nil {
 			continue
 		}
-		path := basePath + f.suffix
+		path := e.cachePath + f.suffix
 		perms := f.perms
 		if perms == 0 {
 			perms = 0644
@@ -89,21 +90,35 @@ func writeSourceCache(t *testing.T, basePath string, fixtures []SourceFixture) {
 		if err := acl.Chmod(path, perms); err != nil {
 			t.Fatalf("Unable to set permissions on cache file %s: %v", path, err)
 		}
-		if f.mtime.IsZero() {
+		if f.suffix != "" {
 			continue
 		}
-		if err := os.Chtimes(path, f.mtime, f.mtime); err != nil {
+		mtime := f.mtime
+		if f.mtime.IsZero() {
+			mtime = e.mtime
+		}
+		if err := os.Chtimes(path, mtime, mtime); err != nil {
 			t.Fatalf("Unable to touch cache file %s to %v: %v", path, f.mtime, err)
 		}
 	}
 }
 
-func checkSourceCache(c *check.C, basePath string, fixtures []SourceFixture) {
-	for _, f := range fixtures {
-		path := basePath + f.suffix
+func checkSourceCache(c *check.C, e *SourceTestExpect) {
+	for _, f := range e.cache {
+		path := e.cachePath + f.suffix
 		_ = acl.Chmod(path, 0644) // don't worry if this fails, reading it will catch the same problem
 		got, err := ioutil.ReadFile(path)
-		c.DeepEqual(got, f.content, "Cache file '%s', err %v", path, err)
+		c.DeepEqual(got, f.content, "Unexpected content for cache file '%s', err %v", path, err)
+		if f.suffix != "" {
+			continue
+		}
+		if fi, err := os.Stat(path); err == nil { // again, if this failed it was already caught above
+			mtime := f.mtime
+			if f.mtime.IsZero() {
+				mtime = e.mtime
+			}
+			c.EQ(fi.ModTime(), mtime, "Unexpected timestamp for cache file '%s'", path)
+		}
 	}
 }
 
@@ -139,7 +154,7 @@ func generateFixtureState(t *testing.T, d *SourceTestData, suffix, file string, 
 			return
 		}
 	}
-	f := SourceFixture{suffix: suffix, mtime: d.timeNow}
+	f := SourceFixture{suffix: suffix}
 	switch state {
 	case TestStateExpired:
 		f.content, f.mtime = d.fixtures[TestStateCorrect][file].content, d.timeOld
@@ -161,7 +176,6 @@ func loadFixtures(t *testing.T, d *SourceTestData) {
 			d.fixtures[TestStateCorrect][file] = SourceFixture{
 				suffix:  suffix,
 				content: readFixture(t, filepath.Join("sources", file)),
-				mtime:   d.timeNow,
 			}
 			for _, state := range [...]SourceTestState{
 				TestStateExpired,
@@ -277,7 +291,7 @@ func prepSourceTestCache(t *testing.T, d *SourceTestData, e *SourceTestExpect, s
 	case TestStateMissing, TestStateMissingSig, TestStateOpenErr, TestStateOpenSigErr:
 		e.err = "open"
 	}
-	writeSourceCache(t, e.cachePath, e.cache)
+	writeSourceCache(t, e)
 }
 
 func prepSourceTestDownload(t *testing.T, d *SourceTestData, e *SourceTestExpect, source string, downloadTest []SourceTestState) {
@@ -336,6 +350,7 @@ func setupSourceTestCase(t *testing.T, d *SourceTestData, i int,
 	id = strconv.Itoa(d.n) + "-" + strconv.Itoa(i)
 	e = &SourceTestExpect{
 		cachePath: filepath.Join(d.tempDir, id),
+		mtime:     d.timeNow,
 	}
 	e.Source = &Source{name: id, urls: []*url.URL{}, format: SourceFormatV2, minisignKey: d.key,
 		cacheFile: e.cachePath, cacheTTL: DefaultPrefetchDelay * 3, prefetchDelay: DefaultPrefetchDelay}
@@ -359,7 +374,7 @@ func TestNewSource(t *testing.T) {
 		}
 		c.DeepEqual(got, e.Source, "Unexpected return")
 		checkTestServer(c, d)
-		checkSourceCache(c, e.cachePath, e.cache)
+		checkSourceCache(c, e)
 	}
 	d.n++
 	for _, tt := range []struct {
@@ -402,7 +417,7 @@ func TestPrefetchSources(t *testing.T) {
 		c.InDelta(got, expectDelay, time.Second, "Unexpected return")
 		checkTestServer(c, d)
 		for _, e := range expects {
-			checkSourceCache(c, e.cachePath, e.cache)
+			checkSourceCache(c, e)
 		}
 	}
 	timeNow = func() time.Time { return d.timeUpd } // since the fixtures are prepared using real now, make the tested code think it's the future
@@ -412,6 +427,7 @@ func TestPrefetchSources(t *testing.T) {
 		expects := []*SourceTestExpect{}
 		for i := range d.sources {
 			_, e := setupSourceTestCase(t, d, i, nil, downloadTest)
+			e.mtime = d.timeUpd
 			sources = append(sources, e.Source)
 			expects = append(expects, e)
 		}
