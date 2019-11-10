@@ -428,7 +428,10 @@ func TestPrefetchSources(t *testing.T) {
 		for i := range d.sources {
 			_, e := setupSourceTestCase(t, d, i, nil, downloadTest)
 			e.mtime = d.timeUpd
-			sources = append(sources, e.Source)
+			s := &Source{}
+			*s = *e.Source
+			s.in = nil
+			sources = append(sources, s)
 			expects = append(expects, e)
 		}
 		t.Run("download "+downloadTestName, func(t *testing.T) {

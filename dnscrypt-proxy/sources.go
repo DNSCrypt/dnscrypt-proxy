@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -77,8 +78,7 @@ func (source *Source) fetchFromCache(now time.Time) (delay time.Duration, err er
 	return
 }
 
-func (source *Source) writeToCache(bin, sig []byte, now time.Time) (err error) {
-	f := source.cacheFile
+func writeSource(f string, bin, sig []byte) (err error) {
 	var fSrc, fSig *safefile.File
 	if fSrc, err = safefile.Create(f, 0644); err != nil {
 		return
@@ -97,10 +97,28 @@ func (source *Source) writeToCache(bin, sig []byte, now time.Time) (err error) {
 	if err = fSrc.Commit(); err != nil {
 		return
 	}
-	if err = fSig.Commit(); err != nil {
-		return
+	return fSig.Commit()
+}
+
+func (source *Source) writeToCache(bin, sig []byte, now time.Time) {
+	f := source.cacheFile
+	var writeErr error // an error writing cache isn't fatal
+	defer func() {
+		source.in = bin
+		if writeErr == nil {
+			return
+		}
+		if absPath, absErr := filepath.Abs(f); absErr == nil {
+			f = absPath
+		}
+		dlog.Warnf("%s: %s", f, writeErr)
+	}()
+	if !bytes.Equal(source.in, bin) {
+		if writeErr = writeSource(f, bin, sig); writeErr != nil {
+			return
+		}
 	}
-	return os.Chtimes(f, now, now)
+	writeErr = os.Chtimes(f, now, now)
 }
 
 func (source *Source) parseURLs(urls []string) {
@@ -161,14 +179,7 @@ func (source *Source) fetchWithCache(xTransport *XTransport, now time.Time) (del
 	if err != nil {
 		return
 	}
-	source.in = bin
-	if writeErr := source.writeToCache(bin, sig, now); writeErr != nil { // an error here isn't fatal
-		f := source.cacheFile
-		if absPath, absErr := filepath.Abs(f); absErr == nil {
-			f = absPath
-		}
-		dlog.Warnf("%s: %s", f, writeErr)
-	}
+	source.writeToCache(bin, sig, now)
 	delay = source.prefetchDelay
 	return
 }
