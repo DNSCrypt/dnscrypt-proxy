@@ -264,7 +264,7 @@ func setupSourceTest(t *testing.T) (func(), *SourceTestData) {
 		"no-urls":              {},
 	}
 	d.xTransport.rebuildTransport()
-	d.timeNow = time.Now().AddDate(0, 0, 0)
+	d.timeNow = time.Now().AddDate(0, 0, 0).Truncate(time.Second)
 	d.timeOld = d.timeNow.Add(DefaultPrefetchDelay * -4)
 	d.timeUpd = d.timeNow.Add(DefaultPrefetchDelay)
 	timeNow = func() time.Time { return d.timeNow } // originally defined in sources.go, replaced during testing to ensure consistent results
