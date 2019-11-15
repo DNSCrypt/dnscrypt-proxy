@@ -2,8 +2,11 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// +build !linux,arm64
+// +build !race
 
-package cpu
+package socket
 
-const cacheLineSize = 64
+func (m *Message) raceRead() {
+}
+func (m *Message) raceWrite() {
+}

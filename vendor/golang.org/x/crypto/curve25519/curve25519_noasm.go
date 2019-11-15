@@ -2,8 +2,10 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// +build !linux,arm64
+// +build !amd64 gccgo appengine purego
 
-package cpu
+package curve25519
 
-const cacheLineSize = 64
+func scalarMult(out, in, base *[32]byte) {
+	scalarMultGeneric(out, in, base)
+}
