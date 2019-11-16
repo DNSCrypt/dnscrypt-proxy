@@ -567,6 +567,22 @@ cache_neg_max_ttl = 600
   #  minisign_key = 'RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3'
 
 
+
+
+#########################################
+#        Servers with known bugs        #
+#########################################
+
+[broken_implementations]
+
+# Cisco servers currently cannot handle queries larger than 1472 bytes.
+# This prevents large DNSCrypt responses from being received, and breaks relaying.
+
+incorrect_padding = ['cisco', 'cisco-ipv6', 'cisco-familyshield']
+
+
+
+
 ################################
 #        Anonymized DNS        #
 ################################

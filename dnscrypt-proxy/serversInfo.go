@@ -31,6 +31,10 @@ type RegisteredServer struct {
 	description string
 }
 
+type ServerBugs struct {
+	incorrectPadding bool
+}
+
 type ServerInfo struct {
 	Proto              stamps.StampProtoType
 	MagicQuery         [8]byte
@@ -45,6 +49,7 @@ type ServerInfo struct {
 	TCPAddr            *net.TCPAddr
 	RelayUDPAddr       *net.UDPAddr
 	RelayTCPAddr       *net.TCPAddr
+	knownBugs          ServerBugs
 	lastActionTS       time.Time
 	rtt                ewma.MovingAverage
 	initialRtt         int
@@ -293,7 +298,19 @@ func fetchDNSCryptServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp
 		dlog.Warnf("Public key [%s] shouldn't be hex-encoded any more", string(stamp.ServerPk))
 		stamp.ServerPk = serverPk
 	}
+	knownBugs := ServerBugs{}
+	for _, buggyServerName := range proxy.serversWithIncorrectPadding {
+		if buggyServerName == name {
+			knownBugs.incorrectPadding = true
+			dlog.Infof("Known bug in [%v]: padding is not correctly implemented", name)
+			break
+		}
+	}
 	relayUDPAddr, relayTCPAddr, err := route(proxy, name)
+	if knownBugs.incorrectPadding && (relayUDPAddr != nil || relayTCPAddr != nil) {
+		relayTCPAddr, relayUDPAddr = nil, nil
+		dlog.Warnf("[%v] is incompatible with anonymization", name)
+	}
 	if err != nil {
 		return ServerInfo{}, err
 	}
@@ -322,6 +339,7 @@ func fetchDNSCryptServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp
 		RelayUDPAddr:       relayUDPAddr,
 		RelayTCPAddr:       relayTCPAddr,
 		initialRtt:         rtt,
+		knownBugs:          knownBugs,
 	}, nil
 }
 

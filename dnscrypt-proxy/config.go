@@ -46,47 +46,48 @@ type Config struct {
 	LBEstimator              bool   `toml:"lb_estimator"`
 	BlockIPv6                bool   `toml:"block_ipv6"`
 	Cache                    bool
-	CacheSize                int                        `toml:"cache_size"`
-	CacheNegTTL              uint32                     `toml:"cache_neg_ttl"`
-	CacheNegMinTTL           uint32                     `toml:"cache_neg_min_ttl"`
-	CacheNegMaxTTL           uint32                     `toml:"cache_neg_max_ttl"`
-	CacheMinTTL              uint32                     `toml:"cache_min_ttl"`
-	CacheMaxTTL              uint32                     `toml:"cache_max_ttl"`
-	RejectTTL                uint32                     `toml:"reject_ttl"`
-	CloakTTL                 uint32                     `toml:"cloak_ttl"`
-	QueryLog                 QueryLogConfig             `toml:"query_log"`
-	NxLog                    NxLogConfig                `toml:"nx_log"`
-	BlockName                BlockNameConfig            `toml:"blacklist"`
-	WhitelistName            WhitelistNameConfig        `toml:"whitelist"`
-	BlockIP                  BlockIPConfig              `toml:"ip_blacklist"`
-	ForwardFile              string                     `toml:"forwarding_rules"`
-	CloakFile                string                     `toml:"cloaking_rules"`
-	StaticsConfig            map[string]StaticConfig    `toml:"static"`
-	SourcesConfig            map[string]SourceConfig    `toml:"sources"`
-	SourceRequireDNSSEC      bool                       `toml:"require_dnssec"`
-	SourceRequireNoLog       bool                       `toml:"require_nolog"`
-	SourceRequireNoFilter    bool                       `toml:"require_nofilter"`
-	SourceDNSCrypt           bool                       `toml:"dnscrypt_servers"`
-	SourceDoH                bool                       `toml:"doh_servers"`
-	SourceIPv4               bool                       `toml:"ipv4_servers"`
-	SourceIPv6               bool                       `toml:"ipv6_servers"`
-	MaxClients               uint32                     `toml:"max_clients"`
-	FallbackResolver         string                     `toml:"fallback_resolver"`
-	IgnoreSystemDNS          bool                       `toml:"ignore_system_dns"`
-	AllWeeklyRanges          map[string]WeeklyRangesStr `toml:"schedules"`
-	LogMaxSize               int                        `toml:"log_files_max_size"`
-	LogMaxAge                int                        `toml:"log_files_max_age"`
-	LogMaxBackups            int                        `toml:"log_files_max_backups"`
-	TLSDisableSessionTickets bool                       `toml:"tls_disable_session_tickets"`
-	TLSCipherSuite           []uint16                   `toml:"tls_cipher_suite"`
-	NetprobeAddress          string                     `toml:"netprobe_address"`
-	NetprobeTimeout          int                        `toml:"netprobe_timeout"`
-	OfflineMode              bool                       `toml:"offline_mode"`
-	HTTPProxyURL             string                     `toml:"http_proxy"`
-	RefusedCodeInResponses   bool                       `toml:"refused_code_in_responses"`
-	BlockedQueryResponse     string                     `toml:"blocked_query_response"`
-	QueryMeta                []string                   `toml:"query_meta"`
-	AnonymizedDNS            AnonymizedDNSConfig        `toml:"anonymized_dns"`
+	CacheSize                int                         `toml:"cache_size"`
+	CacheNegTTL              uint32                      `toml:"cache_neg_ttl"`
+	CacheNegMinTTL           uint32                      `toml:"cache_neg_min_ttl"`
+	CacheNegMaxTTL           uint32                      `toml:"cache_neg_max_ttl"`
+	CacheMinTTL              uint32                      `toml:"cache_min_ttl"`
+	CacheMaxTTL              uint32                      `toml:"cache_max_ttl"`
+	RejectTTL                uint32                      `toml:"reject_ttl"`
+	CloakTTL                 uint32                      `toml:"cloak_ttl"`
+	QueryLog                 QueryLogConfig              `toml:"query_log"`
+	NxLog                    NxLogConfig                 `toml:"nx_log"`
+	BlockName                BlockNameConfig             `toml:"blacklist"`
+	WhitelistName            WhitelistNameConfig         `toml:"whitelist"`
+	BlockIP                  BlockIPConfig               `toml:"ip_blacklist"`
+	ForwardFile              string                      `toml:"forwarding_rules"`
+	CloakFile                string                      `toml:"cloaking_rules"`
+	StaticsConfig            map[string]StaticConfig     `toml:"static"`
+	SourcesConfig            map[string]SourceConfig     `toml:"sources"`
+	BrokenImplementations    BrokenImplementationsConfig `toml:"broken_implementations"`
+	SourceRequireDNSSEC      bool                        `toml:"require_dnssec"`
+	SourceRequireNoLog       bool                        `toml:"require_nolog"`
+	SourceRequireNoFilter    bool                        `toml:"require_nofilter"`
+	SourceDNSCrypt           bool                        `toml:"dnscrypt_servers"`
+	SourceDoH                bool                        `toml:"doh_servers"`
+	SourceIPv4               bool                        `toml:"ipv4_servers"`
+	SourceIPv6               bool                        `toml:"ipv6_servers"`
+	MaxClients               uint32                      `toml:"max_clients"`
+	FallbackResolver         string                      `toml:"fallback_resolver"`
+	IgnoreSystemDNS          bool                        `toml:"ignore_system_dns"`
+	AllWeeklyRanges          map[string]WeeklyRangesStr  `toml:"schedules"`
+	LogMaxSize               int                         `toml:"log_files_max_size"`
+	LogMaxAge                int                         `toml:"log_files_max_age"`
+	LogMaxBackups            int                         `toml:"log_files_max_backups"`
+	TLSDisableSessionTickets bool                        `toml:"tls_disable_session_tickets"`
+	TLSCipherSuite           []uint16                    `toml:"tls_cipher_suite"`
+	NetprobeAddress          string                      `toml:"netprobe_address"`
+	NetprobeTimeout          int                         `toml:"netprobe_timeout"`
+	OfflineMode              bool                        `toml:"offline_mode"`
+	HTTPProxyURL             string                      `toml:"http_proxy"`
+	RefusedCodeInResponses   bool                        `toml:"refused_code_in_responses"`
+	BlockedQueryResponse     string                      `toml:"blocked_query_response"`
+	QueryMeta                []string                    `toml:"query_meta"`
+	AnonymizedDNS            AnonymizedDNSConfig         `toml:"anonymized_dns"`
 }
 
 func newConfig() Config {
@@ -179,6 +180,10 @@ type AnonymizedDNSRouteConfig struct {
 
 type AnonymizedDNSConfig struct {
 	Routes []AnonymizedDNSRouteConfig `toml:"routes"`
+}
+
+type BrokenImplementationsConfig struct {
+	IncorrectPadding []string `toml:"incorrect_padding"`
 }
 
 type ServerSummary struct {
@@ -436,6 +441,7 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 		}
 		proxy.routes = &routes
 	}
+	proxy.serversWithIncorrectPadding = config.BrokenImplementations.IncorrectPadding
 
 	if *flags.ListAll {
 		config.ServerNames = nil
