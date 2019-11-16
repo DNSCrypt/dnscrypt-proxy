@@ -13,11 +13,15 @@ import (
 	lumberjack "gopkg.in/natefinch/lumberjack.v2"
 )
 
-type PluginBlockName struct {
+type BlockedNames struct {
 	allWeeklyRanges *map[string]WeeklyRanges
 	patternMatcher  *PatternMatcher
 	logger          *lumberjack.Logger
 	format          string
+}
+
+type PluginBlockName struct {
+	blockedNames *BlockedNames
 }
 
 func (plugin *PluginBlockName) Name() string {
@@ -34,8 +38,10 @@ func (plugin *PluginBlockName) Init(proxy *Proxy) error {
 	if err != nil {
 		return err
 	}
-	plugin.allWeeklyRanges = proxy.allWeeklyRanges
-	plugin.patternMatcher = NewPatternPatcher()
+	blockedNames := BlockedNames{
+		allWeeklyRanges: proxy.allWeeklyRanges,
+		patternMatcher:  NewPatternPatcher(),
+	}
 	for lineNo, line := range strings.Split(string(bin), "\n") {
 		line = strings.TrimFunc(line, unicode.IsSpace)
 		if len(line) == 0 || strings.HasPrefix(line, "#") {
@@ -52,14 +58,14 @@ func (plugin *PluginBlockName) Init(proxy *Proxy) error {
 		}
 		var weeklyRanges *WeeklyRanges
 		if len(timeRangeName) > 0 {
-			weeklyRangesX, ok := (*plugin.allWeeklyRanges)[timeRangeName]
+			weeklyRangesX, ok := (*blockedNames.allWeeklyRanges)[timeRangeName]
 			if !ok {
 				dlog.Errorf("Time range [%s] not found at line %d", timeRangeName, 1+lineNo)
 			} else {
 				weeklyRanges = &weeklyRangesX
 			}
 		}
-		if err := plugin.patternMatcher.Add(line, weeklyRanges, lineNo+1); err != nil {
+		if err := blockedNames.patternMatcher.Add(line, weeklyRanges, lineNo+1); err != nil {
 			dlog.Error(err)
 			continue
 		}
@@ -67,8 +73,9 @@ func (plugin *PluginBlockName) Init(proxy *Proxy) error {
 	if len(proxy.blockNameLogFile) == 0 {
 		return nil
 	}
-	plugin.logger = &lumberjack.Logger{LocalTime: true, MaxSize: proxy.logMaxSize, MaxAge: proxy.logMaxAge, MaxBackups: proxy.logMaxBackups, Filename: proxy.blockNameLogFile, Compress: true}
-	plugin.format = proxy.blockNameFormat
+	blockedNames.logger = &lumberjack.Logger{LocalTime: true, MaxSize: proxy.logMaxSize, MaxAge: proxy.logMaxAge, MaxBackups: proxy.logMaxBackups, Filename: proxy.blockNameLogFile, Compress: true}
+	blockedNames.format = proxy.blockNameFormat
+	plugin.blockedNames = &blockedNames
 
 	return nil
 }
@@ -90,7 +97,11 @@ func (plugin *PluginBlockName) Eval(pluginsState *PluginsState, msg *dns.Msg) er
 		return nil
 	}
 	qName := strings.ToLower(StripTrailingDot(questions[0].Name))
-	reject, reason, xweeklyRanges := plugin.patternMatcher.Eval(qName)
+	return plugin.blockedNames.check(pluginsState, qName)
+}
+
+func (blockedNames *BlockedNames) check(pluginsState *PluginsState, qName string) error {
+	reject, reason, xweeklyRanges := blockedNames.patternMatcher.Eval(qName)
 	var weeklyRanges *WeeklyRanges
 	if xweeklyRanges != nil {
 		weeklyRanges = xweeklyRanges.(*WeeklyRanges)
@@ -100,33 +111,34 @@ func (plugin *PluginBlockName) Eval(pluginsState *PluginsState, msg *dns.Msg) er
 			reject = false
 		}
 	}
-	if reject {
-		pluginsState.action = PluginsActionReject
-		pluginsState.returnCode = PluginsReturnCodeReject
-		if plugin.logger != nil {
-			var clientIPStr string
-			if pluginsState.clientProto == "udp" {
-				clientIPStr = (*pluginsState.clientAddr).(*net.UDPAddr).IP.String()
-			} else {
-				clientIPStr = (*pluginsState.clientAddr).(*net.TCPAddr).IP.String()
-			}
-			var line string
-			if plugin.format == "tsv" {
-				now := time.Now()
-				year, month, day := now.Date()
-				hour, minute, second := now.Clock()
-				tsStr := fmt.Sprintf("[%d-%02d-%02d %02d:%02d:%02d]", year, int(month), day, hour, minute, second)
-				line = fmt.Sprintf("%s\t%s\t%s\t%s\n", tsStr, clientIPStr, StringQuote(qName), StringQuote(reason))
-			} else if plugin.format == "ltsv" {
-				line = fmt.Sprintf("time:%d\thost:%s\tqname:%s\tmessage:%s\n", time.Now().Unix(), clientIPStr, StringQuote(qName), StringQuote(reason))
-			} else {
-				dlog.Fatalf("Unexpected log format: [%s]", plugin.format)
-			}
-			if plugin.logger == nil {
-				return errors.New("Log file not initialized")
-			}
-			plugin.logger.Write([]byte(line))
+	if !reject {
+		return nil
+	}
+	pluginsState.action = PluginsActionReject
+	pluginsState.returnCode = PluginsReturnCodeReject
+	if blockedNames.logger != nil {
+		var clientIPStr string
+		if pluginsState.clientProto == "udp" {
+			clientIPStr = (*pluginsState.clientAddr).(*net.UDPAddr).IP.String()
+		} else {
+			clientIPStr = (*pluginsState.clientAddr).(*net.TCPAddr).IP.String()
 		}
+		var line string
+		if blockedNames.format == "tsv" {
+			now := time.Now()
+			year, month, day := now.Date()
+			hour, minute, second := now.Clock()
+			tsStr := fmt.Sprintf("[%d-%02d-%02d %02d:%02d:%02d]", year, int(month), day, hour, minute, second)
+			line = fmt.Sprintf("%s\t%s\t%s\t%s\n", tsStr, clientIPStr, StringQuote(qName), StringQuote(reason))
+		} else if blockedNames.format == "ltsv" {
+			line = fmt.Sprintf("time:%d\thost:%s\tqname:%s\tmessage:%s\n", time.Now().Unix(), clientIPStr, StringQuote(qName), StringQuote(reason))
+		} else {
+			dlog.Fatalf("Unexpected log format: [%s]", blockedNames.format)
+		}
+		if blockedNames.logger == nil {
+			return errors.New("Log file not initialized")
+		}
+		blockedNames.logger.Write([]byte(line))
 	}
 	return nil
 }
