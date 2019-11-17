@@ -3,7 +3,7 @@
 provider name, which is generally more useful.
  - IP addresses for DoH servers that require DNS lookups are now cached
 for at least 12 hours.
- - `default ignore_system_dns` is now set to `true` by default.
+ - `ignore_system_dns` is now set to `true` by default.
  - A workaround for a bug in Cisco servers has been implemented.
  - A corrupted or incomplete resolvers list is now ignored, keeping the
 last good known cached list until the next update. In addition, logging was
