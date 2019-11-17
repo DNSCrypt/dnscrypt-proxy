@@ -76,26 +76,26 @@ func FetchCurrentDNSCryptCert(proxy *Proxy, serverName *string, proto string, pk
 		signature := binCert[8:72]
 		signed := binCert[72:]
 		if !ed25519.Verify(pk, signed, signature) {
-			dlog.Warnf("[%v] Incorrect signature", *serverName)
+			dlog.Warnf("[%v] Incorrect signature for provider name: [%v]", *serverName, providerName)
 			continue
 		}
 		serial := binary.BigEndian.Uint32(binCert[112:116])
 		tsBegin := binary.BigEndian.Uint32(binCert[116:120])
 		tsEnd := binary.BigEndian.Uint32(binCert[120:124])
 		if tsBegin >= tsEnd {
-			dlog.Warnf("[%v] certificate ends before it starts (%v >= %v)", providerName, tsBegin, tsEnd)
+			dlog.Warnf("[%v] certificate ends before it starts (%v >= %v)", *serverName, tsBegin, tsEnd)
 			continue
 		}
 		ttl := tsEnd - tsBegin
 		if ttl > 86400*7 {
-			dlog.Infof("[%v] the key validity period for this server is excessively long (%d days), significantly reducing reliability and forward security.", providerName, ttl/86400)
+			dlog.Infof("[%v] the key validity period for this server is excessively long (%d days), significantly reducing reliability and forward security.", *serverName, ttl/86400)
 			daysLeft := (tsEnd - now) / 86400
 			if daysLeft < 1 {
-				dlog.Criticalf("[%v] certificate will expire today -- Switch to a different resolver as soon as possible", providerName)
+				dlog.Criticalf("[%v] certificate will expire today -- Switch to a different resolver as soon as possible", *serverName)
 			} else if daysLeft <= 7 {
-				dlog.Warnf("[%v] certificate is about to expire -- if you don't manage this server, tell the server operator about it", providerName)
+				dlog.Warnf("[%v] certificate is about to expire -- if you don't manage this server, tell the server operator about it", *serverName)
 			} else if daysLeft <= 30 {
-				dlog.Infof("[%v] certificate will expire in %d days", providerName, daysLeft)
+				dlog.Infof("[%v] certificate will expire in %d days", *serverName, daysLeft)
 			}
 			certInfo.ForwardSecurity = false
 		} else {
@@ -103,24 +103,24 @@ func FetchCurrentDNSCryptCert(proxy *Proxy, serverName *string, proto string, pk
 		}
 		if !proxy.certIgnoreTimestamp {
 			if now > tsEnd || now < tsBegin {
-				dlog.Debugf("[%v] Certificate not valid at the current date (now: %v is not in [%v..%v])", providerName, now, tsBegin, tsEnd)
+				dlog.Debugf("[%v] Certificate not valid at the current date (now: %v is not in [%v..%v])", *serverName, now, tsBegin, tsEnd)
 				continue
 			}
 		}
 		if serial < highestSerial {
-			dlog.Debugf("[%v] Superseded by a previous certificate", providerName)
+			dlog.Debugf("[%v] Superseded by a previous certificate", *serverName)
 			continue
 		}
 		if serial == highestSerial {
 			if cryptoConstruction < certInfo.CryptoConstruction {
-				dlog.Debugf("[%v] Keeping the previous, preferred crypto construction", providerName)
+				dlog.Debugf("[%v] Keeping the previous, preferred crypto construction", *serverName)
 				continue
 			} else {
-				dlog.Debugf("[%v] Upgrading the construction from %v to %v", providerName, certInfo.CryptoConstruction, cryptoConstruction)
+				dlog.Debugf("[%v] Upgrading the construction from %v to %v", *serverName, certInfo.CryptoConstruction, cryptoConstruction)
 			}
 		}
 		if cryptoConstruction != XChacha20Poly1305 && cryptoConstruction != XSalsa20Poly1305 {
-			dlog.Noticef("[%v] Cryptographic construction %v not supported", providerName, cryptoConstruction)
+			dlog.Noticef("[%v] Cryptographic construction %v not supported", *serverName, cryptoConstruction)
 			continue
 		}
 		var serverPk [32]byte
