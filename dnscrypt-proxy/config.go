@@ -127,6 +127,9 @@ func newConfig() Config {
 		RefusedCodeInResponses:   false,
 		LBEstimator:              true,
 		BlockedQueryResponse:     "hinfo",
+		BrokenImplementations: BrokenImplementationsConfig{
+			BrokenQueryPadding: []string{"cisco", "cisco-ipv6", "cisco-familyshield"},
+		},
 	}
 }
 

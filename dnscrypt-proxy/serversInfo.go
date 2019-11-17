@@ -302,7 +302,7 @@ func fetchDNSCryptServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp
 	for _, buggyServerName := range proxy.serversWithBrokenQueryPadding {
 		if buggyServerName == name {
 			knownBugs.incorrectPadding = true
-			dlog.Infof("Known bug in [%v]: padding is not correctly implemented", name)
+			dlog.Infof("Known bug in [%v]: padded queries are not correctly parsed", name)
 			break
 		}
 	}
