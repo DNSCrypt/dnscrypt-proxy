@@ -416,7 +416,7 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 				if neterr, ok := err.(net.Error); ok && neterr.Timeout() {
 					pluginsState.returnCode = PluginsReturnCodeServerTimeout
 				} else {
-					pluginsState.returnCode = PluginsReturnCodeServerError
+					pluginsState.returnCode = PluginsReturnCodeNetworkError
 				}
 				pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
 				serverInfo.noticeFailure(proxy)
@@ -429,14 +429,14 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 			resp, _, err := proxy.xTransport.DoHQuery(serverInfo.useGet, serverInfo.URL, query, proxy.timeout)
 			SetTransactionID(query, tid)
 			if err != nil {
-				pluginsState.returnCode = PluginsReturnCodeServerError
+				pluginsState.returnCode = PluginsReturnCodeNetworkError
 				pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
 				serverInfo.noticeFailure(proxy)
 				return
 			}
 			response, err = ioutil.ReadAll(io.LimitReader(resp.Body, int64(MaxDNSPacketSize)))
 			if err != nil {
-				pluginsState.returnCode = PluginsReturnCodeServerError
+				pluginsState.returnCode = PluginsReturnCodeNetworkError
 				pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
 				serverInfo.noticeFailure(proxy)
 				return

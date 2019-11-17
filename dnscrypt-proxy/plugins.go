@@ -43,6 +43,7 @@ const (
 	PluginsReturnCodeNXDomain
 	PluginsReturnCodeResponseError
 	PluginsReturnCodeServerError
+	PluginsReturnCodeNetworkError
 	PluginsReturnCodeCloak
 	PluginsReturnCodeServerTimeout
 )
@@ -57,6 +58,7 @@ var PluginsReturnCodeToString = map[PluginsReturnCode]string{
 	PluginsReturnCodeNXDomain:      "NXDOMAIN",
 	PluginsReturnCodeResponseError: "RESPONSE_ERROR",
 	PluginsReturnCodeServerError:   "SERVER_ERROR",
+	PluginsReturnCodeNetworkError:  "NETWORK_ERROR",
 	PluginsReturnCodeCloak:         "CLOAK",
 	PluginsReturnCodeServerTimeout: "SERVER_TIMEOUT",
 }
