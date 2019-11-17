@@ -30,7 +30,7 @@ const (
 	DefaultKeepAlive        = 5 * time.Second
 	DefaultTimeout          = 30 * time.Second
 	SystemRresolverIPTTL    = 24 * time.Hour
-	MinRresolverIPTTL       = 8 * time.Hour
+	MinResolverIPTTL       = 8 * time.Hour
 	ExpiredCachedIPGraceTTL = 5 * time.Minute
 )
 
@@ -84,12 +84,12 @@ func ParseIP(ipStr string) net.IP {
 }
 
 // If ttl < 0, never expire
-// Otherwise, ttl is set to max(ttl, MinRresolverIPTTL)
+// Otherwise, ttl is set to max(ttl, MinResolverIPTTL)
 func (xTransport *XTransport) saveCachedIP(host string, ip net.IP, ttl time.Duration) {
 	item := &CachedIPItem{ip: ip, expiration: nil}
 	if ttl >= 0 {
-		if ttl < MinRresolverIPTTL {
-			ttl = MinRresolverIPTTL
+		if ttl < MinResolverIPTTL {
+			ttl = MinResolverIPTTL
 		}
 		expiration := time.Now().Add(ttl)
 		item.expiration = &expiration
@@ -279,8 +279,8 @@ func (xTransport *XTransport) resolveWithCache(host string) (err error) {
 			}
 		}
 	}
-	if ttl < MinRresolverIPTTL {
-		ttl = MinRresolverIPTTL
+	if ttl < MinResolverIPTTL {
+		ttl = MinResolverIPTTL
 	}
 	if err != nil {
 		if cachedIP != nil {
