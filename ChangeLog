@@ -10,7 +10,7 @@ last good known cached list until the next update. In addition, logging was
 improved and unit tests were also added. Awesome contribution from William
 Elwood, thanks!
  - On Windows, the network probe immediately returned instead of blocking
-if `netprobe_timout` was set to `-1`. This has been fixed.
+if `netprobe_timeout` was set to `-1`. This has been fixed.
  - Expired cached IP addresses now have a grace period, to avoid breaking the
 service if they temporarily can't be refreshed.
  - On Windows, the service now returns immediately, solving a long-standing
