@@ -29,8 +29,8 @@ const (
 	DefaultFallbackResolver = "9.9.9.9:53"
 	DefaultKeepAlive        = 5 * time.Second
 	DefaultTimeout          = 30 * time.Second
-	SystemRresolverIPTTL    = 24 * time.Hour
-	MinResolverIPTTL       = 8 * time.Hour
+	SystemResolverIPTTL     = 24 * time.Hour
+	MinResolverIPTTL        = 8 * time.Hour
 	ExpiredCachedIPGraceTTL = 5 * time.Minute
 )
 
@@ -70,7 +70,7 @@ func NewXTransport() *XTransport {
 		timeout:                  DefaultTimeout,
 		fallbackResolver:         DefaultFallbackResolver,
 		mainProto:                "",
-		ignoreSystemDNS:          false,
+		ignoreSystemDNS:          true,
 		useIPv4:                  true,
 		useIPv6:                  false,
 		tlsDisableSessionTickets: false,
@@ -173,7 +173,7 @@ func (xTransport *XTransport) rebuildTransport() {
 }
 
 func (xTransport *XTransport) resolveUsingSystem(host string) (ip net.IP, ttl time.Duration, err error) {
-	ttl = SystemRresolverIPTTL
+	ttl = SystemResolverIPTTL
 	var foundIPs []string
 	foundIPs, err = net.LookupHost(host)
 	if err != nil {
