@@ -269,7 +269,7 @@ func (xTransport *XTransport) resolveWithCache(host string) (err error) {
 		}
 		for _, proto := range protos {
 			if err != nil {
-				dlog.Noticef("System DNS configuration not usable yet, exceptionally resolving [%s] using resolver %s[%s]", host, proto, xTransport.fallbackResolver)
+				dlog.Noticef("System DNS configuration not usable yet, exceptionally resolving [%s] using resolver [%s] over %s", host, xTransport.fallbackResolver, proto)
 			} else {
 				dlog.Debugf("Resolving [%s] using resolver %s[%s]", host, proto, xTransport.fallbackResolver)
 			}
