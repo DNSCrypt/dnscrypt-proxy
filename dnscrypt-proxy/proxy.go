@@ -71,7 +71,7 @@ type Proxy struct {
 	blockedQueryResponse         string
 	queryMeta                    []string
 	routes                       *map[string][]string
-	serversWithIncorrectPadding  []string
+	serversWithBrokenQueryPadding  []string
 	showCerts                    bool
 }
 

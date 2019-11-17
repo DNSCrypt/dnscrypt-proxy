@@ -575,10 +575,13 @@ cache_neg_max_ttl = 600
 
 [broken_implementations]
 
-# Cisco servers currently cannot handle queries larger than 1472 bytes.
-# This prevents large DNSCrypt responses from being received, and breaks relaying.
+# Cisco servers currently cannot handle queries larger than 1472 bytes, and don't
+# truncate reponses larger than questions as expected by the DNSCrypt protocol.
+# This prevents large responses from being received, and breaks relaying.
+# A workaround for the first issue will be applied to servers in list below.
+# Do not change that list until the bugs are fixed server-side.
 
-incorrect_padding = ['cisco', 'cisco-ipv6', 'cisco-familyshield']
+broken_query_padding = ['cisco', 'cisco-ipv6', 'cisco-familyshield']
 
 
 

@@ -299,7 +299,7 @@ func fetchDNSCryptServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp
 		stamp.ServerPk = serverPk
 	}
 	knownBugs := ServerBugs{}
-	for _, buggyServerName := range proxy.serversWithIncorrectPadding {
+	for _, buggyServerName := range proxy.serversWithBrokenQueryPadding {
 		if buggyServerName == name {
 			knownBugs.incorrectPadding = true
 			dlog.Infof("Known bug in [%v]: padding is not correctly implemented", name)

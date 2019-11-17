@@ -183,7 +183,7 @@ type AnonymizedDNSConfig struct {
 }
 
 type BrokenImplementationsConfig struct {
-	IncorrectPadding []string `toml:"incorrect_padding"`
+	BrokenQueryPadding []string `toml:"broken_query_padding"`
 }
 
 type ServerSummary struct {
@@ -441,7 +441,7 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 		}
 		proxy.routes = &routes
 	}
-	proxy.serversWithIncorrectPadding = config.BrokenImplementations.IncorrectPadding
+	proxy.serversWithBrokenQueryPadding = config.BrokenImplementations.BrokenQueryPadding
 
 	if *flags.ListAll {
 		config.ServerNames = nil
