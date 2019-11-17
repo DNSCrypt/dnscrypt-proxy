@@ -17,6 +17,9 @@ service if they temporarily can't be refreshed.
 issue when initialization took more than 30 seconds ("The service did not
 respond to the start or control request in a timely fashion"). Fantastic
 work by Alison Winters, thanks!
+ - A new error code, NETWORK_ERROR, has been introduced in order to make
+the distinction between network errors and servers responding with a SERVFAIL
+error code.
 
 * Version 2.0.31
  - This version fixes two regressions introduced in version 2.0.29:
