@@ -42,7 +42,7 @@ const (
 	PluginsReturnCodeParseError
 	PluginsReturnCodeNXDomain
 	PluginsReturnCodeResponseError
-	PluginsReturnCodeServerError
+	PluginsReturnCodeServFail
 	PluginsReturnCodeNetworkError
 	PluginsReturnCodeCloak
 	PluginsReturnCodeServerTimeout
@@ -57,7 +57,7 @@ var PluginsReturnCodeToString = map[PluginsReturnCode]string{
 	PluginsReturnCodeParseError:    "PARSE_ERROR",
 	PluginsReturnCodeNXDomain:      "NXDOMAIN",
 	PluginsReturnCodeResponseError: "RESPONSE_ERROR",
-	PluginsReturnCodeServerError:   "SERVER_ERROR",
+	PluginsReturnCodeServFail:      "SERVFAIL",
 	PluginsReturnCodeNetworkError:  "NETWORK_ERROR",
 	PluginsReturnCodeCloak:         "CLOAK",
 	PluginsReturnCodeServerTimeout: "SERVER_TIMEOUT",
@@ -285,7 +285,7 @@ func (pluginsState *PluginsState) ApplyResponsePlugins(pluginsGlobals *PluginsGl
 	case dns.RcodeNameError:
 		pluginsState.returnCode = PluginsReturnCodeNXDomain
 	case dns.RcodeServerFailure:
-		pluginsState.returnCode = PluginsReturnCodeServerError
+		pluginsState.returnCode = PluginsReturnCodeServFail
 	default:
 		pluginsState.returnCode = PluginsReturnCodeResponseError
 	}
