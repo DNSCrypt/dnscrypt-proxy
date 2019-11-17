@@ -49,18 +49,18 @@ func FetchCurrentDNSCryptCert(proxy *Proxy, serverName *string, proto string, pk
 	for _, answerRr := range in.Answer {
 		var txt string
 		if t, ok := answerRr.(*dns.TXT); !ok {
-			dlog.Noticef("[%v] Extra record of type [%v] found in certificate", providerName, answerRr.Header().Rrtype)
+			dlog.Noticef("[%v] Extra record of type [%v] found in certificate", *serverName, answerRr.Header().Rrtype)
 			continue
 		} else {
 			txt = strings.Join(t.Txt, "")
 		}
 		binCert := packTxtString(txt)
 		if len(binCert) < 124 {
-			dlog.Warnf("[%v] Certificate too short", providerName)
+			dlog.Warnf("[%v] Certificate too short", *serverName)
 			continue
 		}
 		if !bytes.Equal(binCert[:4], CertMagic[:4]) {
-			dlog.Warnf("[%v] Invalid cert magic", providerName)
+			dlog.Warnf("[%v] Invalid cert magic", *serverName)
 			continue
 		}
 		cryptoConstruction := CryptoConstruction(0)
@@ -70,13 +70,13 @@ func FetchCurrentDNSCryptCert(proxy *Proxy, serverName *string, proto string, pk
 		case 0x0002:
 			cryptoConstruction = XChacha20Poly1305
 		default:
-			dlog.Noticef("[%v] Unsupported crypto construction", providerName)
+			dlog.Noticef("[%v] Unsupported crypto construction", *serverName)
 			continue
 		}
 		signature := binCert[8:72]
 		signed := binCert[72:]
 		if !ed25519.Verify(pk, signed, signature) {
-			dlog.Warnf("[%v] Incorrect signature", providerName)
+			dlog.Warnf("[%v] Incorrect signature", *serverName)
 			continue
 		}
 		serial := binary.BigEndian.Uint32(binCert[112:116])
