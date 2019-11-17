@@ -279,6 +279,10 @@ func (xTransport *XTransport) resolveWithCache(host string) (err error) {
 			}
 		}
 	}
+	if err != nil && xTransport.ignoreSystemDNS {
+		dlog.Noticef("Fallback resolver [%v] didn't respond - Trying with the system resolver as a last resort", xTransport.fallbackResolver)
+		foundIP, ttl, err = xTransport.resolveUsingSystem(host)
+	}
 	if ttl < MinResolverIPTTL {
 		ttl = MinResolverIPTTL
 	}
@@ -323,6 +327,7 @@ func (xTransport *XTransport) Fetch(method string, url *url.URL, accept string, 
 		return nil, 0, errors.New("Onion service is not reachable without Tor")
 	}
 	if err := xTransport.resolveWithCache(host); err != nil {
+		dlog.Errorf("Unable to resolve [%v] - Make sure that the system resolver works, or that `fallback_resolver` has been set to a resolver that can be reached", host)
 		return nil, 0, err
 	}
 	req := &http.Request{

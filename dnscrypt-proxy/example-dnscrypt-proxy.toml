@@ -198,8 +198,7 @@ cert_refresh_delay = 240
 fallback_resolver = '9.9.9.9:53'
 
 
-## Never let dnscrypt-proxy try to use the system DNS settings;
-## unconditionally use the fallback resolver.
+## Always use the fallback resolver before the system DNS settings
 
 ignore_system_dns = true
 
