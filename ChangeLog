@@ -1,3 +1,6 @@
+* Version 2.0.33
+ - Fixes an issue that caused some valid queries to return `PARSE_ERROR`.
+
 * Version 2.0.32
  - On certificate errors, the server name is now logged instead of the
 provider name, which is generally more useful.
