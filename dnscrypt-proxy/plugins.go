@@ -272,7 +272,7 @@ func (pluginsState *PluginsState) ApplyResponsePlugins(pluginsGlobals *PluginsGl
 		return packet, nil
 	}
 	pluginsState.action = PluginsActionForward
-	msg := dns.Msg{}
+	msg := dns.Msg{Compress: true}
 	if err := msg.Unpack(packet); err != nil {
 		if len(packet) >= MinDNSPacketSize && HasTCFlag(packet) {
 			err = nil
