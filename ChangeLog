@@ -20,6 +20,7 @@ work by Alison Winters, thanks!
  - The `SERVER_ERROR` error code has been split into two new error codes:
 `NETWORK_ERROR` (self-explanatory) and `SERVFAIL` (a response was returned,
 but it includes a `SERVFAIL` error code).
+ - Responses are now always compressed.
 
 * Version 2.0.31
  - This version fixes two regressions introduced in version 2.0.29:
