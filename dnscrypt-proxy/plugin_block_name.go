@@ -70,12 +70,12 @@ func (plugin *PluginBlockName) Init(proxy *Proxy) error {
 			continue
 		}
 	}
+	plugin.blockedNames = &blockedNames
 	if len(proxy.blockNameLogFile) == 0 {
 		return nil
 	}
 	blockedNames.logger = &lumberjack.Logger{LocalTime: true, MaxSize: proxy.logMaxSize, MaxAge: proxy.logMaxAge, MaxBackups: proxy.logMaxBackups, Filename: proxy.blockNameLogFile, Compress: true}
 	blockedNames.format = proxy.blockNameFormat
-	plugin.blockedNames = &blockedNames
 
 	return nil
 }
@@ -89,7 +89,7 @@ func (plugin *PluginBlockName) Reload() error {
 }
 
 func (plugin *PluginBlockName) Eval(pluginsState *PluginsState, msg *dns.Msg) error {
-	if pluginsState.sessionData["whitelisted"] != nil {
+	if plugin.blockedNames == nil || pluginsState.sessionData["whitelisted"] != nil {
 		return nil
 	}
 	questions := msg.Question
