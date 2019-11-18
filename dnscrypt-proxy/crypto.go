@@ -88,7 +88,7 @@ func (proxy *Proxy) Encrypt(serverInfo *ServerInfo, packet []byte, proto string)
 			minQuestionSize += int(xpad[0])
 		}
 	}
-	paddedLength := Min(MaxDNSUDPPacketSize, (Max(minQuestionSize, QueryOverhead)+63) & ^63)
+	paddedLength := Min(MaxDNSUDPPacketSize, (Max(minQuestionSize, QueryOverhead)+1+63) & ^63)
 	if serverInfo.RelayUDPAddr != nil && proto == "tcp" {
 		// XXX - Note: Cisco's broken implementation doesn't accept more than 1472 bytes
 		paddedLength = MaxDNSPacketSize
