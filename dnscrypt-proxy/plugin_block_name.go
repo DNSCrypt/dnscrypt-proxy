@@ -96,11 +96,11 @@ func (plugin *PluginBlockName) Eval(pluginsState *PluginsState, msg *dns.Msg) er
 	if len(questions) != 1 {
 		return nil
 	}
-	qName := strings.ToLower(StripTrailingDot(questions[0].Name))
-	return plugin.blockedNames.check(pluginsState, qName)
+	return plugin.blockedNames.check(pluginsState, questions[0].Name)
 }
 
 func (blockedNames *BlockedNames) check(pluginsState *PluginsState, qName string) error {
+	qName = strings.ToLower(StripTrailingDot(qName))
 	reject, reason, xweeklyRanges := blockedNames.patternMatcher.Eval(qName)
 	var weeklyRanges *WeeklyRanges
 	if xweeklyRanges != nil {
