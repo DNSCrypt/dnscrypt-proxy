@@ -75,6 +75,75 @@ type Proxy struct {
 	showCerts                     bool
 }
 
+func (proxy *Proxy) addListener(listenAddrStr string) {
+	listenUDPAddr, err := net.ResolveUDPAddr("udp", listenAddrStr)
+	if err != nil {
+		dlog.Fatal(err)
+	}
+	listenTCPAddr, err := net.ResolveTCPAddr("tcp", listenAddrStr)
+	if err != nil {
+		dlog.Fatal(err)
+	}
+
+	// if 'userName' is not set, continue as before
+	if len(proxy.userName) <= 0 {
+		if err := proxy.udpListenerFromAddr(listenUDPAddr); err != nil {
+			dlog.Fatal(err)
+		}
+		if err := proxy.tcpListenerFromAddr(listenTCPAddr); err != nil {
+			dlog.Fatal(err)
+		}
+		return
+	}
+
+	// if 'userName' is set and we are the parent process
+	if !proxy.child {
+		// parent
+		listenerUDP, err := net.ListenUDP("udp", listenUDPAddr)
+		if err != nil {
+			dlog.Fatal(err)
+		}
+		listenerTCP, err := net.ListenTCP("tcp", listenTCPAddr)
+		if err != nil {
+			dlog.Fatal(err)
+		}
+
+		fdUDP, err := listenerUDP.File() // On Windows, the File method of UDPConn is not implemented.
+		if err != nil {
+			dlog.Fatalf("Unable to switch to a different user: %v", err)
+		}
+		fdTCP, err := listenerTCP.File() // On Windows, the File method of TCPListener is not implemented.
+		if err != nil {
+			dlog.Fatalf("Unable to switch to a different user: %v", err)
+		}
+		defer listenerUDP.Close()
+		defer listenerTCP.Close()
+		FileDescriptors = append(FileDescriptors, fdUDP)
+		FileDescriptors = append(FileDescriptors, fdTCP)
+		return
+
+	}
+
+	// child
+	listenerUDP, err := net.FilePacketConn(os.NewFile(uintptr(3+FileDescriptorNum), "listenerUDP"))
+	if err != nil {
+		dlog.Fatalf("Unable to switch to a different user: %v", err)
+	}
+	FileDescriptorNum++
+
+	listenerTCP, err := net.FileListener(os.NewFile(uintptr(3+FileDescriptorNum), "listenerTCP"))
+	if err != nil {
+		dlog.Fatalf("Unable to switch to a different user: %v", err)
+	}
+	FileDescriptorNum++
+
+	dlog.Noticef("Now listening to %v [UDP]", listenUDPAddr)
+	go proxy.udpListener(listenerUDP.(*net.UDPConn))
+
+	dlog.Noticef("Now listening to %v [TCP]", listenAddrStr)
+	go proxy.tcpListener(listenerTCP.(*net.TCPListener))
+}
+
 func (proxy *Proxy) StartProxy() {
 	proxy.questionSizeEstimator = NewQuestionSizeEstimator()
 	if _, err := crypto_rand.Read(proxy.proxySecretKey[:]); err != nil {
@@ -84,75 +153,9 @@ func (proxy *Proxy) StartProxy() {
 	for _, registeredServer := range proxy.registeredServers {
 		proxy.serversInfo.registerServer(registeredServer.name, registeredServer.stamp)
 	}
-
 	for _, listenAddrStr := range proxy.listenAddresses {
-		listenUDPAddr, err := net.ResolveUDPAddr("udp", listenAddrStr)
-		if err != nil {
-			dlog.Fatal(err)
-		}
-		listenTCPAddr, err := net.ResolveTCPAddr("tcp", listenAddrStr)
-		if err != nil {
-			dlog.Fatal(err)
-		}
-
-		// if 'userName' is not set, continue as before
-		if !(len(proxy.userName) > 0) {
-			if err := proxy.udpListenerFromAddr(listenUDPAddr); err != nil {
-				dlog.Fatal(err)
-			}
-			if err := proxy.tcpListenerFromAddr(listenTCPAddr); err != nil {
-				dlog.Fatal(err)
-			}
-		} else {
-			// if 'userName' is set and we are the parent process
-			if !proxy.child {
-				// parent
-				listenerUDP, err := net.ListenUDP("udp", listenUDPAddr)
-				if err != nil {
-					dlog.Fatal(err)
-				}
-				listenerTCP, err := net.ListenTCP("tcp", listenTCPAddr)
-				if err != nil {
-					dlog.Fatal(err)
-				}
-
-				fdUDP, err := listenerUDP.File() // On Windows, the File method of UDPConn is not implemented.
-				if err != nil {
-					dlog.Fatalf("Unable to switch to a different user: %v", err)
-				}
-				fdTCP, err := listenerTCP.File() // On Windows, the File method of TCPListener is not implemented.
-				if err != nil {
-					dlog.Fatalf("Unable to switch to a different user: %v", err)
-				}
-				defer listenerUDP.Close()
-				defer listenerTCP.Close()
-				FileDescriptors = append(FileDescriptors, fdUDP)
-				FileDescriptors = append(FileDescriptors, fdTCP)
-
-				// if 'userName' is set and we are the child process
-			} else {
-				// child
-				listenerUDP, err := net.FilePacketConn(os.NewFile(uintptr(3+FileDescriptorNum), "listenerUDP"))
-				if err != nil {
-					dlog.Fatalf("Unable to switch to a different user: %v", err)
-				}
-				FileDescriptorNum++
-
-				listenerTCP, err := net.FileListener(os.NewFile(uintptr(3+FileDescriptorNum), "listenerTCP"))
-				if err != nil {
-					dlog.Fatalf("Unable to switch to a different user: %v", err)
-				}
-				FileDescriptorNum++
-
-				dlog.Noticef("Now listening to %v [UDP]", listenUDPAddr)
-				go proxy.udpListener(listenerUDP.(*net.UDPConn))
-
-				dlog.Noticef("Now listening to %v [TCP]", listenAddrStr)
-				go proxy.tcpListener(listenerTCP.(*net.TCPListener))
-			}
-		}
+		proxy.addListener(listenAddrStr)
 	}
-
 	// if 'userName' is set and we are the parent process drop privilege and exit
 	if len(proxy.userName) > 0 && !proxy.child {
 		proxy.dropPrivilege(proxy.userName, FileDescriptors)
