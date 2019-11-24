@@ -33,6 +33,7 @@ type Config struct {
 	ServerNames              []string `toml:"server_names"`
 	DisabledServerNames      []string `toml:"disabled_server_names"`
 	ListenAddresses          []string `toml:"listen_addresses"`
+	LocalDoHListenAddresses  []string `toml:"local_doh_listen_addresses"`
 	Daemonize                bool
 	UserName                 string `toml:"user_name"`
 	ForceTCP                 bool   `toml:"force_tcp"`
@@ -94,6 +95,7 @@ func newConfig() Config {
 	return Config{
 		LogLevel:                 int(dlog.LogLevel()),
 		ListenAddresses:          []string{"127.0.0.1:53"},
+		LocalDoHListenAddresses:  []string{"127.0.0.1:443"},
 		Timeout:                  5000,
 		KeepAlive:                5,
 		CertRefreshDelay:         240,
@@ -325,7 +327,7 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	proxy.certRefreshDelayAfterFailure = time.Duration(10 * time.Second)
 	proxy.certIgnoreTimestamp = config.CertIgnoreTimestamp
 	proxy.ephemeralKeys = config.EphemeralKeys
-	if len(config.ListenAddresses) == 0 {
+	if len(config.ListenAddresses) == 0 && len(config.LocalDoHListenAddresses) == 0 {
 		dlog.Debug("No local IP/port configured")
 	}
 
@@ -349,6 +351,7 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	proxy.serversInfo.lbEstimator = config.LBEstimator
 
 	proxy.listenAddresses = config.ListenAddresses
+	proxy.localDoHListenAddresses = config.LocalDoHListenAddresses
 	proxy.daemonize = config.Daemonize
 	proxy.pluginBlockIPv6 = config.BlockIPv6
 	proxy.cache = config.Cache

@@ -31,6 +31,7 @@ type Proxy struct {
 	certIgnoreTimestamp           bool
 	mainProto                     string
 	listenAddresses               []string
+	localDoHListenAddresses       []string
 	daemonize                     bool
 	registeredServers             []RegisteredServer
 	registeredRelays              []RegisteredServer
@@ -75,7 +76,7 @@ type Proxy struct {
 	showCerts                     bool
 }
 
-func (proxy *Proxy) addListener(listenAddrStr string) {
+func (proxy *Proxy) addDNSListener(listenAddrStr string) {
 	listenUDPAddr, err := net.ResolveUDPAddr("udp", listenAddrStr)
 	if err != nil {
 		dlog.Fatal(err)
@@ -121,7 +122,6 @@ func (proxy *Proxy) addListener(listenAddrStr string) {
 		FileDescriptors = append(FileDescriptors, fdUDP)
 		FileDescriptors = append(FileDescriptors, fdTCP)
 		return
-
 	}
 
 	// child
@@ -144,6 +144,48 @@ func (proxy *Proxy) addListener(listenAddrStr string) {
 	go proxy.tcpListener(listenerTCP.(*net.TCPListener))
 }
 
+func (proxy *Proxy) addLocalDoHListener(listenAddrStr string) {
+	listenTCPAddr, err := net.ResolveTCPAddr("tcp", listenAddrStr)
+	if err != nil {
+		dlog.Fatal(err)
+	}
+
+	// if 'userName' is not set, continue as before
+	if len(proxy.userName) <= 0 {
+		if err := proxy.localDoHListenerFromAddr(listenTCPAddr); err != nil {
+			dlog.Fatal(err)
+		}
+		return
+	}
+
+	// if 'userName' is set and we are the parent process
+	if !proxy.child {
+		// parent
+		listenerTCP, err := net.ListenTCP("tcp", listenTCPAddr)
+		if err != nil {
+			dlog.Fatal(err)
+		}
+		fdTCP, err := listenerTCP.File() // On Windows, the File method of TCPListener is not implemented.
+		if err != nil {
+			dlog.Fatalf("Unable to switch to a different user: %v", err)
+		}
+		defer listenerTCP.Close()
+		FileDescriptors = append(FileDescriptors, fdTCP)
+		return
+	}
+
+	// child
+
+	listenerTCP, err := net.FileListener(os.NewFile(uintptr(3+FileDescriptorNum), "listenerTCP"))
+	if err != nil {
+		dlog.Fatalf("Unable to switch to a different user: %v", err)
+	}
+	FileDescriptorNum++
+
+	dlog.Noticef("Now listening to %v [HTTP]", listenAddrStr)
+	go proxy.localDoHListener(listenerTCP.(*net.TCPListener))
+}
+
 func (proxy *Proxy) StartProxy() {
 	proxy.questionSizeEstimator = NewQuestionSizeEstimator()
 	if _, err := crypto_rand.Read(proxy.proxySecretKey[:]); err != nil {
@@ -154,8 +196,12 @@ func (proxy *Proxy) StartProxy() {
 		proxy.serversInfo.registerServer(registeredServer.name, registeredServer.stamp)
 	}
 	for _, listenAddrStr := range proxy.listenAddresses {
-		proxy.addListener(listenAddrStr)
+		proxy.addDNSListener(listenAddrStr)
 	}
+	for _, listenAddrStr := range proxy.localDoHListenAddresses {
+		proxy.addLocalDoHListener(listenAddrStr)
+	}
+
 	// if 'userName' is set and we are the parent process drop privilege and exit
 	if len(proxy.userName) > 0 && !proxy.child {
 		proxy.dropPrivilege(proxy.userName, FileDescriptors)
@@ -267,6 +313,16 @@ func (proxy *Proxy) tcpListenerFromAddr(listenAddr *net.TCPAddr) error {
 	}
 	dlog.Noticef("Now listening to %v [TCP]", listenAddr)
 	go proxy.tcpListener(acceptPc)
+	return nil
+}
+
+func (proxy *Proxy) localDoHListenerFromAddr(listenAddr *net.TCPAddr) error {
+	acceptPc, err := net.ListenTCP("tcp", listenAddr)
+	if err != nil {
+		return err
+	}
+	dlog.Noticef("Now listening to %v [HTTP]", listenAddr)
+	go proxy.localDoHListener(acceptPc)
 	return nil
 }
 
