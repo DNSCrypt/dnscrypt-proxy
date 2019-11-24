@@ -92,8 +92,22 @@ func (plugin *PluginBlockName) Eval(pluginsState *PluginsState, msg *dns.Msg) er
 	if plugin.blockedNames == nil || pluginsState.sessionData["whitelisted"] != nil {
 		return nil
 	}
+	answers := msg.Answer
 	questions := msg.Question
 	if len(questions) != 1 {
+		return nil
+	}
+	if len(answers) > 0 {
+		for _, answer := range msg.Answer {
+			header := answer.Header()
+			Rrtype := header.Rrtype
+			if Rrtype == dns.TypeCNAME {
+				status := plugin.blockedNames.check(pluginsState, answer.(*dns.CNAME).Target)
+				if (status != nil || pluginsState.action == PluginsActionReject) {
+					return status
+				}
+			}
+		}
 		return nil
 	}
 	return plugin.blockedNames.check(pluginsState, questions[0].Name)
