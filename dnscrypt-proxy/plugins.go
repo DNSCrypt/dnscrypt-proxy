@@ -120,6 +120,9 @@ func (proxy *Proxy) InitPluginsGlobals() error {
 	if len(proxy.nxLogFile) != 0 {
 		*responsePlugins = append(*responsePlugins, Plugin(new(PluginNxLog)))
 	}
+	if len(proxy.blockNameFile) != 0 {
+		*responsePlugins = append(*responsePlugins, Plugin(new(PluginBlockNameResponse)))
+	}
 	if len(proxy.blockIPFile) != 0 {
 		*responsePlugins = append(*responsePlugins, Plugin(new(PluginBlockIP)))
 	}

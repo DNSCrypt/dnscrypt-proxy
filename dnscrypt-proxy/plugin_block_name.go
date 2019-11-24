@@ -20,8 +20,57 @@ type BlockedNames struct {
 	format          string
 }
 
+const aliasesLimit = 8
+
+var blockedNames *BlockedNames
+
+func (blockedNames *BlockedNames) check(pluginsState *PluginsState, qName string) (bool, error) {
+	qName = strings.ToLower(StripTrailingDot(qName))
+	reject, reason, xweeklyRanges := blockedNames.patternMatcher.Eval(qName)
+	var weeklyRanges *WeeklyRanges
+	if xweeklyRanges != nil {
+		weeklyRanges = xweeklyRanges.(*WeeklyRanges)
+	}
+	if reject {
+		if weeklyRanges != nil && !weeklyRanges.Match() {
+			reject = false
+		}
+	}
+	if !reject {
+		return false, nil
+	}
+	pluginsState.action = PluginsActionReject
+	pluginsState.returnCode = PluginsReturnCodeReject
+	if blockedNames.logger != nil {
+		var clientIPStr string
+		if pluginsState.clientProto == "udp" {
+			clientIPStr = (*pluginsState.clientAddr).(*net.UDPAddr).IP.String()
+		} else {
+			clientIPStr = (*pluginsState.clientAddr).(*net.TCPAddr).IP.String()
+		}
+		var line string
+		if blockedNames.format == "tsv" {
+			now := time.Now()
+			year, month, day := now.Date()
+			hour, minute, second := now.Clock()
+			tsStr := fmt.Sprintf("[%d-%02d-%02d %02d:%02d:%02d]", year, int(month), day, hour, minute, second)
+			line = fmt.Sprintf("%s\t%s\t%s\t%s\n", tsStr, clientIPStr, StringQuote(qName), StringQuote(reason))
+		} else if blockedNames.format == "ltsv" {
+			line = fmt.Sprintf("time:%d\thost:%s\tqname:%s\tmessage:%s\n", time.Now().Unix(), clientIPStr, StringQuote(qName), StringQuote(reason))
+		} else {
+			dlog.Fatalf("Unexpected log format: [%s]", blockedNames.format)
+		}
+		if blockedNames.logger == nil {
+			return false, errors.New("Log file not initialized")
+		}
+		blockedNames.logger.Write([]byte(line))
+	}
+	return true, nil
+}
+
+// ---
+
 type PluginBlockName struct {
-	blockedNames *BlockedNames
 }
 
 func (plugin *PluginBlockName) Name() string {
@@ -38,7 +87,7 @@ func (plugin *PluginBlockName) Init(proxy *Proxy) error {
 	if err != nil {
 		return err
 	}
-	blockedNames := BlockedNames{
+	xBlockedNames := BlockedNames{
 		allWeeklyRanges: proxy.allWeeklyRanges,
 		patternMatcher:  NewPatternPatcher(),
 	}
@@ -65,12 +114,12 @@ func (plugin *PluginBlockName) Init(proxy *Proxy) error {
 				weeklyRanges = &weeklyRangesX
 			}
 		}
-		if err := blockedNames.patternMatcher.Add(line, weeklyRanges, lineNo+1); err != nil {
+		if err := xBlockedNames.patternMatcher.Add(line, weeklyRanges, lineNo+1); err != nil {
 			dlog.Error(err)
 			continue
 		}
 	}
-	plugin.blockedNames = &blockedNames
+	blockedNames = &xBlockedNames
 	if len(proxy.blockNameLogFile) == 0 {
 		return nil
 	}
@@ -89,56 +138,60 @@ func (plugin *PluginBlockName) Reload() error {
 }
 
 func (plugin *PluginBlockName) Eval(pluginsState *PluginsState, msg *dns.Msg) error {
-	if plugin.blockedNames == nil || pluginsState.sessionData["whitelisted"] != nil {
+	if blockedNames == nil || pluginsState.sessionData["whitelisted"] != nil {
 		return nil
 	}
 	questions := msg.Question
 	if len(questions) != 1 {
 		return nil
 	}
-	return plugin.blockedNames.check(pluginsState, questions[0].Name)
+	_, err := blockedNames.check(pluginsState, questions[0].Name)
+	return err
 }
 
-func (blockedNames *BlockedNames) check(pluginsState *PluginsState, qName string) error {
-	qName = strings.ToLower(StripTrailingDot(qName))
-	reject, reason, xweeklyRanges := blockedNames.patternMatcher.Eval(qName)
-	var weeklyRanges *WeeklyRanges
-	if xweeklyRanges != nil {
-		weeklyRanges = xweeklyRanges.(*WeeklyRanges)
-	}
-	if reject {
-		if weeklyRanges != nil && !weeklyRanges.Match() {
-			reject = false
-		}
-	}
-	if !reject {
+// ---
+
+type PluginBlockNameResponse struct {
+}
+
+func (plugin *PluginBlockNameResponse) Name() string {
+	return "block_name"
+}
+
+func (plugin *PluginBlockNameResponse) Description() string {
+	return "Block DNS responses matching name patterns"
+}
+
+func (plugin *PluginBlockNameResponse) Init(proxy *Proxy) error {
+	return nil
+}
+
+func (plugin *PluginBlockNameResponse) Drop() error {
+	return nil
+}
+
+func (plugin *PluginBlockNameResponse) Reload() error {
+	return nil
+}
+
+func (plugin *PluginBlockNameResponse) Eval(pluginsState *PluginsState, msg *dns.Msg) error {
+	if blockedNames == nil || pluginsState.sessionData["whitelisted"] != nil {
 		return nil
 	}
-	pluginsState.action = PluginsActionReject
-	pluginsState.returnCode = PluginsReturnCodeReject
-	if blockedNames.logger != nil {
-		var clientIPStr string
-		if pluginsState.clientProto == "udp" {
-			clientIPStr = (*pluginsState.clientAddr).(*net.UDPAddr).IP.String()
-		} else {
-			clientIPStr = (*pluginsState.clientAddr).(*net.TCPAddr).IP.String()
+	aliasesLeft := aliasesLimit
+	answers := msg.Answer
+	for _, answer := range answers {
+		header := answer.Header()
+		if header.Class != dns.ClassINET || header.Rrtype != dns.TypeCNAME {
+			continue
 		}
-		var line string
-		if blockedNames.format == "tsv" {
-			now := time.Now()
-			year, month, day := now.Date()
-			hour, minute, second := now.Clock()
-			tsStr := fmt.Sprintf("[%d-%02d-%02d %02d:%02d:%02d]", year, int(month), day, hour, minute, second)
-			line = fmt.Sprintf("%s\t%s\t%s\t%s\n", tsStr, clientIPStr, StringQuote(qName), StringQuote(reason))
-		} else if blockedNames.format == "ltsv" {
-			line = fmt.Sprintf("time:%d\thost:%s\tqname:%s\tmessage:%s\n", time.Now().Unix(), clientIPStr, StringQuote(qName), StringQuote(reason))
-		} else {
-			dlog.Fatalf("Unexpected log format: [%s]", blockedNames.format)
+		if blocked, err := blockedNames.check(pluginsState, answer.(*dns.CNAME).Target); blocked || err != nil {
+			return err
 		}
-		if blockedNames.logger == nil {
-			return errors.New("Log file not initialized")
+		aliasesLeft--
+		if aliasesLeft == 0 {
+			break
 		}
-		blockedNames.logger.Write([]byte(line))
 	}
 	return nil
 }
