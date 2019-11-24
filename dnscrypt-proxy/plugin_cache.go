@@ -23,61 +23,29 @@ type CachedResponses struct {
 
 var cachedResponses CachedResponses
 
-type PluginCacheResponse struct {
-	cachedResponses *CachedResponses
-}
-
-func (plugin *PluginCacheResponse) Name() string {
-	return "cache_response"
-}
-
-func (plugin *PluginCacheResponse) Description() string {
-	return "DNS cache (writer)."
-}
-
-func (plugin *PluginCacheResponse) Init(proxy *Proxy) error {
-	return nil
-}
-
-func (plugin *PluginCacheResponse) Drop() error {
-	return nil
-}
-
-func (plugin *PluginCacheResponse) Reload() error {
-	return nil
-}
-
-func (plugin *PluginCacheResponse) Eval(pluginsState *PluginsState, msg *dns.Msg) error {
-	plugin.cachedResponses = &cachedResponses
-	if msg.Rcode != dns.RcodeSuccess && msg.Rcode != dns.RcodeNameError && msg.Rcode != dns.RcodeNotAuth {
-		return nil
+func computeCacheKey(pluginsState *PluginsState, msg *dns.Msg) ([32]byte, error) {
+	questions := msg.Question
+	if len(questions) != 1 {
+		return [32]byte{}, errors.New("No question present")
 	}
-	if msg.Truncated {
-		return nil
+	question := questions[0]
+	h := sha512.New512_256()
+	var tmp [5]byte
+	binary.LittleEndian.PutUint16(tmp[0:2], question.Qtype)
+	binary.LittleEndian.PutUint16(tmp[2:4], question.Qclass)
+	if pluginsState.dnssec {
+		tmp[4] = 1
 	}
-	cacheKey, err := computeCacheKey(pluginsState, msg)
-	if err != nil {
-		return err
-	}
-	ttl := getMinTTL(msg, pluginsState.cacheMinTTL, pluginsState.cacheMaxTTL, pluginsState.cacheNegMinTTL, pluginsState.cacheNegMaxTTL)
-	cachedResponse := CachedResponse{
-		expiration: time.Now().Add(ttl),
-		msg:        *msg,
-	}
-	plugin.cachedResponses.Lock()
-	if plugin.cachedResponses.cache == nil {
-		plugin.cachedResponses.cache, err = lru.NewARC(pluginsState.cacheSize)
-		if err != nil {
-			plugin.cachedResponses.Unlock()
-			return err
-		}
-	}
-	plugin.cachedResponses.cache.Add(cacheKey, cachedResponse)
-	plugin.cachedResponses.Unlock()
-	updateTTL(msg, cachedResponse.expiration)
-
-	return nil
+	h.Write(tmp[:])
+	normalizedName := []byte(question.Name)
+	NormalizeName(&normalizedName)
+	h.Write(normalizedName)
+	var sum [32]byte
+	h.Sum(sum[:0])
+	return sum, nil
 }
+
+// ---
 
 type PluginCache struct {
 	cachedResponses *CachedResponses
@@ -137,24 +105,60 @@ func (plugin *PluginCache) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 	return nil
 }
 
-func computeCacheKey(pluginsState *PluginsState, msg *dns.Msg) ([32]byte, error) {
-	questions := msg.Question
-	if len(questions) != 1 {
-		return [32]byte{}, errors.New("No question present")
+// ---
+
+type PluginCacheResponse struct {
+	cachedResponses *CachedResponses
+}
+
+func (plugin *PluginCacheResponse) Name() string {
+	return "cache_response"
+}
+
+func (plugin *PluginCacheResponse) Description() string {
+	return "DNS cache (writer)."
+}
+
+func (plugin *PluginCacheResponse) Init(proxy *Proxy) error {
+	return nil
+}
+
+func (plugin *PluginCacheResponse) Drop() error {
+	return nil
+}
+
+func (plugin *PluginCacheResponse) Reload() error {
+	return nil
+}
+
+func (plugin *PluginCacheResponse) Eval(pluginsState *PluginsState, msg *dns.Msg) error {
+	plugin.cachedResponses = &cachedResponses
+	if msg.Rcode != dns.RcodeSuccess && msg.Rcode != dns.RcodeNameError && msg.Rcode != dns.RcodeNotAuth {
+		return nil
 	}
-	question := questions[0]
-	h := sha512.New512_256()
-	var tmp [5]byte
-	binary.LittleEndian.PutUint16(tmp[0:2], question.Qtype)
-	binary.LittleEndian.PutUint16(tmp[2:4], question.Qclass)
-	if pluginsState.dnssec {
-		tmp[4] = 1
+	if msg.Truncated {
+		return nil
 	}
-	h.Write(tmp[:])
-	normalizedName := []byte(question.Name)
-	NormalizeName(&normalizedName)
-	h.Write(normalizedName)
-	var sum [32]byte
-	h.Sum(sum[:0])
-	return sum, nil
+	cacheKey, err := computeCacheKey(pluginsState, msg)
+	if err != nil {
+		return err
+	}
+	ttl := getMinTTL(msg, pluginsState.cacheMinTTL, pluginsState.cacheMaxTTL, pluginsState.cacheNegMinTTL, pluginsState.cacheNegMaxTTL)
+	cachedResponse := CachedResponse{
+		expiration: time.Now().Add(ttl),
+		msg:        *msg,
+	}
+	plugin.cachedResponses.Lock()
+	if plugin.cachedResponses.cache == nil {
+		plugin.cachedResponses.cache, err = lru.NewARC(pluginsState.cacheSize)
+		if err != nil {
+			plugin.cachedResponses.Unlock()
+			return err
+		}
+	}
+	plugin.cachedResponses.cache.Add(cacheKey, cachedResponse)
+	plugin.cachedResponses.Unlock()
+	updateTTL(msg, cachedResponse.expiration)
+
+	return nil
 }
