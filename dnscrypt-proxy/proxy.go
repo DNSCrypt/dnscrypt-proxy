@@ -414,7 +414,7 @@ func (proxy *Proxy) clientsCountDec() {
 	}
 }
 
-func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto string, serverProto string, query []byte, clientAddr *net.Addr, clientPc net.Conn, start time.Time) {
+func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto string, serverProto string, query []byte, clientAddr *net.Addr, clientPc net.Conn, start time.Time) (response []byte) {
 	if len(query) < MinDNSPacketSize {
 		return
 	}
@@ -427,7 +427,6 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 	if len(query) < MinDNSPacketSize || len(query) > MaxDNSPacketSize {
 		return
 	}
-	var response []byte
 	var err error
 	if pluginsState.action != PluginsActionForward {
 		if pluginsState.synthResponse != nil {
@@ -549,7 +548,7 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 		} else {
 			proxy.questionSizeEstimator.adjust(ResponseOverhead + len(response))
 		}
-	} else {
+	} else if clientProto == "tcp" {
 		response, err = PrefixWithSize(response)
 		if err != nil {
 			pluginsState.returnCode = PluginsReturnCodeParseError
@@ -562,6 +561,7 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 		clientPc.Write(response)
 	}
 	pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
+	return response
 }
 
 func NewProxy() *Proxy {
