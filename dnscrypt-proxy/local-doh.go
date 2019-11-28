@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/tls"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -40,18 +41,20 @@ func (handler localDoHHandler) ServeHTTP(writer http.ResponseWriter, request *ht
 		return
 	}
 	writer.Header().Set("Content-Type", "application/dns-message")
-	writer.Header().Set("Content-Length", string(len(response)))
 	writer.WriteHeader(200)
 	writer.Write(response)
 }
 
 func (proxy *Proxy) localDoHListener(acceptPc *net.TCPListener) {
 	defer acceptPc.Close()
+	noh2 := make(map[string]func(*http.Server, *tls.Conn, http.Handler))
 	httpServer := &http.Server{
 		ReadTimeout:  proxy.timeout,
 		WriteTimeout: proxy.timeout,
+		TLSNextProto: noh2,
 		Handler:      localDoHHandler{proxy: proxy},
 	}
+	httpServer.SetKeepAlivesEnabled(true)
 	if err := httpServer.ServeTLS(acceptPc, proxy.localDoHCertFile, proxy.localDoHCertKeyFile); err != nil {
 		dlog.Fatal(err)
 	}
