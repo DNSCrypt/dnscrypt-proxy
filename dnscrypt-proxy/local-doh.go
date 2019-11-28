@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/tls"
+	"io"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -31,7 +32,7 @@ func (handler localDoHHandler) ServeHTTP(writer http.ResponseWriter, request *ht
 		return
 	}
 	xClientAddr := net.Addr(clientAddr)
-	packet, err := ioutil.ReadAll(request.Body)
+	packet, err := ioutil.ReadAll(io.LimitReader(request.Body, MaxHTTPBodyLength))
 	if err != nil {
 		dlog.Warnf("No body in a local DoH query")
 		return
