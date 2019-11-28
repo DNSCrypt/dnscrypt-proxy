@@ -32,6 +32,7 @@ type Proxy struct {
 	mainProto                     string
 	listenAddresses               []string
 	localDoHListenAddresses       []string
+	localDoHPath                  string
 	localDoHCertFile              string
 	localDoHCertKeyFile           string
 	daemonize                     bool

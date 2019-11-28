@@ -355,6 +355,11 @@ cache_neg_max_ttl = 600
 # listen_addresses = ['127.0.0.1:3000']
 
 
+## URL path - The standard one is "/dns-query", but anything can be used.
+
+# path = "/dns-query"
+
+
 ## Certificate file and key - Note that the certificate has to be trusted.
 ## See the Wiki for more information.
 

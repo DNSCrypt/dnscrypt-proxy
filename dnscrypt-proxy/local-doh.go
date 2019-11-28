@@ -16,15 +16,19 @@ type localDoHHandler struct {
 }
 
 func (handler localDoHHandler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
+	proxy := handler.proxy
 	dataType := "application/dns-message"
 	writer.Header().Set("Server", "dnscrypt-proxy")
+	if request.URL.Path != proxy.localDoHPath {
+		writer.WriteHeader(404)
+		return
+	}
 	if request.Header.Get("Content-Type") != dataType {
 		writer.Header().Set("Content-Type", "text/plain")
 		writer.WriteHeader(400)
 		writer.Write([]byte("dnscrypt-proxy local DoH server\n"))
 		return
 	}
-	proxy := handler.proxy
 	start := time.Now()
 	clientAddr, err := net.ResolveTCPAddr("tcp", request.RemoteAddr)
 	if err != nil {

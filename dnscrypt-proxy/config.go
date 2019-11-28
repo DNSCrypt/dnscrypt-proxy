@@ -192,6 +192,7 @@ type BrokenImplementationsConfig struct {
 
 type LocalDoHConfig struct {
 	ListenAddresses []string `toml:"listen_addresses"`
+	Path            string   `toml:"path"`
 	CertFile        string   `toml:"cert_file"`
 	CertKeyFile     string   `toml:"cert_key_file"`
 }
@@ -357,6 +358,7 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 
 	proxy.listenAddresses = config.ListenAddresses
 	proxy.localDoHListenAddresses = config.LocalDoH.ListenAddresses
+	proxy.localDoHPath = config.LocalDoH.Path
 	proxy.localDoHCertFile = config.LocalDoH.CertFile
 	proxy.localDoHCertKeyFile = config.LocalDoH.CertKeyFile
 	proxy.daemonize = config.Daemonize
