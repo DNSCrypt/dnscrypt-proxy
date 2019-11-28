@@ -32,6 +32,8 @@ type Proxy struct {
 	mainProto                     string
 	listenAddresses               []string
 	localDoHListenAddresses       []string
+	localDoHCertFile              string
+	localDoHCertKeyFile           string
 	daemonize                     bool
 	registeredServers             []RegisteredServer
 	registeredRelays              []RegisteredServer
@@ -558,9 +560,12 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 			}
 			return
 		}
-		clientPc.Write(response)
+		if clientPc != nil {
+			clientPc.Write(response)
+		}
 	}
 	pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
+
 	return response
 }
 

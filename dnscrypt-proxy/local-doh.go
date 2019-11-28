@@ -15,8 +15,10 @@ type localDoHHandler struct {
 
 func (handler localDoHHandler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	dataType := "application/dns-message"
+	writer.Header().Set("Server", "dnscrypt-proxy")
 	if request.Header.Get("Content-Type") != dataType {
 		writer.WriteHeader(400)
+		writer.Write([]byte("Unexpected Content-Type\n"))
 		return
 	}
 	proxy := handler.proxy
@@ -32,14 +34,14 @@ func (handler localDoHHandler) ServeHTTP(writer http.ResponseWriter, request *ht
 		dlog.Warnf("No body in a local DoH query")
 		return
 	}
-	response := proxy.processIncomingQuery(proxy.serversInfo.getOne(), "tcp", "tcp", packet, &xClientAddr, nil, start)
+	response := proxy.processIncomingQuery(proxy.serversInfo.getOne(), "http", proxy.mainProto, packet, &xClientAddr, nil, start)
 	if len(response) == 0 {
 		writer.WriteHeader(500)
 		return
 	}
+	writer.Header().Set("Content-Type", "application/dns-message")
+	writer.Header().Set("Content-Length", string(len(response)))
 	writer.WriteHeader(200)
-	writer.Header().Add("Server", "dnscrypt-proxy")
-	writer.Header().Add("Content-Type", "application/dns-message")
 	writer.Write(response)
 }
 
@@ -50,7 +52,7 @@ func (proxy *Proxy) localDoHListener(acceptPc *net.TCPListener) {
 		WriteTimeout: proxy.timeout,
 		Handler:      localDoHHandler{proxy: proxy},
 	}
-	if err := httpServer.Serve(acceptPc); err != nil {
+	if err := httpServer.ServeTLS(acceptPc, proxy.localDoHCertFile, proxy.localDoHCertKeyFile); err != nil {
 		dlog.Fatal(err)
 	}
 }

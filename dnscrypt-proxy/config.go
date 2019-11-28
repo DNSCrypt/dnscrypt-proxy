@@ -34,6 +34,8 @@ type Config struct {
 	DisabledServerNames      []string `toml:"disabled_server_names"`
 	ListenAddresses          []string `toml:"listen_addresses"`
 	LocalDoHListenAddresses  []string `toml:"local_doh_listen_addresses"`
+	LocalDoHCertFile         string   `toml:"local_doh_cert_file"`
+	LocalDoHCertKeyFile      string   `toml:"local_doh_cert_key_file"`
 	Daemonize                bool
 	UserName                 string `toml:"user_name"`
 	ForceTCP                 bool   `toml:"force_tcp"`
@@ -96,6 +98,8 @@ func newConfig() Config {
 		LogLevel:                 int(dlog.LogLevel()),
 		ListenAddresses:          []string{"127.0.0.1:53"},
 		LocalDoHListenAddresses:  []string{"127.0.0.1:443"},
+		LocalDoHCertFile:         "localhost.pem",
+		LocalDoHCertKeyFile:      "localhost.pem",
 		Timeout:                  5000,
 		KeepAlive:                5,
 		CertRefreshDelay:         240,
@@ -352,6 +356,8 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 
 	proxy.listenAddresses = config.ListenAddresses
 	proxy.localDoHListenAddresses = config.LocalDoHListenAddresses
+	proxy.localDoHCertFile = config.LocalDoHCertFile
+	proxy.localDoHCertKeyFile = config.LocalDoHCertKeyFile
 	proxy.daemonize = config.Daemonize
 	proxy.pluginBlockIPv6 = config.BlockIPv6
 	proxy.cache = config.Cache
