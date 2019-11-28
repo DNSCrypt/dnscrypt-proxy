@@ -1,3 +1,10 @@
+* Version 2.0.34 (not released yet)
+ - Blacklisted names are now also blocked if they appear in `CNAME`
+pointers.
+ - `dnscrypt-proxy` can now act as a local DoH *server*. Firefox can
+be configured to use it, so that ESNI can be enabled without bypassing
+your DNS proxy.
+
 * Version 2.0.33
  - Fixes an issue that caused some valid queries to return `PARSE_ERROR`.
 
