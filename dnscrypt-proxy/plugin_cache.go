@@ -48,7 +48,6 @@ func computeCacheKey(pluginsState *PluginsState, msg *dns.Msg) ([32]byte, error)
 // ---
 
 type PluginCache struct {
-	cachedResponses *CachedResponses
 }
 
 func (plugin *PluginCache) Name() string {
@@ -72,18 +71,16 @@ func (plugin *PluginCache) Reload() error {
 }
 
 func (plugin *PluginCache) Eval(pluginsState *PluginsState, msg *dns.Msg) error {
-	plugin.cachedResponses = &cachedResponses
-
 	cacheKey, err := computeCacheKey(pluginsState, msg)
 	if err != nil {
 		return nil
 	}
-	plugin.cachedResponses.RLock()
-	defer plugin.cachedResponses.RUnlock()
-	if plugin.cachedResponses.cache == nil {
+	cachedResponses.RLock()
+	defer cachedResponses.RUnlock()
+	if cachedResponses.cache == nil {
 		return nil
 	}
-	cachedAny, ok := plugin.cachedResponses.cache.Get(cacheKey)
+	cachedAny, ok := cachedResponses.cache.Get(cacheKey)
 	if !ok {
 		return nil
 	}
@@ -108,7 +105,6 @@ func (plugin *PluginCache) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 // ---
 
 type PluginCacheResponse struct {
-	cachedResponses *CachedResponses
 }
 
 func (plugin *PluginCacheResponse) Name() string {
@@ -132,7 +128,6 @@ func (plugin *PluginCacheResponse) Reload() error {
 }
 
 func (plugin *PluginCacheResponse) Eval(pluginsState *PluginsState, msg *dns.Msg) error {
-	plugin.cachedResponses = &cachedResponses
 	if msg.Rcode != dns.RcodeSuccess && msg.Rcode != dns.RcodeNameError && msg.Rcode != dns.RcodeNotAuth {
 		return nil
 	}
@@ -148,16 +143,16 @@ func (plugin *PluginCacheResponse) Eval(pluginsState *PluginsState, msg *dns.Msg
 		expiration: time.Now().Add(ttl),
 		msg:        *msg,
 	}
-	plugin.cachedResponses.Lock()
-	if plugin.cachedResponses.cache == nil {
-		plugin.cachedResponses.cache, err = lru.NewARC(pluginsState.cacheSize)
+	cachedResponses.Lock()
+	if cachedResponses.cache == nil {
+		cachedResponses.cache, err = lru.NewARC(pluginsState.cacheSize)
 		if err != nil {
-			plugin.cachedResponses.Unlock()
+			cachedResponses.Unlock()
 			return err
 		}
 	}
-	plugin.cachedResponses.cache.Add(cacheKey, cachedResponse)
-	plugin.cachedResponses.Unlock()
+	cachedResponses.cache.Add(cacheKey, cachedResponse)
+	cachedResponses.Unlock()
 	updateTTL(msg, cachedResponse.expiration)
 
 	return nil
