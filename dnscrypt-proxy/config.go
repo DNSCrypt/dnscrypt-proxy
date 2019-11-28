@@ -27,15 +27,13 @@ const (
 )
 
 type Config struct {
-	LogLevel                 int      `toml:"log_level"`
-	LogFile                  *string  `toml:"log_file"`
-	UseSyslog                bool     `toml:"use_syslog"`
-	ServerNames              []string `toml:"server_names"`
-	DisabledServerNames      []string `toml:"disabled_server_names"`
-	ListenAddresses          []string `toml:"listen_addresses"`
-	LocalDoHListenAddresses  []string `toml:"local_doh_listen_addresses"`
-	LocalDoHCertFile         string   `toml:"local_doh_cert_file"`
-	LocalDoHCertKeyFile      string   `toml:"local_doh_cert_key_file"`
+	LogLevel                 int            `toml:"log_level"`
+	LogFile                  *string        `toml:"log_file"`
+	UseSyslog                bool           `toml:"use_syslog"`
+	ServerNames              []string       `toml:"server_names"`
+	DisabledServerNames      []string       `toml:"disabled_server_names"`
+	ListenAddresses          []string       `toml:"listen_addresses"`
+	LocalDoH                 LocalDoHConfig `toml:"local_doh"`
 	Daemonize                bool
 	UserName                 string `toml:"user_name"`
 	ForceTCP                 bool   `toml:"force_tcp"`
@@ -97,9 +95,6 @@ func newConfig() Config {
 	return Config{
 		LogLevel:                 int(dlog.LogLevel()),
 		ListenAddresses:          []string{"127.0.0.1:53"},
-		LocalDoHListenAddresses:  []string{"127.0.0.1:443"},
-		LocalDoHCertFile:         "localhost.pem",
-		LocalDoHCertKeyFile:      "localhost.pem",
 		Timeout:                  5000,
 		KeepAlive:                5,
 		CertRefreshDelay:         240,
@@ -193,6 +188,12 @@ type AnonymizedDNSConfig struct {
 
 type BrokenImplementationsConfig struct {
 	BrokenQueryPadding []string `toml:"broken_query_padding"`
+}
+
+type LocalDoHConfig struct {
+	ListenAddresses []string `toml:"listen_addresses"`
+	CertFile        string   `toml:"cert_file"`
+	CertKeyFile     string   `toml:"cert_key_file"`
 }
 
 type ServerSummary struct {
@@ -331,7 +332,7 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	proxy.certRefreshDelayAfterFailure = time.Duration(10 * time.Second)
 	proxy.certIgnoreTimestamp = config.CertIgnoreTimestamp
 	proxy.ephemeralKeys = config.EphemeralKeys
-	if len(config.ListenAddresses) == 0 && len(config.LocalDoHListenAddresses) == 0 {
+	if len(config.ListenAddresses) == 0 && len(config.LocalDoH.ListenAddresses) == 0 {
 		dlog.Debug("No local IP/port configured")
 	}
 
@@ -355,9 +356,9 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	proxy.serversInfo.lbEstimator = config.LBEstimator
 
 	proxy.listenAddresses = config.ListenAddresses
-	proxy.localDoHListenAddresses = config.LocalDoHListenAddresses
-	proxy.localDoHCertFile = config.LocalDoHCertFile
-	proxy.localDoHCertKeyFile = config.LocalDoHCertKeyFile
+	proxy.localDoHListenAddresses = config.LocalDoH.ListenAddresses
+	proxy.localDoHCertFile = config.LocalDoH.CertFile
+	proxy.localDoHCertKeyFile = config.LocalDoH.CertKeyFile
 	proxy.daemonize = config.Daemonize
 	proxy.pluginBlockIPv6 = config.BlockIPv6
 	proxy.cache = config.Cache

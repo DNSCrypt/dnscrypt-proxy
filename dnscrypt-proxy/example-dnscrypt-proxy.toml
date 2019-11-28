@@ -340,6 +340,29 @@ cache_neg_max_ttl = 600
 
 
 
+##################################
+#        Local DoH server        #
+##################################
+
+[local_doh]
+
+## dnscrypt-proxy can act as a local DoH server. By doing so, web browsers
+## requiring a direct connection to a DoH server in order to enable some
+## features will enable these, without bypassing your DNS proxy..
+
+## Addresses that the local DoH server should listen to
+
+# listen_addresses = ['127.0.0.1:3000']
+
+
+## Certificate file and key - Note that the certificate has to be trusted.
+## See the Wiki for more information.
+
+# cert_file = "localhost.pem"
+# cert_key_file = "localhost.pem"
+
+
+
 ###############################
 #        Query logging        #
 ###############################
