@@ -18,8 +18,9 @@ func (handler localDoHHandler) ServeHTTP(writer http.ResponseWriter, request *ht
 	dataType := "application/dns-message"
 	writer.Header().Set("Server", "dnscrypt-proxy")
 	if request.Header.Get("Content-Type") != dataType {
+		writer.Header().Set("Content-Type", "text/plain")
 		writer.WriteHeader(400)
-		writer.Write([]byte("Unexpected Content-Type\n"))
+		writer.Write([]byte("dnscrypt-proxy local DoH server\n"))
 		return
 	}
 	proxy := handler.proxy
