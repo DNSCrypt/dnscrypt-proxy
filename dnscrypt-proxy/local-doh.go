@@ -42,7 +42,7 @@ func (handler localDoHHandler) ServeHTTP(writer http.ResponseWriter, request *ht
 		writer.WriteHeader(500)
 		return
 	}
-	writer.Header().Set("Content-Type", "application/dns-message")
+	writer.Header().Set("Content-Type", dataType)
 	writer.WriteHeader(200)
 	writer.Write(response)
 }
