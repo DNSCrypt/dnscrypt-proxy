@@ -34,7 +34,7 @@ func (handler localDoHHandler) ServeHTTP(writer http.ResponseWriter, request *ht
 		dlog.Warnf("No body in a local DoH query")
 		return
 	}
-	response := proxy.processIncomingQuery(proxy.serversInfo.getOne(), "http", proxy.mainProto, packet, &xClientAddr, nil, start)
+	response := proxy.processIncomingQuery(proxy.serversInfo.getOne(), "local_doh", proxy.mainProto, packet, &xClientAddr, nil, start)
 	if len(response) == 0 {
 		writer.WriteHeader(500)
 		return
