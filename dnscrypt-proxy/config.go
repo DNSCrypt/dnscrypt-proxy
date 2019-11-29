@@ -95,6 +95,7 @@ func newConfig() Config {
 	return Config{
 		LogLevel:                 int(dlog.LogLevel()),
 		ListenAddresses:          []string{"127.0.0.1:53"},
+		LocalDoH:                 LocalDoHConfig{Path: "/dns-query"},
 		Timeout:                  5000,
 		KeepAlive:                5,
 		CertRefreshDelay:         240,
