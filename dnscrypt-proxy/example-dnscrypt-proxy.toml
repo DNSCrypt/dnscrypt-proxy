@@ -348,14 +348,17 @@ cache_neg_max_ttl = 600
 
 ## dnscrypt-proxy can act as a local DoH server. By doing so, web browsers
 ## requiring a direct connection to a DoH server in order to enable some
-## features will enable these, without bypassing your DNS proxy..
+## features will enable these, without bypassing your DNS proxy.
 
 ## Addresses that the local DoH server should listen to
 
 # listen_addresses = ['127.0.0.1:3000']
 
 
-## URL path - The standard one is "/dns-query", but anything can be used.
+## Path of the DoH URL. This is not a file, but the part after the hostname
+## in the URL. By convention, `/dns-query` is frequently chosen.
+## For each `listen_address` the complete URL to access the server will be:
+## `https://<listen_address><path>` (ex: `https://127.0.0.1/dns-query`)
 
 # path = "/dns-query"
 
