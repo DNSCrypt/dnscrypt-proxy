@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/jedisct1/dlog"
@@ -46,7 +47,9 @@ func (handler localDoHHandler) ServeHTTP(writer http.ResponseWriter, request *ht
 		writer.WriteHeader(500)
 		return
 	}
+	padLen := 127 - (len(response)+127)&127
 	writer.Header().Set("Content-Type", dataType)
+	writer.Header().Set("X-Pad", strings.Repeat("X", padLen))
 	writer.WriteHeader(200)
 	writer.Write(response)
 }
