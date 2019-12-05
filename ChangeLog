@@ -1,4 +1,4 @@
-* Version 2.0.34 (not released yet)
+* Version 2.0.34
  - Blacklisted names are now also blocked if they appear in `CNAME`
 pointers.
  - `dnscrypt-proxy` can now act as a local DoH *server*. Firefox can
