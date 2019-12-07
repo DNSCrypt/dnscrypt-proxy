@@ -651,6 +651,44 @@ broken_query_padding = ['cisco', 'cisco-ipv6', 'cisco-familyshield']
 #    { server_name='example-server-2', via=['sdns://gRIxMzcuNzQuMjIzLjIzNDo0NDM'] }
 # ]
 
+######################################################
+#        Pattern-based resource records filtering    #
+######################################################
+
+## Blocks DNS questions and filters DNS responses with specified host names and DNS record type(s).
+## Complete list of DNS record types: https://www.iana.org/assignments/dns-parameters/dns-parameters.xhtml
+##
+## Blacklists are made of one pattern + list of banned DNS (mandatory, entities separated by comma) records per line. Example of valid patterns:
+## Blocks DNS questions and filters DNS responses with specified host names and DNS record type(s).
+## Complete list of DNS resource record types: https://www.iana.org/assignments/dns-parameters/dns-parameters.xhtml
+##
+## Blacklists are made of one pattern + list of banned DNS resource records (mandatory, entities separated by comma) per line.
+##
+## Example of valid patterns:
+##
+## ads.*         5     | matches anything with an "ads." prefix. Blocks only CNAME records for that domains
+## *.example.com 1, 28 | matches example.com and all names within that zone such as www.example.com. Blocks A and AAAA records
+## example.com   5     | identical to the above
+## =example.com  5     | block example.com but not *.example.com
+## *sex*         5     | matches any name containing that substring
+## ads[0-9]*     5     | matches "ads" followed by one or more digits
+## ads*.example* 5     | *, ? and [] can be used anywhere, but prefixes/suffixes are faster
+##
+
+[resource_record_filter]
+  ## Path to the file of blocking rules (absolute, or relative to the same directory as the executable file)
+
+  # filter_file = 'filters.txt'
+
+
+  ## Optional path to a file logging blocked queries
+
+  # log_file = 'filtered.log'
+
+
+  ## Optional log format: tsv or ltsv (default: tsv)
+
+  # log_format = 'tsv'
 
 ## Optional, local, static list of additional servers
 ## Mostly useful for testing your own servers.

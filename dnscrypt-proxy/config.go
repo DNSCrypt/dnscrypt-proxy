@@ -89,6 +89,7 @@ type Config struct {
 	BlockedQueryResponse     string                      `toml:"blocked_query_response"`
 	QueryMeta                []string                    `toml:"query_meta"`
 	AnonymizedDNS            AnonymizedDNSConfig         `toml:"anonymized_dns"`
+	ResourceRecordFilters    ResourceRecordFiltersConfig `toml:"resource_record_filter"`
 }
 
 func newConfig() Config {
@@ -196,6 +197,12 @@ type LocalDoHConfig struct {
 	Path            string   `toml:"path"`
 	CertFile        string   `toml:"cert_file"`
 	CertKeyFile     string   `toml:"cert_key_file"`
+}
+
+type ResourceRecordFiltersConfig struct {
+	File    string `toml:"filter_file"`
+	LogFile string `toml:"log_file"`
+	Format  string `toml:"log_format"`
 }
 
 type ServerSummary struct {
@@ -443,6 +450,18 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 
 	proxy.forwardFile = config.ForwardFile
 	proxy.cloakFile = config.CloakFile
+
+	if len(config.ResourceRecordFilters.Format) == 0 {
+		config.ResourceRecordFilters.Format = "tsv"
+	} else {
+		config.ResourceRecordFilters.Format = strings.ToLower(config.ResourceRecordFilters.Format)
+	}
+	if config.ResourceRecordFilters.Format != "tsv" && config.ResourceRecordFilters.Format != "ltsv" {
+		return errors.New("unsupported resource records filters log format")
+	}
+	proxy.resourceRecordFiltersFile = config.ResourceRecordFilters.File
+	proxy.resourceRecordFiltersFormat = config.ResourceRecordFilters.Format
+	proxy.resourceRecordFiltersLogFile = config.ResourceRecordFilters.LogFile
 
 	allWeeklyRanges, err := ParseAllWeeklyRanges(config.AllWeeklyRanges)
 	if err != nil {

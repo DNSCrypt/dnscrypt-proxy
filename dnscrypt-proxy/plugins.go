@@ -115,6 +115,9 @@ func (proxy *Proxy) InitPluginsGlobals() error {
 	if len(proxy.forwardFile) != 0 {
 		*queryPlugins = append(*queryPlugins, Plugin(new(PluginForward)))
 	}
+	if len(proxy.resourceRecordFiltersFile) != 0 {
+		*queryPlugins = append(*queryPlugins, Plugin(new(PluginBlockResourceRecordsQueries)))
+	}
 
 	responsePlugins := &[]Plugin{}
 	if len(proxy.nxLogFile) != 0 {
@@ -128,6 +131,9 @@ func (proxy *Proxy) InitPluginsGlobals() error {
 	}
 	if proxy.cache {
 		*responsePlugins = append(*responsePlugins, Plugin(new(PluginCacheResponse)))
+	}
+	if len(proxy.resourceRecordFiltersFile) != 0 {
+		*queryPlugins = append(*queryPlugins, Plugin(new(PluginFilterResourceRecordsResponses)))
 	}
 
 	loggingPlugins := &[]Plugin{}
