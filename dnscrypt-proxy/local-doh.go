@@ -18,6 +18,11 @@ type localDoHHandler struct {
 
 func (handler localDoHHandler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	proxy := handler.proxy
+	if !proxy.clientsCountInc() {
+		dlog.Warnf("Too many incoming connections (max=%d)", proxy.maxClients)
+		return
+	}
+	defer proxy.clientsCountDec()
 	dataType := "application/dns-message"
 	writer.Header().Set("Server", "dnscrypt-proxy")
 	if request.URL.Path != proxy.localDoHPath {

@@ -264,7 +264,7 @@ func (proxy *Proxy) udpListener(clientPc *net.UDPConn) {
 		go func() {
 			start := time.Now()
 			if !proxy.clientsCountInc() {
-				dlog.Warnf("Too many connections (max=%d)", proxy.maxClients)
+				dlog.Warnf("Too many incoming connections (max=%d)", proxy.maxClients)
 				return
 			}
 			defer proxy.clientsCountDec()
@@ -294,7 +294,7 @@ func (proxy *Proxy) tcpListener(acceptPc *net.TCPListener) {
 			start := time.Now()
 			defer clientPc.Close()
 			if !proxy.clientsCountInc() {
-				dlog.Warnf("Too many connections (max=%d)", proxy.maxClients)
+				dlog.Warnf("Too many incoming connections (max=%d)", proxy.maxClients)
 				return
 			}
 			defer proxy.clientsCountDec()
