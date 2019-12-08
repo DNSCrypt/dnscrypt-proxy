@@ -12,6 +12,7 @@ download.dnscrypt.info
 edgekey.net
 edgesuite.net
 elasticbeanstalk.com
+fastly.net
 github.com
 github.io
 googleadservices.com
