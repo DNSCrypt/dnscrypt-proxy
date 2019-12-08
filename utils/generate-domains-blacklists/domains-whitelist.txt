@@ -10,6 +10,7 @@ cdninstagram.com
 cloudapp.net
 download.dnscrypt.info
 edgekey.net
+edgesuite.net
 elasticbeanstalk.com
 github.com
 github.io
