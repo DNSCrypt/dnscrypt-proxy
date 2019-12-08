@@ -1,5 +1,5 @@
 ---
-name: "❓ Questions"
+name: "❓ Question"
 about: Ask a question about dnscrypt-proxy or the DNSCrypt protocol
 title: ''
 labels: ''
