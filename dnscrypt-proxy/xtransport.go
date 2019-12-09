@@ -247,6 +247,7 @@ func (xTransport *XTransport) resolveUsingResolver(proto, host string, resolver 
 
 // Return a cached entry, or resolve a name and update the cache
 func (xTransport *XTransport) resolveWithCache(host string) (err error) {
+	err = nil
 	if xTransport.proxyDialer != nil || xTransport.httpProxyFunction != nil {
 		return
 	}
