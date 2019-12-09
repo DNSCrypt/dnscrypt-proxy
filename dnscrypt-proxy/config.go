@@ -46,6 +46,7 @@ type Config struct {
 	LBStrategy               string `toml:"lb_strategy"`
 	LBEstimator              bool   `toml:"lb_estimator"`
 	BlockIPv6                bool   `toml:"block_ipv6"`
+	BlockUnqualified         bool   `toml:"block_unqualified"`
 	Cache                    bool
 	CacheSize                int                         `toml:"cache_size"`
 	CacheNegTTL              uint32                      `toml:"cache_neg_ttl"`
@@ -366,6 +367,7 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	proxy.localDoHCertKeyFile = config.LocalDoH.CertKeyFile
 	proxy.daemonize = config.Daemonize
 	proxy.pluginBlockIPv6 = config.BlockIPv6
+	proxy.pluginBlockUnqualified = config.BlockUnqualified
 	proxy.cache = config.Cache
 	proxy.cacheSize = config.CacheSize
 
