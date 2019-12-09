@@ -41,7 +41,7 @@ github.com/jedisct1/xsecretbox
 github.com/k-sone/critbitgo
 # github.com/kardianos/service v1.0.1-0.20191017145738-4df36c9fc1c6
 github.com/kardianos/service
-# github.com/miekg/dns v1.1.22
+# github.com/miekg/dns v1.1.24
 github.com/miekg/dns
 # github.com/pkg/errors v0.8.1
 github.com/pkg/errors
