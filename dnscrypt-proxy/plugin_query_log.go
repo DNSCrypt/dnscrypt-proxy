@@ -105,6 +105,7 @@ func (plugin *PluginQueryLog) Eval(pluginsState *PluginsState, msg *dns.Msg) err
 	if plugin.logger == nil {
 		return errors.New("Log file not initialized")
 	}
-	plugin.logger.Write([]byte(line))
+	_, _ = plugin.logger.Write([]byte(line))
+
 	return nil
 }

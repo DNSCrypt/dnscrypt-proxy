@@ -151,9 +151,7 @@ func (plugin *PluginBlockIP) Eval(pluginsState *PluginsState, msg *dns.Msg) erro
 			if plugin.logger == nil {
 				return errors.New("Log file not initialized")
 			}
-			if _, err := plugin.logger.Write([]byte(line)); err != nil {
-				return err
-			}
+			_, _ = plugin.logger.Write([]byte(line))
 		}
 	}
 	return nil

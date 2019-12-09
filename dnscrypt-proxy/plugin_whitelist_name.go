@@ -124,7 +124,7 @@ func (plugin *PluginWhitelistName) Eval(pluginsState *PluginsState, msg *dns.Msg
 			if plugin.logger == nil {
 				return errors.New("Log file not initialized")
 			}
-			plugin.logger.Write([]byte(line))
+			_, _ = plugin.logger.Write([]byte(line))
 		}
 	}
 	return nil
