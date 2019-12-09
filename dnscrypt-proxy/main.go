@@ -126,9 +126,7 @@ func (app *App) AppMain() {
 	}
 	app.quit = make(chan struct{})
 	app.wg.Add(1)
-	if err := pidfile.Write(); err != nil {
-		dlog.Critical(err)
-	}
+	_ = pidfile.Write()
 	app.proxy.StartProxy()
 	<-app.quit
 	dlog.Notice("Quit signal received...")
