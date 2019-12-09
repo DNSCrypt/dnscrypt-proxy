@@ -708,7 +708,11 @@ func cdLocal() {
 		dlog.Warnf("Unable to determine the executable directory: [%s] -- You will need to specify absolute paths in the configuration file", err)
 		return
 	}
-	os.Chdir(filepath.Dir(exeFileName))
+
+	err = os.Chdir(filepath.Dir(exeFileName))
+	if err != nil {
+		dlog.Warnf("Unable to change working directory: %s", err)
+	}
 }
 
 func isIPAndPort(addrStr string) error {
