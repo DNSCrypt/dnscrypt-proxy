@@ -225,6 +225,7 @@ before_deploy:
 - sudo apt-get -y install libsodium-dev
 - git clone --depth 1 https://github.com/jedisct1/minisign.git
 - cd minisign/src
+- mkdir -p /tmp/bin
 - gcc -O2 -o /tmp/bin/minisign -D_GNU_SOURCE *.c -lsodium
 - cd -
 - minisign -v
