@@ -6,8 +6,6 @@ os:
 go:
 - 1.x
 
-before_install:
-  - sudo apt-get -y install libsodium
 addons:
   apt:
     update: true
@@ -224,6 +222,7 @@ deploy:
     tags: true
 
 before_deploy:
+- sudo apt-get -y install libsodium-dev
 - git clone --depth 1 https://github.com/jedisct1/minisign.git
 - cd minisign/src
 - gcc -O2 -o /tmp/bin/minisign -I/tmp/include -L/tmp/lib *.c -lsodium
@@ -235,7 +234,7 @@ before_deploy:
 
 before_install:
 - NDK_VER=r18
-- curl -LO http://dl.google.com/android/repository/android-ndk-${NDK_VER}-linux-x86_64.zip
+- curl -LO https://dl.google.com/android/repository/android-ndk-${NDK_VER}-linux-x86_64.zip
 - unzip -q android-ndk-${NDK_VER}-linux-x86_64.zip -d $HOME
 - rm android-ndk-${NDK_VER}-linux-x86_64.zip
 - NDK_TOOLS=$HOME/android-ndk-${NDK_VER}
