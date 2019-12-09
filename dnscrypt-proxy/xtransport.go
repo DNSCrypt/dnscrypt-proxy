@@ -246,20 +246,20 @@ func (xTransport *XTransport) resolveUsingResolver(proto, host string, resolver 
 }
 
 // Return a cached entry, or resolve a name and update the cache
-func (xTransport *XTransport) resolveWithCache(host string) (err error) {
-	err = nil
+func (xTransport *XTransport) resolveWithCache(host string) error {
 	if xTransport.proxyDialer != nil || xTransport.httpProxyFunction != nil {
-		return
+		return nil
 	}
 	if ParseIP(host) != nil {
-		return
+		return nil
 	}
 	cachedIP, expired := xTransport.loadCachedIP(host)
 	if cachedIP != nil && !expired {
-		return
+		return nil
 	}
 	var foundIP net.IP
 	var ttl time.Duration
+	var err error
 	if !xTransport.ignoreSystemDNS {
 		foundIP, ttl, err = xTransport.resolveUsingSystem(host)
 	}
@@ -292,12 +292,12 @@ func (xTransport *XTransport) resolveWithCache(host string) (err error) {
 			foundIP = cachedIP
 			ttl = ExpiredCachedIPGraceTTL
 		} else {
-			return
+			return err
 		}
 	}
 	xTransport.saveCachedIP(host, foundIP, ttl)
 	dlog.Debugf("[%s] IP address [%s] added to the cache, valid for %v", host, foundIP, ttl)
-	return
+	return nil
 }
 
 func (xTransport *XTransport) Fetch(method string, url *url.URL, accept string, contentType string, body *[]byte, timeout time.Duration, padding *string) (*http.Response, time.Duration, error) {
