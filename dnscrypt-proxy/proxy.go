@@ -298,7 +298,9 @@ func (proxy *Proxy) tcpListener(acceptPc *net.TCPListener) {
 				return
 			}
 			defer proxy.clientsCountDec()
-			clientPc.SetDeadline(time.Now().Add(proxy.timeout))
+			if err = clientPc.SetDeadline(time.Now().Add(proxy.timeout)); err != nil {
+				return
+			}
 			packet, err := ReadPrefixed(&clientPc)
 			if err != nil {
 				return
@@ -349,11 +351,15 @@ func (proxy *Proxy) exchangeWithUDPServer(serverInfo *ServerInfo, sharedKey *[32
 		return nil, err
 	}
 	defer pc.Close()
-	pc.SetDeadline(time.Now().Add(serverInfo.Timeout))
+	if err = pc.SetDeadline(time.Now().Add(serverInfo.Timeout)); err != nil {
+		return nil, err
+	}
 	if serverInfo.RelayUDPAddr != nil {
 		proxy.prepareForRelay(serverInfo.UDPAddr.IP, serverInfo.UDPAddr.Port, &encryptedQuery)
 	}
-	pc.Write(encryptedQuery)
+	if _, err = pc.Write(encryptedQuery); err != nil {
+		return nil, err
+	}
 	encryptedResponse := make([]byte, MaxDNSPacketSize)
 	length, err := pc.Read(encryptedResponse)
 	if err != nil {
@@ -380,7 +386,9 @@ func (proxy *Proxy) exchangeWithTCPServer(serverInfo *ServerInfo, sharedKey *[32
 		return nil, err
 	}
 	defer pc.Close()
-	pc.SetDeadline(time.Now().Add(serverInfo.Timeout))
+	if err = pc.SetDeadline(time.Now().Add(serverInfo.Timeout)); err != nil {
+		return nil, err
+	}
 	if serverInfo.RelayTCPAddr != nil {
 		proxy.prepareForRelay(serverInfo.TCPAddr.IP, serverInfo.TCPAddr.Port, &encryptedQuery)
 	}
@@ -388,7 +396,9 @@ func (proxy *Proxy) exchangeWithTCPServer(serverInfo *ServerInfo, sharedKey *[32
 	if err != nil {
 		return nil, err
 	}
-	pc.Write(encryptedQuery)
+	if _, err = pc.Write(encryptedQuery); err != nil {
+		return nil, err
+	}
 	encryptedResponse, err := ReadPrefixed(&pc)
 	if err != nil {
 		return nil, err

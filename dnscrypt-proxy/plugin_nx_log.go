@@ -76,7 +76,9 @@ func (plugin *PluginNxLog) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 	if plugin.logger == nil {
 		return errors.New("Log file not initialized")
 	}
-	plugin.logger.Write([]byte(line))
 
+	if _, err := plugin.logger.Write([]byte(line)); err != nil {
+		return err
+	}
 	return nil
 }
