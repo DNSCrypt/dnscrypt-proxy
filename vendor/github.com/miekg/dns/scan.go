@@ -248,7 +248,6 @@ type ZoneParser struct {
 	includeDepth uint8
 
 	includeAllowed bool
-	generateDisallowed bool
 }
 
 // NewZoneParser returns an RFC 1035 style zonefile parser that reads
@@ -548,9 +547,6 @@ func (zp *ZoneParser) Next() (RR, bool) {
 
 			st = zExpectDirGenerate
 		case zExpectDirGenerate:
-			if zp.generateDisallowed {
-				return zp.setParseError("nested $GENERATE directive not allowed", l)
-			}
 			if l.value != zString {
 				return zp.setParseError("expecting $GENERATE value, not this...", l)
 			}

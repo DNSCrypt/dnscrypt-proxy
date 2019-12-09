@@ -360,7 +360,7 @@ func (e *EDNS0_COOKIE) copy() EDNS0           { return &EDNS0_COOKIE{e.Code, e.C
 // The EDNS0_UL (Update Lease) (draft RFC) option is used to tell the server to set
 // an expiration on an update RR. This is helpful for clients that cannot clean
 // up after themselves. This is a draft RFC and more information can be found at
-// https://tools.ietf.org/html/draft-sekar-dns-ul-02
+// http://files.dns-sd.org/draft-sekar-dns-ul.txt
 //
 //	o := new(dns.OPT)
 //	o.Hdr.Name = "."
@@ -370,36 +370,24 @@ func (e *EDNS0_COOKIE) copy() EDNS0           { return &EDNS0_COOKIE{e.Code, e.C
 //	e.Lease = 120 // in seconds
 //	o.Option = append(o.Option, e)
 type EDNS0_UL struct {
-	Code     uint16 // Always EDNS0UL
-	Lease    uint32
-	KeyLease uint32
+	Code  uint16 // Always EDNS0UL
+	Lease uint32
 }
 
 // Option implements the EDNS0 interface.
 func (e *EDNS0_UL) Option() uint16 { return EDNS0UL }
-func (e *EDNS0_UL) String() string { return fmt.Sprintf("%d %d", e.Lease, e.KeyLease) }
-func (e *EDNS0_UL) copy() EDNS0    { return &EDNS0_UL{e.Code, e.Lease, e.KeyLease} }
+func (e *EDNS0_UL) String() string { return strconv.FormatUint(uint64(e.Lease), 10) }
+func (e *EDNS0_UL) copy() EDNS0    { return &EDNS0_UL{e.Code, e.Lease} }
 
 // Copied: http://golang.org/src/pkg/net/dnsmsg.go
 func (e *EDNS0_UL) pack() ([]byte, error) {
-	var b []byte
-	if e.KeyLease == 0 {
-		b = make([]byte, 4)
-	} else {
-		b = make([]byte, 8)
-		binary.BigEndian.PutUint32(b[4:], e.KeyLease)
-	}
+	b := make([]byte, 4)
 	binary.BigEndian.PutUint32(b, e.Lease)
 	return b, nil
 }
 
 func (e *EDNS0_UL) unpack(b []byte) error {
-	switch len(b) {
-	case 4:
-		e.KeyLease = 0
-	case 8:
-		e.KeyLease = binary.BigEndian.Uint32(b[4:])
-	default:
+	if len(b) < 4 {
 		return ErrBuf
 	}
 	e.Lease = binary.BigEndian.Uint32(b)

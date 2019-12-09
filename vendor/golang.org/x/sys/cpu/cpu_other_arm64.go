@@ -6,4 +6,4 @@
 
 package cpu
 
-func doinit() {}
+const cacheLineSize = 64
