@@ -132,7 +132,7 @@ func (xTransport *XTransport) rebuildTransport() {
 		DialContext: func(ctx context.Context, network, addrStr string) (net.Conn, error) {
 			host, port := ExtractHostAndPort(addrStr, stamps.DefaultPort)
 			ipOnly := host
-			// resolveWithCache() is always called in `Fetch()` before the `Dial()`
+			// resolveAndUpdateCache() is always called in `Fetch()` before the `Dial()`
 			// method is used, so that a cached entry must be present at this point.
 			cachedIP, _ := xTransport.loadCachedIP(host)
 			if cachedIP != nil {
@@ -245,8 +245,8 @@ func (xTransport *XTransport) resolveUsingResolver(proto, host string, resolver 
 	return
 }
 
-// Return a cached entry, or resolve a name and update the cache
-func (xTransport *XTransport) resolveWithCache(host string) error {
+// If a name is not present in the cache, resolve the name and update the cache
+func (xTransport *XTransport) resolveAndUpdateCache(host string) error {
 	if xTransport.proxyDialer != nil || xTransport.httpProxyFunction != nil {
 		return nil
 	}
@@ -327,7 +327,7 @@ func (xTransport *XTransport) Fetch(method string, url *url.URL, accept string, 
 	if xTransport.proxyDialer == nil && strings.HasSuffix(host, ".onion") {
 		return nil, 0, errors.New("Onion service is not reachable without Tor")
 	}
-	if err := xTransport.resolveWithCache(host); err != nil {
+	if err := xTransport.resolveAndUpdateCache(host); err != nil {
 		dlog.Errorf("Unable to resolve [%v] - Make sure that the system resolver works, or that `fallback_resolver` has been set to a resolver that can be reached", host)
 		return nil, 0, err
 	}
