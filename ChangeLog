@@ -1,3 +1,13 @@
+* Version 2.0.35
+ - New option: `block_unqualified` to block `A`/`AAAA` queries to block
+unqualified host names. These will very rarely get an answer from upstream
+resolvers, but can leak private information to these, as well as to root
+servers.
+ - When a `CNAME` pointer is blocked, the original query name is now logged
+along with the pointer. This makes it easier to know what the original
+query name, so it can be whitelisted, or what the pointer was, so it
+can be removed from the blacklist.
+
 * Version 2.0.34
  - Blacklisted names are now also blocked if they appear in `CNAME`
 pointers.
