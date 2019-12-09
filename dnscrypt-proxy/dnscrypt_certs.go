@@ -226,8 +226,14 @@ func _dnsExchange(proxy *Proxy, proto string, query *dns.Msg, serverAddress stri
 			return nil, 0, err
 		}
 		defer pc.Close()
-		pc.SetDeadline(time.Now().Add(proxy.timeout))
-		pc.Write(binQuery)
+		err = pc.SetDeadline(time.Now().Add(proxy.timeout))
+		if err != nil {
+			return nil, 0, err
+		}
+		_, err = pc.Write(binQuery)
+		if err != nil {
+			return nil, 0, err
+		}
 		packet = make([]byte, MaxDNSPacketSize)
 		length, err := pc.Read(packet)
 		if err != nil {
@@ -261,12 +267,18 @@ func _dnsExchange(proxy *Proxy, proto string, query *dns.Msg, serverAddress stri
 			return nil, 0, err
 		}
 		defer pc.Close()
-		pc.SetDeadline(time.Now().Add(proxy.timeout))
+		err = pc.SetDeadline(time.Now().Add(proxy.timeout))
+		if err != nil {
+			return nil, 0, err
+		}
 		binQuery, err = PrefixWithSize(binQuery)
 		if err != nil {
 			return nil, 0, err
 		}
-		pc.Write(binQuery)
+		_, err = pc.Write(binQuery)
+		if err != nil {
+			return nil, 0, err
+		}
 		packet, err = ReadPrefixed(&pc)
 		if err != nil {
 			return nil, 0, err
