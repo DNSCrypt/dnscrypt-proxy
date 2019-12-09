@@ -31,7 +31,7 @@ const (
 	DefaultTimeout          = 30 * time.Second
 	SystemResolverIPTTL     = 24 * time.Hour
 	MinResolverIPTTL        = 12 * time.Hour
-	ExpiredCachedIPGraceTTL = 5 * time.Minute
+	ExpiredCachedIPGraceTTL = 15 * time.Minute
 )
 
 type CachedIPItem struct {
@@ -289,6 +289,7 @@ func (xTransport *XTransport) resolveAndUpdateCache(host string) error {
 	}
 	if err != nil {
 		if cachedIP != nil {
+			dlog.Noticef("Using stale [%v] cached address for a grace period", host)
 			foundIP = cachedIP
 			ttl = ExpiredCachedIPGraceTTL
 		} else {
