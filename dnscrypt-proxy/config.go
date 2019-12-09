@@ -253,7 +253,9 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	if len(undecoded) > 0 {
 		return fmt.Errorf("Unsupported key in configuration file: [%s]", undecoded[0])
 	}
-	cdFileDir(foundConfigFile)
+	if err := cdFileDir(foundConfigFile); err != nil {
+		return err
+	}
 	if config.LogLevel >= 0 && config.LogLevel < int(dlog.SeverityLast) {
 		dlog.SetLogLevel(dlog.Severity(config.LogLevel))
 	}
@@ -698,8 +700,8 @@ func includesName(names []string, name string) bool {
 	return false
 }
 
-func cdFileDir(fileName string) {
-	os.Chdir(filepath.Dir(fileName))
+func cdFileDir(fileName string) error {
+	return os.Chdir(filepath.Dir(fileName))
 }
 
 func cdLocal() {
