@@ -40,7 +40,7 @@ func (plugin *PluginBlockUnqualified) Eval(pluginsState *PluginsState, msg *dns.
 	}
 	qName := questions[0].Name
 	idx := strings.IndexByte(qName, '.')
-	if idx == -1 || idx+1 != len(qName) {
+	if idx == -1 || (idx == 0 || idx+1 != len(qName)) {
 		return nil
 	}
 	synth := EmptyResponseFromMessage(msg)
