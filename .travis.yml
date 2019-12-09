@@ -228,10 +228,10 @@ before_deploy:
 - mkdir -p /tmp/bin
 - gcc -O2 -o /tmp/bin/minisign -D_GNU_SOURCE *.c -lsodium
 - cd -
-- minisign -v
+- /tmp/bin/minisign -v
 - echo '#' > /tmp/minisign.key
 - echo "$MINISIGN_SK" >> /tmp/minisign.key
-- echo | minisign -s /tmp/minisign.key -Sm dnscrypt-proxy-*.tar.gz dnscrypt-proxy-*.zip
+- echo | /tmp/bin/minisign -s /tmp/minisign.key -Sm dnscrypt-proxy-*.tar.gz dnscrypt-proxy-*.zip
 
 before_install:
 - NDK_VER=r18
