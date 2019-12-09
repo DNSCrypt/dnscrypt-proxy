@@ -66,8 +66,7 @@ func (blockedNames *BlockedNames) check(pluginsState *PluginsState, qName string
 		if blockedNames.logger == nil {
 			return false, errors.New("Log file not initialized")
 		}
-		_, err := blockedNames.logger.Write([]byte(line))
-		if err != nil {
+		if _, err := blockedNames.logger.Write([]byte(line)); err != nil {
 			return false, err
 		}
 	}

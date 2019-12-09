@@ -84,8 +84,7 @@ func (plugin *PluginCloak) Init(proxy *Proxy) error {
 		cloakedNames[line] = cloakedName
 	}
 	for line, cloakedName := range cloakedNames {
-		err = plugin.patternMatcher.Add(line, cloakedName, cloakedName.lineNo)
-		if err != nil {
+		if err = plugin.patternMatcher.Add(line, cloakedName, cloakedName.lineNo); err != nil {
 			return err
 		}
 	}
