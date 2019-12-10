@@ -362,6 +362,9 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 
 	proxy.listenAddresses = config.ListenAddresses
 	proxy.localDoHListenAddresses = config.LocalDoH.ListenAddresses
+	if len(config.LocalDoH.Path) > 0 && config.LocalDoH.Path[0] != '/' {
+		dlog.Fatalf("local DoH: [%s] cannot be a valid URL path. Read the documentation", config.LocalDoH.Path)
+	}
 	proxy.localDoHPath = config.LocalDoH.Path
 	proxy.localDoHCertFile = config.LocalDoH.CertFile
 	proxy.localDoHCertKeyFile = config.LocalDoH.CertKeyFile
