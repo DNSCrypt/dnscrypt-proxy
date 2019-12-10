@@ -139,7 +139,7 @@ def whitelist_from_url(url):
 
     names, _time_restrictions = parse_list(content, trusted)
     return names
-
+#test
 
 def blacklists_from_config_file(
     file, whitelist, time_restricted_url, ignore_retrieval_failure
