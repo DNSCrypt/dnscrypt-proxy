@@ -9,27 +9,28 @@ import (
 	"github.com/miekg/dns"
 )
 
+func EmptyResponseFromMessage(srcMsg *dns.Msg) *dns.Msg {
+	dstMsg := *srcMsg
+	dstMsg.Response = true
+	if srcMsg.RecursionDesired {
+		dstMsg.RecursionAvailable = true
+	}
+	dstMsg.RecursionDesired = false
+	dstMsg.CheckingDisabled = false
+	dstMsg.Answer = make([]dns.RR, 0)
+	dstMsg.Ns = make([]dns.RR, 0)
+	dstMsg.Extra = make([]dns.RR, 0)
+	return &dstMsg
+}
+
 func TruncatedResponse(packet []byte) ([]byte, error) {
 	srcMsg := new(dns.Msg)
 	if err := srcMsg.Unpack(packet); err != nil {
 		return nil, err
 	}
-	dstMsg := srcMsg
-	dstMsg.Response = true
-	dstMsg.Answer = make([]dns.RR, 0)
-	dstMsg.Ns = make([]dns.RR, 0)
-	dstMsg.Extra = make([]dns.RR, 0)
+	dstMsg := EmptyResponseFromMessage(srcMsg)
 	dstMsg.Truncated = true
 	return dstMsg.Pack()
-}
-
-func EmptyResponseFromMessage(srcMsg *dns.Msg) *dns.Msg {
-	dstMsg := srcMsg
-	dstMsg.Response = true
-	dstMsg.Answer = make([]dns.RR, 0)
-	dstMsg.Ns = make([]dns.RR, 0)
-	dstMsg.Extra = make([]dns.RR, 0)
-	return dstMsg
 }
 
 func RefusedResponseFromMessage(srcMsg *dns.Msg, refusedCode bool, ipv4 net.IP, ipv6 net.IP, ttl uint32) *dns.Msg {
