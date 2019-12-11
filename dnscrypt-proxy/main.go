@@ -49,7 +49,7 @@ func main() {
 	flags := ConfigFlags{}
 	flags.List = flag.Bool("list", false, "print the list of available resolvers for the enabled filters")
 	flags.ListAll = flag.Bool("list-all", false, "print the complete list of available resolvers, ignoring filters")
-	flags.JsonOutput = flag.Bool("json", false, "output list as JSON")
+	flags.JSONOutput = flag.Bool("json", false, "output list as JSON")
 	flags.Check = flag.Bool("check", false, "check the configuration file and exit")
 	flags.ConfigFile = flag.String("config", DefaultConfigFileName, "Path to the configuration file")
 	flags.Child = flag.Bool("child", false, "Invokes program as a child process")

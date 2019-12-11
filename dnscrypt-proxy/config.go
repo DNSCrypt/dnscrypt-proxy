@@ -215,7 +215,7 @@ type ServerSummary struct {
 type ConfigFlags struct {
 	List                    *bool
 	ListAll                 *bool
-	JsonOutput              *bool
+	JSONOutput              *bool
 	Check                   *bool
 	ConfigFile              *string
 	Child                   *bool
@@ -507,7 +507,7 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 		}
 	}
 	if *flags.List || *flags.ListAll {
-		config.printRegisteredServers(proxy, *flags.JsonOutput)
+		config.printRegisteredServers(proxy, *flags.JSONOutput)
 		os.Exit(0)
 	}
 	if proxy.routes != nil && len(*proxy.routes) > 0 {
