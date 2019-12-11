@@ -10,7 +10,8 @@ import (
 )
 
 func EmptyResponseFromMessage(srcMsg *dns.Msg) *dns.Msg {
-	dstMsg := *srcMsg
+	dstMsg := dns.Msg{MsgHdr: srcMsg.MsgHdr}
+	dstMsg.Question = srcMsg.Question
 	dstMsg.Response = true
 	if srcMsg.RecursionDesired {
 		dstMsg.RecursionAvailable = true
@@ -18,9 +19,9 @@ func EmptyResponseFromMessage(srcMsg *dns.Msg) *dns.Msg {
 	dstMsg.RecursionDesired = false
 	dstMsg.CheckingDisabled = false
 	dstMsg.AuthenticatedData = false
-	dstMsg.Answer = make([]dns.RR, 0)
-	dstMsg.Ns = make([]dns.RR, 0)
-	dstMsg.Extra = make([]dns.RR, 0)
+	if edns0 := srcMsg.IsEdns0(); edns0 != nil {
+		dstMsg.SetEdns0(edns0.UDPSize(), edns0.Do())
+	}
 	return &dstMsg
 }
 
