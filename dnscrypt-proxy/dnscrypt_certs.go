@@ -31,13 +31,13 @@ func FetchCurrentDNSCryptCert(proxy *Proxy, serverName *string, proto string, pk
 	if serverName == nil {
 		serverName = &providerName
 	}
-	query := new(dns.Msg)
+	query := dns.Msg{}
 	query.SetQuestion(providerName, dns.TypeTXT)
 	if !strings.HasPrefix(providerName, "2.dnscrypt-cert.") {
 		dlog.Warnf("[%v] uses a non-standard provider name ('%v' doesn't start with '2.dnscrypt-cert.')", *serverName, providerName)
 		relayUDPAddr, relayTCPAddr = nil, nil
 	}
-	in, rtt, err := dnsExchange(proxy, proto, query, serverAddress, relayUDPAddr, relayTCPAddr, serverName)
+	in, rtt, err := dnsExchange(proxy, proto, &query, serverAddress, relayUDPAddr, relayTCPAddr, serverName)
 	if err != nil {
 		dlog.Noticef("[%s] TIMEOUT", *serverName)
 		return CertInfo{}, 0, err

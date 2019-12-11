@@ -10,7 +10,7 @@ import (
 )
 
 func EmptyResponseFromMessage(srcMsg *dns.Msg) *dns.Msg {
-	dstMsg := dns.Msg{MsgHdr: srcMsg.MsgHdr}
+	dstMsg := dns.Msg{MsgHdr: srcMsg.MsgHdr, Compress: true}
 	dstMsg.Question = srcMsg.Question
 	dstMsg.Response = true
 	if srcMsg.RecursionDesired {
@@ -26,11 +26,11 @@ func EmptyResponseFromMessage(srcMsg *dns.Msg) *dns.Msg {
 }
 
 func TruncatedResponse(packet []byte) ([]byte, error) {
-	srcMsg := new(dns.Msg)
+	srcMsg := dns.Msg{}
 	if err := srcMsg.Unpack(packet); err != nil {
 		return nil, err
 	}
-	dstMsg := EmptyResponseFromMessage(srcMsg)
+	dstMsg := EmptyResponseFromMessage(&srcMsg)
 	dstMsg.Truncated = true
 	return dstMsg.Pack()
 }

@@ -203,11 +203,11 @@ func (xTransport *XTransport) resolveUsingSystem(host string) (ip net.IP, ttl ti
 func (xTransport *XTransport) resolveUsingResolver(proto, host string, resolver string) (ip net.IP, ttl time.Duration, err error) {
 	dnsClient := dns.Client{Net: proto}
 	if xTransport.useIPv4 {
-		msg := new(dns.Msg)
+		msg := dns.Msg{}
 		msg.SetQuestion(dns.Fqdn(host), dns.TypeA)
 		msg.SetEdns0(uint16(MaxDNSPacketSize), true)
 		var in *dns.Msg
-		if in, _, err = dnsClient.Exchange(msg, resolver); err == nil {
+		if in, _, err = dnsClient.Exchange(&msg, resolver); err == nil {
 			answers := make([]dns.RR, 0)
 			for _, answer := range in.Answer {
 				if answer.Header().Rrtype == dns.TypeA {
@@ -223,11 +223,11 @@ func (xTransport *XTransport) resolveUsingResolver(proto, host string, resolver 
 		}
 	}
 	if xTransport.useIPv6 {
-		msg := new(dns.Msg)
+		msg := dns.Msg{}
 		msg.SetQuestion(dns.Fqdn(host), dns.TypeAAAA)
 		msg.SetEdns0(uint16(MaxDNSPacketSize), true)
 		var in *dns.Msg
-		if in, _, err = dnsClient.Exchange(msg, resolver); err == nil {
+		if in, _, err = dnsClient.Exchange(&msg, resolver); err == nil {
 			answers := make([]dns.RR, 0)
 			for _, answer := range in.Answer {
 				if answer.Header().Rrtype == dns.TypeAAAA {
