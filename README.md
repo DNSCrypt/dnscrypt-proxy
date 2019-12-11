@@ -1,6 +1,6 @@
 # ![dnscrypt-proxy 2](https://raw.github.com/dnscrypt/dnscrypt-proxy/master/logo.png?3)
 
-[![Financial Contributors on Open Collective](https://opencollective.com/dnscrypt/all/badge.svg?label=financial+contributors)](https://opencollective.com/dnscrypt) [![DNSCrypt-Proxy Release](https://img.shields.io/github/release/dnscrypt/dnscrypt-proxy.svg?label=Latest%20Release&style=popout)](https://github.com/dnscrypt/dnscrypt-proxy/releases/latest)  [![Build Status](https://travis-ci.org/dnscrypt/dnscrypt-proxy.svg?branch=master)](https://travis-ci.org/dnscrypt/dnscrypt-proxy?branch=master) [![#dnscrypt-proxy:matrix.org](https://img.shields.io/matrix/dnscrypt-proxy:matrix.org.svg?label=DNSCrypt-Proxy%20Matrix%20Chat&server_fqdn=matrix.org&style=popout)](https://matrix.to/#/#dnscrypt-proxy:matrix.org)
+[![Financial Contributors on Open Collective](https://opencollective.com/dnscrypt/all/badge.svg?label=financial+contributors)](https://opencollective.com/dnscrypt) [![DNSCrypt-Proxy Release](https://img.shields.io/github/release/dnscrypt/dnscrypt-proxy.svg?label=Latest%20Release&style=popout)](https://github.com/dnscrypt/dnscrypt-proxy/releases/latest)  [![Build Status](https://travis-ci.com/dnscrypt/dnscrypt-proxy.svg?branch=master)](https://travis-ci.com/dnscrypt/dnscrypt-proxy?branch=master) [![#dnscrypt-proxy:matrix.org](https://img.shields.io/matrix/dnscrypt-proxy:matrix.org.svg?label=DNSCrypt-Proxy%20Matrix%20Chat&server_fqdn=matrix.org&style=popout)](https://matrix.to/#/#dnscrypt-proxy:matrix.org)
 
 ## Overview
 
