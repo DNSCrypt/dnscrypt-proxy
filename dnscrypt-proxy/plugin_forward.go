@@ -97,6 +97,9 @@ func (plugin *PluginForward) Eval(pluginsState *PluginsState, msg *dns.Msg) erro
 	if err != nil {
 		return err
 	}
+	if edns0 := respMsg.IsEdns0(); edns0 == nil || !edns0.Do() {
+		respMsg.AuthenticatedData = false
+	}
 	pluginsState.synthResponse = respMsg
 	pluginsState.action = PluginsActionSynth
 	return nil
