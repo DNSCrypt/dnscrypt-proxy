@@ -1,4 +1,4 @@
-module github.com/DNSCrypt/dnscrypt-proxy/dnscrypt-proxy
+module github.com/DNSCrypt/dnscrypt-proxy
 
 go 1.13
 
