@@ -1,3 +1,14 @@
+* Version 2.0.36
+ - New option: `block_undelegated`. When enabled, `dnscrypt-proxy` will
+directly respond to queries for locally-served zones (https://sk.tl/2QqB971U)
+and nonexistent zones that should have been kept local, but are frequently
+leaked. This reduces latency and improves privacy.
+ - Conformance: the `DO` bit is now set in synthetic responses if it was
+set in a question, and the `AD` bit is cleared.
+ - The `miegkg/dns` module was updated to version 1.1.25, that fixes a
+security issue affecting non-encrypted/non-authenticated DNS traffic. In
+`dnscrypt-proxy`, this only affects the forwarding feature.
+
 * Version 2.0.35
  - New option: `block_unqualified` to block `A`/`AAAA` queries with
 unqualified host names. These will very rarely get an answer from upstream
