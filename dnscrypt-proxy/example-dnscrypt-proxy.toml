@@ -258,11 +258,15 @@ log_files_max_backups = 1
 #        Filters        #
 #########################
 
+## Note: if you are using dnsmasq, disable the `dnssec` option in dnsmasq if you
+## configure dnscrypt-proxy to do any kind of filtering (including the filters
+## below and blacklists).
+## But you can still choose resolvers that do DNSSEC validation.
+
+
 ## Immediately respond to IPv6-related queries with an empty response
 ## This makes things faster when there is no IPv6 connectivity, but can
 ## also cause reliability issues with some stub resolvers.
-## Do not enable if you added a validating resolver such as dnsmasq in front
-## of the proxy.
 
 block_ipv6 = false
 
