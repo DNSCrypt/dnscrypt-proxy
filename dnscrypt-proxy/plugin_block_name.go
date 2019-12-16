@@ -110,7 +110,7 @@ func (plugin *PluginBlockName) Init(proxy *Proxy) error {
 		}
 		var weeklyRanges *WeeklyRanges
 		if len(timeRangeName) > 0 {
-			weeklyRangesX, ok := (*blockedNames.allWeeklyRanges)[timeRangeName]
+			weeklyRangesX, ok := (*xBlockedNames.allWeeklyRanges)[timeRangeName]
 			if !ok {
 				dlog.Errorf("Time range [%s] not found at line %d", timeRangeName, 1+lineNo)
 			} else {
