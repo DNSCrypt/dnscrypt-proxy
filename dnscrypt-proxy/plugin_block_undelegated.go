@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/k-sone/critbitgo"
 	"github.com/miekg/dns"
 )
 
@@ -147,7 +148,7 @@ var undelegatedSet = []string{
 }
 
 type PluginBlockUndelegated struct {
-	patternMatcher *PatternMatcher
+	suffixes *critbitgo.Trie
 }
 
 func (plugin *PluginBlockUndelegated) Name() string {
@@ -159,10 +160,12 @@ func (plugin *PluginBlockUndelegated) Description() string {
 }
 
 func (plugin *PluginBlockUndelegated) Init(proxy *Proxy) error {
-	plugin.patternMatcher = NewPatternPatcher()
-	for lineNo, line := range undelegatedSet {
-		plugin.patternMatcher.Add(line, "", 1+lineNo)
+	suffixes := critbitgo.NewTrie()
+	for _, line := range undelegatedSet {
+		pattern := StringReverse(line + ".")
+		suffixes.Insert([]byte(pattern), true)
 	}
+	plugin.suffixes = suffixes
 	return nil
 }
 
@@ -179,15 +182,15 @@ func (plugin *PluginBlockUndelegated) Eval(pluginsState *PluginsState, msg *dns.
 	if len(questions) != 1 {
 		return nil
 	}
-	qName := StripTrailingDot(questions[0].Name)
-	if reject, _, _ := plugin.patternMatcher.Eval(qName); !reject {
-		return nil
+	revQname := StringReverse(questions[0].Name)
+	if match, _, found := plugin.suffixes.LongestPrefix([]byte(revQname)); found {
+		if len(match) == len(revQname) || revQname[len(match)] == '.' {
+			synth := EmptyResponseFromMessage(msg)
+			synth.Rcode = dns.RcodeNameError
+			pluginsState.synthResponse = synth
+			pluginsState.action = PluginsActionSynth
+			pluginsState.returnCode = PluginsReturnCodeSynth
+		}
 	}
-	synth := EmptyResponseFromMessage(msg)
-	synth.Rcode = dns.RcodeNameError
-	pluginsState.synthResponse = synth
-	pluginsState.action = PluginsActionSynth
-	pluginsState.returnCode = PluginsReturnCodeSynth
-
 	return nil
 }
