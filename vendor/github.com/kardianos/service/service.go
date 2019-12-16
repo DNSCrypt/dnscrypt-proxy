@@ -77,6 +77,8 @@ const (
 	optionSessionCreateDefault = false
 	optionLogOutput            = "LogOutput"
 	optionLogOutputDefault     = false
+	optionPrefix               = "Prefix"
+	optionPrefixDefault        = "application"
 
 	optionRunWait      = "RunWait"
 	optionReloadSignal = "ReloadSignal"
@@ -141,7 +143,7 @@ type Config struct {
 	//    - RunWait       func() (wait for SIGNAL)  - Do not install signal but wait for this function to return.
 	//    - ReloadSignal  string () [USR1, ...]     - Signal to send on reaload.
 	//    - PIDFile       string () [/run/prog.pid] - Location of the PID file.
-	//    - LogOutput     bool   (false)            - Redirect StdErr & StdOut to files.
+	//    - LogOutput     bool   (false)            - Redirect StdErr & StandardOutPath to files.
 	//    - Restart       string (always)           - How shall service be restarted.
 	//    - SuccessExitStatus string ()             - The list of exit status that shall be considered as successful,
 	//                                                in addition to the default ones.
