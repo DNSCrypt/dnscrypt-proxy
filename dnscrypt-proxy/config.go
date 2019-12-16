@@ -47,6 +47,7 @@ type Config struct {
 	LBEstimator              bool   `toml:"lb_estimator"`
 	BlockIPv6                bool   `toml:"block_ipv6"`
 	BlockUnqualified         bool   `toml:"block_unqualified"`
+	BlockUndelegated         bool   `toml:"block_undelegated"`
 	Cache                    bool
 	CacheSize                int                         `toml:"cache_size"`
 	CacheNegTTL              uint32                      `toml:"cache_neg_ttl"`
@@ -371,6 +372,7 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	proxy.daemonize = config.Daemonize
 	proxy.pluginBlockIPv6 = config.BlockIPv6
 	proxy.pluginBlockUnqualified = config.BlockUnqualified
+	proxy.pluginBlockUndelegated = config.BlockUndelegated
 	proxy.cache = config.Cache
 	proxy.cacheSize = config.CacheSize
 

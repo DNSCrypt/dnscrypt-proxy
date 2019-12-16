@@ -40,6 +40,7 @@ type Proxy struct {
 	registeredRelays              []RegisteredServer
 	pluginBlockIPv6               bool
 	pluginBlockUnqualified        bool
+	pluginBlockUndelegated        bool
 	cache                         bool
 	cacheSize                     int
 	cacheNegMinTTL                uint32

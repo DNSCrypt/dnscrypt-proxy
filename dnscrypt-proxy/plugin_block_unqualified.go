@@ -38,7 +38,7 @@ func (plugin *PluginBlockUnqualified) Eval(pluginsState *PluginsState, msg *dns.
 	if question.Qclass != dns.ClassINET || (question.Qtype != dns.TypeA && question.Qtype != dns.TypeAAAA) {
 		return nil
 	}
-	qName := questions[0].Name
+	qName := question.Name
 	idx := strings.IndexByte(qName, '.')
 	if idx == -1 || (idx == 0 || idx+1 != len(qName)) {
 		return nil

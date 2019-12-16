@@ -272,6 +272,12 @@ block_ipv6 = false
 block_unqualified = true
 
 
+## Immediately respond to queries for local zones instead of leaking them to
+## upstream resolvers (always causing errors or timeouts).
+
+block_undelegated = true
+
+
 ## TTL for synthetic responses sent when a request has been blocked (due to
 ## IPv6 or blacklists).
 

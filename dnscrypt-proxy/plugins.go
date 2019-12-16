@@ -118,6 +118,9 @@ func (proxy *Proxy) InitPluginsGlobals() error {
 	if proxy.pluginBlockUnqualified {
 		*queryPlugins = append(*queryPlugins, Plugin(new(PluginBlockUnqualified)))
 	}
+	if proxy.pluginBlockUndelegated {
+		*queryPlugins = append(*queryPlugins, Plugin(new(PluginBlockUndelegated)))
+	}
 
 	responsePlugins := &[]Plugin{}
 	if len(proxy.nxLogFile) != 0 {
