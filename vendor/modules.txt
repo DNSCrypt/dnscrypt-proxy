@@ -6,7 +6,10 @@ github.com/VividCortex/ewma
 github.com/aead/chacha20/chacha
 # github.com/aead/poly1305 v0.0.0-20180717145839-3fee0db0b635
 github.com/aead/poly1305
-# github.com/coreos/go-systemd v0.0.0-20190719114852-fd7a80b32e1f
+# github.com/agl/ed25519 v0.0.0-20170116200512-5312a6153412
+github.com/agl/ed25519
+github.com/agl/ed25519/edwards25519
+# github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf
 github.com/coreos/go-systemd/activation
 github.com/coreos/go-systemd/daemon
 # github.com/davecgh/go-spew v1.1.1
@@ -39,7 +42,7 @@ github.com/jedisct1/go-minisign
 github.com/jedisct1/xsecretbox
 # github.com/k-sone/critbitgo v1.4.0
 github.com/k-sone/critbitgo
-# github.com/kardianos/service v1.0.1-0.20191017145738-4df36c9fc1c6
+# github.com/kardianos/service v1.0.1-0.20191211031725-3c356ae54c8a
 github.com/kardianos/service
 # github.com/miekg/dns v1.1.25
 github.com/miekg/dns

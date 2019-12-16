@@ -2,7 +2,7 @@
 // Use of this source code is governed by a zlib-style
 // license that can be found in the LICENSE file.
 
-// +build linux darwin
+// +build linux darwin solaris aix
 
 package service
 
