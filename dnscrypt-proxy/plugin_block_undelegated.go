@@ -183,7 +183,7 @@ func (plugin *PluginBlockUndelegated) Eval(pluginsState *PluginsState, msg *dns.
 	if len(questions) != 1 {
 		return nil
 	}
-	revQname := StringReverse(strings.ToLower(questions[0].Name))
+	revQname := strings.ToLower(StringReverse(questions[0].Name))
 	match, _, found := plugin.suffixes.LongestPrefix([]byte(revQname))
 	if !found {
 		return nil
