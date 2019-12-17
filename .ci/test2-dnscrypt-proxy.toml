@@ -1,0 +1,67 @@
+server_names = ['public-scaleway-fr']
+listen_addresses = ['127.0.0.1:5300']
+require_dnssec = true
+dnscrypt_ephemeral_keys = true
+tls_disable_session_tickets = false
+ignore_system_dns = false
+block_ipv6 = true
+block_unqualified = true
+block_undelegated = true
+forwarding_rules = 'forwarding-rules.txt'
+cloaking_rules = 'cloaking-rules.txt'
+cache = true
+
+[local_doh]
+listen_addresses = ['127.0.0.1:3000']
+cert_file = "../dnscrypt-proxy/localhost.pem"
+cert_key_file = "../dnscrypt-proxy/localhost.pem"
+
+[query_log]
+file = 'query.log'
+
+[nx_log]
+file = 'nx.log'
+
+[blacklist]
+blacklist_file = 'blacklist.txt'
+log_file = 'blocked.log'
+
+[ip_blacklist]
+blacklist_file = 'ip-blacklist.txt'
+log_file = 'ip-blocked.log'
+
+[whitelist]
+whitelist_file = 'whitelist.txt'
+log_file = 'whitelisted.log'
+
+[schedules]
+
+  [schedules.'time-to-sleep']
+  mon = [{after='21:00', before='7:00'}]
+  tue = [{after='21:00', before='7:00'}]
+  wed = [{after='21:00', before='7:00'}]
+  thu = [{after='21:00', before='7:00'}]
+  fri = [{after='23:00', before='7:00'}]
+  sat = [{after='23:00', before='7:00'}]
+  sun = [{after='21:00', before='7:00'}]
+
+  [schedules.'work']
+  mon = [{after='9:00', before='18:00'}]
+  tue = [{after='9:00', before='18:00'}]
+  wed = [{after='9:00', before='18:00'}]
+  thu = [{after='9:00', before='18:00'}]
+  fri = [{after='9:00', before='17:00'}]
+
+[sources]
+  [sources.'public-resolvers']
+  urls = ['https://raw.githubusercontent.com/DNSCrypt/dnscrypt-resolvers/master/v2/public-resolvers.md', 'https://download.dnscrypt.info/resolvers-list/v2/public-resolvers.md']
+  cache_file = 'public-resolvers.md'
+  minisign_key = 'RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3'
+  prefix = 'public-'
+
+  [sources.'relays']
+  urls = ['https://raw.githubusercontent.com/DNSCrypt/dnscrypt-resolvers/master/v2/relays.md', 'https://download.dnscrypt.info/resolvers-list/v2/relays.md']
+  cache_file = 'relays.md'
+  minisign_key = 'RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3'
+  refresh_delay = 72
+  prefix = 'relay-'

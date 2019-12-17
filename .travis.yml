@@ -13,7 +13,10 @@ addons:
 script:
 - gimme --list
 - echo $TRAVIS_GO_VERSION
-- cd dnscrypt-proxy
+
+- cd .ci
+- ./ci-test.sh || travis_terminate 1
+- cd ../dnscrypt-proxy
 
 - go clean
 - env GOOS=windows GOARCH=386 go build -mod vendor -ldflags="-s -w"

@@ -1,0 +1,17 @@
+ad.*
+ads.*
+banner.*
+banners.*
+creatives.*
+oas.*
+oascentral.*
+stats.*
+tag.*
+telemetry.*
+tracker.*
+*.local
+eth0.me
+*.workgroup
+
+*.youtube.*  @time-to-sleep
+facebook.com @work
