@@ -48,6 +48,10 @@ section
 sleep 5
 
 section
+t || dig -p${DNS_PORT} A microsoft.com @127.0.0.1 | grep -Fq "NOERROR" || fail
+t || dig -p${DNS_PORT} A MICROSOFT.COM @127.0.0.1 | grep -Fq "NOERROR" || fail
+
+section
 t || dig -p${DNS_PORT} AAAA ipv6.google.com @127.0.0.1 | grep -Fq 'locally blocked' || fail
 
 section
@@ -101,6 +105,8 @@ section
 t || grep -Fq 'a.www.dnscrypt-test' nx.log || fail
 
 section
+t || grep -Eq 'microsoft.com.*PASS.*[^-]$' query.log || fail
+t || grep -Eq 'microsoft.com.*PASS.*-$' query.log || fail
 t || grep -Eq 'ipv6.google.com.*SYNTH' query.log || fail
 t || grep -Eq 'invalid.*SYNTH' query.log || fail
 t || grep -Eq '168.192.in-addr.arpa.*SYNTH' query.log || fail
