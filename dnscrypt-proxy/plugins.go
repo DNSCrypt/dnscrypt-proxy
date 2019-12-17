@@ -14,11 +14,11 @@ import (
 type PluginsAction int
 
 const (
-	PluginsActionNone    = 0
-	PluginsActionForward = 1
-	PluginsActionDrop    = 2
-	PluginsActionReject  = 3
-	PluginsActionSynth   = 4
+	PluginsActionNone     = 0
+	PluginsActionContinue = 1
+	PluginsActionDrop     = 2
+	PluginsActionReject   = 3
+	PluginsActionSynth    = 4
 )
 
 type PluginsGlobals struct {
@@ -225,7 +225,7 @@ type Plugin interface {
 
 func NewPluginsState(proxy *Proxy, clientProto string, clientAddr *net.Addr, start time.Time) PluginsState {
 	return PluginsState{
-		action:                           PluginsActionForward,
+		action:                           PluginsActionContinue,
 		returnCode:                       PluginsReturnCodePass,
 		maxPayloadSize:                   MaxDNSUDPPacketSize - ResponseOverhead,
 		clientProto:                      clientProto,
@@ -245,7 +245,6 @@ func NewPluginsState(proxy *Proxy, clientProto string, clientAddr *net.Addr, sta
 
 func (pluginsState *PluginsState) ApplyQueryPlugins(pluginsGlobals *PluginsGlobals, packet []byte, serverName string) ([]byte, error) {
 	pluginsState.serverName = serverName
-	pluginsState.action = PluginsActionForward
 	msg := dns.Msg{}
 	if err := msg.Unpack(packet); err != nil {
 		return packet, err
@@ -273,7 +272,7 @@ func (pluginsState *PluginsState) ApplyQueryPlugins(pluginsGlobals *PluginsGloba
 			synth := RefusedResponseFromMessage(&msg, pluginsGlobals.refusedCodeInResponses, pluginsGlobals.respondWithIPv4, pluginsGlobals.respondWithIPv6, pluginsState.rejectTTL)
 			pluginsState.synthResponse = synth
 		}
-		if pluginsState.action != PluginsActionForward {
+		if pluginsState.action != PluginsActionContinue {
 			break
 		}
 	}
@@ -288,7 +287,6 @@ func (pluginsState *PluginsState) ApplyResponsePlugins(pluginsGlobals *PluginsGl
 	if len(*pluginsGlobals.responsePlugins) == 0 && len(*pluginsGlobals.loggingPlugins) == 0 {
 		return packet, nil
 	}
-	pluginsState.action = PluginsActionForward
 	msg := dns.Msg{Compress: true}
 	if err := msg.Unpack(packet); err != nil {
 		if len(packet) >= MinDNSPacketSize && HasTCFlag(packet) {
@@ -317,7 +315,7 @@ func (pluginsState *PluginsState) ApplyResponsePlugins(pluginsGlobals *PluginsGl
 			synth := RefusedResponseFromMessage(&msg, pluginsGlobals.refusedCodeInResponses, pluginsGlobals.respondWithIPv4, pluginsGlobals.respondWithIPv6, pluginsState.rejectTTL)
 			pluginsState.synthResponse = synth
 		}
-		if pluginsState.action != PluginsActionForward {
+		if pluginsState.action != PluginsActionContinue {
 			break
 		}
 	}

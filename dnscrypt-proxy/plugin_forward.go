@@ -98,5 +98,6 @@ func (plugin *PluginForward) Eval(pluginsState *PluginsState, msg *dns.Msg) erro
 	}
 	pluginsState.synthResponse = respMsg
 	pluginsState.action = PluginsActionSynth
+	pluginsState.returnCode = PluginsReturnCodeForward
 	return nil
 }
