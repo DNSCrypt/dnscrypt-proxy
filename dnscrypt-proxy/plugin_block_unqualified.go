@@ -30,17 +30,11 @@ func (plugin *PluginBlockUnqualified) Reload() error {
 }
 
 func (plugin *PluginBlockUnqualified) Eval(pluginsState *PluginsState, msg *dns.Msg) error {
-	questions := msg.Question
-	if len(questions) != 1 {
-		return nil
-	}
-	question := questions[0]
+	question := msg.Question[0]
 	if question.Qclass != dns.ClassINET || (question.Qtype != dns.TypeA && question.Qtype != dns.TypeAAAA) {
 		return nil
 	}
-	qName := question.Name
-	idx := strings.IndexByte(qName, '.')
-	if idx == -1 || (idx == 0 || idx+1 != len(qName)) {
+	if strings.IndexByte(pluginsState.qName, '.') >= 0 {
 		return nil
 	}
 	synth := EmptyResponseFromMessage(msg)

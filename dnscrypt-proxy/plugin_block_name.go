@@ -25,10 +25,9 @@ const aliasesLimit = 8
 var blockedNames *BlockedNames
 
 func (blockedNames *BlockedNames) check(pluginsState *PluginsState, qName string, aliasFor *string) (bool, error) {
-	qName = strings.ToLower(StripTrailingDot(qName))
 	reject, reason, xweeklyRanges := blockedNames.patternMatcher.Eval(qName)
 	if aliasFor != nil {
-		reason = reason + " (alias for [" + StripTrailingDot(*aliasFor) + "])"
+		reason = reason + " (alias for [" + *aliasFor + "])"
 	}
 	var weeklyRanges *WeeklyRanges
 	if xweeklyRanges != nil {
@@ -144,11 +143,7 @@ func (plugin *PluginBlockName) Eval(pluginsState *PluginsState, msg *dns.Msg) er
 	if blockedNames == nil || pluginsState.sessionData["whitelisted"] != nil {
 		return nil
 	}
-	questions := msg.Question
-	if len(questions) != 1 {
-		return nil
-	}
-	_, err := blockedNames.check(pluginsState, questions[0].Name, nil)
+	_, err := blockedNames.check(pluginsState, pluginsState.qName, nil)
 	return err
 }
 
@@ -181,11 +176,7 @@ func (plugin *PluginBlockNameResponse) Eval(pluginsState *PluginsState, msg *dns
 	if blockedNames == nil || pluginsState.sessionData["whitelisted"] != nil {
 		return nil
 	}
-	questions := msg.Question
-	if len(questions) != 1 {
-		return nil
-	}
-	aliasFor := questions[0].Name
+	aliasFor := pluginsState.qName
 	aliasesLeft := aliasesLimit
 	answers := msg.Answer
 	for _, answer := range answers {
@@ -193,7 +184,11 @@ func (plugin *PluginBlockNameResponse) Eval(pluginsState *PluginsState, msg *dns
 		if header.Class != dns.ClassINET || header.Rrtype != dns.TypeCNAME {
 			continue
 		}
-		if blocked, err := blockedNames.check(pluginsState, answer.(*dns.CNAME).Target, &aliasFor); blocked || err != nil {
+		target, err := NormalizeQName(answer.(*dns.CNAME).Target)
+		if err != nil {
+			return err
+		}
+		if blocked, err := blockedNames.check(pluginsState, target, &aliasFor); blocked || err != nil {
 			return err
 		}
 		aliasesLeft--

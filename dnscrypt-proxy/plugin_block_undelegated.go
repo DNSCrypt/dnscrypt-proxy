@@ -3,7 +3,6 @@ package main
 import (
 	"github.com/k-sone/critbitgo"
 	"github.com/miekg/dns"
-	"strings"
 )
 
 var undelegatedSet = []string{
@@ -179,11 +178,7 @@ func (plugin *PluginBlockUndelegated) Reload() error {
 }
 
 func (plugin *PluginBlockUndelegated) Eval(pluginsState *PluginsState, msg *dns.Msg) error {
-	questions := msg.Question
-	if len(questions) != 1 {
-		return nil
-	}
-	revQname := strings.ToLower(StringReverse(questions[0].Name))
+	revQname := StringReverse(pluginsState.qName)
 	match, _, found := plugin.suffixes.LongestPrefix([]byte(revQname))
 	if !found {
 		return nil

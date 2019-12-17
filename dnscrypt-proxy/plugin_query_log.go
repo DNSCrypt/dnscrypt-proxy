@@ -43,11 +43,7 @@ func (plugin *PluginQueryLog) Reload() error {
 }
 
 func (plugin *PluginQueryLog) Eval(pluginsState *PluginsState, msg *dns.Msg) error {
-	questions := msg.Question
-	if len(questions) == 0 {
-		return nil
-	}
-	question := questions[0]
+	question := msg.Question[0]
 	qType, ok := dns.TypeToString[question.Qtype]
 	if !ok {
 		qType = string(qType)
@@ -65,7 +61,7 @@ func (plugin *PluginQueryLog) Eval(pluginsState *PluginsState, msg *dns.Msg) err
 	} else {
 		clientIPStr = (*pluginsState.clientAddr).(*net.TCPAddr).IP.String()
 	}
-	qName := StripTrailingDot(question.Name)
+	qName := pluginsState.qName
 
 	if pluginsState.cacheHit {
 		pluginsState.serverName = "-"

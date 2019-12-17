@@ -29,11 +29,7 @@ func (plugin *PluginBlockIPv6) Reload() error {
 }
 
 func (plugin *PluginBlockIPv6) Eval(pluginsState *PluginsState, msg *dns.Msg) error {
-	questions := msg.Question
-	if len(questions) != 1 {
-		return nil
-	}
-	question := questions[0]
+	question := msg.Question[0]
 	if question.Qclass != dns.ClassINET || question.Qtype != dns.TypeAAAA {
 		return nil
 	}

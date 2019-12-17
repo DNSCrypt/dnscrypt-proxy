@@ -71,19 +71,15 @@ func (plugin *PluginForward) Reload() error {
 }
 
 func (plugin *PluginForward) Eval(pluginsState *PluginsState, msg *dns.Msg) error {
-	questions := msg.Question
-	if len(questions) != 1 {
-		return nil
-	}
-	question := strings.ToLower(StripTrailingDot(questions[0].Name))
-	questionLen := len(question)
+	qName := pluginsState.qName
+	qNameLen := len(qName)
 	var servers []string
 	for _, candidate := range plugin.forwardMap {
 		candidateLen := len(candidate.domain)
-		if candidateLen > questionLen {
+		if candidateLen > qNameLen {
 			continue
 		}
-		if question[questionLen-candidateLen:] == candidate.domain && (candidateLen == questionLen || (question[questionLen-candidateLen-1] == '.')) {
+		if qName[qNameLen-candidateLen:] == candidate.domain && (candidateLen == qNameLen || (qName[qNameLen-candidateLen-1] == '.')) {
 			servers = candidate.servers
 			break
 		}

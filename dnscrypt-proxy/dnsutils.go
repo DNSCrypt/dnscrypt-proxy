@@ -2,9 +2,11 @@ package main
 
 import (
 	"encoding/binary"
+	"errors"
 	"net"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/miekg/dns"
 )
@@ -42,36 +44,37 @@ func RefusedResponseFromMessage(srcMsg *dns.Msg, refusedCode bool, ipv4 net.IP, 
 	} else {
 		dstMsg.Rcode = dns.RcodeSuccess
 		questions := srcMsg.Question
-		if len(questions) > 0 {
-			question := questions[0]
-			sendHInfoResponse := true
+		if len(questions) == 0 {
+			return dstMsg
+		}
+		question := questions[0]
+		sendHInfoResponse := true
 
-			if ipv4 != nil && question.Qtype == dns.TypeA {
-				rr := new(dns.A)
-				rr.Hdr = dns.RR_Header{Name: question.Name, Rrtype: dns.TypeA, Class: dns.ClassINET, Ttl: ttl}
-				rr.A = ipv4.To4()
-				if rr.A != nil {
-					dstMsg.Answer = []dns.RR{rr}
-					sendHInfoResponse = false
-				}
-			} else if ipv6 != nil && question.Qtype == dns.TypeAAAA {
-				rr := new(dns.AAAA)
-				rr.Hdr = dns.RR_Header{Name: question.Name, Rrtype: dns.TypeAAAA, Class: dns.ClassINET, Ttl: ttl}
-				rr.AAAA = ipv6.To16()
-				if rr.AAAA != nil {
-					dstMsg.Answer = []dns.RR{rr}
-					sendHInfoResponse = false
-				}
+		if ipv4 != nil && question.Qtype == dns.TypeA {
+			rr := new(dns.A)
+			rr.Hdr = dns.RR_Header{Name: question.Name, Rrtype: dns.TypeA, Class: dns.ClassINET, Ttl: ttl}
+			rr.A = ipv4.To4()
+			if rr.A != nil {
+				dstMsg.Answer = []dns.RR{rr}
+				sendHInfoResponse = false
 			}
+		} else if ipv6 != nil && question.Qtype == dns.TypeAAAA {
+			rr := new(dns.AAAA)
+			rr.Hdr = dns.RR_Header{Name: question.Name, Rrtype: dns.TypeAAAA, Class: dns.ClassINET, Ttl: ttl}
+			rr.AAAA = ipv6.To16()
+			if rr.AAAA != nil {
+				dstMsg.Answer = []dns.RR{rr}
+				sendHInfoResponse = false
+			}
+		}
 
-			if sendHInfoResponse {
-				hinfo := new(dns.HINFO)
-				hinfo.Hdr = dns.RR_Header{Name: question.Name, Rrtype: dns.TypeHINFO,
-					Class: dns.ClassINET, Ttl: 1}
-				hinfo.Cpu = "This query has been locally blocked"
-				hinfo.Os = "by dnscrypt-proxy"
-				dstMsg.Answer = []dns.RR{hinfo}
-			}
+		if sendHInfoResponse {
+			hinfo := new(dns.HINFO)
+			hinfo.Hdr = dns.RR_Header{Name: question.Name, Rrtype: dns.TypeHINFO,
+				Class: dns.ClassINET, Ttl: 1}
+			hinfo.Cpu = "This query has been locally blocked"
+			hinfo.Os = "by dnscrypt-proxy"
+			dstMsg.Answer = []dns.RR{hinfo}
 		}
 	}
 	return dstMsg
@@ -93,7 +96,7 @@ func Rcode(packet []byte) uint8 {
 	return packet[3] & 0xf
 }
 
-func NormalizeName(name *[]byte) {
+func NormalizeRawQName(name *[]byte) {
 	for i, c := range *name {
 		if c >= 65 && c <= 90 {
 			(*name)[i] = c + 32
@@ -101,11 +104,33 @@ func NormalizeName(name *[]byte) {
 	}
 }
 
-func StripTrailingDot(str string) string {
-	if len(str) > 1 && strings.HasSuffix(str, ".") {
-		str = str[:len(str)-1]
+func NormalizeQName(str string) (string, error) {
+	if len(str) == 0 || str == "." {
+		return ".", nil
 	}
-	return str
+	hasUpper := false
+	str = strings.TrimSuffix(str, ".")
+	strLen := len(str)
+	for i := 0; i < strLen; i++ {
+		c := str[i]
+		if c >= utf8.RuneSelf {
+			return str, errors.New("Query name is not an ASCII string")
+		}
+		hasUpper = hasUpper || ('A' <= c && c <= 'Z')
+	}
+	if !hasUpper {
+		return str, nil
+	}
+	var b strings.Builder
+	b.Grow(len(str))
+	for i := 0; i < strLen; i++ {
+		c := str[i]
+		if 'A' <= c && c <= 'Z' {
+			c += 'a' - 'A'
+		}
+		b.WriteByte(c)
+	}
+	return b.String(), nil
 }
 
 func getMinTTL(msg *dns.Msg, minTTL uint32, maxTTL uint32, cacheNegMinTTL uint32, cacheNegMaxTTL uint32) time.Duration {

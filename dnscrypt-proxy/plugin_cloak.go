@@ -100,21 +100,13 @@ func (plugin *PluginCloak) Reload() error {
 }
 
 func (plugin *PluginCloak) Eval(pluginsState *PluginsState, msg *dns.Msg) error {
-	questions := msg.Question
-	if len(questions) != 1 {
-		return nil
-	}
-	question := questions[0]
+	question := msg.Question[0]
 	if question.Qclass != dns.ClassINET || (question.Qtype != dns.TypeA && question.Qtype != dns.TypeAAAA) {
-		return nil
-	}
-	qName := strings.ToLower(StripTrailingDot(questions[0].Name))
-	if len(qName) < 2 {
 		return nil
 	}
 	now := time.Now()
 	plugin.RLock()
-	_, _, xcloakedName := plugin.patternMatcher.Eval(qName)
+	_, _, xcloakedName := plugin.patternMatcher.Eval(pluginsState.qName)
 	if xcloakedName == nil {
 		plugin.RUnlock()
 		return nil

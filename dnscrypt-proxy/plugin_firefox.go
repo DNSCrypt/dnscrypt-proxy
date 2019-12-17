@@ -34,16 +34,12 @@ func (plugin *PluginFirefox) Reload() error {
 }
 
 func (plugin *PluginFirefox) Eval(pluginsState *PluginsState, msg *dns.Msg) error {
-	questions := msg.Question
-	if len(questions) != 1 {
-		return nil
-	}
-	question := questions[0]
+	question := msg.Question[0]
 	if question.Qclass != dns.ClassINET || (question.Qtype != dns.TypeA && question.Qtype != dns.TypeAAAA) {
 		return nil
 	}
-	qName := strings.ToLower(question.Name)
-	if qName != "use-application-dns.net." && !strings.HasSuffix(qName, ".use-application-dns.net.") {
+	qName := pluginsState.qName
+	if qName != "use-application-dns.net" && !strings.HasSuffix(qName, ".use-application-dns.net") {
 		return nil
 	}
 	synth := EmptyResponseFromMessage(msg)
