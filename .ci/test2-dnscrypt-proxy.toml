@@ -12,7 +12,7 @@ cloaking_rules = 'cloaking-rules.txt'
 cache = true
 
 [local_doh]
-listen_addresses = ['127.0.0.1:3000']
+listen_addresses = ['127.0.0.1:3053']
 cert_file = "../dnscrypt-proxy/localhost.pem"
 cert_key_file = "../dnscrypt-proxy/localhost.pem"
 

@@ -1,7 +1,7 @@
 #! /bin/sh
 
 DNS_PORT=5300
-HTTP_PORT=3000
+HTTP_PORT=3053
 TEST_COUNT=0
 
 exec 2>error.log
@@ -24,7 +24,8 @@ rm -f blocked.log ip-blocked.log query.log nx.log whitelisted.log
 
 t || (
     cd ../dnscrypt-proxy
-    go build -mod vendor
+    go test -mod vendor
+    go build -mod vendor -race
 ) || fail
 
 section
