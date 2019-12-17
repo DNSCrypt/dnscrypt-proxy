@@ -442,23 +442,19 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 	if len(query) < MinDNSPacketSize || len(query) > MaxDNSPacketSize {
 		return
 	}
+	if pluginsState.action == PluginsActionDrop {
+		pluginsState.returnCode = PluginsReturnCodeDrop
+		pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
+		return
+	}
 	var err error
-	if pluginsState.action != PluginsActionForward {
-		if pluginsState.synthResponse != nil {
-			response, err = pluginsState.synthResponse.PackBuffer(response)
-			if err != nil {
-				pluginsState.returnCode = PluginsReturnCodeParseError
-				pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
-				return
-			}
-		}
-		if pluginsState.action == PluginsActionDrop {
-			pluginsState.returnCode = PluginsReturnCodeDrop
+	if pluginsState.synthResponse != nil {
+		response, err = pluginsState.synthResponse.PackBuffer(response)
+		if err != nil {
+			pluginsState.returnCode = PluginsReturnCodeParseError
 			pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
 			return
 		}
-	} else {
-		pluginsState.returnCode = PluginsReturnCodeForward
 	}
 	if len(response) == 0 && serverInfo != nil {
 		var ttl *uint32
@@ -532,6 +528,19 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 			pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
 			serverInfo.noticeFailure(proxy)
 			return
+		}
+		if pluginsState.action == PluginsActionDrop {
+			pluginsState.returnCode = PluginsReturnCodeDrop
+			pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
+			return
+		}
+		if pluginsState.synthResponse != nil {
+			response, err = pluginsState.synthResponse.PackBuffer(response)
+			if err != nil {
+				pluginsState.returnCode = PluginsReturnCodeParseError
+				pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
+				return
+			}
 		}
 		if rcode := Rcode(response); rcode == dns.RcodeServerFailure { // SERVFAIL
 			dlog.Infof("Server [%v] returned temporary error code [%v] -- Upstream server may be experiencing connectivity issues", serverInfo.Name, rcode)

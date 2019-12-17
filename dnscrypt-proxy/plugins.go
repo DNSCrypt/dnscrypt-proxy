@@ -226,6 +226,7 @@ type Plugin interface {
 func NewPluginsState(proxy *Proxy, clientProto string, clientAddr *net.Addr, start time.Time) PluginsState {
 	return PluginsState{
 		action:                           PluginsActionForward,
+		returnCode:                       PluginsReturnCodeForward,
 		maxPayloadSize:                   MaxDNSUDPPacketSize - ResponseOverhead,
 		clientProto:                      clientProto,
 		clientAddr:                       clientAddr,
