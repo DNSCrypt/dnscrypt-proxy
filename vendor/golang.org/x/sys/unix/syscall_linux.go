@@ -1631,6 +1631,17 @@ func Getpgrp() (pid int) {
 //sysnb	Settimeofday(tv *Timeval) (err error)
 //sys	Setns(fd int, nstype int) (err error)
 
+// PrctlRetInt performs a prctl operation specified by option and further
+// optional arguments arg2 through arg5 depending on option. It returns a
+// non-negative integer that is returned by the prctl syscall.
+func PrctlRetInt(option int, arg2 uintptr, arg3 uintptr, arg4 uintptr, arg5 uintptr) (int, error) {
+	ret, _, err := Syscall6(SYS_PRCTL, uintptr(option), uintptr(arg2), uintptr(arg3), uintptr(arg4), uintptr(arg5), 0)
+	if err != 0 {
+		return 0, err
+	}
+	return int(ret), nil
+}
+
 // issue 1435.
 // On linux Setuid and Setgid only affects the current thread, not the process.
 // This does not match what most callers expect so we must return an error
