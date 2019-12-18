@@ -8,6 +8,7 @@ cdn.optimizely.com
 cdnetworks.com
 cdninstagram.com
 cloudapp.net
+cdn.cloudflare.net
 download.dnscrypt.info
 edgekey.net
 edgesuite.net
