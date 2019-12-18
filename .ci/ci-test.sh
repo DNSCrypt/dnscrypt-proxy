@@ -1,7 +1,7 @@
 #! /bin/sh
 
 DNS_PORT=5300
-HTTP_PORT=3000
+HTTP_PORT=3053
 TEST_COUNT=0
 
 exec 2>error.log
@@ -24,7 +24,8 @@ rm -f blocked.log ip-blocked.log query.log nx.log whitelisted.log
 
 t || (
     cd ../dnscrypt-proxy
-    go build -mod vendor
+    go test -mod vendor
+    go build -mod vendor -race
 ) || fail
 
 section
@@ -81,8 +82,8 @@ t || dig -p${DNS_PORT} tracker.xdebian.org @127.0.0.1 | grep -Fq 'locally blocke
 t || dig -p${DNS_PORT} tracker.debian.org @127.0.0.1 | grep -Fqv 'locally blocked' || fail
 
 section
-t || curl --insecure -siL https://127.0.0.1:3000/ | grep -Fq '404 Not Found' || fail
-t || curl --insecure -sL https://127.0.0.1:3000/dns-query | grep -Fq 'dnscrypt-proxy local DoH server' || fail
+t || curl --insecure -siL https://127.0.0.1:${HTTP_PORT}/ | grep -Fq '404 Not Found' || fail
+t || curl --insecure -sL https://127.0.0.1:${HTTP_PORT}/dns-query | grep -Fq 'dnscrypt-proxy local DoH server' || fail
 
 kill $(cat /tmp/dnscrypt-proxy.pidfile)
 
