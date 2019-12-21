@@ -9,7 +9,7 @@ package unix
 import "unsafe"
 
 // fcntl64Syscall is usually SYS_FCNTL, but is overridden on 32-bit Linux
-// systems by flock_linux_32bit.go to be SYS_FCNTL64.
+// systems by fcntl_linux_32bit.go to be SYS_FCNTL64.
 var fcntl64Syscall uintptr = SYS_FCNTL
 
 // FcntlInt performs a fcntl syscall on fd with the provided command and argument.

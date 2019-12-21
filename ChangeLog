@@ -5,7 +5,7 @@ and nonexistent zones that should have been kept local, but are frequently
 leaked. This reduces latency and improves privacy.
  - Conformance: the `DO` bit is now set in synthetic responses if it was
 set in a question, and the `AD` bit is cleared.
- - The `miegkg/dns` module was updated to version 1.1.25, that fixes a
+ - The `miegkg/dns` module was updated to version 1.1.26, that fixes a
 security issue affecting non-encrypted/non-authenticated DNS traffic. In
 `dnscrypt-proxy`, this only affects the forwarding feature.
 

@@ -6,6 +6,9 @@ github.com/VividCortex/ewma
 github.com/aead/chacha20/chacha
 # github.com/aead/poly1305 v0.0.0-20180717145839-3fee0db0b635
 github.com/aead/poly1305
+# github.com/agl/ed25519 v0.0.0-20170116200512-5312a6153412
+github.com/agl/ed25519
+github.com/agl/ed25519/edwards25519
 # github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf
 github.com/coreos/go-systemd/activation
 github.com/coreos/go-systemd/daemon
@@ -41,7 +44,7 @@ github.com/jedisct1/xsecretbox
 github.com/k-sone/critbitgo
 # github.com/kardianos/service v1.0.1-0.20191211031725-3c356ae54c8a
 github.com/kardianos/service
-# github.com/miekg/dns v1.1.25
+# github.com/miekg/dns v1.1.26
 github.com/miekg/dns
 # github.com/pkg/errors v0.8.1
 github.com/pkg/errors
@@ -52,7 +55,8 @@ github.com/powerman/check
 # github.com/smartystreets/goconvey v1.6.4
 github.com/smartystreets/goconvey/convey/gotest
 github.com/smartystreets/goconvey/convey/reporting
-# golang.org/x/crypto v0.0.0-20191206172530-e9b2fee46413
+# golang.org/x/crypto v0.0.0-20191219195013-becbf705a915
+golang.org/x/crypto/blake2b
 golang.org/x/crypto/curve25519
 golang.org/x/crypto/ed25519
 golang.org/x/crypto/ed25519/internal/edwards25519
@@ -73,7 +77,7 @@ golang.org/x/net/internal/socks
 golang.org/x/net/ipv4
 golang.org/x/net/ipv6
 golang.org/x/net/proxy
-# golang.org/x/sys v0.0.0-20191218084908-4a24b4065292
+# golang.org/x/sys v0.0.0-20191220220014-0732a990476f
 golang.org/x/sys/cpu
 golang.org/x/sys/unix
 golang.org/x/sys/windows
