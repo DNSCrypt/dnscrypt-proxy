@@ -284,9 +284,6 @@ func (pluginsState *PluginsState) ApplyQueryPlugins(pluginsGlobals *PluginsGloba
 }
 
 func (pluginsState *PluginsState) ApplyResponsePlugins(pluginsGlobals *PluginsGlobals, packet []byte, ttl *uint32) ([]byte, error) {
-	if len(*pluginsGlobals.responsePlugins) == 0 && len(*pluginsGlobals.loggingPlugins) == 0 {
-		return packet, nil
-	}
 	msg := dns.Msg{Compress: true}
 	if err := msg.Unpack(packet); err != nil {
 		if len(packet) >= MinDNSPacketSize && HasTCFlag(packet) {
@@ -304,6 +301,7 @@ func (pluginsState *PluginsState) ApplyResponsePlugins(pluginsGlobals *PluginsGl
 	default:
 		pluginsState.returnCode = PluginsReturnCodeResponseError
 	}
+	removeEDNS0Options(&msg)
 	pluginsGlobals.RLock()
 	defer pluginsGlobals.RUnlock()
 	for _, plugin := range *pluginsGlobals.responsePlugins {

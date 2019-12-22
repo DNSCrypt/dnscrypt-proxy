@@ -373,7 +373,7 @@ func (xTransport *XTransport) Post(url *url.URL, accept string, contentType stri
 func (xTransport *XTransport) DoHQuery(useGet bool, url *url.URL, body []byte, timeout time.Duration) (*http.Response, time.Duration, error) {
 	padLen := 63 - (len(body)+63)&63
 	dataType := "application/dns-message"
-	paddedBody := addPaddingIfNoneFound(&body, padLen)
+	paddedBody := addEDNS0PaddingIfNoneFound(&body, padLen)
 	if useGet {
 		qs := url.Query()
 		qs.Add("ct", "")
