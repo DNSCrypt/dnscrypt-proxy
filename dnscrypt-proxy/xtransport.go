@@ -313,9 +313,6 @@ func (xTransport *XTransport) Fetch(method string, url *url.URL, accept string, 
 	if len(contentType) > 0 {
 		header["Content-Type"] = []string{contentType}
 	}
-	if padding != nil {
-		header["X-Pad"] = []string{*padding}
-	}
 	if body != nil {
 		h := sha512.Sum512(*body)
 		qs := url.Query()
@@ -323,6 +320,9 @@ func (xTransport *XTransport) Fetch(method string, url *url.URL, accept string, 
 		url2 := *url
 		url2.RawQuery = qs.Encode()
 		url = &url2
+		if padding != nil {
+			body = addPaddingIfNoneFound(body, len(*padding))
+		}
 	}
 	host, _ := ExtractHostAndPort(url.Host, 0)
 	if xTransport.proxyDialer == nil && strings.HasSuffix(host, ".onion") {
