@@ -383,6 +383,7 @@ func (xTransport *XTransport) DoHQuery(useGet bool, url *url.URL, body []byte, t
 		qs.Add("ct", "")
 		encBody := base64.RawURLEncoding.EncodeToString(body)
 		qs.Add("dns", encBody)
+		qs.Add("padding", *padding)
 		url2 := *url
 		url2.RawQuery = qs.Encode()
 		return xTransport.Get(&url2, dataType, timeout)
@@ -391,9 +392,6 @@ func (xTransport *XTransport) DoHQuery(useGet bool, url *url.URL, body []byte, t
 }
 
 func (xTransport *XTransport) makePad(padLen int) *string {
-	if padLen <= 0 {
-		return nil
-	}
 	padding := strings.Repeat("X", padLen)
 	return &padding
 }
