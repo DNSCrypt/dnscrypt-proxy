@@ -301,7 +301,7 @@ func (xTransport *XTransport) resolveAndUpdateCache(host string) error {
 	return nil
 }
 
-func (xTransport *XTransport) Fetch(method string, url *url.URL, accept string, contentType string, body *[]byte, timeout time.Duration, padding *string) (*http.Response, time.Duration, error) {
+func (xTransport *XTransport) Fetch(method string, url *url.URL, accept string, contentType string, body *[]byte, timeout time.Duration) (*http.Response, time.Duration, error) {
 	if timeout <= 0 {
 		timeout = xTransport.timeout
 	}
@@ -320,9 +320,6 @@ func (xTransport *XTransport) Fetch(method string, url *url.URL, accept string, 
 		url2 := *url
 		url2.RawQuery = qs.Encode()
 		url = &url2
-		if padding != nil {
-			body = addPaddingIfNoneFound(body, len(*padding))
-		}
 	}
 	host, _ := ExtractHostAndPort(url.Host, 0)
 	if xTransport.proxyDialer == nil && strings.HasSuffix(host, ".onion") {
@@ -366,29 +363,27 @@ func (xTransport *XTransport) Fetch(method string, url *url.URL, accept string, 
 }
 
 func (xTransport *XTransport) Get(url *url.URL, accept string, timeout time.Duration) (*http.Response, time.Duration, error) {
-	return xTransport.Fetch("GET", url, accept, "", nil, timeout, nil)
+	return xTransport.Fetch("GET", url, accept, "", nil, timeout)
 }
 
-func (xTransport *XTransport) Post(url *url.URL, accept string, contentType string, body *[]byte, timeout time.Duration, padding *string) (*http.Response, time.Duration, error) {
-
-	return xTransport.Fetch("POST", url, accept, contentType, body, timeout, padding)
+func (xTransport *XTransport) Post(url *url.URL, accept string, contentType string, body *[]byte, timeout time.Duration) (*http.Response, time.Duration, error) {
+	return xTransport.Fetch("POST", url, accept, contentType, body, timeout)
 }
 
 func (xTransport *XTransport) DoHQuery(useGet bool, url *url.URL, body []byte, timeout time.Duration) (*http.Response, time.Duration, error) {
 	padLen := 63 - (len(body)+63)&63
-	padding := xTransport.makePad(padLen)
 	dataType := "application/dns-message"
+	paddedBody := addPaddingIfNoneFound(&body, padLen)
 	if useGet {
 		qs := url.Query()
 		qs.Add("ct", "")
-		encBody := base64.RawURLEncoding.EncodeToString(body)
+		encBody := base64.RawURLEncoding.EncodeToString(*paddedBody)
 		qs.Add("dns", encBody)
-		qs.Add("padding", *padding)
 		url2 := *url
 		url2.RawQuery = qs.Encode()
 		return xTransport.Get(&url2, dataType, timeout)
 	}
-	return xTransport.Post(url, dataType, dataType, &body, timeout, padding)
+	return xTransport.Post(url, dataType, dataType, paddedBody, timeout)
 }
 
 func (xTransport *XTransport) makePad(padLen int) *string {

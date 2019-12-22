@@ -228,7 +228,8 @@ func addPaddingIfNoneFound(packet *[]byte, paddingLen int) *[]byte {
 		}
 	}
 	ext := new(dns.EDNS0_PADDING)
-	ext.Padding = make([]byte, paddingLen)
+	padding := []byte("dnscrypt-proxy.padding:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmno")
+	ext.Padding = padding[:paddingLen]
 	edns0.Option = append(edns0.Option, ext)
 	paddedPacket, err := msg.Pack()
 	if err != nil {
