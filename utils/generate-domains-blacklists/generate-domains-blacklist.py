@@ -51,7 +51,8 @@ def parse_trusted_list(content):
 def parse_list(content, trusted=False):
     rx_comment = re.compile(r"^(#|$)")
     rx_inline_comment = re.compile(r"\s*#\s*[a-z0-9-].*$")
-    rx_u = re.compile(r"^@*\|\|([a-z0-9.-]+[.][a-z]{2,})\^?(\$(popup|third-party))?$")
+    rx_u = re.compile(
+        r"^@*\|\|([a-z0-9.-]+[.][a-z]{2,})\^?(\$(popup|third-party))?$")
     rx_l = re.compile(r"^([a-z0-9.-]+[.][a-z]{2,})$")
     rx_h = re.compile(
         r"^[0-9]{1,3}[.][0-9]{1,3}[.][0-9]{1,3}[.][0-9]{1,3}\s+([a-z0-9.-]+[.][a-z]{2,})$"
@@ -108,7 +109,8 @@ def load_from_url(url):
     except urllib.URLError as err:
         raise Exception("[{}] could not be loaded: {}\n".format(url, err))
     if trusted is False and response.getcode() != 200:
-        raise Exception("[{}] returned HTTP code {}\n".format(url, response.getcode()))
+        raise Exception("[{}] returned HTTP code {}\n".format(
+            url, response.getcode()))
     content = response.read()
     if URLLIB_NEW:
         content = content.decode("utf-8", errors="replace")
@@ -248,5 +250,5 @@ whitelist = args.whitelist
 time_restricted = args.time_restricted
 ignore_retrieval_failure = args.ignore_retrieval_failure
 
-blacklists_from_config_file(conf, whitelist, time_restricted, ignore_retrieval_failure)
-
+blacklists_from_config_file(
+    conf, whitelist, time_restricted, ignore_retrieval_failure)
