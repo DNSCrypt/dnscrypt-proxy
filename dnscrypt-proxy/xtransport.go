@@ -371,22 +371,15 @@ func (xTransport *XTransport) Post(url *url.URL, accept string, contentType stri
 }
 
 func (xTransport *XTransport) DoHQuery(useGet bool, url *url.URL, body []byte, timeout time.Duration) (*http.Response, time.Duration, error) {
-	padLen := 63 - (len(body)+63)&63
 	dataType := "application/dns-message"
-	paddedBody := addEDNS0PaddingIfNoneFound(&body, padLen)
 	if useGet {
 		qs := url.Query()
 		qs.Add("ct", "")
-		encBody := base64.RawURLEncoding.EncodeToString(*paddedBody)
+		encBody := base64.RawURLEncoding.EncodeToString(body)
 		qs.Add("dns", encBody)
 		url2 := *url
 		url2.RawQuery = qs.Encode()
 		return xTransport.Get(&url2, dataType, timeout)
 	}
-	return xTransport.Post(url, dataType, dataType, paddedBody, timeout)
-}
-
-func (xTransport *XTransport) makePad(padLen int) *string {
-	padding := strings.Repeat("X", padLen)
-	return &padding
+	return xTransport.Post(url, dataType, dataType, &body, timeout)
 }

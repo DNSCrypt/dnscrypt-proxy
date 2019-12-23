@@ -209,33 +209,25 @@ func updateTTL(msg *dns.Msg, expiration time.Time) {
 	}
 }
 
-func addEDNS0PaddingIfNoneFound(packet *[]byte, paddingLen int) *[]byte {
-	msg := dns.Msg{Compress: true}
-	if msg.Unpack(*packet) != nil {
-		return packet
-	}
+func addEDNS0PaddingIfNoneFound(msg *dns.Msg, unpaddedPacket []byte, paddingLen int) ([]byte, error) {
 	edns0 := msg.IsEdns0()
 	if edns0 == nil {
 		msg.SetEdns0(uint16(MaxDNSPacketSize), false)
 		edns0 = msg.IsEdns0()
 		if edns0 == nil {
-			return packet
+			return unpaddedPacket, nil
 		}
 	}
 	for _, option := range edns0.Option {
 		if option.Option() == dns.EDNS0PADDING {
-			return packet
+			return unpaddedPacket, nil
 		}
 	}
 	ext := new(dns.EDNS0_PADDING)
 	padding := []byte("dnscrypt-proxy.padding:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmno")
 	ext.Padding = padding[:paddingLen]
 	edns0.Option = append(edns0.Option, ext)
-	paddedPacket, err := msg.Pack()
-	if err != nil {
-		return packet
-	}
-	return &paddedPacket
+	return msg.Pack()
 }
 
 func removeEDNS0Options(msg *dns.Msg) bool {
