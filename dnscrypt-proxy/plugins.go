@@ -281,7 +281,7 @@ func (pluginsState *PluginsState) ApplyQueryPlugins(pluginsGlobals *PluginsGloba
 		return packet, err
 	}
 	if needsEDNS0Padding && pluginsState.action == PluginsActionContinue {
-		padLen := 63 - (len(packet2)+63)&63
+		padLen := 63 - ((len(packet2) + 63) & 63)
 		if paddedPacket2, _ := addEDNS0PaddingIfNoneFound(&msg, packet2, padLen); paddedPacket2 != nil {
 			return paddedPacket2, nil
 		}
