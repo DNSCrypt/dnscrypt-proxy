@@ -71,6 +71,7 @@ func main() {
 		DisplayName:      "DNSCrypt client proxy",
 		Description:      "Encrypted/authenticated DNS proxy",
 		WorkingDirectory: pwd,
+		Arguments:        []string{"-config", *flags.ConfigFile},
 	}
 	svc, err := service.New(app, svcConfig)
 	if err != nil {
