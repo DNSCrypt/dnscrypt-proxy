@@ -164,7 +164,7 @@ def blacklists_from_config_file(
                 blacklists[url] = names
                 all_names |= names
             except Exception as e:
-                sys.stderr.write(e.message)
+                sys.stderr.write(str(e))
                 if not ignore_retrieval_failure:
                     exit(1)
 
