@@ -1575,7 +1575,6 @@ func Sendfile(outfd int, infd int, offset *int64, count int) (written int, err e
 //sys	Fchdir(fd int) (err error)
 //sys	Fchmod(fd int, mode uint32) (err error)
 //sys	Fchownat(dirfd int, path string, uid int, gid int, flags int) (err error)
-//sys	fcntl(fd int, cmd int, arg int) (val int, err error)
 //sys	Fdatasync(fd int) (err error)
 //sys	Fgetxattr(fd int, attr string, dest []byte) (sz int, err error)
 //sys	FinitModule(fd int, params string, flags int) (err error)
