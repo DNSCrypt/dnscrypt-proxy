@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	crypto_rand "crypto/rand"
 	"encoding/binary"
 	"io"
@@ -8,6 +9,7 @@ import (
 	"net"
 	"os"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	"github.com/jedisct1/dlog"
@@ -15,6 +17,7 @@ import (
 	stamps "github.com/jedisct1/go-dnsstamps"
 	"github.com/miekg/dns"
 	"golang.org/x/crypto/curve25519"
+	"golang.org/x/sys/unix"
 )
 
 type Proxy struct {
@@ -313,13 +316,22 @@ func (proxy *Proxy) tcpListener(acceptPc *net.TCPListener) {
 	}
 }
 
+func (proxy *Proxy) tcpListenerSetup(network, address string, cnx syscall.RawConn) error {
+	cnx.Write(func(fd uintptr) bool {
+		_ = syscall.SetsockoptInt(int(fd), unix.IPPROTO_TCP, unix.TCP_FASTOPEN, 10)
+		return true
+	})
+	return nil
+}
+
 func (proxy *Proxy) tcpListenerFromAddr(listenAddr *net.TCPAddr) error {
-	acceptPc, err := net.ListenTCP("tcp", listenAddr)
+	listenConfig := net.ListenConfig{Control: proxy.tcpListenerSetup}
+	acceptPc, err := listenConfig.Listen(context.Background(), "tcp", listenAddr.String())
 	if err != nil {
 		return err
 	}
 	dlog.Noticef("Now listening to %v [TCP]", listenAddr)
-	go proxy.tcpListener(acceptPc)
+	go proxy.tcpListener(acceptPc.(*net.TCPListener))
 	return nil
 }
 
