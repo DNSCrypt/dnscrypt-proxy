@@ -36,3 +36,7 @@ ibpxl.com
 # ditto for that one
 
 internetbrands.com
+
+# Ubuntu's motd script sends way too much information to Canonical
+
+motd.ubuntu.com

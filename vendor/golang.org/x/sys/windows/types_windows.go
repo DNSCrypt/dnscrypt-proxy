@@ -690,6 +690,7 @@ const (
 	SOCK_SEQPACKET = 5
 
 	IPPROTO_IP   = 0
+	IPPROTO_ICMP = 1
 	IPPROTO_IPV6 = 0x29
 	IPPROTO_TCP  = 6
 	IPPROTO_UDP  = 17
@@ -701,6 +702,7 @@ const (
 	SO_BROADCAST              = 32
 	SO_LINGER                 = 128
 	SO_RCVBUF                 = 0x1002
+	SO_RCVTIMEO               = 0x1006
 	SO_SNDBUF                 = 0x1001
 	SO_UPDATE_ACCEPT_CONTEXT  = 0x700b
 	SO_UPDATE_CONNECT_CONTEXT = 0x7010

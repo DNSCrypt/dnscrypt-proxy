@@ -12,14 +12,18 @@ import "unsafe"
 // systems by fcntl_linux_32bit.go to be SYS_FCNTL64.
 var fcntl64Syscall uintptr = SYS_FCNTL
 
-// FcntlInt performs a fcntl syscall on fd with the provided command and argument.
-func FcntlInt(fd uintptr, cmd, arg int) (int, error) {
-	valptr, _, errno := Syscall(fcntl64Syscall, fd, uintptr(cmd), uintptr(arg))
+func fcntl(fd int, cmd, arg int) (int, error) {
+	valptr, _, errno := Syscall(fcntl64Syscall, uintptr(fd), uintptr(cmd), uintptr(arg))
 	var err error
 	if errno != 0 {
 		err = errno
 	}
 	return int(valptr), err
+}
+
+// FcntlInt performs a fcntl syscall on fd with the provided command and argument.
+func FcntlInt(fd uintptr, cmd, arg int) (int, error) {
+	return fcntl(int(fd), cmd, arg)
 }
 
 // FcntlFlock performs a fcntl syscall for the F_GETLK, F_SETLK or F_SETLKW command.
