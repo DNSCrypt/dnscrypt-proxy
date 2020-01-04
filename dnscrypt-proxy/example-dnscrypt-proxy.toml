@@ -395,7 +395,7 @@ cache_neg_max_ttl = 600
 [query_log]
 
   ## Path to the query log file (absolute, or relative to the same directory as the config file)
-  ## Can be /dev/stdout to log to the standard output (and set log_files_max_size to 0)
+  ## Non non-Windows systems, can be /dev/stdout to log to the standard output (and set log_files_max_size to 0)
 
   # file = 'query.log'
 
