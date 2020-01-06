@@ -248,6 +248,7 @@ func Uname(uname *Utsname) error {
 //sys	Close(fd int) (err error)
 //sys	Dup(fd int) (nfd int, err error)
 //sys	Dup2(from int, to int) (err error)
+//sys	Dup3(from int, to int, flags int) (err error)
 //sys	Exit(code int)
 //sys	Faccessat(dirfd int, path string, mode uint32, flags int) (err error)
 //sys	Fchdir(fd int) (err error)
