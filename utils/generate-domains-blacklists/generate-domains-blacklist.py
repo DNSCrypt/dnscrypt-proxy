@@ -19,8 +19,8 @@ except (ImportError, ModuleNotFoundError):
 
 def parse_time_restricted_list(content):
     rx_comment = re.compile(r"^(#|$)")
-    rx_inline_comment = re.compile(r"\s*#\s*[a-z0-9-].*$")
-    rx_trusted = re.compile(r"^([*a-z0-9.-]+)\s*(@\S+)?$")
+    rx_inline_comment = re.compile(r"\s*#\s*[a-z\d-].*$")
+    rx_trusted = re.compile(r"^([*a-z\d.-]+)\s*(@\S+)?$")
 
     names = set()
     time_restrictions = {}
@@ -50,16 +50,16 @@ def parse_trusted_list(content):
 
 def parse_list(content, trusted=False):
     rx_comment = re.compile(r"^(#|$)")
-    rx_inline_comment = re.compile(r"\s*#\s*[a-z0-9-].*$")
+    rx_inline_comment = re.compile(r"\s*#\s*[a-z\d-].*$")
     rx_u = re.compile(
-        r"^@*\|\|([a-z0-9.-]+[.][a-z]{2,})\^?(\$(popup|third-party))?$")
-    rx_l = re.compile(r"^([a-z0-9.-]+[.][a-z]{2,})$")
+        r"^@*\|\|([a-z\d.-]+\.[a-z]{2,})\^?(\$(popup|third-party))?$")
+    rx_l = re.compile(r"^([a-z\d.-]+\.[a-z]{2,})$")
     rx_h = re.compile(
-        r"^[0-9]{1,3}[.][0-9]{1,3}[.][0-9]{1,3}[.][0-9]{1,3}\s+([a-z0-9.-]+[.][a-z]{2,})$"
+        r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\s+([a-z\d.-]+\.[a-z]{2,})$"
     )
-    rx_mdl = re.compile(r'^"[^"]+","([a-z0-9.-]+[.][a-z]{2,})",')
-    rx_b = re.compile(r"^([a-z0-9.-]+[.][a-z]{2,}),.+,[0-9: /-]+,")
-    rx_dq = re.compile(r"^address=/([a-z0-9.-]+[.][a-z]{2,})/.")
+    rx_mdl = re.compile(r'^"[^"]+","([a-z\d.-]+\.[a-z]{2,})",')
+    rx_b = re.compile(r"^([a-z\d.-]+\.[a-z]{2,}),.+,[\d: /-]+,")
+    rx_dq = re.compile(r"^address=/([a-z\d.-]+\.[a-z]{2,})/.")
 
     if trusted:
         return parse_trusted_list(content)
@@ -169,7 +169,7 @@ def blacklists_from_config_file(
                     exit(1)
 
     # Time-based blacklist
-    if time_restricted_url and not re.match(r"^[a-z0-9]+:", time_restricted_url):
+    if time_restricted_url and not re.match(r"^[a-z\d]+:", time_restricted_url):
         time_restricted_url = "file:" + time_restricted_url
 
     if time_restricted_url:
@@ -187,7 +187,7 @@ def blacklists_from_config_file(
         whitelisted_names |= time_restricted_names
 
     # Whitelist
-    if whitelist and not re.match(r"^[a-z0-9]+:", whitelist):
+    if whitelist and not re.match(r"^[a-z\d]+:", whitelist):
         whitelist = "file:" + whitelist
 
     whitelisted_names |= whitelist_from_url(whitelist)
