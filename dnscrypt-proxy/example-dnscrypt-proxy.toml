@@ -183,21 +183,23 @@ cert_refresh_delay = 240
 # tls_cipher_suite = [52392, 49199]
 
 
-## Fallback resolver
-## This is a normal, non-encrypted DNS resolver, that will be only used
+## Fallback resolvers
+## These are normal, non-encrypted DNS resolvers, that will be only used
 ## for one-shot queries when retrieving the initial resolvers list, and
 ## only if the system DNS configuration doesn't work.
-## No user application queries will ever be leaked through this resolver,
-## and it will not be used after IP addresses of resolvers URLs have been found.
-## It will never be used if lists have already been cached, and if stamps
+## No user application queries will ever be leaked through these resolvers,
+## and they will not be used after IP addresses of resolvers URLs have been found.
+## They will never be used if lists have already been cached, and if stamps
 ## don't include host names without IP addresses.
-## It will not be used if the configured system DNS works.
-## A resolver supporting DNSSEC is recommended.
+## They will not be used if the configured system DNS works.
+## Resolver supporting DNSSEC are recommended.
 ##
 ## People in China may need to use 114.114.114.114:53 here.
 ## Other popular options include 8.8.8.8 and 1.1.1.1.
+##
+## If more than one resolver are specified, they will be tried in sequence.
 
-fallback_resolver = '9.9.9.9:53'
+fallback_resolvers = ['9.9.9.9:53', '8.8.8.8:53']
 
 
 ## Always use the fallback resolver before the system DNS settings.

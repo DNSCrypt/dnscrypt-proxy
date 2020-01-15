@@ -76,6 +76,7 @@ type Config struct {
 	SourceIPv6               bool                        `toml:"ipv6_servers"`
 	MaxClients               uint32                      `toml:"max_clients"`
 	FallbackResolver         string                      `toml:"fallback_resolver"`
+	FallbackResolvers        []string                    `toml:"fallback_resolvers"`
 	IgnoreSystemDNS          bool                        `toml:"ignore_system_dns"`
 	AllWeeklyRanges          map[string]WeeklyRangesStr  `toml:"schedules"`
 	LogMaxSize               int                         `toml:"log_files_max_size"`
@@ -119,7 +120,7 @@ func newConfig() Config {
 		SourceDNSCrypt:           true,
 		SourceDoH:                true,
 		MaxClients:               250,
-		FallbackResolver:         DefaultFallbackResolver,
+		FallbackResolvers:        []string{DefaultFallbackResolver},
 		IgnoreSystemDNS:          false,
 		LogMaxSize:               10,
 		LogMaxAge:                7,
@@ -287,12 +288,17 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	proxy.xTransport.tlsCipherSuite = config.TLSCipherSuite
 	proxy.xTransport.mainProto = proxy.mainProto
 	if len(config.FallbackResolver) > 0 {
-		if err := isIPAndPort(config.FallbackResolver); err != nil {
-			dlog.Fatalf("fallback_resolver [%v]", err)
+		config.FallbackResolvers = []string{config.FallbackResolver}
+	}
+	if len(config.FallbackResolvers) > 0 {
+		for _, resolver := range config.FallbackResolvers {
+			if err := isIPAndPort(resolver); err != nil {
+				dlog.Fatalf("Fallback resolver [%v]: %v", resolver, err)
+			}
 		}
 		proxy.xTransport.ignoreSystemDNS = config.IgnoreSystemDNS
 	}
-	proxy.xTransport.fallbackResolver = config.FallbackResolver
+	proxy.xTransport.fallbackResolvers = config.FallbackResolvers
 	proxy.xTransport.useIPv4 = config.SourceIPv4
 	proxy.xTransport.useIPv6 = config.SourceIPv6
 	proxy.xTransport.keepAlive = time.Duration(config.KeepAlive) * time.Second
@@ -489,8 +495,8 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	netprobeAddress := DefaultNetprobeAddress
 	if len(config.NetprobeAddress) > 0 {
 		netprobeAddress = config.NetprobeAddress
-	} else if len(config.FallbackResolver) > 0 {
-		netprobeAddress = config.FallbackResolver
+	} else if len(config.FallbackResolvers) > 0 {
+		netprobeAddress = config.FallbackResolvers[0]
 	}
 	proxy.showCerts = *flags.ShowCerts || len(os.Getenv("SHOW_CERTS")) > 0
 	if proxy.showCerts {

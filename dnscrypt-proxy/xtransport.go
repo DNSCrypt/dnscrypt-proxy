@@ -49,7 +49,7 @@ type XTransport struct {
 	keepAlive                time.Duration
 	timeout                  time.Duration
 	cachedIPs                CachedIPs
-	fallbackResolver         string
+	fallbackResolvers        []string
 	mainProto                string
 	ignoreSystemDNS          bool
 	useIPv4                  bool
@@ -68,7 +68,7 @@ func NewXTransport() *XTransport {
 		cachedIPs:                CachedIPs{cache: make(map[string]*CachedIPItem)},
 		keepAlive:                DefaultKeepAlive,
 		timeout:                  DefaultTimeout,
-		fallbackResolver:         DefaultFallbackResolver,
+		fallbackResolvers:        []string{DefaultFallbackResolver},
 		mainProto:                "",
 		ignoreSystemDNS:          true,
 		useIPv4:                  true,
@@ -245,6 +245,21 @@ func (xTransport *XTransport) resolveUsingResolver(proto, host string, resolver 
 	return
 }
 
+func (xTransport *XTransport) resolveUsingResolvers(proto, host string, resolvers []string) (ip net.IP, ttl time.Duration, err error) {
+	for i, resolver := range resolvers {
+		ip, ttl, err = xTransport.resolveUsingResolver(proto, host, resolver)
+		if err == nil {
+			if i > 0 {
+				dlog.Infof("Resolution succeeded with fallback resolver %s[%s]", proto, resolver)
+				resolvers[0], resolvers[i] = resolvers[i], resolvers[0]
+			}
+			break
+		}
+		dlog.Infof("Unable to resolve [%s] using fallback resolver %s[%s]: %v", host, proto, resolver, err)
+	}
+	return
+}
+
 // If a name is not present in the cache, resolve the name and update the cache
 func (xTransport *XTransport) resolveAndUpdateCache(host string) error {
 	if xTransport.proxyDialer != nil || xTransport.httpProxyFunction != nil {
@@ -270,18 +285,18 @@ func (xTransport *XTransport) resolveAndUpdateCache(host string) error {
 		}
 		for _, proto := range protos {
 			if err != nil {
-				dlog.Noticef("System DNS configuration not usable yet, exceptionally resolving [%s] using resolver [%s] over %s", host, xTransport.fallbackResolver, proto)
+				dlog.Noticef("System DNS configuration not usable yet, exceptionally resolving [%s] using fallback resolvers over %s", host, proto)
 			} else {
-				dlog.Debugf("Resolving [%s] using resolver %s[%s]", host, proto, xTransport.fallbackResolver)
+				dlog.Debugf("Resolving [%s] using fallback resolvers over %s", host, proto)
 			}
-			foundIP, ttl, err = xTransport.resolveUsingResolver(proto, host, xTransport.fallbackResolver)
+			foundIP, ttl, err = xTransport.resolveUsingResolvers(proto, host, xTransport.fallbackResolvers)
 			if err == nil {
 				break
 			}
 		}
 	}
 	if err != nil && xTransport.ignoreSystemDNS {
-		dlog.Noticef("Fallback resolver [%v] didn't respond - Trying with the system resolver as a last resort", xTransport.fallbackResolver)
+		dlog.Noticef("Fallback resolvers didn't respond - Trying with the system resolver as a last resort")
 		foundIP, ttl, err = xTransport.resolveUsingSystem(host)
 	}
 	if ttl < MinResolverIPTTL {
