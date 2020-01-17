@@ -11,7 +11,7 @@ require (
 	github.com/facebookgo/atomicfile v0.0.0-20151019160806-2de1f203e7d5 // indirect
 	github.com/facebookgo/pidfile v0.0.0-20150612191647-f242e2999868
 	github.com/hashicorp/go-immutable-radix v1.1.0
-	github.com/hashicorp/golang-lru v0.5.3
+	github.com/hashicorp/golang-lru v0.5.4
 	github.com/hectane/go-acl v0.0.0-20190604041725-da78bae5fc95
 	github.com/jedisct1/dlog v0.0.0-20190909160351-692385b00b84
 	github.com/jedisct1/go-clocksmith v0.0.0-20190707124905-73e087c7979c
