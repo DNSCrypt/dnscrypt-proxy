@@ -37,6 +37,9 @@ func (plugin *PluginWhitelistName) Init(proxy *Proxy) error {
 	plugin.allWeeklyRanges = proxy.allWeeklyRanges
 	plugin.patternMatcher = NewPatternPatcher()
 	for lineNo, line := range strings.Split(string(bin), "\n") {
+		if strings.Contains(line, "#") {
+			line = line[:strings.Index(line, "#")]
+		}
 		line = strings.TrimFunc(line, unicode.IsSpace)
 		if len(line) == 0 || strings.HasPrefix(line, "#") {
 			continue
