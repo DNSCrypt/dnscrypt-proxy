@@ -6,7 +6,6 @@ import (
 	"net"
 	"strings"
 	"time"
-	"unicode"
 
 	iradix "github.com/hashicorp/go-immutable-radix"
 	"github.com/jedisct1/dlog"
@@ -38,8 +37,8 @@ func (plugin *PluginBlockIP) Init(proxy *Proxy) error {
 	plugin.blockedPrefixes = iradix.New()
 	plugin.blockedIPs = make(map[string]interface{})
 	for lineNo, line := range strings.Split(string(bin), "\n") {
-		line = strings.TrimFunc(line, unicode.IsSpace)
-		if len(line) == 0 || strings.HasPrefix(line, "#") {
+		line = TrimAndStripInlineComments(line)
+		if len(line) == 0 {
 			continue
 		}
 		ip := net.ParseIP(line)

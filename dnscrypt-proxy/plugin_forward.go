@@ -35,8 +35,8 @@ func (plugin *PluginForward) Init(proxy *Proxy) error {
 		return err
 	}
 	for lineNo, line := range strings.Split(string(bin), "\n") {
-		line = strings.TrimFunc(line, unicode.IsSpace)
-		if len(line) == 0 || strings.HasPrefix(line, "#") {
+		line = TrimAndStripInlineComments(line)
+		if len(line) == 0 {
 			continue
 		}
 		domain, serversStr, ok := StringTwoFields(line)

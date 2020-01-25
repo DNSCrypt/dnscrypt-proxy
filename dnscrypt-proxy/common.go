@@ -143,6 +143,18 @@ func StringStripSpaces(str string) string {
 	}, str)
 }
 
+func TrimAndStripInlineComments(str string) string {
+	if idx := strings.LastIndexByte(str, '#'); idx >= 0 {
+		if idx == 0 {
+			return ""
+		}
+		if prev := str[idx-1]; prev == ' ' || prev == '\t' {
+			str = str[:idx-1]
+		}
+	}
+	return strings.TrimFunc(str, unicode.IsSpace)
+}
+
 func ExtractHostAndPort(str string, defaultPort int) (host string, port int) {
 	host, port = str, defaultPort
 	if idx := strings.LastIndex(str, ":"); idx >= 0 && idx < len(str)-1 {

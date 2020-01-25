@@ -94,8 +94,8 @@ func (plugin *PluginBlockName) Init(proxy *Proxy) error {
 		patternMatcher:  NewPatternPatcher(),
 	}
 	for lineNo, line := range strings.Split(string(bin), "\n") {
-		line = strings.TrimFunc(line, unicode.IsSpace)
-		if len(line) == 0 || strings.HasPrefix(line, "#") {
+		line = TrimAndStripInlineComments(line)
+		if len(line) == 0 {
 			continue
 		}
 		parts := strings.Split(line, "@")

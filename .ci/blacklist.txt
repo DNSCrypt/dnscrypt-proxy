@@ -4,8 +4,8 @@ banner.*
 banners.*
 creatives.*
 oas.*
-oascentral.*
-stats.*
+oascentral.*        # test inline comment
+stats.*             # test inline comment with trailing spaces       
 tag.*
 telemetry.*
 tracker.*
