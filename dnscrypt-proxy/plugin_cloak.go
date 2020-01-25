@@ -45,6 +45,9 @@ func (plugin *PluginCloak) Init(proxy *Proxy) error {
 	plugin.patternMatcher = NewPatternPatcher()
 	cloakedNames := make(map[string]*CloakedName)
 	for lineNo, line := range strings.Split(string(bin), "\n") {
+		if strings.Contains(line, "#") {
+			line = line[:strings.Index(line, "#")]
+		}
 		line = strings.TrimFunc(line, unicode.IsSpace)
 		if len(line) == 0 || strings.HasPrefix(line, "#") {
 			continue
