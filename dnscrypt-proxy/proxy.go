@@ -348,7 +348,14 @@ func (proxy *Proxy) exchangeWithUDPServer(serverInfo *ServerInfo, sharedKey *[32
 	if serverInfo.RelayUDPAddr != nil {
 		upstreamAddr = serverInfo.RelayUDPAddr
 	}
-	pc, err := net.DialUDP("udp", nil, upstreamAddr)
+	var err error
+	var pc net.Conn
+	proxyDialer := proxy.xTransport.proxyDialer
+	if proxyDialer == nil {
+		pc, err = net.DialUDP("udp", nil, upstreamAddr)
+	} else {
+		pc, err = (*proxyDialer).Dial("udp", upstreamAddr.String())
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -382,7 +389,7 @@ func (proxy *Proxy) exchangeWithTCPServer(serverInfo *ServerInfo, sharedKey *[32
 	if proxyDialer == nil {
 		pc, err = net.DialTCP("tcp", nil, upstreamAddr)
 	} else {
-		pc, err = (*proxyDialer).Dial("tcp", serverInfo.TCPAddr.String())
+		pc, err = (*proxyDialer).Dial("tcp", upstreamAddr.String())
 	}
 	if err != nil {
 		return nil, err
