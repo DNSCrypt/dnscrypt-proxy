@@ -366,15 +366,18 @@ func (proxy *Proxy) exchangeWithUDPServer(serverInfo *ServerInfo, sharedKey *[32
 	if serverInfo.RelayUDPAddr != nil {
 		proxy.prepareForRelay(serverInfo.UDPAddr.IP, serverInfo.UDPAddr.Port, &encryptedQuery)
 	}
-	if _, err = pc.Write(encryptedQuery); err != nil {
-		return nil, err
-	}
 	encryptedResponse := make([]byte, MaxDNSPacketSize)
-	length, err := pc.Read(encryptedResponse)
-	if err != nil {
-		return nil, err
+	for tries := 2; tries > 0; tries-- {
+		if _, err = pc.Write(encryptedQuery); err != nil {
+			return nil, err
+		}
+		length, err := pc.Read(encryptedResponse)
+		if err == nil {
+			encryptedResponse = encryptedResponse[:length]
+			break
+		}
+		dlog.Debug("Retry on timeout")
 	}
-	encryptedResponse = encryptedResponse[:length]
 	return proxy.Decrypt(serverInfo, sharedKey, encryptedResponse, clientNonce)
 }
 
