@@ -224,7 +224,10 @@ func addEDNS0PaddingIfNoneFound(msg *dns.Msg, unpaddedPacket []byte, paddingLen 
 		}
 	}
 	ext := new(dns.EDNS0_PADDING)
-	padding := []byte("dnscrypt-proxy.padding:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmno")
+	padding := make([]byte, paddingLen)
+	for i := range padding {
+		padding[i] = 'X'
+	}
 	ext.Padding = padding[:paddingLen]
 	edns0.Option = append(edns0.Option, ext)
 	return msg.Pack()

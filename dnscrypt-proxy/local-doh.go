@@ -57,7 +57,9 @@ func (handler localDoHHandler) ServeHTTP(writer http.ResponseWriter, request *ht
 		writer.WriteHeader(500)
 		return
 	}
-	padLen := 127 - (len(response)+127)&127
+	responseLen := len(response)
+	paddedLen := dohPaddedLen(responseLen)
+	padLen := responseLen - paddedLen
 	paddedResponse, err := addEDNS0PaddingIfNoneFound(&msg, response, padLen)
 	if err != nil {
 		return
@@ -83,4 +85,14 @@ func (proxy *Proxy) localDoHListener(acceptPc *net.TCPListener) {
 	if err := httpServer.ServeTLS(acceptPc, proxy.localDoHCertFile, proxy.localDoHCertKeyFile); err != nil {
 		dlog.Fatal(err)
 	}
+}
+
+func dohPaddedLen(unpaddedLen int) int {
+	boundaries := [...]int{64, 128, 192, 256, 320, 384, 512, 704, 768, 896, 960, 1024, 1088, 1152, 2688, 4080, MaxDNSPacketSize}
+	for _, boundary := range boundaries {
+		if boundary >= unpaddedLen {
+			return boundary
+		}
+	}
+	return unpaddedLen
 }
