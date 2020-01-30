@@ -1,4 +1,9 @@
+* Version 2.0.38
+ - Fixes a regression from 2.0.37 when parsing non-inline comments.
+
 * Version 2.0.37
+ - Entries from lists (forwarding, blacklists, whitelists) now support
+inline comments.
  - Reliability improvement: queries over UDP are retried after a timeout
 instead of solely relying on the client.
  - Reliability improvement: during temporary network outages, cached records
