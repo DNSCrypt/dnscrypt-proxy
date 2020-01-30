@@ -494,6 +494,12 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 				response, err = proxy.exchangeWithTCPServer(serverInfo, sharedKey, encryptedQuery, clientNonce)
 			}
 			if err != nil {
+				if stale, ok := pluginsState.sessionData["stale"]; ok {
+					dlog.Debug("Serving stale response")
+					response, err = (stale.(*dns.Msg)).Pack()
+				}
+			}
+			if err != nil {
 				if neterr, ok := err.(net.Error); ok && neterr.Timeout() {
 					pluginsState.returnCode = PluginsReturnCodeServerTimeout
 				} else {
@@ -509,13 +515,21 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 			serverInfo.noticeBegin(proxy)
 			resp, _, err := proxy.xTransport.DoHQuery(serverInfo.useGet, serverInfo.URL, query, proxy.timeout)
 			SetTransactionID(query, tid)
+			if err == nil {
+				response = nil
+			} else if stale, ok := pluginsState.sessionData["stale"]; ok {
+				dlog.Debug("Serving stale response")
+				response, err = (stale.(*dns.Msg)).Pack()
+			}
 			if err != nil {
 				pluginsState.returnCode = PluginsReturnCodeNetworkError
 				pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
 				serverInfo.noticeFailure(proxy)
 				return
 			}
-			response, err = ioutil.ReadAll(io.LimitReader(resp.Body, int64(MaxDNSPacketSize)))
+			if response == nil {
+				response, err = ioutil.ReadAll(io.LimitReader(resp.Body, int64(MaxDNSPacketSize)))
+			}
 			if err != nil {
 				pluginsState.returnCode = PluginsReturnCodeNetworkError
 				pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)

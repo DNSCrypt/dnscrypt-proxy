@@ -240,6 +240,7 @@ func NewPluginsState(proxy *Proxy, clientProto string, clientAddr *net.Addr, sta
 		qName:                            "",
 		requestStart:                     start,
 		maxUnencryptedUDPSafePayloadSize: MaxDNSUDPSafePacketSize,
+		sessionData:                      make(map[string]interface{}),
 	}
 }
 
