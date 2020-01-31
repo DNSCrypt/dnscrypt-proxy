@@ -59,7 +59,7 @@ func (handler localDoHHandler) ServeHTTP(writer http.ResponseWriter, request *ht
 	}
 	responseLen := len(response)
 	paddedLen := dohPaddedLen(responseLen)
-	padLen := responseLen - paddedLen
+	padLen := paddedLen - responseLen
 	paddedResponse, err := addEDNS0PaddingIfNoneFound(&msg, response, padLen)
 	if err != nil {
 		return
