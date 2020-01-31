@@ -209,6 +209,21 @@ func updateTTL(msg *dns.Msg, expiration time.Time) {
 	}
 }
 
+func hasEDNS0Padding(packet []byte) (bool, error) {
+	msg := dns.Msg{}
+	if err := msg.Unpack(packet); err != nil {
+		return false, err
+	}
+	if edns0 := msg.IsEdns0(); edns0 != nil {
+		for _, option := range edns0.Option {
+			if option.Option() == dns.EDNS0PADDING {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
+}
+
 func addEDNS0PaddingIfNoneFound(msg *dns.Msg, unpaddedPacket []byte, paddingLen int) ([]byte, error) {
 	edns0 := msg.IsEdns0()
 	if edns0 == nil {
