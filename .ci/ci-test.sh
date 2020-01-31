@@ -84,6 +84,10 @@ t || dig -p${DNS_PORT} tracker.debian.org @127.0.0.1 | grep -Fqv 'locally blocke
 section
 t || curl --insecure -siL https://127.0.0.1:${HTTP_PORT}/ | grep -Fq '404 Not Found' || fail
 t || curl --insecure -sL https://127.0.0.1:${HTTP_PORT}/dns-query | grep -Fq 'dnscrypt-proxy local DoH server' || fail
+t ||
+    echo yv4BAAABAAAAAAABAAACAAEAACkQAAAAgAAAAA== | base64 -d |
+    curl -H'Content-Type: application/dns-message' -H'Accept: application/dns-message' --data-binary @- -D - --insecure https://127.0.0.1:${HTTP_PORT}/dns-query 2>/dev/null |
+        grep -Fq application/dns-message || fail
 
 kill $(cat /tmp/dnscrypt-proxy.pidfile)
 
