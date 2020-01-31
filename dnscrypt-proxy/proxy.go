@@ -569,8 +569,12 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 			}
 		}
 		if rcode := Rcode(response); rcode == dns.RcodeServerFailure { // SERVFAIL
-			dlog.Infof("Server [%v] returned temporary error code [%v] -- Upstream server may be experiencing connectivity issues", serverInfo.Name, rcode)
-			serverInfo.noticeFailure(proxy)
+			if pluginsState.dnssec {
+				dlog.Debug("A response had an invalid DNSSEC signature")
+			} else {
+				dlog.Infof("Server [%v] returned temporary error code SERVFAIL -- Invalid DNSSEC signature received or server may be experiencing connectivity issues", serverInfo.Name)
+				serverInfo.noticeFailure(proxy)
+			}
 		} else {
 			serverInfo.noticeSuccess(proxy)
 		}
