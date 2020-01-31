@@ -1,7 +1,8 @@
-* Version 2.0.38
- - Fixes a regression from 2.0.37 when parsing non-inline comments.
+* Version 2.0.39
+ - The Firefox Local DoH service didn't properly work in version 2.0.38;
+this has been fixed. Thanks to Simon Brand for the report!
 
-* Version 2.0.37
+* Version 2.0.38
  - Entries from lists (forwarding, blacklists, whitelists) now support
 inline comments.
  - Reliability improvement: queries over UDP are retried after a timeout
