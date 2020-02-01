@@ -29,6 +29,10 @@ type App struct {
 func main() {
 	dlog.Init("dnscrypt-proxy", dlog.SeverityNotice, "DAEMON")
 
+	// Specify the most privileges we will ever need. These will be reduced in InitSandbox to the
+	// minimum necessary based on our flags and configuration.
+	PledgePromises("cpath dns exec fattr id inet rpath stdio unix unveil wpath")
+
 	seed := make([]byte, 8)
 	crypto_rand.Read(seed)
 	rand.Seed(int64(binary.LittleEndian.Uint64(seed[:])))
@@ -54,12 +58,17 @@ func main() {
 	flag.Parse()
 
 	if *version {
+		PledgePromises("stdio")
 		fmt.Println(AppVersion)
 		os.Exit(0)
 	}
 	if resolve != nil && len(*resolve) > 0 {
+		PledgePromises("dns inet rpath stdio")
 		Resolve(*resolve)
 		os.Exit(0)
+	}
+	if len(*svcFlag) != 0 {
+		PledgePromises("stdio")
 	}
 
 	app := &App{
@@ -122,7 +131,12 @@ func (app *App) Start(service service.Service) error {
 }
 
 func (app *App) AppMain() {
-	if err := ConfigLoad(app.proxy, app.flags); err != nil {
+	config, err := ConfigRead(app.flags)
+	if err != nil {
+		dlog.Fatal(err)
+	}
+	InitSandbox(config, app.flags)
+	if err := ConfigApply(config, app.proxy, app.flags); err != nil {
 		dlog.Fatal(err)
 	}
 	if err := app.proxy.InitPluginsGlobals(); err != nil {

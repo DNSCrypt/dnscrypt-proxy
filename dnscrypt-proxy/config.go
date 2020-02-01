@@ -242,7 +242,7 @@ func findConfigFile(configFile *string) (string, error) {
 	return path.Join(pwd, *configFile), nil
 }
 
-func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
+func ConfigRead(flags *ConfigFlags) (*Config, error) {
 	foundConfigFile, err := findConfigFile(flags.ConfigFile)
 	if err != nil {
 		dlog.Fatalf("Unable to load the configuration file [%s] -- Maybe use the -config command-line switch?", *flags.ConfigFile)
@@ -250,15 +250,29 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	config := newConfig()
 	md, err := toml.DecodeFile(foundConfigFile, &config)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	undecoded := md.Undecoded()
 	if len(undecoded) > 0 {
-		return fmt.Errorf("Unsupported key in configuration file: [%s]", undecoded[0])
+		return nil, fmt.Errorf("Unsupported key in configuration file: [%s]", undecoded[0])
 	}
 	if err := cdFileDir(foundConfigFile); err != nil {
-		return err
+		return nil, err
 	}
+
+	if md.IsDefined("refused_code_in_responses") {
+		dlog.Notice("config option `refused_code_in_responses` is deprecated, use `blocked_query_response`")
+		if config.RefusedCodeInResponses {
+			config.BlockedQueryResponse = "refused"
+		} else {
+			config.BlockedQueryResponse = "hinfo"
+		}
+	}
+
+	return &config, nil
+}
+
+func ConfigApply(config *Config, proxy *Proxy, flags *ConfigFlags) error {
 	if config.LogLevel >= 0 && config.LogLevel < int(dlog.SeverityLast) {
 		dlog.SetLogLevel(dlog.Severity(config.LogLevel))
 	}
@@ -325,14 +339,6 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 
 	proxy.xTransport.rebuildTransport()
 
-	if md.IsDefined("refused_code_in_responses") {
-		dlog.Notice("config option `refused_code_in_responses` is deprecated, use `blocked_query_response`")
-		if config.RefusedCodeInResponses {
-			config.BlockedQueryResponse = "refused"
-		} else {
-			config.BlockedQueryResponse = "hinfo"
-		}
-	}
 	proxy.blockedQueryResponse = config.BlockedQueryResponse
 	proxy.timeout = time.Duration(config.Timeout) * time.Millisecond
 	proxy.maxClients = config.MaxClients
