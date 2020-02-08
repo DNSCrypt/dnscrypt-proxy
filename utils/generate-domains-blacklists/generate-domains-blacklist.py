@@ -81,6 +81,32 @@ def parse_list(content, trusted=False):
     return names, time_restrictions
 
 
+# basic check if the line contains any regex specific char
+def is_regex(line):
+    regex_chars = "*[]?}{"
+    return any(char in line for char in regex_chars)
+
+
+def parse_regex(names):
+    regexes = set()
+    for line in names:
+        # skip lines without regex characters:
+        if not is_regex(line):
+            continue
+        # convert to python regex:
+        line=line.replace(".", "\.")
+        line=line.replace("*", ".*")
+        line = "^"+line+"$"
+        # check if resulting regex is valid:
+        try:
+            if re.compile(line):
+                regexes.add(line)
+        except re.error:
+            sys.stderr.write("Invalid regex: {} [{}]\n".format(line, re.error))
+            continue
+    return regexes
+
+
 def print_restricted_name(name, time_restrictions):
     if name in time_restrictions:
         print("{}\t{}".format(name, time_restrictions[name]))
@@ -134,6 +160,18 @@ def has_suffix(names, name):
     return False
 
 
+# check if a line matches with any of the collected regexes:
+def covered_by_regex(line, regexes):
+
+    # only check lines that aren't regexes themselves:
+    if not is_regex(line):
+        for regex in regexes:
+            if re.match(regex, line):
+                return True
+
+    return False
+
+
 def whitelist_from_url(url):
     if not url:
         return set()
@@ -148,6 +186,7 @@ def blacklists_from_config_file(
 ):
     blacklists = {}
     whitelisted_names = set()
+    all_regexes = set()
     all_names = set()
     unique_names = set()
 
@@ -163,6 +202,8 @@ def blacklists_from_config_file(
                 names, _time_restrictions = parse_list(content, trusted)
                 blacklists[url] = names
                 all_names |= names
+                all_regexes |= parse_regex(names)
+
             except Exception as e:
                 sys.stderr.write(str(e))
                 if not ignore_retrieval_failure:
@@ -198,7 +239,7 @@ def blacklists_from_config_file(
         ignored, whitelisted = 0, 0
         list_names = list()
         for name in names:
-            if has_suffix(all_names, name) or name in unique_names:
+            if has_suffix(all_names, name) or name in unique_names or covered_by_regex(name, all_regexes):
                 ignored = ignored + 1
             elif has_suffix(whitelisted_names, name) or name in whitelisted_names:
                 whitelisted = whitelisted + 1
