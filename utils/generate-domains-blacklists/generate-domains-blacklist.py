@@ -3,9 +3,12 @@
 # Use the following command ensure the right encoding:
 # python generate-domains-blacklist.py -o list.txt.tmp && mv -f list.txt.tmp list
 
+
 import argparse
 import re
 import sys
+from io import StringIO
+from fnmatch import fnmatch
 
 try:
     import urllib2 as urllib
@@ -82,30 +85,14 @@ def parse_list(content, trusted=False):
     return names, time_restrictions
 
 
-# basic check if the line contains any regex specific char
-def is_regex(line):
-    regex_chars = "*[]?}{"
-    return any(char in line for char in regex_chars)
+# basic check if the line contains any glob specific characters
+def is_glob(line):
+    glob_chars = "*[]?"  # ignore = for now
+    return any(char in line for char in glob_chars)
 
 
-def parse_regex(names):
-    regexes = set()
-    for line in names:
-        # skip lines without regex characters:
-        if not is_regex(line):
-            continue
-        # convert to python regex:
-        line=line.replace(".", "\.")
-        line=line.replace("*", ".*")
-        line = "^"+line+"$"
-        # check if resulting regex is valid:
-        try:
-            if re.compile(line):
-                regexes.add(line)
-        except re.error:
-            sys.stderr.write("Invalid regex: {} [{}]\n".format(line, re.error))
-            continue
-    return regexes
+def get_lines_with_globs(names):
+    return set(filter(lambda line: is_glob(line), names))
 
 
 def print_restricted_name(name, time_restrictions):
@@ -142,7 +129,7 @@ def load_from_url(url):
     if URLLIB_NEW:
         content = content.decode("utf-8", errors="replace")
 
-    return (content, trusted)
+    return content, trusted
 
 
 def name_cmp(name):
@@ -161,13 +148,12 @@ def has_suffix(names, name):
     return False
 
 
-# check if a line matches with any of the collected regexes:
-def covered_by_regex(line, regexes):
-
-    # only check lines that aren't regexes themselves:
-    if not is_regex(line):
-        for regex in regexes:
-            if re.match(regex, line):
+# check if a line matches with any of the collected globs:
+def covered_by_glob(line, glob_list):
+    # ignore lines that are part of the glob_list
+    if line not in glob_list:
+        for glob in glob_list:
+            if fnmatch(line, glob):
                 return True
 
     return False
@@ -183,11 +169,11 @@ def whitelist_from_url(url):
 
 
 def blacklists_from_config_file(
-    file, whitelist, time_restricted_url, ignore_retrieval_failure, output_file
+        file, whitelist, time_restricted_url, ignore_retrieval_failure, output_file
 ):
     blacklists = {}
     whitelisted_names = set()
-    all_regexes = set()
+    all_globs = set()
     all_names = set()
     unique_names = set()
 
@@ -203,7 +189,9 @@ def blacklists_from_config_file(
                 names, _time_restrictions = parse_list(content, trusted)
                 blacklists[url] = names
                 all_names |= names
-                all_regexes |= parse_regex(names)
+                # only check local files for globs:
+                if trusted:
+                    all_globs |= get_lines_with_globs(names)
 
             except Exception as e:
                 sys.stderr.write(str(e))
@@ -233,17 +221,19 @@ def blacklists_from_config_file(
         whitelist = "file:" + whitelist
 
     whitelisted_names |= whitelist_from_url(whitelist)
-    
+
     # redirect output to output_file if provided
     output = StringIO() if output_file else sys.stdout
 
     # Process blacklists
     for url, names in blacklists.items():
         print("########## Blacklist from {} ##########\n".format(url), file=output)
-        ignored, whitelisted = 0, 0
+        ignored, whitelisted, glob_ignored = 0, 0, 0
         list_names = list()
         for name in names:
-            if has_suffix(all_names, name) or name in unique_names or covered_by_regex(name, all_regexes):
+            if covered_by_glob(name, all_globs):
+                glob_ignored = glob_ignored + 1
+            elif has_suffix(all_names, name) or name in unique_names:
                 ignored = ignored + 1
             elif has_suffix(whitelisted_names, name) or name in whitelisted_names:
                 whitelisted = whitelisted + 1
@@ -256,10 +246,12 @@ def blacklists_from_config_file(
             print("# Ignored duplicates: {}\n".format(ignored), file=output)
         if whitelisted:
             print("# Ignored entries due to the whitelist: {}\n".format(whitelisted), file=output)
+        if glob_ignored:
+            print("# Ignored entries due to globs in local-additions: {}\n".format(glob_ignored), file=output)
         for name in list_names:
             print(name, file=output)
         print("\n\n", file=output)
-        
+
     # if provided, save content from output buffer to file all at once
     if output_file:
         f = open(output_file, "w", encoding='utf8')
@@ -312,4 +304,3 @@ output_file = args.output_file
 
 blacklists_from_config_file(
     conf, whitelist, time_restricted, ignore_retrieval_failure, output_file)
-
