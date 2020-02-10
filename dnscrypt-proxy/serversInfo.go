@@ -59,14 +59,11 @@ type ServerInfo struct {
 type LBStrategy int
 
 const (
-	LBStrategyNone = LBStrategy(iota)
-	LBStrategyP2
-	LBStrategyPH
-	LBStrategyFirst
-	LBStrategyRandom
+	LBStrategyRandom = LBStrategy(0)
+	LBStrategyPH     = LBStrategy(-1)
 )
 
-const DefaultLBStrategy = LBStrategyP2
+const DefaultLBStrategy = LBStrategy(2)
 
 type ServersInfo struct {
 	sync.RWMutex
@@ -205,14 +202,12 @@ func (serversInfo *ServersInfo) getOne() *ServerInfo {
 	}
 	var candidate int
 	switch serversInfo.lbStrategy {
-	case LBStrategyFirst:
-		candidate = 0
-	case LBStrategyPH:
+	case -1: // First half
 		candidate = rand.Intn(Max(Min(serversCount, 2), serversCount/2))
-	case LBStrategyRandom:
+	case 0: // Random
 		candidate = rand.Intn(serversCount)
-	default:
-		candidate = rand.Intn(Min(serversCount, 2))
+	default: // First N
+		candidate = rand.Intn(int(serversInfo.lbStrategy)) % serversCount
 	}
 	serverInfo := serversInfo.inner[candidate]
 	dlog.Debugf("Using candidate [%s] RTT: %d", (*serverInfo).Name, int((*serverInfo).rtt.Value()))

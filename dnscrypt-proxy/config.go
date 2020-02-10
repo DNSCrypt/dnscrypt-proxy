@@ -352,17 +352,22 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	switch strings.ToLower(config.LBStrategy) {
 	case "":
 		// default
-	case "p2":
-		lbStrategy = LBStrategyP2
 	case "ph":
 		lbStrategy = LBStrategyPH
 	case "fastest":
 	case "first":
-		lbStrategy = LBStrategyFirst
+		lbStrategy = LBStrategy(1)
 	case "random":
 		lbStrategy = LBStrategyRandom
+
 	default:
-		dlog.Warnf("Unknown load balancing strategy: [%s]", config.LBStrategy)
+		n, err := strconv.ParseUint(strings.TrimPrefix(config.LBStrategy, "p"), 10, 64)
+
+		if err == nil && n >= 1 {
+			lbStrategy = LBStrategy(n)
+		} else {
+			dlog.Warnf("Unknown load balancing strategy: [%s]", config.LBStrategy)
+		}
 	}
 	proxy.serversInfo.lbStrategy = lbStrategy
 	proxy.serversInfo.lbEstimator = config.LBEstimator

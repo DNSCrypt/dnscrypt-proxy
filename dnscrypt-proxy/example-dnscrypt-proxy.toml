@@ -124,6 +124,7 @@ keepalive = 30
 
 
 ## Load-balancing strategy: 'p2' (default), 'ph', 'first' or 'random'
+## Use pN where N is a positive number to choose between N first fastest servers.
 
 # lb_strategy = 'p2'
 
