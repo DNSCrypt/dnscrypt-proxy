@@ -1,6 +1,7 @@
 #! /usr/bin/env python
 
-# run with python generate-domains-blacklist.py > list.txt.tmp && mv -f list.txt.tmp list
+# Use the following command ensure the right encoding:
+# python generate-domains-blacklist.py -o list.txt.tmp && mv -f list.txt.tmp list
 
 import argparse
 import re
@@ -182,7 +183,7 @@ def whitelist_from_url(url):
 
 
 def blacklists_from_config_file(
-    file, whitelist, time_restricted_url, ignore_retrieval_failure
+    file, whitelist, time_restricted_url, ignore_retrieval_failure, output_file
 ):
     blacklists = {}
     whitelisted_names = set()
@@ -232,10 +233,13 @@ def blacklists_from_config_file(
         whitelist = "file:" + whitelist
 
     whitelisted_names |= whitelist_from_url(whitelist)
+    
+    # redirect output to output_file if provided
+    output = StringIO() if output_file else sys.stdout
 
     # Process blacklists
     for url, names in blacklists.items():
-        print("\n\n########## Blacklist from {} ##########\n".format(url))
+        print("########## Blacklist from {} ##########\n".format(url), file=output)
         ignored, whitelisted = 0, 0
         list_names = list()
         for name in names:
@@ -249,11 +253,19 @@ def blacklists_from_config_file(
 
         list_names.sort(key=name_cmp)
         if ignored:
-            print("# Ignored duplicates: {}\n".format(ignored))
+            print("# Ignored duplicates: {}\n".format(ignored), file=output)
         if whitelisted:
-            print("# Ignored entries due to the whitelist: {}\n".format(whitelisted))
+            print("# Ignored entries due to the whitelist: {}\n".format(whitelisted), file=output)
         for name in list_names:
-            print(name)
+            print(name, file=output)
+        print("\n\n", file=output)
+        
+    # if provided, save content from output buffer to file all at once
+    if output_file:
+        f = open(output_file, "w", encoding='utf8')
+        f.write(output.getvalue())
+        f.close()
+        output.close()
 
 
 argp = argparse.ArgumentParser(
@@ -283,6 +295,12 @@ argp.add_argument(
     action="store_true",
     help="generate list even if some urls couldn't be retrieved",
 )
+argp.add_argument(
+    "-o",
+    "--output-file",
+    default=None,
+    help="save generated blacklist to a text file with the provided file name",
+)
 argp.add_argument("-t", "--timeout", default=30, help="URL open timeout")
 args = argp.parse_args()
 
@@ -290,6 +308,8 @@ conf = args.config
 whitelist = args.whitelist
 time_restricted = args.time_restricted
 ignore_retrieval_failure = args.ignore_retrieval_failure
+output_file = args.output_file
 
 blacklists_from_config_file(
-    conf, whitelist, time_restricted, ignore_retrieval_failure)
+    conf, whitelist, time_restricted, ignore_retrieval_failure, output_file)
+
