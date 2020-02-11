@@ -35,6 +35,11 @@ type ServerBugs struct {
 	incorrectPadding bool
 }
 
+type DOHClientCreds struct {
+	clientCert string
+	clientKey  string
+}
+
 type ServerInfo struct {
 	Proto              stamps.StampProtoType
 	MagicQuery         [8]byte
@@ -54,6 +59,7 @@ type ServerInfo struct {
 	rtt                ewma.MovingAverage
 	initialRtt         int
 	useGet             bool
+	DOHClientCreds     DOHClientCreds
 }
 
 type LBStrategy int
@@ -361,6 +367,15 @@ func fetchDoHServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, isN
 	}
 	body := []byte{
 		0xca, 0xfe, 0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x02, 0x00, 0x01, 0x00, 0x00, 0x29, 0x10, 0x00, 0x00, 0x00, 0x80, 0x00, 0x00, 0x00,
+	}
+	dohClientCreds, ok := (*proxy.dohCreds)["*"]
+	if !ok {
+		dohClientCreds = (*proxy.dohCreds)[name]
+	}
+	if (dohClientCreds != DOHClientCreds{}) {
+		dlog.Noticef("[%s] Cert: %s, Key: %s", name, dohClientCreds.clientCert, dohClientCreds.clientKey)
+		proxy.xTransport.tlsClientCreds = dohClientCreds
+		proxy.xTransport.rebuildTransport()
 	}
 	useGet := false
 	if _, _, err := proxy.xTransport.DoHQuery(useGet, url, body, proxy.timeout); err != nil {
