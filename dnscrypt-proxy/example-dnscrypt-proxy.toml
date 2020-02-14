@@ -192,12 +192,12 @@ cert_refresh_delay = 240
 ## They will never be used if lists have already been cached, and if stamps
 ## don't include host names without IP addresses.
 ## They will not be used if the configured system DNS works.
-## Resolver supporting DNSSEC are recommended.
+## Resolvers supporting DNSSEC are recommended.
 ##
 ## People in China may need to use 114.114.114.114:53 here.
 ## Other popular options include 8.8.8.8 and 1.1.1.1.
 ##
-## If more than one resolver are specified, they will be tried in sequence.
+## If more than one resolver is specified, they will be tried in sequence.
 
 fallback_resolvers = ['9.9.9.9:53', '8.8.8.8:53']
 
@@ -393,7 +393,7 @@ cache_neg_max_ttl = 600
 [query_log]
 
   ## Path to the query log file (absolute, or relative to the same directory as the config file)
-  ## Non non-Windows systems, can be /dev/stdout to log to the standard output (and set log_files_max_size to 0)
+  ## On non-Windows systems, can be /dev/stdout to log to the standard output (and set log_files_max_size to 0)
 
   # file = 'query.log'
 
