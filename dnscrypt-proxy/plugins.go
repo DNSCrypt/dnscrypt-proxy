@@ -200,7 +200,6 @@ func parseBlockedQueryResponse(blockedResponse string, pluginsGlobals *PluginsGl
 		if (*pluginsGlobals).respondWithIPv6 == nil {
 			(*pluginsGlobals).respondWithIPv6 = (*pluginsGlobals).respondWithIPv4
 		}
-
 	} else {
 		switch blockedResponse {
 		case "refused":
