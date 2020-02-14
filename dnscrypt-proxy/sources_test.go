@@ -33,8 +33,8 @@ const (
 	TestStateExpired                           // modification time of files set in distant past (cache only)
 	TestStatePartial                           // incomplete files
 	TestStatePartialSig                        // incomplete .minisig
-	TestStateMissing                           // non-existant files
-	TestStateMissingSig                        // non-existant .minisig
+	TestStateMissing                           // non-existent files
+	TestStateMissingSig                        // non-existent .minisig
 	TestStateReadErr                           // I/O error on reading files (download only)
 	TestStateReadSigErr                        // I/O error on reading .minisig (download only)
 	TestStateOpenErr                           // I/O error on opening files
