@@ -133,7 +133,7 @@ func newConfig() Config {
 		LBEstimator:              true,
 		BlockedQueryResponse:     "hinfo",
 		BrokenImplementations: BrokenImplementationsConfig{
-			BrokenQueryPadding: []string{"cisco", "cisco-ipv6", "cisco-familyshield", "quad9-dnscrypt-ip4-filter-alt", "quad9-dnscrypt-ip4-filter-pri", "quad9-dnscrypt-ip4-nofilter-alt", "quad9-dnscrypt-ip4-nofilter-pri", "quad9-dnscrypt-ip6-filter-alt", "quad9-dnscrypt-ip6-filter-pri", "quad9-dnscrypt-ip6-nofilter-alt", "quad9-dnscrypt-ip6-nofilter-pri", "quad9-doh-ip4-filter-alt", "quad9-doh-ip4-filter-pri", "quad9-doh-ip4-nofilter-alt", "quad9-doh-ip4-nofilter-pri", "quad9-doh-ip6-filter-alt", "quad9-doh-ip6-filter-pri", "quad9-doh-ip6-nofilter-alt", "quad9-doh-ip6-nofilter-pri"},
+			BrokenQueryPadding: []string{"cisco", "cisco-ipv6", "cisco-familyshield", "quad9-dnscrypt-ip4-filter-alt", "quad9-dnscrypt-ip4-filter-pri", "quad9-dnscrypt-ip4-nofilter-alt", "quad9-dnscrypt-ip4-nofilter-pri", "quad9-dnscrypt-ip6-filter-alt", "quad9-dnscrypt-ip6-filter-pri", "quad9-dnscrypt-ip6-nofilter-alt", "quad9-dnscrypt-ip6-nofilter-pri"},
 		},
 	}
 }
