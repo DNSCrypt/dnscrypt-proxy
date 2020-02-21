@@ -3,8 +3,6 @@ package main
 import (
 	crypto_rand "crypto/rand"
 	"encoding/binary"
-	"io"
-	"io/ioutil"
 	"net"
 	"os"
 	"sync/atomic"
@@ -513,9 +511,9 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 			tid := TransactionID(query)
 			SetTransactionID(query, 0)
 			serverInfo.noticeBegin(proxy)
-			resp, _, err := proxy.xTransport.DoHQuery(serverInfo.useGet, serverInfo.URL, query, proxy.timeout)
+			serverResponse, tls, _, err := proxy.xTransport.DoHQuery(serverInfo.useGet, serverInfo.URL, query, proxy.timeout)
 			SetTransactionID(query, tid)
-			if err == nil {
+			if err == nil || tls == nil || !tls.HandshakeComplete {
 				response = nil
 			} else if stale, ok := pluginsState.sessionData["stale"]; ok {
 				dlog.Debug("Serving stale response")
@@ -528,7 +526,7 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 				return
 			}
 			if response == nil {
-				response, err = ioutil.ReadAll(io.LimitReader(resp.Body, int64(MaxDNSPacketSize)))
+				response = serverResponse
 			}
 			if err != nil {
 				pluginsState.returnCode = PluginsReturnCodeNetworkError

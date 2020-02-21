@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
+	"io"
 	"io/ioutil"
 	"math/rand"
 	"net"
@@ -316,7 +317,7 @@ func (xTransport *XTransport) resolveAndUpdateCache(host string) error {
 	return nil
 }
 
-func (xTransport *XTransport) Fetch(method string, url *url.URL, accept string, contentType string, body *[]byte, timeout time.Duration) (*http.Response, time.Duration, error) {
+func (xTransport *XTransport) Fetch(method string, url *url.URL, accept string, contentType string, body *[]byte, timeout time.Duration) ([]byte, *tls.ConnectionState, time.Duration, error) {
 	if timeout <= 0 {
 		timeout = xTransport.timeout
 	}
@@ -338,11 +339,11 @@ func (xTransport *XTransport) Fetch(method string, url *url.URL, accept string, 
 	}
 	host, _ := ExtractHostAndPort(url.Host, 0)
 	if xTransport.proxyDialer == nil && strings.HasSuffix(host, ".onion") {
-		return nil, 0, errors.New("Onion service is not reachable without Tor")
+		return nil, nil, 0, errors.New("Onion service is not reachable without Tor")
 	}
 	if err := xTransport.resolveAndUpdateCache(host); err != nil {
 		dlog.Errorf("Unable to resolve [%v] - Make sure that the system resolver works, or that `fallback_resolver` has been set to a resolver that can be reached", host)
-		return nil, 0, err
+		return nil, nil, 0, err
 	}
 	req := &http.Request{
 		Method: method,
@@ -373,19 +374,26 @@ func (xTransport *XTransport) Fetch(method string, url *url.URL, accept string, 
 			xTransport.tlsCipherSuite = nil
 			xTransport.rebuildTransport()
 		}
+		return nil, nil, 0, err
 	}
-	return resp, rtt, err
+	tls := resp.TLS
+	bin, err := ioutil.ReadAll(io.LimitReader(resp.Body, MaxHTTPBodyLength))
+	if err != nil {
+		return nil, tls, 0, err
+	}
+	resp.Body.Close()
+	return bin, tls, rtt, err
 }
 
-func (xTransport *XTransport) Get(url *url.URL, accept string, timeout time.Duration) (*http.Response, time.Duration, error) {
+func (xTransport *XTransport) Get(url *url.URL, accept string, timeout time.Duration) ([]byte, *tls.ConnectionState, time.Duration, error) {
 	return xTransport.Fetch("GET", url, accept, "", nil, timeout)
 }
 
-func (xTransport *XTransport) Post(url *url.URL, accept string, contentType string, body *[]byte, timeout time.Duration) (*http.Response, time.Duration, error) {
+func (xTransport *XTransport) Post(url *url.URL, accept string, contentType string, body *[]byte, timeout time.Duration) ([]byte, *tls.ConnectionState, time.Duration, error) {
 	return xTransport.Fetch("POST", url, accept, contentType, body, timeout)
 }
 
-func (xTransport *XTransport) DoHQuery(useGet bool, url *url.URL, body []byte, timeout time.Duration) (*http.Response, time.Duration, error) {
+func (xTransport *XTransport) DoHQuery(useGet bool, url *url.URL, body []byte, timeout time.Duration) ([]byte, *tls.ConnectionState, time.Duration, error) {
 	dataType := "application/dns-message"
 	if useGet {
 		qs := url.Query()
