@@ -1,6 +1,7 @@
 package main
 
 import (
+	crypto_rand "crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -18,6 +19,7 @@ import (
 	"github.com/VividCortex/ewma"
 	"github.com/jedisct1/dlog"
 	stamps "github.com/jedisct1/go-dnsstamps"
+	"github.com/miekg/dns"
 	"golang.org/x/crypto/ed25519"
 )
 
@@ -343,6 +345,24 @@ func fetchDNSCryptServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp
 	}, nil
 }
 
+func dohTestPacket(msgID uint16) []byte {
+	msg := dns.Msg{}
+	msg.SetQuestion(".", dns.TypeNS)
+	msg.Id = msgID
+	msg.MsgHdr.RecursionDesired = true
+	msg.SetEdns0(uint16(MaxDNSPacketSize), false)
+	ext := new(dns.EDNS0_PADDING)
+	ext.Padding = make([]byte, 16)
+	crypto_rand.Read(ext.Padding)
+	edns0 := msg.IsEdns0()
+	edns0.Option = append(edns0.Option, ext)
+	body, err := msg.Pack()
+	if err != nil {
+		dlog.Fatal(err)
+	}
+	return body
+}
+
 func fetchDoHServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, isNew bool) (ServerInfo, error) {
 	// If an IP has been provided, use it forever.
 	// Or else, if the fallback server and the DoH server are operated
@@ -359,9 +379,7 @@ func fetchDoHServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, isN
 		Host:   stamp.ProviderName,
 		Path:   stamp.Path,
 	}
-	body := []byte{
-		0xca, 0xfe, 0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x02, 0x00, 0x01, 0x00, 0x00, 0x29, 0x10, 0x00, 0x00, 0x00, 0x80, 0x00, 0x00, 0x00,
-	}
+	body := dohTestPacket(0xcafe)
 	useGet := false
 	if _, _, err := proxy.xTransport.DoHQuery(useGet, url, body, proxy.timeout); err != nil {
 		useGet = true
