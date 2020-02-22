@@ -13,7 +13,7 @@ www.google.*             forcesafesearch.google.com
 
 www.bing.com             strict.bing.com
 
-yandex.ru                familysearch.yandex.ru
+yandex.ru                familysearch.yandex.ru       # inline comments are allowed after a pound sign
 
 =duckduckgo.com          safe.duckduckgo.com
 

@@ -31,13 +31,13 @@ func FetchCurrentDNSCryptCert(proxy *Proxy, serverName *string, proto string, pk
 	if serverName == nil {
 		serverName = &providerName
 	}
-	query := new(dns.Msg)
+	query := dns.Msg{}
 	query.SetQuestion(providerName, dns.TypeTXT)
 	if !strings.HasPrefix(providerName, "2.dnscrypt-cert.") {
 		dlog.Warnf("[%v] uses a non-standard provider name ('%v' doesn't start with '2.dnscrypt-cert.')", *serverName, providerName)
 		relayUDPAddr, relayTCPAddr = nil, nil
 	}
-	in, rtt, err := dnsExchange(proxy, proto, query, serverAddress, relayUDPAddr, relayTCPAddr, serverName)
+	in, rtt, err := dnsExchange(proxy, proto, &query, serverAddress, relayUDPAddr, relayTCPAddr, serverName)
 	if err != nil {
 		dlog.Noticef("[%s] TIMEOUT", *serverName)
 		return CertInfo{}, 0, err
@@ -226,8 +226,12 @@ func _dnsExchange(proxy *Proxy, proto string, query *dns.Msg, serverAddress stri
 			return nil, 0, err
 		}
 		defer pc.Close()
-		pc.SetDeadline(time.Now().Add(proxy.timeout))
-		pc.Write(binQuery)
+		if err = pc.SetDeadline(time.Now().Add(proxy.timeout)); err != nil {
+			return nil, 0, err
+		}
+		if _, err = pc.Write(binQuery); err != nil {
+			return nil, 0, err
+		}
 		packet = make([]byte, MaxDNSPacketSize)
 		length, err := pc.Read(packet)
 		if err != nil {
@@ -261,12 +265,16 @@ func _dnsExchange(proxy *Proxy, proto string, query *dns.Msg, serverAddress stri
 			return nil, 0, err
 		}
 		defer pc.Close()
-		pc.SetDeadline(time.Now().Add(proxy.timeout))
+		if err = pc.SetDeadline(time.Now().Add(proxy.timeout)); err != nil {
+			return nil, 0, err
+		}
 		binQuery, err = PrefixWithSize(binQuery)
 		if err != nil {
 			return nil, 0, err
 		}
-		pc.Write(binQuery)
+		if _, err = pc.Write(binQuery); err != nil {
+			return nil, 0, err
+		}
 		packet, err = ReadPrefixed(&pc)
 		if err != nil {
 			return nil, 0, err

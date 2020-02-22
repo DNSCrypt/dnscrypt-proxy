@@ -6,7 +6,6 @@ import (
 	"net"
 	"strings"
 	"time"
-	"unicode"
 
 	iradix "github.com/hashicorp/go-immutable-radix"
 	"github.com/jedisct1/dlog"
@@ -38,8 +37,8 @@ func (plugin *PluginBlockIP) Init(proxy *Proxy) error {
 	plugin.blockedPrefixes = iradix.New()
 	plugin.blockedIPs = make(map[string]interface{})
 	for lineNo, line := range strings.Split(string(bin), "\n") {
-		line = strings.TrimFunc(line, unicode.IsSpace)
-		if len(line) == 0 || strings.HasPrefix(line, "#") {
+		line = TrimAndStripInlineComments(line)
+		if len(line) == 0 {
 			continue
 		}
 		ip := net.ParseIP(line)
@@ -122,14 +121,7 @@ func (plugin *PluginBlockIP) Eval(pluginsState *PluginsState, msg *dns.Msg) erro
 		pluginsState.action = PluginsActionReject
 		pluginsState.returnCode = PluginsReturnCodeReject
 		if plugin.logger != nil {
-			questions := msg.Question
-			if len(questions) != 1 {
-				return nil
-			}
-			qName := strings.ToLower(StripTrailingDot(questions[0].Name))
-			if len(qName) < 2 {
-				return nil
-			}
+			qName := pluginsState.qName
 			var clientIPStr string
 			if pluginsState.clientProto == "udp" {
 				clientIPStr = (*pluginsState.clientAddr).(*net.UDPAddr).IP.String()
@@ -151,7 +143,7 @@ func (plugin *PluginBlockIP) Eval(pluginsState *PluginsState, msg *dns.Msg) erro
 			if plugin.logger == nil {
 				return errors.New("Log file not initialized")
 			}
-			plugin.logger.Write([]byte(line))
+			_, _ = plugin.logger.Write([]byte(line))
 		}
 	}
 	return nil

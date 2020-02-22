@@ -1,3 +1,45 @@
+* Version 2.0.39
+ - The Firefox Local DoH service didn't properly work in version 2.0.38;
+this has been fixed. Thanks to Simon Brand for the report!
+
+* Version 2.0.38
+ - Entries from lists (forwarding, blacklists, whitelists) now support
+inline comments.
+ - Reliability improvement: queries over UDP are retried after a timeout
+instead of solely relying on the client.
+ - Reliability improvement: during temporary network outages, cached records
+are now served even if they are stale.
+ - Bug fix: SOCKS proxies and DNS relays can be combined.
+ - New feature: multiple fallback resolvers are now supported (see the
+new `fallback_resolvers` option. Note that `fallback_resolver` is
+still supported for backward compatibility).
+ - Windows: the service can be installed with a configuration file
+stored separately from the application.
+ - Security (affecting DoH): precompiled binaries of dnscrypt-proxy 2.0.37 are
+built using Go 1.13.7 that fixes a TLS certificate parsing issue present in
+previous versions of the compiler.
+
+* Version 2.0.36
+ - New option: `block_undelegated`. When enabled, `dnscrypt-proxy` will
+directly respond to queries for locally-served zones (https://sk.tl/2QqB971U)
+and nonexistent zones that should have been kept local, but are frequently
+leaked. This reduces latency and improves privacy.
+ - Conformance: the `DO` bit is now set in synthetic responses if it was
+set in a question, and the `AD` bit is cleared.
+ - The `miegkg/dns` module was updated to version 1.1.26, that fixes a
+security issue affecting non-encrypted/non-authenticated DNS traffic. In
+`dnscrypt-proxy`, this only affects the forwarding feature.
+
+* Version 2.0.35
+ - New option: `block_unqualified` to block `A`/`AAAA` queries with
+unqualified host names. These will very rarely get an answer from upstream
+resolvers, but can leak private information to these, as well as to root
+servers.
+ - When a `CNAME` pointer is blocked, the original query name is now logged
+along with the pointer. This makes it easier to know what the original
+query name, so it can be whitelisted, or what the pointer was, so it
+can be removed from the blacklist.
+
 * Version 2.0.34
  - Blacklisted names are now also blocked if they appear in `CNAME`
 pointers.

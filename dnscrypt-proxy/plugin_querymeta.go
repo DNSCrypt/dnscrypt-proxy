@@ -34,10 +34,6 @@ func (plugin *PluginQueryMeta) Reload() error {
 }
 
 func (plugin *PluginQueryMeta) Eval(pluginsState *PluginsState, msg *dns.Msg) error {
-	questions := msg.Question
-	if len(questions) == 0 {
-		return nil
-	}
 	msg.Extra = []dns.RR{plugin.queryMetaRR}
 	return nil
 }

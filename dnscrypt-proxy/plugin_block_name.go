@@ -25,10 +25,9 @@ const aliasesLimit = 8
 var blockedNames *BlockedNames
 
 func (blockedNames *BlockedNames) check(pluginsState *PluginsState, qName string, aliasFor *string) (bool, error) {
-	qName = strings.ToLower(StripTrailingDot(qName))
 	reject, reason, xweeklyRanges := blockedNames.patternMatcher.Eval(qName)
 	if aliasFor != nil {
-		reason = reason + " (alias for [" + StripTrailingDot(*aliasFor) + "])"
+		reason = reason + " (alias for [" + *aliasFor + "])"
 	}
 	var weeklyRanges *WeeklyRanges
 	if xweeklyRanges != nil {
@@ -66,7 +65,7 @@ func (blockedNames *BlockedNames) check(pluginsState *PluginsState, qName string
 		if blockedNames.logger == nil {
 			return false, errors.New("Log file not initialized")
 		}
-		blockedNames.logger.Write([]byte(line))
+		_, _ = blockedNames.logger.Write([]byte(line))
 	}
 	return true, nil
 }
@@ -95,8 +94,8 @@ func (plugin *PluginBlockName) Init(proxy *Proxy) error {
 		patternMatcher:  NewPatternPatcher(),
 	}
 	for lineNo, line := range strings.Split(string(bin), "\n") {
-		line = strings.TrimFunc(line, unicode.IsSpace)
-		if len(line) == 0 || strings.HasPrefix(line, "#") {
+		line = TrimAndStripInlineComments(line)
+		if len(line) == 0 {
 			continue
 		}
 		parts := strings.Split(line, "@")
@@ -110,7 +109,7 @@ func (plugin *PluginBlockName) Init(proxy *Proxy) error {
 		}
 		var weeklyRanges *WeeklyRanges
 		if len(timeRangeName) > 0 {
-			weeklyRangesX, ok := (*blockedNames.allWeeklyRanges)[timeRangeName]
+			weeklyRangesX, ok := (*xBlockedNames.allWeeklyRanges)[timeRangeName]
 			if !ok {
 				dlog.Errorf("Time range [%s] not found at line %d", timeRangeName, 1+lineNo)
 			} else {
@@ -144,11 +143,7 @@ func (plugin *PluginBlockName) Eval(pluginsState *PluginsState, msg *dns.Msg) er
 	if blockedNames == nil || pluginsState.sessionData["whitelisted"] != nil {
 		return nil
 	}
-	questions := msg.Question
-	if len(questions) != 1 {
-		return nil
-	}
-	_, err := blockedNames.check(pluginsState, questions[0].Name, nil)
+	_, err := blockedNames.check(pluginsState, pluginsState.qName, nil)
 	return err
 }
 
@@ -181,11 +176,7 @@ func (plugin *PluginBlockNameResponse) Eval(pluginsState *PluginsState, msg *dns
 	if blockedNames == nil || pluginsState.sessionData["whitelisted"] != nil {
 		return nil
 	}
-	questions := msg.Question
-	if len(questions) != 1 {
-		return nil
-	}
-	aliasFor := questions[0].Name
+	aliasFor := pluginsState.qName
 	aliasesLeft := aliasesLimit
 	answers := msg.Answer
 	for _, answer := range answers {
@@ -193,7 +184,11 @@ func (plugin *PluginBlockNameResponse) Eval(pluginsState *PluginsState, msg *dns
 		if header.Class != dns.ClassINET || header.Rrtype != dns.TypeCNAME {
 			continue
 		}
-		if blocked, err := blockedNames.check(pluginsState, answer.(*dns.CNAME).Target, &aliasFor); blocked || err != nil {
+		target, err := NormalizeQName(answer.(*dns.CNAME).Target)
+		if err != nil {
+			return err
+		}
+		if blocked, err := blockedNames.check(pluginsState, target, &aliasFor); blocked || err != nil {
 			return err
 		}
 		aliasesLeft--

@@ -122,7 +122,7 @@ func (patternMatcher *PatternMatcher) Eval(qName string) (reject bool, reason st
 
 	revQname := StringReverse(qName)
 	if match, xval, found := patternMatcher.blockedSuffixes.LongestPrefix([]byte(revQname)); found {
-		if len(match) == len(qName) || revQname[len(match)] == '.' {
+		if len(match) == len(revQname) || revQname[len(match)] == '.' {
 			return true, "*." + StringReverse(string(match)), xval
 		}
 		if len(match) < len(revQname) && len(revQname) > 0 {

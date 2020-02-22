@@ -1,0 +1,13 @@
+##############################
+#        IP blacklist        #
+##############################
+
+## Response containing blacklisted IP addresses will be blocked
+##
+## Sample feed of suspect IP addresses: https://github.com/stamparm/ipsum
+## Use only one of the levels from that list. 1 is not very reliable
+## (may have a lot of false positives), 8 is the most reliable subset.
+
+163.5.1.4
+94.46.118.*
+[fe80:53:*]        # IPv6 prefix example

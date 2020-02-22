@@ -3,7 +3,6 @@ package main
 import (
 	"crypto/sha512"
 	"encoding/binary"
-	"errors"
 	"sync"
 	"time"
 
@@ -23,12 +22,8 @@ type CachedResponses struct {
 
 var cachedResponses CachedResponses
 
-func computeCacheKey(pluginsState *PluginsState, msg *dns.Msg) ([32]byte, error) {
-	questions := msg.Question
-	if len(questions) != 1 {
-		return [32]byte{}, errors.New("No question present")
-	}
-	question := questions[0]
+func computeCacheKey(pluginsState *PluginsState, msg *dns.Msg) [32]byte {
+	question := msg.Question[0]
 	h := sha512.New512_256()
 	var tmp [5]byte
 	binary.LittleEndian.PutUint16(tmp[0:2], question.Qtype)
@@ -37,12 +32,13 @@ func computeCacheKey(pluginsState *PluginsState, msg *dns.Msg) ([32]byte, error)
 		tmp[4] = 1
 	}
 	h.Write(tmp[:])
-	normalizedName := []byte(question.Name)
-	NormalizeName(&normalizedName)
-	h.Write(normalizedName)
+	normalizedRawQName := []byte(question.Name)
+	NormalizeRawQName(&normalizedRawQName)
+	h.Write(normalizedRawQName)
 	var sum [32]byte
 	h.Sum(sum[:0])
-	return sum, nil
+
+	return sum
 }
 
 // ---
@@ -71,10 +67,7 @@ func (plugin *PluginCache) Reload() error {
 }
 
 func (plugin *PluginCache) Eval(pluginsState *PluginsState, msg *dns.Msg) error {
-	cacheKey, err := computeCacheKey(pluginsState, msg)
-	if err != nil {
-		return nil
-	}
+	cacheKey := computeCacheKey(pluginsState, msg)
 	cachedResponses.RLock()
 	defer cachedResponses.RUnlock()
 	if cachedResponses.cache == nil {
@@ -85,17 +78,20 @@ func (plugin *PluginCache) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 		return nil
 	}
 	cached := cachedAny.(CachedResponse)
-	if time.Now().After(cached.expiration) {
-		return nil
-	}
-
-	updateTTL(&cached.msg, cached.expiration)
 
 	synth := cached.msg
 	synth.Id = msg.Id
 	synth.Response = true
 	synth.Compress = true
 	synth.Question = msg.Question
+
+	if time.Now().After(cached.expiration) {
+		pluginsState.sessionData["stale"] = &synth
+		return nil
+	}
+
+	updateTTL(&cached.msg, cached.expiration)
+
 	pluginsState.synthResponse = &synth
 	pluginsState.action = PluginsActionSynth
 	pluginsState.cacheHit = true
@@ -134,10 +130,7 @@ func (plugin *PluginCacheResponse) Eval(pluginsState *PluginsState, msg *dns.Msg
 	if msg.Truncated {
 		return nil
 	}
-	cacheKey, err := computeCacheKey(pluginsState, msg)
-	if err != nil {
-		return err
-	}
+	cacheKey := computeCacheKey(pluginsState, msg)
 	ttl := getMinTTL(msg, pluginsState.cacheMinTTL, pluginsState.cacheMaxTTL, pluginsState.cacheNegMinTTL, pluginsState.cacheNegMaxTTL)
 	cachedResponse := CachedResponse{
 		expiration: time.Now().Add(ttl),
@@ -145,6 +138,7 @@ func (plugin *PluginCacheResponse) Eval(pluginsState *PluginsState, msg *dns.Msg
 	}
 	cachedResponses.Lock()
 	if cachedResponses.cache == nil {
+		var err error
 		cachedResponses.cache, err = lru.NewARC(pluginsState.cacheSize)
 		if err != nil {
 			cachedResponses.Unlock()

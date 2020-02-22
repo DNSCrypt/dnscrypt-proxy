@@ -2,221 +2,217 @@ dist: bionic
 
 language: go
 os:
-- linux
+  - linux
 go:
-- 1.x
+  - 1.x
 
-before_install:
-  - sudo apt-get -y install libsodium
 addons:
   apt:
     update: true
 
 script:
-- gimme --list
-- echo $TRAVIS_GO_VERSION
-- cd dnscrypt-proxy
+  - cd dnscrypt-proxy
 
-- go clean
-- env GOOS=windows GOARCH=386 go build -mod vendor -ldflags="-s -w"
-- mkdir win32
-- ln dnscrypt-proxy.exe win32/
-- cp ../LICENSE example-dnscrypt-proxy.toml localhost.pem example-*.txt win32/
-- for i in win32/LICENSE win32/*.toml win32/*.txt; do ex -bsc '%!awk "{sub(/$/,\"\r\")}1"'
-  -cx "$i"; done
-- ln ../windows/* win32/
-- zip -9 -r dnscrypt-proxy-win32-${TRAVIS_TAG:-dev}.zip win32
+  - go clean
+  - env GOOS=windows GOARCH=386 go build -mod vendor -ldflags="-s -w"
+  - mkdir win32
+  - ln dnscrypt-proxy.exe win32/
+  - cp ../LICENSE example-dnscrypt-proxy.toml localhost.pem example-*.txt win32/
+  - for i in win32/LICENSE win32/*.toml win32/*.txt; do ex -bsc '%!awk "{sub(/$/,\"\r\")}1"'
+    -cx "$i"; done
+  - ln ../windows/* win32/
+  - zip -9 -r dnscrypt-proxy-win32-${TRAVIS_TAG:-dev}.zip win32
 
-- go clean
-- env GOOS=windows GOARCH=amd64 go build -mod vendor -ldflags="-s -w"
-- mkdir win64
-- ln dnscrypt-proxy.exe win64/
-- cp ../LICENSE example-dnscrypt-proxy.toml localhost.pem example-*.txt win64/
-- for i in win64/LICENSE win64/*.toml win64/*.txt; do ex -bsc '%!awk "{sub(/$/,\"\r\")}1"'
-  -cx "$i"; done
-- ln ../windows/* win64/
-- zip -9 -r dnscrypt-proxy-win64-${TRAVIS_TAG:-dev}.zip win64
+  - go clean
+  - env GOOS=windows GOARCH=amd64 go build -mod vendor -ldflags="-s -w"
+  - mkdir win64
+  - ln dnscrypt-proxy.exe win64/
+  - cp ../LICENSE example-dnscrypt-proxy.toml localhost.pem example-*.txt win64/
+  - for i in win64/LICENSE win64/*.toml win64/*.txt; do ex -bsc '%!awk "{sub(/$/,\"\r\")}1"'
+    -cx "$i"; done
+  - ln ../windows/* win64/
+  - zip -9 -r dnscrypt-proxy-win64-${TRAVIS_TAG:-dev}.zip win64
 
-- go clean
-- env GO386=387 GOOS=openbsd GOARCH=386 go build -mod vendor -ldflags="-s -w"
-- mkdir openbsd-i386
-- ln dnscrypt-proxy openbsd-i386/
-- ln ../LICENSE example-dnscrypt-proxy.toml localhost.pem example-*.txt openbsd-i386/
-- tar czpvf dnscrypt-proxy-openbsd_i386-${TRAVIS_TAG:-dev}.tar.gz openbsd-i386
+  - go clean
+  - env GO386=387 GOOS=openbsd GOARCH=386 go build -mod vendor -ldflags="-s -w"
+  - mkdir openbsd-i386
+  - ln dnscrypt-proxy openbsd-i386/
+  - ln ../LICENSE example-dnscrypt-proxy.toml localhost.pem example-*.txt openbsd-i386/
+  - tar czpvf dnscrypt-proxy-openbsd_i386-${TRAVIS_TAG:-dev}.tar.gz openbsd-i386
 
-- go clean
-- env GOOS=openbsd GOARCH=amd64 go build -mod vendor -ldflags="-s -w"
-- mkdir openbsd-amd64
-- ln dnscrypt-proxy openbsd-amd64/
-- ln ../LICENSE example-dnscrypt-proxy.toml localhost.pem example-*.txt openbsd-amd64/
-- tar czpvf dnscrypt-proxy-openbsd_amd64-${TRAVIS_TAG:-dev}.tar.gz openbsd-amd64
+  - go clean
+  - env GOOS=openbsd GOARCH=amd64 go build -mod vendor -ldflags="-s -w"
+  - mkdir openbsd-amd64
+  - ln dnscrypt-proxy openbsd-amd64/
+  - ln ../LICENSE example-dnscrypt-proxy.toml localhost.pem example-*.txt openbsd-amd64/
+  - tar czpvf dnscrypt-proxy-openbsd_amd64-${TRAVIS_TAG:-dev}.tar.gz openbsd-amd64
 
-- go clean
-- env GOOS=freebsd GOARCH=386 go build -mod vendor -ldflags="-s -w"
-- mkdir freebsd-i386
-- ln dnscrypt-proxy freebsd-i386/
-- ln ../LICENSE example-dnscrypt-proxy.toml localhost.pem example-*.txt freebsd-i386/
-- tar czpvf dnscrypt-proxy-freebsd_i386-${TRAVIS_TAG:-dev}.tar.gz freebsd-i386
+  - go clean
+  - env GOOS=freebsd GOARCH=386 go build -mod vendor -ldflags="-s -w"
+  - mkdir freebsd-i386
+  - ln dnscrypt-proxy freebsd-i386/
+  - ln ../LICENSE example-dnscrypt-proxy.toml localhost.pem example-*.txt freebsd-i386/
+  - tar czpvf dnscrypt-proxy-freebsd_i386-${TRAVIS_TAG:-dev}.tar.gz freebsd-i386
 
-- go clean
-- env GOOS=freebsd GOARCH=amd64 go build -mod vendor -ldflags="-s -w"
-- mkdir freebsd-amd64
-- ln dnscrypt-proxy freebsd-amd64/
-- ln ../LICENSE example-dnscrypt-proxy.toml localhost.pem example-*.txt freebsd-amd64/
-- tar czpvf dnscrypt-proxy-freebsd_amd64-${TRAVIS_TAG:-dev}.tar.gz freebsd-amd64
+  - go clean
+  - env GOOS=freebsd GOARCH=amd64 go build -mod vendor -ldflags="-s -w"
+  - mkdir freebsd-amd64
+  - ln dnscrypt-proxy freebsd-amd64/
+  - ln ../LICENSE example-dnscrypt-proxy.toml localhost.pem example-*.txt freebsd-amd64/
+  - tar czpvf dnscrypt-proxy-freebsd_amd64-${TRAVIS_TAG:-dev}.tar.gz freebsd-amd64
 
-- go clean
-- env GOOS=freebsd GOARCH=arm go build -mod vendor -ldflags="-s -w"
-- mkdir freebsd-arm
-- ln dnscrypt-proxy freebsd-arm/
-- ln ../LICENSE example-dnscrypt-proxy.toml localhost.pem example-*.txt freebsd-arm/
-- tar czpvf dnscrypt-proxy-freebsd_arm-${TRAVIS_TAG:-dev}.tar.gz freebsd-arm
+  - go clean
+  - env GOOS=freebsd GOARCH=arm go build -mod vendor -ldflags="-s -w"
+  - mkdir freebsd-arm
+  - ln dnscrypt-proxy freebsd-arm/
+  - ln ../LICENSE example-dnscrypt-proxy.toml localhost.pem example-*.txt freebsd-arm/
+  - tar czpvf dnscrypt-proxy-freebsd_arm-${TRAVIS_TAG:-dev}.tar.gz freebsd-arm
 
-- go clean
-- env GOOS=freebsd GOARCH=arm GOARM=7 go build -mod vendor -ldflags="-s -w"
-- mkdir freebsd-armv7
-- ln dnscrypt-proxy freebsd-armv7/
-- ln ../LICENSE example-dnscrypt-proxy.toml localhost.pem example-*.txt freebsd-armv7/
-- tar czpvf dnscrypt-proxy-freebsd_armv7-${TRAVIS_TAG:-dev}.tar.gz freebsd-armv7
+  - go clean
+  - env GOOS=freebsd GOARCH=arm GOARM=7 go build -mod vendor -ldflags="-s -w"
+  - mkdir freebsd-armv7
+  - ln dnscrypt-proxy freebsd-armv7/
+  - ln ../LICENSE example-dnscrypt-proxy.toml localhost.pem example-*.txt freebsd-armv7/
+  - tar czpvf dnscrypt-proxy-freebsd_armv7-${TRAVIS_TAG:-dev}.tar.gz freebsd-armv7
 
-- go clean
-- env GOOS=dragonfly GOARCH=amd64 go build -mod vendor -ldflags="-s -w"
-- mkdir dragonflybsd-amd64
-- ln dnscrypt-proxy dragonflybsd-amd64/
-- ln ../LICENSE example-dnscrypt-proxy.toml localhost.pem example-*.txt dragonflybsd-amd64/
-- tar czpvf dnscrypt-proxy-dragonflybsd_amd64-${TRAVIS_TAG:-dev}.tar.gz dragonflybsd-amd64
+  - go clean
+  - env GOOS=dragonfly GOARCH=amd64 go build -mod vendor -ldflags="-s -w"
+  - mkdir dragonflybsd-amd64
+  - ln dnscrypt-proxy dragonflybsd-amd64/
+  - ln ../LICENSE example-dnscrypt-proxy.toml localhost.pem example-*.txt dragonflybsd-amd64/
+  - tar czpvf dnscrypt-proxy-dragonflybsd_amd64-${TRAVIS_TAG:-dev}.tar.gz dragonflybsd-amd64
 
-- go clean
-- env GOOS=netbsd GOARCH=386 go build -mod vendor -ldflags="-s -w"
-- mkdir netbsd-i386
-- ln dnscrypt-proxy netbsd-i386/
-- ln ../LICENSE example-dnscrypt-proxy.toml localhost.pem example-*.txt netbsd-i386/
-- tar czpvf dnscrypt-proxy-netbsd_i386-${TRAVIS_TAG:-dev}.tar.gz netbsd-i386
+  - go clean
+  - env GOOS=netbsd GOARCH=386 go build -mod vendor -ldflags="-s -w"
+  - mkdir netbsd-i386
+  - ln dnscrypt-proxy netbsd-i386/
+  - ln ../LICENSE example-dnscrypt-proxy.toml localhost.pem example-*.txt netbsd-i386/
+  - tar czpvf dnscrypt-proxy-netbsd_i386-${TRAVIS_TAG:-dev}.tar.gz netbsd-i386
 
-- go clean
-- env GOOS=netbsd GOARCH=amd64 go build -mod vendor -ldflags="-s -w"
-- mkdir netbsd-amd64
-- ln dnscrypt-proxy netbsd-amd64/
-- ln ../LICENSE example-dnscrypt-proxy.toml localhost.pem example-*.txt netbsd-amd64/
-- tar czpvf dnscrypt-proxy-netbsd_amd64-${TRAVIS_TAG:-dev}.tar.gz netbsd-amd64
+  - go clean
+  - env GOOS=netbsd GOARCH=amd64 go build -mod vendor -ldflags="-s -w"
+  - mkdir netbsd-amd64
+  - ln dnscrypt-proxy netbsd-amd64/
+  - ln ../LICENSE example-dnscrypt-proxy.toml localhost.pem example-*.txt netbsd-amd64/
+  - tar czpvf dnscrypt-proxy-netbsd_amd64-${TRAVIS_TAG:-dev}.tar.gz netbsd-amd64
 
-- go clean
-- env GOOS=solaris GOARCH=amd64 go build -mod vendor -ldflags="-s -w"
-- mkdir solaris-amd64
-- ln dnscrypt-proxy solaris-amd64/
-- ln ../LICENSE example-dnscrypt-proxy.toml localhost.pem example-*.txt solaris-amd64/
-- tar czpvf dnscrypt-proxy-solaris_amd64-${TRAVIS_TAG:-dev}.tar.gz solaris-amd64
+  - go clean
+  - env GOOS=solaris GOARCH=amd64 go build -mod vendor -ldflags="-s -w"
+  - mkdir solaris-amd64
+  - ln dnscrypt-proxy solaris-amd64/
+  - ln ../LICENSE example-dnscrypt-proxy.toml localhost.pem example-*.txt solaris-amd64/
+  - tar czpvf dnscrypt-proxy-solaris_amd64-${TRAVIS_TAG:-dev}.tar.gz solaris-amd64
 
-- go clean
-- env CGO_ENABLED=0 GOOS=linux GOARCH=386 go build -mod vendor -ldflags="-s -w"
-- mkdir linux-i386
-- ln dnscrypt-proxy linux-i386/
-- ln ../LICENSE example-dnscrypt-proxy.toml localhost.pem example-*.txt linux-i386/
-- tar czpvf dnscrypt-proxy-linux_i386-${TRAVIS_TAG:-dev}.tar.gz linux-i386
+  - go clean
+  - env CGO_ENABLED=0 GOOS=linux GOARCH=386 go build -mod vendor -ldflags="-s -w"
+  - mkdir linux-i386
+  - ln dnscrypt-proxy linux-i386/
+  - ln ../LICENSE example-dnscrypt-proxy.toml localhost.pem example-*.txt linux-i386/
+  - tar czpvf dnscrypt-proxy-linux_i386-${TRAVIS_TAG:-dev}.tar.gz linux-i386
 
-- go clean
-- env CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -mod vendor -ldflags="-s -w"
-- mkdir linux-x86_64
-- ln dnscrypt-proxy linux-x86_64/
-- ln ../LICENSE example-dnscrypt-proxy.toml localhost.pem example-*.txt linux-x86_64/
-- tar czpvf dnscrypt-proxy-linux_x86_64-${TRAVIS_TAG:-dev}.tar.gz linux-x86_64
+  - go clean
+  - env CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -mod vendor -ldflags="-s -w"
+  - mkdir linux-x86_64
+  - ln dnscrypt-proxy linux-x86_64/
+  - ln ../LICENSE example-dnscrypt-proxy.toml localhost.pem example-*.txt linux-x86_64/
+  - tar czpvf dnscrypt-proxy-linux_x86_64-${TRAVIS_TAG:-dev}.tar.gz linux-x86_64
 
-- go clean
-- env CGO_ENABLED=0 GOOS=linux GOARCH=arm go build -mod vendor -ldflags="-s -w"
-- mkdir linux-arm
-- ln dnscrypt-proxy linux-arm/
-- ln ../LICENSE example-dnscrypt-proxy.toml localhost.pem example-*.txt linux-arm/
-- tar czpvf dnscrypt-proxy-linux_arm-${TRAVIS_TAG:-dev}.tar.gz linux-arm
+  - go clean
+  - env CGO_ENABLED=0 GOOS=linux GOARCH=arm go build -mod vendor -ldflags="-s -w"
+  - mkdir linux-arm
+  - ln dnscrypt-proxy linux-arm/
+  - ln ../LICENSE example-dnscrypt-proxy.toml localhost.pem example-*.txt linux-arm/
+  - tar czpvf dnscrypt-proxy-linux_arm-${TRAVIS_TAG:-dev}.tar.gz linux-arm
 
-- go clean
-- env CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -mod vendor -ldflags="-s -w"
-- mkdir linux-arm64
-- ln dnscrypt-proxy linux-arm64/
-- ln ../LICENSE example-dnscrypt-proxy.toml localhost.pem example-*.txt linux-arm64/
-- tar czpvf dnscrypt-proxy-linux_arm64-${TRAVIS_TAG:-dev}.tar.gz linux-arm64
+  - go clean
+  - env CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -mod vendor -ldflags="-s -w"
+  - mkdir linux-arm64
+  - ln dnscrypt-proxy linux-arm64/
+  - ln ../LICENSE example-dnscrypt-proxy.toml localhost.pem example-*.txt linux-arm64/
+  - tar czpvf dnscrypt-proxy-linux_arm64-${TRAVIS_TAG:-dev}.tar.gz linux-arm64
 
-- go clean
-- env CGO_ENABLED=0 GOOS=linux GOARCH=mips GOMIPS=softfloat go build -mod vendor -ldflags="-s -w"
-- mkdir linux-mips
-- ln dnscrypt-proxy linux-mips/
-- ln ../LICENSE example-dnscrypt-proxy.toml localhost.pem example-*.txt linux-mips/
-- tar czpvf dnscrypt-proxy-linux_mips-${TRAVIS_TAG:-dev}.tar.gz linux-mips
+  - go clean
+  - env CGO_ENABLED=0 GOOS=linux GOARCH=mips GOMIPS=softfloat go build -mod vendor -ldflags="-s -w"
+  - mkdir linux-mips
+  - ln dnscrypt-proxy linux-mips/
+  - ln ../LICENSE example-dnscrypt-proxy.toml localhost.pem example-*.txt linux-mips/
+  - tar czpvf dnscrypt-proxy-linux_mips-${TRAVIS_TAG:-dev}.tar.gz linux-mips
 
-- go clean
-- env CGO_ENABLED=0 GOOS=linux GOARCH=mipsle GOMIPS=softfloat go build -mod vendor -ldflags="-s -w"
-- mkdir linux-mipsle
-- ln dnscrypt-proxy linux-mipsle/
-- ln ../LICENSE example-dnscrypt-proxy.toml localhost.pem example-*.txt linux-mipsle/
-- tar czpvf dnscrypt-proxy-linux_mipsle-${TRAVIS_TAG:-dev}.tar.gz linux-mipsle
+  - go clean
+  - env CGO_ENABLED=0 GOOS=linux GOARCH=mipsle GOMIPS=softfloat go build -mod vendor -ldflags="-s -w"
+  - mkdir linux-mipsle
+  - ln dnscrypt-proxy linux-mipsle/
+  - ln ../LICENSE example-dnscrypt-proxy.toml localhost.pem example-*.txt linux-mipsle/
+  - tar czpvf dnscrypt-proxy-linux_mipsle-${TRAVIS_TAG:-dev}.tar.gz linux-mipsle
 
-- go clean
-- env CGO_ENABLED=0 GOOS=linux GOARCH=mips64 go build -mod vendor -ldflags="-s -w"
-- mkdir linux-mips64
-- ln dnscrypt-proxy linux-mips64/
-- ln ../LICENSE example-dnscrypt-proxy.toml localhost.pem example-*.txt linux-mips64/
-- tar czpvf dnscrypt-proxy-linux_mips64-${TRAVIS_TAG:-dev}.tar.gz linux-mips64
+  - go clean
+  - env CGO_ENABLED=0 GOOS=linux GOARCH=mips64 go build -mod vendor -ldflags="-s -w"
+  - mkdir linux-mips64
+  - ln dnscrypt-proxy linux-mips64/
+  - ln ../LICENSE example-dnscrypt-proxy.toml localhost.pem example-*.txt linux-mips64/
+  - tar czpvf dnscrypt-proxy-linux_mips64-${TRAVIS_TAG:-dev}.tar.gz linux-mips64
 
-- go clean
-- env CGO_ENABLED=0 GOOS=linux GOARCH=mips64le go build -mod vendor -ldflags="-s -w"
-- mkdir linux-mips64le
-- ln dnscrypt-proxy linux-mips64le/
-- ln ../LICENSE example-dnscrypt-proxy.toml localhost.pem example-*.txt linux-mips64le/
-- tar czpvf dnscrypt-proxy-linux_mips64le-${TRAVIS_TAG:-dev}.tar.gz linux-mips64le
+  - go clean
+  - env CGO_ENABLED=0 GOOS=linux GOARCH=mips64le go build -mod vendor -ldflags="-s -w"
+  - mkdir linux-mips64le
+  - ln dnscrypt-proxy linux-mips64le/
+  - ln ../LICENSE example-dnscrypt-proxy.toml localhost.pem example-*.txt linux-mips64le/
+  - tar czpvf dnscrypt-proxy-linux_mips64le-${TRAVIS_TAG:-dev}.tar.gz linux-mips64le
 
-- go clean
-- env GOOS=darwin GOARCH=amd64 go build -mod vendor -ldflags="-s -w"
-- mkdir macos
-- ln dnscrypt-proxy macos/
-- ln ../LICENSE example-dnscrypt-proxy.toml localhost.pem example-*.txt macos/
-- tar czpvf dnscrypt-proxy-macos-${TRAVIS_TAG:-dev}.tar.gz macos
+  - go clean
+  - env GOOS=darwin GOARCH=amd64 go build -mod vendor -ldflags="-s -w"
+  - mkdir macos
+  - ln dnscrypt-proxy macos/
+  - ln ../LICENSE example-dnscrypt-proxy.toml localhost.pem example-*.txt macos/
+  - tar czpvf dnscrypt-proxy-macos-${TRAVIS_TAG:-dev}.tar.gz macos
 
-- go clean
-- env CC=arm-linux-androideabi-clang CXX=arm-linux-androideabi-clang++
-  CGO_ENABLED=1
-  GOOS=android GOARCH=arm GOARM=7 go build -mod vendor -ldflags="-s -w"
-- mkdir android-arm
-- ln dnscrypt-proxy android-arm/
-- cp ../LICENSE example-dnscrypt-proxy.toml localhost.pem example-*.txt android-arm/
-- zip -9 -r dnscrypt-proxy-android_arm-${TRAVIS_TAG:-dev}.zip android-arm
+  - go clean
+  - env CC=arm-linux-androideabi-clang CXX=arm-linux-androideabi-clang++
+    CGO_ENABLED=1
+    GOOS=android GOARCH=arm GOARM=7 go build -mod vendor -ldflags="-s -w"
+  - mkdir android-arm
+  - ln dnscrypt-proxy android-arm/
+  - cp ../LICENSE example-dnscrypt-proxy.toml localhost.pem example-*.txt android-arm/
+  - zip -9 -r dnscrypt-proxy-android_arm-${TRAVIS_TAG:-dev}.zip android-arm
 
-- go clean
-- env CC=aarch64-linux-android-clang CXX=aarch64-linux-android-clang++
-  CGO_ENABLED=1
-  GOOS=android GOARCH=arm64 go build -mod vendor -ldflags="-s -w"
-- mkdir android-arm64
-- ln dnscrypt-proxy android-arm64/
-- cp ../LICENSE example-dnscrypt-proxy.toml localhost.pem example-*.txt android-arm64/
-- zip -9 -r dnscrypt-proxy-android_arm64-${TRAVIS_TAG:-dev}.zip android-arm64
+  - go clean
+  - env CC=aarch64-linux-android-clang CXX=aarch64-linux-android-clang++
+    CGO_ENABLED=1
+    GOOS=android GOARCH=arm64 go build -mod vendor -ldflags="-s -w"
+  - mkdir android-arm64
+  - ln dnscrypt-proxy android-arm64/
+  - cp ../LICENSE example-dnscrypt-proxy.toml localhost.pem example-*.txt android-arm64/
+  - zip -9 -r dnscrypt-proxy-android_arm64-${TRAVIS_TAG:-dev}.zip android-arm64
 
-- go clean
-- env CC=i686-linux-android-clang CXX=i686-linux-android-clang++
-  CGO_ENABLED=1 GOOS=android
-  GOARCH=386 go build -mod vendor -ldflags="-s -w"
-- mkdir android-i386
-- ln dnscrypt-proxy android-i386/
-- cp ../LICENSE example-dnscrypt-proxy.toml localhost.pem example-*.txt android-i386/
-- zip -9 -r dnscrypt-proxy-android_i386-${TRAVIS_TAG:-dev}.zip android-i386
+  - go clean
+  - env CC=i686-linux-android-clang CXX=i686-linux-android-clang++
+    CGO_ENABLED=1 GOOS=android
+    GOARCH=386 go build -mod vendor -ldflags="-s -w"
+  - mkdir android-i386
+  - ln dnscrypt-proxy android-i386/
+  - cp ../LICENSE example-dnscrypt-proxy.toml localhost.pem example-*.txt android-i386/
+  - zip -9 -r dnscrypt-proxy-android_i386-${TRAVIS_TAG:-dev}.zip android-i386
 
-- go clean
-- env CC=x86_64-linux-android-clang CXX=x86_64-linux-android-clang++
-  CGO_ENABLED=1
-  GOOS=android GOARCH=amd64 go build -mod vendor -ldflags="-s -w"
-- mkdir android-x86_64
-- ln dnscrypt-proxy android-x86_64/
-- cp ../LICENSE example-dnscrypt-proxy.toml localhost.pem example-*.txt android-x86_64/
-- zip -9 -r dnscrypt-proxy-android_x86_64-${TRAVIS_TAG:-dev}.zip android-x86_64
+  - go clean
+  - env CC=x86_64-linux-android-clang CXX=x86_64-linux-android-clang++
+    CGO_ENABLED=1
+    GOOS=android GOARCH=amd64 go build -mod vendor -ldflags="-s -w"
+  - mkdir android-x86_64
+  - ln dnscrypt-proxy android-x86_64/
+  - cp ../LICENSE example-dnscrypt-proxy.toml localhost.pem example-*.txt android-x86_64/
+  - zip -9 -r dnscrypt-proxy-android_x86_64-${TRAVIS_TAG:-dev}.zip android-x86_64
 
 after_success:
-- ls -l dnscrypt-proxy-*.tar.gz dnscrypt-proxy-*.zip
+  - ls -l dnscrypt-proxy-*.tar.gz dnscrypt-proxy-*.zip
 
 deploy:
   provider: releases
   api_key:
     secure: J3K/wo3oW/ySl6X4Zk5PX+EVy4fa0qa4fbpKNivogch5yjYw2pgrlSvwto9TM12Gxi4tTMKiWYK4YBapNf+tm501s4OyS1G1rJR1fZ+iyaHgGBLD+QppbivZt+P7Do56agSili68Zcgm7MQfZbvOq9z42z3AJ71+UNTJmTp63voaAuyOF/VdLsmJHMd/5nmFJH6mfMrgMs720GCWxFgdq3NRM2AdVldsp1YmNb4qKqIzunmfxqG9TqVlpq35tNOhWA/Ll3rbsiDVeUpBAW5ked/qHyGRkFVk44O6cPSFGe035Txx0JviBshGxsNSP+aJL9T55hIj1dmuk6g5uhPqABU/zcdJvXOv11oqJuV/DGHO31UfVN6u744LJY6Y1lkd+UUNiOJDPGC80+6M2GbP7BFMZiO5qnYkxzktnYg9b6zIPwmj96XZSniDTAn+qemJf2S8rzShvBtWX29Q4odIaCfFUY8i0muowQ4Vep5S5FqVG+r/rQTXOUIUsNv4r/gP/y5hdtOMC2r1VSvWk068upmW6ovCtcmTghSfYcLCG5r+g5OE2mKj9kbx6RQMspewk9+pvOhNZKXsn/AIvvDC4V46MaDjFkdYN0VbsYB5NH11DGCPH7vDwJnAzzMWnofCkiTG07dJYlLUnD9iUgYoNkrxivAgQKnDP8C6Ka0RGdk=
   file:
-  - dnscrypt-proxy-*.tar.gz
-  - dnscrypt-proxy-*.zip
-  - dnscrypt-proxy-*.minisig
+    - dnscrypt-proxy-*.tar.gz
+    - dnscrypt-proxy-*.zip
+    - dnscrypt-proxy-*.minisig
   file_glob: true
   skip_cleanup: true
   on:
@@ -224,29 +220,36 @@ deploy:
     tags: true
 
 before_deploy:
-- git clone --depth 1 https://github.com/jedisct1/minisign.git
-- cd minisign/src
-- gcc -O2 -o /tmp/bin/minisign -I/tmp/include -L/tmp/lib *.c -lsodium
-- cd -
-- minisign -v
-- echo '#' > /tmp/minisign.key
-- echo "$MINISIGN_SK" >> /tmp/minisign.key
-- echo | minisign -s /tmp/minisign.key -Sm dnscrypt-proxy-*.tar.gz dnscrypt-proxy-*.zip
+  - sudo apt-get -y install libsodium-dev
+  - git clone --depth 1 https://github.com/jedisct1/minisign.git
+  - cd minisign/src
+  - mkdir -p /tmp/bin
+  - gcc -O2 -o /tmp/bin/minisign -D_GNU_SOURCE *.c -lsodium
+  - cd -
+  - /tmp/bin/minisign -v
+  - echo '#' > /tmp/minisign.key
+  - echo "$MINISIGN_SK" >> /tmp/minisign.key
+  - echo | /tmp/bin/minisign -s /tmp/minisign.key -Sm dnscrypt-proxy-*.tar.gz dnscrypt-proxy-*.zip
 
 before_install:
-- NDK_VER=r18
-- curl -LO http://dl.google.com/android/repository/android-ndk-${NDK_VER}-linux-x86_64.zip
-- unzip -q android-ndk-${NDK_VER}-linux-x86_64.zip -d $HOME
-- rm android-ndk-${NDK_VER}-linux-x86_64.zip
-- NDK_TOOLS=$HOME/android-ndk-${NDK_VER}
-- NDK_STANDALONE=$HOME/ndk-standalone-${NDK_VER}
-- MAKE_TOOLCHAIN=$NDK_TOOLS/build/tools/make_standalone_toolchain.py
-- for arch in x86 arm; do python $MAKE_TOOLCHAIN --arch $arch --api 19
-  --install-dir $NDK_STANDALONE/$arch; PATH=$PATH:$NDK_STANDALONE/$arch/bin; done
-- for arch in x86_64 arm64; do python $MAKE_TOOLCHAIN --arch $arch --api 21
-  --install-dir $NDK_STANDALONE/$arch; PATH=$PATH:$NDK_STANDALONE/$arch/bin; done
-- rm -rf $NDK_TOOLS
+  - gimme --list
+  - echo $TRAVIS_GO_VERSION
+  - cd .ci
+  - ./ci-test.sh || travis_terminate 1
+  - cd -
+  - NDK_VER=r18
+  - curl -LO https://dl.google.com/android/repository/android-ndk-${NDK_VER}-linux-x86_64.zip
+  - unzip -q android-ndk-${NDK_VER}-linux-x86_64.zip -d $HOME
+  - rm android-ndk-${NDK_VER}-linux-x86_64.zip
+  - NDK_TOOLS=$HOME/android-ndk-${NDK_VER}
+  - NDK_STANDALONE=$HOME/ndk-standalone-${NDK_VER}
+  - MAKE_TOOLCHAIN=$NDK_TOOLS/build/tools/make_standalone_toolchain.py
+  - for arch in x86 arm; do python $MAKE_TOOLCHAIN --arch $arch --api 19
+    --install-dir $NDK_STANDALONE/$arch; PATH=$PATH:$NDK_STANDALONE/$arch/bin; done
+  - for arch in x86_64 arm64; do python $MAKE_TOOLCHAIN --arch $arch --api 21
+    --install-dir $NDK_STANDALONE/$arch; PATH=$PATH:$NDK_STANDALONE/$arch/bin; done
+  - rm -rf $NDK_TOOLS
 
 env:
   global:
-  - secure: cuTXb4v5NwTr1XmkiHGkFir8fMiiBMnraCrls3thdDRlSTix0CiQc/H5Vh8SHauuG6VwVyrCT/Xsf0UQUmnULkPHjvuiNehb+bG4J3fz7hF94glBdQ8vxTuMmnHfJEYTQRLwCsWMBEC1wekw13O8J/0opFNG5neduns3Z1/rD5VSlBwgc8/4lomEp0fadIvzLeS7f5mxeXAD5Z9KBmc09uCjxVoF9Qsk1r901B0c0RMxIbJWyW9ZhDIVr/aEUN/tU0EXMKOA85sizg2moAigb8RZ1WCTh7utLGKpAyQegNk/unkksKMzZFkUCwHkrxlujwoe93wUS4rvZ+3nHMtLQdR+OfMeVs4/zvvQVq2f3bOXgkxgvhq6Bop0RK0xyEJffa5hUFbGNKhIFkLFLn1Ok28t2q7NOFPr0H2egHlkwgPztyhYMYb9C5PW4zd9buI0LS5452C4jXH5raBMfx844wTzaBbN689AKiYb84Qesqczss/o7eC7V48kh823dlZ/s2//gtp1ceqdAtNvp4dy7X/ECA/vNlpYisrtkR/CsFpJjGoTvS37leVMpmc5bn39dkoa5ZLliu7CaFRefbavcWWEImVStll9FBQ6+Ck9+41gczl9Rr7eGIV9ZZ/fmdkLNgxIpoAhZRee/dZD+/0gUExHxXXn10MqPuNVytVPiuU=
+    - secure: cuTXb4v5NwTr1XmkiHGkFir8fMiiBMnraCrls3thdDRlSTix0CiQc/H5Vh8SHauuG6VwVyrCT/Xsf0UQUmnULkPHjvuiNehb+bG4J3fz7hF94glBdQ8vxTuMmnHfJEYTQRLwCsWMBEC1wekw13O8J/0opFNG5neduns3Z1/rD5VSlBwgc8/4lomEp0fadIvzLeS7f5mxeXAD5Z9KBmc09uCjxVoF9Qsk1r901B0c0RMxIbJWyW9ZhDIVr/aEUN/tU0EXMKOA85sizg2moAigb8RZ1WCTh7utLGKpAyQegNk/unkksKMzZFkUCwHkrxlujwoe93wUS4rvZ+3nHMtLQdR+OfMeVs4/zvvQVq2f3bOXgkxgvhq6Bop0RK0xyEJffa5hUFbGNKhIFkLFLn1Ok28t2q7NOFPr0H2egHlkwgPztyhYMYb9C5PW4zd9buI0LS5452C4jXH5raBMfx844wTzaBbN689AKiYb84Qesqczss/o7eC7V48kh823dlZ/s2//gtp1ceqdAtNvp4dy7X/ECA/vNlpYisrtkR/CsFpJjGoTvS37leVMpmc5bn39dkoa5ZLliu7CaFRefbavcWWEImVStll9FBQ6+Ck9+41gczl9Rr7eGIV9ZZ/fmdkLNgxIpoAhZRee/dZD+/0gUExHxXXn10MqPuNVytVPiuU=

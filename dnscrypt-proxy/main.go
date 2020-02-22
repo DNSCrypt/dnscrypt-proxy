@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	AppVersion            = "2.0.34"
+	AppVersion            = "2.0.39"
 	DefaultConfigFileName = "dnscrypt-proxy.toml"
 )
 
@@ -37,19 +37,14 @@ func main() {
 	if err != nil {
 		dlog.Fatal("Unable to find the path to the current directory")
 	}
-	svcConfig := &service.Config{
-		Name:             "dnscrypt-proxy",
-		DisplayName:      "DNSCrypt client proxy",
-		Description:      "Encrypted/authenticated DNS proxy",
-		WorkingDirectory: pwd,
-	}
+
 	svcFlag := flag.String("service", "", fmt.Sprintf("Control the system service: %q", service.ControlAction))
 	version := flag.Bool("version", false, "print current proxy version")
 	resolve := flag.String("resolve", "", "resolve a name using system libraries")
 	flags := ConfigFlags{}
 	flags.List = flag.Bool("list", false, "print the list of available resolvers for the enabled filters")
 	flags.ListAll = flag.Bool("list-all", false, "print the complete list of available resolvers, ignoring filters")
-	flags.JsonOutput = flag.Bool("json", false, "output list as JSON")
+	flags.JSONOutput = flag.Bool("json", false, "output list as JSON")
 	flags.Check = flag.Bool("check", false, "check the configuration file and exit")
 	flags.ConfigFile = flag.String("config", DefaultConfigFileName, "Path to the configuration file")
 	flags.Child = flag.Bool("child", false, "Invokes program as a child process")
@@ -70,11 +65,20 @@ func main() {
 	app := &App{
 		flags: &flags,
 	}
+
+	svcConfig := &service.Config{
+		Name:             "dnscrypt-proxy",
+		DisplayName:      "DNSCrypt client proxy",
+		Description:      "Encrypted/authenticated DNS proxy",
+		WorkingDirectory: pwd,
+		Arguments:        []string{"-config", *flags.ConfigFile},
+	}
 	svc, err := service.New(app, svcConfig)
 	if err != nil {
 		svc = nil
 		dlog.Debug(err)
 	}
+
 	app.proxy = NewProxy()
 	_ = ServiceManagerStartNotify()
 	if len(*svcFlag) != 0 {
@@ -126,7 +130,7 @@ func (app *App) AppMain() {
 	}
 	app.quit = make(chan struct{})
 	app.wg.Add(1)
-	pidfile.Write()
+	_ = pidfile.Write()
 	app.proxy.StartProxy()
 	<-app.quit
 	dlog.Notice("Quit signal received...")
