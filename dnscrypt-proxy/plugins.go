@@ -118,6 +118,7 @@ func (proxy *Proxy) InitPluginsGlobals() error {
 	}
 	if len(proxy.resourceRecordFiltersFile) != 0 {
 		*queryPlugins = append(*queryPlugins, Plugin(new(PluginBlockResourceRecordsQueries)))
+	}
 	if proxy.pluginBlockUnqualified {
 		*queryPlugins = append(*queryPlugins, Plugin(new(PluginBlockUnqualified)))
 	}
@@ -139,7 +140,7 @@ func (proxy *Proxy) InitPluginsGlobals() error {
 		*responsePlugins = append(*responsePlugins, Plugin(new(PluginCacheResponse)))
 	}
 	if len(proxy.resourceRecordFiltersFile) != 0 {
-		*queryPlugins = append(*queryPlugins, Plugin(new(PluginFilterResourceRecordsResponses)))
+		*responsePlugins = append(*queryPlugins, Plugin(new(PluginFilterResourceRecordsResponses)))
 	}
 
 	loggingPlugins := &[]Plugin{}
