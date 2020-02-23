@@ -41,24 +41,23 @@ func (resourceRecordFilter *ResourceRecordFilter) check(pluginsState *PluginsSta
 		if filterExpression.weeklyRanges != nil && !filterExpression.weeklyRanges.Match() {
 			reject = false
 		}
-
-		found := false
-		for _, bannedRecordType := range *filterExpression.recordTypes {
-			if bannedRecordType == dnsType {
-				found = true
-				break
+		if len(*filterExpression.recordTypes) != 0 {
+			found := false
+			for _, bannedRecordType := range *filterExpression.recordTypes {
+				if bannedRecordType == dnsType {
+					found = true
+					break
+				}
 			}
-		}
-
-		if !found {
-			reject = false
+			if !found {
+				reject = false
+			}
 		}
 	}
 	if !reject {
 		return false, nil
 	}
-
-	if blockedNames.logger != nil {
+	if resourceRecordFilter.logger != nil {
 		var clientIPStr string
 		if pluginsState.clientProto == "udp" {
 			clientIPStr = (*pluginsState.clientAddr).(*net.UDPAddr).IP.String()
@@ -66,21 +65,21 @@ func (resourceRecordFilter *ResourceRecordFilter) check(pluginsState *PluginsSta
 			clientIPStr = (*pluginsState.clientAddr).(*net.TCPAddr).IP.String()
 		}
 		var line string
-		if blockedNames.format == "tsv" {
+		if resourceRecordFilter.format == "tsv" {
 			now := time.Now()
 			year, month, day := now.Date()
 			hour, minute, second := now.Clock()
 			tsStr := fmt.Sprintf("[%d-%02d-%02d %02d:%02d:%02d]", year, int(month), day, hour, minute, second)
-			line = fmt.Sprintf("%s\t%s\t%s\t%s\n", tsStr, clientIPStr, StringQuote(qName), StringQuote(reason))
-		} else if blockedNames.format == "ltsv" {
-			line = fmt.Sprintf("time:%d\thost:%s\tqname:%s\tmessage:%s\n", time.Now().Unix(), clientIPStr, StringQuote(qName), StringQuote(reason))
+			line = fmt.Sprintf("%s\t%s\t%s\t%s\t%s\n", tsStr, clientIPStr, StringQuote(qName), StringQuote(strconv.FormatUint(uint64(dnsType), 10)), StringQuote(reason))
+		} else if resourceRecordFilter.format == "ltsv" {
+			line = fmt.Sprintf("time:%d\thost:%s\tqname:%s\trecordType:%s\tmessage:%s\n", time.Now().Unix(), clientIPStr, StringQuote(qName), StringQuote(strconv.FormatUint(uint64(dnsType), 10)), StringQuote(reason))
 		} else {
-			dlog.Fatalf("Unexpected log format: [%s]", blockedNames.format)
+			dlog.Fatalf("Unexpected log format: [%s]", resourceRecordFilter.format)
 		}
-		if blockedNames.logger == nil {
+		if resourceRecordFilter.logger == nil {
 			return false, errors.New("Log file not initialized")
 		}
-		_, _ = blockedNames.logger.Write([]byte(line))
+		_, _ = resourceRecordFilter.logger.Write([]byte(line))
 	}
 
 	return true, nil
@@ -96,7 +95,7 @@ func (plugin *PluginBlockResourceRecordsQueries) Name() string {
 }
 
 func (plugin *PluginBlockResourceRecordsQueries) Description() string {
-	return "Immediately return a synthetic response to filtered DNS record type queries."
+	return "Immediately return a synthetic response to filtered DNS resource record types queries."
 }
 
 func (plugin *PluginBlockResourceRecordsQueries) Init(proxy *Proxy) error {
@@ -132,7 +131,7 @@ func (plugin *PluginBlockResourceRecordsQueries) Init(proxy *Proxy) error {
 			dlog.Errorf("Syntax error in resource records filter rules at line %d -- Unexpected space character", 1+lineNo)
 			continue
 		}
-		if len(line) == 0 || len(blockedRecordTypes) == 0 {
+		if len(line) == 0 {
 			dlog.Errorf("Syntax error in resource records filter rules at line %d -- Missing name or blocked query types", 1+lineNo)
 			continue
 		}
@@ -147,17 +146,16 @@ func (plugin *PluginBlockResourceRecordsQueries) Init(proxy *Proxy) error {
 		}
 		xBannedResourceRecords := make([]uint16, 0)
 		bannedResourceRecords := &xBannedResourceRecords
-		isValidSeparator := func(char rune) bool {
-			return char == ','
-		}
-		dnsTypes := strings.FieldsFunc(blockedRecordTypes, isValidSeparator)
-		for _, dnsTypeStr := range dnsTypes {
-			value, err := strconv.ParseUint(dnsTypeStr, 10, 16)
-			if err != nil {
-				dlog.Errorf("Failed to parse DNS resource record type %s at line %d", dnsTypeStr, 1+lineNo)
-				return err
+		if len(blockedRecordTypes) != 0 {
+			dnsTypes := strings.Split(blockedRecordTypes, ",")
+			for _, dnsTypeStr := range dnsTypes {
+				value, err := strconv.ParseUint(dnsTypeStr, 10, 16)
+				if err != nil {
+					dlog.Errorf("Failed to parse DNS resource record type %s at line %d", dnsTypeStr, 1+lineNo)
+					return err
+				}
+				*bannedResourceRecords = append(*bannedResourceRecords, uint16(value))
 			}
-			*bannedResourceRecords = append(*bannedResourceRecords, uint16(value))
 		}
 		filterExpression := FilterExpression{
 			weeklyRanges: weeklyRanges,
@@ -208,7 +206,7 @@ func (plugin *PluginFilterResourceRecordsResponses) Name() string {
 }
 
 func (plugin *PluginFilterResourceRecordsResponses) Description() string {
-	return "Filters responses for blocked DNS query types."
+	return "Filters blocked resource record types from DNS responses."
 }
 
 func (plugin *PluginFilterResourceRecordsResponses) Init(proxy *Proxy) error {
@@ -263,7 +261,7 @@ func (plugin *PluginFilterResourceRecordsResponses) Eval(pluginsState *PluginsSt
 	if err != nil {
 		return err
 	}
-	if len(msg.Answer) < 1 && len(msg.Extra) < 1 {
+	if len(msg.Answer) < 1 {
 		pluginsState.action = PluginsActionReject
 		pluginsState.returnCode = PluginsReturnCodeReject
 	}
