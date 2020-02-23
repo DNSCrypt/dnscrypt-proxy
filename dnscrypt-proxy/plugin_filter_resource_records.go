@@ -3,65 +3,93 @@ package main
 import (
 	"errors"
 	"fmt"
-	"github.com/jedisct1/dlog"
-	"github.com/miekg/dns"
-	"gopkg.in/natefinch/lumberjack.v2"
+	"net"
 	"strconv"
 	"strings"
 	"time"
 	"unicode"
+
+	"github.com/jedisct1/dlog"
+	"github.com/miekg/dns"
+	lumberjack "gopkg.in/natefinch/lumberjack.v2"
 )
 
-type ResourceRecordFilter struct {
-	patternMatcher *PatternMatcher
-	logger         *lumberjack.Logger
-	format         string
+type FilterExpression struct {
+	weeklyRanges *WeeklyRanges
+	recordTypes  *[]uint16
 }
 
-func (resourceRecordFilter *ResourceRecordFilter) ShouldBlock(name string, dnsClass uint16, dnsType uint16) (bool, error) {
-	if dnsClass != dns.ClassINET {
+type ResourceRecordFilter struct {
+	allWeeklyRanges *map[string]WeeklyRanges
+	patternMatcher  *PatternMatcher
+	logger          *lumberjack.Logger
+	format          string
+}
+
+func (resourceRecordFilter *ResourceRecordFilter) check(pluginsState *PluginsState, qName string, dnsType uint16, aliasFor *string) (bool, error) {
+	reject, reason, xFilterExpression := resourceRecordFilter.patternMatcher.Eval(qName)
+	if aliasFor != nil {
+		reason = reason + " (alias for [" + *aliasFor + "])"
+	}
+	var filterExpression *FilterExpression
+	if xFilterExpression != nil {
+		filterExpression = xFilterExpression.(*FilterExpression)
+	} else {
+		return false, nil
+	}
+	if reject {
+		if filterExpression.weeklyRanges != nil && !filterExpression.weeklyRanges.Match() {
+			reject = false
+		}
+
+		found := false
+		for _, bannedRecordType := range *filterExpression.recordTypes {
+			if bannedRecordType == dnsType {
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			reject = false
+		}
+	}
+	if !reject {
 		return false, nil
 	}
 
-	qName := strings.ToLower(StripTrailingDot(name))
-	_, _, xBannedRecordTypes := resourceRecordFilter.patternMatcher.Eval(qName)
-	bannedRecordTypes := xBannedRecordTypes.(*[]uint16)
-
-	banned := false
-	for _, bannedRecordType := range *bannedRecordTypes {
-		if bannedRecordType == dnsType {
-			banned = true
-			var line string
-			if resourceRecordFilter.format == "tsv" {
-				now := time.Now()
-				year, month, day := now.Date()
-				hour, minute, second := now.Clock()
-				tsStr := fmt.Sprintf("[%d-%02d-%02d %02d:%02d:%02d]", year, int(month), day, hour, minute, second)
-				line = fmt.Sprintf("%s\t%s\t%d\n", tsStr, StringQuote(qName), dnsType)
-			} else if resourceRecordFilter.format == "ltsv" {
-				line = fmt.Sprintf("time:%d\thost:%s\tdnsType:%d\n", time.Now().Unix(), StringQuote(qName), dnsType)
-			} else {
-				dlog.Fatalf("Unexpected log format: [%s]", resourceRecordFilter.format)
-			}
-			if resourceRecordFilter.logger == nil {
-				return false, errors.New("log file not initialized")
-			}
-
-			_, err := resourceRecordFilter.logger.Write([]byte(line))
-			if err != nil {
-				return false, err
-			}
-
-			break
+	if blockedNames.logger != nil {
+		var clientIPStr string
+		if pluginsState.clientProto == "udp" {
+			clientIPStr = (*pluginsState.clientAddr).(*net.UDPAddr).IP.String()
+		} else {
+			clientIPStr = (*pluginsState.clientAddr).(*net.TCPAddr).IP.String()
 		}
+		var line string
+		if blockedNames.format == "tsv" {
+			now := time.Now()
+			year, month, day := now.Date()
+			hour, minute, second := now.Clock()
+			tsStr := fmt.Sprintf("[%d-%02d-%02d %02d:%02d:%02d]", year, int(month), day, hour, minute, second)
+			line = fmt.Sprintf("%s\t%s\t%s\t%s\n", tsStr, clientIPStr, StringQuote(qName), StringQuote(reason))
+		} else if blockedNames.format == "ltsv" {
+			line = fmt.Sprintf("time:%d\thost:%s\tqname:%s\tmessage:%s\n", time.Now().Unix(), clientIPStr, StringQuote(qName), StringQuote(reason))
+		} else {
+			dlog.Fatalf("Unexpected log format: [%s]", blockedNames.format)
+		}
+		if blockedNames.logger == nil {
+			return false, errors.New("Log file not initialized")
+		}
+		_, _ = blockedNames.logger.Write([]byte(line))
 	}
 
-	return banned, nil
+	return true, nil
 }
 
 var resourceRecordFilter *ResourceRecordFilter
 
-type PluginBlockResourceRecordsQueries struct{}
+type PluginBlockResourceRecordsQueries struct{
+}
 
 func (plugin *PluginBlockResourceRecordsQueries) Name() string {
 	return "block_record_queries"
@@ -77,74 +105,74 @@ func (plugin *PluginBlockResourceRecordsQueries) Init(proxy *Proxy) error {
 	if err != nil {
 		return err
 	}
-
-	tempQueryBlackList := ResourceRecordFilter{
+	xQueryBlackList := ResourceRecordFilter{
+		allWeeklyRanges: proxy.allWeeklyRanges,
 		patternMatcher: NewPatternPatcher(),
 	}
-
-	bannedResourceRecords := make(map[string]*[]uint16)
-
 	for lineNo, line := range strings.Split(bin, "\n") {
-		line = strings.TrimFunc(line, unicode.IsSpace)
-		if len(line) == 0 || strings.HasPrefix(line, "#") {
+		line = TrimAndStripInlineComments(line)
+		if len(line) == 0 {
 			continue
 		}
-
-		var blocklist string
-		parts := strings.FieldsFunc(line, unicode.IsSpace)
+		parts := strings.Split(line, "@")
+		timeRangeName := ""
+		blockedRecordTypes := ""
 		if len(parts) == 2 {
 			line = strings.TrimFunc(parts[0], unicode.IsSpace)
-			blocklist = strings.TrimFunc(parts[1], unicode.IsSpace)
+			timeRangeName = strings.TrimFunc(parts[1], unicode.IsSpace)
+		} else if len(parts) > 2 {
+			dlog.Errorf("Syntax error in block rules at line %d -- Unexpected @ character", 1+lineNo)
+			continue
+		}
+		parts = strings.Split(line, " ")
+		if len(parts) == 2 {
+			line = strings.TrimFunc(parts[0], unicode.IsSpace)
+			blockedRecordTypes = strings.TrimFunc(parts[1], unicode.IsSpace)
 		} else if len(parts) > 2 {
 			dlog.Errorf("Syntax error in resource records filter rules at line %d -- Unexpected space character", 1+lineNo)
 			continue
 		}
-		if len(line) == 0 || len(blocklist) == 0 {
+		if len(line) == 0 || len(blockedRecordTypes) == 0 {
 			dlog.Errorf("Syntax error in resource records filter rules at line %d -- Missing name or blocked query types", 1+lineNo)
 			continue
 		}
-		line = strings.ToLower(line)
-		bannedResourceRecord, found := bannedResourceRecords[line]
-		if !found {
-			xBannedResourceRecord := make([]uint16, 0)
-			bannedResourceRecord = &xBannedResourceRecord
+		var weeklyRanges *WeeklyRanges
+		if len(timeRangeName) > 0 {
+			weeklyRangesX, ok := (*xQueryBlackList.allWeeklyRanges)[timeRangeName]
+			if !ok {
+				dlog.Errorf("Time range [%s] not found at line %d", timeRangeName, 1+lineNo)
+			} else {
+				weeklyRanges = &weeklyRangesX
+			}
 		}
-
+		xBannedResourceRecords := make([]uint16, 0)
+		bannedResourceRecords := &xBannedResourceRecords
 		isValidSeparator := func(char rune) bool {
 			return char == ','
 		}
-
-		dnsTypes := strings.FieldsFunc(blocklist, isValidSeparator)
-
+		dnsTypes := strings.FieldsFunc(blockedRecordTypes, isValidSeparator)
 		for _, dnsTypeStr := range dnsTypes {
 			value, err := strconv.ParseUint(dnsTypeStr, 10, 16)
 			if err != nil {
+				dlog.Errorf("Failed to parse DNS resource record type %s at line %d", dnsTypeStr, 1+lineNo)
 				return err
 			}
-
-			*bannedResourceRecord = append(*bannedResourceRecord, uint16(value))
+			*bannedResourceRecords = append(*bannedResourceRecords, uint16(value))
 		}
-
-		bannedResourceRecords[line] = bannedResourceRecord
-	}
-
-	i := 1
-	for line, bannedResourceRecord := range bannedResourceRecords {
-		err := tempQueryBlackList.patternMatcher.Add(line, bannedResourceRecord, i)
-		if err != nil {
-			dlog.Errorf("Error processing resource records filter rule %d", i)
-			return err
+		filterExpression := FilterExpression{
+			weeklyRanges: weeklyRanges,
+			recordTypes: bannedResourceRecords,
 		}
-
-		i++
+		if err := xQueryBlackList.patternMatcher.Add(line, &filterExpression, lineNo+1); err != nil {
+			dlog.Error(err)
+			continue
+		}
 	}
-
-	if len(proxy.blockNameLogFile) != 0 {
-		tempQueryBlackList.logger = &lumberjack.Logger{LocalTime: true, MaxSize: proxy.logMaxSize, MaxAge: proxy.logMaxAge, MaxBackups: proxy.logMaxBackups, Filename: proxy.resourceRecordFiltersLogFile, Compress: true}
-		tempQueryBlackList.format = proxy.resourceRecordFiltersFormat
+	if len(proxy.resourceRecordFiltersLogFile) != 0 {
+		xQueryBlackList.logger = &lumberjack.Logger{LocalTime: true, MaxSize: proxy.logMaxSize, MaxAge: proxy.logMaxAge, MaxBackups: proxy.logMaxBackups, Filename: proxy.resourceRecordFiltersLogFile, Compress: true}
+		xQueryBlackList.format = proxy.resourceRecordFiltersFormat
 	}
-
-	resourceRecordFilter = &tempQueryBlackList
+	resourceRecordFilter = &xQueryBlackList
 
 	return nil
 }
@@ -158,27 +186,21 @@ func (plugin *PluginBlockResourceRecordsQueries) Reload() error {
 }
 
 func (plugin *PluginBlockResourceRecordsQueries) Eval(pluginsState *PluginsState, msg *dns.Msg) error {
-	questions := msg.Question
-	if len(questions) != 1 {
+	if resourceRecordFilter == nil {
 		return nil
 	}
-	question := questions[0]
-	block, err := resourceRecordFilter.ShouldBlock(question.Name, question.Qclass, question.Qtype)
+	block, err := resourceRecordFilter.check(pluginsState, pluginsState.qName, msg.Question[0].Qtype, nil)
 	if err != nil {
 		return err
 	}
-
 	if block {
 		pluginsState.action = PluginsActionReject
 		pluginsState.returnCode = PluginsReturnCodeReject
 	}
-
 	return nil
 }
 
-type PluginFilterResourceRecordsResponses struct
-{
-
+type PluginFilterResourceRecordsResponses struct {
 }
 
 func (plugin *PluginFilterResourceRecordsResponses) Name() string {
@@ -202,42 +224,45 @@ func (plugin *PluginFilterResourceRecordsResponses) Reload() error {
 }
 
 func (plugin *PluginFilterResourceRecordsResponses) Eval(pluginsState *PluginsState, msg *dns.Msg) error {
-	questions := msg.Question
-	if len(questions) != 1 {
+	if resourceRecordFilter == nil {
 		return nil
 	}
-	question := questions[0]
-
 	filterResponseSection := func(src *[]dns.RR) error {
 		i := 0
 		for _, answer := range *src {
+			qName := pluginsState.qName
 			header := answer.Header()
-			block, err := resourceRecordFilter.ShouldBlock(question.Name, header.Class, header.Rrtype)
+			if header.Class != dns.ClassINET {
+				continue
+			}
+			if header.Rrtype == dns.TypeCNAME {
+				target, err := NormalizeQName(answer.(*dns.CNAME).Target)
+				if err != nil {
+					return err
+				}
+				qName = target
+			}
+			block, err := resourceRecordFilter.check(pluginsState, qName, header.Rrtype, &pluginsState.qName)
 			if err != nil {
 				return err
 			}
-
 			if !block {
 				(*src)[i] = answer
 				i++
 			}
 		}
-
 		*src = (*src)[:i]
 
 		return nil
 	}
-
 	err := filterResponseSection(&msg.Answer)
 	if err != nil {
 		return err
 	}
-
 	err = filterResponseSection(&msg.Extra)
 	if err != nil {
 		return err
 	}
-
 	if len(msg.Answer) < 1 && len(msg.Extra) < 1 {
 		pluginsState.action = PluginsActionReject
 		pluginsState.returnCode = PluginsReturnCodeReject

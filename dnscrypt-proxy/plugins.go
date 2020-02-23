@@ -140,7 +140,7 @@ func (proxy *Proxy) InitPluginsGlobals() error {
 		*responsePlugins = append(*responsePlugins, Plugin(new(PluginCacheResponse)))
 	}
 	if len(proxy.resourceRecordFiltersFile) != 0 {
-		*responsePlugins = append(*queryPlugins, Plugin(new(PluginFilterResourceRecordsResponses)))
+		*responsePlugins = append(*responsePlugins, Plugin(new(PluginFilterResourceRecordsResponses)))
 	}
 
 	loggingPlugins := &[]Plugin{}
