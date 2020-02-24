@@ -383,7 +383,7 @@ func fetchDoHServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, isN
 		Host:   stamp.ProviderName,
 		Path:   stamp.Path,
 	}
-  body := dohTestPacket(0xcafe)
+	body := dohTestPacket(0xcafe)
 	dohClientCreds, ok := (*proxy.dohCreds)["*"]
 	if !ok {
 		dohClientCreds = (*proxy.dohCreds)[name]
