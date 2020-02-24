@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/jedisct1/dlog"
@@ -47,6 +48,11 @@ func (handler localDoHHandler) ServeHTTP(writer http.ResponseWriter, request *ht
 		dlog.Warnf("No body in a local DoH query")
 		return
 	}
+	hasEDNS0Padding, err := hasEDNS0Padding(packet)
+	if err != nil {
+		writer.WriteHeader(400)
+		return
+	}
 	response := proxy.processIncomingQuery(proxy.serversInfo.getOne(), "local_doh", proxy.mainProto, packet, &xClientAddr, nil, start)
 	if len(response) == 0 {
 		writer.WriteHeader(500)
@@ -57,14 +63,22 @@ func (handler localDoHHandler) ServeHTTP(writer http.ResponseWriter, request *ht
 		writer.WriteHeader(500)
 		return
 	}
-	padLen := 127 - (len(response)+127)&127
-	paddedResponse, err := addEDNS0PaddingIfNoneFound(&msg, response, padLen)
-	if err != nil {
-		return
+	responseLen := len(response)
+	paddedLen := dohPaddedLen(responseLen)
+	padLen := paddedLen - responseLen
+	if hasEDNS0Padding {
+		response, err = addEDNS0PaddingIfNoneFound(&msg, response, padLen)
+		if err != nil {
+			dlog.Critical(err)
+			return
+		}
+	} else {
+		pad := strings.Repeat("X", padLen)
+		writer.Header().Set("X-Pad", pad)
 	}
 	writer.Header().Set("Content-Type", dataType)
 	writer.WriteHeader(200)
-	writer.Write(paddedResponse)
+	writer.Write(response)
 }
 
 func (proxy *Proxy) localDoHListener(acceptPc *net.TCPListener) {
@@ -83,4 +97,14 @@ func (proxy *Proxy) localDoHListener(acceptPc *net.TCPListener) {
 	if err := httpServer.ServeTLS(acceptPc, proxy.localDoHCertFile, proxy.localDoHCertKeyFile); err != nil {
 		dlog.Fatal(err)
 	}
+}
+
+func dohPaddedLen(unpaddedLen int) int {
+	boundaries := [...]int{64, 128, 192, 256, 320, 384, 512, 704, 768, 896, 960, 1024, 1088, 1152, 2688, 4080, MaxDNSPacketSize}
+	for _, boundary := range boundaries {
+		if boundary >= unpaddedLen {
+			return boundary
+		}
+	}
+	return unpaddedLen
 }

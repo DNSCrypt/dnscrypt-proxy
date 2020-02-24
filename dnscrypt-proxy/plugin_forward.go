@@ -89,13 +89,22 @@ func (plugin *PluginForward) Eval(pluginsState *PluginsState, msg *dns.Msg) erro
 	}
 	server := servers[rand.Intn(len(servers))]
 	pluginsState.serverName = server
-	respMsg, err := dns.Exchange(msg, server)
+	client := dns.Client{Net: "udp"}
+	respMsg, _, err := client.Exchange(msg, server)
 	if err != nil {
 		return err
+	}
+	if respMsg.Truncated {
+		client.Net = "tcp"
+		respMsg, _, err = client.Exchange(msg, server)
+		if err != nil {
+			return err
+		}
 	}
 	if edns0 := respMsg.IsEdns0(); edns0 == nil || !edns0.Do() {
 		respMsg.AuthenticatedData = false
 	}
+	respMsg.Id = msg.Id
 	pluginsState.synthResponse = respMsg
 	pluginsState.action = PluginsActionSynth
 	pluginsState.returnCode = PluginsReturnCodeForward

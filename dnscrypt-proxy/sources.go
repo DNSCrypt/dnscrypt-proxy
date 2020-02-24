@@ -3,9 +3,7 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"io"
 	"io/ioutil"
-	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -132,12 +130,8 @@ func (source *Source) parseURLs(urls []string) {
 }
 
 func fetchFromURL(xTransport *XTransport, u *url.URL) (bin []byte, err error) {
-	var resp *http.Response
-	if resp, _, err = xTransport.Get(u, "", DefaultTimeout); err == nil {
-		bin, err = ioutil.ReadAll(io.LimitReader(resp.Body, MaxHTTPBodyLength))
-		resp.Body.Close()
-	}
-	return
+	bin, _, _, err = xTransport.Get(u, "", DefaultTimeout)
+	return bin, err
 }
 
 func (source *Source) fetchWithCache(xTransport *XTransport, now time.Time) (delay time.Duration, err error) {

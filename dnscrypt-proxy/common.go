@@ -145,7 +145,7 @@ func StringStripSpaces(str string) string {
 
 func TrimAndStripInlineComments(str string) string {
 	if idx := strings.LastIndexByte(str, '#'); idx >= 0 {
-		if idx == 0 {
+		if idx == 0 || str[0] == '#' {
 			return ""
 		}
 		if prev := str[idx-1]; prev == ' ' || prev == '\t' {

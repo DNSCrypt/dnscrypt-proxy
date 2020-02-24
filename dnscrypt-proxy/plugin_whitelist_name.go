@@ -94,9 +94,6 @@ func (plugin *PluginWhitelistName) Eval(pluginsState *PluginsState, msg *dns.Msg
 		}
 	}
 	if whitelist {
-		if pluginsState.sessionData == nil {
-			pluginsState.sessionData = make(map[string]interface{})
-		}
 		pluginsState.sessionData["whitelisted"] = true
 		if plugin.logger != nil {
 			var clientIPStr string

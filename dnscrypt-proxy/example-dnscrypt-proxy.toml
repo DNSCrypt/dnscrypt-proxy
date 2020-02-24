@@ -192,12 +192,12 @@ cert_refresh_delay = 240
 ## They will never be used if lists have already been cached, and if stamps
 ## don't include host names without IP addresses.
 ## They will not be used if the configured system DNS works.
-## Resolver supporting DNSSEC are recommended.
+## Resolvers supporting DNSSEC are recommended.
 ##
 ## People in China may need to use 114.114.114.114:53 here.
 ## Other popular options include 8.8.8.8 and 1.1.1.1.
 ##
-## If more than one resolver are specified, they will be tried in sequence.
+## If more than one resolver is specified, they will be tried in sequence.
 
 fallback_resolvers = ['9.9.9.9:53', '8.8.8.8:53']
 
@@ -295,9 +295,7 @@ reject_ttl = 600
 #        Route queries for specific domains to a dedicated set of servers        #
 ##################################################################################
 
-## Example map entries (one entry per line):
-## example.com 9.9.9.9
-## example.net 9.9.9.9,8.8.8.8,1.1.1.1
+## See the `example-forwarding-rules.txt` file for an example
 
 # forwarding_rules = 'forwarding-rules.txt'
 
@@ -311,9 +309,7 @@ reject_ttl = 600
 ## In addition to acting as a HOSTS file, it can also return the IP address
 ## of a different name. It will also do CNAME flattening.
 ##
-## Example map entries (one entry per line)
-## example.com     10.1.1.1
-## www.google.com  forcesafesearch.google.com
+## See the `example-cloaking-rules.txt` file for an example
 
 # cloaking_rules = 'cloaking-rules.txt'
 
@@ -333,7 +329,7 @@ cache = true
 
 ## Cache size
 
-cache_size = 1024
+cache_size = 4096
 
 
 ## Minimum TTL for cached entries
@@ -397,7 +393,7 @@ cache_neg_max_ttl = 600
 [query_log]
 
   ## Path to the query log file (absolute, or relative to the same directory as the config file)
-  ## Non non-Windows systems, can be /dev/stdout to log to the standard output (and set log_files_max_size to 0)
+  ## On non-Windows systems, can be /dev/stdout to log to the standard output (and set log_files_max_size to 0)
 
   # file = 'query.log'
 
@@ -628,9 +624,10 @@ cache_neg_max_ttl = 600
 # truncate reponses larger than questions as expected by the DNSCrypt protocol.
 # This prevents large responses from being received, and breaks relaying.
 # A workaround for the first issue will be applied to servers in list below.
+# Quad9 (actually dnsdist) appears to currently have a similar issue.
 # Do not change that list until the bugs are fixed server-side.
 
-broken_query_padding = ['cisco', 'cisco-ipv6', 'cisco-familyshield']
+broken_query_padding = ['cisco', 'cisco-ipv6', 'cisco-familyshield', "quad9-dnscrypt-ip4-filter-alt", "quad9-dnscrypt-ip4-filter-pri", "quad9-dnscrypt-ip4-nofilter-alt", "quad9-dnscrypt-ip4-nofilter-pri", "quad9-dnscrypt-ip6-filter-alt", "quad9-dnscrypt-ip6-filter-pri", "quad9-dnscrypt-ip6-nofilter-alt", "quad9-dnscrypt-ip6-nofilter-pri"]
 
 
 
