@@ -34,6 +34,9 @@ func (plugin *PluginFirefox) Reload() error {
 }
 
 func (plugin *PluginFirefox) Eval(pluginsState *PluginsState, msg *dns.Msg) error {
+	if pluginsState.clientProto == "local_doh" {
+		return nil
+	}
 	question := msg.Question[0]
 	if question.Qclass != dns.ClassINET || (question.Qtype != dns.TypeA && question.Qtype != dns.TypeAAAA) {
 		return nil
