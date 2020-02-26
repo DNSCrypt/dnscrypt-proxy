@@ -265,7 +265,7 @@ log_files_max_backups = 1
 ## Note: if you are using dnsmasq, disable the `dnssec` option in dnsmasq if you
 ## configure dnscrypt-proxy to do any kind of filtering (including the filters
 ## below and blacklists).
-## But you can still choose resolvers that do DNSSEC validation.
+## You can still choose resolvers that do DNSSEC validation.
 
 
 ## Immediately respond to IPv6-related queries with an empty response
@@ -395,7 +395,7 @@ cache_neg_max_ttl = 600
 [query_log]
 
   ## Path to the query log file (absolute, or relative to the same directory as the config file)
-  ## On non-Windows systems, can be /dev/stdout to log to the standard output (and set log_files_max_size to 0)
+  ## On non-Windows systems, can be /dev/stdout to log to the standard output (also set log_files_max_size to 0)
 
   # file = 'query.log'
 
@@ -533,8 +533,7 @@ cache_neg_max_ttl = 600
 ##
 ## For example, the following rule in a blacklist file:
 ## *.youtube.* @time-to-sleep
-## would block access to YouTube only during the days, and period of the days
-## define by the 'time-to-sleep' schedule.
+## would block access to YouTube during the times defined by the 'time-to-sleep' schedule.
 ##
 ## {after='21:00', before= '7:00'} matches 0:00-7:00 and 21:00-0:00
 ## {after= '9:00', before='18:00'} matches 9:00-18:00
@@ -575,7 +574,7 @@ cache_neg_max_ttl = 600
 ## must include the prefixes.
 ##
 ## If the `urls` property is missing, cache files and valid signatures
-## must be already present; This doesn't prevent these cache files from
+## must already be present. This doesn't prevent these cache files from
 ## expiring after `refresh_delay` hours.
 
 [sources]
@@ -654,13 +653,13 @@ broken_query_padding = ['cisco', 'cisco-ipv6', 'cisco-familyshield', "quad9-dnsc
 ##
 ## !!! THESE ARE JUST EXAMPLES !!!
 ##
-## Review the list of available relays from the "relays.md` file, and, for each
+## Review the list of available relays from the "relays.md" file, and, for each
 ## server you want to use, define the relays you want connections to go through.
 ##
-## Carefully choose relays and servers so that the are run by different entities.
+## Carefully choose relays and servers so that they are run by different entities.
 ##
 ## "server_name" can also be set to "*" to define a default route, but this is not
-## recommended. if you do so, keep "server_names" short and distinct from relays.
+## recommended. If you do so, keep "server_names" short and distinct from relays.
 
 # routes = [
 #    { server_name='example-server-1', via=['anon-example-1', 'anon-example-2'] },
