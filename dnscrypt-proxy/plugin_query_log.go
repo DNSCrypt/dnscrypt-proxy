@@ -67,7 +67,7 @@ func (plugin *PluginQueryLog) Eval(pluginsState *PluginsState, msg *dns.Msg) err
 		pluginsState.serverName = "-"
 	} else {
 		switch pluginsState.returnCode {
-		case PluginsReturnCodeSynth, PluginsReturnCodeCloak, PluginsReturnCodeParseError:
+		case PluginsReturnCodeSynth, PluginsReturnCodeCloak, PluginsReturnCodeParseError, PluginsReturnCodeReject:
 			pluginsState.serverName = "-"
 		}
 	}
