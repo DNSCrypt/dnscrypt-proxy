@@ -63,7 +63,7 @@ func (plugin *PluginQueryLog) Eval(pluginsState *PluginsState, msg *dns.Msg) err
 	}
 	qName := pluginsState.qName
 
-	if pluginsState.cacheHit {
+	if pluginsState.cacheHit || pluginsState.noServed {
 		pluginsState.serverName = "-"
 	} else {
 		switch pluginsState.returnCode {
