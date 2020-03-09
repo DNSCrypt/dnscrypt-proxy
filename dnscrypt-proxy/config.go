@@ -92,6 +92,7 @@ type Config struct {
 	BlockedQueryResponse     string                      `toml:"blocked_query_response"`
 	QueryMeta                []string                    `toml:"query_meta"`
 	AnonymizedDNS            AnonymizedDNSConfig         `toml:"anonymized_dns"`
+	TLSClientAuth            TLSClientAuthConfig         `toml:"tls_client_auth"`
 }
 
 func newConfig() Config {
@@ -212,6 +213,16 @@ type ServerSummary struct {
 	NoFilter    bool     `json:"nofilter"`
 	Description string   `json:"description,omitempty"`
 	Stamp       string   `json:"stamp"`
+}
+
+type TLSClientAuthCredsConfig struct {
+	ServerName string `toml:"server_name"`
+	ClientCert string `toml:"client_cert"`
+	ClientKey  string `toml:"client_key"`
+}
+
+type TLSClientAuthConfig struct {
+	Creds []TLSClientAuthCredsConfig `toml:"creds"`
 }
 
 type ConfigFlags struct {
@@ -472,6 +483,17 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 		}
 		proxy.routes = &routes
 	}
+	configClientCreds := config.TLSClientAuth.Creds
+	creds := make(map[string]DOHClientCreds)
+	for _, configClientCred := range configClientCreds {
+		credFiles := DOHClientCreds{
+			clientCert: configClientCred.ClientCert,
+			clientKey:  configClientCred.ClientKey,
+		}
+		creds[configClientCred.ServerName] = credFiles
+	}
+	proxy.dohCreds = &creds
+
 	proxy.serversWithBrokenQueryPadding = config.BrokenImplementations.BrokenQueryPadding
 
 	if *flags.ListAll {

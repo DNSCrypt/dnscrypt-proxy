@@ -674,3 +674,14 @@ broken_query_padding = ['cisco', 'cisco-ipv6', 'cisco-familyshield', "quad9-dnsc
 
   # [static.'myserver']
   # stamp = 'sdns:AQcAAAAAAAAAAAAQMi5kbnNjcnlwdC1jZXJ0Lg'
+
+
+################################
+#   TLS Client Authentication  #
+################################
+
+[tls_client_auth]
+
+# creds = [
+#    { server_name='myserver', client_cert='client.crt', client_key='client.key' },
+# ]

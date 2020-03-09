@@ -77,6 +77,7 @@ type Proxy struct {
 	routes                        *map[string][]string
 	serversWithBrokenQueryPadding []string
 	showCerts                     bool
+	dohCreds                      *map[string]DOHClientCreds
 }
 
 func (proxy *Proxy) addDNSListener(listenAddrStr string) {
