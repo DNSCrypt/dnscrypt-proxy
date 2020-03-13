@@ -320,7 +320,10 @@ func fetchDNSCryptServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp
 	if err != nil {
 		return ServerInfo{}, err
 	}
-	certInfo, rtt, err := FetchCurrentDNSCryptCert(proxy, &name, proxy.mainProto, stamp.ServerPk, stamp.ServerAddrStr, stamp.ProviderName, isNew, relayUDPAddr, relayTCPAddr)
+	certInfo, rtt, fragmentsBlocked, err := FetchCurrentDNSCryptCert(proxy, &name, proxy.mainProto, stamp.ServerPk, stamp.ServerAddrStr, stamp.ProviderName, isNew, relayUDPAddr, relayTCPAddr, knownBugs)
+	if knownBugs.incorrectPadding == false && fragmentsBlocked {
+		dlog.Debugf("[%v] drops fragmented queries", name)
+	}
 	if err != nil {
 		return ServerInfo{}, err
 	}
