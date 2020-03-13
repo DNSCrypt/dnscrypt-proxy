@@ -269,7 +269,7 @@ func (proxy *Proxy) udpListener(clientPc *net.UDPConn) {
 				return
 			}
 			defer proxy.clientsCountDec()
-			proxy.processIncomingQuery(proxy.serversInfo.getOne(), "udp", proxy.mainProto, packet, &clientAddr, clientPc, start)
+			proxy.processIncomingQuery("udp", proxy.mainProto, packet, &clientAddr, clientPc, start)
 		}()
 	}
 }
@@ -307,7 +307,7 @@ func (proxy *Proxy) tcpListener(acceptPc *net.TCPListener) {
 				return
 			}
 			clientAddr := clientPc.RemoteAddr()
-			proxy.processIncomingQuery(proxy.serversInfo.getOne(), "tcp", "tcp", packet, &clientAddr, clientPc, start)
+			proxy.processIncomingQuery("tcp", "tcp", packet, &clientAddr, clientPc, start)
 		}()
 	}
 }
@@ -438,18 +438,19 @@ func (proxy *Proxy) clientsCountDec() {
 	}
 }
 
-func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto string, serverProto string, query []byte, clientAddr *net.Addr, clientPc net.Conn, start time.Time) (response []byte) {
+func (proxy *Proxy) processIncomingQuery(clientProto string, serverProto string, query []byte, clientAddr *net.Addr, clientPc net.Conn, start time.Time) (response []byte) {
 	if len(query) < MinDNSPacketSize {
 		return
 	}
 	pluginsState := NewPluginsState(proxy, clientProto, clientAddr, start)
 	serverName := "-"
 	needsEDNS0Padding := false
+	serverInfo := proxy.serversInfo.getOne()
 	if serverInfo != nil {
 		serverName = serverInfo.Name
 		needsEDNS0Padding = (serverInfo.Proto == stamps.StampProtoTypeDoH || serverInfo.Proto == stamps.StampProtoTypeTLS)
 	}
-	query, _ = pluginsState.ApplyQueryPlugins(&proxy.pluginsGlobals, query, serverName, needsEDNS0Padding)
+	query, _ = pluginsState.ApplyQueryPlugins(&proxy.pluginsGlobals, query, needsEDNS0Padding)
 	if len(query) < MinDNSPacketSize || len(query) > MaxDNSPacketSize {
 		return
 	}
@@ -469,6 +470,7 @@ func (proxy *Proxy) processIncomingQuery(serverInfo *ServerInfo, clientProto str
 	}
 	if len(response) == 0 && serverInfo != nil {
 		var ttl *uint32
+		pluginsState.serverName = serverName
 		if serverInfo.Proto == stamps.StampProtoTypeDNSCrypt {
 			sharedKey, encryptedQuery, clientNonce, err := proxy.Encrypt(serverInfo, query, serverProto)
 			if err != nil {
