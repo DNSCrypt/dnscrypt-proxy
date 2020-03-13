@@ -743,7 +743,7 @@ func cdLocal() {
 	exeFileName, err := os.Executable()
 	if err != nil {
 		dlog.Warnf("Unable to determine the executable directory: [%s] -- You will need to specify absolute paths in the configuration file", err)
-	} else if err = os.Chdir(filepath.Dir(exeFileName)); err != nil {
+	} else if err := os.Chdir(filepath.Dir(exeFileName)); err != nil {
 		dlog.Warnf("Unable to change working directory to [%s]: %s", exeFileName, err)
 	}
 }

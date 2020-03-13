@@ -102,7 +102,7 @@ func main() {
 		return
 	}
 	if svc != nil {
-		if err = svc.Run(); err != nil {
+		if err := svc.Run(); err != nil {
 			dlog.Fatal(err)
 		}
 	} else {

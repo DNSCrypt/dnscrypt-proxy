@@ -41,8 +41,7 @@ type Source struct {
 }
 
 func (source *Source) checkSignature(bin, sig []byte) (err error) {
-	var signature minisign.Signature
-	if signature, err = minisign.DecodeSignature(string(sig)); err == nil {
+	if signature, err := minisign.DecodeSignature(string(sig)); err == nil {
 		_, err = source.minisignKey.Verify(bin, signature)
 	}
 	return
