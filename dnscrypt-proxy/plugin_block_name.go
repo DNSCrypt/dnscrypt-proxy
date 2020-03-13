@@ -26,9 +26,6 @@ var blockedNames *BlockedNames
 
 func (blockedNames *BlockedNames) check(pluginsState *PluginsState, qName string, aliasFor *string) (bool, error) {
 	reject, reason, xweeklyRanges := blockedNames.patternMatcher.Eval(qName)
-	if aliasFor != nil {
-		reason = reason + " (alias for [" + *aliasFor + "])"
-	}
 	var weeklyRanges *WeeklyRanges
 	if xweeklyRanges != nil {
 		weeklyRanges = xweeklyRanges.(*WeeklyRanges)
@@ -43,6 +40,11 @@ func (blockedNames *BlockedNames) check(pluginsState *PluginsState, qName string
 	}
 	pluginsState.action = PluginsActionReject
 	pluginsState.returnCode = PluginsReturnCodeReject
+	if aliasFor != nil {
+		reason = reason + " (alias for [" + *aliasFor + "])"
+	} else {
+		pluginsState.noServed = true
+	}
 	if blockedNames.logger != nil {
 		var clientIPStr string
 		if pluginsState.clientProto == "udp" {

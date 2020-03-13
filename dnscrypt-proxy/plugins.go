@@ -84,6 +84,7 @@ type PluginsState struct {
 	requestStart                     time.Time
 	requestEnd                       time.Time
 	cacheHit                         bool
+	noServed                         bool
 	returnCode                       PluginsReturnCode
 	serverName                       string
 }
