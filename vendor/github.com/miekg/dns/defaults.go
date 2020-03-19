@@ -317,6 +317,12 @@ func Fqdn(s string) string {
 	return s + "."
 }
 
+// CanonicalName returns the domain name in canonical form. A name in canonical
+// form is lowercase and fully qualified. See Section 6.2 in RFC 4034.
+func CanonicalName(s string) string {
+	return strings.ToLower(Fqdn(s))
+}
+
 // Copied from the official Go code.
 
 // ReverseAddr returns the in-addr.arpa. or ip6.arpa. hostname of the IP

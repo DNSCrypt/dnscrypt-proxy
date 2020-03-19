@@ -20,7 +20,7 @@ github.com/dchest/safefile
 github.com/facebookgo/atomicfile
 # github.com/facebookgo/pidfile v0.0.0-20150612191647-f242e2999868
 github.com/facebookgo/pidfile
-# github.com/hashicorp/go-immutable-radix v1.1.0
+# github.com/hashicorp/go-immutable-radix v1.2.0
 github.com/hashicorp/go-immutable-radix
 # github.com/hashicorp/go-syslog v1.0.0
 github.com/hashicorp/go-syslog
@@ -44,7 +44,7 @@ github.com/jedisct1/xsecretbox
 github.com/k-sone/critbitgo
 # github.com/kardianos/service v1.0.1-0.20191211031725-3c356ae54c8a
 github.com/kardianos/service
-# github.com/miekg/dns v1.1.28
+# github.com/miekg/dns v1.1.29
 github.com/miekg/dns
 # github.com/pkg/errors v0.8.1
 github.com/pkg/errors
@@ -55,7 +55,7 @@ github.com/powerman/check
 # github.com/smartystreets/goconvey v1.6.4
 github.com/smartystreets/goconvey/convey/gotest
 github.com/smartystreets/goconvey/convey/reporting
-# golang.org/x/crypto v0.0.0-20200311171314-f7b00557c8c4
+# golang.org/x/crypto v0.0.0-20200317142112-1b76d66859c6
 golang.org/x/crypto/blake2b
 golang.org/x/crypto/curve25519
 golang.org/x/crypto/ed25519
@@ -77,7 +77,7 @@ golang.org/x/net/internal/socks
 golang.org/x/net/ipv4
 golang.org/x/net/ipv6
 golang.org/x/net/proxy
-# golang.org/x/sys v0.0.0-20200302150141-5c8b2ff67527
+# golang.org/x/sys v0.0.0-20200317113312-5766fd39f98d
 golang.org/x/sys/cpu
 golang.org/x/sys/unix
 golang.org/x/sys/windows

@@ -124,7 +124,7 @@ freebsd_arm)
 freebsd_arm64)
 	mkerrors="$mkerrors -m64"
 	mksysnum="go run mksysnum.go 'https://svn.freebsd.org/base/stable/11/sys/kern/syscalls.master'"
-	mktypes="GOARCH=$GOARCH go tool cgo -godefs"
+	mktypes="GOARCH=$GOARCH go tool cgo -godefs -- -fsigned-char"
 	;;
 netbsd_386)
 	mkerrors="$mkerrors -m32"
