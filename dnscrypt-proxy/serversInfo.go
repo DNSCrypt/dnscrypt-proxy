@@ -62,17 +62,35 @@ type ServerInfo struct {
 	DOHClientCreds     DOHClientCreds
 }
 
-type LBStrategy int
+type LBStrategy interface {
+	getCandidate(serversCount int) int
+}
 
-const (
-	LBStrategyNone = LBStrategy(iota)
-	LBStrategyP2
-	LBStrategyPH
-	LBStrategyFirst
-	LBStrategyRandom
-)
+type LBStrategyP2 struct{}
 
-const DefaultLBStrategy = LBStrategyP2
+func (LBStrategyP2) getCandidate(serversCount int) int {
+	return rand.Intn(Min(serversCount, 2))
+}
+
+type LBStrategyPH struct{}
+
+func (LBStrategyPH) getCandidate(serversCount int) int {
+	return rand.Intn(Max(Min(serversCount, 2), serversCount/2))
+}
+
+type LBStrategyFirst struct{}
+
+func (LBStrategyFirst) getCandidate(int) int {
+	return 0
+}
+
+type LBStrategyRandom struct{}
+
+func (LBStrategyRandom) getCandidate(serversCount int) int {
+	return rand.Intn(serversCount)
+}
+
+var DefaultLBStrategy = LBStrategyP2{}
 
 type ServersInfo struct {
 	sync.RWMutex
@@ -209,17 +227,7 @@ func (serversInfo *ServersInfo) getOne() *ServerInfo {
 	if serversInfo.lbEstimator {
 		serversInfo.estimatorUpdate()
 	}
-	var candidate int
-	switch serversInfo.lbStrategy {
-	case LBStrategyFirst:
-		candidate = 0
-	case LBStrategyPH:
-		candidate = rand.Intn(Max(Min(serversCount, 2), serversCount/2))
-	case LBStrategyRandom:
-		candidate = rand.Intn(serversCount)
-	default:
-		candidate = rand.Intn(Min(serversCount, 2))
-	}
+	candidate := serversInfo.lbStrategy.getCandidate(serversCount)
 	serverInfo := serversInfo.inner[candidate]
 	dlog.Debugf("Using candidate [%s] RTT: %d", (*serverInfo).Name, int((*serverInfo).rtt.Value()))
 	serversInfo.Unlock()

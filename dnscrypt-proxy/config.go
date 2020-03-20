@@ -358,20 +358,19 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	if len(config.ListenAddresses) == 0 && len(config.LocalDoH.ListenAddresses) == 0 {
 		dlog.Debug("No local IP/port configured")
 	}
-
-	lbStrategy := DefaultLBStrategy
+	lbStrategy := LBStrategy(DefaultLBStrategy)
 	switch strings.ToLower(config.LBStrategy) {
 	case "":
 		// default
 	case "p2":
-		lbStrategy = LBStrategyP2
+		lbStrategy = LBStrategyP2{}
 	case "ph":
-		lbStrategy = LBStrategyPH
+		lbStrategy = LBStrategyPH{}
 	case "fastest":
 	case "first":
-		lbStrategy = LBStrategyFirst
+		lbStrategy = LBStrategyFirst{}
 	case "random":
-		lbStrategy = LBStrategyRandom
+		lbStrategy = LBStrategyRandom{}
 	default:
 		dlog.Warnf("Unknown load balancing strategy: [%s]", config.LBStrategy)
 	}
