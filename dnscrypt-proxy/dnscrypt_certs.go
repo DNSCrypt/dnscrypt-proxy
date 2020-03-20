@@ -199,23 +199,23 @@ func dnsExchange(proxy *Proxy, proto string, query *dns.Msg, serverAddress strin
 		options := 0
 
 		for tries := 1; tries >= 0; tries-- {
-			if tryFragmentsSupport {
-				go func() {
-					time.Sleep(time.Duration(10*tries) * time.Millisecond)
+			if tryFragmentsSupport && false {
+				go func(query *dns.Msg, delay time.Duration) {
+					time.Sleep(delay)
 					option := _dnsExchange(proxy, proto, query, serverAddress, relayUDPAddr, relayTCPAddr, 1500)
 					option.fragmentsBlocked = false
 					option.priority = 0
 					channel <- option
-				}()
+				}(query.Copy(), time.Duration(10*tries)*time.Millisecond)
 				options++
 			}
-			go func() {
-				time.Sleep(time.Duration(15*tries) * time.Millisecond)
+			go func(query *dns.Msg, delay time.Duration) {
+				time.Sleep(delay)
 				option := _dnsExchange(proxy, proto, query, serverAddress, relayUDPAddr, relayTCPAddr, 480)
 				option.fragmentsBlocked = true
 				option.priority = 1
 				channel <- option
-			}()
+			}(query.Copy(), time.Duration(15*tries)*time.Millisecond)
 			options++
 		}
 		var bestOption *dnsExchangeResponse
