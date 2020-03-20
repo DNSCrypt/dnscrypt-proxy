@@ -1,3 +1,15 @@
+* Version 2.0.40
+ - Servers blocking fragmented queries are now automatically detected.
+ - The server name is now only present in query logs when an actual
+upstream servers was required to resolve a query.
+ - TLS client authentication has been added for DoH.
+ - The Firefox plugin is now skipped for connections coming from the
+local DoH server.
+ - DoH RTT computation is now more accurate, especially when CDNs are
+in the middle.
+ - The forwarding plugin is now more reliable, and handles retries over
+ TCP.
+
 * Version 2.0.39
  - The Firefox Local DoH service didn't properly work in version 2.0.38;
 this has been fixed. Thanks to Simon Brand for the report!

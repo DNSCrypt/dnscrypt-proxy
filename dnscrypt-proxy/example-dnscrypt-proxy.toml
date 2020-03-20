@@ -241,8 +241,10 @@ netprobe_address = '9.9.9.9:53'
 ## These strings will be added as TXT records to queries.
 ## Do not use, except on servers explicitly asking for extra data
 ## to be present.
+## encrypted-dns-server can be configured to use this for access control
+## in the [access_control] section
 
-# query_meta = ["key1:value1", "key2:value2", "key3:value3"]
+# query_meta = ["key1:value1", "key2:value2", "token:MySecretToken"]
 
 
 ## Automatic log files rotation
