@@ -359,7 +359,7 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 		dlog.Debug("No local IP/port configured")
 	}
 	lbStrategy := LBStrategy(DefaultLBStrategy)
-	switch strings.ToLower(config.LBStrategy) {
+	switch lbStrategyStr := strings.ToLower(config.LBStrategy); lbStrategyStr {
 	case "":
 		// default
 	case "p2":
@@ -372,7 +372,15 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	case "random":
 		lbStrategy = LBStrategyRandom{}
 	default:
-		dlog.Warnf("Unknown load balancing strategy: [%s]", config.LBStrategy)
+		if strings.HasPrefix(lbStrategyStr, "p") {
+			n, err := strconv.ParseInt(strings.TrimPrefix(lbStrategyStr, "p"), 10, 32)
+			if err != nil || n <= 0 {
+				dlog.Fatalf("Invalid load balancing strategy: [%s]", config.LBStrategy)
+			}
+			lbStrategy = LBStrategyPN{n: int(n)}
+		} else {
+			dlog.Warnf("Unknown load balancing strategy: [%s]", config.LBStrategy)
+		}
 	}
 	proxy.serversInfo.lbStrategy = lbStrategy
 	proxy.serversInfo.lbEstimator = config.LBEstimator

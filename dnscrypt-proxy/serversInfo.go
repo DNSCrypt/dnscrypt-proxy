@@ -72,6 +72,12 @@ func (LBStrategyP2) getCandidate(serversCount int) int {
 	return rand.Intn(Min(serversCount, 2))
 }
 
+type LBStrategyPN struct{ n int }
+
+func (s LBStrategyPN) getCandidate(serversCount int) int {
+	return rand.Intn(Min(serversCount, s.n))
+}
+
 type LBStrategyPH struct{}
 
 func (LBStrategyPH) getCandidate(serversCount int) int {
