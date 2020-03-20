@@ -22,8 +22,8 @@ require (
 	github.com/kardianos/service v1.0.1-0.20191211031725-3c356ae54c8a
 	github.com/miekg/dns v1.1.29
 	github.com/powerman/check v1.2.1
-	golang.org/x/crypto v0.0.0-20200317142112-1b76d66859c6
-	golang.org/x/net v0.0.0-20200301022130-244492dfa37a
+	golang.org/x/crypto v0.0.0-20200320145329-97fc981609be
+	golang.org/x/net v0.0.0-20200319234117-63522dbf7eec
 	golang.org/x/sys v0.0.0-20200317113312-5766fd39f98d
 	golang.org/x/text v0.3.2 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
