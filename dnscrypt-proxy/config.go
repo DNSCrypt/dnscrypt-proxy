@@ -375,9 +375,10 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 		if strings.HasPrefix(lbStrategyStr, "p") {
 			n, err := strconv.ParseInt(strings.TrimPrefix(lbStrategyStr, "p"), 10, 32)
 			if err != nil || n <= 0 {
-				dlog.Fatalf("Invalid load balancing strategy: [%s]", config.LBStrategy)
+				dlog.Warnf("Invalid load balancing strategy: [%s]", config.LBStrategy)
+			} else {
+				lbStrategy = LBStrategyPN{n: int(n)}
 			}
-			lbStrategy = LBStrategyPN{n: int(n)}
 		} else {
 			dlog.Warnf("Unknown load balancing strategy: [%s]", config.LBStrategy)
 		}
