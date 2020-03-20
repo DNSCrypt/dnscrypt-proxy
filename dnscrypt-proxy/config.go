@@ -358,22 +358,29 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	if len(config.ListenAddresses) == 0 && len(config.LocalDoH.ListenAddresses) == 0 {
 		dlog.Debug("No local IP/port configured")
 	}
-
-	lbStrategy := DefaultLBStrategy
-	switch strings.ToLower(config.LBStrategy) {
+	lbStrategy := LBStrategy(DefaultLBStrategy)
+	switch lbStrategyStr := strings.ToLower(config.LBStrategy); lbStrategyStr {
 	case "":
 		// default
 	case "p2":
-		lbStrategy = LBStrategyP2
+		lbStrategy = LBStrategyP2{}
 	case "ph":
-		lbStrategy = LBStrategyPH
+		lbStrategy = LBStrategyPH{}
 	case "fastest":
 	case "first":
-		lbStrategy = LBStrategyFirst
+		lbStrategy = LBStrategyFirst{}
 	case "random":
-		lbStrategy = LBStrategyRandom
+		lbStrategy = LBStrategyRandom{}
 	default:
-		dlog.Warnf("Unknown load balancing strategy: [%s]", config.LBStrategy)
+		if strings.HasPrefix(lbStrategyStr, "p") {
+			n, err := strconv.ParseInt(strings.TrimPrefix(lbStrategyStr, "p"), 10, 32)
+			if err != nil || n <= 0 {
+				dlog.Fatalf("Invalid load balancing strategy: [%s]", config.LBStrategy)
+			}
+			lbStrategy = LBStrategyPN{n: int(n)}
+		} else {
+			dlog.Warnf("Unknown load balancing strategy: [%s]", config.LBStrategy)
+		}
 	}
 	proxy.serversInfo.lbStrategy = lbStrategy
 	proxy.serversInfo.lbEstimator = config.LBEstimator
