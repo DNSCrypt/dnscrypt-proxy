@@ -55,7 +55,7 @@ github.com/powerman/check
 # github.com/smartystreets/goconvey v1.6.4
 github.com/smartystreets/goconvey/convey/gotest
 github.com/smartystreets/goconvey/convey/reporting
-# golang.org/x/crypto v0.0.0-20200320145329-97fc981609be
+# golang.org/x/crypto v0.0.0-20200320181102-891825fb96df
 golang.org/x/crypto/blake2b
 golang.org/x/crypto/curve25519
 golang.org/x/crypto/ed25519
@@ -65,7 +65,7 @@ golang.org/x/crypto/nacl/box
 golang.org/x/crypto/nacl/secretbox
 golang.org/x/crypto/poly1305
 golang.org/x/crypto/salsa20/salsa
-# golang.org/x/net v0.0.0-20200319234117-63522dbf7eec
+# golang.org/x/net v0.0.0-20200320181208-1c781a10960a
 golang.org/x/net/bpf
 golang.org/x/net/http/httpguts
 golang.org/x/net/http2
@@ -77,7 +77,7 @@ golang.org/x/net/internal/socks
 golang.org/x/net/ipv4
 golang.org/x/net/ipv6
 golang.org/x/net/proxy
-# golang.org/x/sys v0.0.0-20200317113312-5766fd39f98d
+# golang.org/x/sys v0.0.0-20200320181252-af34d8274f85
 golang.org/x/sys/cpu
 golang.org/x/sys/unix
 golang.org/x/sys/windows
