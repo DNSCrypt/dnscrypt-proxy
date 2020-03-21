@@ -24,7 +24,7 @@ require (
 	github.com/powerman/check v1.2.1
 	golang.org/x/crypto v0.0.0-20200320181102-891825fb96df
 	golang.org/x/net v0.0.0-20200320220750-118fecf932d8
-	golang.org/x/sys v0.0.0-20200320181252-af34d8274f85
+	golang.org/x/sys v0.0.0-20200321134203-328b4cd54aae
 	golang.org/x/text v0.3.2 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 	gopkg.in/yaml.v2 v2.2.7 // indirect
