@@ -69,6 +69,13 @@ script:
   - tar czpvf dnscrypt-proxy-freebsd_arm-${TRAVIS_TAG:-dev}.tar.gz freebsd-arm
 
   - go clean
+  - env GOOS=freebsd GOARCH=arm go GOARM=6 build -mod vendor -ldflags="-s -w"
+  - mkdir freebsd-armv6
+  - ln dnscrypt-proxy freebsd-armv6/
+  - ln ../LICENSE example-dnscrypt-proxy.toml localhost.pem example-*.txt freebsd-armv6/
+  - tar czpvf dnscrypt-proxy-freebsd_armv6-${TRAVIS_TAG:-dev}.tar.gz freebsd-armv6
+
+  - go clean
   - env GOOS=freebsd GOARCH=arm GOARM=7 go build -mod vendor -ldflags="-s -w"
   - mkdir freebsd-armv7
   - ln dnscrypt-proxy freebsd-armv7/
@@ -123,6 +130,13 @@ script:
   - ln dnscrypt-proxy linux-arm/
   - ln ../LICENSE example-dnscrypt-proxy.toml localhost.pem example-*.txt linux-arm/
   - tar czpvf dnscrypt-proxy-linux_arm-${TRAVIS_TAG:-dev}.tar.gz linux-arm
+
+  - go clean
+  - env CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=6 go build -mod vendor -ldflags="-s -w"
+  - mkdir linux-armv6
+  - ln dnscrypt-proxy linux-armv6/
+  - ln ../LICENSE example-dnscrypt-proxy.toml localhost.pem example-*.txt linux-armv6/
+  - tar czpvf dnscrypt-proxy-linux_armv6-${TRAVIS_TAG:-dev}.tar.gz linux-armv6
 
   - go clean
   - env CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -mod vendor -ldflags="-s -w"
