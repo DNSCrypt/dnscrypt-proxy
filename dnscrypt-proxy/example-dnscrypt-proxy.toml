@@ -626,10 +626,10 @@ cache_neg_max_ttl = 600
 # truncate reponses larger than questions as expected by the DNSCrypt protocol.
 # This prevents large responses from being received, and breaks relaying.
 # A workaround for the first issue will be applied to servers in list below.
-# Quad9 appears to currently have a similar issue.
+# Quad9 appears to be dropping fragmented UDP queries, but only for some networks.
 # Do not change that list until the bugs are fixed server-side.
 
-broken_query_padding = ['cisco', 'cisco-ipv6', 'cisco-familyshield', 'quad9-dnscrypt-ip4-filter-alt', 'quad9-dnscrypt-ip4-filter-pri', 'quad9-dnscrypt-ip4-nofilter-alt', 'quad9-dnscrypt-ip4-nofilter-pri', 'quad9-dnscrypt-ip6-filter-alt', 'quad9-dnscrypt-ip6-filter-pri', 'quad9-dnscrypt-ip6-nofilter-alt', 'quad9-dnscrypt-ip6-nofilter-pri']
+broken_query_padding = ['cisco', 'cisco-ipv6', 'cisco-familyshield']
 
 
 
@@ -637,10 +637,13 @@ broken_query_padding = ['cisco', 'cisco-ipv6', 'cisco-familyshield', 'quad9-dnsc
 #   TLS Client Authentication  #
 ################################
 
+# This is only useful if you are operating your own, private DoH server(s).
+# (for DNSCrypt, see the `query_meta` feature instead)
+
 [tls_client_auth]
 
 # creds = [
-#    { server_name='myserver', client_cert='client.crt', client_key='client.key' },
+#    { server_name='myserver', client_cert='client.crt', client_key='client.key' }
 # ]
 
 
