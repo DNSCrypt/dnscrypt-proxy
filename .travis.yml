@@ -60,14 +60,14 @@ script:
   - tar czpvf dnscrypt-proxy-freebsd_amd64-${TRAVIS_TAG:-dev}.tar.gz freebsd-amd64
 
   - go clean
-  - env GOOS=freebsd GOARCH=arm go GOARM=5 build -mod vendor -ldflags="-s -w"
+  - env GOOS=freebsd GOARCH=arm GOARM=5 go build -mod vendor -ldflags="-s -w"
   - mkdir freebsd-arm
   - ln dnscrypt-proxy freebsd-arm/
   - ln ../LICENSE example-dnscrypt-proxy.toml localhost.pem example-*.txt freebsd-arm/
   - tar czpvf dnscrypt-proxy-freebsd_arm-${TRAVIS_TAG:-dev}.tar.gz freebsd-arm
 
   - go clean
-  - env GOOS=freebsd GOARCH=arm go GOARM=6 build -mod vendor -ldflags="-s -w"
+  - env GOOS=freebsd GOARCH=arm GOARM=6 go build -mod vendor -ldflags="-s -w"
   - mkdir freebsd-armv6
   - ln dnscrypt-proxy freebsd-armv6/
   - ln ../LICENSE example-dnscrypt-proxy.toml localhost.pem example-*.txt freebsd-armv6/
