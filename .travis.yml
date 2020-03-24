@@ -186,28 +186,28 @@ script:
   - tar czpvf dnscrypt-proxy-macos-${TRAVIS_TAG:-dev}.tar.gz macos
 
   - go clean
-  - env CC=arm-linux-androideabi-clang CXX=arm-linux-androideabi-clang++ CGO_ENABLED=1 GOOS=android GOARCH=arm GOARM=7 go build -mod vendor -ldflags="-s -w"
+  - env CC=armv7a-linux-androideabi19-clang CXX=armv7a-linux-androideabi19-clang++ CGO_ENABLED=1 GOOS=android GOARCH=arm GOARM=7 go build -mod vendor -ldflags="-s -w"
   - mkdir android-arm
   - ln dnscrypt-proxy android-arm/
   - cp ../LICENSE example-dnscrypt-proxy.toml localhost.pem example-*.txt android-arm/
   - zip -9 -r dnscrypt-proxy-android_arm-${TRAVIS_TAG:-dev}.zip android-arm
 
   - go clean
-  - env CC=aarch64-linux-android-clang CXX=aarch64-linux-android-clang++ CGO_ENABLED=1 GOOS=android GOARCH=arm64 go build -mod vendor -ldflags="-s -w"
+  - env CC=aarch64-linux-android21-clang CXX=aarch64-linux-android21-clang++ CGO_ENABLED=1 GOOS=android GOARCH=arm64 go build -mod vendor -ldflags="-s -w"
   - mkdir android-arm64
   - ln dnscrypt-proxy android-arm64/
   - cp ../LICENSE example-dnscrypt-proxy.toml localhost.pem example-*.txt android-arm64/
   - zip -9 -r dnscrypt-proxy-android_arm64-${TRAVIS_TAG:-dev}.zip android-arm64
 
   - go clean
-  - env CC=i686-linux-android-clang CXX=i686-linux-android-clang++ CGO_ENABLED=1 GOOS=android GOARCH=386 go build -mod vendor -ldflags="-s -w"
+  - env CC=i686-linux-android19-clang CXX=i686-linux-android19-clang++ CGO_ENABLED=1 GOOS=android GOARCH=386 go build -mod vendor -ldflags="-s -w"
   - mkdir android-i386
   - ln dnscrypt-proxy android-i386/
   - cp ../LICENSE example-dnscrypt-proxy.toml localhost.pem example-*.txt android-i386/
   - zip -9 -r dnscrypt-proxy-android_i386-${TRAVIS_TAG:-dev}.zip android-i386
 
   - go clean
-  - env CC=x86_64-linux-android-clang CXX=x86_64-linux-android-clang++ CGO_ENABLED=1 GOOS=android GOARCH=amd64 go build -mod vendor -ldflags="-s -w"
+  - env CC=x86_64-linux-android21-clang CXX=x86_64-linux-android21-clang++ CGO_ENABLED=1 GOOS=android GOARCH=amd64 go build -mod vendor -ldflags="-s -w"
   - mkdir android-x86_64
   - ln dnscrypt-proxy android-x86_64/
   - cp ../LICENSE example-dnscrypt-proxy.toml localhost.pem example-*.txt android-x86_64/
@@ -247,16 +247,12 @@ before_install:
   - cd .ci
   - ./ci-test.sh || travis_terminate 1
   - cd -
-  - NDK_VER=r18
+  - NDK_VER=r20
   - curl -LO https://dl.google.com/android/repository/android-ndk-${NDK_VER}-linux-x86_64.zip
   - unzip -q android-ndk-${NDK_VER}-linux-x86_64.zip -d $HOME
   - rm android-ndk-${NDK_VER}-linux-x86_64.zip
   - NDK_TOOLS=$HOME/android-ndk-${NDK_VER}
-  - NDK_STANDALONE=$HOME/ndk-standalone-${NDK_VER}
-  - MAKE_TOOLCHAIN=$NDK_TOOLS/build/tools/make_standalone_toolchain.py
-  - for arch in x86 arm; do python $MAKE_TOOLCHAIN --arch $arch --api 19 --install-dir $NDK_STANDALONE/$arch; PATH=$PATH:$NDK_STANDALONE/$arch/bin; done
-  - for arch in x86_64 arm64; do python $MAKE_TOOLCHAIN --arch $arch --api 21 --install-dir $NDK_STANDALONE/$arch; PATH=$PATH:$NDK_STANDALONE/$arch/bin; done
-  - rm -rf $NDK_TOOLS
+  - PATH=$PATH:$NDK_TOOLS/toolchains/llvm/prebuilt/linux-x86_64/bin
 
 env:
   global:
