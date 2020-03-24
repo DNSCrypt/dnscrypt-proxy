@@ -162,7 +162,7 @@ func (xTransport *XTransport) rebuildTransport() {
 	if (clientCreds != DOHClientCreds{}) {
 		cert, err := tls.LoadX509KeyPair(clientCreds.clientCert, clientCreds.clientKey)
 		if err != nil {
-			dlog.Error(err)
+			dlog.Fatalf("Unable to use certificate [%v] (key: [%v]): %v", clientCreds.clientCert, clientCreds.clientKey, err)
 		}
 		tlsClientConfig.Certificates = []tls.Certificate{cert}
 	}

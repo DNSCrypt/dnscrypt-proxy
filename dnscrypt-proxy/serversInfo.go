@@ -407,7 +407,7 @@ func fetchDoHServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, isN
 		dohClientCreds, ok = (*proxy.dohCreds)["*"]
 	}
 	if ok {
-		dlog.Noticef("[%s] Cert: %s, Key: %s", name, dohClientCreds.clientCert, dohClientCreds.clientKey)
+		dlog.Noticef("Enabling TLS authentication for [%s]", name)
 		proxy.xTransport.tlsClientCreds = dohClientCreds
 		proxy.xTransport.rebuildTransport()
 	}
