@@ -253,6 +253,7 @@ before_install:
   - rm android-ndk-${NDK_VER}-linux-x86_64.zip
   - NDK_TOOLS=$HOME/android-ndk-${NDK_VER}
   - PATH=$PATH:$NDK_TOOLS/toolchains/llvm/prebuilt/linux-x86_64/bin
+  - TRAVIS_TAG=2.0.41
 
 env:
   global:
