@@ -137,6 +137,13 @@ script:
   - tar czpvf dnscrypt-proxy-linux_armv6-${TRAVIS_TAG:-dev}.tar.gz linux-armv6
 
   - go clean
+  - env CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build -mod vendor -ldflags="-s -w"
+  - mkdir linux-armv7
+  - ln dnscrypt-proxy linux-armv7/
+  - ln ../LICENSE example-dnscrypt-proxy.toml localhost.pem example-*.txt linux-armv7/
+  - tar czpvf dnscrypt-proxy-linux_armv7-${TRAVIS_TAG:-dev}.tar.gz linux-armv7
+
+  - go clean
   - env CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -mod vendor -ldflags="-s -w"
   - mkdir linux-arm64
   - ln dnscrypt-proxy linux-arm64/
