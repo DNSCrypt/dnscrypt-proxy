@@ -160,14 +160,14 @@ script:
   - tar czpvf dnscrypt-proxy-linux_mipsle-${TRAVIS_TAG:-dev}.tar.gz linux-mipsle
 
   - go clean
-  - env CGO_ENABLED=0 GOOS=linux GOARCH=mips64 go build -mod vendor -ldflags="-s -w"
+  - env CGO_ENABLED=0 GOOS=linux GOARCH=mips64 GOMIPS64=softfloat go build -mod vendor -ldflags="-s -w"
   - mkdir linux-mips64
   - ln dnscrypt-proxy linux-mips64/
   - ln ../LICENSE example-dnscrypt-proxy.toml localhost.pem example-*.txt linux-mips64/
   - tar czpvf dnscrypt-proxy-linux_mips64-${TRAVIS_TAG:-dev}.tar.gz linux-mips64
 
   - go clean
-  - env CGO_ENABLED=0 GOOS=linux GOARCH=mips64le go build -mod vendor -ldflags="-s -w"
+  - env CGO_ENABLED=0 GOOS=linux GOARCH=mips64le GOMIPS64=softfloat go build -mod vendor -ldflags="-s -w"
   - mkdir linux-mips64le
   - ln dnscrypt-proxy linux-mips64le/
   - ln ../LICENSE example-dnscrypt-proxy.toml localhost.pem example-*.txt linux-mips64le/
