@@ -1,3 +1,14 @@
+* Version 2.0.41
+ - Precompiled binaries for armv5, armv6 and armv7 are available.
+The default arm builds were not compatible with older CPUs when
+compiled with Go 1.14. mips64 binaries are explicitly compiled with
+softfloat to improve compatibility.
+ - Quad9 seems to be only blocking fragmented queries over UDP for
+some networks. They have been removed from the default list of broken
+resolvers; runtime detection of support for fragments should now do
+the job.
+ - Runtime detection of support for fragments was actually enabled.
+
 * Version 2.0.40
  - Servers blocking fragmented queries are now automatically detected.
  - The server name is now only present in query logs when an actual
