@@ -32,7 +32,8 @@ type RegisteredServer struct {
 }
 
 type ServerBugs struct {
-	incorrectPadding bool
+	fragmentsBlocked     bool
+	largerQueriesDropped bool
 }
 
 type DOHClientCreds struct {
@@ -319,10 +320,17 @@ func fetchDNSCryptServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp
 		stamp.ServerPk = serverPk
 	}
 	knownBugs := ServerBugs{}
-	for _, buggyServerName := range proxy.serversWithBrokenQueryPadding {
+	for _, buggyServerName := range proxy.serversBlockingFragments {
 		if buggyServerName == name {
-			knownBugs.incorrectPadding = true
-			dlog.Infof("Known bug in [%v]: padding is not correctly handled", name)
+			knownBugs.fragmentsBlocked = true
+			dlog.Infof("Known bug in [%v]: fragmented questions over UDP are blocked", name)
+			break
+		}
+	}
+	for _, buggyServerName := range proxy.serversDroppingLargerResponses {
+		if buggyServerName == name {
+			knownBugs.largerQueriesDropped = true
+			dlog.Infof("Known bug in [%v]: truncated responses are not sent when a response is larger than the query", name)
 			break
 		}
 	}
@@ -331,11 +339,11 @@ func fetchDNSCryptServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp
 		return ServerInfo{}, err
 	}
 	certInfo, rtt, fragmentsBlocked, err := FetchCurrentDNSCryptCert(proxy, &name, proxy.mainProto, stamp.ServerPk, stamp.ServerAddrStr, stamp.ProviderName, isNew, relayUDPAddr, relayTCPAddr, knownBugs)
-	if !knownBugs.incorrectPadding && fragmentsBlocked {
+	if !knownBugs.fragmentsBlocked && fragmentsBlocked {
 		dlog.Debugf("[%v] drops fragmented queries", name)
-		knownBugs.incorrectPadding = true
+		knownBugs.fragmentsBlocked = true
 	}
-	if knownBugs.incorrectPadding && (relayUDPAddr != nil || relayTCPAddr != nil) {
+	if knownBugs.fragmentsBlocked && (relayUDPAddr != nil || relayTCPAddr != nil) {
 		dlog.Warnf("[%v] is incompatible with anonymization", name)
 		relayTCPAddr, relayUDPAddr = nil, nil
 	}

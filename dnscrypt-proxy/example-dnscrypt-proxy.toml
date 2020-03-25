@@ -624,14 +624,19 @@ cache_neg_max_ttl = 600
 
 # Cisco servers currently cannot handle queries larger than 1472 bytes, and don't
 # truncate reponses larger than questions as expected by the DNSCrypt protocol.
-# Quad9 ignores the query instead of sending a truncated response when the
-# response is larger than the question.
+
 # This prevents large responses from being received over UDP, and breaks relaying.
 # A workaround for the first issue will be applied to servers in list below.
 # Relaying cannot be reliable until the servers are fixed.
 # Do not change that list until the bugs are fixed server-side.
 
-broken_query_padding = ['cisco', 'cisco-ipv6', 'cisco-familyshield', 'quad9-dnscrypt-ip4-filter-alt', 'quad9-dnscrypt-ip4-filter-pri', 'quad9-dnscrypt-ip4-nofilter-alt', 'quad9-dnscrypt-ip4-nofilter-pri', 'quad9-dnscrypt-ip6-filter-alt', 'quad9-dnscrypt-ip6-filter-pri', 'quad9-dnscrypt-ip6-nofilter-alt', 'quad9-dnscrypt-ip6-nofilter-pri']
+fragments_blocked = ['cisco', 'cisco-ipv6', 'cisco-familyshield', 'quad9-dnscrypt-ip4-filter-alt', 'quad9-dnscrypt-ip4-filter-pri', 'quad9-dnscrypt-ip4-nofilter-alt', 'quad9-dnscrypt-ip4-nofilter-pri', 'quad9-dnscrypt-ip6-filter-alt', 'quad9-dnscrypt-ip6-filter-pri', 'quad9-dnscrypt-ip6-nofilter-alt', 'quad9-dnscrypt-ip6-nofilter-pri']
+
+# Quad9 ignores the query instead of sending a truncated response when the
+# response is larger than the question.
+# Do not change that list until the bugs are fixed server-side.
+
+larger_responses_dropped = ['quad9-dnscrypt-ip4-filter-alt', 'quad9-dnscrypt-ip4-filter-pri', 'quad9-dnscrypt-ip4-nofilter-alt', 'quad9-dnscrypt-ip4-nofilter-pri', 'quad9-dnscrypt-ip6-filter-alt', 'quad9-dnscrypt-ip6-filter-pri', 'quad9-dnscrypt-ip6-nofilter-alt', 'quad9-dnscrypt-ip6-nofilter-pri']
 
 
 

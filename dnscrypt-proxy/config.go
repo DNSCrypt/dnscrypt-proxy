@@ -134,7 +134,8 @@ func newConfig() Config {
 		LBEstimator:              true,
 		BlockedQueryResponse:     "hinfo",
 		BrokenImplementations: BrokenImplementationsConfig{
-			BrokenQueryPadding: []string{"cisco", "cisco-ipv6", "cisco-familyshield", "quad9-dnscrypt-ip4-filter-alt", "quad9-dnscrypt-ip4-filter-pri", "quad9-dnscrypt-ip4-nofilter-alt", "quad9-dnscrypt-ip4-nofilter-pri", "quad9-dnscrypt-ip6-filter-alt", "quad9-dnscrypt-ip6-filter-pri", "quad9-dnscrypt-ip6-nofilter-alt", "quad9-dnscrypt-ip6-nofilter-pri"},
+			FragmentsBlocked:       []string{"cisco", "cisco-ipv6", "cisco-familyshield", "quad9-dnscrypt-ip4-filter-alt", "quad9-dnscrypt-ip4-filter-pri", "quad9-dnscrypt-ip4-nofilter-alt", "quad9-dnscrypt-ip4-nofilter-pri", "quad9-dnscrypt-ip6-filter-alt", "quad9-dnscrypt-ip6-filter-pri", "quad9-dnscrypt-ip6-nofilter-alt", "quad9-dnscrypt-ip6-nofilter-pri"},
+			LargerResponsesDropped: []string{"quad9-dnscrypt-ip4-filter-alt", "quad9-dnscrypt-ip4-filter-pri", "quad9-dnscrypt-ip4-nofilter-alt", "quad9-dnscrypt-ip4-nofilter-pri", "quad9-dnscrypt-ip6-filter-alt", "quad9-dnscrypt-ip6-filter-pri", "quad9-dnscrypt-ip6-nofilter-alt", "quad9-dnscrypt-ip6-nofilter-pri"},
 		},
 	}
 }
@@ -192,7 +193,9 @@ type AnonymizedDNSConfig struct {
 }
 
 type BrokenImplementationsConfig struct {
-	BrokenQueryPadding []string `toml:"broken_query_padding"`
+	BrokenQueryPadding     []string `toml:"broken_query_padding"`
+	FragmentsBlocked       []string `toml:"fragments_blocked"`
+	LargerResponsesDropped []string `toml:"larger_responses_dropped"`
 }
 
 type LocalDoHConfig struct {
@@ -502,7 +505,12 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	}
 	proxy.dohCreds = &creds
 
-	proxy.serversWithBrokenQueryPadding = config.BrokenImplementations.BrokenQueryPadding
+	// Backwards compatibility
+	config.BrokenImplementations.FragmentsBlocked = append(config.BrokenImplementations.FragmentsBlocked, config.BrokenImplementations.BrokenQueryPadding...)
+	config.BrokenImplementations.LargerResponsesDropped = append(config.BrokenImplementations.LargerResponsesDropped, config.BrokenImplementations.BrokenQueryPadding...)
+
+	proxy.serversBlockingFragments = config.BrokenImplementations.FragmentsBlocked
+	proxy.serversDroppingLargerResponses = config.BrokenImplementations.LargerResponsesDropped
 
 	if *flags.ListAll {
 		config.ServerNames = nil

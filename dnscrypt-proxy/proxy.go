@@ -16,68 +16,69 @@ import (
 )
 
 type Proxy struct {
-	userName                      string
-	child                         bool
-	proxyPublicKey                [32]byte
-	proxySecretKey                [32]byte
-	ephemeralKeys                 bool
-	questionSizeEstimator         QuestionSizeEstimator
-	serversInfo                   ServersInfo
-	timeout                       time.Duration
-	certRefreshDelay              time.Duration
-	certRefreshDelayAfterFailure  time.Duration
-	certIgnoreTimestamp           bool
-	mainProto                     string
-	listenAddresses               []string
-	localDoHListenAddresses       []string
-	localDoHPath                  string
-	localDoHCertFile              string
-	localDoHCertKeyFile           string
-	daemonize                     bool
-	registeredServers             []RegisteredServer
-	registeredRelays              []RegisteredServer
-	pluginBlockIPv6               bool
-	pluginBlockUnqualified        bool
-	pluginBlockUndelegated        bool
-	cache                         bool
-	cacheSize                     int
-	cacheNegMinTTL                uint32
-	cacheNegMaxTTL                uint32
-	cacheMinTTL                   uint32
-	cacheMaxTTL                   uint32
-	rejectTTL                     uint32
-	cloakTTL                      uint32
-	queryLogFile                  string
-	queryLogFormat                string
-	queryLogIgnoredQtypes         []string
-	nxLogFile                     string
-	nxLogFormat                   string
-	blockNameFile                 string
-	whitelistNameFile             string
-	blockNameLogFile              string
-	whitelistNameLogFile          string
-	blockNameFormat               string
-	whitelistNameFormat           string
-	blockIPFile                   string
-	blockIPLogFile                string
-	blockIPFormat                 string
-	forwardFile                   string
-	cloakFile                     string
-	pluginsGlobals                PluginsGlobals
-	sources                       []*Source
-	clientsCount                  uint32
-	maxClients                    uint32
-	xTransport                    *XTransport
-	allWeeklyRanges               *map[string]WeeklyRanges
-	logMaxSize                    int
-	logMaxAge                     int
-	logMaxBackups                 int
-	blockedQueryResponse          string
-	queryMeta                     []string
-	routes                        *map[string][]string
-	serversWithBrokenQueryPadding []string
-	showCerts                     bool
-	dohCreds                      *map[string]DOHClientCreds
+	userName                       string
+	child                          bool
+	proxyPublicKey                 [32]byte
+	proxySecretKey                 [32]byte
+	ephemeralKeys                  bool
+	questionSizeEstimator          QuestionSizeEstimator
+	serversInfo                    ServersInfo
+	timeout                        time.Duration
+	certRefreshDelay               time.Duration
+	certRefreshDelayAfterFailure   time.Duration
+	certIgnoreTimestamp            bool
+	mainProto                      string
+	listenAddresses                []string
+	localDoHListenAddresses        []string
+	localDoHPath                   string
+	localDoHCertFile               string
+	localDoHCertKeyFile            string
+	daemonize                      bool
+	registeredServers              []RegisteredServer
+	registeredRelays               []RegisteredServer
+	pluginBlockIPv6                bool
+	pluginBlockUnqualified         bool
+	pluginBlockUndelegated         bool
+	cache                          bool
+	cacheSize                      int
+	cacheNegMinTTL                 uint32
+	cacheNegMaxTTL                 uint32
+	cacheMinTTL                    uint32
+	cacheMaxTTL                    uint32
+	rejectTTL                      uint32
+	cloakTTL                       uint32
+	queryLogFile                   string
+	queryLogFormat                 string
+	queryLogIgnoredQtypes          []string
+	nxLogFile                      string
+	nxLogFormat                    string
+	blockNameFile                  string
+	whitelistNameFile              string
+	blockNameLogFile               string
+	whitelistNameLogFile           string
+	blockNameFormat                string
+	whitelistNameFormat            string
+	blockIPFile                    string
+	blockIPLogFile                 string
+	blockIPFormat                  string
+	forwardFile                    string
+	cloakFile                      string
+	pluginsGlobals                 PluginsGlobals
+	sources                        []*Source
+	clientsCount                   uint32
+	maxClients                     uint32
+	xTransport                     *XTransport
+	allWeeklyRanges                *map[string]WeeklyRanges
+	logMaxSize                     int
+	logMaxAge                      int
+	logMaxBackups                  int
+	blockedQueryResponse           string
+	queryMeta                      []string
+	routes                         *map[string][]string
+	serversBlockingFragments       []string
+	serversDroppingLargerResponses []string
+	showCerts                      bool
+	dohCreds                       *map[string]DOHClientCreds
 }
 
 func (proxy *Proxy) addDNSListener(listenAddrStr string) {
@@ -473,6 +474,11 @@ func (proxy *Proxy) processIncomingQuery(clientProto string, serverProto string,
 		pluginsState.serverName = serverName
 		if serverInfo.Proto == stamps.StampProtoTypeDNSCrypt {
 			sharedKey, encryptedQuery, clientNonce, err := proxy.Encrypt(serverInfo, query, serverProto)
+			if err != nil && serverProto == "udp" {
+				dlog.Debug("Unable to pad for UDP, re-encrypting query for TCP")
+				serverProto = "tcp"
+				sharedKey, encryptedQuery, clientNonce, err = proxy.Encrypt(serverInfo, query, serverProto)
+			}
 			if err != nil {
 				pluginsState.returnCode = PluginsReturnCodeParseError
 				pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)

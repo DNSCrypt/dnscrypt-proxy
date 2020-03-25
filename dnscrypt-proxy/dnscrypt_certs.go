@@ -38,7 +38,7 @@ func FetchCurrentDNSCryptCert(proxy *Proxy, serverName *string, proto string, pk
 		relayUDPAddr, relayTCPAddr = nil, nil
 	}
 	tryFragmentsSupport := true
-	if knownBugs.incorrectPadding {
+	if knownBugs.fragmentsBlocked {
 		tryFragmentsSupport = false
 	}
 	in, rtt, fragmentsBlocked, err := dnsExchange(proxy, proto, &query, serverAddress, relayUDPAddr, relayTCPAddr, serverName, tryFragmentsSupport)
