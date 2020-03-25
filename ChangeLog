@@ -1,3 +1,10 @@
+* Version 2.0.42
+ - Quad9 was put back into the list of broken implementations. They
+drop responses larger than questions instead of truncating them.
+ - Queries for servers that don't properly handle padding are now
+padded to 1472 bytes. This mitigates the issue with Quad9 while
+still working around the limitations of Cisco resolvers.
+
 * Version 2.0.41
  - Precompiled ARM binaries are compatible with ARMv5 CPUs. The
 default arm builds were not compatible with older CPUs when compiled
