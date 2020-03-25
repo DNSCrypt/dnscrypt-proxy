@@ -8,7 +8,6 @@ banners.*
 creatives.*
 oas.*
 oascentral.*
-stats.*
 tag.*
 telemetry.*
 tracker.*
