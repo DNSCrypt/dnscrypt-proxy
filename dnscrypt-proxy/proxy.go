@@ -485,6 +485,7 @@ func (proxy *Proxy) processIncomingQuery(clientProto string, serverProto string,
 				if err == nil && len(response) >= MinDNSPacketSize && response[2]&0x02 == 0x02 {
 					retryOverTCP = true
 				} else if neterr, ok := err.(net.Error); ok && neterr.Timeout() {
+					dlog.Debug("Retry over TCP after UDP timeouts")
 					retryOverTCP = true
 				}
 				if retryOverTCP {

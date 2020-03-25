@@ -79,18 +79,20 @@ func (proxy *Proxy) Encrypt(serverInfo *ServerInfo, packet []byte, proto string)
 		publicKey = &proxy.proxyPublicKey
 	}
 	minQuestionSize := QueryOverhead + len(packet)
-	if !serverInfo.knownBugs.incorrectPadding {
-		if proto == "udp" {
-			minQuestionSize = Max(proxy.questionSizeEstimator.MinQuestionSize(), minQuestionSize)
+	if proto == "udp" {
+		if serverInfo.knownBugs.incorrectPadding {
+			// XXX - Note: Cisco's broken implementation doesn't accept more than 1472 bytes
+			minQuestionSize = Max(1472, minQuestionSize)
 		} else {
-			var xpad [1]byte
-			rand.Read(xpad[:])
-			minQuestionSize += int(xpad[0])
+			minQuestionSize = Max(proxy.questionSizeEstimator.MinQuestionSize(), minQuestionSize)
 		}
+	} else {
+		var xpad [1]byte
+		rand.Read(xpad[:])
+		minQuestionSize += int(xpad[0])
 	}
 	paddedLength := Min(MaxDNSUDPPacketSize, (Max(minQuestionSize, QueryOverhead)+1+63) & ^63)
 	if serverInfo.RelayUDPAddr != nil && proto == "tcp" {
-		// XXX - Note: Cisco's broken implementation doesn't accept more than 1472 bytes
 		paddedLength = MaxDNSPacketSize
 	}
 	if QueryOverhead+len(packet)+1 > paddedLength {
