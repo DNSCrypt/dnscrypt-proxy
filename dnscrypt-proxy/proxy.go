@@ -481,7 +481,13 @@ func (proxy *Proxy) processIncomingQuery(clientProto string, serverProto string,
 			serverInfo.noticeBegin(proxy)
 			if serverProto == "udp" {
 				response, err = proxy.exchangeWithUDPServer(serverInfo, sharedKey, encryptedQuery, clientNonce)
+				retryOverTCP := false
 				if err == nil && len(response) >= MinDNSPacketSize && response[2]&0x02 == 0x02 {
+					retryOverTCP = true
+				} else if neterr, ok := err.(net.Error); ok && neterr.Timeout() {
+					retryOverTCP = true
+				}
+				if retryOverTCP {
 					serverProto = "tcp"
 					sharedKey, encryptedQuery, clientNonce, err = proxy.Encrypt(serverInfo, query, serverProto)
 					if err != nil {
