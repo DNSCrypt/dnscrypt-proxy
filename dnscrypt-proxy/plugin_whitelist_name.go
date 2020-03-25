@@ -35,7 +35,7 @@ func (plugin *PluginWhitelistName) Init(proxy *Proxy) error {
 		return err
 	}
 	plugin.allWeeklyRanges = proxy.allWeeklyRanges
-	plugin.patternMatcher = NewPatternPatcher()
+	plugin.patternMatcher = NewPatternMatcher()
 	for lineNo, line := range strings.Split(string(bin), "\n") {
 		line = TrimAndStripInlineComments(line)
 		if len(line) == 0 {

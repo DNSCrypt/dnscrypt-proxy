@@ -42,7 +42,7 @@ func (plugin *PluginCloak) Init(proxy *Proxy) error {
 		return err
 	}
 	plugin.ttl = proxy.cloakTTL
-	plugin.patternMatcher = NewPatternPatcher()
+	plugin.patternMatcher = NewPatternMatcher()
 	cloakedNames := make(map[string]*CloakedName)
 	for lineNo, line := range strings.Split(string(bin), "\n") {
 		line = TrimAndStripInlineComments(line)

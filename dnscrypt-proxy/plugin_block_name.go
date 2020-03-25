@@ -91,7 +91,7 @@ func (plugin *PluginBlockName) Init(proxy *Proxy) error {
 	}
 	xBlockedNames := BlockedNames{
 		allWeeklyRanges: proxy.allWeeklyRanges,
-		patternMatcher:  NewPatternPatcher(),
+		patternMatcher:  NewPatternMatcher(),
 	}
 	for lineNo, line := range strings.Split(string(bin), "\n") {
 		line = TrimAndStripInlineComments(line)

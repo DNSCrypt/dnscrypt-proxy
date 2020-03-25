@@ -30,7 +30,7 @@ type PatternMatcher struct {
 	indirectVals      map[string]interface{}
 }
 
-func NewPatternPatcher() *PatternMatcher {
+func NewPatternMatcher() *PatternMatcher {
 	patternMatcher := PatternMatcher{
 		blockedPrefixes: critbitgo.NewTrie(),
 		blockedSuffixes: critbitgo.NewTrie(),
