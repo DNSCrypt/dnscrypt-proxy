@@ -1,7 +1,15 @@
 * Version 2.0.42
- - Quad9 was put back into the list of broken implementations. They
-drop responses larger than questions instead of truncating them.
- - More workarounds were implemented for servers dropping UDP fragments.
+ - Version 1.4.0 of the dnsdist load balancer (presumably used by
+quad9, cleanbrowsing, qualityology, freetsa.org, ffmuc.net,
+opennic-bongobow, sth-dnscrypt-se, ams-dnscrypt-nl and more)
+unintentionally introduced a regression preventing large queries
+from being received over UDP. Temporary workarounds have been
+introduced to improve reliability with these resolvers for regular
+DNSCrypt. Unfortunately, anonymized DNS cannot be reliable until
+dnsdist is updated on these servers.
+ - New option in the `[anonymized_dns]` section: `skip_incompatible`,
+to ignore resolvers incompatible with Anonymized DNS instead of
+using them without a relay.
 
 * Version 2.0.41
  - Precompiled ARM binaries are compatible with ARMv5 CPUs. The
