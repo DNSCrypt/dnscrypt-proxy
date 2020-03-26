@@ -76,7 +76,6 @@ type Proxy struct {
 	queryMeta                      []string
 	routes                         *map[string][]string
 	serversBlockingFragments       []string
-	serversDroppingLargerResponses []string
 	showCerts                      bool
 	dohCreds                       *map[string]DOHClientCreds
 	skipAnonIncompatbibleResolvers bool

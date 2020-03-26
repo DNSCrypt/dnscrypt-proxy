@@ -139,10 +139,6 @@ func newConfig() Config {
 				"quad9-dnscrypt-ip4-filter-alt", "quad9-dnscrypt-ip4-filter-pri", "quad9-dnscrypt-ip4-nofilter-alt", "quad9-dnscrypt-ip4-nofilter-pri", "quad9-dnscrypt-ip6-filter-alt", "quad9-dnscrypt-ip6-filter-pri", "quad9-dnscrypt-ip6-nofilter-alt", "quad9-dnscrypt-ip6-nofilter-pri",
 				"cleanbrowsing-adult", "cleanbrowsing-family-ipv6", "cleanbrowsing-family", "cleanbrowsing-security",
 			},
-			LargerResponsesDropped: []string{
-				"quad9-dnscrypt-ip4-filter-alt", "quad9-dnscrypt-ip4-filter-pri", "quad9-dnscrypt-ip4-nofilter-alt", "quad9-dnscrypt-ip4-nofilter-pri", "quad9-dnscrypt-ip6-filter-alt", "quad9-dnscrypt-ip6-filter-pri", "quad9-dnscrypt-ip6-nofilter-alt", "quad9-dnscrypt-ip6-nofilter-pri",
-				"cleanbrowsing-adult", "cleanbrowsing-family-ipv6", "cleanbrowsing-family", "cleanbrowsing-security",
-			},
 		},
 	}
 }
@@ -201,9 +197,8 @@ type AnonymizedDNSConfig struct {
 }
 
 type BrokenImplementationsConfig struct {
-	BrokenQueryPadding     []string `toml:"broken_query_padding"`
-	FragmentsBlocked       []string `toml:"fragments_blocked"`
-	LargerResponsesDropped []string `toml:"larger_responses_dropped"`
+	BrokenQueryPadding []string `toml:"broken_query_padding"`
+	FragmentsBlocked   []string `toml:"fragments_blocked"`
 }
 
 type LocalDoHConfig struct {
@@ -517,10 +512,8 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 
 	// Backwards compatibility
 	config.BrokenImplementations.FragmentsBlocked = append(config.BrokenImplementations.FragmentsBlocked, config.BrokenImplementations.BrokenQueryPadding...)
-	config.BrokenImplementations.LargerResponsesDropped = append(config.BrokenImplementations.LargerResponsesDropped, config.BrokenImplementations.BrokenQueryPadding...)
 
-	proxy.serversBlockingFragments = config.BrokenImplementations.FragmentsBlocked
-	proxy.serversDroppingLargerResponses = config.BrokenImplementations.LargerResponsesDropped
+	proxy.serversBlockingFragments = config.BrokenImplementations.BrokenQueryPadding
 
 	if *flags.ListAll {
 		config.ServerNames = nil

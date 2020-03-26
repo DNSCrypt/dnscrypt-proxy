@@ -87,12 +87,8 @@ func (proxy *Proxy) Encrypt(serverInfo *ServerInfo, packet []byte, proto string)
 		minQuestionSize += int(xpad[0])
 	}
 	paddedLength := Min(MaxDNSUDPPacketSize, (Max(minQuestionSize, QueryOverhead)+1+63) & ^63)
-	if proto == "udp" {
-		if serverInfo.knownBugs.fragmentsBlocked {
-			paddedLength = MaxDNSUDPSafePacketSize
-		} else if serverInfo.knownBugs.largerQueriesDropped {
-			paddedLength = MaxDNSUDPPacketSize
-		}
+	if proto == "udp" && serverInfo.knownBugs.fragmentsBlocked {
+		paddedLength = MaxDNSUDPSafePacketSize
 	}
 	if serverInfo.RelayUDPAddr != nil && proto == "tcp" {
 		paddedLength = MaxDNSPacketSize

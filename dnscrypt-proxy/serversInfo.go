@@ -32,8 +32,7 @@ type RegisteredServer struct {
 }
 
 type ServerBugs struct {
-	fragmentsBlocked     bool
-	largerQueriesDropped bool
+	fragmentsBlocked bool
 }
 
 type DOHClientCreds struct {
@@ -324,13 +323,6 @@ func fetchDNSCryptServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp
 		if buggyServerName == name {
 			knownBugs.fragmentsBlocked = true
 			dlog.Infof("Known bug in [%v]: fragmented questions over UDP are blocked", name)
-			break
-		}
-	}
-	for _, buggyServerName := range proxy.serversDroppingLargerResponses {
-		if buggyServerName == name {
-			knownBugs.largerQueriesDropped = true
-			dlog.Infof("Known bug in [%v]: truncated responses are not sent when a response is larger than the query", name)
 			break
 		}
 	}
