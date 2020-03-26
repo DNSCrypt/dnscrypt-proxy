@@ -626,7 +626,7 @@ cache_neg_max_ttl = 600
 # truncate reponses larger than questions as expected by the DNSCrypt protocol.
 # This prevents large responses from being received over UDP and over relays.
 #
-# The `dnsdist` server software drops incoming packets larger than 1500 bytes.
+# The `dnsdist` server software drops client queries larger than 1500 bytes.
 # They are aware of it and are working on a fix.
 #
 # The list below enables workarounds to make non-relayed usage more reliable
