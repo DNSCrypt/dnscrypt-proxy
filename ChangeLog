@@ -10,6 +10,9 @@ authors are aware of it and are working on a fix.
  - New option in the `[anonymized_dns]` section: `skip_incompatible`,
 to ignore resolvers incompatible with Anonymized DNS instead of
 using them without a relay.
+ - The server latency benchmark is faster while being able to perform
+more retries if necessary.
+ - Continuous integration has been moved to GitHub Actions.
 
 * Version 2.0.41
  - Precompiled ARM binaries are compatible with ARMv5 CPUs. The
