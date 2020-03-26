@@ -643,6 +643,7 @@ larger_responses_dropped = ['quad9-dnscrypt-ip4-filter-alt', 'quad9-dnscrypt-ip4
 
 
 
+
 ################################
 #   TLS Client Authentication  #
 ################################
@@ -690,6 +691,13 @@ larger_responses_dropped = ['quad9-dnscrypt-ip4-filter-alt', 'quad9-dnscrypt-ip4
 #    { server_name='example-server-1', via=['anon-example-1', 'anon-example-2'] },
 #    { server_name='example-server-2', via=['sdns://gRIxMzcuNzQuMjIzLjIzNDo0NDM'] }
 # ]
+
+
+# skip resolvers incompatible with anonymization instead of using them directly
+
+skip_incompatible = false
+
+
 
 
 ## Optional, local, static list of additional servers

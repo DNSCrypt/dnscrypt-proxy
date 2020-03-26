@@ -193,7 +193,8 @@ type AnonymizedDNSRouteConfig struct {
 }
 
 type AnonymizedDNSConfig struct {
-	Routes []AnonymizedDNSRouteConfig `toml:"routes"`
+	Routes           []AnonymizedDNSRouteConfig `toml:"routes"`
+	SkipIncompatible bool                       `toml:"skip_incompatible"`
 }
 
 type BrokenImplementationsConfig struct {
@@ -498,6 +499,8 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 		}
 		proxy.routes = &routes
 	}
+	proxy.skipAnonIncompatbibleResolvers = config.AnonymizedDNS.SkipIncompatible
+
 	configClientCreds := config.TLSClientAuth.Creds
 	creds := make(map[string]DOHClientCreds)
 	for _, configClientCred := range configClientCreds {

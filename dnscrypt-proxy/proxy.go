@@ -79,6 +79,7 @@ type Proxy struct {
 	serversDroppingLargerResponses []string
 	showCerts                      bool
 	dohCreds                       *map[string]DOHClientCreds
+	skipAnonIncompatbibleResolvers bool
 }
 
 func (proxy *Proxy) addDNSListener(listenAddrStr string) {
