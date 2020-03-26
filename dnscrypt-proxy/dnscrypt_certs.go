@@ -197,24 +197,28 @@ func dnsExchange(proxy *Proxy, proto string, query *dns.Msg, serverAddress strin
 		var err error
 		options := 0
 
-		for tries := 1; tries >= 0; tries-- {
+		for tries := 2; tries >= 0; tries-- {
 			if tryFragmentsSupport {
+				queryCopy := query.Copy()
+				queryCopy.Id += uint16(options)
 				go func(query *dns.Msg, delay time.Duration) {
 					time.Sleep(delay)
 					option := _dnsExchange(proxy, proto, query, serverAddress, relayUDPAddr, relayTCPAddr, 1500)
 					option.fragmentsBlocked = false
 					option.priority = 0
 					channel <- option
-				}(query.Copy(), time.Duration(10*tries)*time.Millisecond)
+				}(queryCopy, time.Duration(200*tries)*time.Millisecond)
 				options++
 			}
+			queryCopy := query.Copy()
+			queryCopy.Id += uint16(options)
 			go func(query *dns.Msg, delay time.Duration) {
 				time.Sleep(delay)
 				option := _dnsExchange(proxy, proto, query, serverAddress, relayUDPAddr, relayTCPAddr, 480)
 				option.fragmentsBlocked = true
 				option.priority = 1
 				channel <- option
-			}(query.Copy(), time.Duration(15*tries)*time.Millisecond)
+			}(queryCopy, time.Duration(250*tries)*time.Millisecond)
 			options++
 		}
 		var bestOption *dnsExchangeResponse
@@ -254,6 +258,7 @@ func dnsExchange(proxy *Proxy, proto string, query *dns.Msg, serverAddress strin
 func _dnsExchange(proxy *Proxy, proto string, query *dns.Msg, serverAddress string, relayUDPAddr *net.UDPAddr, relayTCPAddr *net.TCPAddr, paddedLen int) dnsExchangeResponse {
 	var packet []byte
 	var rtt time.Duration
+
 	if proto == "udp" {
 		qNameLen, padding := len(query.Question[0].Name), 0
 		if qNameLen < paddedLen {
