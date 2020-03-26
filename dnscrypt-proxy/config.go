@@ -134,7 +134,11 @@ func newConfig() Config {
 		LBEstimator:              true,
 		BlockedQueryResponse:     "hinfo",
 		BrokenImplementations: BrokenImplementationsConfig{
-			FragmentsBlocked:       []string{"cisco", "cisco-ipv6", "cisco-familyshield", "quad9-dnscrypt-ip4-filter-alt", "quad9-dnscrypt-ip4-filter-pri", "quad9-dnscrypt-ip4-nofilter-alt", "quad9-dnscrypt-ip4-nofilter-pri", "quad9-dnscrypt-ip6-filter-alt", "quad9-dnscrypt-ip6-filter-pri", "quad9-dnscrypt-ip6-nofilter-alt", "quad9-dnscrypt-ip6-nofilter-pri"},
+			FragmentsBlocked: []string{
+				"cisco", "cisco-ipv6", "cisco-familyshield",
+				"quad9-dnscrypt-ip4-filter-alt", "quad9-dnscrypt-ip4-filter-pri", "quad9-dnscrypt-ip4-nofilter-alt", "quad9-dnscrypt-ip4-nofilter-pri", "quad9-dnscrypt-ip6-filter-alt", "quad9-dnscrypt-ip6-filter-pri", "quad9-dnscrypt-ip6-nofilter-alt", "quad9-dnscrypt-ip6-nofilter-pri",
+				"qualityology.com", "freetsa.org", "ffmuc.net", "opennic-bongobow", "sth-dnscrypt-se", "ams-dnscrypt-nl",
+			},
 			LargerResponsesDropped: []string{"quad9-dnscrypt-ip4-filter-alt", "quad9-dnscrypt-ip4-filter-pri", "quad9-dnscrypt-ip4-nofilter-alt", "quad9-dnscrypt-ip4-nofilter-pri", "quad9-dnscrypt-ip6-filter-alt", "quad9-dnscrypt-ip6-filter-pri", "quad9-dnscrypt-ip6-nofilter-alt", "quad9-dnscrypt-ip6-nofilter-pri"},
 		},
 	}
