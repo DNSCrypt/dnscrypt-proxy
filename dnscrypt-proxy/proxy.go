@@ -376,7 +376,7 @@ func (proxy *Proxy) exchangeWithUDPServer(serverInfo *ServerInfo, sharedKey *[32
 			encryptedResponse = encryptedResponse[:length]
 			break
 		}
-		dlog.Debug("Retry on timeout")
+		dlog.Debugf("[%v] Retry on timeout", serverInfo.Name)
 	}
 	return proxy.Decrypt(serverInfo, sharedKey, encryptedResponse, clientNonce)
 }
@@ -491,7 +491,7 @@ func (proxy *Proxy) processIncomingQuery(clientProto string, serverProto string,
 				if err == nil && len(response) >= MinDNSPacketSize && response[2]&0x02 == 0x02 {
 					retryOverTCP = true
 				} else if neterr, ok := err.(net.Error); ok && neterr.Timeout() {
-					dlog.Debug("Retry over TCP after UDP timeouts")
+					dlog.Debugf("[%v] Retry over TCP after UDP timeouts", serverName)
 					retryOverTCP = true
 				}
 				if retryOverTCP {
