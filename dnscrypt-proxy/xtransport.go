@@ -405,7 +405,6 @@ func (xTransport *XTransport) DoHQuery(useGet bool, url *url.URL, body []byte, t
 	dataType := "application/dns-message"
 	if useGet {
 		qs := url.Query()
-		qs.Add("ct", "")
 		encBody := base64.RawURLEncoding.EncodeToString(body)
 		qs.Add("dns", encBody)
 		url2 := *url
