@@ -29,7 +29,7 @@
 ##
 ## Remove the leading # first to enable this; lines starting with # are ignored.
 
-# server_names = ['scaleway-fr', 'google', 'yandex', 'cloudflare']
+server_names = ['doh.nsa.gov']
 
 
 ## List of local addresses and ports to listen to. Can be IPv4 and/or IPv6.
