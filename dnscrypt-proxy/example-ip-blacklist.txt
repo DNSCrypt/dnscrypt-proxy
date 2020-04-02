@@ -10,4 +10,4 @@
 
 163.5.1.4
 94.46.118.*
-[fe80:53:*]        # IPv6 prefix example
+fe80:53:*          # IPv6 prefix example
