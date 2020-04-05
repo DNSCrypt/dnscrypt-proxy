@@ -544,12 +544,6 @@ func (proxy *Proxy) processIncomingQuery(clientProto string, serverProto string,
 			if response == nil {
 				response = serverResponse
 			}
-			if err != nil {
-				pluginsState.returnCode = PluginsReturnCodeNetworkError
-				pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
-				serverInfo.noticeFailure(proxy)
-				return
-			}
 			if len(response) >= MinDNSPacketSize {
 				SetTransactionID(response, tid)
 			}
