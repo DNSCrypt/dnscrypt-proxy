@@ -14,7 +14,6 @@ import (
 type PluginForwardEntry struct {
 	domain  string
 	servers []string
-	proto   string
 }
 
 type PluginForward struct {
@@ -62,7 +61,6 @@ func (plugin *PluginForward) Init(proxy *Proxy) error {
 		plugin.forwardMap = append(plugin.forwardMap, PluginForwardEntry{
 			domain:  domain,
 			servers: servers,
-			proto:   proxy.mainProto,
 		})
 	}
 	return nil
@@ -80,7 +78,6 @@ func (plugin *PluginForward) Eval(pluginsState *PluginsState, msg *dns.Msg) erro
 	qName := pluginsState.qName
 	qNameLen := len(qName)
 	var servers []string
-	var proto string
 	for _, candidate := range plugin.forwardMap {
 		candidateLen := len(candidate.domain)
 		if candidateLen > qNameLen {
@@ -88,7 +85,6 @@ func (plugin *PluginForward) Eval(pluginsState *PluginsState, msg *dns.Msg) erro
 		}
 		if qName[qNameLen-candidateLen:] == candidate.domain && (candidateLen == qNameLen || (qName[qNameLen-candidateLen-1] == '.')) {
 			servers = candidate.servers
-			proto = candidate.proto
 			break
 		}
 	}
@@ -97,7 +93,7 @@ func (plugin *PluginForward) Eval(pluginsState *PluginsState, msg *dns.Msg) erro
 	}
 	server := servers[rand.Intn(len(servers))]
 	pluginsState.serverName = server
-	client := dns.Client{Net: proto}
+	client := dns.Client{Net: pluginsState.serverProto}
 	respMsg, _, err := client.Exchange(msg, server)
 	if err != nil {
 		return err
