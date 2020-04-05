@@ -86,6 +86,7 @@ type PluginsState struct {
 	cacheHit                         bool
 	returnCode                       PluginsReturnCode
 	serverName                       string
+	serverProto                      string
 }
 
 func (proxy *Proxy) InitPluginsGlobals() error {
@@ -222,7 +223,7 @@ type Plugin interface {
 	Eval(pluginsState *PluginsState, msg *dns.Msg) error
 }
 
-func NewPluginsState(proxy *Proxy, clientProto string, clientAddr *net.Addr, start time.Time) PluginsState {
+func NewPluginsState(proxy *Proxy, clientProto string, clientAddr *net.Addr, serverProto string, start time.Time) PluginsState {
 	return PluginsState{
 		action:                           PluginsActionContinue,
 		returnCode:                       PluginsReturnCodePass,
@@ -238,6 +239,7 @@ func NewPluginsState(proxy *Proxy, clientProto string, clientAddr *net.Addr, sta
 		questionMsg:                      nil,
 		qName:                            "",
 		serverName:                       "-",
+		serverProto:                      serverProto,
 		requestStart:                     start,
 		maxUnencryptedUDPSafePayloadSize: MaxDNSUDPSafePacketSize,
 		sessionData:                      make(map[string]interface{}),
