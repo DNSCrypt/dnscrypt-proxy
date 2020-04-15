@@ -38,6 +38,7 @@ type ServerBugs struct {
 type DOHClientCreds struct {
 	clientCert string
 	clientKey  string
+	rootCA     string
 }
 
 type ServerInfo struct {

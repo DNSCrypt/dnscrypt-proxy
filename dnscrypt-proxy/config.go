@@ -225,6 +225,7 @@ type TLSClientAuthCredsConfig struct {
 	ServerName string `toml:"server_name"`
 	ClientCert string `toml:"client_cert"`
 	ClientKey  string `toml:"client_key"`
+	RootCA     string `toml:"root_ca"`
 }
 
 type TLSClientAuthConfig struct {
