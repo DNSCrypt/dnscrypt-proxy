@@ -647,7 +647,7 @@ fragments_blocked = ['cisco', 'cisco-ipv6', 'cisco-familyshield', 'cisco-familys
 [tls_client_auth]
 
 # creds = [
-#    { server_name='myserver', client_cert='client.crt', client_key='client.key' }
+#    { server_name='myserver', client_cert='client.crt', client_key='client.key', root_ca='ca.crt' }
 # ]
 
 

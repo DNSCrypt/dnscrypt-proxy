@@ -225,6 +225,7 @@ type TLSClientAuthCredsConfig struct {
 	ServerName string `toml:"server_name"`
 	ClientCert string `toml:"client_cert"`
 	ClientKey  string `toml:"client_key"`
+	RootCA     string `toml:"root_ca"`
 }
 
 type TLSClientAuthConfig struct {
@@ -505,6 +506,7 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 		credFiles := DOHClientCreds{
 			clientCert: configClientCred.ClientCert,
 			clientKey:  configClientCred.ClientKey,
+			rootCA:     configClientCred.RootCA,
 		}
 		creds[configClientCred.ServerName] = credFiles
 	}
