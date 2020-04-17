@@ -87,6 +87,7 @@ type PluginsState struct {
 	returnCode                       PluginsReturnCode
 	serverName                       string
 	serverProto                      string
+	timeout                          time.Duration
 }
 
 func (proxy *Proxy) InitPluginsGlobals() error {
@@ -223,7 +224,7 @@ type Plugin interface {
 	Eval(pluginsState *PluginsState, msg *dns.Msg) error
 }
 
-func NewPluginsState(proxy *Proxy, clientProto string, clientAddr *net.Addr, serverProto string, start time.Time) PluginsState {
+func NewPluginsState(proxy *Proxy, clientProto string, clientAddr *net.Addr, serverProto string, timeout time.Duration, start time.Time) PluginsState {
 	return PluginsState{
 		action:                           PluginsActionContinue,
 		returnCode:                       PluginsReturnCodePass,
@@ -240,6 +241,7 @@ func NewPluginsState(proxy *Proxy, clientProto string, clientAddr *net.Addr, ser
 		qName:                            "",
 		serverName:                       "-",
 		serverProto:                      serverProto,
+		timeout:                          timeout,
 		requestStart:                     start,
 		maxUnencryptedUDPSafePayloadSize: MaxDNSUDPSafePacketSize,
 		sessionData:                      make(map[string]interface{}),
