@@ -93,7 +93,7 @@ func (plugin *PluginForward) Eval(pluginsState *PluginsState, msg *dns.Msg) erro
 	}
 	server := servers[rand.Intn(len(servers))]
 	pluginsState.serverName = server
-	client := dns.Client{Net: pluginsState.serverProto}
+	client := dns.Client{Net: pluginsState.serverProto, Timeout: pluginsState.serverProto}
 	respMsg, _, err := client.Exchange(msg, server)
 	if err != nil {
 		return err
