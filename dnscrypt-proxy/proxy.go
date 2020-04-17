@@ -443,7 +443,7 @@ func (proxy *Proxy) processIncomingQuery(clientProto string, serverProto string,
 	if len(query) < MinDNSPacketSize {
 		return
 	}
-	pluginsState := NewPluginsState(proxy, clientProto, clientAddr, serverProto, start)
+	pluginsState := NewPluginsState(proxy, clientProto, clientAddr, serverProto, timeout, start)
 	serverName := "-"
 	needsEDNS0Padding := false
 	serverInfo := proxy.serversInfo.getOne()
