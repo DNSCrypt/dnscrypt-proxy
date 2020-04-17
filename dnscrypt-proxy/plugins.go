@@ -87,6 +87,7 @@ type PluginsState struct {
 	returnCode                       PluginsReturnCode
 	serverName                       string
 	serverProto                      string
+	timeout                          time.Duration
 }
 
 func (proxy *Proxy) InitPluginsGlobals() error {
@@ -240,6 +241,7 @@ func NewPluginsState(proxy *Proxy, clientProto string, clientAddr *net.Addr, ser
 		qName:                            "",
 		serverName:                       "-",
 		serverProto:                      serverProto,
+		timeout:                          proxy.timeout,
 		requestStart:                     start,
 		maxUnencryptedUDPSafePayloadSize: MaxDNSUDPSafePacketSize,
 		sessionData:                      make(map[string]interface{}),
