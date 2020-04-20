@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/BurntSushi/toml"
+	"github.com/facebookgo/pidfile"
 	"github.com/jedisct1/dlog"
 	stamps "github.com/jedisct1/go-dnsstamps"
 	netproxy "golang.org/x/net/proxy"
@@ -547,6 +548,22 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	if err := NetProbe(netprobeAddress, netprobeTimeout); err != nil {
 		return err
 	}
+
+	for _, listenAddrStr := range proxy.listenAddresses {
+		proxy.addDNSListener(listenAddrStr)
+	}
+	for _, listenAddrStr := range proxy.localDoHListenAddresses {
+		proxy.addLocalDoHListener(listenAddrStr)
+	}
+	_ = pidfile.Write()
+	// if 'userName' is set and we are the parent process drop privilege and exit
+	if len(proxy.userName) > 0 && !proxy.child {
+		proxy.dropPrivilege(proxy.userName, FileDescriptors)
+	}
+	if err := proxy.SystemDListeners(); err != nil {
+		dlog.Fatal(err)
+	}
+
 	if !config.OfflineMode {
 		if err := config.loadSources(proxy); err != nil {
 			return err

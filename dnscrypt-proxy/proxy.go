@@ -200,20 +200,6 @@ func (proxy *Proxy) StartProxy() {
 	for _, registeredServer := range proxy.registeredServers {
 		proxy.serversInfo.registerServer(registeredServer.name, registeredServer.stamp)
 	}
-	for _, listenAddrStr := range proxy.listenAddresses {
-		proxy.addDNSListener(listenAddrStr)
-	}
-	for _, listenAddrStr := range proxy.localDoHListenAddresses {
-		proxy.addLocalDoHListener(listenAddrStr)
-	}
-
-	// if 'userName' is set and we are the parent process drop privilege and exit
-	if len(proxy.userName) > 0 && !proxy.child {
-		proxy.dropPrivilege(proxy.userName, FileDescriptors)
-	}
-	if err := proxy.SystemDListeners(); err != nil {
-		dlog.Fatal(err)
-	}
 	liveServers, err := proxy.serversInfo.refresh(proxy)
 	if liveServers > 0 {
 		proxy.certIgnoreTimestamp = false
