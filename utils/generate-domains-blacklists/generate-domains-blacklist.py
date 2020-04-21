@@ -1,14 +1,10 @@
 #! /usr/bin/env python
 
-# Use the following command ensure the right encoding:
-# python generate-domains-blacklist.py -o list.txt.tmp && mv -f list.txt.tmp list
-
+# run with python generate-domains-blacklist.py > list.txt.tmp && mv -f list.txt.tmp list
 
 import argparse
 import re
 import sys
-from io import StringIO
-from fnmatch import fnmatch
 
 try:
     import urllib2 as urllib
@@ -85,16 +81,6 @@ def parse_list(content, trusted=False):
     return names, time_restrictions
 
 
-# basic check if the line contains any glob specific characters
-def is_glob(line):
-    glob_chars = "*[]?"  # ignore = for now
-    return any(char in line for char in glob_chars)
-
-
-def get_lines_with_globs(names):
-    return set(filter(lambda line: is_glob(line), names))
-
-
 def print_restricted_name(name, time_restrictions):
     if name in time_restrictions:
         print("{}\t{}".format(name, time_restrictions[name]))
@@ -129,7 +115,7 @@ def load_from_url(url):
     if URLLIB_NEW:
         content = content.decode("utf-8", errors="replace")
 
-    return content, trusted
+    return (content, trusted)
 
 
 def name_cmp(name):
@@ -148,17 +134,6 @@ def has_suffix(names, name):
     return False
 
 
-# check if a line matches with any of the collected globs:
-def covered_by_glob(line, glob_list):
-    # ignore lines that are part of the glob_list
-    if line not in glob_list:
-        for glob in glob_list:
-            if fnmatch(line, glob):
-                return True
-
-    return False
-
-
 def whitelist_from_url(url):
     if not url:
         return set()
@@ -169,11 +144,10 @@ def whitelist_from_url(url):
 
 
 def blacklists_from_config_file(
-        file, whitelist, time_restricted_url, ignore_retrieval_failure, output_file
+    file, whitelist, time_restricted_url, ignore_retrieval_failure
 ):
     blacklists = {}
     whitelisted_names = set()
-    all_globs = set()
     all_names = set()
     unique_names = set()
 
@@ -189,10 +163,6 @@ def blacklists_from_config_file(
                 names, _time_restrictions = parse_list(content, trusted)
                 blacklists[url] = names
                 all_names |= names
-                # only check local files for globs:
-                if trusted:
-                    all_globs |= get_lines_with_globs(names)
-
             except Exception as e:
                 sys.stderr.write(str(e))
                 if not ignore_retrieval_failure:
@@ -222,18 +192,13 @@ def blacklists_from_config_file(
 
     whitelisted_names |= whitelist_from_url(whitelist)
 
-    # redirect output to output_file if provided
-    output = StringIO() if output_file else sys.stdout
-
     # Process blacklists
     for url, names in blacklists.items():
-        print("########## Blacklist from {} ##########\n".format(url), file=output)
-        ignored, whitelisted, glob_ignored = 0, 0, 0
+        print("\n\n########## Blacklist from {} ##########\n".format(url))
+        ignored, whitelisted = 0, 0
         list_names = list()
         for name in names:
-            if covered_by_glob(name, all_globs):
-                glob_ignored = glob_ignored + 1
-            elif has_suffix(all_names, name) or name in unique_names:
+            if has_suffix(all_names, name) or name in unique_names:
                 ignored = ignored + 1
             elif has_suffix(whitelisted_names, name) or name in whitelisted_names:
                 whitelisted = whitelisted + 1
@@ -243,21 +208,11 @@ def blacklists_from_config_file(
 
         list_names.sort(key=name_cmp)
         if ignored:
-            print("# Ignored duplicates: {}\n".format(ignored), file=output)
+            print("# Ignored duplicates: {}\n".format(ignored))
         if whitelisted:
-            print("# Ignored entries due to the whitelist: {}\n".format(whitelisted), file=output)
-        if glob_ignored:
-            print("# Ignored entries due to globs in local-additions: {}\n".format(glob_ignored), file=output)
+            print("# Ignored entries due to the whitelist: {}\n".format(whitelisted))
         for name in list_names:
-            print(name, file=output)
-        print("\n\n", file=output)
-
-    # if provided, save content from output buffer to file all at once
-    if output_file:
-        f = open(output_file, "w", encoding='utf8')
-        f.write(output.getvalue())
-        f.close()
-        output.close()
+            print(name)
 
 
 argp = argparse.ArgumentParser(
@@ -287,12 +242,6 @@ argp.add_argument(
     action="store_true",
     help="generate list even if some urls couldn't be retrieved",
 )
-argp.add_argument(
-    "-o",
-    "--output-file",
-    default=None,
-    help="save generated blacklist to a text file with the provided file name",
-)
 argp.add_argument("-t", "--timeout", default=30, help="URL open timeout")
 args = argp.parse_args()
 
@@ -300,7 +249,6 @@ conf = args.config
 whitelist = args.whitelist
 time_restricted = args.time_restricted
 ignore_retrieval_failure = args.ignore_retrieval_failure
-output_file = args.output_file
 
 blacklists_from_config_file(
-    conf, whitelist, time_restricted, ignore_retrieval_failure, output_file)
+    conf, whitelist, time_restricted, ignore_retrieval_failure)
