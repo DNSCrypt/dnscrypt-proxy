@@ -2,6 +2,8 @@
 
 # run with python generate-domains-blacklist.py > list.txt.tmp && mv -f list.txt.tmp list
 
+from __future__ import print_function
+
 import argparse
 import re
 import sys
@@ -81,13 +83,14 @@ def parse_list(content, trusted=False):
     return names, time_restrictions
 
 
-def print_restricted_name(name, time_restrictions):
+def print_restricted_name(output_fd, name, time_restrictions):
     if name in time_restrictions:
-        print("{}\t{}".format(name, time_restrictions[name]))
+        print("{}\t{}".format(
+            name, time_restrictions[name]), file=output_fd, end='\n')
     else:
         print(
             "# ignored: [{}] was in the time-restricted list, "
-            "but without a time restriction label".format(name)
+            "but without a time restriction label".format(name), file=output_fd, end='\n'
         )
 
 
@@ -115,7 +118,7 @@ def load_from_url(url):
     if URLLIB_NEW:
         content = content.decode("utf-8", errors="replace")
 
-    return (content, trusted)
+    return content, trusted
 
 
 def name_cmp(name):
@@ -144,7 +147,7 @@ def whitelist_from_url(url):
 
 
 def blacklists_from_config_file(
-    file, whitelist, time_restricted_url, ignore_retrieval_failure
+    file, whitelist, time_restricted_url, ignore_retrieval_failure, output_file
 ):
     blacklists = {}
     whitelisted_names = set()
@@ -172,6 +175,10 @@ def blacklists_from_config_file(
     if time_restricted_url and not re.match(r"^[a-z0-9]+:", time_restricted_url):
         time_restricted_url = "file:" + time_restricted_url
 
+    output_fd = sys.stdout
+    if output_file:
+        output_fd = open(output_file, "w")
+
     if time_restricted_url:
         time_restricted_content, _trusted = load_from_url(time_restricted_url)
         time_restricted_names, time_restrictions = parse_time_restricted_list(
@@ -179,9 +186,10 @@ def blacklists_from_config_file(
         )
 
         if time_restricted_names:
-            print("########## Time-based blacklist ##########\n")
+            print("########## Time-based blacklist ##########\n",
+                  file=output_fd, end='\n')
             for name in time_restricted_names:
-                print_restricted_name(name, time_restrictions)
+                print_restricted_name(output_fd, name, time_restrictions)
 
         # Time restricted names should be whitelisted, or they could be always blocked
         whitelisted_names |= time_restricted_names
@@ -194,7 +202,8 @@ def blacklists_from_config_file(
 
     # Process blacklists
     for url, names in blacklists.items():
-        print("\n\n########## Blacklist from {} ##########\n".format(url))
+        print("\n\n########## Blacklist from {} ##########\n".format(
+            url), file=output_fd, end='\n')
         ignored, whitelisted = 0, 0
         list_names = list()
         for name in names:
@@ -208,11 +217,15 @@ def blacklists_from_config_file(
 
         list_names.sort(key=name_cmp)
         if ignored:
-            print("# Ignored duplicates: {}\n".format(ignored))
+            print("# Ignored duplicates: {}\n".format(
+                ignored), file=output_fd, end='\n')
         if whitelisted:
-            print("# Ignored entries due to the whitelist: {}\n".format(whitelisted))
+            print(
+                "# Ignored entries due to the whitelist: {}\n".format(whitelisted), file=output_fd, end='\n')
         for name in list_names:
-            print(name)
+            print(name, file=output_fd, end='\n')
+
+    output_fd.close()
 
 
 argp = argparse.ArgumentParser(
@@ -242,13 +255,21 @@ argp.add_argument(
     action="store_true",
     help="generate list even if some urls couldn't be retrieved",
 )
+argp.add_argument(
+    "-o",
+    "--output-file",
+    default=None,
+    help="save generated blacklist to a text file with the provided file name",
+)
 argp.add_argument("-t", "--timeout", default=30, help="URL open timeout")
+
 args = argp.parse_args()
 
 conf = args.config
 whitelist = args.whitelist
 time_restricted = args.time_restricted
 ignore_retrieval_failure = args.ignore_retrieval_failure
+output_file = args.output_file
 
 blacklists_from_config_file(
-    conf, whitelist, time_restricted, ignore_retrieval_failure)
+    conf, whitelist, time_restricted, ignore_retrieval_failure, output_file)
