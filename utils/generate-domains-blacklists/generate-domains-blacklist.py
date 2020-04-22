@@ -7,6 +7,7 @@ from __future__ import print_function
 import argparse
 import re
 import sys
+import fnmatch
 
 try:
     import urllib2 as urllib
@@ -26,12 +27,17 @@ def parse_time_restricted_list(content):
 
     names = set()
     time_restrictions = {}
+    globs = set()
     rx_set = [rx_trusted]
     for line in content.splitlines():
         line = str.lower(str.strip(line))
         if rx_comment.match(line):
             continue
-        line = rx_inline_comment.sub("", line)
+        line = str.strip(rx_inline_comment.sub("", line))
+        if is_glob(line):
+            globs.add(line)
+            names.add(line)
+            continue
         for rx in rx_set:
             matches = rx.match(line)
             if not matches:
@@ -41,13 +47,13 @@ def parse_time_restricted_list(content):
             time_restriction = matches.group(2)
             if time_restriction:
                 time_restrictions[name] = time_restriction
-    return names, time_restrictions
+    return names, time_restrictions, globs
 
 
 def parse_trusted_list(content):
-    names, _time_restrictions = parse_time_restricted_list(content)
+    names, _time_restrictions, globs = parse_time_restricted_list(content)
     time_restrictions = {}
-    return names, time_restrictions
+    return names, time_restrictions, globs
 
 
 def parse_list(content, trusted=False):
@@ -68,19 +74,24 @@ def parse_list(content, trusted=False):
 
     names = set()
     time_restrictions = {}
+    globs = set()
     rx_set = [rx_u, rx_l, rx_h, rx_mdl, rx_b, rx_dq]
     for line in content.splitlines():
         line = str.lower(str.strip(line))
         if rx_comment.match(line):
             continue
-        line = rx_inline_comment.sub("", line)
+        line = str.strip(rx_inline_comment.sub("", line))
+        if trusted and is_glob(line):
+            globs.add(line)
+            names.add(line)
+            continue
         for rx in rx_set:
             matches = rx.match(line)
             if not matches:
                 continue
             name = matches.group(1)
             names.add(name)
-    return names, time_restrictions
+    return names, time_restrictions, globs
 
 
 def print_restricted_name(output_fd, name, time_restrictions):
@@ -127,6 +138,36 @@ def name_cmp(name):
     return str.join(".", parts)
 
 
+def is_glob(pattern):
+    maybe_glob = False
+    for i in range(len(pattern)):
+        c = pattern[i]
+        if c == "?" or c == "[":
+            maybe_glob = True
+        elif c == "*" and i != 0:
+            if i < len(pattern) - 1 or pattern[i - 1] == '.':
+                maybe_glob = True
+    if maybe_glob:
+        try:
+            fnmatch.fnmatch("example", pattern)
+            return True
+        except:
+            pass
+    return False
+
+
+def covered_by_glob(globs, name):
+    if name in globs:
+        return False
+    for glob in globs:
+        try:
+            if fnmatch.fnmatch(name, glob):
+                return True
+        except:
+            pass
+    return False
+
+
 def has_suffix(names, name):
     parts = str.split(name, ".")
     while parts:
@@ -142,7 +183,7 @@ def whitelist_from_url(url):
         return set()
     content, trusted = load_from_url(url)
 
-    names, _time_restrictions = parse_list(content, trusted)
+    names, _time_restrictions, _globs = parse_list(content, trusted)
     return names
 
 
@@ -153,6 +194,7 @@ def blacklists_from_config_file(
     whitelisted_names = set()
     all_names = set()
     unique_names = set()
+    all_globs = set()
 
     # Load conf & blacklists
     with open(file) as fd:
@@ -163,9 +205,10 @@ def blacklists_from_config_file(
             url = line
             try:
                 content, trusted = load_from_url(url)
-                names, _time_restrictions = parse_list(content, trusted)
+                names, _time_restrictions, globs = parse_list(content, trusted)
                 blacklists[url] = names
                 all_names |= names
+                all_globs |= globs
             except Exception as e:
                 sys.stderr.write(str(e))
                 if not ignore_retrieval_failure:
@@ -181,9 +224,8 @@ def blacklists_from_config_file(
 
     if time_restricted_url:
         time_restricted_content, _trusted = load_from_url(time_restricted_url)
-        time_restricted_names, time_restrictions = parse_time_restricted_list(
-            time_restricted_content
-        )
+        time_restricted_names, time_restrictions, _globs = parse_time_restricted_list(
+            time_restricted_content)
 
         if time_restricted_names:
             print("########## Time-based blacklist ##########\n",
@@ -204,10 +246,12 @@ def blacklists_from_config_file(
     for url, names in blacklists.items():
         print("\n\n########## Blacklist from {} ##########\n".format(
             url), file=output_fd, end='\n')
-        ignored, whitelisted = 0, 0
+        ignored, glob_ignored, whitelisted = 0, 0, 0
         list_names = list()
         for name in names:
-            if has_suffix(all_names, name) or name in unique_names:
+            if covered_by_glob(all_globs, name):
+                glob_ignored = glob_ignored + 1
+            elif has_suffix(all_names, name) or name in unique_names:
                 ignored = ignored + 1
             elif has_suffix(whitelisted_names, name) or name in whitelisted_names:
                 whitelisted = whitelisted + 1
@@ -217,11 +261,16 @@ def blacklists_from_config_file(
 
         list_names.sort(key=name_cmp)
         if ignored:
-            print("# Ignored duplicates: {}\n".format(
+            print("# Ignored duplicates: {}".format(
                 ignored), file=output_fd, end='\n')
+        if glob_ignored:
+            print("# Ignored due to overlapping local patterns: {}".format(
+                glob_ignored), file=output_fd, end='\n')
         if whitelisted:
             print(
-                "# Ignored entries due to the whitelist: {}\n".format(whitelisted), file=output_fd, end='\n')
+                "# Ignored entries due to the whitelist: {}".format(whitelisted), file=output_fd, end='\n')
+        if ignored or glob_ignored or whitelisted:
+            print(file=output_fd, end='\n')
         for name in list_names:
             print(name, file=output_fd, end='\n')
 
