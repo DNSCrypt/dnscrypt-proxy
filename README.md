@@ -35,7 +35,7 @@ Available as source code and pre-built binaries for most operating systems and a
 * Automatic background updates of resolvers lists
 * Can force outgoing connections to use TCP
 * Compatible with DNSSEC
-* Includes a local DoH server in order to support ESNI
+* Includes a local DoH server in order to support ECHO (ESNI)
 
 ## Pre-built binaries
 
