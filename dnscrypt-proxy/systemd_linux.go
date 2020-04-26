@@ -25,7 +25,7 @@ func (proxy *Proxy) addSystemDListeners() error {
 			proxy.tcpListener = append(proxy.tcpListener, listener.(*net.TCPListener))
 		} else if pc, err := net.FilePacketConn(file); err == nil {
 			dlog.Noticef("Wiring systemd UDP socket #%d, %s, %s", i, file.Name(), pc.LocalAddr())
-			proxy.udpListener = append(proxy.udpListener, listener.(*net.UDPConn))
+			proxy.udpListener = append(proxy.udpListener, pc.(*net.UDPConn))
 		}
 	}
 	return nil
