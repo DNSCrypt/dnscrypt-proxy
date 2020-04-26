@@ -3,14 +3,13 @@
 package main
 
 import (
-	"fmt"
 	"net"
 
 	"github.com/coreos/go-systemd/activation"
 	"github.com/jedisct1/dlog"
 )
 
-func (proxy *Proxy) SystemDListeners() error {
+func (proxy *Proxy) addSystemDListeners() error {
 	files := activation.Files(true)
 
 	if len(files) > 0 {
@@ -21,20 +20,13 @@ func (proxy *Proxy) SystemDListeners() error {
 	}
 	for i, file := range files {
 		defer file.Close()
-		ok := false
 		if listener, err := net.FileListener(file); err == nil {
 			dlog.Noticef("Wiring systemd TCP socket #%d, %s, %s", i, file.Name(), listener.Addr())
-			ok = true
-			go proxy.tcpListener(listener.(*net.TCPListener))
+			proxy.tcpListener = append(proxy.tcpListener, listener.(*net.TCPListener))
 		} else if pc, err := net.FilePacketConn(file); err == nil {
 			dlog.Noticef("Wiring systemd UDP socket #%d, %s, %s", i, file.Name(), pc.LocalAddr())
-			ok = true
-			go proxy.udpListener(pc.(*net.UDPConn))
-		}
-		if !ok {
-			return fmt.Errorf("Could not wire systemd socket #%d, %s", i, file.Name())
+			proxy.udpListener = append(proxy.udpListener, listener.(*net.UDPConn))
 		}
 	}
-
 	return nil
 }
