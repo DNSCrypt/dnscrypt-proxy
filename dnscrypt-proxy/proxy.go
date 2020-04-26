@@ -63,7 +63,7 @@ type Proxy struct {
 	blockIPFormat                  string
 	forwardFile                    string
 	cloakFile                      string
-	pluginsGlobals                 PluginsGlobals
+	pluginsGlobals                 *PluginsGlobals
 	sources                        []*Source
 	clientsCount                   uint32
 	maxClients                     uint32
@@ -429,6 +429,7 @@ func (proxy *Proxy) processIncomingQuery(clientProto string, serverProto string,
 	if len(query) < MinDNSPacketSize {
 		return
 	}
+	<-proxy.pluginsGlobals.ready // wait for pluginsGlobals to init
 	pluginsState := NewPluginsState(proxy, clientProto, clientAddr, serverProto, start)
 	serverName := "-"
 	needsEDNS0Padding := false
@@ -437,13 +438,13 @@ func (proxy *Proxy) processIncomingQuery(clientProto string, serverProto string,
 		serverName = serverInfo.Name
 		needsEDNS0Padding = (serverInfo.Proto == stamps.StampProtoTypeDoH || serverInfo.Proto == stamps.StampProtoTypeTLS)
 	}
-	query, _ = pluginsState.ApplyQueryPlugins(&proxy.pluginsGlobals, query, needsEDNS0Padding)
+	query, _ = pluginsState.ApplyQueryPlugins(proxy.pluginsGlobals, query, needsEDNS0Padding)
 	if len(query) < MinDNSPacketSize || len(query) > MaxDNSPacketSize {
 		return
 	}
 	if pluginsState.action == PluginsActionDrop {
 		pluginsState.returnCode = PluginsReturnCodeDrop
-		pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
+		pluginsState.ApplyLoggingPlugins(proxy.pluginsGlobals)
 		return
 	}
 	var err error
@@ -451,7 +452,7 @@ func (proxy *Proxy) processIncomingQuery(clientProto string, serverProto string,
 		response, err = pluginsState.synthResponse.PackBuffer(response)
 		if err != nil {
 			pluginsState.returnCode = PluginsReturnCodeParseError
-			pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
+			pluginsState.ApplyLoggingPlugins(proxy.pluginsGlobals)
 			return
 		}
 	}
@@ -467,7 +468,7 @@ func (proxy *Proxy) processIncomingQuery(clientProto string, serverProto string,
 			}
 			if err != nil {
 				pluginsState.returnCode = PluginsReturnCodeParseError
-				pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
+				pluginsState.ApplyLoggingPlugins(proxy.pluginsGlobals)
 				return
 			}
 			serverInfo.noticeBegin(proxy)
@@ -485,7 +486,7 @@ func (proxy *Proxy) processIncomingQuery(clientProto string, serverProto string,
 					sharedKey, encryptedQuery, clientNonce, err = proxy.Encrypt(serverInfo, query, serverProto)
 					if err != nil {
 						pluginsState.returnCode = PluginsReturnCodeParseError
-						pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
+						pluginsState.ApplyLoggingPlugins(proxy.pluginsGlobals)
 						return
 					}
 					response, err = proxy.exchangeWithTCPServer(serverInfo, sharedKey, encryptedQuery, clientNonce)
@@ -505,7 +506,7 @@ func (proxy *Proxy) processIncomingQuery(clientProto string, serverProto string,
 				} else {
 					pluginsState.returnCode = PluginsReturnCodeNetworkError
 				}
-				pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
+				pluginsState.ApplyLoggingPlugins(proxy.pluginsGlobals)
 				serverInfo.noticeFailure(proxy)
 				return
 			}
@@ -523,7 +524,7 @@ func (proxy *Proxy) processIncomingQuery(clientProto string, serverProto string,
 			}
 			if err != nil {
 				pluginsState.returnCode = PluginsReturnCodeNetworkError
-				pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
+				pluginsState.ApplyLoggingPlugins(proxy.pluginsGlobals)
 				serverInfo.noticeFailure(proxy)
 				return
 			}
@@ -538,27 +539,27 @@ func (proxy *Proxy) processIncomingQuery(clientProto string, serverProto string,
 		}
 		if len(response) < MinDNSPacketSize || len(response) > MaxDNSPacketSize {
 			pluginsState.returnCode = PluginsReturnCodeParseError
-			pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
+			pluginsState.ApplyLoggingPlugins(proxy.pluginsGlobals)
 			serverInfo.noticeFailure(proxy)
 			return
 		}
-		response, err = pluginsState.ApplyResponsePlugins(&proxy.pluginsGlobals, response, ttl)
+		response, err = pluginsState.ApplyResponsePlugins(proxy.pluginsGlobals, response, ttl)
 		if err != nil {
 			pluginsState.returnCode = PluginsReturnCodeParseError
-			pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
+			pluginsState.ApplyLoggingPlugins(proxy.pluginsGlobals)
 			serverInfo.noticeFailure(proxy)
 			return
 		}
 		if pluginsState.action == PluginsActionDrop {
 			pluginsState.returnCode = PluginsReturnCodeDrop
-			pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
+			pluginsState.ApplyLoggingPlugins(proxy.pluginsGlobals)
 			return
 		}
 		if pluginsState.synthResponse != nil {
 			response, err = pluginsState.synthResponse.PackBuffer(response)
 			if err != nil {
 				pluginsState.returnCode = PluginsReturnCodeParseError
-				pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
+				pluginsState.ApplyLoggingPlugins(proxy.pluginsGlobals)
 				return
 			}
 		}
@@ -575,7 +576,7 @@ func (proxy *Proxy) processIncomingQuery(clientProto string, serverProto string,
 	}
 	if len(response) < MinDNSPacketSize || len(response) > MaxDNSPacketSize {
 		pluginsState.returnCode = PluginsReturnCodeParseError
-		pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
+		pluginsState.ApplyLoggingPlugins(proxy.pluginsGlobals)
 		if serverInfo != nil {
 			serverInfo.noticeFailure(proxy)
 		}
@@ -586,7 +587,7 @@ func (proxy *Proxy) processIncomingQuery(clientProto string, serverProto string,
 			response, err = TruncatedResponse(response)
 			if err != nil {
 				pluginsState.returnCode = PluginsReturnCodeParseError
-				pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
+				pluginsState.ApplyLoggingPlugins(proxy.pluginsGlobals)
 				return
 			}
 		}
@@ -600,7 +601,7 @@ func (proxy *Proxy) processIncomingQuery(clientProto string, serverProto string,
 		response, err = PrefixWithSize(response)
 		if err != nil {
 			pluginsState.returnCode = PluginsReturnCodeParseError
-			pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
+			pluginsState.ApplyLoggingPlugins(proxy.pluginsGlobals)
 			if serverInfo != nil {
 				serverInfo.noticeFailure(proxy)
 			}
@@ -610,13 +611,14 @@ func (proxy *Proxy) processIncomingQuery(clientProto string, serverProto string,
 			clientPc.Write(response)
 		}
 	}
-	pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
+	pluginsState.ApplyLoggingPlugins(proxy.pluginsGlobals)
 
 	return response
 }
 
 func NewProxy() *Proxy {
 	return &Proxy{
-		serversInfo: NewServersInfo(),
+		serversInfo:    NewServersInfo(),
+		pluginsGlobals: &PluginsGlobals{ready: make(chan struct{})},
 	}
 }

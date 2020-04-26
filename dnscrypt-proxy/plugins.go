@@ -4,7 +4,6 @@ import (
 	"errors"
 	"net"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/jedisct1/dlog"
@@ -22,13 +21,13 @@ const (
 )
 
 type PluginsGlobals struct {
-	sync.RWMutex
-	queryPlugins           *[]Plugin
-	responsePlugins        *[]Plugin
-	loggingPlugins         *[]Plugin
+	queryPlugins           []Plugin
+	responsePlugins        []Plugin
+	loggingPlugins         []Plugin
 	refusedCodeInResponses bool
 	respondWithIPv4        net.IP
 	respondWithIPv6        net.IP
+	ready                  chan struct{}
 }
 
 type PluginsReturnCode int
@@ -91,70 +90,71 @@ type PluginsState struct {
 }
 
 func (proxy *Proxy) InitPluginsGlobals() error {
-	queryPlugins := &[]Plugin{}
+	defer close(proxy.pluginsGlobals.ready)
 
+	var queryPlugins []Plugin
 	if len(proxy.queryMeta) != 0 {
-		*queryPlugins = append(*queryPlugins, Plugin(new(PluginQueryMeta)))
+		queryPlugins = append(queryPlugins, Plugin(new(PluginQueryMeta)))
 	}
 	if len(proxy.whitelistNameFile) != 0 {
-		*queryPlugins = append(*queryPlugins, Plugin(new(PluginWhitelistName)))
+		queryPlugins = append(queryPlugins, Plugin(new(PluginWhitelistName)))
 	}
 
-	*queryPlugins = append(*queryPlugins, Plugin(new(PluginFirefox)))
+	queryPlugins = append(queryPlugins, Plugin(new(PluginFirefox)))
 
 	if len(proxy.blockNameFile) != 0 {
-		*queryPlugins = append(*queryPlugins, Plugin(new(PluginBlockName)))
+		queryPlugins = append(queryPlugins, Plugin(new(PluginBlockName)))
 	}
 	if proxy.pluginBlockIPv6 {
-		*queryPlugins = append(*queryPlugins, Plugin(new(PluginBlockIPv6)))
+		queryPlugins = append(queryPlugins, Plugin(new(PluginBlockIPv6)))
 	}
 	if len(proxy.cloakFile) != 0 {
-		*queryPlugins = append(*queryPlugins, Plugin(new(PluginCloak)))
+		queryPlugins = append(queryPlugins, Plugin(new(PluginCloak)))
 	}
-	*queryPlugins = append(*queryPlugins, Plugin(new(PluginGetSetPayloadSize)))
+	queryPlugins = append(queryPlugins, Plugin(new(PluginGetSetPayloadSize)))
 	if proxy.cache {
-		*queryPlugins = append(*queryPlugins, Plugin(new(PluginCache)))
+		queryPlugins = append(queryPlugins, Plugin(new(PluginCache)))
 	}
 	if len(proxy.forwardFile) != 0 {
-		*queryPlugins = append(*queryPlugins, Plugin(new(PluginForward)))
+		queryPlugins = append(queryPlugins, Plugin(new(PluginForward)))
 	}
 	if proxy.pluginBlockUnqualified {
-		*queryPlugins = append(*queryPlugins, Plugin(new(PluginBlockUnqualified)))
+		queryPlugins = append(queryPlugins, Plugin(new(PluginBlockUnqualified)))
 	}
 	if proxy.pluginBlockUndelegated {
-		*queryPlugins = append(*queryPlugins, Plugin(new(PluginBlockUndelegated)))
+		queryPlugins = append(queryPlugins, Plugin(new(PluginBlockUndelegated)))
 	}
 
-	responsePlugins := &[]Plugin{}
+	var responsePlugins []Plugin
 	if len(proxy.nxLogFile) != 0 {
-		*responsePlugins = append(*responsePlugins, Plugin(new(PluginNxLog)))
+		responsePlugins = append(responsePlugins, Plugin(new(PluginNxLog)))
 	}
 	if len(proxy.blockNameFile) != 0 {
-		*responsePlugins = append(*responsePlugins, Plugin(new(PluginBlockNameResponse)))
+		responsePlugins = append(responsePlugins, Plugin(new(PluginBlockNameResponse)))
 	}
 	if len(proxy.blockIPFile) != 0 {
-		*responsePlugins = append(*responsePlugins, Plugin(new(PluginBlockIP)))
+		responsePlugins = append(responsePlugins, Plugin(new(PluginBlockIP)))
 	}
 	if proxy.cache {
-		*responsePlugins = append(*responsePlugins, Plugin(new(PluginCacheResponse)))
+		responsePlugins = append(responsePlugins, Plugin(new(PluginCacheResponse)))
 	}
 
-	loggingPlugins := &[]Plugin{}
+	var loggingPlugins []Plugin
 	if len(proxy.queryLogFile) != 0 {
-		*loggingPlugins = append(*loggingPlugins, Plugin(new(PluginQueryLog)))
+		loggingPlugins = append(loggingPlugins, Plugin(new(PluginQueryLog)))
 	}
 
-	for _, plugin := range *queryPlugins {
+	for _, plugin := range queryPlugins {
 		if err := plugin.Init(proxy); err != nil {
 			return err
 		}
 	}
-	for _, plugin := range *responsePlugins {
+	for _, plugin := range responsePlugins {
 		if err := plugin.Init(proxy); err != nil {
 			return err
 		}
 	}
-	for _, plugin := range *loggingPlugins {
+	for _, plugin := range loggingPlugins {
 		if err := plugin.Init(proxy); err != nil {
 			return err
 		}
@@ -164,7 +164,7 @@ func (proxy *Proxy) InitPluginsGlobals() error {
 	proxy.pluginsGlobals.responsePlugins = responsePlugins
 	proxy.pluginsGlobals.loggingPlugins = loggingPlugins
 
-	parseBlockedQueryResponse(proxy.blockedQueryResponse, &proxy.pluginsGlobals)
+	parseBlockedQueryResponse(proxy.blockedQueryResponse, proxy.pluginsGlobals)
 
 	return nil
 }
@@ -262,12 +262,10 @@ func (pluginsState *PluginsState) ApplyQueryPlugins(pluginsGlobals *PluginsGloba
 	}
 	pluginsState.qName = qName
 	pluginsState.questionMsg = &msg
-	if len(*pluginsGlobals.queryPlugins) == 0 && len(*pluginsGlobals.loggingPlugins) == 0 {
+	if len(pluginsGlobals.queryPlugins) == 0 && len(pluginsGlobals.loggingPlugins) == 0 {
 		return packet, nil
 	}
-	pluginsGlobals.RLock()
-	defer pluginsGlobals.RUnlock()
-	for _, plugin := range *pluginsGlobals.queryPlugins {
+	for _, plugin := range pluginsGlobals.queryPlugins {
 		if err := plugin.Eval(pluginsState, &msg); err != nil {
 			pluginsState.action = PluginsActionDrop
 			return packet, err
@@ -312,9 +310,7 @@ func (pluginsState *PluginsState) ApplyResponsePlugins(pluginsGlobals *PluginsGl
 		pluginsState.returnCode = PluginsReturnCodeResponseError
 	}
 	removeEDNS0Options(&msg)
-	pluginsGlobals.RLock()
-	defer pluginsGlobals.RUnlock()
-	for _, plugin := range *pluginsGlobals.responsePlugins {
+	for _, plugin := range pluginsGlobals.responsePlugins {
 		if err := plugin.Eval(pluginsState, &msg); err != nil {
 			pluginsState.action = PluginsActionDrop
 			return packet, err
@@ -338,7 +334,7 @@ func (pluginsState *PluginsState) ApplyResponsePlugins(pluginsGlobals *PluginsGl
 }
 
 func (pluginsState *PluginsState) ApplyLoggingPlugins(pluginsGlobals *PluginsGlobals) error {
-	if len(*pluginsGlobals.loggingPlugins) == 0 {
+	if len(pluginsGlobals.loggingPlugins) == 0 {
 		return nil
 	}
 	pluginsState.requestEnd = time.Now()
@@ -346,9 +342,7 @@ func (pluginsState *PluginsState) ApplyLoggingPlugins(pluginsGlobals *PluginsGlo
 	if questionMsg == nil {
 		return errors.New("Question not found")
 	}
-	pluginsGlobals.RLock()
-	defer pluginsGlobals.RUnlock()
-	for _, plugin := range *pluginsGlobals.loggingPlugins {
+	for _, plugin := range pluginsGlobals.loggingPlugins {
 		if err := plugin.Eval(pluginsState, questionMsg); err != nil {
 			return err
 		}
