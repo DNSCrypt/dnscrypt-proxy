@@ -21,11 +21,11 @@ func (proxy *Proxy) addSystemDListeners() error {
 	for i, file := range files {
 		defer file.Close()
 		if listener, err := net.FileListener(file); err == nil {
+			proxy.registerTcpListener(listener.(*net.TCPListener))
 			dlog.Noticef("Wiring systemd TCP socket #%d, %s, %s", i, file.Name(), listener.Addr())
-			proxy.tcpListener = append(proxy.tcpListener, listener.(*net.TCPListener))
 		} else if pc, err := net.FilePacketConn(file); err == nil {
+			proxy.registerUdpListener(pc.(*net.UDPConn))
 			dlog.Noticef("Wiring systemd UDP socket #%d, %s, %s", i, file.Name(), pc.LocalAddr())
-			proxy.udpListener = append(proxy.udpListener, pc.(*net.UDPConn))
 		}
 	}
 	return nil
