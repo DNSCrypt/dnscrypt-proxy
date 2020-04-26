@@ -93,7 +93,7 @@ type Config struct {
 	BlockedQueryResponse     string                      `toml:"blocked_query_response"`
 	QueryMeta                []string                    `toml:"query_meta"`
 	AnonymizedDNS            AnonymizedDNSConfig         `toml:"anonymized_dns"`
-	TLSClientAuth            TLSClientAuthConfig         `toml:"tls_client_auth"`
+	DoHClientX509Auth        DoHClientX509AuthConfig     `toml:"doh_client_x509_auth"`
 }
 
 func newConfig() Config {
@@ -228,7 +228,7 @@ type TLSClientAuthCredsConfig struct {
 	ClientKey  string `toml:"client_key"`
 }
 
-type TLSClientAuthConfig struct {
+type DoHClientX509AuthConfig struct {
 	Creds []TLSClientAuthCredsConfig `toml:"creds"`
 }
 
@@ -500,7 +500,7 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	}
 	proxy.skipAnonIncompatbibleResolvers = config.AnonymizedDNS.SkipIncompatible
 
-	configClientCreds := config.TLSClientAuth.Creds
+	configClientCreds := config.DoHClientX509Auth.Creds
 	creds := make(map[string]DOHClientCreds)
 	for _, configClientCred := range configClientCreds {
 		credFiles := DOHClientCreds{

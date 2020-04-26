@@ -645,7 +645,7 @@ fragments_blocked = ['cisco', 'cisco-ipv6', 'cisco-familyshield', 'cisco-familys
 # This is only useful if you are operating your own, private DoH server(s).
 # (for DNSCrypt, see the `query_meta` feature instead)
 
-# [tls_client_auth]
+# [doh_client_x509_auth]
 
 # creds = [
 #    { server_name='myserver', client_cert='client.crt', client_key='client.key' }
