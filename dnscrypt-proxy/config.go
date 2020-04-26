@@ -561,6 +561,7 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	// if 'userName' is set and we are the parent process drop privilege and exit
 	if len(proxy.userName) > 0 && !proxy.child {
 		proxy.dropPrivilege(proxy.userName, FileDescriptors)
+		dlog.Fatal("Dropping privileges is not supporting on this operating system. Unset `user_name` in the configuration file.")
 	}
 	if err := proxy.SystemDListeners(); err != nil {
 		dlog.Fatal(err)
