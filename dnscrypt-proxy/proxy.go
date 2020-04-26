@@ -325,15 +325,15 @@ func (proxy *Proxy) localDoHListenerFromAddr(listenAddr *net.TCPAddr) error {
 
 func (proxy *Proxy) startAcceptingClients() {
 	for _, clientPc := range proxy.udpListeners {
-		proxy.udpListener(clientPc)
+		go proxy.udpListener(clientPc)
 	}
 	proxy.udpListeners = nil
 	for _, acceptPc := range proxy.tcpListeners {
-		proxy.tcpListener(acceptPc)
+		go proxy.tcpListener(acceptPc)
 	}
 	proxy.tcpListeners = nil
 	for _, acceptPc := range proxy.localDoHListeners {
-		proxy.localDoHListener(acceptPc)
+		go proxy.localDoHListener(acceptPc)
 	}
 	proxy.localDoHListeners = nil
 }
