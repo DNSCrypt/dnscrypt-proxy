@@ -191,7 +191,7 @@ func (proxy *Proxy) addLocalDoHListener(listenAddrStr string) {
 	FileDescriptorNum++
 
 	dlog.Noticef("Now listening to https://%v%v [DoH]", listenAddrStr, proxy.localDoHPath)
-	go proxy.localDoHListener(listenerTCP.(*net.TCPListener))
+	proxy.localDoHListeners = append(proxy.localDoHListeners, listenerTCP.(*net.TCPListener))
 }
 
 func (proxy *Proxy) StartProxy() {
@@ -319,7 +319,7 @@ func (proxy *Proxy) localDoHListenerFromAddr(listenAddr *net.TCPAddr) error {
 		return err
 	}
 	dlog.Noticef("Now listening to https://%v%v [DoH]", listenAddr, proxy.localDoHPath)
-	proxy.tcpListeners = append(proxy.localDoHListeners, acceptPc)
+	proxy.localDoHListeners = append(proxy.localDoHListeners, acceptPc)
 	return nil
 }
 
