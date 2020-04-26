@@ -16,6 +16,9 @@ import (
 )
 
 type Proxy struct {
+	udpListeners                   []*net.UDPConn
+	tcpListeners                   []*net.TCPListener
+	localDoHListeners              []*net.TCPListener
 	userName                       string
 	child                          bool
 	proxyPublicKey                 [32]byte
@@ -143,10 +146,10 @@ func (proxy *Proxy) addDNSListener(listenAddrStr string) {
 	FileDescriptorNum++
 
 	dlog.Noticef("Now listening to %v [UDP]", listenUDPAddr)
-	go proxy.udpListener(listenerUDP.(*net.UDPConn))
+	proxy.udpListeners = append(proxy.udpListeners, listenerUDP.(*net.UDPConn))
 
 	dlog.Noticef("Now listening to %v [TCP]", listenAddrStr)
-	go proxy.tcpListener(listenerTCP.(*net.TCPListener))
+	proxy.tcpListeners = append(proxy.tcpListeners, listenerTCP.(*net.TCPListener))
 }
 
 func (proxy *Proxy) addLocalDoHListener(listenAddrStr string) {
@@ -218,6 +221,7 @@ func (proxy *Proxy) StartProxy() {
 		dlog.Error(err)
 		dlog.Notice("dnscrypt-proxy is waiting for at least one server to be reachable")
 	}
+	proxy.startAcceptingClients()
 	go func() {
 		for {
 			clocksmith.Sleep(PrefetchSources(proxy.xTransport, proxy.sources))
@@ -267,7 +271,7 @@ func (proxy *Proxy) udpListenerFromAddr(listenAddr *net.UDPAddr) error {
 		return err
 	}
 	dlog.Noticef("Now listening to %v [UDP]", listenAddr)
-	go proxy.udpListener(clientPc)
+	proxy.udpListeners = append(proxy.udpListeners, clientPc)
 	return nil
 }
 
@@ -304,8 +308,8 @@ func (proxy *Proxy) tcpListenerFromAddr(listenAddr *net.TCPAddr) error {
 	if err != nil {
 		return err
 	}
+	proxy.tcpListeners = append(proxy.tcpListeners, acceptPc)
 	dlog.Noticef("Now listening to %v [TCP]", listenAddr)
-	go proxy.tcpListener(acceptPc)
 	return nil
 }
 
@@ -315,8 +319,23 @@ func (proxy *Proxy) localDoHListenerFromAddr(listenAddr *net.TCPAddr) error {
 		return err
 	}
 	dlog.Noticef("Now listening to https://%v%v [DoH]", listenAddr, proxy.localDoHPath)
-	go proxy.localDoHListener(acceptPc)
+	proxy.tcpListeners = append(proxy.localDoHListeners, acceptPc)
 	return nil
+}
+
+func (proxy *Proxy) startAcceptingClients() {
+	for _, clientPc := range proxy.udpListeners {
+		proxy.udpListener(clientPc)
+	}
+	proxy.udpListeners = nil
+	for _, acceptPc := range proxy.tcpListeners {
+		proxy.tcpListener(acceptPc)
+	}
+	proxy.tcpListeners = nil
+	for _, acceptPc := range proxy.localDoHListeners {
+		proxy.localDoHListener(acceptPc)
+	}
+	proxy.localDoHListeners = nil
 }
 
 func (proxy *Proxy) prepareForRelay(ip net.IP, port int, encryptedQuery *[]byte) {
