@@ -4,7 +4,9 @@
 
 ## Response containing blacklisted IP addresses will be blocked
 ##
-## Sample feed of suspect IP addresses: https://github.com/stamparm/ipsum
+## Sample feeds of suspect IP addresses:
+## - https://github.com/stamparm/ipsum
+## - https://github.com/tg12/bad_packets_blocklist
 ## Use only one of the levels from that list. 1 is not very reliable
 ## (may have a lot of false positives), 8 is the most reliable subset.
 
