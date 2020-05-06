@@ -1,4 +1,4 @@
-#! /usr/bin/env python
+#! /usr/bin/env python3
 
 # run with python generate-domains-blacklist.py > list.txt.tmp && mv -f list.txt.tmp list
 
@@ -20,7 +20,7 @@ except (ImportError, ModuleNotFoundError):
     URLLIB_NEW = True
 
 
-def parse_time_restricted_list(content):
+def parse_trusted_list(content):
     rx_comment = re.compile(r"^(#|$)")
     rx_inline_comment = re.compile(r"\s*#\s*[a-z0-9-].*$")
     rx_trusted = re.compile(r"^([*a-z0-9.-]+)\s*(@\S+)?$")
@@ -50,13 +50,10 @@ def parse_time_restricted_list(content):
     return names, time_restrictions, globs
 
 
-def parse_trusted_list(content):
-    names, _time_restrictions, globs = parse_time_restricted_list(content)
-    time_restrictions = {}
-    return names, time_restrictions, globs
-
-
 def parse_list(content, trusted=False):
+    if trusted:
+        return parse_trusted_list(content)
+
     rx_comment = re.compile(r"^(#|$)")
     rx_inline_comment = re.compile(r"\s*#\s*[a-z0-9-].*$")
     rx_u = re.compile(
@@ -69,9 +66,6 @@ def parse_list(content, trusted=False):
     rx_b = re.compile(r"^([a-z0-9][a-z0-9.-]*[.][a-z]{2,}),.+,[0-9: /-]+,")
     rx_dq = re.compile(r"^address=/([a-z0-9][a-z0-9.-]*[.][a-z]{2,})/.")
 
-    if trusted:
-        return parse_trusted_list(content)
-
     names = set()
     time_restrictions = {}
     globs = set()
@@ -81,10 +75,6 @@ def parse_list(content, trusted=False):
         if rx_comment.match(line):
             continue
         line = str.strip(rx_inline_comment.sub("", line))
-        if trusted and is_glob(line):
-            globs.add(line)
-            names.add(line)
-            continue
         for rx in rx_set:
             matches = rx.match(line)
             if not matches:
@@ -224,7 +214,7 @@ def blacklists_from_config_file(
 
     if time_restricted_url:
         time_restricted_content, _trusted = load_from_url(time_restricted_url)
-        time_restricted_names, time_restrictions, _globs = parse_time_restricted_list(
+        time_restricted_names, time_restrictions, _globs = parse_trusted_list(
             time_restricted_content)
 
         if time_restricted_names:
