@@ -514,7 +514,7 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	// Backwards compatibility
 	config.BrokenImplementations.FragmentsBlocked = append(config.BrokenImplementations.FragmentsBlocked, config.BrokenImplementations.BrokenQueryPadding...)
 
-	proxy.serversBlockingFragments = config.BrokenImplementations.BrokenQueryPadding
+	proxy.serversBlockingFragments = config.BrokenImplementations.FragmentsBlocked
 
 	if *flags.ListAll {
 		config.ServerNames = nil
