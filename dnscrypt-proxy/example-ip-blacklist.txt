@@ -7,6 +7,7 @@
 ## Sample feeds of suspect IP addresses:
 ## - https://github.com/stamparm/ipsum
 ## - https://github.com/tg12/bad_packets_blocklist
+## - https://block.energized.pro/extensions/ips/formats/list.txt
 ## Use only one of the levels from that list. 1 is not very reliable
 ## (may have a lot of false positives), 8 is the most reliable subset.
 
