@@ -712,8 +712,11 @@ func (config *Config) loadSource(proxy *Proxy, requiredProps stamps.ServerInform
 	}
 	source, err := NewSource(cfgSourceName, proxy.xTransport, cfgSource.URLs, cfgSource.MinisignKeyStr, cfgSource.CacheFile, cfgSource.FormatStr, time.Duration(cfgSource.RefreshDelay)*time.Hour)
 	if err != nil {
-		dlog.Criticalf("Unable to retrieve source [%s]: [%s]", cfgSourceName, err)
-		return err
+		if len(source.in) <= 0 {
+			dlog.Criticalf("Unable to retrieve source [%s]: [%s]", cfgSourceName, err)
+			return err
+		}
+		dlog.Infof("Downloading [%s] failed: %v, use cache file to startup", source.name, err)
 	}
 	proxy.sources = append(proxy.sources, source)
 	registeredServers, err := source.Parse(cfgSource.Prefix)

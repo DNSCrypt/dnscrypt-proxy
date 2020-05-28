@@ -135,8 +135,7 @@ func fetchFromURL(xTransport *XTransport, u *url.URL) (bin []byte, err error) {
 }
 
 func (source *Source) fetchWithCache(xTransport *XTransport, now time.Time) (delay time.Duration, err error) {
-	var errCached error
-	if delay, errCached = source.fetchFromCache(now); errCached != nil {
+	if delay, err = source.fetchFromCache(now); err != nil {
 		if len(source.urls) == 0 {
 			dlog.Errorf("Source [%s] cache file [%s] not present and no valid URL", source.name, source.cacheFile)
 			return
@@ -172,10 +171,6 @@ func (source *Source) fetchWithCache(xTransport *XTransport, now time.Time) (del
 		dlog.Debugf("Source [%s] failed signature check using URL [%s]", source.name, srcURL)
 	}
 	if err != nil {
-		if errCached == nil {
-			dlog.Debugf("Source [%s] failed to update, retry after %v", source.name, delay)
-			return delay, nil // fallback avoids termination, sleep MinimumPrefetchInterval
-		}
 		return
 	}
 	source.writeToCache(bin, sig, now)
@@ -216,7 +211,7 @@ func PrefetchSources(xTransport *XTransport, sources []*Source) time.Duration {
 		}
 		dlog.Debugf("Prefetching [%s]", source.name)
 		if delay, err := source.fetchWithCache(xTransport, now); err != nil {
-			dlog.Infof("Prefetching [%s] failed: %v", source.name, err)
+			dlog.Infof("Prefetching [%s] failed: %v, retry after %v", source.name, err, interval)
 		} else {
 			dlog.Debugf("Prefetching [%s] succeeded, next update: %v", source.name, delay)
 			if delay >= MinimumPrefetchInterval && (interval == MinimumPrefetchInterval || interval > delay) {
