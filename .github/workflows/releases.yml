@@ -15,7 +15,6 @@ on:
       - ".ci/**"
       - ".git*"
       - ".github/workflows/releases.yml"
-  create:
 
 name: CI and optionally publish
 
