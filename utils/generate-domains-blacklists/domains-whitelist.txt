@@ -4,11 +4,11 @@ amazon.com
 app.link
 appsflyer.com
 azurewebsites.net
+cdn.cloudflare.net
 cdn.optimizely.com
 cdnetworks.com
 cdninstagram.com
 cloudapp.net
-cdn.cloudflare.net
 download.dnscrypt.info
 edgekey.net
 edgesuite.net
@@ -27,6 +27,8 @@ liveinternet.ru
 localdomain
 microsoft.com
 msedge.net
+msftconnecttest.com
+msftncsi.com
 nsatc.net
 ocsp.apple.com
 ovh.net
