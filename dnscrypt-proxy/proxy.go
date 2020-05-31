@@ -215,6 +215,7 @@ func (proxy *Proxy) StartProxy() {
 	for _, registeredServer := range proxy.registeredServers {
 		proxy.serversInfo.registerServer(registeredServer.name, registeredServer.stamp)
 	}
+	proxy.startAcceptingClients()
 	liveServers, err := proxy.serversInfo.refresh(proxy)
 	if liveServers > 0 {
 		proxy.certIgnoreTimestamp = false
@@ -233,7 +234,6 @@ func (proxy *Proxy) StartProxy() {
 		dlog.Error(err)
 		dlog.Notice("dnscrypt-proxy is waiting for at least one server to be reachable")
 	}
-	proxy.startAcceptingClients()
 	go func() {
 		for {
 			clocksmith.Sleep(PrefetchSources(proxy.xTransport, proxy.sources))
