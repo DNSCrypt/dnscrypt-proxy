@@ -211,7 +211,7 @@ func PrefetchSources(xTransport *XTransport, sources []*Source) time.Duration {
 		}
 		dlog.Debugf("Prefetching [%s]", source.name)
 		if delay, err := source.fetchWithCache(xTransport, now); err != nil {
-			dlog.Infof("Prefetching [%s] failed: %v, retry after %v", source.name, err, interval)
+			dlog.Infof("Prefetching [%s] failed: %v, will retry in %v", source.name, err, interval)
 		} else {
 			dlog.Debugf("Prefetching [%s] succeeded, next update: %v", source.name, delay)
 			if delay >= MinimumPrefetchInterval && (interval == MinimumPrefetchInterval || interval > delay) {

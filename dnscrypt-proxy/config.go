@@ -716,7 +716,7 @@ func (config *Config) loadSource(proxy *Proxy, requiredProps stamps.ServerInform
 			dlog.Criticalf("Unable to retrieve source [%s]: [%s]", cfgSourceName, err)
 			return err
 		}
-		dlog.Infof("Downloading [%s] failed: %v, use cache file to startup", source.name, err)
+		dlog.Infof("Downloading [%s] failed: %v, using cache file to startup", source.name, err)
 	}
 	proxy.sources = append(proxy.sources, source)
 	registeredServers, err := source.Parse(cfgSource.Prefix)
