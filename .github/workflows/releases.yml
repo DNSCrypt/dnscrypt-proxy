@@ -1,4 +1,20 @@
-on: push
+on:
+  push:
+    paths:
+      - "**.go"
+      - "go.*"
+      - "**/testdata/**"
+      - ".ci/**"
+      - ".git*"
+      - ".github/workflows/releases.yml"
+  pull_request:
+    paths:
+      - "**.go"
+      - "go.*"
+      - "**/testdata/**"
+      - ".ci/**"
+      - ".git*"
+      - ".github/workflows/releases.yml"
 
 name: CI and optionally publish
 
