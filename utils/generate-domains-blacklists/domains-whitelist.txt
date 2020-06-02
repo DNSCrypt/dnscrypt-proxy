@@ -35,6 +35,7 @@ ovh.net
 polyfill.io
 pusher.com
 pusherapp.com
+qualtrics.com
 raw.githubusercontent.com
 revinate.com
 s.youtube.com
