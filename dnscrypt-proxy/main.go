@@ -27,6 +27,7 @@ type App struct {
 }
 
 func main() {
+	TimezoneSetup()
 	dlog.Init("dnscrypt-proxy", dlog.SeverityNotice, "DAEMON")
 
 	seed := make([]byte, 8)
