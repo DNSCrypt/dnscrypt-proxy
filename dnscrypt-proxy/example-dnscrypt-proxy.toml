@@ -710,6 +710,9 @@ skip_incompatible = false
 ##
 ## If both options are configured - only static prefixes are used.
 ## (Ref. RFC6147, RFC6052, RFC7050)
+##
+## Do not enable unless you know what DNS64 is and why you need it, or else
+## you won't be able to connect to anything at all.
 
 # [dns64]
 
