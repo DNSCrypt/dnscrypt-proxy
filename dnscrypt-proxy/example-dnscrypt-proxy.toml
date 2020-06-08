@@ -140,7 +140,11 @@ keepalive = 30
 # log_level = 2
 
 
-## log file for the application
+## Log file for the application, as an alternative to sending logs to
+## the standard system logging service (syslog/Windows event log).
+##
+## This file is different from other log files, and will not be
+## automatically rotated by the application.
 
 # log_file = 'dnscrypt-proxy.log'
 
