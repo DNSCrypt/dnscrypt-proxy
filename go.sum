@@ -32,8 +32,8 @@ github.com/hashicorp/golang-lru v0.5.4 h1:YDjusn29QI/Das2iO9M0BHnIbxPeyuCHsjMW+l
 github.com/hashicorp/golang-lru v0.5.4/go.mod h1:iADmTwqILo4mZ8BN3D2Q6+9jd8WM5uGBxy+E8yxSoD4=
 github.com/hectane/go-acl v0.0.0-20190604041725-da78bae5fc95 h1:S4qyfL2sEm5Budr4KVMyEniCy+PbS55651I/a+Kn/NQ=
 github.com/hectane/go-acl v0.0.0-20190604041725-da78bae5fc95/go.mod h1:QiyDdbZLaJ/mZP4Zwc9g2QsfaEA4o7XvvgZegSci5/E=
-github.com/jedisct1/dlog v0.0.0-20200608182644-a0fe4302a941 h1:BL7Wr9TaQB9lzUh2q3DQwDVNMQuB9uzmHjLhOxUWZxE=
-github.com/jedisct1/dlog v0.0.0-20200608182644-a0fe4302a941/go.mod h1:qlw2+W23d6vMLRF2E7PLeQrk903Fp7hZRSeYQQMcKW8=
+github.com/jedisct1/dlog v0.0.0-20200608205121-58b466d6e649 h1:T6nM2+LNv44UpemJ0T5+UPItmEVjf/29Uc6edX8rVIs=
+github.com/jedisct1/dlog v0.0.0-20200608205121-58b466d6e649/go.mod h1:qlw2+W23d6vMLRF2E7PLeQrk903Fp7hZRSeYQQMcKW8=
 github.com/jedisct1/go-clocksmith v0.0.0-20190707124905-73e087c7979c h1:a/NQUT7AXkEfhaZ+nb7Uzqijo1Qc7C7SZpRrv+6UQDA=
 github.com/jedisct1/go-clocksmith v0.0.0-20190707124905-73e087c7979c/go.mod h1:SAINchklztk2jcLWJ4bpNF4KnwDUSUTX+cJbspWC2Rw=
 github.com/jedisct1/go-dnsstamps v0.0.0-20200205175031-8109eec6ec46 h1:EgxCa7UN+QWlNe3EzxtpszkkpuG3ctC3aCIfUE/gqjM=
