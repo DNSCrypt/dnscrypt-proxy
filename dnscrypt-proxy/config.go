@@ -94,6 +94,7 @@ type Config struct {
 	QueryMeta                []string                    `toml:"query_meta"`
 	AnonymizedDNS            AnonymizedDNSConfig         `toml:"anonymized_dns"`
 	DoHClientX509Auth        DoHClientX509AuthConfig     `toml:"doh_client_x509_auth"`
+	DNS64                    DNS64Config                 `toml:"dns64"`
 }
 
 func newConfig() Config {
@@ -231,6 +232,11 @@ type TLSClientAuthCredsConfig struct {
 
 type DoHClientX509AuthConfig struct {
 	Creds []TLSClientAuthCredsConfig `toml:"creds"`
+}
+
+type DNS64Config struct {
+	Prefixes  []string `toml:"prefix"`
+	Resolvers []string `toml:"resolver"`
 }
 
 type ConfigFlags struct {
@@ -517,6 +523,9 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	config.BrokenImplementations.FragmentsBlocked = append(config.BrokenImplementations.FragmentsBlocked, config.BrokenImplementations.BrokenQueryPadding...)
 
 	proxy.serversBlockingFragments = config.BrokenImplementations.FragmentsBlocked
+
+	proxy.dns64Prefixes = config.DNS64.Prefixes
+	proxy.dns64Resolvers = config.DNS64.Resolvers
 
 	if *flags.ListAll {
 		config.ServerNames = nil
