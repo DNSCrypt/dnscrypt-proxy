@@ -13,7 +13,7 @@ require (
 	github.com/hashicorp/go-immutable-radix v1.2.0
 	github.com/hashicorp/golang-lru v0.5.4
 	github.com/hectane/go-acl v0.0.0-20190604041725-da78bae5fc95
-	github.com/jedisct1/dlog v0.0.0-20190909160351-692385b00b84
+	github.com/jedisct1/dlog v0.0.0-20200608182644-a0fe4302a941
 	github.com/jedisct1/go-clocksmith v0.0.0-20190707124905-73e087c7979c
 	github.com/jedisct1/go-dnsstamps v0.0.0-20200205175031-8109eec6ec46
 	github.com/jedisct1/go-minisign v0.0.0-20190909160543-45766022959e
