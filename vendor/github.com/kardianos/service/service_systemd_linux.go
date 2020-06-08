@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -66,15 +67,21 @@ func (s *systemd) Platform() string {
 	return s.platform
 }
 
-// Systemd services should be supported, but are not currently.
-var errNoUserServiceSystemd = errors.New("User services are not supported on systemd.")
-
 func (s *systemd) configPath() (cp string, err error) {
-	if s.Option.bool(optionUserService, optionUserServiceDefault) {
-		err = errNoUserServiceSystemd
+	if !s.Option.bool(optionUserService, optionUserServiceDefault) {
+		cp = "/etc/systemd/system/" + s.Config.Name + ".service"
 		return
 	}
-	cp = "/etc/systemd/system/" + s.Config.Name + ".service"
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return
+	}
+	systemdUserDir := filepath.Join(homeDir, ".config/systemd/user")
+	err = os.MkdirAll(systemdUserDir, os.ModePerm)
+	if err != nil {
+		return
+	}
+	cp = filepath.Join(systemdUserDir, s.Config.Name + ".service")
 	return
 }
 
@@ -132,7 +139,7 @@ func (s *systemd) Install() error {
 		return fmt.Errorf("Init already exists: %s", confPath)
 	}
 
-	f, err := os.Create(confPath)
+	f, err := os.OpenFile(confPath, os.O_WRONLY|os.O_CREATE, 0644)
 	if err != nil {
 		return err
 	}
@@ -149,6 +156,7 @@ func (s *systemd) Install() error {
 		HasOutputFileSupport bool
 		ReloadSignal         string
 		PIDFile              string
+		LimitNOFILE          int
 		Restart              string
 		SuccessExitStatus    string
 		LogOutput            bool
@@ -158,6 +166,7 @@ func (s *systemd) Install() error {
 		s.hasOutputFileSupport(),
 		s.Option.string(optionReloadSignal, ""),
 		s.Option.string(optionPIDFile, ""),
+		s.Option.int(optionLimitNOFILE, optionLimitNOFILEDefault),
 		s.Option.string(optionRestart, "always"),
 		s.Option.string(optionSuccessExitStatus, ""),
 		s.Option.bool(optionLogOutput, optionLogOutputDefault),
@@ -168,15 +177,30 @@ func (s *systemd) Install() error {
 		return err
 	}
 
-	err = run("systemctl", "enable", s.Name+".service")
+	if s.Option.bool(optionUserService, optionUserServiceDefault) {
+		err = run("systemctl", "enable", "--user", s.Name+".service")
+	} else {
+		err = run("systemctl", "enable", s.Name+".service")
+	}
 	if err != nil {
 		return err
 	}
-	return run("systemctl", "daemon-reload")
+
+	if s.Option.bool(optionUserService, optionUserServiceDefault) {
+		err = run("systemctl", "daemon-reload", "--user")
+	} else {
+		err = run("systemctl", "daemon-reload")
+	}
+	return err
 }
 
 func (s *systemd) Uninstall() error {
-	err := run("systemctl", "disable", s.Name+".service")
+	var err error
+	if s.Option.bool(optionUserService, optionUserServiceDefault) {
+		err = run("systemctl", "disable", "--user", s.Name+".service")
+	} else {
+		err = run("systemctl", "disable", s.Name+".service")
+	}
 	if err != nil {
 		return err
 	}
@@ -226,6 +250,8 @@ func (s *systemd) Status() (Status, error) {
 		return StatusRunning, nil
 	case strings.HasPrefix(out, "inactive"):
 		return StatusStopped, nil
+	case strings.HasPrefix(out, "activating"):
+		return StatusRunning, nil
 	case strings.HasPrefix(out, "failed"):
 		return StatusUnknown, errors.New("service in failed state")
 	default:
@@ -264,6 +290,7 @@ ExecStart={{.Path|cmdEscape}}{{range .Arguments}} {{.|cmd}}{{end}}
 StandardOutput=file:/var/log/{{.Name}}.out
 StandardError=file:/var/log/{{.Name}}.err
 {{- end}}
+{{if gt .LimitNOFILE -1 }}LimitNOFILE={{.LimitNOFILE}}{{end}}
 {{if .Restart}}Restart={{.Restart}}{{end}}
 {{if .SuccessExitStatus}}SuccessExitStatus={{.SuccessExitStatus}}{{end}}
 RestartSec=120

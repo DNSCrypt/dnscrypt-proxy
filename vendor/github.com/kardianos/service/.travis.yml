@@ -3,8 +3,8 @@ go_import_path: github.com/kardianos/service
 sudo: required
 
 go:
-  - 1.10.x
-  - 1.11.x
+  - 1.12.x
+  - 1.14.x
   - master
 
 before_install:

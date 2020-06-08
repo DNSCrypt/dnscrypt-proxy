@@ -23,6 +23,7 @@ as. This fixes permission issues at startup time.
 forced to use TCP.
  - The `ct` parameter has been removed from DoH queries, as Google doesn't
 require it any more.
+ - Service installation is now supported on FreeBSD.
 
 * Version 2.0.42
  - The current versions of the `dnsdist` load balancer (presumably used

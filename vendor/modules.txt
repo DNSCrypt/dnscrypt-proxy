@@ -42,7 +42,7 @@ github.com/jedisct1/go-minisign
 github.com/jedisct1/xsecretbox
 # github.com/k-sone/critbitgo v1.4.0
 github.com/k-sone/critbitgo
-# github.com/kardianos/service v1.0.1-0.20191211031725-3c356ae54c8a
+# github.com/kardianos/service v1.1.0
 github.com/kardianos/service
 # github.com/miekg/dns v1.1.29
 github.com/miekg/dns
@@ -55,7 +55,7 @@ github.com/powerman/check
 # github.com/smartystreets/goconvey v1.6.4
 github.com/smartystreets/goconvey/convey/gotest
 github.com/smartystreets/goconvey/convey/reporting
-# golang.org/x/crypto v0.0.0-20200510223506-06a226fb4e37
+# golang.org/x/crypto v0.0.0-20200604202706-70a84ac30bf9
 golang.org/x/crypto/blake2b
 golang.org/x/crypto/curve25519
 golang.org/x/crypto/ed25519
@@ -77,7 +77,7 @@ golang.org/x/net/internal/socks
 golang.org/x/net/ipv4
 golang.org/x/net/ipv6
 golang.org/x/net/proxy
-# golang.org/x/sys v0.0.0-20200602100848-8d3cce7afc34
+# golang.org/x/sys v0.0.0-20200602225109-6fdc65e7d980
 golang.org/x/sys/cpu
 golang.org/x/sys/internal/unsafeheader
 golang.org/x/sys/unix

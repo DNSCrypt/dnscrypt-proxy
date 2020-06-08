@@ -83,6 +83,8 @@ const (
 	optionRunWait      = "RunWait"
 	optionReloadSignal = "ReloadSignal"
 	optionPIDFile      = "PIDFile"
+	optionLimitNOFILE        = "LimitNOFILE"
+	optionLimitNOFILEDefault = -1 // -1 = don't set in configuration
 	optionRestart      = "Restart"
 
 	optionSuccessExitStatus = "SuccessExitStatus"
@@ -147,6 +149,9 @@ type Config struct {
 	//    - Restart       string (always)           - How shall service be restarted.
 	//    - SuccessExitStatus string ()             - The list of exit status that shall be considered as successful,
 	//                                                in addition to the default ones.
+	//  * Linux (systemd)
+	//    - LimitNOFILE	 int - Maximum open files (ulimit -n) (https://serverfault.com/questions/628610/increasing-nproc-for-processes-launched-by-systemd-on-centos-7)
+
 	Option KeyValue
 }
 
@@ -223,7 +228,7 @@ func (kv KeyValue) float64(name string, defaultValue float64) float64 {
 	return defaultValue
 }
 
-// funcSingle returns the value of the given name, assuming the value is a float64.
+// funcSingle returns the value of the given name, assuming the value is a func().
 // If the value isn't found or is not of the type, the defaultValue is returned.
 func (kv KeyValue) funcSingle(name string, defaultValue func()) func() {
 	if v, found := kv[name]; found {
@@ -310,7 +315,7 @@ type System interface {
 //   8. Service.Run returns.
 //   9. User program should quickly exit.
 type Interface interface {
-	// Start provides a place to initiate the service. The service doesn't not
+	// Start provides a place to initiate the service. The service doesn't
 	// signal a completed start until after this function returns, so the
 	// Start function must not take more then a few seconds at most.
 	Start(s Service) error
