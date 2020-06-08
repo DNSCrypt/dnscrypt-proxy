@@ -82,6 +82,8 @@ type Proxy struct {
 	showCerts                      bool
 	dohCreds                       *map[string]DOHClientCreds
 	skipAnonIncompatbibleResolvers bool
+	dns64Prefixes                  []string
+	dns64Resolvers                 []string
 }
 
 func (proxy *Proxy) registerUdpListener(conn *net.UDPConn) {
