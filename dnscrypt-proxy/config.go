@@ -30,6 +30,7 @@ const (
 type Config struct {
 	LogLevel                 int            `toml:"log_level"`
 	LogFile                  *string        `toml:"log_file"`
+	LogFileLatest            bool           `toml:"log_file_latest"`
 	UseSyslog                bool           `toml:"use_syslog"`
 	ServerNames              []string       `toml:"server_names"`
 	DisabledServerNames      []string       `toml:"disabled_server_names"`
@@ -100,6 +101,7 @@ type Config struct {
 func newConfig() Config {
 	return Config{
 		LogLevel:                 int(dlog.LogLevel()),
+		LogFileLatest:            true,
 		ListenAddresses:          []string{"127.0.0.1:53"},
 		LocalDoH:                 LocalDoHConfig{Path: "/dns-query"},
 		Timeout:                  5000,
@@ -290,6 +292,7 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	if dlog.LogLevel() <= dlog.SeverityDebug && os.Getenv("DEBUG") == "" {
 		dlog.SetLogLevel(dlog.SeverityInfo)
 	}
+	dlog.TruncateLogFile(config.LogFileLatest)
 	if config.UseSyslog {
 		dlog.UseSyslog(true)
 	} else if config.LogFile != nil {

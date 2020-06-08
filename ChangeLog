@@ -24,6 +24,8 @@ forced to use TCP.
  - The `ct` parameter has been removed from DoH queries, as Google doesn't
 require it any more.
  - Service installation is now supported on FreeBSD.
+ - When stored into a file, service logs now only contain data from the most
+recent launch. This can be changed with the new `log_file_latest` option.
 
 * Version 2.0.42
  - The current versions of the `dnsdist` load balancer (presumably used
