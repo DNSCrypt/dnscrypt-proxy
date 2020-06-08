@@ -4,11 +4,9 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"io/ioutil"
 	"net"
 	"os"
-	"runtime"
 	"strconv"
 	"strings"
 	"unicode"
@@ -31,12 +29,13 @@ const (
 )
 
 var (
-	CertMagic              = [4]byte{0x44, 0x4e, 0x53, 0x43}
-	ServerMagic            = [8]byte{0x72, 0x36, 0x66, 0x6e, 0x76, 0x57, 0x6a, 0x38}
-	MinDNSPacketSize       = 12 + 5
-	MaxDNSPacketSize       = 4096
-	MaxDNSUDPPacketSize    = 1252
-	InitialMinQuestionSize = 256
+	CertMagic               = [4]byte{0x44, 0x4e, 0x53, 0x43}
+	ServerMagic             = [8]byte{0x72, 0x36, 0x66, 0x6e, 0x76, 0x57, 0x6a, 0x38}
+	MinDNSPacketSize        = 12 + 5
+	MaxDNSPacketSize        = 4096
+	MaxDNSUDPPacketSize     = 4096
+	MaxDNSUDPSafePacketSize = 1252
+	InitialMinQuestionSize  = 512
 )
 
 var (
@@ -135,23 +134,25 @@ func StringQuote(str string) string {
 	return str[1 : len(str)-1]
 }
 
-func ExtractPort(str string, defaultPort int) int {
-	port := defaultPort
-	if idx := strings.LastIndex(str, ":"); idx >= 0 && idx < len(str)-1 {
-		if portX, err := strconv.Atoi(str[idx+1:]); err == nil {
-			port = portX
+func StringStripSpaces(str string) string {
+	return strings.Map(func(r rune) rune {
+		if unicode.IsSpace(r) {
+			return -1
 		}
-	}
-	return port
+		return r
+	}, str)
 }
 
-func ExtractHost(str string) string {
-	if idx := strings.LastIndex(str, ":"); idx >= 0 && idx < len(str)-1 {
-		if _, err := strconv.Atoi(str[idx+1:]); err == nil {
-			str = str[:idx]
+func TrimAndStripInlineComments(str string) string {
+	if idx := strings.LastIndexByte(str, '#'); idx >= 0 {
+		if idx == 0 || str[0] == '#' {
+			return ""
+		}
+		if prev := str[idx-1]; prev == ' ' || prev == '\t' {
+			str = str[:idx-1]
 		}
 	}
-	return str
+	return strings.TrimFunc(str, unicode.IsSpace)
 }
 
 func ExtractHostAndPort(str string, defaultPort int) (host string, port int) {
@@ -162,15 +163,6 @@ func ExtractHostAndPort(str string, defaultPort int) (host string, port int) {
 		}
 	}
 	return
-}
-
-func MemUsage() {
-	var m runtime.MemStats
-	runtime.ReadMemStats(&m)
-	fmt.Printf("Alloc = %v MiB", m.Alloc/1024/1024)
-	fmt.Printf("\tTotalAlloc = %v MiB", m.TotalAlloc/1024/1024)
-	fmt.Printf("\tSys = %v MiB", m.Sys/1024/1024)
-	fmt.Printf("\tNumGC = %v\n", m.NumGC)
 }
 
 func ReadTextFile(filename string) (string, error) {

@@ -10,14 +10,15 @@ import (
 )
 
 const rfc7050WKN = "ipv4only.arpa."
+
 var (
 	rfc7050WKA1 = net.IPv4(192, 0, 0, 170)
 	rfc7050WKA2 = net.IPv4(192, 0, 0, 171)
 )
 
 type PluginDns64 struct {
-	pref64Mutex  *sync.RWMutex
-	pref64       []*net.IPNet
+	pref64Mutex    *sync.RWMutex
+	pref64         []*net.IPNet
 	dns64Resolvers []string
 	ipv4Resolver   string
 }
@@ -123,11 +124,7 @@ func (plugin *PluginDns64) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 		}
 	}
 
-	synth, err := EmptyResponseFromMessage(msg)
-	if err != nil {
-		return err
-	}
-
+	synth := EmptyResponseFromMessage(msg)
 	synth.Answer = append(synth.Answer, synthAAAAs...)
 
 	pluginsState.synthResponse = synth
@@ -159,12 +156,12 @@ func translateToIPv6(ipv4 net.IP, prefix *net.IPNet) net.IP {
 	ipv6 := make(net.IP, net.IPv6len)
 	copy(ipv6, prefix.IP)
 	n, _ := prefix.Mask.Size()
-	ipShift := n/8
+	ipShift := n / 8
 	for i := 0; i < net.IPv4len; i++ {
-		if ipShift + i == 8 {
+		if ipShift+i == 8 {
 			ipShift++
 		}
-		ipv6[ipShift + i] = ipv4[i]
+		ipv6[ipShift+i] = ipv4[i]
 	}
 	return ipv6
 }
@@ -178,7 +175,7 @@ func (plugin *PluginDns64) fetchPref64(resolver string) error {
 
 	if err != nil {
 		return err
-	} 
+	}
 
 	if resp == nil || resp.Rcode != dns.RcodeSuccess {
 		return errors.New("Unable to fetch Pref64")
@@ -191,7 +188,7 @@ func (plugin *PluginDns64) fetchPref64(resolver string) error {
 			ipv6 := answer.(*dns.AAAA).AAAA
 			if ipv6 != nil && len(ipv6) == net.IPv6len {
 				prefEnd := 0
-				
+
 				if wka := net.IPv4(ipv6[12], ipv6[13], ipv6[14], ipv6[15]); wka.Equal(rfc7050WKA1) || wka.Equal(rfc7050WKA2) { //96
 					prefEnd = 12
 				} else if wka := net.IPv4(ipv6[9], ipv6[10], ipv6[11], ipv6[12]); wka.Equal(rfc7050WKA1) || wka.Equal(rfc7050WKA2) { //64
@@ -209,7 +206,7 @@ func (plugin *PluginDns64) fetchPref64(resolver string) error {
 				if prefEnd > 0 {
 					prefix := new(net.IPNet)
 					prefix.IP = append(ipv6[:prefEnd], net.IPv6zero[prefEnd:]...)
-					prefix.Mask = net.CIDRMask(prefEnd * 8, 128)
+					prefix.Mask = net.CIDRMask(prefEnd*8, 128)
 					if _, ok := uniqPrefixes[prefix.String()]; !ok {
 						prefixes = append(prefixes, prefix)
 						uniqPrefixes[prefix.String()] = struct{}{}

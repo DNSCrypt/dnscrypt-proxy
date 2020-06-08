@@ -21,7 +21,7 @@ banner.*
 banners.*
 creatives.*
 oas.*
-oascentral.*
+oascentral.*        # inline comments are allowed after a pound sign
 stats.*
 tag.*
 telemetry.*

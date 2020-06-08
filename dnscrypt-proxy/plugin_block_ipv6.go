@@ -29,18 +29,11 @@ func (plugin *PluginBlockIPv6) Reload() error {
 }
 
 func (plugin *PluginBlockIPv6) Eval(pluginsState *PluginsState, msg *dns.Msg) error {
-	questions := msg.Question
-	if len(questions) != 1 {
-		return nil
-	}
-	question := questions[0]
+	question := msg.Question[0]
 	if question.Qclass != dns.ClassINET || question.Qtype != dns.TypeAAAA {
 		return nil
 	}
-	synth, err := EmptyResponseFromMessage(msg)
-	if err != nil {
-		return err
-	}
+	synth := EmptyResponseFromMessage(msg)
 	hinfo := new(dns.HINFO)
 	hinfo.Hdr = dns.RR_Header{Name: question.Name, Rrtype: dns.TypeHINFO,
 		Class: dns.ClassINET, Ttl: 86400}

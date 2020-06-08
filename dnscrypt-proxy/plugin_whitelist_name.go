@@ -35,10 +35,10 @@ func (plugin *PluginWhitelistName) Init(proxy *Proxy) error {
 		return err
 	}
 	plugin.allWeeklyRanges = proxy.allWeeklyRanges
-	plugin.patternMatcher = NewPatternPatcher()
+	plugin.patternMatcher = NewPatternMatcher()
 	for lineNo, line := range strings.Split(string(bin), "\n") {
-		line = strings.TrimFunc(line, unicode.IsSpace)
-		if len(line) == 0 || strings.HasPrefix(line, "#") {
+		line = TrimAndStripInlineComments(line)
+		if len(line) == 0 {
 			continue
 		}
 		parts := strings.Split(line, "@")
@@ -59,7 +59,7 @@ func (plugin *PluginWhitelistName) Init(proxy *Proxy) error {
 				weeklyRanges = &weeklyRangesX
 			}
 		}
-		if _, err := plugin.patternMatcher.Add(line, weeklyRanges, lineNo+1); err != nil {
+		if err := plugin.patternMatcher.Add(line, weeklyRanges, lineNo+1); err != nil {
 			dlog.Error(err)
 			continue
 		}
@@ -82,11 +82,7 @@ func (plugin *PluginWhitelistName) Reload() error {
 }
 
 func (plugin *PluginWhitelistName) Eval(pluginsState *PluginsState, msg *dns.Msg) error {
-	questions := msg.Question
-	if len(questions) != 1 {
-		return nil
-	}
-	qName := strings.ToLower(StripTrailingDot(questions[0].Name))
+	qName := pluginsState.qName
 	whitelist, reason, xweeklyRanges := plugin.patternMatcher.Eval(qName)
 	var weeklyRanges *WeeklyRanges
 	if xweeklyRanges != nil {
@@ -98,9 +94,6 @@ func (plugin *PluginWhitelistName) Eval(pluginsState *PluginsState, msg *dns.Msg
 		}
 	}
 	if whitelist {
-		if pluginsState.sessionData == nil {
-			pluginsState.sessionData = make(map[string]interface{})
-		}
 		pluginsState.sessionData["whitelisted"] = true
 		if plugin.logger != nil {
 			var clientIPStr string
@@ -124,7 +117,7 @@ func (plugin *PluginWhitelistName) Eval(pluginsState *PluginsState, msg *dns.Msg
 			if plugin.logger == nil {
 				return errors.New("Log file not initialized")
 			}
-			plugin.logger.Write([]byte(line))
+			_, _ = plugin.logger.Write([]byte(line))
 		}
 	}
 	return nil

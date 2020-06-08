@@ -7,8 +7,11 @@ func ServiceManagerStartNotify() error {
 	if err != nil {
 		return err
 	}
-	mgr.Disconnect()
+	_ = mgr.Disconnect()
+
 	return nil
 }
 
-func ServiceManagerReadyNotify() {}
+func ServiceManagerReadyNotify() error {
+	return nil
+}

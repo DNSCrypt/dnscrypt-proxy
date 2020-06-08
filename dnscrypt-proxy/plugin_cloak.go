@@ -41,12 +41,12 @@ func (plugin *PluginCloak) Init(proxy *Proxy) error {
 	if err != nil {
 		return err
 	}
-	plugin.ttl = proxy.cacheMinTTL
-	plugin.patternMatcher = NewPatternPatcher()
+	plugin.ttl = proxy.cloakTTL
+	plugin.patternMatcher = NewPatternMatcher()
 	cloakedNames := make(map[string]*CloakedName)
 	for lineNo, line := range strings.Split(string(bin), "\n") {
-		line = strings.TrimFunc(line, unicode.IsSpace)
-		if len(line) == 0 || strings.HasPrefix(line, "#") {
+		line = TrimAndStripInlineComments(line)
+		if len(line) == 0 {
 			continue
 		}
 		var target string
@@ -84,7 +84,9 @@ func (plugin *PluginCloak) Init(proxy *Proxy) error {
 		cloakedNames[line] = cloakedName
 	}
 	for line, cloakedName := range cloakedNames {
-		plugin.patternMatcher.Add(line, cloakedName, cloakedName.lineNo)
+		if err := plugin.patternMatcher.Add(line, cloakedName, cloakedName.lineNo); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -98,21 +100,13 @@ func (plugin *PluginCloak) Reload() error {
 }
 
 func (plugin *PluginCloak) Eval(pluginsState *PluginsState, msg *dns.Msg) error {
-	questions := msg.Question
-	if len(questions) != 1 {
-		return nil
-	}
-	question := questions[0]
+	question := msg.Question[0]
 	if question.Qclass != dns.ClassINET || (question.Qtype != dns.TypeA && question.Qtype != dns.TypeAAAA) {
-		return nil
-	}
-	qName := strings.ToLower(StripTrailingDot(questions[0].Name))
-	if len(qName) < 2 {
 		return nil
 	}
 	now := time.Now()
 	plugin.RLock()
-	_, _, xcloakedName := plugin.patternMatcher.Eval(qName)
+	_, _, xcloakedName := plugin.patternMatcher.Eval(pluginsState.qName)
 	if xcloakedName == nil {
 		plugin.RUnlock()
 		return nil
@@ -166,10 +160,7 @@ func (plugin *PluginCloak) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 		}
 	}
 	plugin.RUnlock()
-	synth, err := EmptyResponseFromMessage(msg)
-	if err != nil {
-		return err
-	}
+	synth := EmptyResponseFromMessage(msg)
 	if ip == nil {
 		synth.Answer = []dns.RR{}
 	} else if question.Qtype == dns.TypeA {

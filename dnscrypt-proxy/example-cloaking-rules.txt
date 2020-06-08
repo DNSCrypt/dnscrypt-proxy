@@ -13,7 +13,9 @@ www.google.*             forcesafesearch.google.com
 
 www.bing.com             strict.bing.com
 
-yandex.ru                familysearch.yandex.ru
+yandex.ru                familysearch.yandex.ru       # inline comments are allowed after a pound sign
+
+=duckduckgo.com          safe.duckduckgo.com
 
 www.youtube.com          restrictmoderate.youtube.com
 m.youtube.com            restrictmoderate.youtube.com
@@ -21,5 +23,15 @@ youtubei.googleapis.com  restrictmoderate.youtube.com
 youtube.googleapis.com   restrictmoderate.youtube.com
 www.youtube-nocookie.com restrictmoderate.youtube.com
 
+# Multiple IP entries for the same name are supported.
+# In the following example, the same name maps both to IPv4 and IPv6 addresses:
+
 localhost                127.0.0.1
 localhost                ::1
+
+# For load-balancing, multiple IP addresses of the same class can also be
+# provided using the same format, one <pattern> <ip> pair per line.
+
+# ads.*                 192.168.100.1
+# ads.*                 192.168.100.2
+# ads.*                 ::1

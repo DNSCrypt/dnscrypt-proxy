@@ -43,11 +43,7 @@ func (plugin *PluginQueryLog) Reload() error {
 }
 
 func (plugin *PluginQueryLog) Eval(pluginsState *PluginsState, msg *dns.Msg) error {
-	questions := msg.Question
-	if len(questions) == 0 {
-		return nil
-	}
-	question := questions[0]
+	question := msg.Question[0]
 	qType, ok := dns.TypeToString[question.Qtype]
 	if !ok {
 		qType = string(qType)
@@ -65,7 +61,16 @@ func (plugin *PluginQueryLog) Eval(pluginsState *PluginsState, msg *dns.Msg) err
 	} else {
 		clientIPStr = (*pluginsState.clientAddr).(*net.TCPAddr).IP.String()
 	}
-	qName := StripTrailingDot(question.Name)
+	qName := pluginsState.qName
+
+	if pluginsState.cacheHit {
+		pluginsState.serverName = "-"
+	} else {
+		switch pluginsState.returnCode {
+		case PluginsReturnCodeSynth, PluginsReturnCodeCloak, PluginsReturnCodeParseError:
+			pluginsState.serverName = "-"
+		}
+	}
 	returnCode, ok := PluginsReturnCodeToString[pluginsState.returnCode]
 	if !ok {
 		returnCode = string(returnCode)
@@ -75,7 +80,6 @@ func (plugin *PluginQueryLog) Eval(pluginsState *PluginsState, msg *dns.Msg) err
 	if !pluginsState.requestStart.IsZero() && !pluginsState.requestEnd.IsZero() {
 		requestDuration = pluginsState.requestEnd.Sub(pluginsState.requestStart)
 	}
-
 	var line string
 	if plugin.format == "tsv" {
 		now := time.Now()
@@ -97,6 +101,7 @@ func (plugin *PluginQueryLog) Eval(pluginsState *PluginsState, msg *dns.Msg) err
 	if plugin.logger == nil {
 		return errors.New("Log file not initialized")
 	}
-	plugin.logger.Write([]byte(line))
+	_, _ = plugin.logger.Write([]byte(line))
+
 	return nil
 }

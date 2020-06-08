@@ -1,0 +1,21 @@
+##################
+# Test blacklist #
+##################
+
+ad.*
+ads.*
+banner.*
+banners.*
+creatives.*
+oas.*
+oascentral.*        # test inline comment
+stats.*             # test inline comment with trailing spaces       
+tag.*
+telemetry.*
+tracker.*
+*.local
+eth0.me
+*.workgroup
+
+*.youtube.*  @time-to-sleep
+facebook.com @work

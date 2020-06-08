@@ -2,6 +2,6 @@
 
 package main
 
-func (proxy *Proxy) SystemDListeners() error {
+func (proxy *Proxy) addSystemDListeners() error {
 	return nil
 }

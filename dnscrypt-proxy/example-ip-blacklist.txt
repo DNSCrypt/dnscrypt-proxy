@@ -1,0 +1,15 @@
+##############################
+#        IP blacklist        #
+##############################
+
+## Response containing blacklisted IP addresses will be blocked
+##
+## Sample feeds of suspect IP addresses:
+## - https://github.com/stamparm/ipsum
+## - https://github.com/tg12/bad_packets_blocklist
+## - https://isc.sans.edu/block.txt
+## - https://block.energized.pro/extensions/ips/formats/list.txt
+
+163.5.1.4
+94.46.118.*
+fe80:53:*          # IPv6 prefix example

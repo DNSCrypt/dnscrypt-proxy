@@ -35,13 +35,16 @@ func (plugin *PluginForward) Init(proxy *Proxy) error {
 		return err
 	}
 	for lineNo, line := range strings.Split(string(bin), "\n") {
-		line = strings.TrimFunc(line, unicode.IsSpace)
-		if len(line) == 0 || strings.HasPrefix(line, "#") {
+		line = TrimAndStripInlineComments(line)
+		if len(line) == 0 {
 			continue
 		}
 		domain, serversStr, ok := StringTwoFields(line)
 		if !ok {
-			return fmt.Errorf("Syntax error for a forwarding rule at line %d. Expected syntax: example.com: 9.9.9.9,8.8.8.8", 1+lineNo)
+			return fmt.Errorf(
+				"Syntax error for a forwarding rule at line %d. Expected syntax: example.com 9.9.9.9,8.8.8.8",
+				1+lineNo,
+			)
 		}
 		domain = strings.ToLower(domain)
 		var servers []string
@@ -56,7 +59,8 @@ func (plugin *PluginForward) Init(proxy *Proxy) error {
 			continue
 		}
 		plugin.forwardMap = append(plugin.forwardMap, PluginForwardEntry{
-			domain: domain, servers: servers,
+			domain:  domain,
+			servers: servers,
 		})
 	}
 	return nil
@@ -71,19 +75,15 @@ func (plugin *PluginForward) Reload() error {
 }
 
 func (plugin *PluginForward) Eval(pluginsState *PluginsState, msg *dns.Msg) error {
-	questions := msg.Question
-	if len(questions) != 1 {
-		return nil
-	}
-	question := strings.ToLower(StripTrailingDot(questions[0].Name))
-	questionLen := len(question)
+	qName := pluginsState.qName
+	qNameLen := len(qName)
 	var servers []string
 	for _, candidate := range plugin.forwardMap {
 		candidateLen := len(candidate.domain)
-		if candidateLen > questionLen {
+		if candidateLen > qNameLen {
 			continue
 		}
-		if question[questionLen-candidateLen:] == candidate.domain && (candidateLen == questionLen || (question[questionLen-candidateLen-1] == '.')) {
+		if qName[qNameLen-candidateLen:] == candidate.domain && (candidateLen == qNameLen || (qName[qNameLen-candidateLen-1] == '.')) {
 			servers = candidate.servers
 			break
 		}
@@ -92,11 +92,25 @@ func (plugin *PluginForward) Eval(pluginsState *PluginsState, msg *dns.Msg) erro
 		return nil
 	}
 	server := servers[rand.Intn(len(servers))]
-	respMsg, err := dns.Exchange(msg, server)
+	pluginsState.serverName = server
+	client := dns.Client{Net: pluginsState.serverProto, Timeout: pluginsState.timeout}
+	respMsg, _, err := client.Exchange(msg, server)
 	if err != nil {
 		return err
 	}
+	if respMsg.Truncated {
+		client.Net = "tcp"
+		respMsg, _, err = client.Exchange(msg, server)
+		if err != nil {
+			return err
+		}
+	}
+	if edns0 := respMsg.IsEdns0(); edns0 == nil || !edns0.Do() {
+		respMsg.AuthenticatedData = false
+	}
+	respMsg.Id = msg.Id
 	pluginsState.synthResponse = respMsg
 	pluginsState.action = PluginsActionSynth
+	pluginsState.returnCode = PluginsReturnCodeForward
 	return nil
 }

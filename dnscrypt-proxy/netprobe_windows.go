@@ -1,9 +1,8 @@
 package main
 
 import (
-	"errors"
 	"net"
- 	"time"
+	"time"
 
 	"github.com/jedisct1/dlog"
 )
@@ -20,7 +19,7 @@ func NetProbe(address string, timeout int) error {
 	if timeout < 0 {
 		timeout = MaxTimeout
 	} else {
-		timeout = Max(MaxTimeout, timeout)
+		timeout = Min(MaxTimeout, timeout)
 	}
 	for tries := timeout; tries > 0; tries-- {
 		pc, err := net.DialUDP("udp", nil, remoteUDPAddr)
@@ -43,7 +42,6 @@ func NetProbe(address string, timeout int) error {
 		dlog.Notice("Network connectivity detected")
 		return nil
 	}
-	es := "Timeout while waiting for network connectivity"
-	dlog.Error(es)
-	return errors.New(es)
+	dlog.Error("Timeout while waiting for network connectivity")
+	return nil
 }

@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"syscall"
 
+	"golang.org/x/sys/unix"
+
 	"github.com/jedisct1/dlog"
 )
 
@@ -45,17 +47,20 @@ func (proxy *Proxy) dropPrivilege(userStr string, fds []*os.File) {
 		dlog.Fatal(err)
 	}
 
-	ServiceManagerReadyNotify()
+	if err := ServiceManagerReadyNotify(); err != nil {
+		dlog.Fatal(err)
+	}
 
 	args = append(args, "-child")
 
 	dlog.Notice("Dropping privileges")
+
 	runtime.LockOSThread()
 	if _, _, rcode := syscall.RawSyscall(syscall.SYS_SETGROUPS, uintptr(0), uintptr(0), 0); rcode != 0 {
 		dlog.Fatalf("Unable to drop additional groups: [%s]", rcode.Error())
 	}
 	if _, _, rcode := syscall.RawSyscall(syscall.SYS_SETGID, uintptr(gid), 0, 0); rcode != 0 {
-		dlog.Fatalf("Unable to drop user privileges: [%s]", rcode.Error())
+		dlog.Fatalf("Unable to drop group privileges: [%s]", rcode.Error())
 	}
 	if _, _, rcode := syscall.RawSyscall(syscall.SYS_SETUID, uintptr(uid), 0, 0); rcode != 0 {
 		dlog.Fatalf("Unable to drop user privileges: [%s]", rcode.Error())
@@ -68,19 +73,19 @@ func (proxy *Proxy) dropPrivilege(userStr string, fds []*os.File) {
 	}
 	fdbase := maxfd + 1
 	for i, fd := range fds {
-		if _, _, rcode := syscall.RawSyscall(syscall.SYS_DUP3, fd.Fd(), fdbase+uintptr(i), 0); rcode != 0 {
-			dlog.Fatalf("Unable to clone file descriptor: [%s]", rcode.Error())
+		if err := unix.Dup2(int(fd.Fd()), int(fdbase+uintptr(i))); err != nil {
+			dlog.Fatalf("Unable to clone file descriptor: [%s]", err)
 		}
-		if _, _, rcode := syscall.RawSyscall(syscall.SYS_FCNTL, fd.Fd(), syscall.F_SETFD, syscall.FD_CLOEXEC); rcode != 0 {
-			dlog.Fatalf("Unable to set the close on exec flag: [%s]", rcode.Error())
+		if _, err := unix.FcntlInt(fd.Fd(), unix.F_SETFD, unix.FD_CLOEXEC); err != nil {
+			dlog.Fatalf("Unable to set the close on exec flag: [%s]", err)
 		}
 	}
 	for i := range fds {
-		if _, _, rcode := syscall.RawSyscall(syscall.SYS_DUP3, fdbase+uintptr(i), uintptr(i)+3, 0); rcode != 0 {
-			dlog.Fatalf("Unable to reassign descriptor: [%s]", rcode.Error())
+		if err := unix.Dup2(int(fdbase+uintptr(i)), int(i)+3); err != nil {
+			dlog.Fatalf("Unable to reassign descriptor: [%s]", err)
 		}
 	}
-	err = syscall.Exec(path, args, os.Environ())
+	err = unix.Exec(path, args, os.Environ())
 	dlog.Fatalf("Unable to reexecute [%s]: [%s]", path, err)
 	os.Exit(1)
 }

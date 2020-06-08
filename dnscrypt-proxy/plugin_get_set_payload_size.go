@@ -29,7 +29,8 @@ func (plugin *PluginGetSetPayloadSize) Eval(pluginsState *PluginsState, msg *dns
 	edns0 := msg.IsEdns0()
 	dnssec := false
 	if edns0 != nil {
-		pluginsState.originalMaxPayloadSize = Min(int(edns0.UDPSize())-ResponseOverhead, pluginsState.originalMaxPayloadSize)
+		pluginsState.maxUnencryptedUDPSafePayloadSize = int(edns0.UDPSize())
+		pluginsState.originalMaxPayloadSize = Max(pluginsState.maxUnencryptedUDPSafePayloadSize-ResponseOverhead, pluginsState.originalMaxPayloadSize)
 		dnssec = edns0.Do()
 	}
 	var options *[]dns.EDNS0

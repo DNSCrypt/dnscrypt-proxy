@@ -30,7 +30,7 @@ type PatternMatcher struct {
 	indirectVals      map[string]interface{}
 }
 
-func NewPatternPatcher() *PatternMatcher {
+func NewPatternMatcher() *PatternMatcher {
 	patternMatcher := PatternMatcher{
 		blockedPrefixes: critbitgo.NewTrie(),
 		blockedSuffixes: critbitgo.NewTrie(),
@@ -51,7 +51,7 @@ func isGlobCandidate(str string) bool {
 	return false
 }
 
-func (patternMatcher *PatternMatcher) Add(pattern string, val interface{}, position int) (PatternType, error) {
+func (patternMatcher *PatternMatcher) Add(pattern string, val interface{}, position int) error {
 	leadingStar := strings.HasPrefix(pattern, "*")
 	trailingStar := strings.HasSuffix(pattern, "*")
 	exact := strings.HasPrefix(pattern, "=")
@@ -60,24 +60,24 @@ func (patternMatcher *PatternMatcher) Add(pattern string, val interface{}, posit
 		patternType = PatternTypePattern
 		_, err := filepath.Match(pattern, "example.com")
 		if len(pattern) < 2 || err != nil {
-			return patternType, fmt.Errorf("Syntax error in block rules at pattern %d", position)
+			return fmt.Errorf("Syntax error in block rules at pattern %d", position)
 		}
 	} else if leadingStar && trailingStar {
 		patternType = PatternTypeSubstring
 		if len(pattern) < 3 {
-			return patternType, fmt.Errorf("Syntax error in block rules at pattern %d", position)
+			return fmt.Errorf("Syntax error in block rules at pattern %d", position)
 		}
 		pattern = pattern[1 : len(pattern)-1]
 	} else if trailingStar {
 		patternType = PatternTypePrefix
 		if len(pattern) < 2 {
-			return patternType, fmt.Errorf("Syntax error in block rules at pattern %d", position)
+			return fmt.Errorf("Syntax error in block rules at pattern %d", position)
 		}
 		pattern = pattern[:len(pattern)-1]
 	} else if exact {
 		patternType = PatternTypeExact
 		if len(pattern) < 2 {
-			return patternType, fmt.Errorf("Syntax error in block rules at pattern %d", position)
+			return fmt.Errorf("Syntax error in block rules at pattern %d", position)
 		}
 		pattern = pattern[1:]
 	} else {
@@ -112,7 +112,7 @@ func (patternMatcher *PatternMatcher) Add(pattern string, val interface{}, posit
 	default:
 		dlog.Fatal("Unexpected block type")
 	}
-	return patternType, nil
+	return nil
 }
 
 func (patternMatcher *PatternMatcher) Eval(qName string) (reject bool, reason string, val interface{}) {
@@ -122,7 +122,7 @@ func (patternMatcher *PatternMatcher) Eval(qName string) (reject bool, reason st
 
 	revQname := StringReverse(qName)
 	if match, xval, found := patternMatcher.blockedSuffixes.LongestPrefix([]byte(revQname)); found {
-		if len(match) == len(qName) || revQname[len(match)] == '.' {
+		if len(match) == len(revQname) || revQname[len(match)] == '.' {
 			return true, "*." + StringReverse(string(match)), xval
 		}
 		if len(match) < len(revQname) && len(revQname) > 0 {

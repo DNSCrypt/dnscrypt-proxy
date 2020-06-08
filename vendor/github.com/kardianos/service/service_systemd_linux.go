@@ -5,6 +5,7 @@
 package service
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"os"
@@ -19,6 +20,21 @@ import (
 func isSystemd() bool {
 	if _, err := os.Stat("/run/systemd/system"); err == nil {
 		return true
+	}
+	if _, err := os.Stat("/proc/1/comm"); err == nil {
+		filerc, err := os.Open("/proc/1/comm")
+		if err != nil {
+			return false
+		}
+		defer filerc.Close()
+
+		buf := new(bytes.Buffer)
+		buf.ReadFrom(filerc)
+		contents := buf.String()
+
+		if strings.Trim(contents, " \r\n") == "systemd" {
+			return true
+		}
 	}
 	return false
 }
@@ -133,6 +149,8 @@ func (s *systemd) Install() error {
 		HasOutputFileSupport bool
 		ReloadSignal         string
 		PIDFile              string
+		Restart              string
+		SuccessExitStatus    string
 		LogOutput            bool
 	}{
 		s.Config,
@@ -140,6 +158,8 @@ func (s *systemd) Install() error {
 		s.hasOutputFileSupport(),
 		s.Option.string(optionReloadSignal, ""),
 		s.Option.string(optionPIDFile, ""),
+		s.Option.string(optionRestart, "always"),
+		s.Option.string(optionSuccessExitStatus, ""),
 		s.Option.bool(optionLogOutput, optionLogOutputDefault),
 	}
 
@@ -228,6 +248,8 @@ func (s *systemd) Restart() error {
 const systemdScript = `[Unit]
 Description={{.Description}}
 ConditionFileIsExecutable={{.Path|cmdEscape}}
+{{range $i, $dep := .Dependencies}} 
+{{$dep}} {{end}}
 
 [Service]
 StartLimitInterval=5
@@ -242,7 +264,8 @@ ExecStart={{.Path|cmdEscape}}{{range .Arguments}} {{.|cmd}}{{end}}
 StandardOutput=file:/var/log/{{.Name}}.out
 StandardError=file:/var/log/{{.Name}}.err
 {{- end}}
-Restart=always
+{{if .Restart}}Restart={{.Restart}}{{end}}
+{{if .SuccessExitStatus}}SuccessExitStatus={{.SuccessExitStatus}}{{end}}
 RestartSec=120
 EnvironmentFile=-/etc/sysconfig/{{.Name}}
 
