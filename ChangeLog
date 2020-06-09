@@ -8,14 +8,14 @@ and relays lists.
  - Android: the time zone for log files is now set to the system
 time zone.
  - Quite a lot of updates and additions have been made to the
-example domain blacklists configuration. Thanks to `IceCodeNew`.
+example domain block lists. Thanks to `IceCodeNew`!
  - Cached configuration files can now be temporarily used if
 they are out of date, but bootstraping is impossible. Contributed by
 `lifenjoiner`, thanks!
  - Precompiled macOS binaries are now notarized.
  - `generate-domains-blacklists` now tries to deduplicate entries
-clobbered by wildcard rules. Thanks to `Huhni`.
- - `generate-domains-blacklists` can now directly write blacklists to a
+clobbered by wildcard rules. Thanks to `Huhni`!
+ - `generate-domains-blacklists` can now directly write lists to a
 file with the `-o` command-line option.
  - cache files are now downloaded as the user the daemon will be running
 as. This fixes permission issues at startup time.
