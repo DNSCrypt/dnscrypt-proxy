@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"runtime"
 	"sync"
 
 	"github.com/facebookgo/pidfile"
@@ -133,6 +134,7 @@ func (app *App) AppMain() {
 	app.wg.Add(1)
 	_ = pidfile.Write()
 	app.proxy.StartProxy()
+	runtime.GC()
 	<-app.quit
 	dlog.Notice("Quit signal received...")
 	app.wg.Done()

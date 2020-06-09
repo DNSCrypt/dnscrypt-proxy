@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"net"
 	"os"
+	"runtime"
 	"sync/atomic"
 	"time"
 
@@ -253,6 +254,7 @@ func (proxy *Proxy) StartProxy() {
 				if liveServers > 0 {
 					proxy.certIgnoreTimestamp = false
 				}
+				runtime.GC()
 			}
 		}()
 	}
