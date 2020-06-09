@@ -240,6 +240,7 @@ func (proxy *Proxy) StartProxy() {
 	go func() {
 		for {
 			clocksmith.Sleep(PrefetchSources(proxy.xTransport, proxy.sources))
+			runtime.GC()
 		}
 	}()
 	if len(proxy.serversInfo.registeredServers) > 0 {
