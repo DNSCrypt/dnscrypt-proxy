@@ -1,61 +1,77 @@
 # github.com/BurntSushi/toml v0.3.1
+## explicit
 github.com/BurntSushi/toml
 # github.com/VividCortex/ewma v1.1.1
+## explicit
 github.com/VividCortex/ewma
 # github.com/aead/chacha20 v0.0.0-20180709150244-8b13a72661da
 github.com/aead/chacha20/chacha
 # github.com/aead/poly1305 v0.0.0-20180717145839-3fee0db0b635
 github.com/aead/poly1305
-# github.com/agl/ed25519 v0.0.0-20170116200512-5312a6153412
-github.com/agl/ed25519
-github.com/agl/ed25519/edwards25519
 # github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf
+## explicit
 github.com/coreos/go-systemd/activation
 github.com/coreos/go-systemd/daemon
 # github.com/davecgh/go-spew v1.1.1
 github.com/davecgh/go-spew/spew
 # github.com/dchest/safefile v0.0.0-20151022103144-855e8d98f185
+## explicit
 github.com/dchest/safefile
 # github.com/facebookgo/atomicfile v0.0.0-20151019160806-2de1f203e7d5
+## explicit
 github.com/facebookgo/atomicfile
 # github.com/facebookgo/pidfile v0.0.0-20150612191647-f242e2999868
+## explicit
 github.com/facebookgo/pidfile
 # github.com/hashicorp/go-immutable-radix v1.2.0
+## explicit
 github.com/hashicorp/go-immutable-radix
 # github.com/hashicorp/go-syslog v1.0.0
 github.com/hashicorp/go-syslog
 # github.com/hashicorp/golang-lru v0.5.4
+## explicit
 github.com/hashicorp/golang-lru
 github.com/hashicorp/golang-lru/simplelru
 # github.com/hectane/go-acl v0.0.0-20190604041725-da78bae5fc95
+## explicit
 github.com/hectane/go-acl
 github.com/hectane/go-acl/api
 # github.com/jedisct1/dlog v0.0.0-20200608205121-58b466d6e649
+## explicit
 github.com/jedisct1/dlog
 # github.com/jedisct1/go-clocksmith v0.0.0-20190707124905-73e087c7979c
+## explicit
 github.com/jedisct1/go-clocksmith
 # github.com/jedisct1/go-dnsstamps v0.0.0-20200205175031-8109eec6ec46
+## explicit
 github.com/jedisct1/go-dnsstamps
 # github.com/jedisct1/go-minisign v0.0.0-20190909160543-45766022959e
+## explicit
 github.com/jedisct1/go-minisign
 # github.com/jedisct1/xsecretbox v0.0.0-20190909160646-b731c21297f9
+## explicit
 github.com/jedisct1/xsecretbox
 # github.com/k-sone/critbitgo v1.4.0
+## explicit
 github.com/k-sone/critbitgo
 # github.com/kardianos/service v1.1.0
+## explicit
 github.com/kardianos/service
 # github.com/miekg/dns v1.1.29
+## explicit
 github.com/miekg/dns
 # github.com/pkg/errors v0.8.1
 github.com/pkg/errors
 # github.com/pmezard/go-difflib v1.0.0
 github.com/pmezard/go-difflib/difflib
 # github.com/powerman/check v1.2.1
+## explicit
 github.com/powerman/check
 # github.com/smartystreets/goconvey v1.6.4
 github.com/smartystreets/goconvey/convey/gotest
 github.com/smartystreets/goconvey/convey/reporting
 # golang.org/x/crypto v0.0.0-20200604202706-70a84ac30bf9
+## explicit
 golang.org/x/crypto/blake2b
 golang.org/x/crypto/curve25519
 golang.org/x/crypto/ed25519
@@ -66,6 +82,7 @@ golang.org/x/crypto/nacl/secretbox
 golang.org/x/crypto/poly1305
 golang.org/x/crypto/salsa20/salsa
 # golang.org/x/net v0.0.0-20200602114024-627f9648deb9
+## explicit
 golang.org/x/net/bpf
 golang.org/x/net/http/httpguts
 golang.org/x/net/http2
@@ -78,6 +95,7 @@ golang.org/x/net/ipv4
 golang.org/x/net/ipv6
 golang.org/x/net/proxy
 # golang.org/x/sys v0.0.0-20200602225109-6fdc65e7d980
+## explicit
 golang.org/x/sys/cpu
 golang.org/x/sys/internal/unsafeheader
 golang.org/x/sys/unix
@@ -87,9 +105,13 @@ golang.org/x/sys/windows/svc
 golang.org/x/sys/windows/svc/eventlog
 golang.org/x/sys/windows/svc/mgr
 # golang.org/x/text v0.3.2
+## explicit
 golang.org/x/text/secure/bidirule
 golang.org/x/text/transform
 golang.org/x/text/unicode/bidi
 golang.org/x/text/unicode/norm
 # gopkg.in/natefinch/lumberjack.v2 v2.0.0
+## explicit
 gopkg.in/natefinch/lumberjack.v2
+# gopkg.in/yaml.v2 v2.3.0
+## explicit
