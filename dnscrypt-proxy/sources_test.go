@@ -312,11 +312,10 @@ func prepSourceTestDownload(t *testing.T, d *SourceTestData, e *SourceTestExpect
 		case TestStateOpenErr, TestStateOpenSigErr:
 			if u, err := url.Parse(serverURL + path); err == nil {
 				host, port := ExtractHostAndPort(u.Host, -1)
-				u.Host = fmt.Sprintf("%s:%d", host, port|0x10000)
+				u.Host = fmt.Sprintf("%s:%d", host, port|0x10000) // high numeric port is parsed but then fails to connect
 				serverURL = u.String()
 			}
-			// Win10 treats an invalid port as part of the hostname, then tries DNS lookup and magic http->https upgrades simultaneously
-			e.err = "invalid port|no such host|too many colons in address"
+			e.err = "invalid port"
 		case TestStatePathErr:
 			path = "..." + path // non-numeric port fails URL parsing
 		}
