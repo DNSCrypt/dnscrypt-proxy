@@ -655,7 +655,8 @@ fragments_blocked = ['cisco', 'cisco-ipv6', 'cisco-familyshield', 'cisco-familys
 # If you are not using the standard root CA, an optional "root_ca"
 # property set to the path to a root CRT file can be added to a server entry.
 
-# [doh_client_x509_auth]
+[doh_client_x509_auth]
+
 #
 # creds = [
 #    { server_name='myserver', client_cert='client.crt', client_key='client.key' }
@@ -723,7 +724,7 @@ skip_incompatible = false
 ## Do not enable unless you know what DNS64 is and why you need it, or else
 ## you won't be able to connect to anything at all.
 
-# [dns64]
+[dns64]
 
 ## (Option 1) Static prefix(es) as Pref64::/n CIDRs.
 # prefix = ["64:ff9b::/96"]
