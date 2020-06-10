@@ -95,6 +95,7 @@ type Config struct {
 	QueryMeta                []string                    `toml:"query_meta"`
 	AnonymizedDNS            AnonymizedDNSConfig         `toml:"anonymized_dns"`
 	DoHClientX509Auth        DoHClientX509AuthConfig     `toml:"doh_client_x509_auth"`
+	DoHClientX509AuthLegacy  DoHClientX509AuthConfig     `toml:"tls_client_auth"`
 	DNS64                    DNS64Config                 `toml:"dns64"`
 }
 
@@ -510,6 +511,9 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	}
 	proxy.skipAnonIncompatbibleResolvers = config.AnonymizedDNS.SkipIncompatible
 
+	if config.DoHClientX509AuthLegacy.Creds != nil {
+		dlog.Fatal("[tls_client_auth] has been renamed to [doh_client_x509_auth] - Update your config file.")
+	}
 	configClientCreds := config.DoHClientX509Auth.Creds
 	creds := make(map[string]DOHClientCreds)
 	for _, configClientCred := range configClientCreds {
