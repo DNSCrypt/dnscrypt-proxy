@@ -27,7 +27,8 @@ require it any more.
  - When stored into a file, service logs now only contain data from the most
 recent launch. This can be changed with the new `log_file_latest` option.
  - Breaking change: the `tls_client_auth` section was renamed to
-`doh_client_x509_auth`.
+`doh_client_x509_auth`. If you had a tls_client_auth section in the
+configuration file, it needs to be updated.
 
 * Version 2.0.42
  - The current versions of the `dnsdist` load balancer (presumably used
