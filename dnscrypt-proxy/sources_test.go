@@ -308,8 +308,9 @@ func prepSourceTestDownload(t *testing.T, d *SourceTestData, e *SourceTestExpect
 		case TestStateReadErr, TestStateReadSigErr:
 			e.err = "unexpected EOF"
 		case TestStateOpenErr, TestStateOpenSigErr:
-			path = "00000" + path // high numeric port is parsed but then fails to connect
-			e.err = "invalid port|no such host"
+			path = "00000" + path // high numeric port should be parsed but then fail to connect
+			// Win10 treats an invalid port as part of the hostname, then tries DNS lookup and magic http->https upgrades simultaneously
+			e.err = "invalid port|no such host|too many colons in address"
 		case TestStatePathErr:
 			path = "..." + path // non-numeric port fails URL parsing
 		}
