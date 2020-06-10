@@ -555,24 +555,22 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 		netprobeAddress = config.FallbackResolvers[0]
 	}
 	proxy.showCerts = *flags.ShowCerts || len(os.Getenv("SHOW_CERTS")) > 0
-	if proxy.showCerts {
-		proxy.listenAddresses = nil
-	}
 	if !proxy.child {
 		dlog.Noticef("dnscrypt-proxy %s", AppVersion)
 	}
-	if err := NetProbe(netprobeAddress, netprobeTimeout); err != nil {
-		return err
-	}
-
-	for _, listenAddrStr := range proxy.listenAddresses {
-		proxy.addDNSListener(listenAddrStr)
-	}
-	for _, listenAddrStr := range proxy.localDoHListenAddresses {
-		proxy.addLocalDoHListener(listenAddrStr)
-	}
-	if err := proxy.addSystemDListeners(); err != nil {
-		dlog.Fatal(err)
+	if !*flags.Check && !*flags.ShowCerts {
+		if err := NetProbe(netprobeAddress, netprobeTimeout); err != nil {
+			return err
+		}
+		for _, listenAddrStr := range proxy.listenAddresses {
+			proxy.addDNSListener(listenAddrStr)
+		}
+		for _, listenAddrStr := range proxy.localDoHListenAddresses {
+			proxy.addLocalDoHListener(listenAddrStr)
+		}
+		if err := proxy.addSystemDListeners(); err != nil {
+			dlog.Fatal(err)
+		}
 	}
 	_ = pidfile.Write()
 	// if 'userName' is set and we are the parent process drop privilege and exit
