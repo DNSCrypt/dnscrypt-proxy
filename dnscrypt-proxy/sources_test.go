@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -300,6 +301,7 @@ func prepSourceTestDownload(t *testing.T, d *SourceTestData, e *SourceTestExpect
 	}
 	for _, state := range downloadTest {
 		path := "/" + strconv.FormatUint(uint64(state), 10) + "/" + source
+		serverURL := d.server.URL
 		switch state {
 		case TestStateMissing, TestStateMissingSig:
 			e.err = "404 Not Found"
@@ -308,15 +310,19 @@ func prepSourceTestDownload(t *testing.T, d *SourceTestData, e *SourceTestExpect
 		case TestStateReadErr, TestStateReadSigErr:
 			e.err = "unexpected EOF"
 		case TestStateOpenErr, TestStateOpenSigErr:
-			path = "00000" + path // high numeric port is parsed but then fails to connect
-			e.err = "invalid port|no such host"
+			if u, err := url.Parse(serverURL + path); err == nil {
+				host, port := ExtractHostAndPort(u.Host, -1)
+				u.Host = fmt.Sprintf("%s:%d", host, port|0x10000) // high numeric port is parsed but then fails to connect
+				serverURL = u.String()
+			}
+			e.err = "invalid port"
 		case TestStatePathErr:
 			path = "..." + path // non-numeric port fails URL parsing
 		}
-		if u, err := url.Parse(d.server.URL + path); err == nil {
+		if u, err := url.Parse(serverURL + path); err == nil {
 			e.Source.urls = append(e.Source.urls, u)
 		}
-		e.urls = append(e.urls, d.server.URL+path)
+		e.urls = append(e.urls, serverURL+path)
 		if e.success {
 			continue
 		}
