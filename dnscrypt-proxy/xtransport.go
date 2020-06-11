@@ -171,6 +171,9 @@ func (xTransport *XTransport) rebuildTransport() {
 				dlog.Fatal(err)
 			}
 			systemCertPool, err := x509.SystemCertPool()
+			if err != nil {
+				dlog.Fatal(err)
+			}
 			systemCertPool.AppendCertsFromPEM(caCert)
 			tlsClientConfig.RootCAs = systemCertPool
 		}
