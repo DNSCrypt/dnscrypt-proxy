@@ -562,7 +562,7 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	if !proxy.child {
 		dlog.Noticef("dnscrypt-proxy %s", AppVersion)
 	}
-	if !*flags.Check && !*flags.ShowCerts {
+	if !*flags.Check && !*flags.ShowCerts && !*flags.List && !*flags.ListAll {
 		if err := NetProbe(netprobeAddress, netprobeTimeout); err != nil {
 			return err
 		}
