@@ -1,3 +1,13 @@
+* Version 2.0.44
+ - More updates to the set of block lists, thanks again to IceCodeNew.
+ - Netprobes and listening sockets are now ignored when the `-list`,
+`-list-all`, `-show-certs` or `-check` command-line switches are used.
+ - `tls_client_auth` was renamed to `doh_client_x509_auth`. A section
+with the previous name is temporarily ignored if empty, but will error
+out if not.
+ - Unit tests are now working on 32-bit systems. Thanks to Will Elwood
+and @lifenjoiner.
+
 * Version 2.0.43
  - Built-in support for DNS64 translation has been implemented.
 (Contributed by Sergey Smirnov, thanks!)
