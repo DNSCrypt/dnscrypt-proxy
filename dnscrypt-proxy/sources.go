@@ -16,7 +16,6 @@ import (
 
 	"github.com/jedisct1/dlog"
 	"github.com/jedisct1/go-dnsstamps"
-	stamps "github.com/jedisct1/go-dnsstamps"
 	"github.com/jedisct1/go-minisign"
 )
 
@@ -283,7 +282,7 @@ func (source *Source) parseV2(prefix string) ([]RegisteredServer, error) {
 		var stamp dnsstamps.ServerStamp
 		var err error
 		for _, stampStr = range stampStrs {
-			stamp, err = stamps.NewServerStampFromString(stampStr)
+			stamp, err = dnsstamps.NewServerStampFromString(stampStr)
 			if err == nil {
 				break
 			}
