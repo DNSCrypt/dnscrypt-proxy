@@ -675,7 +675,8 @@ func (config *Config) loadSources(proxy *Proxy) error {
 	if config.SourceRequireNoFilter {
 		requiredProps |= stamps.ServerInformalPropertyNoFilter
 	}
-	for cfgSourceName, cfgSource := range config.SourcesConfig {
+	for cfgSourceName, cfgSource_ := range config.SourcesConfig {
+		cfgSource := cfgSource_
 		if err := config.loadSource(proxy, requiredProps, cfgSourceName, &cfgSource); err != nil {
 			return err
 		}
