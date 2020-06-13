@@ -280,16 +280,16 @@ func (xTransport *XTransport) resolveUsingResolvers(proto, host string, resolver
 }
 
 // If a name is not present in the cache, resolve the name and update the cache
-func (xTransport *XTransport) resolveAndUpdateCache(host string) error {
+func (xTransport *XTransport) resolveAndUpdateCache(host string) (net.IP, error) {
 	if xTransport.proxyDialer != nil || xTransport.httpProxyFunction != nil {
-		return nil
+		return nil, nil
 	}
 	if ParseIP(host) != nil {
-		return nil
+		return nil, nil
 	}
 	cachedIP, expired := xTransport.loadCachedIP(host)
 	if cachedIP != nil && !expired {
-		return nil
+		return nil, nil
 	}
 	var foundIP net.IP
 	var ttl time.Duration
@@ -327,12 +327,12 @@ func (xTransport *XTransport) resolveAndUpdateCache(host string) error {
 			foundIP = cachedIP
 			ttl = ExpiredCachedIPGraceTTL
 		} else {
-			return err
+			return foundIP, err
 		}
 	}
 	xTransport.saveCachedIP(host, foundIP, ttl)
 	dlog.Debugf("[%s] IP address [%s] added to the cache, valid for %v", host, foundIP, ttl)
-	return nil
+	return foundIP, nil
 }
 
 func (xTransport *XTransport) Fetch(method string, url *url.URL, accept string, contentType string, body *[]byte, timeout time.Duration) ([]byte, *tls.ConnectionState, time.Duration, error) {
@@ -359,8 +359,12 @@ func (xTransport *XTransport) Fetch(method string, url *url.URL, accept string, 
 	if xTransport.proxyDialer == nil && strings.HasSuffix(host, ".onion") {
 		return nil, nil, 0, errors.New("Onion service is not reachable without Tor")
 	}
-	if err := xTransport.resolveAndUpdateCache(host); err != nil {
+	if ip, err := xTransport.resolveAndUpdateCache(host); err != nil {
 		dlog.Errorf("Unable to resolve [%v] - Make sure that the system resolver works, or that `fallback_resolver` has been set to a resolver that can be reached", host)
+		return nil, nil, 0, err
+	} else if ip == nil && net.ParseIP(host) == nil {
+		err = errors.New("NXDOMAIN: host " + host + " - non-existed, no longer available, or blocked?")
+		dlog.Errorf("%v", err)
 		return nil, nil, 0, err
 	}
 	req := &http.Request{
