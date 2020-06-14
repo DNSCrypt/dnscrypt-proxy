@@ -284,12 +284,12 @@ func (xTransport *XTransport) resolveAndUpdateCache(host string) (net.IP, error)
 	if xTransport.proxyDialer != nil || xTransport.httpProxyFunction != nil {
 		return nil, nil
 	}
-	if ParseIP(host) != nil {
-		return nil, nil
+	if ip := ParseIP(host); ip != nil {
+		return ip, nil
 	}
 	cachedIP, expired := xTransport.loadCachedIP(host)
 	if cachedIP != nil && !expired {
-		return nil, nil
+		return cachedIP, nil
 	}
 	var foundIP net.IP
 	var ttl time.Duration
@@ -362,10 +362,8 @@ func (xTransport *XTransport) Fetch(method string, url *url.URL, accept string, 
 	if ip, err := xTransport.resolveAndUpdateCache(host); err != nil {
 		dlog.Errorf("Unable to resolve [%v] - Make sure that the system resolver works, or that `fallback_resolver` has been set to a resolver that can be reached", host)
 		return nil, nil, 0, err
-	} else if ip == nil && net.ParseIP(host) == nil {
-		err = errors.New("NXDOMAIN: host " + host + " - non-existed, no longer available, or blocked?")
-		dlog.Errorf("%v", err)
-		return nil, nil, 0, err
+	} else if ip == nil {
+		return nil, nil, 0, errors.New("NXDOMAIN: host " + host)
 	}
 	req := &http.Request{
 		Method: method,
