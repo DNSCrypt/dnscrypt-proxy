@@ -39,8 +39,6 @@ localdomain
 login.microsoftonline.com
 login.yahoo.com
 mdidesign.ca
-microsoft.com
-msedge.net
 msftconnecttest.com
 msftncsi.com
 nsatc.net
@@ -70,5 +68,4 @@ urldefense.proofpoint.com
 userbenchmark.com
 vk.com
 vlab.pp.ru
-windows.net
 youtu.be
