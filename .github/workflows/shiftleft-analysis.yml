@@ -1,0 +1,23 @@
+name: ShiftLeft Scan
+
+on: push
+
+jobs:
+  Scan-Build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v1
+
+    - name: Perform ShiftLeft Scan
+      uses: ShiftLeftSecurity/scan-action@master
+      env:
+        WORKSPACE: ""
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        SCAN_AUTO_BUILD: true
+      with:
+        output: reports
+
+    - name: Upload report
+      uses: github/codeql-action/upload-sarif@v1
+      with:
+        sarif_file: reports
