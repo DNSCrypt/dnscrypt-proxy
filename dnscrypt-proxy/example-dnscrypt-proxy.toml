@@ -136,6 +136,7 @@ keepalive = 30
 
 
 ## Log level (0-6, default: 2 - 0 is very verbose, 6 only contains fatal errors)
+## Note: for log level 0 (debug), the environment variable DEBUG must also be set.
 
 # log_level = 2
 
