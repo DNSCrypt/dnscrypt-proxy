@@ -148,13 +148,13 @@ func (proxy *Proxy) addDNSListener(listenAddrStr string) {
 	}
 
 	// child
-	listenerUDP, err := net.FilePacketConn(os.NewFile(uintptr(3+FileDescriptorNum), "listenerUDP"))
+	listenerUDP, err := net.FilePacketConn(os.NewFile(InheritedDescriptorsBase+FileDescriptorNum, "listenerUDP"))
 	if err != nil {
 		dlog.Fatalf("Unable to switch to a different user: %v", err)
 	}
 	FileDescriptorNum++
 
-	listenerTCP, err := net.FileListener(os.NewFile(uintptr(3+FileDescriptorNum), "listenerTCP"))
+	listenerTCP, err := net.FileListener(os.NewFile(InheritedDescriptorsBase+FileDescriptorNum, "listenerTCP"))
 	if err != nil {
 		dlog.Fatalf("Unable to switch to a different user: %v", err)
 	}
@@ -199,7 +199,7 @@ func (proxy *Proxy) addLocalDoHListener(listenAddrStr string) {
 
 	// child
 
-	listenerTCP, err := net.FileListener(os.NewFile(uintptr(3+FileDescriptorNum), "listenerTCP"))
+	listenerTCP, err := net.FileListener(os.NewFile(InheritedDescriptorsBase+FileDescriptorNum, "listenerTCP"))
 	if err != nil {
 		dlog.Fatalf("Unable to switch to a different user: %v", err)
 	}

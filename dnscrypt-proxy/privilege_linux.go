@@ -81,7 +81,7 @@ func (proxy *Proxy) dropPrivilege(userStr string, fds []*os.File) {
 		}
 	}
 	for i := range fds {
-		if err := unix.Dup2(int(fdbase+uintptr(i)), int(i)+3); err != nil {
+		if err := unix.Dup2(int(fdbase)+i, int(InheritedDescriptorsBase)+i); err != nil {
 			dlog.Fatalf("Unable to reassign descriptor: [%s]", err)
 		}
 	}
