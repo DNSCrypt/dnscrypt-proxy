@@ -65,24 +65,15 @@ func (proxy *Proxy) dropPrivilege(userStr string, fds []*os.File) {
 	if _, _, rcode := syscall.RawSyscall(syscall.SYS_SETUID, uintptr(uid), 0, 0); rcode != 0 {
 		dlog.Fatalf("Unable to drop user privileges: [%s]", rcode.Error())
 	}
-	maxfd := uintptr(0)
-	for _, fd := range fds {
-		if fd.Fd() > maxfd {
-			maxfd = fd.Fd()
-		}
-	}
-	fdbase := maxfd + 1
 	for i, fd := range fds {
-		if err := unix.Dup2(int(fd.Fd()), int(fdbase+uintptr(i))); err != nil {
+		if fd.Fd() >= InheritedDescriptorsBase {
+			dlog.Fatal("Duplicated file descriptors are above base")
+		}
+		if err := unix.Dup2(int(fd.Fd()), int(InheritedDescriptorsBase+uintptr(i))); err != nil {
 			dlog.Fatalf("Unable to clone file descriptor: [%s]", err)
 		}
 		if _, err := unix.FcntlInt(fd.Fd(), unix.F_SETFD, unix.FD_CLOEXEC); err != nil {
 			dlog.Fatalf("Unable to set the close on exec flag: [%s]", err)
-		}
-	}
-	for i := range fds {
-		if err := unix.Dup2(int(fdbase)+i, int(InheritedDescriptorsBase)+i); err != nil {
-			dlog.Fatalf("Unable to reassign descriptor: [%s]", err)
 		}
 	}
 	err = unix.Exec(path, args, os.Environ())
