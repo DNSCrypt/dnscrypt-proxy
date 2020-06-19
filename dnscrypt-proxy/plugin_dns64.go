@@ -16,22 +16,22 @@ var (
 	rfc7050WKA2 = net.IPv4(192, 0, 0, 171)
 )
 
-type PluginDns64 struct {
+type PluginDNS64 struct {
 	pref64Mutex    *sync.RWMutex
 	pref64         []*net.IPNet
 	dns64Resolvers []string
 	ipv4Resolver   string
 }
 
-func (plugin *PluginDns64) Name() string {
+func (plugin *PluginDNS64) Name() string {
 	return "dns64"
 }
 
-func (plugin *PluginDns64) Description() string {
+func (plugin *PluginDNS64) Description() string {
 	return "Synth DNS64 AAAA responses"
 }
 
-func (plugin *PluginDns64) Init(proxy *Proxy) error {
+func (plugin *PluginDNS64) Init(proxy *Proxy) error {
 	plugin.ipv4Resolver = proxy.listenAddresses[0] //recursively to ourselves
 	plugin.pref64Mutex = new(sync.RWMutex)
 
@@ -56,15 +56,15 @@ func (plugin *PluginDns64) Init(proxy *Proxy) error {
 	return nil
 }
 
-func (plugin *PluginDns64) Drop() error {
+func (plugin *PluginDNS64) Drop() error {
 	return nil
 }
 
-func (plugin *PluginDns64) Reload() error {
+func (plugin *PluginDNS64) Reload() error {
 	return nil
 }
 
-func (plugin *PluginDns64) Eval(pluginsState *PluginsState, msg *dns.Msg) error {
+func (plugin *PluginDNS64) Eval(pluginsState *PluginsState, msg *dns.Msg) error {
 	if !hasAAAAQuestion(msg) || hasAAAAAnswer(msg) {
 		return nil
 	}
@@ -166,7 +166,7 @@ func translateToIPv6(ipv4 net.IP, prefix *net.IPNet) net.IP {
 	return ipv6
 }
 
-func (plugin *PluginDns64) fetchPref64(resolver string) error {
+func (plugin *PluginDNS64) fetchPref64(resolver string) error {
 	msg := new(dns.Msg)
 	msg.SetQuestion(rfc7050WKN, dns.TypeAAAA)
 
@@ -227,7 +227,7 @@ func (plugin *PluginDns64) fetchPref64(resolver string) error {
 	return nil
 }
 
-func (plugin *PluginDns64) refreshPref64() error {
+func (plugin *PluginDNS64) refreshPref64() error {
 	for _, resolver := range plugin.dns64Resolvers {
 		if err := plugin.fetchPref64(resolver); err == nil {
 			break

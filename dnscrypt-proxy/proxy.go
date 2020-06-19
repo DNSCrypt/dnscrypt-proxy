@@ -87,11 +87,11 @@ type Proxy struct {
 	dns64Resolvers                 []string
 }
 
-func (proxy *Proxy) registerUdpListener(conn *net.UDPConn) {
+func (proxy *Proxy) registerUDPListener(conn *net.UDPConn) {
 	proxy.udpListeners = append(proxy.udpListeners, conn)
 }
 
-func (proxy *Proxy) registerTcpListener(listener *net.TCPListener) {
+func (proxy *Proxy) registerTCPListener(listener *net.TCPListener) {
 	proxy.tcpListeners = append(proxy.tcpListeners, listener)
 }
 
@@ -161,10 +161,10 @@ func (proxy *Proxy) addDNSListener(listenAddrStr string) {
 	FileDescriptorNum++
 
 	dlog.Noticef("Now listening to %v [UDP]", listenUDPAddr)
-	proxy.registerUdpListener(listenerUDP.(*net.UDPConn))
+	proxy.registerUDPListener(listenerUDP.(*net.UDPConn))
 
 	dlog.Noticef("Now listening to %v [TCP]", listenAddrStr)
-	proxy.registerTcpListener(listenerTCP.(*net.TCPListener))
+	proxy.registerTCPListener(listenerTCP.(*net.TCPListener))
 }
 
 func (proxy *Proxy) addLocalDoHListener(listenAddrStr string) {
@@ -287,7 +287,7 @@ func (proxy *Proxy) udpListenerFromAddr(listenAddr *net.UDPAddr) error {
 	if err != nil {
 		return err
 	}
-	proxy.registerUdpListener(clientPc)
+	proxy.registerUDPListener(clientPc)
 	dlog.Noticef("Now listening to %v [UDP]", listenAddr)
 	return nil
 }
@@ -325,7 +325,7 @@ func (proxy *Proxy) tcpListenerFromAddr(listenAddr *net.TCPAddr) error {
 	if err != nil {
 		return err
 	}
-	proxy.registerTcpListener(acceptPc)
+	proxy.registerTCPListener(acceptPc)
 	dlog.Noticef("Now listening to %v [TCP]", listenAddr)
 	return nil
 }
