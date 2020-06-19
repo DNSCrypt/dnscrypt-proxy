@@ -1,4 +1,4 @@
-// +build !windows,!linux,!darwin
+// +build !windows,!linux
 
 package main
 
@@ -74,6 +74,9 @@ func (proxy *Proxy) dropPrivilege(userStr string, fds []*os.File) {
 	}
 	fdbase := maxfd + 1
 	for i, fd := range fds {
+		if fd.Fd() >= InheritedDescriptorsBase {
+			dlog.Fatal("Duplicated file descriptors are above base")
+		}
 		if err := unix.Dup2(int(fd.Fd()), int(fdbase+uintptr(i))); err != nil {
 			dlog.Fatalf("Unable to clone file descriptor: [%s]", err)
 		}
@@ -81,8 +84,11 @@ func (proxy *Proxy) dropPrivilege(userStr string, fds []*os.File) {
 			dlog.Fatalf("Unable to set the close on exec flag: [%s]", err)
 		}
 	}
+	if int(fdbase)+len(fds) >= int(InheritedDescriptorsBase) {
+		dlog.Fatal("Renumbered file descriptors are above base")
+	}
 	for i := range fds {
-		if err := unix.Dup2(int(fdbase+uintptr(i)), int(i)+3); err != nil {
+		if err := unix.Dup2(int(fdbase)+i, int(InheritedDescriptorsBase)+i); err != nil {
 			dlog.Fatalf("Unable to reassign descriptor: [%s]", err)
 		}
 	}

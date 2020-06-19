@@ -40,7 +40,11 @@ var (
 
 var (
 	FileDescriptors   = make([]*os.File, 0)
-	FileDescriptorNum = 0
+	FileDescriptorNum = uintptr(0)
+)
+
+const (
+	InheritedDescriptorsBase = uintptr(50)
 )
 
 func PrefixWithSize(packet []byte) ([]byte, error) {
