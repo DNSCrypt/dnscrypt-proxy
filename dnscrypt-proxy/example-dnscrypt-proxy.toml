@@ -75,7 +75,7 @@ require_dnssec = false
 # Server must not log user queries (declarative)
 require_nolog = true
 
-# Server must not enforce its own blocklist (for parental control, ads blocking...)
+# Server must not enforce its own blocked list (for parental control, ads blocking...)
 require_nofilter = true
 
 # Server names to avoid even if they match all criteria
@@ -275,7 +275,7 @@ log_files_max_backups = 1
 
 ## Note: if you are using dnsmasq, disable the `dnssec` option in dnsmasq if you
 ## configure dnscrypt-proxy to do any kind of filtering (including the filters
-## below and blocklists).
+## below and blocked lists).
 ## You can still choose resolvers that do DNSSEC validation.
 
 
@@ -298,7 +298,7 @@ block_undelegated = true
 
 
 ## TTL for synthetic responses sent when a request has been blocked (due to
-## IPv6 or blocklists).
+## IPv6 or blocked lists).
 
 reject_ttl = 600
 
@@ -444,7 +444,7 @@ cache_neg_max_ttl = 600
 
 
 ######################################################
-#        Pattern-based blocking (blocklists)        #
+#        Pattern-based blocking (blocked lists)        #
 ######################################################
 
 ## Blocklists are made of one pattern per line. Example of valid patterns:
@@ -457,19 +457,19 @@ cache_neg_max_ttl = 600
 ##   ads*.example[0-9]*.com
 ##
 ## Example blocklist files can be found at https://download.dnscrypt.info/blacklists/
-## A script to build blocklists from public feeds can be found in the
+## A script to build blocked lists from public feeds can be found in the
 ## `utils/generate-domains-blacklists` directory of the dnscrypt-proxy source code.
 
-[blocklist]
+[blocked_names]
 
   ## Path to the file of blocking rules (absolute, or relative to the same directory as the config file)
 
-  # blocklist_file = 'blocklist.txt'
+  # blocked_names_file = 'blocked_names.txt'
 
 
   ## Optional path to a file logging blocked queries
 
-  # log_file = 'blocked.log'
+  # log_file = 'blocked_names.log'
 
 
   ## Optional log format: tsv or ltsv (default: tsv)
@@ -488,16 +488,16 @@ cache_neg_max_ttl = 600
 ##   fe80:abcd:*
 ##   192.168.1.4
 
-[ip_blocklist]
+[blocked_ips]
 
   ## Path to the file of blocking rules (absolute, or relative to the same directory as the config file)
 
-  # blocklist_file = 'ip-blocklist.txt'
+  # blocked_ips_file = 'blocked_ips.txt'
 
 
   ## Optional path to a file logging blocked queries
 
-  # log_file = 'ip-blocked.log'
+  # log_file = 'blocked-ips.log'
 
 
   ## Optional log format: tsv or ltsv (default: tsv)
@@ -516,16 +516,16 @@ cache_neg_max_ttl = 600
 ##
 ## Time-based rules are also supported to make some websites only accessible at specific times of the day.
 
-[allowlist]
+[allowed_names]
 
   ## Path to the file of allowlisting rules (absolute, or relative to the same directory as the config file)
 
-  # allowlist_file = 'allowlist.txt'
+  # allowed_names_file = 'allowed_names.txt'
 
 
   ## Optional path to a file logging allowlisted queries
 
-  # log_file = 'allowlisted.log'
+  # log_file = 'allowed_names.log'
 
 
   ## Optional log format: tsv or ltsv (default: tsv)
@@ -539,7 +539,7 @@ cache_neg_max_ttl = 600
 ##########################################
 
 ## One or more weekly schedules can be defined here.
-## Patterns in the name-based blocklist can optionally be followed with @schedule_name
+## Patterns in the name-based blocked_names file can optionally be followed with @schedule_name
 ## to apply the pattern 'schedule_name' only when it matches a time range of that schedule.
 ##
 ## For example, the following rule in a blocklist file:
