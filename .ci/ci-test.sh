@@ -82,7 +82,7 @@ t || dig -p${DNS_PORT} tracker.xdebian.org @127.0.0.1 | grep -Fq 'locally blocke
 t || dig -p${DNS_PORT} tracker.debian.org @127.0.0.1 | grep -Fqv 'locally blocked' || fail
 
 section
-t || curl --insecure -siL https://127.0.0.1:${HTTP_PORT}/ | grep -Fq '404 Not Found' || fail
+t || curl --insecure -siL https://127.0.0.1:${HTTP_PORT}/ | grep -Fq 'HTTP/2 404' || fail
 t || curl --insecure -sL https://127.0.0.1:${HTTP_PORT}/dns-query | grep -Fq 'dnscrypt-proxy local DoH server' || fail
 t ||
     echo yv4BAAABAAAAAAABAAACAAEAACkQAAAAgAAAAA== | base64 -d |
