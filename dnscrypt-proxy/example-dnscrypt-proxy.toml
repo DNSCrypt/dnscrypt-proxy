@@ -747,4 +747,4 @@ skip_incompatible = false
 [static]
 
   # [static.'myserver']
-  # stamp = 'sdns:AQcAAAAAAAAAAAAQMi5kbnNjcnlwdC1jZXJ0Lg'
+  # stamp = 'sdns://AQcAAAAAAAAAAAAQMi5kbnNjcnlwdC1jZXJ0Lg'
