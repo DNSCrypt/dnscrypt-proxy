@@ -1,5 +1,5 @@
 ##################
-# Test blacklist #
+# Test blocklist #
 ##################
 
 ad.*

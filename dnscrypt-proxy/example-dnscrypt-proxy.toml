@@ -75,7 +75,7 @@ require_dnssec = false
 # Server must not log user queries (declarative)
 require_nolog = true
 
-# Server must not enforce its own blacklist (for parental control, ads blocking...)
+# Server must not enforce its own blocklist (for parental control, ads blocking...)
 require_nofilter = true
 
 # Server names to avoid even if they match all criteria
@@ -275,7 +275,7 @@ log_files_max_backups = 1
 
 ## Note: if you are using dnsmasq, disable the `dnssec` option in dnsmasq if you
 ## configure dnscrypt-proxy to do any kind of filtering (including the filters
-## below and blacklists).
+## below and blocklists).
 ## You can still choose resolvers that do DNSSEC validation.
 
 
@@ -298,7 +298,7 @@ block_undelegated = true
 
 
 ## TTL for synthetic responses sent when a request has been blocked (due to
-## IPv6 or blacklists).
+## IPv6 or blocklists).
 
 reject_ttl = 600
 
@@ -444,10 +444,10 @@ cache_neg_max_ttl = 600
 
 
 ######################################################
-#        Pattern-based blocking (blacklists)        #
+#        Pattern-based blocking (blocklists)        #
 ######################################################
 
-## Blacklists are made of one pattern per line. Example of valid patterns:
+## Blocklists are made of one pattern per line. Example of valid patterns:
 ##
 ##   example.com
 ##   =example.com
@@ -456,20 +456,20 @@ cache_neg_max_ttl = 600
 ##   ads*.example.*
 ##   ads*.example[0-9]*.com
 ##
-## Example blacklist files can be found at https://download.dnscrypt.info/blacklists/
-## A script to build blacklists from public feeds can be found in the
+## Example blocklist files can be found at https://download.dnscrypt.info/blacklists/
+## A script to build blocklists from public feeds can be found in the
 ## `utils/generate-domains-blacklists` directory of the dnscrypt-proxy source code.
 
-[blacklist]
+[blocked_names]
 
   ## Path to the file of blocking rules (absolute, or relative to the same directory as the config file)
 
-  # blacklist_file = 'blacklist.txt'
+  # blocked_names_file = 'blocked-names.txt'
 
 
   ## Optional path to a file logging blocked queries
 
-  # log_file = 'blocked.log'
+  # log_file = 'blocked-names.log'
 
 
   ## Optional log format: tsv or ltsv (default: tsv)
@@ -479,25 +479,25 @@ cache_neg_max_ttl = 600
 
 
 ###########################################################
-#        Pattern-based IP blocking (IP blacklists)        #
+#        Pattern-based IP blocking (IP blocklists)        #
 ###########################################################
 
-## IP blacklists are made of one pattern per line. Example of valid patterns:
+## IP blocklists are made of one pattern per line. Example of valid patterns:
 ##
 ##   127.*
 ##   fe80:abcd:*
 ##   192.168.1.4
 
-[ip_blacklist]
+[blocked_ips]
 
   ## Path to the file of blocking rules (absolute, or relative to the same directory as the config file)
 
-  # blacklist_file = 'ip-blacklist.txt'
+  # blocked_ips_file = 'blocked-ips.txt'
 
 
   ## Optional path to a file logging blocked queries
 
-  # log_file = 'ip-blocked.log'
+  # log_file = 'blocked-ips.log'
 
 
   ## Optional log format: tsv or ltsv (default: tsv)
@@ -507,25 +507,25 @@ cache_neg_max_ttl = 600
 
 
 ######################################################
-#   Pattern-based whitelisting (blacklists bypass)   #
+#   Pattern-based allowlisting (blocklists bypass)   #
 ######################################################
 
-## Whitelists support the same patterns as blacklists
-## If a name matches a whitelist entry, the corresponding session
+## Allowlists support the same patterns as blocklists
+## If a name matches a allowlist entry, the corresponding session
 ## will bypass names and IP filters.
 ##
 ## Time-based rules are also supported to make some websites only accessible at specific times of the day.
 
-[whitelist]
+[allowed_names]
 
-  ## Path to the file of whitelisting rules (absolute, or relative to the same directory as the config file)
+  ## Path to the file of allowlisting rules (absolute, or relative to the same directory as the config file)
 
-  # whitelist_file = 'whitelist.txt'
+  # allowed_names_file = 'allowed-names.txt'
 
 
-  ## Optional path to a file logging whitelisted queries
+  ## Optional path to a file logging allowlisted queries
 
-  # log_file = 'whitelisted.log'
+  # log_file = 'allowed-names.log'
 
 
   ## Optional log format: tsv or ltsv (default: tsv)
@@ -539,10 +539,10 @@ cache_neg_max_ttl = 600
 ##########################################
 
 ## One or more weekly schedules can be defined here.
-## Patterns in the name-based blocklist can optionally be followed with @schedule_name
+## Patterns in the name-based blocked_names file can optionally be followed with @schedule_name
 ## to apply the pattern 'schedule_name' only when it matches a time range of that schedule.
 ##
-## For example, the following rule in a blacklist file:
+## For example, the following rule in a blocklist file:
 ## *.youtube.* @time-to-sleep
 ## would block access to YouTube during the times defined by the 'time-to-sleep' schedule.
 ##
