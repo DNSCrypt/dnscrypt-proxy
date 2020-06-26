@@ -23,17 +23,17 @@ file = 'query.log'
 [nx_log]
 file = 'nx.log'
 
-[blacklist]
-blacklist_file = 'blacklist.txt'
-log_file = 'blocked.log'
+[blocked_names]
+blocked_names_file = 'blocked-names.txt'
+log_file = 'blocked-names.log'
 
-[ip_blacklist]
-blacklist_file = 'ip-blacklist.txt'
-log_file = 'ip-blocked.log'
+[blocked_ips]
+blocked_ips_file = 'blocked-ips.txt'
+log_file = 'blocked-ips.log'
 
-[whitelist]
-whitelist_file = 'whitelist.txt'
-log_file = 'whitelisted.log'
+[allowed_names]
+allowed_names_file = 'allowed-names.txt'
+log_file = 'allowed-names.log'
 
 [schedules]
 
