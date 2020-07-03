@@ -218,8 +218,9 @@ type AnonymizedDNSRouteConfig struct {
 }
 
 type AnonymizedDNSConfig struct {
-	Routes           []AnonymizedDNSRouteConfig `toml:"routes"`
-	SkipIncompatible bool                       `toml:"skip_incompatible"`
+	Routes             []AnonymizedDNSRouteConfig `toml:"routes"`
+	SkipIncompatible   bool                       `toml:"skip_incompatible"`
+	DirectCertFallback bool                       `toml:"direct_cert_fallback"`
 }
 
 type BrokenImplementationsConfig struct {
@@ -558,6 +559,7 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 		proxy.routes = &routes
 	}
 	proxy.skipAnonIncompatbibleResolvers = config.AnonymizedDNS.SkipIncompatible
+	proxy.anonDirectCertFallback = config.AnonymizedDNS.DirectCertFallback
 
 	if config.DoHClientX509AuthLegacy.Creds != nil {
 		dlog.Fatal("[tls_client_auth] has been renamed to [doh_client_x509_auth] - Update your config file.")
