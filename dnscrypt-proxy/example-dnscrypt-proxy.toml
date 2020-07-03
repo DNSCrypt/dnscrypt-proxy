@@ -698,13 +698,18 @@ fragments_blocked = ['cisco', 'cisco-ipv6', 'cisco-familyshield', 'cisco-familys
 # ]
 
 
-# skip resolvers incompatible with anonymization instead of using them directly
+# Skip resolvers incompatible with anonymization instead of using them directly
 
 skip_incompatible = false
 
-# If unable to get the certificate for a server via the relay fallback to getting it directly
+
+# If public server certificates for a non-conformant server cannot be
+# retrieved via a relay, try getting them directly. Actual queries
+# will then always go through relays.
 
 # direct_cert_fallback = false
+
+
 
 ###############################
 #            DNS64            #
