@@ -34,7 +34,7 @@ func FetchCurrentDNSCryptCert(proxy *Proxy, serverName *string, proto string, pk
 	query := dns.Msg{}
 	query.SetQuestion(providerName, dns.TypeTXT)
 	if !strings.HasPrefix(providerName, "2.dnscrypt-cert.") {
-		if (relayUDPAddr != nil && !proxy.anonDirectCertFallback) {
+		if relayUDPAddr != nil && !proxy.anonDirectCertFallback {
 			dlog.Warnf("[%v] uses a non-standard provider name, enable direct cert fallback to use with a relay ('%v' doesn't start with '2.dnscrypt-cert.')", *serverName, providerName)
 		} else {
 			dlog.Warnf("[%v] uses a non-standard provider name ('%v' doesn't start with '2.dnscrypt-cert.')", *serverName, providerName)
@@ -260,7 +260,7 @@ func dnsExchange(proxy *Proxy, proto string, query *dns.Msg, serverAddress strin
 			return bestOption.response, bestOption.rtt, bestOption.fragmentsBlocked, nil
 		}
 
-		if (relayUDPAddr == nil || !proxy.anonDirectCertFallback) {
+		if relayUDPAddr == nil || !proxy.anonDirectCertFallback {
 			if err == nil {
 				err = errors.New("Unable to reach the server")
 			}
