@@ -702,7 +702,9 @@ fragments_blocked = ['cisco', 'cisco-ipv6', 'cisco-familyshield', 'cisco-familys
 
 skip_incompatible = false
 
+# If unable to get the certificate for a server via the relay fallback to getting it directly
 
+# direct_cert_fallback = false
 
 ###############################
 #            DNS64            #
