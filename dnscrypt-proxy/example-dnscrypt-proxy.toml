@@ -511,7 +511,7 @@ cache_neg_max_ttl = 600
 ######################################################
 
 ## Allowlists support the same patterns as blocklists
-## If a name matches a allowlist entry, the corresponding session
+## If a name matches an allowlist entry, the corresponding session
 ## will bypass names and IP filters.
 ##
 ## Time-based rules are also supported to make some websites only accessible at specific times of the day.

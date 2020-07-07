@@ -1,8 +1,8 @@
 ##############################
-#        IP blacklist        #
+#        IP blocklist        #
 ##############################
 
-## Response containing blacklisted IP addresses will be blocked
+## Response containing blocklisted IP addresses will be blocked
 ##
 ## Sample feeds of suspect IP addresses:
 ## - https://github.com/stamparm/ipsum
