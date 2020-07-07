@@ -337,11 +337,12 @@ func fetchDNSCryptServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp
 		knownBugs.fragmentsBlocked = true
 	}
 	if knownBugs.fragmentsBlocked && (relayUDPAddr != nil || relayTCPAddr != nil) {
-		dlog.Warnf("[%v] is incompatible with anonymization", name)
 		relayTCPAddr, relayUDPAddr = nil, nil
 		if proxy.skipAnonIncompatbibleResolvers {
+			dlog.Infof("[%v] is incompatible with anonymization, it will be ignored", name)
 			return ServerInfo{}, errors.New("Resolver is incompatible with anonymization")
 		}
+		dlog.Warnf("[%v] is incompatible with anonymization", name)
 	}
 	if err != nil {
 		return ServerInfo{}, err

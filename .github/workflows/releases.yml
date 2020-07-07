@@ -16,7 +16,7 @@ on:
       - ".git*"
       - ".github/workflows/releases.yml"
 
-name: CI and optionally publish
+name: GitHub CI
 
 jobs:
   build:

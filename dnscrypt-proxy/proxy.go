@@ -83,6 +83,7 @@ type Proxy struct {
 	showCerts                      bool
 	dohCreds                       *map[string]DOHClientCreds
 	skipAnonIncompatbibleResolvers bool
+	anonDirectCertFallback	       bool
 	dns64Prefixes                  []string
 	dns64Resolvers                 []string
 }

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"crypto/tls"
 	"io"
 	"io/ioutil"
 	"net"
@@ -86,11 +85,9 @@ func (proxy *Proxy) localDoHListener(acceptPc *net.TCPListener) {
 	if len(proxy.localDoHCertFile) == 0 || len(proxy.localDoHCertKeyFile) == 0 {
 		dlog.Fatal("A certificate and a key are required to start a local DoH service")
 	}
-	noh2 := make(map[string]func(*http.Server, *tls.Conn, http.Handler))
 	httpServer := &http.Server{
 		ReadTimeout:  proxy.timeout,
 		WriteTimeout: proxy.timeout,
-		TLSNextProto: noh2,
 		Handler:      localDoHHandler{proxy: proxy},
 	}
 	httpServer.SetKeepAlivesEnabled(true)
