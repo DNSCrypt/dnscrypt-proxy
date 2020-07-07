@@ -3,14 +3,14 @@
 #        Allowlist        #
 ###########################
 
-## Rules for name-based query allowlisting, one per line
+## Rules for allowing queries based on name, one per line
 ##
 ## Example of valid patterns:
 ##
 ## ads.*         | matches anything with an "ads." prefix
 ## *.example.com | matches example.com and all names within that zone such as www.example.com
 ## example.com   | identical to the above
-## =example.com  | allowlists example.com but not *.example.com
+## =example.com  | allows example.com but not *.example.com
 ## *sex*         | matches any name containing that substring
 ## ads[0-9]*     | matches "ads" followed by one or more digits
 ## ads*.example* | *, ? and [] can be used anywhere, but prefixes/suffixes are faster

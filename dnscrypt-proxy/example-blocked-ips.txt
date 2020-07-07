@@ -2,7 +2,7 @@
 #        IP blocklist        #
 ##############################
 
-## Response containing blocklisted IP addresses will be blocked
+## Rules for IP-based response blocking
 ##
 ## Sample feeds of suspect IP addresses:
 ## - https://github.com/stamparm/ipsum

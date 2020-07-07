@@ -507,7 +507,7 @@ cache_neg_max_ttl = 600
 
 
 ######################################################
-#   Pattern-based allowlisting (blocklists bypass)   #
+#   Pattern-based allow lists (blocklists bypass)   #
 ######################################################
 
 ## Allowlists support the same patterns as blocklists
@@ -518,12 +518,12 @@ cache_neg_max_ttl = 600
 
 [allowed_names]
 
-  ## Path to the file of allowlisting rules (absolute, or relative to the same directory as the config file)
+  ## Path to the file of allow list rules (absolute, or relative to the same directory as the config file)
 
   # allowed_names_file = 'allowed-names.txt'
 
 
-  ## Optional path to a file logging allowlisted queries
+  ## Optional path to a file logging allowed queries
 
   # log_file = 'allowed-names.log'
 

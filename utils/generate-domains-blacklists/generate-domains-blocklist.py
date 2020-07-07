@@ -181,7 +181,7 @@ def blocklists_from_config_file(
     file, allowlist, time_restricted_url, ignore_retrieval_failure, output_file
 ):
     blocklists = {}
-    allowlisted_names = set()
+    allowed_names = set()
     all_names = set()
     unique_names = set()
     all_globs = set()
@@ -223,28 +223,28 @@ def blocklists_from_config_file(
             for name in time_restricted_names:
                 print_restricted_name(output_fd, name, time_restrictions)
 
-        # Time restricted names should be allowlisted, or they could be always blocked
-        allowlisted_names |= time_restricted_names
+        # Time restricted names should be allowed, or they could be always blocked
+        allowed_names |= time_restricted_names
 
-    # Whitelist
+    # Allowed list
     if allowlist and not re.match(r"^[a-z0-9]+:", allowlist):
         allowlist = "file:" + allowlist
 
-    allowlisted_names |= allowlist_from_url(allowlist)
+    allowed_names |= allowlist_from_url(allowlist)
 
     # Process blocklists
     for url, names in blocklists.items():
-        print("\n\n########## Blacklist from {} ##########\n".format(
+        print("\n\n########## Blocklist from {} ##########\n".format(
             url), file=output_fd, end='\n')
-        ignored, glob_ignored, allowlisted = 0, 0, 0
+        ignored, glob_ignored, allowed = 0, 0, 0
         list_names = list()
         for name in names:
             if covered_by_glob(all_globs, name):
                 glob_ignored = glob_ignored + 1
             elif has_suffix(all_names, name) or name in unique_names:
                 ignored = ignored + 1
-            elif has_suffix(allowlisted_names, name) or name in allowlisted_names:
-                allowlisted = allowlisted + 1
+            elif has_suffix(allowed_names, name) or name in allowed_names:
+                allowed = allowed + 1
             else:
                 list_names.append(name)
                 unique_names.add(name)
@@ -256,10 +256,10 @@ def blocklists_from_config_file(
         if glob_ignored:
             print("# Ignored due to overlapping local patterns: {}".format(
                 glob_ignored), file=output_fd, end='\n')
-        if allowlisted:
+        if allowed:
             print(
-                "# Ignored entries due to the allowlist: {}".format(allowlisted), file=output_fd, end='\n')
-        if ignored or glob_ignored or allowlisted:
+                "# Ignored entries due to the allowlist: {}".format(allowed), file=output_fd, end='\n')
+        if ignored or glob_ignored or allowed:
             print(file=output_fd, end='\n')
         for name in list_names:
             print(name, file=output_fd, end='\n')
