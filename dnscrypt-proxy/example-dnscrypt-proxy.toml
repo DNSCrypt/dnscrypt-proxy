@@ -456,9 +456,9 @@ cache_neg_max_ttl = 600
 ##   ads*.example.*
 ##   ads*.example[0-9]*.com
 ##
-## Example blocklist files can be found at https://download.dnscrypt.info/blacklists/
+## Example blocklist files can be found at https://download.dnscrypt.info/blocklists/
 ## A script to build blocklists from public feeds can be found in the
-## `utils/generate-domains-blacklists` directory of the dnscrypt-proxy source code.
+## `utils/generate-domains-blocklists` directory of the dnscrypt-proxy source code.
 
 [blocked_names]
 
