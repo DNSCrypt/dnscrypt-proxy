@@ -29,10 +29,6 @@ www.youtube-nocookie.com restrictmoderate.youtube.com
 localhost                127.0.0.1
 localhost                ::1
 
-# A router's internal name, that cannot be resolved using external DNS servers.
-
-fritz.box               169.254.1.1
-
 # For load-balancing, multiple IP addresses of the same class can also be
 # provided using the same format, one <pattern> <ip> pair per line.
 
