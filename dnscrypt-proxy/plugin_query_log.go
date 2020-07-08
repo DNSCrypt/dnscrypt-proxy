@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"strings"
 	"time"
@@ -13,7 +14,7 @@ import (
 )
 
 type PluginQueryLog struct {
-	logger        *lumberjack.Logger
+	logger        io.Writer
 	format        string
 	ignoredQtypes []string
 }

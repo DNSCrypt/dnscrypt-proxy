@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"time"
 
@@ -12,7 +13,7 @@ import (
 )
 
 type PluginNxLog struct {
-	logger *lumberjack.Logger
+	logger io.Writer
 	format string
 }
 

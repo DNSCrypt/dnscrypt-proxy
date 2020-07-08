@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"strings"
 	"time"
@@ -16,7 +17,7 @@ import (
 type PluginBlockIP struct {
 	blockedPrefixes *iradix.Tree
 	blockedIPs      map[string]interface{}
-	logger          *lumberjack.Logger
+	logger          io.Writer
 	format          string
 }
 
