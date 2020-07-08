@@ -1,6 +1,6 @@
 #! /usr/bin/env python3
 
-# run with python generate-domains-blacklist.py > list.txt.tmp && mv -f list.txt.tmp list
+# run with python generate-domains-blocklist.py > list.txt.tmp && mv -f list.txt.tmp list
 
 from __future__ import print_function
 
@@ -168,7 +168,7 @@ def has_suffix(names, name):
     return False
 
 
-def whitelist_from_url(url):
+def allowlist_from_url(url):
     if not url:
         return set()
     content, trusted = load_from_url(url)
@@ -177,16 +177,16 @@ def whitelist_from_url(url):
     return names
 
 
-def blacklists_from_config_file(
-    file, whitelist, time_restricted_url, ignore_retrieval_failure, output_file
+def blocklists_from_config_file(
+    file, allowlist, time_restricted_url, ignore_retrieval_failure, output_file
 ):
-    blacklists = {}
-    whitelisted_names = set()
+    blocklists = {}
+    allowed_names = set()
     all_names = set()
     unique_names = set()
     all_globs = set()
 
-    # Load conf & blacklists
+    # Load conf & blocklists
     with open(file) as fd:
         for line in fd:
             line = str.strip(line)
@@ -196,7 +196,7 @@ def blacklists_from_config_file(
             try:
                 content, trusted = load_from_url(url)
                 names, _time_restrictions, globs = parse_list(content, trusted)
-                blacklists[url] = names
+                blocklists[url] = names
                 all_names |= names
                 all_globs |= globs
             except Exception as e:
@@ -204,7 +204,7 @@ def blacklists_from_config_file(
                 if not ignore_retrieval_failure:
                     exit(1)
 
-    # Time-based blacklist
+    # Time-based blocklist
     if time_restricted_url and not re.match(r"^[a-z0-9]+:", time_restricted_url):
         time_restricted_url = "file:" + time_restricted_url
 
@@ -218,33 +218,33 @@ def blacklists_from_config_file(
             time_restricted_content)
 
         if time_restricted_names:
-            print("########## Time-based blacklist ##########\n",
+            print("########## Time-based blocklist ##########\n",
                   file=output_fd, end='\n')
             for name in time_restricted_names:
                 print_restricted_name(output_fd, name, time_restrictions)
 
-        # Time restricted names should be whitelisted, or they could be always blocked
-        whitelisted_names |= time_restricted_names
+        # Time restricted names should be allowed, or they could be always blocked
+        allowed_names |= time_restricted_names
 
-    # Whitelist
-    if whitelist and not re.match(r"^[a-z0-9]+:", whitelist):
-        whitelist = "file:" + whitelist
+    # Allowed list
+    if allowlist and not re.match(r"^[a-z0-9]+:", allowlist):
+        allowlist = "file:" + allowlist
 
-    whitelisted_names |= whitelist_from_url(whitelist)
+    allowed_names |= allowlist_from_url(allowlist)
 
-    # Process blacklists
-    for url, names in blacklists.items():
-        print("\n\n########## Blacklist from {} ##########\n".format(
+    # Process blocklists
+    for url, names in blocklists.items():
+        print("\n\n########## Blocklist from {} ##########\n".format(
             url), file=output_fd, end='\n')
-        ignored, glob_ignored, whitelisted = 0, 0, 0
+        ignored, glob_ignored, allowed = 0, 0, 0
         list_names = list()
         for name in names:
             if covered_by_glob(all_globs, name):
                 glob_ignored = glob_ignored + 1
             elif has_suffix(all_names, name) or name in unique_names:
                 ignored = ignored + 1
-            elif has_suffix(whitelisted_names, name) or name in whitelisted_names:
-                whitelisted = whitelisted + 1
+            elif has_suffix(allowed_names, name) or name in allowed_names:
+                allowed = allowed + 1
             else:
                 list_names.append(name)
                 unique_names.add(name)
@@ -256,10 +256,10 @@ def blacklists_from_config_file(
         if glob_ignored:
             print("# Ignored due to overlapping local patterns: {}".format(
                 glob_ignored), file=output_fd, end='\n')
-        if whitelisted:
+        if allowed:
             print(
-                "# Ignored entries due to the whitelist: {}".format(whitelisted), file=output_fd, end='\n')
-        if ignored or glob_ignored or whitelisted:
+                "# Ignored entries due to the allowlist: {}".format(allowed), file=output_fd, end='\n')
+        if ignored or glob_ignored or allowed:
             print(file=output_fd, end='\n')
         for name in list_names:
             print(name, file=output_fd, end='\n')
@@ -268,19 +268,19 @@ def blacklists_from_config_file(
 
 
 argp = argparse.ArgumentParser(
-    description="Create a unified blacklist from a set of local and remote files"
+    description="Create a unified blocklist from a set of local and remote files"
 )
 argp.add_argument(
     "-c",
     "--config",
-    default="domains-blacklist.conf",
-    help="file containing blacklist sources",
+    default="domains-blocklist.conf",
+    help="file containing blocklist sources",
 )
 argp.add_argument(
     "-w",
-    "--whitelist",
-    default="domains-whitelist.txt",
-    help="file containing a set of names to exclude from the blacklist",
+    "--allowlist",
+    default="domains-allowlist.txt",
+    help="file containing a set of names to exclude from the blocklist",
 )
 argp.add_argument(
     "-r",
@@ -298,17 +298,17 @@ argp.add_argument(
     "-o",
     "--output-file",
     default=None,
-    help="save generated blacklist to a text file with the provided file name",
+    help="save generated blocklist to a text file with the provided file name",
 )
 argp.add_argument("-t", "--timeout", default=30, help="URL open timeout")
 
 args = argp.parse_args()
 
 conf = args.config
-whitelist = args.whitelist
+allowlist = args.allowlist
 time_restricted = args.time_restricted
 ignore_retrieval_failure = args.ignore_retrieval_failure
 output_file = args.output_file
 
-blacklists_from_config_file(
-    conf, whitelist, time_restricted, ignore_retrieval_failure, output_file)
+blocklists_from_config_file(
+    conf, allowlist, time_restricted, ignore_retrieval_failure, output_file)
