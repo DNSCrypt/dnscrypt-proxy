@@ -9,7 +9,6 @@ import (
 
 	"github.com/jedisct1/dlog"
 	"github.com/miekg/dns"
-	lumberjack "gopkg.in/natefinch/lumberjack.v2"
 )
 
 type PluginNxLog struct {
@@ -26,7 +25,7 @@ func (plugin *PluginNxLog) Description() string {
 }
 
 func (plugin *PluginNxLog) Init(proxy *Proxy) error {
-	plugin.logger = &lumberjack.Logger{LocalTime: true, MaxSize: proxy.logMaxSize, MaxAge: proxy.logMaxAge, MaxBackups: proxy.logMaxBackups, Filename: proxy.nxLogFile, Compress: true}
+	plugin.logger = Logger(proxy.logMaxSize, proxy.logMaxAge, proxy.logMaxBackups, proxy.nxLogFile)
 	plugin.format = proxy.nxLogFormat
 
 	return nil
