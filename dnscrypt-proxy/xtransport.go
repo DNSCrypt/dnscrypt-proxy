@@ -350,6 +350,7 @@ func (xTransport *XTransport) Fetch(method string, url *url.URL, accept string, 
 	if len(contentType) > 0 {
 		header["Content-Type"] = []string{contentType}
 	}
+	header["Cache-Control"] = []string{"max-stale"}
 	if body != nil {
 		h := sha512.Sum512(*body)
 		qs := url.Query()
