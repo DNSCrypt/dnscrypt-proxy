@@ -1,6 +1,6 @@
 
 ###########################
-#        Blacklist        #
+#        Blocklist        #
 ###########################
 
 ## Rules for name-based query blocking, one per line

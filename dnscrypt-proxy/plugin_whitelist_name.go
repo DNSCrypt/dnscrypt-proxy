@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"strings"
 	"time"
@@ -10,13 +11,12 @@ import (
 
 	"github.com/jedisct1/dlog"
 	"github.com/miekg/dns"
-	lumberjack "gopkg.in/natefinch/lumberjack.v2"
 )
 
 type PluginWhitelistName struct {
 	allWeeklyRanges *map[string]WeeklyRanges
 	patternMatcher  *PatternMatcher
-	logger          *lumberjack.Logger
+	logger          io.Writer
 	format          string
 }
 
@@ -67,7 +67,7 @@ func (plugin *PluginWhitelistName) Init(proxy *Proxy) error {
 	if len(proxy.whitelistNameLogFile) == 0 {
 		return nil
 	}
-	plugin.logger = &lumberjack.Logger{LocalTime: true, MaxSize: proxy.logMaxSize, MaxAge: proxy.logMaxAge, MaxBackups: proxy.logMaxBackups, Filename: proxy.whitelistNameLogFile, Compress: true}
+	plugin.logger = Logger(proxy.logMaxSize, proxy.logMaxAge, proxy.logMaxBackups, proxy.whitelistNameLogFile)
 	plugin.format = proxy.whitelistNameFormat
 
 	return nil

@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"strings"
 	"time"
@@ -10,13 +11,12 @@ import (
 	iradix "github.com/hashicorp/go-immutable-radix"
 	"github.com/jedisct1/dlog"
 	"github.com/miekg/dns"
-	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 type PluginBlockIP struct {
 	blockedPrefixes *iradix.Tree
 	blockedIPs      map[string]interface{}
-	logger          *lumberjack.Logger
+	logger          io.Writer
 	format          string
 }
 
@@ -71,7 +71,7 @@ func (plugin *PluginBlockIP) Init(proxy *Proxy) error {
 	if len(proxy.blockIPLogFile) == 0 {
 		return nil
 	}
-	plugin.logger = &lumberjack.Logger{LocalTime: true, MaxSize: proxy.logMaxSize, MaxAge: proxy.logMaxAge, MaxBackups: proxy.logMaxBackups, Filename: proxy.blockIPLogFile, Compress: true}
+	plugin.logger = Logger(proxy.logMaxSize, proxy.logMaxAge, proxy.logMaxBackups, proxy.blockIPLogFile)
 	plugin.format = proxy.blockIPFormat
 
 	return nil

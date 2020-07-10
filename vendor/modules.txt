@@ -17,12 +17,6 @@ github.com/davecgh/go-spew/spew
 # github.com/dchest/safefile v0.0.0-20151022103144-855e8d98f185
 ## explicit
 github.com/dchest/safefile
-# github.com/facebookgo/atomicfile v0.0.0-20151019160806-2de1f203e7d5
-## explicit
-github.com/facebookgo/atomicfile
-# github.com/facebookgo/pidfile v0.0.0-20150612191647-f242e2999868
-## explicit
-github.com/facebookgo/pidfile
 # github.com/hashicorp/go-immutable-radix v1.2.0
 ## explicit
 github.com/hashicorp/go-immutable-radix
@@ -70,7 +64,7 @@ github.com/powerman/check
 # github.com/smartystreets/goconvey v1.6.4
 github.com/smartystreets/goconvey/convey/gotest
 github.com/smartystreets/goconvey/convey/reporting
-# golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9
+# golang.org/x/crypto v0.0.0-20200709230013-948cd5f35899
 ## explicit
 golang.org/x/crypto/blake2b
 golang.org/x/crypto/curve25519

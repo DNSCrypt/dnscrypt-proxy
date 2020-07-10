@@ -406,7 +406,7 @@ cache_neg_max_ttl = 600
 [query_log]
 
   ## Path to the query log file (absolute, or relative to the same directory as the config file)
-  ## On non-Windows systems, can be /dev/stdout to log to the standard output (also set log_files_max_size to 0)
+  ## Can be set to /dev/stdout in order to log to the standard output.
 
   # file = 'query.log'
 
@@ -456,9 +456,9 @@ cache_neg_max_ttl = 600
 ##   ads*.example.*
 ##   ads*.example[0-9]*.com
 ##
-## Example blocklist files can be found at https://download.dnscrypt.info/blacklists/
+## Example blocklist files can be found at https://download.dnscrypt.info/blocklists/
 ## A script to build blocklists from public feeds can be found in the
-## `utils/generate-domains-blacklists` directory of the dnscrypt-proxy source code.
+## `utils/generate-domains-blocklists` directory of the dnscrypt-proxy source code.
 
 [blocked_names]
 
@@ -507,23 +507,23 @@ cache_neg_max_ttl = 600
 
 
 ######################################################
-#   Pattern-based allowlisting (blocklists bypass)   #
+#   Pattern-based allow lists (blocklists bypass)   #
 ######################################################
 
 ## Allowlists support the same patterns as blocklists
-## If a name matches a allowlist entry, the corresponding session
+## If a name matches an allowlist entry, the corresponding session
 ## will bypass names and IP filters.
 ##
 ## Time-based rules are also supported to make some websites only accessible at specific times of the day.
 
 [allowed_names]
 
-  ## Path to the file of allowlisting rules (absolute, or relative to the same directory as the config file)
+  ## Path to the file of allow list rules (absolute, or relative to the same directory as the config file)
 
   # allowed_names_file = 'allowed-names.txt'
 
 
-  ## Optional path to a file logging allowlisted queries
+  ## Optional path to a file logging allowed queries
 
   # log_file = 'allowed-names.log'
 

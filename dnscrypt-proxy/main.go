@@ -10,7 +10,6 @@ import (
 	"runtime"
 	"sync"
 
-	"github.com/facebookgo/pidfile"
 	"github.com/jedisct1/dlog"
 	"github.com/kardianos/service"
 )
@@ -127,12 +126,14 @@ func (app *App) AppMain() {
 	if err := ConfigLoad(app.proxy, app.flags); err != nil {
 		dlog.Fatal(err)
 	}
+	if err := PidFileCreate(); err != nil {
+		dlog.Criticalf("Unable to create the PID file: %v", err)
+	}
 	if err := app.proxy.InitPluginsGlobals(); err != nil {
 		dlog.Fatal(err)
 	}
 	app.quit = make(chan struct{})
 	app.wg.Add(1)
-	_ = pidfile.Write()
 	app.proxy.StartProxy()
 	runtime.GC()
 	<-app.quit
@@ -141,9 +142,7 @@ func (app *App) AppMain() {
 }
 
 func (app *App) Stop(service service.Service) error {
-	if pidFilePath := pidfile.GetPidfilePath(); len(pidFilePath) > 1 {
-		os.Remove(pidFilePath)
-	}
+	PidFileRemove()
 	dlog.Notice("Stopped.")
 	return nil
 }
