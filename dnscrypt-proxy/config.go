@@ -294,16 +294,12 @@ func findConfigFile(configFile *string) (string, error) {
 func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	foundConfigFile, err := findConfigFile(flags.ConfigFile)
 	if err != nil {
-		dlog.Fatalf("Unable to load the configuration file [%s] -- Maybe use the -config command-line switch?", *flags.ConfigFile)
+		return fmt.Errorf("Unable to load the configuration file [%s] -- Maybe use the -config command-line switch?", *flags.ConfigFile)
 	}
 	config := newConfig()
 	md, err := toml.DecodeFile(foundConfigFile, &config)
 	if err != nil {
 		return err
-	}
-	undecoded := md.Undecoded()
-	if len(undecoded) > 0 {
-		return fmt.Errorf("Unsupported key in configuration file: [%s]", undecoded[0])
 	}
 	if err := cdFileDir(foundConfigFile); err != nil {
 		return err
@@ -326,6 +322,14 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 			dlog.SetFileDescriptor(os.NewFile(uintptr(3), "logFile"))
 		}
 	}
+	if !*flags.Child {
+		dlog.Noticef("dnscrypt-proxy %s", AppVersion)
+	}
+	undecoded := md.Undecoded()
+	if len(undecoded) > 0 {
+		return fmt.Errorf("Unsupported key in configuration file: [%s]", undecoded[0])
+	}
+
 	proxy.logMaxSize = config.LogMaxSize
 	proxy.logMaxAge = config.LogMaxAge
 	proxy.logMaxBackups = config.LogMaxBackups
@@ -343,7 +347,7 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	if len(config.FallbackResolvers) > 0 {
 		for _, resolver := range config.FallbackResolvers {
 			if err := isIPAndPort(resolver); err != nil {
-				dlog.Fatalf("Fallback resolver [%v]: %v", resolver, err)
+				return fmt.Errorf("Fallback resolver [%v]: %v", resolver, err)
 			}
 		}
 		proxy.xTransport.ignoreSystemDNS = config.IgnoreSystemDNS
@@ -355,7 +359,7 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	if len(config.HTTPProxyURL) > 0 {
 		httpProxyURL, err := url.Parse(config.HTTPProxyURL)
 		if err != nil {
-			dlog.Fatalf("Unable to parse the HTTP proxy URL [%v]", config.HTTPProxyURL)
+			return fmt.Errorf("Unable to parse the HTTP proxy URL [%v]", config.HTTPProxyURL)
 		}
 		proxy.xTransport.httpProxyFunction = http.ProxyURL(httpProxyURL)
 	}
@@ -363,11 +367,11 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	if len(config.Proxy) > 0 {
 		proxyDialerURL, err := url.Parse(config.Proxy)
 		if err != nil {
-			dlog.Fatalf("Unable to parse the proxy URL [%v]", config.Proxy)
+			return fmt.Errorf("Unable to parse the proxy URL [%v]", config.Proxy)
 		}
 		proxyDialer, err := netproxy.FromURL(proxyDialerURL, netproxy.Direct)
 		if err != nil {
-			dlog.Fatalf("Unable to use the proxy: [%v]", err)
+			return fmt.Errorf("Unable to use the proxy: [%v]", err)
 		}
 		proxy.xTransport.proxyDialer = &proxyDialer
 		proxy.mainProto = "tcp"
@@ -428,7 +432,7 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	proxy.listenAddresses = config.ListenAddresses
 	proxy.localDoHListenAddresses = config.LocalDoH.ListenAddresses
 	if len(config.LocalDoH.Path) > 0 && config.LocalDoH.Path[0] != '/' {
-		dlog.Fatalf("local DoH: [%s] cannot be a valid URL path. Read the documentation", config.LocalDoH.Path)
+		return fmt.Errorf("local DoH: [%s] cannot be a valid URL path. Read the documentation", config.LocalDoH.Path)
 	}
 	proxy.localDoHPath = config.LocalDoH.Path
 	proxy.localDoHCertFile = config.LocalDoH.CertFile
@@ -479,7 +483,7 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	proxy.nxLogFormat = config.NxLog.Format
 
 	if len(config.BlockName.File) > 0 && len(config.BlockNameLegacy.File) > 0 {
-		dlog.Fatal("Don't specify both [blocked_names] and [blacklist] sections - Update your config file.")
+		return errors.New("Don't specify both [blocked_names] and [blacklist] sections - Update your config file.")
 	}
 	if len(config.BlockNameLegacy.File) > 0 {
 		dlog.Notice("Use of [blacklist] is deprecated - Update your config file.")
@@ -500,7 +504,7 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	proxy.blockNameLogFile = config.BlockName.LogFile
 
 	if len(config.AllowedName.File) > 0 && len(config.WhitelistNameLegacy.File) > 0 {
-		dlog.Fatal("Don't specify both [whitelist] and [allowed_names] sections - Update your config file.")
+		return errors.New("Don't specify both [whitelist] and [allowed_names] sections - Update your config file.")
 	}
 	if len(config.WhitelistNameLegacy.File) > 0 {
 		dlog.Notice("Use of [whitelist] is deprecated - Update your config file.")
@@ -521,7 +525,7 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	proxy.whitelistNameLogFile = config.AllowedName.LogFile
 
 	if len(config.BlockIP.File) > 0 && len(config.BlockIPLegacy.File) > 0 {
-		dlog.Fatal("Don't specify both [blocked_ips] and [ip_blacklist] sections - Update your config file.")
+		return errors.New("Don't specify both [blocked_ips] and [ip_blacklist] sections - Update your config file.")
 	}
 	if len(config.BlockIPLegacy.File) > 0 {
 		dlog.Notice("Use of [ip_blacklist] is deprecated - Update your config file.")
@@ -561,7 +565,7 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	proxy.anonDirectCertFallback = config.AnonymizedDNS.DirectCertFallback
 
 	if config.DoHClientX509AuthLegacy.Creds != nil {
-		dlog.Fatal("[tls_client_auth] has been renamed to [doh_client_x509_auth] - Update your config file.")
+		return errors.New("[tls_client_auth] has been renamed to [doh_client_x509_auth] - Update your config file.")
 	}
 	configClientCreds := config.DoHClientX509Auth.Creds
 	creds := make(map[string]DOHClientCreds)
@@ -608,9 +612,6 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 		netprobeAddress = config.FallbackResolvers[0]
 	}
 	proxy.showCerts = *flags.ShowCerts || len(os.Getenv("SHOW_CERTS")) > 0
-	if !proxy.child {
-		dlog.Noticef("dnscrypt-proxy %s", AppVersion)
-	}
 	if !*flags.Check && !*flags.ShowCerts && !*flags.List && !*flags.ListAll {
 		if err := NetProbe(netprobeAddress, netprobeTimeout); err != nil {
 			return err
@@ -622,13 +623,13 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 			proxy.addLocalDoHListener(listenAddrStr)
 		}
 		if err := proxy.addSystemDListeners(); err != nil {
-			dlog.Fatal(err)
+			return err
 		}
 	}
 	// if 'userName' is set and we are the parent process drop privilege and exit
 	if len(proxy.userName) > 0 && !proxy.child {
 		proxy.dropPrivilege(proxy.userName, FileDescriptors)
-		dlog.Fatal("Dropping privileges is not supporting on this operating system. Unset `user_name` in the configuration file.")
+		return errors.New("Dropping privileges is not supporting on this operating system. Unset `user_name` in the configuration file.")
 	}
 	if !config.OfflineMode {
 		if err := config.loadSources(proxy); err != nil {
@@ -639,7 +640,9 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 		}
 	}
 	if *flags.List || *flags.ListAll {
-		config.printRegisteredServers(proxy, *flags.JSONOutput)
+		if err := config.printRegisteredServers(proxy, *flags.JSONOutput); err != nil {
+			return err
+		}
 		os.Exit(0)
 	}
 	if proxy.routes != nil && len(*proxy.routes) > 0 {
@@ -669,7 +672,7 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	return nil
 }
 
-func (config *Config) printRegisteredServers(proxy *Proxy, jsonOutput bool) {
+func (config *Config) printRegisteredServers(proxy *Proxy, jsonOutput bool) error {
 	var summary []ServerSummary
 	for _, registeredServer := range proxy.registeredServers {
 		addrStr, port := registeredServer.stamp.ServerAddrStr, stamps.DefaultPort
@@ -706,10 +709,11 @@ func (config *Config) printRegisteredServers(proxy *Proxy, jsonOutput bool) {
 	if jsonOutput {
 		jsonStr, err := json.MarshalIndent(summary, "", " ")
 		if err != nil {
-			dlog.Fatal(err)
+			return err
 		}
 		fmt.Print(string(jsonStr))
 	}
+	return nil
 }
 
 func (config *Config) loadSources(proxy *Proxy) error {
@@ -740,11 +744,11 @@ func (config *Config) loadSources(proxy *Proxy) error {
 			continue
 		}
 		if len(staticConfig.Stamp) == 0 {
-			dlog.Fatalf("Missing stamp for the static [%s] definition", serverName)
+			return fmt.Errorf("Missing stamp for the static [%s] definition", serverName)
 		}
 		stamp, err := stamps.NewServerStampFromString(staticConfig.Stamp)
 		if err != nil {
-			dlog.Fatalf("Stamp error for the static [%s] definition: [%v]", serverName, err)
+			return fmt.Errorf("Stamp error for the static [%s] definition: [%v]", serverName, err)
 		}
 		proxy.registeredServers = append(proxy.registeredServers, RegisteredServer{name: serverName, stamp: stamp})
 	}
