@@ -301,10 +301,6 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	if err != nil {
 		return err
 	}
-	undecoded := md.Undecoded()
-	if len(undecoded) > 0 {
-		return fmt.Errorf("Unsupported key in configuration file: [%s]", undecoded[0])
-	}
 	if err := cdFileDir(foundConfigFile); err != nil {
 		return err
 	}
@@ -326,6 +322,14 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 			dlog.SetFileDescriptor(os.NewFile(uintptr(3), "logFile"))
 		}
 	}
+	if !*flags.Child {
+		dlog.Noticef("dnscrypt-proxy %s", AppVersion)
+	}
+	undecoded := md.Undecoded()
+	if len(undecoded) > 0 {
+		return fmt.Errorf("Unsupported key in configuration file: [%s]", undecoded[0])
+	}
+
 	proxy.logMaxSize = config.LogMaxSize
 	proxy.logMaxAge = config.LogMaxAge
 	proxy.logMaxBackups = config.LogMaxBackups
@@ -608,9 +612,6 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 		netprobeAddress = config.FallbackResolvers[0]
 	}
 	proxy.showCerts = *flags.ShowCerts || len(os.Getenv("SHOW_CERTS")) > 0
-	if !proxy.child {
-		dlog.Noticef("dnscrypt-proxy %s", AppVersion)
-	}
 	if !*flags.Check && !*flags.ShowCerts && !*flags.List && !*flags.ListAll {
 		if err := NetProbe(netprobeAddress, netprobeTimeout); err != nil {
 			return err
