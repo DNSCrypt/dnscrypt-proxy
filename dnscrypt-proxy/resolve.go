@@ -11,18 +11,6 @@ const myResolverHost string = "resolver.dnscrypt.info"
 func Resolve(name string) {
 	fmt.Printf("Resolving [%s]\n\n", name)
 
-	fmt.Printf("Domain exists:  ")
-	ns, err := net.LookupNS(name)
-	if err != nil || len(ns) == 0 {
-		if name == "." {
-			fmt.Println("'No' would mean that the Internet doesn't exist any more, and that would be very sad. On the bright side, you just found an easter egg.")
-		} else {
-			fmt.Println("probably not, or blocked by the proxy")
-		}
-	} else {
-		fmt.Printf("yes, %d name servers found\n", len(ns))
-	}
-
 	fmt.Printf("Canonical name: ")
 	cname, err := net.LookupCNAME(name)
 	if err != nil {
@@ -45,6 +33,16 @@ func Resolve(name string) {
 		fmt.Println("-")
 	} else {
 		fmt.Println(strings.Join(txt, " "))
+	}
+
+	mxs, _ := net.LookupMX(name)
+	if len(mxs) > 0 {
+		fmt.Printf("Mail servers:   %d mail servers found\n", len(mxs))
+	}
+
+	ns, _ := net.LookupNS(name)
+	if len(ns) > 0 {
+		fmt.Printf("Name servers:   %d name servers found\n", len(ns))
 	}
 
 	resIP, err := net.LookupHost(myResolverHost)
