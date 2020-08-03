@@ -10,6 +10,8 @@ import (
 )
 
 func NetProbe(address string, timeout int) error {
+	cancelChannels := ColdStart([]string{"0.0.0.0:53"})
+	defer ColdStartStop(cancelChannels)
 	if len(address) <= 0 || timeout == 0 {
 		return nil
 	}
