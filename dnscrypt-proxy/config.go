@@ -68,6 +68,7 @@ type Config struct {
 	BlockIPLegacy            BlockIPConfigLegacy         `toml:"ip_blacklist"`
 	ForwardFile              string                      `toml:"forwarding_rules"`
 	CloakFile                string                      `toml:"cloaking_rules"`
+	CaptivePortalFile        string                      `toml:"captive_portal_handler"`
 	StaticsConfig            map[string]StaticConfig     `toml:"static"`
 	SourcesConfig            map[string]SourceConfig     `toml:"sources"`
 	BrokenImplementations    BrokenImplementationsConfig `toml:"broken_implementations"`
@@ -547,6 +548,7 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 
 	proxy.forwardFile = config.ForwardFile
 	proxy.cloakFile = config.CloakFile
+	proxy.captivePortalFile = config.CaptivePortalFile
 
 	allWeeklyRanges, err := ParseAllWeeklyRanges(config.AllWeeklyRanges)
 	if err != nil {
@@ -613,7 +615,7 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	}
 	proxy.showCerts = *flags.ShowCerts || len(os.Getenv("SHOW_CERTS")) > 0
 	if !*flags.Check && !*flags.ShowCerts && !*flags.List && !*flags.ListAll {
-		if err := NetProbe(netprobeAddress, netprobeTimeout); err != nil {
+		if err := NetProbe(proxy, netprobeAddress, netprobeTimeout); err != nil {
 			return err
 		}
 		for _, listenAddrStr := range proxy.listenAddresses {

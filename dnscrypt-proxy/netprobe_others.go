@@ -9,11 +9,14 @@ import (
 	"github.com/jedisct1/dlog"
 )
 
-func NetProbe(address string, timeout int) error {
-	cancelChannels := ColdStart([]string{"0.0.0.0:53"})
-	defer ColdStartStop(cancelChannels)
+func NetProbe(proxy *Proxy, address string, timeout int) error {
 	if len(address) <= 0 || timeout == 0 {
 		return nil
+	}
+	if captivePortalHandler, err := ColdStart(proxy); err == nil {
+		defer captivePortalHandler.Stop()
+	} else {
+		dlog.Critical(err)
 	}
 	remoteUDPAddr, err := net.ResolveUDPAddr("udp", address)
 	if err != nil {

@@ -67,6 +67,7 @@ type Proxy struct {
 	blockIPFormat                  string
 	forwardFile                    string
 	cloakFile                      string
+	captivePortalFile              string
 	pluginsGlobals                 PluginsGlobals
 	sources                        []*Source
 	clientsCount                   uint32
@@ -83,7 +84,7 @@ type Proxy struct {
 	showCerts                      bool
 	dohCreds                       *map[string]DOHClientCreds
 	skipAnonIncompatbibleResolvers bool
-	anonDirectCertFallback	       bool
+	anonDirectCertFallback         bool
 	dns64Prefixes                  []string
 	dns64Resolvers                 []string
 }
