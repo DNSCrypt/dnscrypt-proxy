@@ -14,7 +14,9 @@ func NetProbe(proxy *Proxy, address string, timeout int) error {
 		return nil
 	}
 	if captivePortalHandler, err := ColdStart(proxy); err == nil {
-		defer captivePortalHandler.Stop()
+		if captivePortalHandler != nil {
+			defer captivePortalHandler.Stop()
+		}
 	} else {
 		dlog.Critical(err)
 	}

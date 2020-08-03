@@ -22,7 +22,7 @@ type CaptivePortalHandler struct {
 	cancelChannels []chan struct{}
 }
 
-func (captivePortalHandler *CaptivePortalHandler) Stop() {
+func (captivePortalHandler *CaptivePortalHandler) Stop() {	
 	for _, cancelChannel := range captivePortalHandler.cancelChannels {
 		cancelChannel <- struct{}{}
 		_ = <-cancelChannel
