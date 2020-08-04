@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"runtime"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -14,6 +15,8 @@ import (
 	stamps "github.com/jedisct1/go-dnsstamps"
 	"github.com/miekg/dns"
 	"golang.org/x/crypto/curve25519"
+	"golang.org/x/net/ipv4"
+	"golang.org/x/net/ipv6"
 )
 
 type Proxy struct {
@@ -263,14 +266,82 @@ func (proxy *Proxy) StartProxy() {
 	}
 }
 
-func (proxy *Proxy) udpListener(clientPc *net.UDPConn) {
-	defer clientPc.Close()
+type XConn struct {
+	conn interface{}
+}
+
+func (xConn *XConn) Write(p []byte) (n int, err error) {
+	return xConn.conn.(net.Conn).Write(p)
+}
+
+func (xConn *XConn) WriteTo(p []byte, addr net.Addr) (n int, err error) {
+	return xConn.conn.(net.PacketConn).WriteTo(p, addr)
+}
+
+type XNetUDPConn struct {
+	packetConnV4   *ipv4.PacketConn
+	packetConnV6   *ipv6.PacketConn
+	controlMessage *XControlMessage
+}
+
+type XControlMessage struct {
+	controlMessageV4 *ipv4.ControlMessage
+	controlMessageV6 *ipv6.ControlMessage
+}
+
+func (xNetConn *XNetUDPConn) fixSourceAddress(xControlMessage *XControlMessage) {
+	if xControlMessage == nil {
+		return
+	}
+	if xControlMessage.controlMessageV4 != nil {
+		xControlMessage.controlMessageV4.Src = xControlMessage.controlMessageV4.Dst
+	} else if xControlMessage.controlMessageV6 != nil {
+		xControlMessage.controlMessageV6.Src = xControlMessage.controlMessageV6.Dst
+	}
+	xNetConn.controlMessage = xControlMessage
+}
+
+func (xNetConn *XNetUDPConn) Close() error {
+	if xNetConn.packetConnV4 != nil {
+		return xNetConn.packetConnV4.Close()
+	}
+	return xNetConn.packetConnV6.Close()
+}
+
+func (xNetConn *XNetUDPConn) ReadFrom(b []byte) (n int, cm *XControlMessage, src net.Addr, err error) {
+	if xNetConn.packetConnV4 != nil {
+		xn, xcm, xsrc, xerr := xNetConn.packetConnV4.ReadFrom(b)
+		return xn, &XControlMessage{controlMessageV4: xcm}, xsrc, xerr
+	}
+	xn, xcm, xsrc, xerr := xNetConn.packetConnV6.ReadFrom(b)
+	return xn, &XControlMessage{controlMessageV6: xcm}, xsrc, xerr
+}
+
+func (xNetConn *XNetUDPConn) WriteTo(b []byte, cm *XControlMessage, dst net.Addr) (n int, err error) {
+	if xNetConn.packetConnV4 != nil {
+		return xNetConn.packetConnV4.WriteTo(b, cm.controlMessageV4, dst)
+	}
+	return xNetConn.packetConnV6.WriteTo(b, cm.controlMessageV6, dst)
+}
+
+func (proxy *Proxy) udpListener(clientPc net.PacketConn) {
+	isIPv6 := strings.HasPrefix(clientPc.LocalAddr().String(), "[")
+	var xClientPc XNetUDPConn
+	if !isIPv6 {
+		xClientPc = XNetUDPConn{packetConnV4: ipv4.NewPacketConn(clientPc)}
+		xClientPc.packetConnV4.SetControlMessage(ipv4.FlagDst, true)
+	} else {
+		xClientPc = XNetUDPConn{packetConnV6: ipv6.NewPacketConn(clientPc)}
+		xClientPc.packetConnV6.SetControlMessage(ipv6.FlagDst, true)
+	}
+	defer xClientPc.Close()
 	for {
 		buffer := make([]byte, MaxDNSPacketSize-1)
-		length, clientAddr, err := clientPc.ReadFrom(buffer)
+		length, metadata, clientAddr, err := xClientPc.ReadFrom(buffer)
 		if err != nil {
 			return
 		}
+		xClientPc.fixSourceAddress(metadata)
 		packet := buffer[:length]
 		go func() {
 			start := time.Now()
@@ -279,17 +350,17 @@ func (proxy *Proxy) udpListener(clientPc *net.UDPConn) {
 				return
 			}
 			defer proxy.clientsCountDec()
-			proxy.processIncomingQuery("udp", proxy.mainProto, packet, &clientAddr, clientPc, start)
+			proxy.processIncomingQuery("udp", proxy.mainProto, packet, &clientAddr, &XConn{conn: clientPc}, start)
 		}()
 	}
 }
 
 func (proxy *Proxy) udpListenerFromAddr(listenAddr *net.UDPAddr) error {
-	clientPc, err := net.ListenUDP("udp", listenAddr)
+	listener, err := net.ListenUDP("udp", listenAddr)
 	if err != nil {
 		return err
 	}
-	proxy.registerUDPListener(clientPc)
+	proxy.registerUDPListener(listener)
 	dlog.Noticef("Now listening to %v [UDP]", listenAddr)
 	return nil
 }
@@ -317,7 +388,7 @@ func (proxy *Proxy) tcpListener(acceptPc *net.TCPListener) {
 				return
 			}
 			clientAddr := clientPc.RemoteAddr()
-			proxy.processIncomingQuery("tcp", "tcp", packet, &clientAddr, clientPc, start)
+			proxy.processIncomingQuery("tcp", "tcp", packet, &clientAddr, &XConn{conn: clientPc}, start)
 		}()
 	}
 }
@@ -463,7 +534,7 @@ func (proxy *Proxy) clientsCountDec() {
 	}
 }
 
-func (proxy *Proxy) processIncomingQuery(clientProto string, serverProto string, query []byte, clientAddr *net.Addr, clientPc net.Conn, start time.Time) (response []byte) {
+func (proxy *Proxy) processIncomingQuery(clientProto string, serverProto string, query []byte, clientAddr *net.Addr, clientPc *XConn, start time.Time) (response []byte) {
 	if len(query) < MinDNSPacketSize {
 		return
 	}
@@ -628,7 +699,7 @@ func (proxy *Proxy) processIncomingQuery(clientProto string, serverProto string,
 				return
 			}
 		}
-		clientPc.(net.PacketConn).WriteTo(response, *clientAddr)
+		clientPc.WriteTo(response, *clientAddr)
 		if HasTCFlag(response) {
 			proxy.questionSizeEstimator.blindAdjust()
 		} else {
