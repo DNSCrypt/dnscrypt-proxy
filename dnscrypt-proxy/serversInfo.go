@@ -450,6 +450,7 @@ func fetchDoHServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, isN
 	body = dohNXTestPacket(0xcafe)
 	serverResponse, tls, rtt, err := proxy.xTransport.DoHQuery(useGet, url, body, proxy.timeout)
 	if err != nil {
+		dlog.Warnf("[%s] [%s]: %v", name, url, err)
 		return ServerInfo{}, err
 	}
 	if tls == nil || !tls.HandshakeComplete {
@@ -457,6 +458,7 @@ func fetchDoHServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, isN
 	}
 	msg := dns.Msg{}
 	if err := msg.Unpack(serverResponse); err != nil {
+		dlog.Warnf("[%s]: %v", name, err)
 		return ServerInfo{}, err
 	}
 	if msg.Rcode != dns.RcodeNameError {
@@ -492,14 +494,13 @@ func fetchDoHServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, isN
 		}
 	}
 	if !found && len(stamp.Hashes) > 0 {
-		return ServerInfo{}, fmt.Errorf("Certificate hash [%x] not found for [%s]", wantedHash, name)
+		dlog.Criticalf("[%s] Certificate hash [%x] not found", name, wantedHash)
+		return ServerInfo{}, fmt.Errorf("Certificate hash not found")
 	}
 	respBody := serverResponse
-	if err != nil {
-		return ServerInfo{}, err
-	}
 	if len(respBody) < MinDNSPacketSize || len(respBody) > MaxDNSPacketSize ||
 		respBody[0] != 0xca || respBody[1] != 0xfe || respBody[4] != 0x00 || respBody[5] != 0x01 {
+		dlog.Info("Webserver returned an unexpected response")
 		return ServerInfo{}, errors.New("Webserver returned an unexpected response")
 	}
 	xrtt := int(rtt.Nanoseconds() / 1000000)
