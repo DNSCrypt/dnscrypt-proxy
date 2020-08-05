@@ -450,7 +450,7 @@ func fetchDoHServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, isN
 	body = dohNXTestPacket(0xcafe)
 	serverResponse, tls, rtt, err := proxy.xTransport.DoHQuery(useGet, url, body, proxy.timeout)
 	if err != nil {
-		dlog.Warnf("[%s] [%s]: %v", name, url, err)
+		dlog.Infof("[%s] [%s]: %v", name, url, err)
 		return ServerInfo{}, err
 	}
 	if tls == nil || !tls.HandshakeComplete {
