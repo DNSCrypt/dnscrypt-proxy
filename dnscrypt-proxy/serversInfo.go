@@ -397,7 +397,7 @@ func dohNXTestPacket(msgID uint16) []byte {
 	for i := range qName {
 		qName[i] = charset[rand.Intn(len(charset))]
 	}
-	msg.SetQuestion(string(qName)+".dnscrypt.test.", dns.TypeNS)
+	msg.SetQuestion(string(qName)+".test.dnscrypt.", dns.TypeNS)
 	msg.Id = msgID
 	msg.MsgHdr.RecursionDesired = true
 	msg.SetEdns0(uint16(MaxDNSPacketSize), false)
