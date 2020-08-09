@@ -263,6 +263,7 @@ func (pluginsState *PluginsState) ApplyQueryPlugins(pluginsGlobals *PluginsGloba
 	if err != nil {
 		return packet, err
 	}
+	dlog.Debugf("Handling query for [%v]", qName)
 	pluginsState.qName = qName
 	pluginsState.questionMsg = &msg
 	if len(*pluginsGlobals.queryPlugins) == 0 && len(*pluginsGlobals.loggingPlugins) == 0 {
