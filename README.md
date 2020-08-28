@@ -39,6 +39,49 @@ Available as source code and pre-built binaries for most operating systems and a
 * Compatible with DNSSEC
 * Includes a local DoH server in order to support ECHO (ESNI)
 
+## Building From Source
+
+```
+$ git clone https://github.com/DNSCrypt/dnscrypt-proxy.git
+$ cd dnscrypt-proxy/dnscrypt-proxy/
+$ go build
+$ ./dnscrypt-proxy --help
+
+Usage of ./dnscrypt-proxy:
+  -check
+    	check the configuration file and exit
+  -child
+    	Invokes program as a child process
+  -config string
+    	Path to the configuration file (default "dnscrypt-proxy.toml")
+  -json
+    	output list as JSON
+  -list
+    	print the list of available resolvers for the enabled filters
+  -list-all
+    	print the complete list of available resolvers, ignoring filters
+  -logfile string
+    	Write application logs to file
+  -logfile-truncate
+    	Truncate the application log file; keep only data from the most recent application launch
+  -loglevel value
+    	Application log level (0-6) (default 2)
+  -netprobe-timeout int
+    	Override the netprobe timeout (default 60)
+  -pidfile string
+    	Store the PID into a file
+  -resolve string
+    	resolve a name using system libraries
+  -service string
+    	Control the system service: ["start" "stop" "restart" "install" "uninstall"]
+  -show-certs
+    	print DoH certificate chain hashes
+  -syslog
+    	Send application logs to the local system logger (Eventlog on Windows, syslog on Unix)
+  -version
+    	print current proxy version
+```
+
 ## Pre-built binaries
 
 Up-to-date, pre-built binaries are available for:
