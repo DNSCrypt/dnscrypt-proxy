@@ -278,6 +278,11 @@ argp.add_argument(
 )
 argp.add_argument(
     "-w",
+    "--whitelist",
+    help="Deprecated.  Please use -a or --allowlist",
+)
+argp.add_argument(
+    "-a",
     "--allowlist",
     default="domains-allowlist.txt",
     help="file containing a set of names to exclude from the blocklist",
@@ -303,6 +308,11 @@ argp.add_argument(
 argp.add_argument("-t", "--timeout", default=30, help="URL open timeout")
 
 args = argp.parse_args()
+
+whitelist = args.whitelist
+if whitelist:
+    print('Use of -w WHITELIST has been removed. Please use -a ALLOWLIST instead.')
+    exit(1)
 
 conf = args.config
 allowlist = args.allowlist
