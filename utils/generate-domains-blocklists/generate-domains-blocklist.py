@@ -57,7 +57,8 @@ def parse_list(content, trusted=False):
     rx_comment = re.compile(r"^(#|$)")
     rx_inline_comment = re.compile(r"\s*#\s*[a-z0-9-].*$")
     rx_u = re.compile(
-        r"^@*\|\|([a-z0-9][a-z0-9.-]*[.][a-z]{2,})\^?(\$(popup|third-party))?$")
+        r"^@*\|\|([a-z0-9][a-z0-9.-]*[.][a-z]{2,})\^?(\$(popup|third-party))?$"
+    )
     rx_l = re.compile(r"^([a-z0-9][a-z0-9.-]*[.][a-z]{2,})$")
     rx_h = re.compile(
         r"^[0-9]{1,3}[.][0-9]{1,3}[.][0-9]{1,3}[.][0-9]{1,3}\s+([a-z0-9][a-z0-9.-]*[.][a-z]{2,})$"
@@ -86,12 +87,13 @@ def parse_list(content, trusted=False):
 
 def print_restricted_name(output_fd, name, time_restrictions):
     if name in time_restrictions:
-        print("{}\t{}".format(
-            name, time_restrictions[name]), file=output_fd, end='\n')
+        print("{}\t{}".format(name, time_restrictions[name]), file=output_fd, end="\n")
     else:
         print(
             "# ignored: [{}] was in the time-restricted list, "
-            "but without a time restriction label".format(name), file=output_fd, end='\n'
+            "but without a time restriction label".format(name),
+            file=output_fd,
+            end="\n",
         )
 
 
@@ -113,8 +115,7 @@ def load_from_url(url):
     except urllib.URLError as err:
         raise Exception("[{}] could not be loaded: {}\n".format(url, err))
     if trusted is False and response.getcode() != 200:
-        raise Exception("[{}] returned HTTP code {}\n".format(
-            url, response.getcode()))
+        raise Exception("[{}] returned HTTP code {}\n".format(url, response.getcode()))
     content = response.read()
     if URLLIB_NEW:
         content = content.decode("utf-8", errors="replace")
@@ -135,7 +136,7 @@ def is_glob(pattern):
         if c == "?" or c == "[":
             maybe_glob = True
         elif c == "*" and i != 0:
-            if i < len(pattern) - 1 or pattern[i - 1] == '.':
+            if i < len(pattern) - 1 or pattern[i - 1] == ".":
                 maybe_glob = True
     if maybe_glob:
         try:
@@ -215,11 +216,13 @@ def blocklists_from_config_file(
     if time_restricted_url:
         time_restricted_content, _trusted = load_from_url(time_restricted_url)
         time_restricted_names, time_restrictions, _globs = parse_trusted_list(
-            time_restricted_content)
+            time_restricted_content
+        )
 
         if time_restricted_names:
-            print("########## Time-based blocklist ##########\n",
-                  file=output_fd, end='\n')
+            print(
+                "########## Time-based blocklist ##########\n", file=output_fd, end="\n"
+            )
             for name in time_restricted_names:
                 print_restricted_name(output_fd, name, time_restrictions)
 
@@ -234,8 +237,11 @@ def blocklists_from_config_file(
 
     # Process blocklists
     for url, names in blocklists.items():
-        print("\n\n########## Blocklist from {} ##########\n".format(
-            url), file=output_fd, end='\n')
+        print(
+            "\n\n########## Blocklist from {} ##########\n".format(url),
+            file=output_fd,
+            end="\n",
+        )
         ignored, glob_ignored, allowed = 0, 0, 0
         list_names = list()
         for name in names:
@@ -251,18 +257,23 @@ def blocklists_from_config_file(
 
         list_names.sort(key=name_cmp)
         if ignored:
-            print("# Ignored duplicates: {}".format(
-                ignored), file=output_fd, end='\n')
+            print("# Ignored duplicates: {}".format(ignored), file=output_fd, end="\n")
         if glob_ignored:
-            print("# Ignored due to overlapping local patterns: {}".format(
-                glob_ignored), file=output_fd, end='\n')
+            print(
+                "# Ignored due to overlapping local patterns: {}".format(glob_ignored),
+                file=output_fd,
+                end="\n",
+            )
         if allowed:
             print(
-                "# Ignored entries due to the allowlist: {}".format(allowed), file=output_fd, end='\n')
+                "# Ignored entries due to the allowlist: {}".format(allowed),
+                file=output_fd,
+                end="\n",
+            )
         if ignored or glob_ignored or allowed:
-            print(file=output_fd, end='\n')
+            print(file=output_fd, end="\n")
         for name in list_names:
-            print(name, file=output_fd, end='\n')
+            print(name, file=output_fd, end="\n")
 
     output_fd.close()
 
@@ -311,7 +322,7 @@ args = argp.parse_args()
 
 whitelist = args.whitelist
 if whitelist:
-    print('Use of -w WHITELIST has been removed. Please use -a ALLOWLIST instead.')
+    print("Use of -w WHITELIST has been removed. Please use -a ALLOWLIST instead.")
     exit(1)
 
 conf = args.config
@@ -321,4 +332,5 @@ ignore_retrieval_failure = args.ignore_retrieval_failure
 output_file = args.output_file
 
 blocklists_from_config_file(
-    conf, allowlist, time_restricted, ignore_retrieval_failure, output_file)
+    conf, allowlist, time_restricted, ignore_retrieval_failure, output_file
+)
