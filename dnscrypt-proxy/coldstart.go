@@ -75,8 +75,7 @@ func handleColdStartClient(clientPc *net.UDPConn, cancelChannel chan struct{}, i
 	if question.Qclass != dns.ClassINET {
 		return false
 	}
-	var respMsg *dns.Msg
-	respMsg = EmptyResponseFromMessage(msg)
+	respMsg := EmptyResponseFromMessage(msg)
 	ttl := uint32(1)
 	if question.Qtype == dns.TypeA {
 		for _, xip := range ips {
