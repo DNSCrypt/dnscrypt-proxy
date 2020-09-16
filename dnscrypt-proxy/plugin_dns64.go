@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net"
 	"sync"
+	"time"
 
 	"github.com/jedisct1/dlog"
 	"github.com/miekg/dns"
@@ -21,6 +22,7 @@ type PluginDNS64 struct {
 	pref64         []*net.IPNet
 	dns64Resolvers []string
 	ipv4Resolver   string
+	proxy          *Proxy
 }
 
 func (plugin *PluginDNS64) Name() string {
@@ -34,6 +36,7 @@ func (plugin *PluginDNS64) Description() string {
 func (plugin *PluginDNS64) Init(proxy *Proxy) error {
 	plugin.ipv4Resolver = proxy.listenAddresses[0] //recursively to ourselves
 	plugin.pref64Mutex = new(sync.RWMutex)
+	plugin.proxy = proxy
 
 	if len(proxy.dns64Prefixes) != 0 {
 		plugin.pref64Mutex.RLock()
@@ -65,26 +68,29 @@ func (plugin *PluginDNS64) Reload() error {
 }
 
 func (plugin *PluginDNS64) Eval(pluginsState *PluginsState, msg *dns.Msg) error {
-	if !hasAAAAQuestion(pluginsState.questionMsg) || hasAAAAAnswer(msg) {
+	if hasAAAAAnswer(msg) {
 		return nil
 	}
 
-	questions := msg.Question
-	if len(questions) != 1 {
-		return nil
-	}
-	question := questions[0]
-	if question.Qclass != dns.ClassINET {
+	question := pluginsState.questionMsg.Question[0]
+	if question.Qclass != dns.ClassINET || question.Qtype != dns.TypeAAAA {
 		return nil
 	}
 
-	msgA := new(dns.Msg)
+	msgA := pluginsState.questionMsg.Copy()
 	msgA.SetQuestion(question.Name, dns.TypeA)
+	msgAPacket, err := msgA.Pack()
+	if err != nil {
+		return err
+	}
 
-	client := new(dns.Client)
-	resp, _, err := client.Exchange(msgA, plugin.ipv4Resolver)
+	respPacket := plugin.proxy.processIncomingQuery("trampoline", plugin.proxy.mainProto, msgAPacket, nil, nil, time.Now())
+	resp := dns.Msg{}
+	if err := resp.Unpack(respPacket); err != nil {
+		return err
+	}
 
-	if err != nil || resp == nil || resp.Rcode != dns.RcodeSuccess {
+	if err != nil || resp.Rcode != dns.RcodeSuccess {
 		return nil
 	}
 
@@ -132,10 +138,6 @@ func (plugin *PluginDNS64) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 	pluginsState.returnCode = PluginsReturnCodeCloak
 
 	return nil
-}
-
-func hasAAAAQuestion(msg *dns.Msg) bool {
-	return msg.Question[0].Qtype == dns.TypeAAAA
 }
 
 func hasAAAAAnswer(msg *dns.Msg) bool {
