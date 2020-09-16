@@ -84,7 +84,11 @@ func (plugin *PluginDNS64) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 		return err
 	}
 
+	if !plugin.proxy.clientsCountInc() {
+		return errors.New("Too many concurrent connections to handle DNS64 subqueries")
+	}
 	respPacket := plugin.proxy.processIncomingQuery("trampoline", plugin.proxy.mainProto, msgAPacket, nil, nil, time.Now())
+	plugin.proxy.clientsCountDec()
 	resp := dns.Msg{}
 	if err := resp.Unpack(respPacket); err != nil {
 		return err
