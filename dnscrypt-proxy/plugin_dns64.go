@@ -65,7 +65,7 @@ func (plugin *PluginDNS64) Reload() error {
 }
 
 func (plugin *PluginDNS64) Eval(pluginsState *PluginsState, msg *dns.Msg) error {
-	if !hasAAAAQuestion(msg) || hasAAAAAnswer(msg) {
+	if !hasAAAAQuestion(pluginsState.questionMsg) || hasAAAAAnswer(msg) {
 		return nil
 	}
 
