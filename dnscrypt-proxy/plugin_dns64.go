@@ -135,12 +135,7 @@ func (plugin *PluginDNS64) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 }
 
 func hasAAAAQuestion(msg *dns.Msg) bool {
-	for _, question := range msg.Question {
-		if question.Qtype == dns.TypeAAAA {
-			return true
-		}
-	}
-	return false
+	return msg.Question[0].Qtype == dns.TypeAAAA
 }
 
 func hasAAAAAnswer(msg *dns.Msg) bool {
