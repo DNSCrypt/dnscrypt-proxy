@@ -585,6 +585,9 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 
 	proxy.serversBlockingFragments = config.BrokenImplementations.FragmentsBlocked
 
+	if (len(config.DNS64.Prefixes) != 0 || len(config.DNS64.Resolvers) != 0) && len(config.ListenAddresses) == 0 {
+		dlog.Fatal("`listenAddresses` cannot be empty in order to use DNS64 translation")
+	}
 	proxy.dns64Prefixes = config.DNS64.Prefixes
 	proxy.dns64Resolvers = config.DNS64.Resolvers
 
