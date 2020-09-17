@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"math/rand"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -100,6 +101,7 @@ type Config struct {
 	DoHClientX509Auth        DoHClientX509AuthConfig     `toml:"doh_client_x509_auth"`
 	DoHClientX509AuthLegacy  DoHClientX509AuthConfig     `toml:"tls_client_auth"`
 	DNS64                    DNS64Config                 `toml:"dns64"`
+	EDNSClientSubnet         []string                    `toml:"edns_client_subnet"`
 }
 
 func newConfig() Config {
@@ -458,6 +460,17 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	proxy.cloakTTL = config.CloakTTL
 
 	proxy.queryMeta = config.QueryMeta
+
+	if len(config.EDNSClientSubnet) != 0 {
+		proxy.ednsClientSubnets = make([]*net.IPNet, 0)
+		for _, cidr := range config.EDNSClientSubnet {
+			_, net, err := net.ParseCIDR(cidr)
+			if err != nil {
+				return fmt.Errorf("Invalid EDNS-client-subnet CIDR: [%v]", cidr)
+			}
+			proxy.ednsClientSubnets = append(proxy.ednsClientSubnets, net)
+		}
+	}
 
 	if len(config.QueryLog.Format) == 0 {
 		config.QueryLog.Format = "tsv"

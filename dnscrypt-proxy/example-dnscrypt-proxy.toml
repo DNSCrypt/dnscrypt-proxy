@@ -117,6 +117,14 @@ timeout = 5000
 keepalive = 30
 
 
+## Add EDNS-client-subnet information to outgoing queries
+##
+## Multiple networks can be listed; they will be randomly chosen.
+## These networks don't have to match your actual networks.
+
+# edns_client_subnet = ["0.0.0.0/0", "2001:db8::/32"]
+
+
 ## Response for blocked queries.  Options are `refused`, `hinfo` (default) or
 ## an IP response.  To give an IP response, use the format `a:<IPv4>,aaaa:<IPv6>`.
 ## Using the `hinfo` option means that some responses will be lies.
