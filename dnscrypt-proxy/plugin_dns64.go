@@ -30,7 +30,7 @@ func (plugin *PluginDNS64) Name() string {
 }
 
 func (plugin *PluginDNS64) Description() string {
-	return "Synth DNS64 AAAA responses"
+	return "Synthesize DNS64 AAAA responses"
 }
 
 func (plugin *PluginDNS64) Init(proxy *Proxy) error {
