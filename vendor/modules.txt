@@ -17,7 +17,7 @@ github.com/davecgh/go-spew/spew
 # github.com/dchest/safefile v0.0.0-20151022103144-855e8d98f185
 ## explicit
 github.com/dchest/safefile
-# github.com/hashicorp/go-immutable-radix v1.2.0
+# github.com/hashicorp/go-immutable-radix v1.3.0
 ## explicit
 github.com/hashicorp/go-immutable-radix
 # github.com/hashicorp/go-syslog v1.0.0
@@ -64,7 +64,7 @@ github.com/powerman/check
 # github.com/smartystreets/goconvey v1.6.4
 github.com/smartystreets/goconvey/convey/gotest
 github.com/smartystreets/goconvey/convey/reporting
-# golang.org/x/crypto v0.0.0-20200728195943-123391ffb6de
+# golang.org/x/crypto v0.0.0-20200820211705-5c72a883971a
 ## explicit
 golang.org/x/crypto/blake2b
 golang.org/x/crypto/curve25519
@@ -75,7 +75,7 @@ golang.org/x/crypto/nacl/box
 golang.org/x/crypto/nacl/secretbox
 golang.org/x/crypto/poly1305
 golang.org/x/crypto/salsa20/salsa
-# golang.org/x/net v0.0.0-20200707034311-ab3426394381
+# golang.org/x/net v0.0.0-20200904194848-62affa334b73
 ## explicit
 golang.org/x/net/bpf
 golang.org/x/net/http/httpguts
@@ -88,7 +88,7 @@ golang.org/x/net/internal/socks
 golang.org/x/net/ipv4
 golang.org/x/net/ipv6
 golang.org/x/net/proxy
-# golang.org/x/sys v0.0.0-20200728102440-3e129f6d46b1
+# golang.org/x/sys v0.0.0-20200917073148-efd3b9a0ff20
 ## explicit
 golang.org/x/sys/cpu
 golang.org/x/sys/internal/unsafeheader
