@@ -50,10 +50,20 @@ func ComputeSharedKey(cryptoConstruction CryptoConstruction, secretKey *[32]byte
 		var err error
 		sharedKey, err = xsecretbox.SharedKey(*secretKey, *serverPk)
 		if err != nil {
-			dlog.Criticalf("[%v] Weak public key", providerName)
+			dlog.Criticalf("[%v] Weak XChaCha20 public key", providerName)
 		}
 	} else {
 		box.Precompute(&sharedKey, serverPk, secretKey)
+		c := byte(0)
+		for i := 0; i < 32; i++ {
+			c |= sharedKey[i]
+		}
+		if c == 0 {
+			dlog.Criticalf("[%v] Weak XSalsa20 public key", providerName)
+			if _, err := crypto_rand.Read(sharedKey[:]); err != nil {
+				dlog.Fatal(err)
+			}
+		}
 	}
 	return
 }
