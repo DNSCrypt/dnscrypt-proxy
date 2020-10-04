@@ -290,7 +290,7 @@ argp.add_argument(
 argp.add_argument(
     "-w",
     "--whitelist",
-    help="Deprecated.  Please use -a or --allowlist",
+    help=argparse.SUPPRESS,
 )
 argp.add_argument(
     "-a",
@@ -322,7 +322,8 @@ args = argp.parse_args()
 
 whitelist = args.whitelist
 if whitelist:
-    print("Use of -w WHITELIST has been removed. Please use -a ALLOWLIST instead.")
+    print("The option to provide a set of names to exclude from the blocklist has been changed from -w to -a\r\n")
+    argp.print_help()
     exit(1)
 
 conf = args.config
