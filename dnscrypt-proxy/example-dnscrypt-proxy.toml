@@ -134,7 +134,7 @@ keepalive = 30
 
 
 ## Load-balancing strategy: 'p2' (default), 'ph', 'pn', 'first' or 'random'
-## Use the 2, half, n, 1 or random number of all by latency.
+## Randomly choose 1 of the fastest 2, half, n, 1 or all live servers by latency.
 ## The response quality still depends on the server itself.
 
 # lb_strategy = 'p2'
