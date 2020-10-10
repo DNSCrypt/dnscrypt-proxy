@@ -141,11 +141,13 @@ keepalive = 30
 
 ## Set to `true` to constantly try to estimate the latency of all the resolvers
 ## and adjust the load-balancing parameters accordingly, or to `false` to disable.
+## Default is `true` that makes 'p2' `lb_strategy` work well.
 
 # lb_estimator = true
 
 
 ## Log level (0-6, default: 2 - 0 is very verbose, 6 only contains fatal errors)
+## If you set it to 0 for debugging mode, environment variable `DEBUG` is needed.
 
 # log_level = 2
 
