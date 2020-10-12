@@ -104,6 +104,8 @@ func FetchCurrentDNSCryptCert(proxy *Proxy, serverName *string, proto string, pk
 				dlog.Warnf("[%v] certificate is about to expire -- if you don't manage this server, tell the server operator about it", *serverName)
 			} else if daysLeft <= 30 {
 				dlog.Infof("[%v] certificate will expire in %d days", *serverName, daysLeft)
+			} else {
+				dlog.Debugf("[%v] certificate still valid for %d days", *serverName, daysLeft)
 			}
 			certInfo.ForwardSecurity = false
 		} else {
