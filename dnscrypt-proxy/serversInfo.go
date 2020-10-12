@@ -390,6 +390,29 @@ func dohTestPacket(msgID uint16) []byte {
 	return body
 }
 
+func dohNXTestPacket(msgID uint16) []byte {
+	msg := dns.Msg{}
+	qName := make([]byte, 16)
+	charset := "abcdefghijklmnopqrstuvwxyz"
+	for i := range qName {
+		qName[i] = charset[rand.Intn(len(charset))]
+	}
+	msg.SetQuestion(string(qName)+".test.dnscrypt.", dns.TypeNS)
+	msg.Id = msgID
+	msg.MsgHdr.RecursionDesired = true
+	msg.SetEdns0(uint16(MaxDNSPacketSize), false)
+	ext := new(dns.EDNS0_PADDING)
+	ext.Padding = make([]byte, 16)
+	crypto_rand.Read(ext.Padding)
+	edns0 := msg.IsEdns0()
+	edns0.Option = append(edns0.Option, ext)
+	body, err := msg.Pack()
+	if err != nil {
+		dlog.Fatal(err)
+	}
+	return body
+}
+
 func fetchDoHServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, isNew bool) (ServerInfo, error) {
 	// If an IP has been provided, use it forever.
 	// Or else, if the fallback server and the DoH server are operated
@@ -424,12 +447,22 @@ func fetchDoHServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, isN
 		}
 		dlog.Debugf("Server [%s] doesn't appear to support POST; falling back to GET requests", name)
 	}
+	body = dohNXTestPacket(0xcafe)
 	serverResponse, tls, rtt, err := proxy.xTransport.DoHQuery(useGet, url, body, proxy.timeout)
 	if err != nil {
+		dlog.Infof("[%s] [%s]: %v", name, url, err)
 		return ServerInfo{}, err
 	}
 	if tls == nil || !tls.HandshakeComplete {
 		return ServerInfo{}, errors.New("TLS handshake failed")
+	}
+	msg := dns.Msg{}
+	if err := msg.Unpack(serverResponse); err != nil {
+		dlog.Warnf("[%s]: %v", name, err)
+		return ServerInfo{}, err
+	}
+	if msg.Rcode != dns.RcodeNameError {
+		dlog.Criticalf("[%s] may be a lying resolver", name)
 	}
 	protocol := tls.NegotiatedProtocol
 	if len(protocol) == 0 {
@@ -461,14 +494,13 @@ func fetchDoHServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, isN
 		}
 	}
 	if !found && len(stamp.Hashes) > 0 {
-		return ServerInfo{}, fmt.Errorf("Certificate hash [%x] not found for [%s]", wantedHash, name)
+		dlog.Criticalf("[%s] Certificate hash [%x] not found", name, wantedHash)
+		return ServerInfo{}, fmt.Errorf("Certificate hash not found")
 	}
 	respBody := serverResponse
-	if err != nil {
-		return ServerInfo{}, err
-	}
 	if len(respBody) < MinDNSPacketSize || len(respBody) > MaxDNSPacketSize ||
 		respBody[0] != 0xca || respBody[1] != 0xfe || respBody[4] != 0x00 || respBody[5] != 0x01 {
+		dlog.Info("Webserver returned an unexpected response")
 		return ServerInfo{}, errors.New("Webserver returned an unexpected response")
 	}
 	xrtt := int(rtt.Nanoseconds() / 1000000)

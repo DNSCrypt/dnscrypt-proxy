@@ -1,0 +1,7 @@
+captive.apple.com               17.253.109.201,17.253.113.202
+connectivitycheck.gstatic.com   64.233.165.94
+connectivitycheck.android.com   172.217.20.110
+www.msftncsi.com                2.19.98.8,2.19.98.59
+dns.msftncsi.com                131.107.255.255
+www.msftconnecttest.com         13.107.4.52
+ipv4only.arpa                   192.0.0.170,192.0.0.171

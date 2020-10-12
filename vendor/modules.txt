@@ -17,7 +17,7 @@ github.com/davecgh/go-spew/spew
 # github.com/dchest/safefile v0.0.0-20151022103144-855e8d98f185
 ## explicit
 github.com/dchest/safefile
-# github.com/hashicorp/go-immutable-radix v1.2.0
+# github.com/hashicorp/go-immutable-radix v1.3.0
 ## explicit
 github.com/hashicorp/go-immutable-radix
 # github.com/hashicorp/go-syslog v1.0.0
@@ -42,7 +42,7 @@ github.com/jedisct1/go-dnsstamps
 # github.com/jedisct1/go-minisign v0.0.0-20190909160543-45766022959e
 ## explicit
 github.com/jedisct1/go-minisign
-# github.com/jedisct1/xsecretbox v0.0.0-20190909160646-b731c21297f9
+# github.com/jedisct1/xsecretbox v0.0.0-20200921000858-23f5ec706e6a
 ## explicit
 github.com/jedisct1/xsecretbox
 # github.com/k-sone/critbitgo v1.4.0
@@ -51,7 +51,7 @@ github.com/k-sone/critbitgo
 # github.com/kardianos/service v1.1.0
 ## explicit
 github.com/kardianos/service
-# github.com/miekg/dns v1.1.30
+# github.com/miekg/dns v1.1.31
 ## explicit
 github.com/miekg/dns
 # github.com/pkg/errors v0.8.1
@@ -64,7 +64,7 @@ github.com/powerman/check
 # github.com/smartystreets/goconvey v1.6.4
 github.com/smartystreets/goconvey/convey/gotest
 github.com/smartystreets/goconvey/convey/reporting
-# golang.org/x/crypto v0.0.0-20200709230013-948cd5f35899
+# golang.org/x/crypto v0.0.0-20200820211705-5c72a883971a
 ## explicit
 golang.org/x/crypto/blake2b
 golang.org/x/crypto/curve25519
@@ -75,7 +75,7 @@ golang.org/x/crypto/nacl/box
 golang.org/x/crypto/nacl/secretbox
 golang.org/x/crypto/poly1305
 golang.org/x/crypto/salsa20/salsa
-# golang.org/x/net v0.0.0-20200707034311-ab3426394381
+# golang.org/x/net v0.0.0-20200904194848-62affa334b73
 ## explicit
 golang.org/x/net/bpf
 golang.org/x/net/http/httpguts
@@ -88,7 +88,7 @@ golang.org/x/net/internal/socks
 golang.org/x/net/ipv4
 golang.org/x/net/ipv6
 golang.org/x/net/proxy
-# golang.org/x/sys v0.0.0-20200625212154-ddb9806d33ae
+# golang.org/x/sys v0.0.0-20200918174421-af09f7315aff
 ## explicit
 golang.org/x/sys/cpu
 golang.org/x/sys/internal/unsafeheader
@@ -98,7 +98,8 @@ golang.org/x/sys/windows/registry
 golang.org/x/sys/windows/svc
 golang.org/x/sys/windows/svc/eventlog
 golang.org/x/sys/windows/svc/mgr
-# golang.org/x/text v0.3.0
+# golang.org/x/text v0.3.3
+## explicit
 golang.org/x/text/secure/bidirule
 golang.org/x/text/transform
 golang.org/x/text/unicode/bidi

@@ -117,6 +117,14 @@ timeout = 5000
 keepalive = 30
 
 
+## Add EDNS-client-subnet information to outgoing queries
+##
+## Multiple networks can be listed; they will be randomly chosen.
+## These networks don't have to match your actual networks.
+
+# edns_client_subnet = ["0.0.0.0/0", "2001:db8::/32"]
+
+
 ## Response for blocked queries.  Options are `refused`, `hinfo` (default) or
 ## an IP response.  To give an IP response, use the format `a:<IPv4>,aaaa:<IPv6>`.
 ## Using the `hinfo` option means that some responses will be lies.
@@ -253,7 +261,7 @@ netprobe_address = '9.9.9.9:53'
 ## encrypted-dns-server can be configured to use this for access control
 ## in the [access_control] section
 
-# query_meta = ["key1:value1", "key2:value2", "token:MySecretToken"]
+# query_meta = ['key1:value1', 'key2:value2', 'token:MySecretToken']
 
 
 ## Automatic log files rotation
@@ -386,14 +394,14 @@ cache_neg_max_ttl = 600
 ## For each `listen_address` the complete URL to access the server will be:
 ## `https://<listen_address><path>` (ex: `https://127.0.0.1/dns-query`)
 
-# path = "/dns-query"
+# path = '/dns-query'
 
 
 ## Certificate file and key - Note that the certificate has to be trusted.
 ## See the documentation (wiki) for more information.
 
-# cert_file = "localhost.pem"
-# cert_key_file = "localhost.pem"
+# cert_file = 'localhost.pem'
+# cert_key_file = 'localhost.pem'
 
 
 
@@ -641,7 +649,7 @@ cache_neg_max_ttl = 600
 # The list below enables workarounds to make non-relayed usage more reliable
 # until the servers are fixed.
 
-fragments_blocked = ['cisco', 'cisco-ipv6', 'cisco-familyshield', 'cisco-familyshield-ipv6', 'quad9-dnscrypt-ip4-filter-pri', 'quad9-dnscrypt-ip4-nofilter-pri', 'quad9-dnscrypt-ip6-filter-pri', 'quad9-dnscrypt-ip6-nofilter-pri', 'cleanbrowsing-adult', 'cleanbrowsing-family-ipv6', 'cleanbrowsing-family', 'cleanbrowsing-security']
+fragments_blocked = ['cisco', 'cisco-ipv6', 'cisco-familyshield', 'cisco-familyshield-ipv6', 'cleanbrowsing-adult', 'cleanbrowsing-family-ipv6', 'cleanbrowsing-family', 'cleanbrowsing-security']
 
 
 
@@ -734,13 +742,13 @@ skip_incompatible = false
 [dns64]
 
 ## (Option 1) Static prefix(es) as Pref64::/n CIDRs.
-# prefix = ["64:ff9b::/96"]
+# prefix = ['64:ff9b::/96']
 
 ## (Option 2) DNS64-enabled resolver(s) to discover Pref64::/n CIDRs.
 ## These resolvers are used to query for Well-Known IPv4-only Name (WKN) "ipv4only.arpa." to discover only.
 ## Set with your ISP's resolvers in case of custom prefixes (other than Well-Known Prefix 64:ff9b::/96).
 ## IMPORTANT: Default resolvers listed below support Well-Known Prefix 64:ff9b::/96 only.
-# resolver = ["[2606:4700:4700::64]:53", "[2001:4860:4860::64]:53"]
+# resolver = ['[2606:4700:4700::64]:53', '[2001:4860:4860::64]:53']
 
 
 

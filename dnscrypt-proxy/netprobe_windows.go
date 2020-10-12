@@ -7,9 +7,16 @@ import (
 	"github.com/jedisct1/dlog"
 )
 
-func NetProbe(address string, timeout int) error {
+func NetProbe(proxy *Proxy, address string, timeout int) error {
 	if len(address) <= 0 || timeout == 0 {
 		return nil
+	}
+	if captivePortalHandler, err := ColdStart(proxy); err == nil {
+		if captivePortalHandler != nil {
+			defer captivePortalHandler.Stop()
+		}
+	} else {
+		dlog.Critical(err)
 	}
 	remoteUDPAddr, err := net.ResolveUDPAddr("udp", address)
 	if err != nil {

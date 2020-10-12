@@ -58,8 +58,10 @@ func (plugin *PluginQueryLog) Eval(pluginsState *PluginsState, msg *dns.Msg) err
 	var clientIPStr string
 	if pluginsState.clientProto == "udp" {
 		clientIPStr = (*pluginsState.clientAddr).(*net.UDPAddr).IP.String()
-	} else {
+	} else if pluginsState.clientProto == "tcp" {
 		clientIPStr = (*pluginsState.clientAddr).(*net.TCPAddr).IP.String()
+	} else {
+		clientIPStr = "-"
 	}
 	qName := pluginsState.qName
 

@@ -1,6 +1,7 @@
 package xsecretbox
 
 import (
+	crypto_rand "crypto/rand"
 	"errors"
 
 	"github.com/aead/chacha20/chacha"
@@ -16,6 +17,9 @@ func SharedKey(secretKey [32]byte, publicKey [32]byte) ([32]byte, error) {
 		c |= sharedKey[i]
 	}
 	if c == 0 {
+		if _, err := crypto_rand.Read(sharedKey[:]); err != nil {
+			return sharedKey, nil
+		}
 		return sharedKey, errors.New("weak public key")
 	}
 	var nonce [16]byte
