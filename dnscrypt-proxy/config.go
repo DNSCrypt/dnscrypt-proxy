@@ -67,6 +67,7 @@ type Config struct {
 	AllowedName              AllowedNameConfig           `toml:"allowed_names"`
 	BlockIP                  BlockIPConfig               `toml:"blocked_ips"`
 	BlockIPLegacy            BlockIPConfigLegacy         `toml:"ip_blacklist"`
+	AllowIP                  AllowIPConfig               `toml:"allowed_ips"`
 	ForwardFile              string                      `toml:"forwarding_rules"`
 	CloakFile                string                      `toml:"cloaking_rules"`
 	CaptivePortalFile        string                      `toml:"captive_portal_handler"`
@@ -209,6 +210,12 @@ type BlockIPConfig struct {
 
 type BlockIPConfigLegacy struct {
 	File    string `toml:"blacklist_file"`
+	LogFile string `toml:"log_file"`
+	Format  string `toml:"log_format"`
+}
+
+type AllowIPConfig struct {
+	File    string `toml:"allowed_ips_file"`
 	LogFile string `toml:"log_file"`
 	Format  string `toml:"log_format"`
 }
@@ -557,6 +564,18 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	proxy.blockIPFile = config.BlockIP.File
 	proxy.blockIPFormat = config.BlockIP.Format
 	proxy.blockIPLogFile = config.BlockIP.LogFile
+
+	if len(config.AllowIP.Format) == 0 {
+		config.AllowIP.Format = "tsv"
+	} else {
+		config.AllowIP.Format = strings.ToLower(config.AllowIP.Format)
+	}
+	if config.AllowIP.Format != "tsv" && config.AllowIP.Format != "ltsv" {
+		return errors.New("Unsupported allowed_ips log format")
+	}
+	proxy.allowedIPFile = config.AllowIP.File
+	proxy.allowedIPFormat = config.AllowIP.Format
+	proxy.allowedIPLogFile = config.AllowIP.LogFile
 
 	proxy.forwardFile = config.ForwardFile
 	proxy.cloakFile = config.CloakFile

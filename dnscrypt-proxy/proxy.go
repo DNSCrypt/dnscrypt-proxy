@@ -50,6 +50,9 @@ type Proxy struct {
 	blockIPLogFile                 string
 	queryLogFormat                 string
 	blockIPFile                    string
+	allowedIPFile                  string
+	allowedIPFormat                string
+	allowedIPLogFile               string
 	whitelistNameFormat            string
 	whitelistNameLogFile           string
 	blockNameLogFile               string
