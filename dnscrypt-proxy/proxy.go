@@ -41,6 +41,7 @@ type Proxy struct {
 	registeredServers              []RegisteredServer
 	registeredRelays               []RegisteredServer
 	pluginBlockIPv6                bool
+	pluginBlockIPv6DualStack       bool
 	pluginBlockUnqualified         bool
 	pluginBlockUndelegated         bool
 	cache                          bool

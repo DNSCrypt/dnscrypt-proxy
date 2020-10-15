@@ -294,6 +294,13 @@ log_files_max_backups = 1
 block_ipv6 = false
 
 
+## Block AAAA query if A record is available for the same domain name.
+## Remember to set block_ipv6 (a general IPv6 filter) to false.
+## This may increase the latency.
+
+block_ipv6_dual_stack = false
+
+
 ## Immediately respond to A and AAAA queries for host names without a domain name
 
 block_unqualified = true
