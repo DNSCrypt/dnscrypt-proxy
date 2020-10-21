@@ -125,20 +125,23 @@ keepalive = 30
 # edns_client_subnet = ["0.0.0.0/0", "2001:db8::/32"]
 
 
-## Response for blocked queries.  Options are `refused`, `hinfo` (default) or
-## an IP response.  To give an IP response, use the format `a:<IPv4>,aaaa:<IPv6>`.
+## Response for blocked queries. Options are `refused`, `hinfo` (default) or
+## an IP response. To give an IP response, use the format `a:<IPv4>,aaaa:<IPv6>`.
 ## Using the `hinfo` option means that some responses will be lies.
 ## Unfortunately, the `hinfo` option appears to be required for Android 8+
 
 # blocked_query_response = 'refused'
 
 
-## Load-balancing strategy: 'p2' (default), 'ph', 'first' or 'random'
+## Load-balancing strategy: 'p2' (default), 'ph', 'p<n>', 'first' or 'random'
+## Randomly choose 1 of the fastest 2, half, n, 1 or all live servers by latency.
+## The response quality still depends on the server itself.
 
 # lb_strategy = 'p2'
 
 ## Set to `true` to constantly try to estimate the latency of all the resolvers
 ## and adjust the load-balancing parameters accordingly, or to `false` to disable.
+## Default is `true` that makes 'p2' `lb_strategy` work well.
 
 # lb_estimator = true
 
