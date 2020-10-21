@@ -133,7 +133,7 @@ keepalive = 30
 # blocked_query_response = 'refused'
 
 
-## Load-balancing strategy: 'p2' (default), 'ph', 'pn', 'first' or 'random'
+## Load-balancing strategy: 'p2' (default), 'ph', 'p<n>', 'first' or 'random'
 ## Randomly choose 1 of the fastest 2, half, n, 1 or all live servers by latency.
 ## The response quality still depends on the server itself.
 
@@ -147,7 +147,6 @@ keepalive = 30
 
 
 ## Log level (0-6, default: 2 - 0 is very verbose, 6 only contains fatal errors)
-## If you set it to 0 for debugging mode, environment variable `DEBUG` is needed.
 
 # log_level = 2
 
