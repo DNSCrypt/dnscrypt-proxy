@@ -12,7 +12,7 @@ import (
 
 type SVCBKey uint16
 
-// Keys defined in draft-ietf-dnsop-svcb-https-02 Section 11.1.2.
+// Keys defined in draft-ietf-dnsop-svcb-https-01 Section 12.3.2.
 const (
 	SVCB_MANDATORY       SVCBKey = 0
 	SVCB_ALPN            SVCBKey = 1
@@ -199,7 +199,7 @@ func makeSVCBKeyValue(key SVCBKey) SVCBKeyValue {
 	}
 }
 
-// SVCB RR. See RFC xxxx (https://tools.ietf.org/html/draft-ietf-dnsop-svcb-https-02).
+// SVCB RR. See RFC xxxx (https://tools.ietf.org/html/draft-ietf-dnsop-svcb-https-01).
 type SVCB struct {
 	Hdr      RR_Header
 	Priority uint16
@@ -305,7 +305,8 @@ func (s *SVCBMandatory) copy() SVCBKeyValue {
 // https://www.iana.org/assignments/tls-extensiontype-values/tls-extensiontype-values.xhtml#alpn-protocol-ids
 // Basic use pattern for creating an alpn option:
 //
-//	h := &dns.HTTPS{Hdr: dns.RR_Header{Name: ".", Rrtype: dns.TypeHTTPS, Class: dns.ClassINET}}
+//	h := new(dns.HTTPS)
+//	h.Hdr = dns.RR_Header{Name: ".", Rrtype: dns.TypeHTTPS, Class: dns.ClassINET}
 //	e := new(dns.SVCBAlpn)
 //	e.Alpn = []string{"h2", "http/1.1"}
 //	h.Value = append(o.Value, e)
@@ -440,7 +441,8 @@ func (s *SVCBPort) parse(b string) error {
 // to the hinted IP address may be terminated and a new connection may be opened.
 // Basic use pattern for creating an ipv4hint option:
 //
-//	h := &dns.HTTPS{Hdr: dns.RR_Header{Name: ".", Rrtype: dns.TypeHTTPS, Class: dns.ClassINET}}
+//	h := new(dns.HTTPS)
+//	h.Hdr = dns.RR_Header{Name: ".", Rrtype: dns.TypeHTTPS, Class: dns.ClassINET}
 //	e := new(dns.SVCBIPv4Hint)
 //	e.Hint = []net.IP{net.IPv4(1,1,1,1).To4()}
 //
@@ -517,9 +519,10 @@ func (s *SVCBIPv4Hint) copy() SVCBKeyValue {
 // SVCBECHConfig pair contains the ECHConfig structure defined in draft-ietf-tls-esni [RFC xxxx].
 // Basic use pattern for creating an echconfig option:
 //
-//	h := &dns.HTTPS{Hdr: dns.RR_Header{Name: ".", Rrtype: dns.TypeHTTPS, Class: dns.ClassINET}}
+//	h := new(dns.HTTPS)
+//	h.Hdr = dns.RR_Header{Name: ".", Rrtype: dns.TypeHTTPS, Class: dns.ClassINET}
 //	e := new(dns.SVCBECHConfig)
-//	e.ECH = "/wH...="
+//	e.ECH = []byte{0xfe, 0x08, ...}
 //	h.Value = append(h.Value, e)
 type SVCBECHConfig struct {
 	ECH []byte
@@ -558,7 +561,8 @@ func (s *SVCBECHConfig) parse(b string) error {
 // connection to the hinted IP address may be terminated and a new connection may be opened.
 // Basic use pattern for creating an ipv6hint option:
 //
-//	h := &dns.HTTPS{Hdr: dns.RR_Header{Name: ".", Rrtype: dns.TypeHTTPS, Class: dns.ClassINET}}
+//	h := new(dns.HTTPS)
+//	h.Hdr = dns.RR_Header{Name: ".", Rrtype: dns.TypeHTTPS, Class: dns.ClassINET}
 //	e := new(dns.SVCBIPv6Hint)
 //	e.Hint = []net.IP{net.ParseIP("2001:db8::1")}
 //	h.Value = append(h.Value, e)
@@ -634,7 +638,8 @@ func (s *SVCBIPv6Hint) copy() SVCBKeyValue {
 // to be in the range [SVCB_PRIVATE_LOWER, SVCB_PRIVATE_UPPER].
 // Basic use pattern for creating a keyNNNNN option:
 //
-//	h := &dns.HTTPS{Hdr: dns.RR_Header{Name: ".", Rrtype: dns.TypeHTTPS, Class: dns.ClassINET}}
+//	h := new(dns.HTTPS)
+//	h.Hdr = dns.RR_Header{Name: ".", Rrtype: dns.TypeHTTPS, Class: dns.ClassINET}
 //	e := new(dns.SVCBLocal)
 //	e.KeyCode = 65400
 //	e.Data = []byte("abc")
