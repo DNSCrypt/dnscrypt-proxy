@@ -16,6 +16,7 @@ import (
 
 	"github.com/VividCortex/ewma"
 	"github.com/jedisct1/dlog"
+	"github.com/jedisct1/go-dnsstamps"
 	stamps "github.com/jedisct1/go-dnsstamps"
 	"github.com/miekg/dns"
 	"golang.org/x/crypto/ed25519"
@@ -42,25 +43,25 @@ type DOHClientCreds struct {
 }
 
 type ServerInfo struct {
-	Proto              stamps.StampProtoType
-	MagicQuery         [8]byte
-	ServerPk           [32]byte
-	SharedKey          [32]byte
-	CryptoConstruction CryptoConstruction
+	DOHClientCreds     DOHClientCreds
+	lastActionTS       time.Time
+	rtt                ewma.MovingAverage
 	Name               string
-	Timeout            time.Duration
-	URL                *url.URL
 	HostName           string
 	UDPAddr            *net.UDPAddr
 	TCPAddr            *net.TCPAddr
 	RelayUDPAddr       *net.UDPAddr
+	URL                *url.URL
 	RelayTCPAddr       *net.TCPAddr
-	knownBugs          ServerBugs
-	lastActionTS       time.Time
-	rtt                ewma.MovingAverage
 	initialRtt         int
+	Timeout            time.Duration
+	CryptoConstruction CryptoConstruction
+	ServerPk           [32]byte
+	SharedKey          [32]byte
+	MagicQuery         [8]byte
+	knownBugs          ServerBugs
+	Proto              dnsstamps.StampProtoType
 	useGet             bool
-	DOHClientCreds     DOHClientCreds
 }
 
 type LBStrategy interface {
