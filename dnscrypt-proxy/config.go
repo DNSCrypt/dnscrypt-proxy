@@ -28,80 +28,80 @@ const (
 )
 
 type Config struct {
-	LocalDoH                 LocalDoHConfig
-	QueryLog                 QueryLogConfig
-	AllowedName              AllowedNameConfig
-	DNS64                    DNS64Config
-	BlockIP                  BlockIPConfig
-	BlockName                BlockNameConfig
-	BlockNameLegacy          BlockNameConfigLegacy
-	BlockIPLegacy            BlockIPConfigLegacy
-	WhitelistNameLegacy      WhitelistNameConfigLegacy
-	BrokenImplementations    BrokenImplementationsConfig
-	NxLog                    NxLogConfig
-	AnonymizedDNS            AnonymizedDNSConfig
-	DoHClientX509Auth        DoHClientX509AuthConfig
-	DoHClientX509AuthLegacy  DoHClientX509AuthConfig
-	ListenAddresses          []string
-	DisabledServerNames      []string
-	QueryMeta                []string
-	ServerNames              []string
-	FallbackResolvers        []string
-	TLSCipherSuite           []uint16
-	EDNSClientSubnet         []string
-	SourcesConfig            map[string]SourceConfig
-	AllWeeklyRanges          map[string]WeeklyRangesStr
-	StaticsConfig            map[string]StaticConfig
-	LogFile                  *string
-	UserName                 string
-	CloakFile                string
-	ForwardFile              string
-	FallbackResolver         string
-	HTTPProxyURL             string
-	NetprobeAddress          string
-	Proxy                    string
-	LBStrategy               string
-	BlockedQueryResponse     string
-	CaptivePortalFile        string
-	LogMaxBackups            int
-	LogMaxAge                int
-	CertRefreshDelay         int
-	LogMaxSize               int
-	LogLevel                 int
-	CacheSize                int
-	NetprobeTimeout          int
-	Timeout                  int
-	KeepAlive                int
-	MaxClients               uint32
-	CloakTTL                 uint32
-	RejectTTL                uint32
-	CacheMinTTL              uint32
-	CacheNegMaxTTL           uint32
-	CacheNegTTL              uint32
-	CacheNegMinTTL           uint32
-	CacheMaxTTL              uint32
-	SourceIPv6               bool
-	SourceIPv4               bool
-	SourceDoH                bool
-	IgnoreSystemDNS          bool
-	SourceDNSCrypt           bool
-	SourceRequireNoFilter    bool
-	SourceRequireNoLog       bool
-	SourceRequireDNSSEC      bool
-	TLSDisableSessionTickets bool
-	Cache                    bool
-	BlockUndelegated         bool
-	BlockUnqualified         bool
-	BlockIPv6                bool
-	LBEstimator              bool
-	RefusedCodeInResponses   bool
-	EphemeralKeys            bool
-	CertIgnoreTimestamp      bool
-	ForceTCP                 bool
+	LogLevel                 int            `toml:"log_level"`
+	LogFile                  *string        `toml:"log_file"`
+	LogFileLatest            bool           `toml:"log_file_latest"`
+	UseSyslog                bool           `toml:"use_syslog"`
+	ServerNames              []string       `toml:"server_names"`
+	DisabledServerNames      []string       `toml:"disabled_server_names"`
+	ListenAddresses          []string       `toml:"listen_addresses"`
+	LocalDoH                 LocalDoHConfig `toml:"local_doh"`
 	Daemonize                bool
-	UseSyslog                bool
-	LogFileLatest            bool
-	OfflineMode              bool
+	UserName                 string `toml:"user_name"`
+	ForceTCP                 bool   `toml:"force_tcp"`
+	Timeout                  int    `toml:"timeout"`
+	KeepAlive                int    `toml:"keepalive"`
+	Proxy                    string `toml:"proxy"`
+	CertRefreshDelay         int    `toml:"cert_refresh_delay"`
+	CertIgnoreTimestamp      bool   `toml:"cert_ignore_timestamp"`
+	EphemeralKeys            bool   `toml:"dnscrypt_ephemeral_keys"`
+	LBStrategy               string `toml:"lb_strategy"`
+	LBEstimator              bool   `toml:"lb_estimator"`
+	BlockIPv6                bool   `toml:"block_ipv6"`
+	BlockUnqualified         bool   `toml:"block_unqualified"`
+	BlockUndelegated         bool   `toml:"block_undelegated"`
+	Cache                    bool
+	CacheSize                int                         `toml:"cache_size"`
+	CacheNegTTL              uint32                      `toml:"cache_neg_ttl"`
+	CacheNegMinTTL           uint32                      `toml:"cache_neg_min_ttl"`
+	CacheNegMaxTTL           uint32                      `toml:"cache_neg_max_ttl"`
+	CacheMinTTL              uint32                      `toml:"cache_min_ttl"`
+	CacheMaxTTL              uint32                      `toml:"cache_max_ttl"`
+	RejectTTL                uint32                      `toml:"reject_ttl"`
+	CloakTTL                 uint32                      `toml:"cloak_ttl"`
+	QueryLog                 QueryLogConfig              `toml:"query_log"`
+	NxLog                    NxLogConfig                 `toml:"nx_log"`
+	BlockName                BlockNameConfig             `toml:"blocked_names"`
+	BlockNameLegacy          BlockNameConfigLegacy       `toml:"blacklist"`
+	WhitelistNameLegacy      WhitelistNameConfigLegacy   `toml:"whitelist"`
+	AllowedName              AllowedNameConfig           `toml:"allowed_names"`
+	BlockIP                  BlockIPConfig               `toml:"blocked_ips"`
+	BlockIPLegacy            BlockIPConfigLegacy         `toml:"ip_blacklist"`
+	ForwardFile              string                      `toml:"forwarding_rules"`
+	CloakFile                string                      `toml:"cloaking_rules"`
+	CaptivePortalFile        string                      `toml:"captive_portal_handler"`
+	StaticsConfig            map[string]StaticConfig     `toml:"static"`
+	SourcesConfig            map[string]SourceConfig     `toml:"sources"`
+	BrokenImplementations    BrokenImplementationsConfig `toml:"broken_implementations"`
+	SourceRequireDNSSEC      bool                        `toml:"require_dnssec"`
+	SourceRequireNoLog       bool                        `toml:"require_nolog"`
+	SourceRequireNoFilter    bool                        `toml:"require_nofilter"`
+	SourceDNSCrypt           bool                        `toml:"dnscrypt_servers"`
+	SourceDoH                bool                        `toml:"doh_servers"`
+	SourceIPv4               bool                        `toml:"ipv4_servers"`
+	SourceIPv6               bool                        `toml:"ipv6_servers"`
+	MaxClients               uint32                      `toml:"max_clients"`
+	FallbackResolver         string                      `toml:"fallback_resolver"`
+	FallbackResolvers        []string                    `toml:"fallback_resolvers"`
+	IgnoreSystemDNS          bool                        `toml:"ignore_system_dns"`
+	AllWeeklyRanges          map[string]WeeklyRangesStr  `toml:"schedules"`
+	LogMaxSize               int                         `toml:"log_files_max_size"`
+	LogMaxAge                int                         `toml:"log_files_max_age"`
+	LogMaxBackups            int                         `toml:"log_files_max_backups"`
+	TLSDisableSessionTickets bool                        `toml:"tls_disable_session_tickets"`
+	TLSCipherSuite           []uint16                    `toml:"tls_cipher_suite"`
+	NetprobeAddress          string                      `toml:"netprobe_address"`
+	NetprobeTimeout          int                         `toml:"netprobe_timeout"`
+	OfflineMode              bool                        `toml:"offline_mode"`
+	HTTPProxyURL             string                      `toml:"http_proxy"`
+	RefusedCodeInResponses   bool                        `toml:"refused_code_in_responses"`
+	BlockedQueryResponse     string                      `toml:"blocked_query_response"`
+	QueryMeta                []string                    `toml:"query_meta"`
+	AnonymizedDNS            AnonymizedDNSConfig         `toml:"anonymized_dns"`
+	DoHClientX509Auth        DoHClientX509AuthConfig     `toml:"doh_client_x509_auth"`
+	DoHClientX509AuthLegacy  DoHClientX509AuthConfig     `toml:"tls_client_auth"`
+	DNS64                    DNS64Config                 `toml:"dns64"`
+	EDNSClientSubnet         []string                    `toml:"edns_client_subnet"`
 }
 
 func newConfig() Config {
