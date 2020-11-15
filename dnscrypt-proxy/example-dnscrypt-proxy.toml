@@ -545,6 +545,33 @@ cache_neg_max_ttl = 600
 
 
 
+#########################################################
+#   Pattern-based allowed IPs lists (blocklists bypass) #
+#########################################################
+
+## Allowed IP lists support the same patterns as IP blocklists
+## If an IP response matches an allow ip entry, the corresponding session
+## will bypass IP filters.
+##
+## Time-based rules are also supported to make some websites only accessible at specific times of the day.
+
+[allowed_ips]
+
+  ## Path to the file of allowed ip rules (absolute, or relative to the same directory as the config file)
+
+  # allowed_ips_file = 'allowed-ips.txt'
+
+
+  ## Optional path to a file logging allowed queries
+
+  # log_file = 'allowed-ips.log'
+
+  ## Optional log format: tsv or ltsv (default: tsv)
+
+  # log_format = 'tsv'
+
+
+
 ##########################################
 #        Time access restrictions        #
 ##########################################
