@@ -68,7 +68,7 @@ func (s *systemd) Platform() string {
 }
 
 func (s *systemd) configPath() (cp string, err error) {
-	if !s.Option.bool(optionUserService, optionUserServiceDefault) {
+	if !s.isUserService() {
 		cp = "/etc/systemd/system/" + s.Config.Name + ".service"
 		return
 	}
@@ -81,7 +81,7 @@ func (s *systemd) configPath() (cp string, err error) {
 	if err != nil {
 		return
 	}
-	cp = filepath.Join(systemdUserDir, s.Config.Name + ".service")
+	cp = filepath.Join(systemdUserDir, s.Config.Name+".service")
 	return
 }
 
@@ -127,6 +127,10 @@ func (s *systemd) template() *template.Template {
 	} else {
 		return template.Must(template.New("").Funcs(tf).Parse(systemdScript))
 	}
+}
+
+func (s *systemd) isUserService() bool {
+	return s.Option.bool(optionUserService, optionUserServiceDefault)
 }
 
 func (s *systemd) Install() error {
@@ -177,30 +181,16 @@ func (s *systemd) Install() error {
 		return err
 	}
 
-	if s.Option.bool(optionUserService, optionUserServiceDefault) {
-		err = run("systemctl", "enable", "--user", s.Name+".service")
-	} else {
-		err = run("systemctl", "enable", s.Name+".service")
-	}
+	err = s.runAction("enable")
 	if err != nil {
 		return err
 	}
 
-	if s.Option.bool(optionUserService, optionUserServiceDefault) {
-		err = run("systemctl", "daemon-reload", "--user")
-	} else {
-		err = run("systemctl", "daemon-reload")
-	}
-	return err
+	return s.run("daemon-reload")
 }
 
 func (s *systemd) Uninstall() error {
-	var err error
-	if s.Option.bool(optionUserService, optionUserServiceDefault) {
-		err = run("systemctl", "disable", "--user", s.Name+".service")
-	} else {
-		err = run("systemctl", "disable", s.Name+".service")
-	}
+	err := s.runAction("disable")
 	if err != nil {
 		return err
 	}
@@ -249,7 +239,17 @@ func (s *systemd) Status() (Status, error) {
 	case strings.HasPrefix(out, "active"):
 		return StatusRunning, nil
 	case strings.HasPrefix(out, "inactive"):
-		return StatusStopped, nil
+		// inactive can also mean its not installed, check unit files
+		exitCode, out, err := runWithOutput("systemctl", "list-unit-files", "-t", "service", s.Name)
+		if exitCode == 0 && err != nil {
+			return StatusUnknown, err
+		}
+		if strings.Contains(out, s.Name) {
+			// unit file exists, installed but not running
+			return StatusStopped, nil
+		}
+		// no unit file
+		return StatusUnknown, ErrNotInstalled
 	case strings.HasPrefix(out, "activating"):
 		return StatusRunning, nil
 	case strings.HasPrefix(out, "failed"):
@@ -260,15 +260,26 @@ func (s *systemd) Status() (Status, error) {
 }
 
 func (s *systemd) Start() error {
-	return run("systemctl", "start", s.Name+".service")
+	return s.runAction("start")
 }
 
 func (s *systemd) Stop() error {
-	return run("systemctl", "stop", s.Name+".service")
+	return s.runAction("stop")
 }
 
 func (s *systemd) Restart() error {
-	return run("systemctl", "restart", s.Name+".service")
+	return s.runAction("restart")
+}
+
+func (s *systemd) run(action string, args ...string) error {
+	if s.isUserService() {
+		return run("systemctl", append([]string{action, "--user"}, args...)...)
+	}
+	return run("systemctl", append([]string{action}, args...)...)
+}
+
+func (s *systemd) runAction(action string) error {
+	return s.run(action, s.Name+".service")
 }
 
 const systemdScript = `[Unit]

@@ -134,9 +134,9 @@ func (s *solarisService) Install() error {
 	}
 	var to = &struct {
 		*Config
-		Prefix string
+		Prefix  string
 		Display string
-		Path string
+		Path    string
 	}{
 		s.Config,
 		s.Prefix,
@@ -150,7 +150,7 @@ func (s *solarisService) Install() error {
 	}
 
 	// import service
-	err = run("svcadm", "restart", "manifest-import" )
+	err = run("svcadm", "restart", "manifest-import")
 	if err != nil {
 		return err
 	}
@@ -171,7 +171,7 @@ func (s *solarisService) Uninstall() error {
 	}
 
 	// unregister service
-	err = run("svcadm", "restart", "manifest-import" )
+	err = run("svcadm", "restart", "manifest-import")
 	if err != nil {
 		return err
 	}

@@ -160,9 +160,8 @@ func (s *darwinLaunchdService) Install() error {
 
 		KeepAlive, RunAtLoad bool
 		SessionCreate        bool
-		StandardOut bool
-		StandardError bool
-		
+		StandardOut          bool
+		StandardError        bool
 	}{
 		Config:        s.Config,
 		Path:          path,

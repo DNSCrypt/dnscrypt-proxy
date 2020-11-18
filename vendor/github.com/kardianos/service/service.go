@@ -80,12 +80,12 @@ const (
 	optionPrefix               = "Prefix"
 	optionPrefixDefault        = "application"
 
-	optionRunWait      = "RunWait"
-	optionReloadSignal = "ReloadSignal"
-	optionPIDFile      = "PIDFile"
+	optionRunWait            = "RunWait"
+	optionReloadSignal       = "ReloadSignal"
+	optionPIDFile            = "PIDFile"
 	optionLimitNOFILE        = "LimitNOFILE"
 	optionLimitNOFILEDefault = -1 // -1 = don't set in configuration
-	optionRestart      = "Restart"
+	optionRestart            = "Restart"
 
 	optionSuccessExitStatus = "SuccessExitStatus"
 
@@ -151,6 +151,8 @@ type Config struct {
 	//                                                in addition to the default ones.
 	//  * Linux (systemd)
 	//    - LimitNOFILE	 int - Maximum open files (ulimit -n) (https://serverfault.com/questions/628610/increasing-nproc-for-processes-launched-by-systemd-on-centos-7)
+	//  * Windows
+	//    - DelayedAutoStart  bool (false) - after booting start this service after some delay
 
 	Option KeyValue
 }
@@ -324,6 +326,16 @@ type Interface interface {
 	// It should not take more then a few seconds to execute.
 	// Stop should not call os.Exit directly in the function.
 	Stop(s Service) error
+}
+
+// Shutdowner represents a service interface for a program that differentiates between "stop" and
+// "shutdown". A shutdown is triggered when the whole box (not just the service) is stopped.
+type Shutdowner interface {
+	Interface
+	// Shutdown provides a place to clean up program execution when the system is being shutdown.
+	// It is essentially the same as Stop but for the case where machine is being shutdown/restarted
+	// instead of just normally stopping the service. Stop won't be called when Shutdown is.
+	Shutdown(s Service) error
 }
 
 // TODO: Add Configure to Service interface.
