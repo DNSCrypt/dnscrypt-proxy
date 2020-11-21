@@ -72,6 +72,9 @@ t || dig -p${DNS_PORT} +short www.dnscrypt-test @127.0.0.1 | grep -Fq '192.168.1
 t || dig -p${DNS_PORT} a.www.dnscrypt-test @127.0.0.1 | grep -Fq 'NXDOMAIN' || fail
 
 section
+t || dig -p${DNS_PORT} +short dns.quad9.net @127.0.0.1 | grep -Fq '8.8.8.8' || fail
+
+section
 t || dig -p${DNS_PORT} telemetry.example @127.0.0.1 | grep -Fq 'locally blocked' || fail
 
 section

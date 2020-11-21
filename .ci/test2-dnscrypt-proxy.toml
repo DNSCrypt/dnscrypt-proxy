@@ -31,6 +31,9 @@ log_file = 'blocked-names.log'
 blocked_ips_file = 'blocked-ips.txt'
 log_file = 'blocked-ips.log'
 
+[fake_ips]
+fake_ips_file = 'fake-ips.txt'
+
 [allowed_names]
 allowed_names_file = 'allowed-names.txt'
 log_file = 'allowed-names.log'
