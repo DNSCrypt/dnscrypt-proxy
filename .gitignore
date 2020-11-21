@@ -10,3 +10,5 @@
 dnscrypt-proxy/dnscrypt-proxy2
 dnscrypt-proxy/dnscrypt-proxy
 .idea
+.ci/error.log
+.ci/test-dnscrypt-proxy.toml
