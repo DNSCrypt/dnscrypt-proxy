@@ -1,7 +1,6 @@
 package main
 
 import (
-	"io"
 	"net"
 	"strings"
 	"unicode"
@@ -10,12 +9,8 @@ import (
 	"github.com/miekg/dns"
 )
 
-// TODO: Add log support
-
 type PluginFakeIP struct {
 	fakeIPs map[string]net.IP
-	logger  io.Writer
-	format  string
 }
 
 func (plugin *PluginFakeIP) Name() string {
@@ -66,8 +61,6 @@ func (plugin *PluginFakeIP) Init(proxy *Proxy) error {
 	if len(proxy.blockIPLogFile) == 0 {
 		return nil
 	}
-	plugin.logger = Logger(proxy.logMaxSize, proxy.logMaxAge, proxy.logMaxBackups, proxy.fakeIPLogFile)
-	plugin.format = proxy.fakeIPFormat
 	return nil
 }
 

@@ -577,15 +577,6 @@ cache_neg_max_ttl = 600
   # fake_ips_file = 'fake-ips.txt'
 
 
-  ## Optional path to a file logging fake ip actions
-
-  # log_file = 'fake-ips.log'
-
-  ## Optional log format: tsv or ltsv (default: tsv)
-
-  # log_format = 'tsv'
-
-
 ##########################################
 #        Time access restrictions        #
 ##########################################

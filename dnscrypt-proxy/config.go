@@ -222,9 +222,7 @@ type AllowIPConfig struct {
 }
 
 type FakeIPConfig struct {
-	File    string `toml:"fake_ips_file"`
-	LogFile string `toml:"log_file"`
-	Format  string `toml:"log_format"`
+	File string `toml:"fake_ips_file"`
 }
 
 type AnonymizedDNSRouteConfig struct {
@@ -584,18 +582,7 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	proxy.allowedIPFormat = config.AllowIP.Format
 	proxy.allowedIPLogFile = config.AllowIP.LogFile
 
-	if len(config.FakeIP.Format) == 0 {
-		config.FakeIP.Format = "tsv"
-	} else {
-		config.FakeIP.Format = strings.ToLower(config.FakeIP.Format)
-	}
-	if config.FakeIP.Format != "tsv" && config.FakeIP.Format != "ltsv" {
-		return errors.New("Unsupported fake_ips log format")
-	}
 	proxy.fakeIPFile = config.FakeIP.File
-	proxy.fakeIPFormat = config.FakeIP.Format
-	proxy.fakeIPLogFile = config.FakeIP.LogFile
-
 	proxy.forwardFile = config.ForwardFile
 	proxy.cloakFile = config.CloakFile
 	proxy.captivePortalFile = config.CaptivePortalFile
