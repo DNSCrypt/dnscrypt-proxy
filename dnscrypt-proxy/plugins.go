@@ -141,6 +141,9 @@ func (proxy *Proxy) InitPluginsGlobals() error {
 	if len(proxy.blockIPFile) != 0 {
 		*responsePlugins = append(*responsePlugins, Plugin(new(PluginBlockIP)))
 	}
+	if len(proxy.fakeIPFile) != 0 {
+		*responsePlugins = append(*responsePlugins, Plugin(new(PluginFakeIP)))
+	}
 	if len(proxy.dns64Resolvers) != 0 || len(proxy.dns64Prefixes) != 0 {
 		*responsePlugins = append(*responsePlugins, Plugin(new(PluginDNS64)))
 	}

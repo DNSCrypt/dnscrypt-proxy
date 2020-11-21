@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/jedisct1/dlog"
-	clocksmith "github.com/jedisct1/go-clocksmith"
+	"github.com/jedisct1/go-clocksmith"
 	stamps "github.com/jedisct1/go-dnsstamps"
 	"github.com/miekg/dns"
 	"golang.org/x/crypto/curve25519"
@@ -46,13 +46,16 @@ type Proxy struct {
 	mainProto                      string
 	cloakFile                      string
 	forwardFile                    string
+	blockIPFile                    string
 	blockIPFormat                  string
 	blockIPLogFile                 string
 	allowedIPFile                  string
 	allowedIPFormat                string
 	allowedIPLogFile               string
+	fakeIPFile                     string
+	fakeIPFormat                   string
+	fakeIPLogFile                  string
 	queryLogFormat                 string
-	blockIPFile                    string
 	whitelistNameFormat            string
 	whitelistNameLogFile           string
 	blockNameLogFile               string
@@ -477,7 +480,7 @@ func (proxy *Proxy) processIncomingQuery(clientProto string, serverProto string,
 	serverInfo := proxy.serversInfo.getOne()
 	if serverInfo != nil {
 		serverName = serverInfo.Name
-		needsEDNS0Padding = (serverInfo.Proto == stamps.StampProtoTypeDoH || serverInfo.Proto == stamps.StampProtoTypeTLS)
+		needsEDNS0Padding = serverInfo.Proto == stamps.StampProtoTypeDoH || serverInfo.Proto == stamps.StampProtoTypeTLS
 	}
 	query, _ = pluginsState.ApplyQueryPlugins(&proxy.pluginsGlobals, query, needsEDNS0Padding)
 	if len(query) < MinDNSPacketSize || len(query) > MaxDNSPacketSize {

@@ -570,6 +570,20 @@ cache_neg_max_ttl = 600
 
   # log_format = 'tsv'
 
+[fake_ips]
+
+  ## Path to the file of fake ip rules (absolute, or relative to the same directory as the config file)
+
+  # fake_ips_file = 'fake-ips.txt'
+
+
+  ## Optional path to a file logging fake ip actions
+
+  # log_file = 'fake-ips.log'
+
+  ## Optional log format: tsv or ltsv (default: tsv)
+
+  # log_format = 'tsv'
 
 
 ##########################################

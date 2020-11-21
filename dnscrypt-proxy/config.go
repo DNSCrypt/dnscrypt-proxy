@@ -68,6 +68,7 @@ type Config struct {
 	BlockIP                  BlockIPConfig               `toml:"blocked_ips"`
 	BlockIPLegacy            BlockIPConfigLegacy         `toml:"ip_blacklist"`
 	AllowIP                  AllowIPConfig               `toml:"allowed_ips"`
+	FakeIP                   FakeIPConfig                `toml:"fake_ips"`
 	ForwardFile              string                      `toml:"forwarding_rules"`
 	CloakFile                string                      `toml:"cloaking_rules"`
 	CaptivePortalFile        string                      `toml:"captive_portal_handler"`
@@ -215,9 +216,15 @@ type BlockIPConfigLegacy struct {
 }
 
 type AllowIPConfig struct {
-       File    string `toml:"allowed_ips_file"`
-       LogFile string `toml:"log_file"`
-       Format  string `toml:"log_format"`
+	File    string `toml:"allowed_ips_file"`
+	LogFile string `toml:"log_file"`
+	Format  string `toml:"log_format"`
+}
+
+type FakeIPConfig struct {
+	File    string `toml:"fake_ips_file"`
+	LogFile string `toml:"log_file"`
+	Format  string `toml:"log_format"`
 }
 
 type AnonymizedDNSRouteConfig struct {
@@ -576,6 +583,18 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	proxy.allowedIPFile = config.AllowIP.File
 	proxy.allowedIPFormat = config.AllowIP.Format
 	proxy.allowedIPLogFile = config.AllowIP.LogFile
+
+	if len(config.FakeIP.Format) == 0 {
+		config.FakeIP.Format = "tsv"
+	} else {
+		config.FakeIP.Format = strings.ToLower(config.FakeIP.Format)
+	}
+	if config.FakeIP.Format != "tsv" && config.FakeIP.Format != "ltsv" {
+		return errors.New("Unsupported fake_ips log format")
+	}
+	proxy.fakeIPFile = config.FakeIP.File
+	proxy.fakeIPFormat = config.FakeIP.Format
+	proxy.fakeIPLogFile = config.FakeIP.LogFile
 
 	proxy.forwardFile = config.ForwardFile
 	proxy.cloakFile = config.CloakFile

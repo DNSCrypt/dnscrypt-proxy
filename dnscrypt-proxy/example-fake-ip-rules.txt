@@ -1,0 +1,9 @@
+################################
+#         Fake IP rules        #
+################################
+
+# The following example returns a specified CloudFlare CDN node IP
+# when it should return other ones.
+
+# 104.18.44.30 172.67.217.71
+# 104.18.45.30 172.67.217.71
