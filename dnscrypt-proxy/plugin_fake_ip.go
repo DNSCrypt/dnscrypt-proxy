@@ -111,5 +111,20 @@ func (plugin *PluginFakeIP) Eval(pluginsState *PluginsState, msg *dns.Msg) error
 			}
 		}
 	}
+	var cleanedRR []dns.RR
+	exist := map[string]bool{}
+	for _, answer := range answers {
+		if answer.Header().Rrtype != dns.TypeA && answer.Header().Rrtype != dns.TypeAAAA {
+			cleanedRR = append(cleanedRR, answer)
+			continue
+		}
+		if exist[answer.String()] {
+			continue
+		} else {
+			cleanedRR = append(cleanedRR, answer)
+			exist[answer.String()] = true
+		}
+	}
+	msg.Answer = cleanedRR
 	return nil
 }
