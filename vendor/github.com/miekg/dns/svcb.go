@@ -12,7 +12,7 @@ import (
 
 type SVCBKey uint16
 
-// Keys defined in draft-ietf-dnsop-svcb-https-02 Section 11.1.2
+// Keys defined in draft-ietf-dnsop-svcb-https-01 Section 12.3.2.
 const (
 	SVCB_MANDATORY       SVCBKey = 0
 	SVCB_ALPN            SVCBKey = 1
@@ -173,8 +173,7 @@ func (rr *SVCB) parse(c *zlexer, o string) *ParseError {
 	return nil
 }
 
-// makeSVCBKeyValue returns an SVCBKeyValue struct with the key
-// or nil for reserved keys.
+// makeSVCBKeyValue returns an SVCBKeyValue struct with the key or nil for reserved keys.
 func makeSVCBKeyValue(key SVCBKey) SVCBKeyValue {
 	switch key {
 	case SVCB_MANDATORY:
@@ -200,19 +199,16 @@ func makeSVCBKeyValue(key SVCBKey) SVCBKeyValue {
 	}
 }
 
-// SVCB RR. See RFC xxxx (https://tools.ietf.org/html/draft-ietf-dnsop-svcb-https-00)
-
-// The one with the smallest priority should be given preference. Of those with
-// equal priority, a random one should be preferred for load balancing.
+// SVCB RR. See RFC xxxx (https://tools.ietf.org/html/draft-ietf-dnsop-svcb-https-01).
 type SVCB struct {
 	Hdr      RR_Header
 	Priority uint16
 	Target   string         `dns:"domain-name"`
-	Value    []SVCBKeyValue `dns:"pairs"` // This must be empty if Priority is non-zero
+	Value    []SVCBKeyValue `dns:"pairs"` // Value must be empty if Priority is non-zero.
 }
 
-// HTTPS RR. Everything valid for SVCB applies to HTTPS as well
-// except that the HTTPS record is intended for use with the HTTP and HTTPS protocols.
+// HTTPS RR. Everything valid for SVCB applies to HTTPS as well.
+// Except that the HTTPS record is intended for use with the HTTP and HTTPS protocols.
 type HTTPS struct {
 	SVCB
 }
@@ -228,33 +224,23 @@ func (rr *HTTPS) parse(c *zlexer, o string) *ParseError {
 // SVCBKeyValue defines a key=value pair for the SVCB RR type.
 // An SVCB RR can have multiple SVCBKeyValues appended to it.
 type SVCBKeyValue interface {
-	// Key returns the numerical key code.
-	Key() SVCBKey
-	// pack returns the encoded value.
-	pack() ([]byte, error)
-	// unpack sets the value.
-	unpack([]byte) error
-	// String returns the string representation of the value.
-	String() string
-	// parse sets the value to the given string representation of the value.
-	parse(string) error
-	// copy returns a deep-copy of the pair.
-	copy() SVCBKeyValue
-	// len returns the length of value in the wire format.
-	len() int
+	Key() SVCBKey          // Key returns the numerical key code.
+	pack() ([]byte, error) // pack returns the encoded value.
+	unpack([]byte) error   // unpack sets the value.
+	String() string        // String returns the string representation of the value.
+	parse(string) error    // parse sets the value to the given string representation of the value.
+	copy() SVCBKeyValue    // copy returns a deep-copy of the pair.
+	len() int              // len returns the length of value in the wire format.
 }
 
 // SVCBMandatory pair adds to required keys that must be interpreted for the RR
 // to be functional.
 // Basic use pattern for creating a mandatory option:
 //
-//	o := new(dns.SVCB)
-//	o.Hdr.Name = "."
-//	o.Hdr.Rrtype = dns.TypeSVCB
+//	s := &dns.SVCB{Hdr: dns.RR_Header{Name: ".", Rrtype: dns.TypeSVCB, Class: dns.ClassINET}}
 //	e := new(dns.SVCBMandatory)
 //	e.Code = []uint16{65403}
-//	o.Value = append(o.Value, e)
-//  // Then add key-value pair for key65403
+//	s.Value = append(s.Value, e)
 type SVCBMandatory struct {
 	Code []SVCBKey // Must not include mandatory
 }
@@ -319,22 +305,17 @@ func (s *SVCBMandatory) copy() SVCBKeyValue {
 // https://www.iana.org/assignments/tls-extensiontype-values/tls-extensiontype-values.xhtml#alpn-protocol-ids
 // Basic use pattern for creating an alpn option:
 //
-//	o := new(dns.HTTPS)
-//	o.Hdr.Name = "."
-//	o.Hdr.Rrtype = dns.TypeHTTPS
+//	h := new(dns.HTTPS)
+//	h.Hdr = dns.RR_Header{Name: ".", Rrtype: dns.TypeHTTPS, Class: dns.ClassINET}
 //	e := new(dns.SVCBAlpn)
 //	e.Alpn = []string{"h2", "http/1.1"}
-//	o.Value = append(o.Value, e)
+//	h.Value = append(o.Value, e)
 type SVCBAlpn struct {
 	Alpn []string
 }
 
 func (*SVCBAlpn) Key() SVCBKey     { return SVCB_ALPN }
 func (s *SVCBAlpn) String() string { return strings.Join(s.Alpn, ",") }
-
-// The spec requires the alpn keys including \ or , to be escaped.
-// In practice, no standard key including those exists.
-// Therefore those characters are not escaped.
 
 func (s *SVCBAlpn) pack() ([]byte, error) {
 	// Liberally estimate the size of an alpn as 10 octets
@@ -390,14 +371,10 @@ func (s *SVCBAlpn) copy() SVCBKeyValue {
 // SVCBNoDefaultAlpn pair signifies no support for default connection protocols.
 // Basic use pattern for creating a no-default-alpn option:
 //
-//	o := new(dns.SVCB)
-//	o.Hdr.Name = "."
-//	o.Hdr.Rrtype = dns.SVCB
+//	s := &dns.SVCB{Hdr: dns.RR_Header{Name: ".", Rrtype: dns.TypeSVCB, Class: dns.ClassINET}}
 //	e := new(dns.SVCBNoDefaultAlpn)
-//	o.Value = append(o.Value, e)
-type SVCBNoDefaultAlpn struct {
-	// Empty
-}
+//	s.Value = append(s.Value, e)
+type SVCBNoDefaultAlpn struct{}
 
 func (*SVCBNoDefaultAlpn) Key() SVCBKey          { return SVCB_NO_DEFAULT_ALPN }
 func (*SVCBNoDefaultAlpn) copy() SVCBKeyValue    { return &SVCBNoDefaultAlpn{} }
@@ -422,12 +399,10 @@ func (*SVCBNoDefaultAlpn) parse(b string) error {
 // SVCBPort pair defines the port for connection.
 // Basic use pattern for creating a port option:
 //
-//	o := new(dns.SVCB)
-//	o.Hdr.Name = "."
-//	o.Hdr.Rrtype = dns.SVCB
+//	s := &dns.SVCB{Hdr: dns.RR_Header{Name: ".", Rrtype: dns.TypeSVCB, Class: dns.ClassINET}}
 //	e := new(dns.SVCBPort)
 //	e.Port = 80
-//	o.Value = append(o.Value, e)
+//	s.Value = append(s.Value, e)
 type SVCBPort struct {
 	Port uint16
 }
@@ -466,14 +441,15 @@ func (s *SVCBPort) parse(b string) error {
 // to the hinted IP address may be terminated and a new connection may be opened.
 // Basic use pattern for creating an ipv4hint option:
 //
-//	o := new(dns.HTTPS)
-//	o.Hdr.Name = "."
-//	o.Hdr.Rrtype = dns.HTTPS
+//	h := new(dns.HTTPS)
+//	h.Hdr = dns.RR_Header{Name: ".", Rrtype: dns.TypeHTTPS, Class: dns.ClassINET}
 //	e := new(dns.SVCBIPv4Hint)
 //	e.Hint = []net.IP{net.IPv4(1,1,1,1).To4()}
-//  // or
+//
+//  Or
+//
 //	e.Hint = []net.IP{net.ParseIP("1.1.1.1").To4()}
-//	o.Value = append(o.Value, e)
+//	h.Value = append(h.Value, e)
 type SVCBIPv4Hint struct {
 	Hint []net.IP
 }
@@ -505,7 +481,6 @@ func (s *SVCBIPv4Hint) unpack(b []byte) error {
 	return nil
 }
 
-// String returns the string form of s, it returns "<nil>" if s is invalid.
 func (s *SVCBIPv4Hint) String() string {
 	str := make([]string, len(s.Hint))
 	for i, e := range s.Hint {
@@ -544,12 +519,11 @@ func (s *SVCBIPv4Hint) copy() SVCBKeyValue {
 // SVCBECHConfig pair contains the ECHConfig structure defined in draft-ietf-tls-esni [RFC xxxx].
 // Basic use pattern for creating an echconfig option:
 //
-//	o := new(dns.HTTPS)
-//	o.Hdr.Name = "."
-//	o.Hdr.Rrtype = dns.HTTPS
+//	h := new(dns.HTTPS)
+//	h.Hdr = dns.RR_Header{Name: ".", Rrtype: dns.TypeHTTPS, Class: dns.ClassINET}
 //	e := new(dns.SVCBECHConfig)
-//	e.ECH = "/wH...="
-//	o.Value = append(o.Value, e)
+//	e.ECH = []byte{0xfe, 0x08, ...}
+//	h.Value = append(h.Value, e)
 type SVCBECHConfig struct {
 	ECH []byte
 }
@@ -587,12 +561,11 @@ func (s *SVCBECHConfig) parse(b string) error {
 // connection to the hinted IP address may be terminated and a new connection may be opened.
 // Basic use pattern for creating an ipv6hint option:
 //
-//	o := new(dns.HTTPS)
-//	o.Hdr.Name = "."
-//	o.Hdr.Rrtype = dns.HTTPS
+//	h := new(dns.HTTPS)
+//	h.Hdr = dns.RR_Header{Name: ".", Rrtype: dns.TypeHTTPS, Class: dns.ClassINET}
 //	e := new(dns.SVCBIPv6Hint)
 //	e.Hint = []net.IP{net.ParseIP("2001:db8::1")}
-//	o.Value = append(o.Value, e)
+//	h.Value = append(h.Value, e)
 type SVCBIPv6Hint struct {
 	Hint []net.IP
 }
@@ -627,7 +600,6 @@ func (s *SVCBIPv6Hint) unpack(b []byte) error {
 	return nil
 }
 
-// String returns the string form of s, it returns "<nil>" if s is invalid.
 func (s *SVCBIPv6Hint) String() string {
 	str := make([]string, len(s.Hint))
 	for i, e := range s.Hint {
@@ -666,16 +638,15 @@ func (s *SVCBIPv6Hint) copy() SVCBKeyValue {
 // to be in the range [SVCB_PRIVATE_LOWER, SVCB_PRIVATE_UPPER].
 // Basic use pattern for creating a keyNNNNN option:
 //
-//	o := new(dns.HTTPS)
-//	o.Hdr.Name = "."
-//	o.Hdr.Rrtype = dns.HTTPS
+//	h := new(dns.HTTPS)
+//	h.Hdr = dns.RR_Header{Name: ".", Rrtype: dns.TypeHTTPS, Class: dns.ClassINET}
 //	e := new(dns.SVCBLocal)
 //	e.KeyCode = 65400
 //	e.Data = []byte("abc")
-//	o.Value = append(o.Value, e)
+//	h.Value = append(h.Value, e)
 type SVCBLocal struct {
-	KeyCode SVCBKey // Never 65535 or any assigned keys
-	Data    []byte  // All byte sequences are allowed
+	KeyCode SVCBKey // Never 65535 or any assigned keys.
+	Data    []byte  // All byte sequences are allowed.
 }
 
 func (s *SVCBLocal) Key() SVCBKey          { return s.KeyCode }

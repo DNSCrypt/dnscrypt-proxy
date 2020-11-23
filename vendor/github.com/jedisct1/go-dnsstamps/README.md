@@ -1,4 +1,5 @@
 # go-dnsstamps
-DNS Stamps library for Go
 
-## [https://pkg.go.dev/github.com/jedisct1/go-dnsstamps](Documentation)
+DNS Stamps library for Go.
+
+## [Documentation](https://pkg.go.dev/github.com/jedisct1/go-dnsstamps)

@@ -125,20 +125,23 @@ keepalive = 30
 # edns_client_subnet = ["0.0.0.0/0", "2001:db8::/32"]
 
 
-## Response for blocked queries.  Options are `refused`, `hinfo` (default) or
-## an IP response.  To give an IP response, use the format `a:<IPv4>,aaaa:<IPv6>`.
+## Response for blocked queries. Options are `refused`, `hinfo` (default) or
+## an IP response. To give an IP response, use the format `a:<IPv4>,aaaa:<IPv6>`.
 ## Using the `hinfo` option means that some responses will be lies.
 ## Unfortunately, the `hinfo` option appears to be required for Android 8+
 
 # blocked_query_response = 'refused'
 
 
-## Load-balancing strategy: 'p2' (default), 'ph', 'first' or 'random'
+## Load-balancing strategy: 'p2' (default), 'ph', 'p<n>', 'first' or 'random'
+## Randomly choose 1 of the fastest 2, half, n, 1 or all live servers by latency.
+## The response quality still depends on the server itself.
 
 # lb_strategy = 'p2'
 
 ## Set to `true` to constantly try to estimate the latency of all the resolvers
 ## and adjust the load-balancing parameters accordingly, or to `false` to disable.
+## Default is `true` that makes 'p2' `lb_strategy` work well.
 
 # lb_estimator = true
 
@@ -542,6 +545,33 @@ cache_neg_max_ttl = 600
 
 
 
+#########################################################
+#   Pattern-based allowed IPs lists (blocklists bypass) #
+#########################################################
+
+## Allowed IP lists support the same patterns as IP blocklists
+## If an IP response matches an allow ip entry, the corresponding session
+## will bypass IP filters.
+##
+## Time-based rules are also supported to make some websites only accessible at specific times of the day.
+
+[allowed_ips]
+
+  ## Path to the file of allowed ip rules (absolute, or relative to the same directory as the config file)
+
+  # allowed_ips_file = 'allowed-ips.txt'
+
+
+  ## Optional path to a file logging allowed queries
+
+  # log_file = 'allowed-ips.log'
+
+  ## Optional log format: tsv or ltsv (default: tsv)
+
+  # log_format = 'tsv'
+
+
+
 ##########################################
 #        Time access restrictions        #
 ##########################################
@@ -601,7 +631,7 @@ cache_neg_max_ttl = 600
   ## An example of a remote source from https://github.com/DNSCrypt/dnscrypt-resolvers
 
   [sources.'public-resolvers']
-  urls = ['https://raw.githubusercontent.com/DNSCrypt/dnscrypt-resolvers/master/v3/public-resolvers.md', 'https://download.dnscrypt.info/resolvers-list/v3/public-resolvers.md']
+  urls = ['https://raw.githubusercontent.com/DNSCrypt/dnscrypt-resolvers/master/v3/public-resolvers.md', 'https://download.dnscrypt.info/resolvers-list/v3/public-resolvers.md', 'https://ipv6.download.dnscrypt.info/resolvers-list/v3/public-resolvers.md']
   cache_file = 'public-resolvers.md'
   minisign_key = 'RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3'
   prefix = ''
@@ -609,7 +639,7 @@ cache_neg_max_ttl = 600
   ## Anonymized DNS relays
 
   [sources.'relays']
-  urls = ['https://raw.githubusercontent.com/DNSCrypt/dnscrypt-resolvers/master/v3/relays.md', 'https://download.dnscrypt.info/resolvers-list/v3/relays.md']
+  urls = ['https://raw.githubusercontent.com/DNSCrypt/dnscrypt-resolvers/master/v3/relays.md', 'https://download.dnscrypt.info/resolvers-list/v3/relays.md', 'https://ipv6.download.dnscrypt.info/resolvers-list/v3/relays.md']
   cache_file = 'relays.md'
   minisign_key = 'RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3'
   refresh_delay = 72
@@ -627,7 +657,7 @@ cache_neg_max_ttl = 600
   ## This is a subset of the `public-resolvers` list, so enabling both is useless
 
   #  [sources.'parental-control']
-  #  urls = ['https://raw.githubusercontent.com/DNSCrypt/dnscrypt-resolvers/master/v3/parental-control.md', 'https://download.dnscrypt.info/resolvers-list/v3/parental-control.md']
+  #  urls = ['https://raw.githubusercontent.com/DNSCrypt/dnscrypt-resolvers/master/v3/parental-control.md', 'https://download.dnscrypt.info/resolvers-list/v3/parental-control.md', 'https://ipv6.download.dnscrypt.info/resolvers-list/v3/parental-control.md']
   #  cache_file = 'parental-control.md'
   #  minisign_key = 'RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3'
 

@@ -176,9 +176,22 @@ loop:
 		switch c.Cmd {
 		case svc.Interrogate:
 			changes <- c.CurrentStatus
-		case svc.Stop, svc.Shutdown:
+		case svc.Stop:
 			changes <- svc.Status{State: svc.StopPending}
 			if err := ws.i.Stop(ws); err != nil {
+				ws.setError(err)
+				return true, 2
+			}
+			break loop
+		case svc.Shutdown:
+			changes <- svc.Status{State: svc.StopPending}
+			var err error
+			if wsShutdown, ok := ws.i.(Shutdowner); ok {
+				err = wsShutdown.Shutdown(ws)
+			} else {
+				err = ws.i.Stop(ws)
+			}
+			if err != nil {
 				ws.setError(err)
 				return true, 2
 			}
@@ -214,6 +227,7 @@ func (ws *windowsService) Install() error {
 		ServiceStartName: ws.UserName,
 		Password:         ws.Option.string("Password", ""),
 		Dependencies:     ws.Dependencies,
+		DelayedAutoStart: ws.Option.bool("DelayedAutoStart", false),
 	}, ws.Arguments...)
 	if err != nil {
 		return err

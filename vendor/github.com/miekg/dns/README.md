@@ -68,6 +68,7 @@ A not-so-up-to-date-list-that-may-be-actually-current:
 * https://domainr.com/
 * https://zonedb.org/
 * https://router7.org/
+* https://github.com/fortio/dnsping
 
 Send pull request if you want to be listed here.
 

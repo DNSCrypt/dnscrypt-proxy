@@ -12,6 +12,9 @@ import (
 	"time"
 
 	pkgerrors "github.com/pkg/errors"
+	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
 var (
@@ -444,15 +447,29 @@ func (t *C) NotBytesEqual(actual, expected []byte, msg ...interface{}) bool {
 }
 
 // DeepEqual checks for reflect.DeepEqual(actual, expected).
+// It will use proto.Equal for protobuf messages.
 func (t *C) DeepEqual(actual, expected interface{}, msg ...interface{}) bool {
 	t.Helper()
+	protoActual, proto1 := actual.(protoreflect.ProtoMessage)
+	protoExpected, proto2 := expected.(protoreflect.ProtoMessage)
+	if proto1 && proto2 {
+		return t.report2(actual, expected, msg,
+			proto.Equal(protoActual, protoExpected))
+	}
 	return t.report2(actual, expected, msg,
 		reflect.DeepEqual(actual, expected))
 }
 
 // NotDeepEqual checks for !reflect.DeepEqual(actual, expected).
+// It will use !proto.Equal for protobuf messages.
 func (t *C) NotDeepEqual(actual, expected interface{}, msg ...interface{}) bool {
 	t.Helper()
+	protoActual, proto1 := actual.(protoreflect.ProtoMessage)
+	protoExpected, proto2 := expected.(protoreflect.ProtoMessage)
+	if proto1 && proto2 {
+		return t.report1(actual, msg,
+			!proto.Equal(protoActual, protoExpected))
+	}
 	return t.report1(actual, msg,
 		!reflect.DeepEqual(actual, expected))
 }
@@ -665,14 +682,21 @@ func (t *C) NotLen(actual interface{}, expected int, msg ...interface{}) bool {
 // It tries to recursively unwrap actual before checking using
 // errors.Unwrap() and github.com/pkg/errors.Cause().
 //
+// It will use proto.Equal for gRPC status errors.
+//
 // They may be a different instances, but must have same type and value.
 //
 // Checking for nil is okay, but using Nil(actual) instead is more clean.
 func (t *C) Err(actual, expected error, msg ...interface{}) bool {
 	t.Helper()
 	actual = unwrapErr(actual)
-	return t.report2(actual, expected, msg,
-		fmt.Sprintf("%#v", actual) == fmt.Sprintf("%#v", expected))
+	equal := fmt.Sprintf("%#v", actual) == fmt.Sprintf("%#v", expected)
+	_, proto1 := actual.(interface{ GRPCStatus() *status.Status })
+	_, proto2 := expected.(interface{ GRPCStatus() *status.Status })
+	if proto1 || proto2 {
+		equal = proto.Equal(status.Convert(actual).Proto(), status.Convert(expected).Proto())
+	}
+	return t.report2(actual, expected, msg, equal)
 }
 
 func unwrapErr(err error) (actual error) {
@@ -698,14 +722,21 @@ func unwrapErr(err error) (actual error) {
 // It tries to recursively unwrap actual before checking using
 // errors.Unwrap() and github.com/pkg/errors.Cause().
 //
+// It will use !proto.Equal for gRPC status errors.
+//
 // They must have either different types or values (or one should be nil).
 // Different instances with same type and value will be considered the
 // same error, and so is both nil.
 func (t *C) NotErr(actual, expected error, msg ...interface{}) bool {
 	t.Helper()
 	actual = unwrapErr(actual)
-	return t.report1(actual, msg,
-		fmt.Sprintf("%#v", actual) != fmt.Sprintf("%#v", expected))
+	notEqual := fmt.Sprintf("%#v", actual) != fmt.Sprintf("%#v", expected)
+	_, proto1 := actual.(interface{ GRPCStatus() *status.Status })
+	_, proto2 := expected.(interface{ GRPCStatus() *status.Status })
+	if proto1 || proto2 {
+		notEqual = !proto.Equal(status.Convert(actual).Proto(), status.Convert(expected).Proto())
+	}
+	return t.report1(actual, msg, notEqual)
 }
 
 // Panic checks is actual() panics.
@@ -713,7 +744,7 @@ func (t *C) NotErr(actual, expected error, msg ...interface{}) bool {
 // It is able to detect panic(nil)… but you should try to avoid using this.
 func (t *C) Panic(actual func(), msg ...interface{}) bool {
 	t.Helper()
-	var didPanic = true
+	didPanic := true
 	func() {
 		defer func() { _ = recover() }()
 		actual()
@@ -728,7 +759,7 @@ func (t *C) Panic(actual func(), msg ...interface{}) bool {
 // It is able to detect panic(nil)… but you should try to avoid using this.
 func (t *C) NotPanic(actual func(), msg ...interface{}) bool {
 	t.Helper()
-	var didPanic = true
+	didPanic := true
 	func() {
 		defer func() { _ = recover() }()
 		actual()
@@ -746,7 +777,7 @@ func (t *C) NotPanic(actual func(), msg ...interface{}) bool {
 func (t *C) PanicMatch(actual func(), regex interface{}, msg ...interface{}) bool {
 	t.Helper()
 	var panicVal interface{}
-	var didPanic = true
+	didPanic := true
 	func() {
 		defer func() { panicVal = recover() }()
 		actual()
@@ -776,7 +807,7 @@ func (t *C) PanicMatch(actual func(), regex interface{}, msg ...interface{}) boo
 func (t *C) PanicNotMatch(actual func(), regex interface{}, msg ...interface{}) bool {
 	t.Helper()
 	var panicVal interface{}
-	var didPanic = true
+	didPanic := true
 	func() {
 		defer func() { panicVal = recover() }()
 		actual()
