@@ -13,9 +13,10 @@
 ## Blocking IPv6 may prevent local devices from being discovered.
 ## If this happens, set `block_ipv6` to `false` in the main config file.
 
-## Forward *.lan, *.local, *.home.arpa, *.internal and *.localdomain to 192.168.1.1
+## Forward *.lan, *.local, *.home, *.home.arpa, *.internal and *.localdomain to 192.168.1.1
 # lan             192.168.1.1
 # local           192.168.1.1
+# home            192.168.1.1
 # home.arpa       192.168.1.1
 # internal        192.168.1.1
 # localdomain     192.168.1.1
