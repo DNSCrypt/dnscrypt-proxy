@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	crypto_rand "crypto/rand"
 	"encoding/binary"
 	"net"
@@ -288,16 +289,6 @@ func (proxy *Proxy) udpListener(clientPc *net.UDPConn) {
 	}
 }
 
-func (proxy *Proxy) udpListenerFromAddr(listenAddr *net.UDPAddr) error {
-	clientPc, err := net.ListenUDP("udp", listenAddr)
-	if err != nil {
-		return err
-	}
-	proxy.registerUDPListener(clientPc)
-	dlog.Noticef("Now listening to %v [UDP]", listenAddr)
-	return nil
-}
-
 func (proxy *Proxy) tcpListener(acceptPc *net.TCPListener) {
 	defer acceptPc.Close()
 	for {
@@ -326,22 +317,44 @@ func (proxy *Proxy) tcpListener(acceptPc *net.TCPListener) {
 	}
 }
 
-func (proxy *Proxy) tcpListenerFromAddr(listenAddr *net.TCPAddr) error {
-	acceptPc, err := net.ListenTCP("tcp", listenAddr)
+func (proxy *Proxy) udpListenerFromAddr(listenAddr *net.UDPAddr) error {
+	listenConfig, err := proxy.udpListenerConfig()
 	if err != nil {
 		return err
 	}
-	proxy.registerTCPListener(acceptPc)
+	clientPc, err := listenConfig.ListenPacket(context.Background(), "udp", listenAddr.String())
+	if err != nil {
+		return err
+	}
+	proxy.registerUDPListener(clientPc.(*net.UDPConn))
+	dlog.Noticef("Now listening to %v [UDP]", listenAddr)
+	return nil
+}
+
+func (proxy *Proxy) tcpListenerFromAddr(listenAddr *net.TCPAddr) error {
+	listenConfig, err := proxy.tcpListenerConfig()
+	if err != nil {
+		return err
+	}
+	acceptPc, err := listenConfig.Listen(context.Background(), "tcp", listenAddr.String())
+	if err != nil {
+		return err
+	}
+	proxy.registerTCPListener(acceptPc.(*net.TCPListener))
 	dlog.Noticef("Now listening to %v [TCP]", listenAddr)
 	return nil
 }
 
 func (proxy *Proxy) localDoHListenerFromAddr(listenAddr *net.TCPAddr) error {
-	acceptPc, err := net.ListenTCP("tcp", listenAddr)
+	listenConfig, err := proxy.tcpListenerConfig()
 	if err != nil {
 		return err
 	}
-	proxy.registerLocalDoHListener(acceptPc)
+	acceptPc, err := listenConfig.Listen(context.Background(), "tcp", listenAddr.String())
+	if err != nil {
+		return err
+	}
+	proxy.registerLocalDoHListener(acceptPc.(*net.TCPListener))
 	dlog.Noticef("Now listening to https://%v%v [DoH]", listenAddr, proxy.localDoHPath)
 	return nil
 }
