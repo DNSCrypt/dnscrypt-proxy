@@ -189,7 +189,7 @@ func (plugin *PluginBlockNameResponse) Eval(pluginsState *PluginsState, msg *dns
 			target = answer.(*dns.CNAME).Target
 		} else if header.Rrtype == dns.TypeSVCB && answer.(*dns.SVCB).Priority == 0 {
 			target = answer.(*dns.SVCB).Target
-		} else if header.Rrtype == dns.TypeSVCB && answer.(*dns.HTTPS).Priority == 0 {
+		} else if header.Rrtype == dns.TypeHTTPS && answer.(*dns.HTTPS).Priority == 0 {
 			target = answer.(*dns.HTTPS).Target
 		} else {
 			continue
