@@ -36,6 +36,7 @@ labarchitects.com
 lan
 liveinternet.ru
 localdomain
+localhost
 login.microsoftonline.com
 login.yahoo.com
 mdidesign.ca
