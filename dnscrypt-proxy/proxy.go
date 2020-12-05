@@ -92,6 +92,8 @@ type Proxy struct {
 	pluginBlockUndelegated         bool
 	child                          bool
 	daemonize                      bool
+	queryLogHideClientIP           bool
+	queryLogHideDomainName         bool
 }
 
 func (proxy *Proxy) registerUDPListener(conn *net.UDPConn) {

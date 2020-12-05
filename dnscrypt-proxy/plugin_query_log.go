@@ -13,9 +13,11 @@ import (
 )
 
 type PluginQueryLog struct {
-	logger        io.Writer
-	format        string
-	ignoredQtypes []string
+	logger         io.Writer
+	format         string
+	ignoredQtypes  []string
+	hideClientIP   bool
+	hideDomainName bool
 }
 
 func (plugin *PluginQueryLog) Name() string {
@@ -30,6 +32,8 @@ func (plugin *PluginQueryLog) Init(proxy *Proxy) error {
 	plugin.logger = Logger(proxy.logMaxSize, proxy.logMaxAge, proxy.logMaxBackups, proxy.queryLogFile)
 	plugin.format = proxy.queryLogFormat
 	plugin.ignoredQtypes = proxy.queryLogIgnoredQtypes
+	plugin.hideClientIP = proxy.queryLogHideClientIP
+	plugin.hideDomainName = proxy.queryLogHideDomainName
 
 	return nil
 }
@@ -56,14 +60,23 @@ func (plugin *PluginQueryLog) Eval(pluginsState *PluginsState, msg *dns.Msg) err
 		}
 	}
 	var clientIPStr string
-	if pluginsState.clientProto == "udp" {
-		clientIPStr = (*pluginsState.clientAddr).(*net.UDPAddr).IP.String()
-	} else if pluginsState.clientProto == "tcp" {
-		clientIPStr = (*pluginsState.clientAddr).(*net.TCPAddr).IP.String()
+	if plugin.hideClientIP {
+		clientIPStr = "***"
 	} else {
-		clientIPStr = "-"
+		if pluginsState.clientProto == "udp" {
+			clientIPStr = (*pluginsState.clientAddr).(*net.UDPAddr).IP.String()
+		} else if pluginsState.clientProto == "tcp" {
+			clientIPStr = (*pluginsState.clientAddr).(*net.TCPAddr).IP.String()
+		} else {
+			clientIPStr = "-"
+		}
 	}
-	qName := pluginsState.qName
+	var qName string
+	if plugin.hideDomainName {
+		qName = "***"
+	} else {
+		qName = pluginsState.qName
+	}
 
 	if pluginsState.cacheHit {
 		pluginsState.serverName = "-"
