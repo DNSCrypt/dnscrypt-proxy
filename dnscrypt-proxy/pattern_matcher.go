@@ -120,6 +120,10 @@ func (patternMatcher *PatternMatcher) Eval(qName string) (reject bool, reason st
 		return false, "", nil
 	}
 
+	if xval := patternMatcher.blockedExact[qName]; xval != nil {
+		return true, qName, xval
+	}
+
 	revQname := StringReverse(qName)
 	if match, xval, found := patternMatcher.blockedSuffixes.LongestPrefix([]byte(revQname)); found {
 		if len(match) == len(revQname) || revQname[len(match)] == '.' {
@@ -151,10 +155,6 @@ func (patternMatcher *PatternMatcher) Eval(qName string) (reject bool, reason st
 		if found, _ := filepath.Match(pattern, qName); found {
 			return true, pattern, patternMatcher.indirectVals[pattern]
 		}
-	}
-
-	if xval := patternMatcher.blockedExact[qName]; xval != nil {
-		return true, qName, xval
 	}
 
 	return false, "", nil
