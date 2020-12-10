@@ -46,6 +46,7 @@ var (
 	modntdll    = NewLazySystemDLL("ntdll.dll")
 	modole32    = NewLazySystemDLL("ole32.dll")
 	modpsapi    = NewLazySystemDLL("psapi.dll")
+	modsechost  = NewLazySystemDLL("sechost.dll")
 	modsecur32  = NewLazySystemDLL("secur32.dll")
 	modshell32  = NewLazySystemDLL("shell32.dll")
 	moduser32   = NewLazySystemDLL("user32.dll")
@@ -329,6 +330,8 @@ var (
 	procCoTaskMemFree                                        = modole32.NewProc("CoTaskMemFree")
 	procStringFromGUID2                                      = modole32.NewProc("StringFromGUID2")
 	procEnumProcesses                                        = modpsapi.NewProc("EnumProcesses")
+	procSubscribeServiceChangeNotifications                  = modsechost.NewProc("SubscribeServiceChangeNotifications")
+	procUnsubscribeServiceChangeNotifications                = modsechost.NewProc("UnsubscribeServiceChangeNotifications")
 	procGetUserNameExW                                       = modsecur32.NewProc("GetUserNameExW")
 	procTranslateNameW                                       = modsecur32.NewProc("TranslateNameW")
 	procCommandLineToArgvW                                   = modshell32.NewProc("CommandLineToArgvW")
@@ -2786,6 +2789,27 @@ func EnumProcesses(processIds []uint32, bytesReturned *uint32) (err error) {
 	if r1 == 0 {
 		err = errnoErr(e1)
 	}
+	return
+}
+
+func SubscribeServiceChangeNotifications(service Handle, eventType uint32, callback uintptr, callbackCtx uintptr, subscription *uintptr) (ret error) {
+	ret = procSubscribeServiceChangeNotifications.Find()
+	if ret != nil {
+		return
+	}
+	r0, _, _ := syscall.Syscall6(procSubscribeServiceChangeNotifications.Addr(), 5, uintptr(service), uintptr(eventType), uintptr(callback), uintptr(callbackCtx), uintptr(unsafe.Pointer(subscription)), 0)
+	if r0 != 0 {
+		ret = syscall.Errno(r0)
+	}
+	return
+}
+
+func UnsubscribeServiceChangeNotifications(subscription uintptr) (err error) {
+	err = procUnsubscribeServiceChangeNotifications.Find()
+	if err != nil {
+		return
+	}
+	syscall.Syscall(procUnsubscribeServiceChangeNotifications.Addr(), 1, uintptr(subscription), 0, 0)
 	return
 }
 
