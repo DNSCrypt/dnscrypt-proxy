@@ -53,8 +53,8 @@ github.com/jedisct1/dlog v0.0.0-20201201133931-57e17ecd14f1 h1:glnf1FFQoM6G8Z9i2
 github.com/jedisct1/dlog v0.0.0-20201201133931-57e17ecd14f1/go.mod h1:+vbxop6USWgBLUajqc/ak72bH24IpH+HqVy/jiUndSY=
 github.com/jedisct1/go-clocksmith v0.0.0-20190707124905-73e087c7979c h1:a/NQUT7AXkEfhaZ+nb7Uzqijo1Qc7C7SZpRrv+6UQDA=
 github.com/jedisct1/go-clocksmith v0.0.0-20190707124905-73e087c7979c/go.mod h1:SAINchklztk2jcLWJ4bpNF4KnwDUSUTX+cJbspWC2Rw=
-github.com/jedisct1/go-dnsstamps v0.0.0-20201129203013-2c136bd66b10 h1:PlCvCebUh0sSBYBmLjpyq0jcsDMQfQr5p/pjNw6FeM0=
-github.com/jedisct1/go-dnsstamps v0.0.0-20201129203013-2c136bd66b10/go.mod h1:t35n6rsPE3nD3RXbc5hI5Ax1ci/SSYTpx0BdMXh/1aE=
+github.com/jedisct1/go-dnsstamps v0.0.0-20201210214355-8114706e4f2a h1:XXNdV/wI5aLjCEWiYHZEIArB81lHHDcNpfXndq/52aA=
+github.com/jedisct1/go-dnsstamps v0.0.0-20201210214355-8114706e4f2a/go.mod h1:t35n6rsPE3nD3RXbc5hI5Ax1ci/SSYTpx0BdMXh/1aE=
 github.com/jedisct1/go-minisign v0.0.0-20190909160543-45766022959e h1:UvSe12bq+Uj2hWd8aOlwPmoZ+CITRFrdit+sDGfAg8U=
 github.com/jedisct1/go-minisign v0.0.0-20190909160543-45766022959e/go.mod h1:G1CVv03EnqU1wYL2dFwXxW2An0az9JTl/ZsqXQeBlkU=
 github.com/jedisct1/xsecretbox v0.0.0-20200921000858-23f5ec706e6a h1:poHGyVo1+BCg7ngkrgq1h8xr2MDZHBwD6l2uG2GEMDI=

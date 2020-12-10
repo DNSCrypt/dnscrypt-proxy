@@ -12,7 +12,7 @@ require (
 	github.com/hectane/go-acl v0.0.0-20190604041725-da78bae5fc95
 	github.com/jedisct1/dlog v0.0.0-20201201133931-57e17ecd14f1
 	github.com/jedisct1/go-clocksmith v0.0.0-20190707124905-73e087c7979c
-	github.com/jedisct1/go-dnsstamps v0.0.0-20201129203013-2c136bd66b10
+	github.com/jedisct1/go-dnsstamps v0.0.0-20201210214355-8114706e4f2a
 	github.com/jedisct1/go-minisign v0.0.0-20190909160543-45766022959e
 	github.com/jedisct1/xsecretbox v0.0.0-20200921000858-23f5ec706e6a
 	github.com/k-sone/critbitgo v1.4.0
