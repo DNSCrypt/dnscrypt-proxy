@@ -249,7 +249,7 @@ func fetchServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, isNew 
 	} else if stamp.Proto == stamps.StampProtoTypeDoH {
 		return fetchDoHServerInfo(proxy, name, stamp, isNew)
 	}
-	return ServerInfo{}, errors.New("Unsupported protocol")
+	return ServerInfo{}, errors.New(fmt.Sprintf("Unsupported protocol for [%s]: [%s]", name, stamp.Proto.String()))
 }
 
 func route(proxy *Proxy, name string) (*net.UDPAddr, *net.TCPAddr, error) {
