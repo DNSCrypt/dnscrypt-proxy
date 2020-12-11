@@ -42,7 +42,7 @@ github.com/jedisct1/dlog
 # github.com/jedisct1/go-clocksmith v0.0.0-20190707124905-73e087c7979c
 ## explicit
 github.com/jedisct1/go-clocksmith
-# github.com/jedisct1/go-dnsstamps v0.0.0-20201210214355-8114706e4f2a
+# github.com/jedisct1/go-dnsstamps v0.0.0-20201211123510-8d2deeae02b9
 ## explicit
 github.com/jedisct1/go-dnsstamps
 # github.com/jedisct1/go-minisign v0.0.0-20190909160543-45766022959e
