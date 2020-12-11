@@ -215,9 +215,9 @@ type BlockIPConfigLegacy struct {
 }
 
 type AllowIPConfig struct {
-       File    string `toml:"allowed_ips_file"`
-       LogFile string `toml:"log_file"`
-       Format  string `toml:"log_format"`
+	File    string `toml:"allowed_ips_file"`
+	LogFile string `toml:"log_file"`
+	Format  string `toml:"log_format"`
 }
 
 type AnonymizedDNSRouteConfig struct {
