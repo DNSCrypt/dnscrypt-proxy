@@ -271,14 +271,9 @@ func route(proxy *Proxy, name string) (*net.UDPAddr, *net.TCPAddr, error) {
 	}
 	var relayCandidateStamp *stamps.ServerStamp
 	if len(relayName) == 0 {
-		return nil, nil, fmt.Errorf("Route declared for [%v] but an empty relay list", name)
+		return nil, nil, fmt.Errorf("Route declared for [%v] but the relay list is empty", name)
 	} else if relayStamp, err := stamps.NewServerStampFromString(relayName); err == nil {
 		relayCandidateStamp = &relayStamp
-	} else if _, err := net.ResolveUDPAddr("udp", relayName); err == nil {
-		relayCandidateStamp = &stamps.ServerStamp{
-			ServerAddrStr: relayName,
-			Proto:         stamps.StampProtoTypeDNSCryptRelay,
-		}
 	} else {
 		for _, registeredServer := range proxy.registeredRelays {
 			if registeredServer.name == relayName {
