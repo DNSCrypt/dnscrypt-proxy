@@ -181,10 +181,20 @@ func (plugin *PluginBlockNameResponse) Eval(pluginsState *PluginsState, msg *dns
 	answers := msg.Answer
 	for _, answer := range answers {
 		header := answer.Header()
-		if header.Class != dns.ClassINET || header.Rrtype != dns.TypeCNAME {
+		if header.Class != dns.ClassINET {
 			continue
 		}
-		target, err := NormalizeQName(answer.(*dns.CNAME).Target)
+		var target string
+		if header.Rrtype == dns.TypeCNAME {
+			target = answer.(*dns.CNAME).Target
+		} else if header.Rrtype == dns.TypeSVCB && answer.(*dns.SVCB).Priority == 0 {
+			target = answer.(*dns.SVCB).Target
+		} else if header.Rrtype == dns.TypeHTTPS && answer.(*dns.HTTPS).Priority == 0 {
+			target = answer.(*dns.HTTPS).Target
+		} else {
+			continue
+		}
+		target, err := NormalizeQName(target)
 		if err != nil {
 			return err
 		}

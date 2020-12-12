@@ -36,13 +36,13 @@ github.com/hashicorp/golang-lru/simplelru
 ## explicit
 github.com/hectane/go-acl
 github.com/hectane/go-acl/api
-# github.com/jedisct1/dlog v0.0.0-20201015120035-7b9837cfc336
+# github.com/jedisct1/dlog v0.0.0-20201201133931-57e17ecd14f1
 ## explicit
 github.com/jedisct1/dlog
 # github.com/jedisct1/go-clocksmith v0.0.0-20190707124905-73e087c7979c
 ## explicit
 github.com/jedisct1/go-clocksmith
-# github.com/jedisct1/go-dnsstamps v0.0.0-20201015120701-b7d110434bec
+# github.com/jedisct1/go-dnsstamps v0.0.0-20201211123510-8d2deeae02b9
 ## explicit
 github.com/jedisct1/go-dnsstamps
 # github.com/jedisct1/go-minisign v0.0.0-20190909160543-45766022959e
@@ -70,7 +70,7 @@ github.com/powerman/check
 # github.com/smartystreets/goconvey v1.6.4
 github.com/smartystreets/goconvey/convey/gotest
 github.com/smartystreets/goconvey/convey/reporting
-# golang.org/x/crypto v0.0.0-20201117144127-c1f2f97bffc9
+# golang.org/x/crypto v0.0.0-20201208171446-5f87f3452ae9
 ## explicit
 golang.org/x/crypto/blake2b
 golang.org/x/crypto/curve25519
@@ -81,7 +81,7 @@ golang.org/x/crypto/nacl/box
 golang.org/x/crypto/nacl/secretbox
 golang.org/x/crypto/poly1305
 golang.org/x/crypto/salsa20/salsa
-# golang.org/x/net v0.0.0-20201110031124-69a78807bb2b
+# golang.org/x/net v0.0.0-20201209123823-ac852fbbde11
 ## explicit
 golang.org/x/net/bpf
 golang.org/x/net/http/httpguts
@@ -94,7 +94,7 @@ golang.org/x/net/internal/socks
 golang.org/x/net/ipv4
 golang.org/x/net/ipv6
 golang.org/x/net/proxy
-# golang.org/x/sys v0.0.0-20201117222635-ba5294a509c7
+# golang.org/x/sys v0.0.0-20201207223542-d4d67f95c62d
 ## explicit
 golang.org/x/sys/cpu
 golang.org/x/sys/internal/unsafeheader
@@ -104,7 +104,8 @@ golang.org/x/sys/windows/registry
 golang.org/x/sys/windows/svc
 golang.org/x/sys/windows/svc/eventlog
 golang.org/x/sys/windows/svc/mgr
-# golang.org/x/text v0.3.3
+# golang.org/x/text v0.3.4
+## explicit
 golang.org/x/text/secure/bidirule
 golang.org/x/text/transform
 golang.org/x/text/unicode/bidi
@@ -150,5 +151,5 @@ google.golang.org/protobuf/types/known/timestamppb
 # gopkg.in/natefinch/lumberjack.v2 v2.0.0
 ## explicit
 gopkg.in/natefinch/lumberjack.v2
-# gopkg.in/yaml.v2 v2.3.0
+# gopkg.in/yaml.v2 v2.4.0
 ## explicit

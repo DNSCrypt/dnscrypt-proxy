@@ -36,10 +36,12 @@ labarchitects.com
 lan
 liveinternet.ru
 localdomain
+localhost
 login.microsoftonline.com
 login.yahoo.com
 mdidesign.ca
 microsoft.com
+mobiledl.adobe.com
 msedge.net
 msftconnecttest.com
 msftncsi.com

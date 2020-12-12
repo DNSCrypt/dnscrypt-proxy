@@ -1,3 +1,3 @@
 module github.com/jedisct1/go-dnsstamps
 
-go 1.14
+go 1.15
