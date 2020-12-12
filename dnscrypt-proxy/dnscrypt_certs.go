@@ -21,7 +21,7 @@ type CertInfo struct {
 	ForwardSecurity    bool
 }
 
-func FetchCurrentDNSCryptCert(proxy *Proxy, serverName *string, proto string, pk ed25519.PublicKey, serverAddress string, providerName string, isNew bool, relayUDPAddr *net.UDPAddr, relayTCPAddr *net.TCPAddr, knownBugs ServerBugs) (CertInfo, int, bool, error) {
+func FetchCurrentDNSCryptCert(proxy *Proxy, serverName *string, proto string, pk ed25519.PublicKey, serverAddress string, providerName string, isNew bool, relay *DNSCryptRelay, knownBugs ServerBugs) (CertInfo, int, bool, error) {
 	if len(pk) != ed25519.PublicKeySize {
 		return CertInfo{}, 0, false, errors.New("Invalid public key length")
 	}
@@ -34,18 +34,18 @@ func FetchCurrentDNSCryptCert(proxy *Proxy, serverName *string, proto string, pk
 	query := dns.Msg{}
 	query.SetQuestion(providerName, dns.TypeTXT)
 	if !strings.HasPrefix(providerName, "2.dnscrypt-cert.") {
-		if relayUDPAddr != nil && !proxy.anonDirectCertFallback {
+		if relay != nil && !proxy.anonDirectCertFallback {
 			dlog.Warnf("[%v] uses a non-standard provider name, enable direct cert fallback to use with a relay ('%v' doesn't start with '2.dnscrypt-cert.')", *serverName, providerName)
 		} else {
 			dlog.Warnf("[%v] uses a non-standard provider name ('%v' doesn't start with '2.dnscrypt-cert.')", *serverName, providerName)
-			relayUDPAddr, relayTCPAddr = nil, nil
+			relay = nil
 		}
 	}
 	tryFragmentsSupport := true
 	if knownBugs.fragmentsBlocked {
 		tryFragmentsSupport = false
 	}
-	in, rtt, fragmentsBlocked, err := dnsExchange(proxy, proto, &query, serverAddress, relayUDPAddr, relayTCPAddr, serverName, tryFragmentsSupport)
+	in, rtt, fragmentsBlocked, err := dnsExchange(proxy, proto, &query, serverAddress, relay, serverName, tryFragmentsSupport)
 	if err != nil {
 		dlog.Noticef("[%s] TIMEOUT", *serverName)
 		return CertInfo{}, 0, fragmentsBlocked, err
@@ -197,7 +197,7 @@ type dnsExchangeResponse struct {
 	err              error
 }
 
-func dnsExchange(proxy *Proxy, proto string, query *dns.Msg, serverAddress string, relayUDPAddr *net.UDPAddr, relayTCPAddr *net.TCPAddr, serverName *string, tryFragmentsSupport bool) (*dns.Msg, time.Duration, bool, error) {
+func dnsExchange(proxy *Proxy, proto string, query *dns.Msg, serverAddress string, relay *DNSCryptRelay, serverName *string, tryFragmentsSupport bool) (*dns.Msg, time.Duration, bool, error) {
 	for {
 		cancelChannel := make(chan struct{})
 		channel := make(chan dnsExchangeResponse)
@@ -209,7 +209,7 @@ func dnsExchange(proxy *Proxy, proto string, query *dns.Msg, serverAddress strin
 				queryCopy := query.Copy()
 				queryCopy.Id += uint16(options)
 				go func(query *dns.Msg, delay time.Duration) {
-					option := _dnsExchange(proxy, proto, query, serverAddress, relayUDPAddr, relayTCPAddr, 1500)
+					option := _dnsExchange(proxy, proto, query, serverAddress, relay, 1500)
 					option.fragmentsBlocked = false
 					option.priority = 0
 					channel <- option
@@ -225,7 +225,7 @@ func dnsExchange(proxy *Proxy, proto string, query *dns.Msg, serverAddress strin
 			queryCopy := query.Copy()
 			queryCopy.Id += uint16(options)
 			go func(query *dns.Msg, delay time.Duration) {
-				option := _dnsExchange(proxy, proto, query, serverAddress, relayUDPAddr, relayTCPAddr, 480)
+				option := _dnsExchange(proxy, proto, query, serverAddress, relay, 480)
 				option.fragmentsBlocked = true
 				option.priority = 1
 				channel <- option
@@ -262,18 +262,18 @@ func dnsExchange(proxy *Proxy, proto string, query *dns.Msg, serverAddress strin
 			return bestOption.response, bestOption.rtt, bestOption.fragmentsBlocked, nil
 		}
 
-		if relayUDPAddr == nil || !proxy.anonDirectCertFallback {
+		if relay == nil || !proxy.anonDirectCertFallback {
 			if err == nil {
 				err = errors.New("Unable to reach the server")
 			}
 			return nil, 0, false, err
 		}
-		dlog.Infof("Unable to get a certificate for [%v] via relay [%v], retrying over a direct connection", *serverName, relayUDPAddr.IP)
-		relayUDPAddr, relayTCPAddr = nil, nil
+		dlog.Infof("Unable to get a certificate for [%v] via relay [%v], retrying over a direct connection", *serverName, relay.RelayUDPAddr.IP)
+		relay = nil
 	}
 }
 
-func _dnsExchange(proxy *Proxy, proto string, query *dns.Msg, serverAddress string, relayUDPAddr *net.UDPAddr, relayTCPAddr *net.TCPAddr, paddedLen int) dnsExchangeResponse {
+func _dnsExchange(proxy *Proxy, proto string, query *dns.Msg, serverAddress string, relay *DNSCryptRelay, paddedLen int) dnsExchangeResponse {
 	var packet []byte
 	var rtt time.Duration
 
@@ -299,9 +299,9 @@ func _dnsExchange(proxy *Proxy, proto string, query *dns.Msg, serverAddress stri
 			return dnsExchangeResponse{err: err}
 		}
 		upstreamAddr := udpAddr
-		if relayUDPAddr != nil {
+		if relay != nil {
 			proxy.prepareForRelay(udpAddr.IP, udpAddr.Port, &binQuery)
-			upstreamAddr = relayUDPAddr
+			upstreamAddr = relay.RelayUDPAddr
 		}
 		now := time.Now()
 		pc, err := net.DialUDP("udp", nil, upstreamAddr)
@@ -332,9 +332,9 @@ func _dnsExchange(proxy *Proxy, proto string, query *dns.Msg, serverAddress stri
 			return dnsExchangeResponse{err: err}
 		}
 		upstreamAddr := tcpAddr
-		if relayTCPAddr != nil {
+		if relay != nil {
 			proxy.prepareForRelay(tcpAddr.IP, tcpAddr.Port, &binQuery)
-			upstreamAddr = relayTCPAddr
+			upstreamAddr = relay.RelayTCPAddr
 		}
 		now := time.Now()
 		var pc net.Conn

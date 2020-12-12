@@ -100,7 +100,7 @@ func (proxy *Proxy) Encrypt(serverInfo *ServerInfo, packet []byte, proto string)
 	if proto == "udp" && serverInfo.knownBugs.fragmentsBlocked {
 		paddedLength = MaxDNSUDPSafePacketSize
 	}
-	if serverInfo.RelayUDPAddr != nil && proto == "tcp" {
+	if serverInfo.Relay != nil && proto == "tcp" {
 		paddedLength = MaxDNSPacketSize
 	}
 	if QueryOverhead+len(packet)+1 > paddedLength {
