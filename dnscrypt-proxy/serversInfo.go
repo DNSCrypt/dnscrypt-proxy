@@ -16,7 +16,6 @@ import (
 
 	"github.com/VividCortex/ewma"
 	"github.com/jedisct1/dlog"
-	"github.com/jedisct1/go-dnsstamps"
 	stamps "github.com/jedisct1/go-dnsstamps"
 	"github.com/miekg/dns"
 	"golang.org/x/crypto/ed25519"
@@ -59,7 +58,7 @@ type ServerInfo struct {
 	SharedKey          [32]byte
 	MagicQuery         [8]byte
 	knownBugs          ServerBugs
-	Proto              dnsstamps.StampProtoType
+	Proto              stamps.StampProtoType
 	useGet             bool
 }
 
@@ -98,8 +97,6 @@ func (LBStrategyRandom) getCandidate(serversCount int) int {
 }
 
 var DefaultLBStrategy = LBStrategyP2{}
-
-type ODoHRelay struct{}
 
 type DNSCryptRelay struct {
 	RelayUDPAddr *net.UDPAddr
@@ -260,7 +257,7 @@ func fetchServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, isNew 
 	} else if stamp.Proto == stamps.StampProtoTypeDoH {
 		return fetchDoHServerInfo(proxy, name, stamp, isNew)
 	}
-	return ServerInfo{}, errors.New(fmt.Sprintf("Unsupported protocol for [%s]: [%s]", name, stamp.Proto.String()))
+	return ServerInfo{}, fmt.Errorf("Unsupported protocol for [%s]: [%s]", name, stamp.Proto.String())
 }
 
 func route(proxy *Proxy, name string) (*Relay, error) {
