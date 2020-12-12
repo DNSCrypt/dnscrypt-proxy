@@ -99,6 +99,8 @@ func (LBStrategyRandom) getCandidate(serversCount int) int {
 
 var DefaultLBStrategy = LBStrategyP2{}
 
+type ODoHRelay struct{}
+
 type DNSCryptRelay struct {
 	RelayUDPAddr *net.UDPAddr
 	RelayTCPAddr *net.TCPAddr
@@ -311,6 +313,9 @@ func route(proxy *Proxy, name string) (*Relay, error) {
 			return nil, err
 		}
 		return &Relay{Proto: stamps.StampProtoTypeDNSCryptRelay, Dnscrypt: &DNSCryptRelay{RelayUDPAddr: relayUDPAddr, RelayTCPAddr: relayTCPAddr}}, nil
+	case stamps.StampProtoTypeODoHRelay:
+		dlog.Debugf("Ignoring relay [%v]: ODoH relays are currently unsupported", relayName)
+		return nil, nil
 	}
 	return nil, fmt.Errorf("Invalid relay [%v] for server [%v]", relayName, name)
 }
