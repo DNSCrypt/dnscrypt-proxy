@@ -103,9 +103,12 @@ type DNSCryptRelay struct {
 	RelayTCPAddr *net.TCPAddr
 }
 
+type ODoHRelay struct{}
+
 type Relay struct {
 	Proto    stamps.StampProtoType
 	Dnscrypt *DNSCryptRelay
+	ODoH     *ODoHRelay
 }
 
 type ServersInfo struct {
@@ -311,8 +314,7 @@ func route(proxy *Proxy, name string) (*Relay, error) {
 		}
 		return &Relay{Proto: stamps.StampProtoTypeDNSCryptRelay, Dnscrypt: &DNSCryptRelay{RelayUDPAddr: relayUDPAddr, RelayTCPAddr: relayTCPAddr}}, nil
 	case stamps.StampProtoTypeODoHRelay:
-		dlog.Debugf("Ignoring relay [%v]: ODoH relays are currently unsupported", relayName)
-		return nil, nil
+		return &Relay{Proto: stamps.StampProtoTypeODoHRelay, ODoH: &ODoHRelay{}}, nil
 	}
 	return nil, fmt.Errorf("Invalid relay [%v] for server [%v]", relayName, name)
 }
