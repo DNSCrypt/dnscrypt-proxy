@@ -209,12 +209,16 @@ cert_refresh_delay = 240
 ## These are normal, non-encrypted DNS resolvers, that will be only used
 ## for one-shot queries when retrieving the initial resolvers list, and
 ## only if the system DNS configuration doesn't work.
+##
 ## No user application queries will ever be leaked through these resolvers,
 ## and they will not be used after IP addresses of resolvers URLs have been found.
 ## They will never be used if lists have already been cached, and if stamps
 ## don't include host names without IP addresses.
+##
 ## They will not be used if the configured system DNS works.
-## Resolvers supporting DNSSEC are recommended.
+## Resolvers supporting DNSSEC are recommended, and, if you are using
+## DoH, fallback resolvers should ideally be operated by a different entity than
+## the DoH servers you will be using, especially if you have IPv6 enabled.
 ##
 ## People in China may need to use 114.114.114.114:53 here.
 ## Other popular options include 8.8.8.8 and 1.1.1.1.
