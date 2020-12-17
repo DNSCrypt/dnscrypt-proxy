@@ -477,7 +477,7 @@ func fetchDoHServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, isN
 		dlog.Criticalf("[%s] may be a lying resolver", name)
 	}
 	protocol := tls.NegotiatedProtocol
-	if len(protocol) == 0 {
+	if len(protocol) == 0 || strings.HasPrefix(protocol, "http/1.") {
 		protocol = "h1"
 		dlog.Warnf("[%s] does not support HTTP/2", name)
 	}
