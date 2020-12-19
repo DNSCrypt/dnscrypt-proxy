@@ -386,8 +386,8 @@ func (proxy *Proxy) prepareForRelay(ip net.IP, port int, encryptedQuery *[]byte)
 
 func (proxy *Proxy) exchangeWithUDPServer(serverInfo *ServerInfo, sharedKey *[32]byte, encryptedQuery []byte, clientNonce []byte) ([]byte, error) {
 	upstreamAddr := serverInfo.UDPAddr
-	if serverInfo.RelayUDPAddr != nil {
-		upstreamAddr = serverInfo.RelayUDPAddr
+	if serverInfo.Relay != nil && serverInfo.Relay.Dnscrypt != nil {
+		upstreamAddr = serverInfo.Relay.Dnscrypt.RelayUDPAddr
 	}
 	var err error
 	var pc net.Conn
@@ -404,7 +404,7 @@ func (proxy *Proxy) exchangeWithUDPServer(serverInfo *ServerInfo, sharedKey *[32
 	if err := pc.SetDeadline(time.Now().Add(serverInfo.Timeout)); err != nil {
 		return nil, err
 	}
-	if serverInfo.RelayUDPAddr != nil {
+	if serverInfo.Relay != nil && serverInfo.Relay.Dnscrypt != nil {
 		proxy.prepareForRelay(serverInfo.UDPAddr.IP, serverInfo.UDPAddr.Port, &encryptedQuery)
 	}
 	encryptedResponse := make([]byte, MaxDNSPacketSize)
@@ -424,8 +424,8 @@ func (proxy *Proxy) exchangeWithUDPServer(serverInfo *ServerInfo, sharedKey *[32
 
 func (proxy *Proxy) exchangeWithTCPServer(serverInfo *ServerInfo, sharedKey *[32]byte, encryptedQuery []byte, clientNonce []byte) ([]byte, error) {
 	upstreamAddr := serverInfo.TCPAddr
-	if serverInfo.RelayUDPAddr != nil {
-		upstreamAddr = serverInfo.RelayTCPAddr
+	if serverInfo.Relay != nil && serverInfo.Relay.Dnscrypt != nil {
+		upstreamAddr = serverInfo.Relay.Dnscrypt.RelayTCPAddr
 	}
 	var err error
 	var pc net.Conn
@@ -442,7 +442,7 @@ func (proxy *Proxy) exchangeWithTCPServer(serverInfo *ServerInfo, sharedKey *[32
 	if err := pc.SetDeadline(time.Now().Add(serverInfo.Timeout)); err != nil {
 		return nil, err
 	}
-	if serverInfo.RelayTCPAddr != nil {
+	if serverInfo.Relay != nil && serverInfo.Relay.Dnscrypt != nil {
 		proxy.prepareForRelay(serverInfo.TCPAddr.IP, serverInfo.TCPAddr.Port, &encryptedQuery)
 	}
 	encryptedQuery, err = PrefixWithSize(encryptedQuery)

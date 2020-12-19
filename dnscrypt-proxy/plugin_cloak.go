@@ -147,33 +147,25 @@ func (plugin *PluginCloak) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 		plugin.Unlock()
 		plugin.RLock()
 	}
-	var ip *net.IP
-	if question.Qtype == dns.TypeA {
-		ipLen := len(cloakedName.ipv4)
-		if ipLen > 0 {
-			ip = &cloakedName.ipv4[rand.Intn(ipLen)]
-		}
-	} else {
-		ipLen := len(cloakedName.ipv6)
-		if ipLen > 0 {
-			ip = &cloakedName.ipv6[rand.Intn(ipLen)]
-		}
-	}
 	plugin.RUnlock()
 	synth := EmptyResponseFromMessage(msg)
-	if ip == nil {
-		synth.Answer = []dns.RR{}
-	} else if question.Qtype == dns.TypeA {
-		rr := new(dns.A)
-		rr.Hdr = dns.RR_Header{Name: question.Name, Rrtype: dns.TypeA, Class: dns.ClassINET, Ttl: ttl}
-		rr.A = *ip
-		synth.Answer = []dns.RR{rr}
+	synth.Answer = []dns.RR{}
+	if question.Qtype == dns.TypeA {
+		for _, ip := range cloakedName.ipv4 {
+			rr := new(dns.A)
+			rr.Hdr = dns.RR_Header{Name: question.Name, Rrtype: dns.TypeA, Class: dns.ClassINET, Ttl: ttl}
+			rr.A = ip
+			synth.Answer = append(synth.Answer, rr)
+		}
 	} else {
-		rr := new(dns.AAAA)
-		rr.Hdr = dns.RR_Header{Name: question.Name, Rrtype: dns.TypeAAAA, Class: dns.ClassINET, Ttl: ttl}
-		rr.AAAA = *ip
-		synth.Answer = []dns.RR{rr}
+		for _, ip := range cloakedName.ipv6 {
+			rr := new(dns.AAAA)
+			rr.Hdr = dns.RR_Header{Name: question.Name, Rrtype: dns.TypeAAAA, Class: dns.ClassINET, Ttl: ttl}
+			rr.AAAA = ip
+			synth.Answer = append(synth.Answer, rr)
+		}
 	}
+	rand.Shuffle(len(synth.Answer), func(i, j int) { synth.Answer[i], synth.Answer[j] = synth.Answer[j], synth.Answer[i] })
 	pluginsState.synthResponse = synth
 	pluginsState.action = PluginsActionSynth
 	pluginsState.returnCode = PluginsReturnCodeCloak

@@ -13,10 +13,7 @@ import (
 
 type CaptivePortalEntryips []net.IP
 
-type CaptivePortalEntry struct {
-	name string
-	ips  CaptivePortalEntryips
-}
+type CaptivePortalMap map[string]CaptivePortalEntryips
 
 type CaptivePortalHandler struct {
 	cancelChannels []chan struct{}
@@ -25,11 +22,11 @@ type CaptivePortalHandler struct {
 func (captivePortalHandler *CaptivePortalHandler) Stop() {
 	for _, cancelChannel := range captivePortalHandler.cancelChannels {
 		cancelChannel <- struct{}{}
-		_ = <-cancelChannel
+		<-cancelChannel
 	}
 }
 
-func handleColdStartClient(clientPc *net.UDPConn, cancelChannel chan struct{}, ipsMap *map[string]CaptivePortalEntryips) bool {
+func handleColdStartClient(clientPc *net.UDPConn, cancelChannel chan struct{}, ipsMap *CaptivePortalMap) bool {
 	buffer := make([]byte, MaxDNSPacketSize-1)
 	clientPc.SetDeadline(time.Now().Add(time.Duration(1) * time.Second))
 	length, clientAddr, err := clientPc.ReadFrom(buffer)
@@ -105,7 +102,7 @@ func handleColdStartClient(clientPc *net.UDPConn, cancelChannel chan struct{}, i
 	return false
 }
 
-func addColdStartListener(proxy *Proxy, ipsMap *map[string]CaptivePortalEntryips, listenAddrStr string, cancelChannel chan struct{}) error {
+func addColdStartListener(proxy *Proxy, ipsMap *CaptivePortalMap, listenAddrStr string, cancelChannel chan struct{}) error {
 	listenUDPAddr, err := net.ResolveUDPAddr("udp", listenAddrStr)
 	if err != nil {
 		return err
@@ -132,7 +129,7 @@ func ColdStart(proxy *Proxy) (*CaptivePortalHandler, error) {
 		dlog.Warn(err)
 		return nil, err
 	}
-	ipsMap := make(map[string]CaptivePortalEntryips)
+	ipsMap := make(CaptivePortalMap)
 	for lineNo, line := range strings.Split(string(bin), "\n") {
 		line = TrimAndStripInlineComments(line)
 		if len(line) == 0 {

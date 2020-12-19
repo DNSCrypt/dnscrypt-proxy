@@ -766,6 +766,15 @@ func (config *Config) loadSources(proxy *Proxy) error {
 			return err
 		}
 	}
+	for name, config := range config.StaticsConfig {
+		if stamp, err := stamps.NewServerStampFromString(config.Stamp); err == nil {
+			if stamp.Proto == stamps.StampProtoTypeDNSCryptRelay || stamp.Proto == stamps.StampProtoTypeODoHRelay {
+				dlog.Debugf("Adding [%s] to the set of available static relays", name)
+				registeredServer := RegisteredServer{name: name, stamp: stamp, description: "static relay"}
+				proxy.registeredRelays = append(proxy.registeredRelays, registeredServer)
+			}
+		}
+	}
 	if len(config.ServerNames) == 0 {
 		for serverName := range config.StaticsConfig {
 			config.ServerNames = append(config.ServerNames, serverName)
@@ -830,7 +839,7 @@ func (config *Config) loadSource(proxy *Proxy, requiredProps stamps.ServerInform
 		dlog.Warnf("Error in source [%s]: [%s] -- Continuing with reduced server count [%d]", cfgSourceName, err, len(registeredServers))
 	}
 	for _, registeredServer := range registeredServers {
-		if registeredServer.stamp.Proto != stamps.StampProtoTypeDNSCryptRelay {
+		if registeredServer.stamp.Proto != stamps.StampProtoTypeDNSCryptRelay && registeredServer.stamp.Proto != stamps.StampProtoTypeODoHRelay {
 			if len(config.ServerNames) > 0 {
 				if !includesName(config.ServerNames, registeredServer.name) {
 					continue
@@ -854,7 +863,7 @@ func (config *Config) loadSource(proxy *Proxy, requiredProps stamps.ServerInform
 				continue
 			}
 		}
-		if registeredServer.stamp.Proto == stamps.StampProtoTypeDNSCryptRelay {
+		if registeredServer.stamp.Proto == stamps.StampProtoTypeDNSCryptRelay || registeredServer.stamp.Proto == stamps.StampProtoTypeODoHRelay {
 			dlog.Debugf("Adding [%s] to the set of available relays", registeredServer.name)
 			proxy.registeredRelays = append(proxy.registeredRelays, registeredServer)
 		} else {
