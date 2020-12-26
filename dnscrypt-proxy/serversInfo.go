@@ -303,7 +303,7 @@ func route(proxy *Proxy, name string) (*Relay, error) {
 		return nil, fmt.Errorf("Undefined relay [%v] for server [%v]", relayName, name)
 	}
 	switch relayCandidateStamp.Proto {
-	case stamps.StampProtoTypeDNSCrypt | stamps.StampProtoTypeDNSCryptRelay:
+	case stamps.StampProtoTypeDNSCrypt, stamps.StampProtoTypeDNSCryptRelay:
 		relayUDPAddr, err := net.ResolveUDPAddr("udp", relayCandidateStamp.ServerAddrStr)
 		if err != nil {
 			return nil, err
