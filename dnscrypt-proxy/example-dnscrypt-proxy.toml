@@ -629,6 +629,9 @@ cache_neg_max_ttl = 600
 ## If the `urls` property is missing, cache files and valid signatures
 ## must already be present. This doesn't prevent these cache files from
 ## expiring after `refresh_delay` hours.
+## Cache freshness is checked every 24 hours, so values for 'refresh_delay'
+## of less than 24 hours will have no effect.
+## A maximum delay of 168 hours (1 week) is imposed to ensure cache freshness.
 
 [sources]
 
@@ -638,6 +641,7 @@ cache_neg_max_ttl = 600
   urls = ['https://raw.githubusercontent.com/DNSCrypt/dnscrypt-resolvers/master/v3/public-resolvers.md', 'https://download.dnscrypt.info/resolvers-list/v3/public-resolvers.md', 'https://ipv6.download.dnscrypt.info/resolvers-list/v3/public-resolvers.md', 'https://download.dnscrypt.net/resolvers-list/v3/public-resolvers.md']
   cache_file = 'public-resolvers.md'
   minisign_key = 'RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3'
+  refresh_delay = 72
   prefix = ''
 
   ## Anonymized DNS relays

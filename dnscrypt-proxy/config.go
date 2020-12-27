@@ -820,6 +820,8 @@ func (config *Config) loadSource(proxy *Proxy, requiredProps stamps.ServerInform
 	}
 	if cfgSource.RefreshDelay <= 0 {
 		cfgSource.RefreshDelay = 72
+	} else if cfgSource.RefreshDelay > 168 {
+		cfgSource.RefreshDelay = 168
 	}
 	source, err := NewSource(cfgSourceName, proxy.xTransport, cfgSource.URLs, cfgSource.MinisignKeyStr, cfgSource.CacheFile, cfgSource.FormatStr, time.Duration(cfgSource.RefreshDelay)*time.Hour)
 	if err != nil {
