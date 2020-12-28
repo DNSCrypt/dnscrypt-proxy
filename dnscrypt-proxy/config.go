@@ -832,7 +832,7 @@ func (config *Config) loadSource(proxy *Proxy, requiredProps stamps.ServerInform
 	} else if cfgSource.RefreshDelay > 168 {
 		cfgSource.RefreshDelay = 168
 	}
-	source, err := NewSource(cfgSourceName, proxy.xTransport, cfgSource.URLs, cfgSource.MinisignKeyStr, cfgSource.CacheFile, cfgSource.FormatStr, time.Duration(cfgSource.RefreshDelay)*time.Hour)
+	source, err := NewSource(cfgSourceName, proxy.xTransport, cfgSource.URLs, cfgSource.MinisignKeyStr, cfgSource.CacheFile, cfgSource.FormatStr, time.Duration(cfgSource.RefreshDelay)*time.Hour, cfgSource.Prefix)
 	if err != nil {
 		if len(source.in) <= 0 {
 			dlog.Criticalf("Unable to retrieve source [%s]: [%s]", cfgSourceName, err)

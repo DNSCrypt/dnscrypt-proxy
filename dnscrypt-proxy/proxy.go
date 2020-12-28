@@ -280,7 +280,7 @@ func (proxy *Proxy) StartProxy() {
 func (proxy *Proxy) updateRegisteredServers() error {
 	for _, source := range proxy.sources {
 		//dlog.Debugf(string(source.in))
-		registeredServers, err := source.Parse("")
+		registeredServers, err := source.Parse()
 		if err != nil {
 			if len(registeredServers) == 0 {
 				dlog.Criticalf("Unable to use source [%s]: [%s]", source.name, err)
