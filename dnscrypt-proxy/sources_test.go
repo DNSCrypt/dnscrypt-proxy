@@ -65,6 +65,7 @@ type SourceTestExpect struct {
 	urls           []string
 	Source         *Source
 	delay          time.Duration
+	prefix         string
 }
 
 func readFixture(t *testing.T, name string) []byte {
@@ -388,12 +389,12 @@ func TestNewSource(t *testing.T) {
 		refreshDelay time.Duration
 		e            *SourceTestExpect
 	}{
-		{"", "", 0, &SourceTestExpect{err: " ", Source: &Source{name: "short refresh delay", urls: []*url.URL{}, cacheTTL: DefaultPrefetchDelay, prefetchDelay: DefaultPrefetchDelay}}},
+		{"", "", 0, &SourceTestExpect{err: " ", Source: &Source{name: "short refresh delay", urls: []*url.URL{}, cacheTTL: DefaultPrefetchDelay, prefetchDelay: DefaultPrefetchDelay, prefix: ""}}},
 		{"v1", d.keyStr, DefaultPrefetchDelay * 2, &SourceTestExpect{err: "Unsupported source format", Source: &Source{name: "old format", urls: []*url.URL{}, cacheTTL: DefaultPrefetchDelay * 2, prefetchDelay: DefaultPrefetchDelay}}},
 		{"v2", "", DefaultPrefetchDelay * 3, &SourceTestExpect{err: "Invalid encoded public key", Source: &Source{name: "invalid public key", urls: []*url.URL{}, cacheTTL: DefaultPrefetchDelay * 3, prefetchDelay: DefaultPrefetchDelay}}},
 	} {
 		t.Run(tt.e.Source.name, func(t *testing.T) {
-			got, err := NewSource(tt.e.Source.name, d.xTransport, tt.e.urls, tt.key, tt.e.cachePath, tt.v, tt.refreshDelay)
+			got, err := NewSource(tt.e.Source.name, d.xTransport, tt.e.urls, tt.key, tt.e.cachePath, tt.v, tt.refreshDelay, tt.e.prefix)
 			checkResult(t, tt.e, got, err)
 		})
 	}
@@ -403,7 +404,7 @@ func TestNewSource(t *testing.T) {
 			for i := range d.sources {
 				id, e := setupSourceTestCase(t, d, i, &cacheTest, downloadTest)
 				t.Run("cache "+cacheTestName+", download "+downloadTestName+"/"+id, func(t *testing.T) {
-					got, err := NewSource(id, d.xTransport, e.urls, d.keyStr, e.cachePath, "v2", DefaultPrefetchDelay*3)
+					got, err := NewSource(id, d.xTransport, e.urls, d.keyStr, e.cachePath, "v2", DefaultPrefetchDelay*3, "")
 					checkResult(t, e, got, err)
 				})
 			}
