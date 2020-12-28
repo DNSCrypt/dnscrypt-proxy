@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"runtime"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -92,6 +93,13 @@ type Proxy struct {
 	pluginBlockUndelegated         bool
 	child                          bool
 	daemonize                      bool
+	requiredProps                  stamps.ServerInformalProperties
+	ServerNames                    []string
+	DisabledServerNames            []string
+	SourceIPv4                     bool
+	SourceIPv6                     bool
+	SourceDNSCrypt                 bool
+	SourceDoH                      bool
 }
 
 func (proxy *Proxy) registerUDPListener(conn *net.UDPConn) {
@@ -247,6 +255,7 @@ func (proxy *Proxy) StartProxy() {
 	go func() {
 		for {
 			clocksmith.Sleep(PrefetchSources(proxy.xTransport, proxy.sources))
+			proxy.updateRegisteredServers()
 			runtime.GC()
 		}
 	}()
@@ -266,6 +275,88 @@ func (proxy *Proxy) StartProxy() {
 			}
 		}()
 	}
+}
+
+func (proxy *Proxy) updateRegisteredServers() error {
+	for _, source := range proxy.sources {
+		//dlog.Debugf(string(source.in))
+		registeredServers, err := source.Parse("")
+		if err != nil {
+			if len(registeredServers) == 0 {
+				dlog.Criticalf("Unable to use source [%s]: [%s]", source.name, err)
+				return err
+			}
+			dlog.Warnf("Error in source [%s]: [%s] -- Continuing with reduced server count [%d]", source.name, err, len(registeredServers))
+		}
+		for _, registeredServer := range registeredServers {
+			if registeredServer.stamp.Proto != stamps.StampProtoTypeDNSCryptRelay && registeredServer.stamp.Proto != stamps.StampProtoTypeODoHRelay {
+				if len(proxy.ServerNames) > 0 {
+					if !includesName(proxy.ServerNames, registeredServer.name) {
+						continue
+					}
+				} else if registeredServer.stamp.Props&proxy.requiredProps != proxy.requiredProps {
+					continue
+				}
+			}
+			if includesName(proxy.DisabledServerNames, registeredServer.name) {
+				continue
+			}
+			if proxy.SourceIPv4 || proxy.SourceIPv6 {
+				isIPv4, isIPv6 := true, false
+				if registeredServer.stamp.Proto == stamps.StampProtoTypeDoH {
+					isIPv4, isIPv6 = true, true
+				}
+				if strings.HasPrefix(registeredServer.stamp.ServerAddrStr, "[") {
+					isIPv4, isIPv6 = false, true
+				}
+				if !(proxy.SourceIPv4 == isIPv4 || proxy.SourceIPv6 == isIPv6) {
+					continue
+				}
+			}
+			if registeredServer.stamp.Proto == stamps.StampProtoTypeDNSCryptRelay || registeredServer.stamp.Proto == stamps.StampProtoTypeODoHRelay {
+				var found bool
+				for i, currentRegisteredRelay := range proxy.registeredRelays {
+					if currentRegisteredRelay.name == registeredServer.name {
+						found = true
+						if currentRegisteredRelay.stamp.String() != registeredServer.stamp.String() {
+							dlog.Infof("Updating stamp for [%s] was: %s now: %s", registeredServer.name, currentRegisteredRelay.stamp.String(), registeredServer.stamp.String())
+							proxy.registeredRelays[i].stamp = registeredServer.stamp
+							dlog.Debugf("Total count of registered relays %v", len(proxy.registeredRelays))
+						}
+					}
+				}
+				if !found {
+					dlog.Debugf("Adding [%s] to the set of available relays", registeredServer.name)
+					proxy.registeredRelays = append(proxy.registeredRelays, registeredServer)
+				}
+			} else {
+				if !((proxy.SourceDNSCrypt && registeredServer.stamp.Proto == stamps.StampProtoTypeDNSCrypt) ||
+					(proxy.SourceDoH && registeredServer.stamp.Proto == stamps.StampProtoTypeDoH)) {
+					continue
+				}
+				var found bool
+				for i, currentRegisteredServer := range proxy.registeredServers {
+					if currentRegisteredServer.name == registeredServer.name {
+						found = true
+						if currentRegisteredServer.stamp.String() != registeredServer.stamp.String() {
+							dlog.Infof("Updating stamp for [%s] was: %s now: %s", registeredServer.name, currentRegisteredServer.stamp.String(), registeredServer.stamp.String())
+							proxy.registeredServers[i].stamp = registeredServer.stamp
+						}
+					}
+				}
+				if !found {
+					dlog.Debugf("Adding [%s] to the set of wanted resolvers", registeredServer.name)
+					proxy.registeredServers = append(proxy.registeredServers, registeredServer)
+					dlog.Debugf("Total count of registered servers %v", len(proxy.registeredServers))
+				}
+			}
+		}
+
+	}
+	for _, registeredServer := range proxy.registeredServers {
+		proxy.serversInfo.registerServer(registeredServer.name, registeredServer.stamp)
+	}
+	return nil
 }
 
 func (proxy *Proxy) udpListener(clientPc *net.UDPConn) {
