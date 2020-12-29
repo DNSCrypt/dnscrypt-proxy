@@ -230,9 +230,6 @@ func (proxy *Proxy) StartProxy() {
 		dlog.Fatal(err)
 	}
 	curve25519.ScalarBaseMult(&proxy.proxyPublicKey, &proxy.proxySecretKey)
-	for _, registeredServer := range proxy.registeredServers {
-		proxy.serversInfo.registerServer(registeredServer.name, registeredServer.stamp)
-	}
 	proxy.startAcceptingClients()
 	liveServers, err := proxy.serversInfo.refresh(proxy)
 	if liveServers > 0 {
