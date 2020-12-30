@@ -770,7 +770,7 @@ func (config *Config) printRegisteredServers(proxy *Proxy, jsonOutput bool) erro
 func (config *Config) loadSources(proxy *Proxy) error {
 	for cfgSourceName, cfgSource_ := range config.SourcesConfig {
 		cfgSource := cfgSource_
-		if err := config.loadSource(proxy, proxy.requiredProps, cfgSourceName, &cfgSource); err != nil {
+		if err := config.loadSource(proxy, cfgSourceName, &cfgSource); err != nil {
 			return err
 		}
 	}
@@ -810,7 +810,7 @@ func (config *Config) loadSources(proxy *Proxy) error {
 	return nil
 }
 
-func (config *Config) loadSource(proxy *Proxy, requiredProps stamps.ServerInformalProperties, cfgSourceName string, cfgSource *SourceConfig) error {
+func (config *Config) loadSource(proxy *Proxy, cfgSourceName string, cfgSource *SourceConfig) error {
 	if len(cfgSource.URLs) == 0 {
 		if len(cfgSource.URL) == 0 {
 			dlog.Debugf("Missing URLs for source [%s]", cfgSourceName)
