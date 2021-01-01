@@ -143,6 +143,17 @@ tar czpvf dnscrypt-proxy-linux_mips64le-${PACKAGE_VERSION:-dev}.tar.gz linux-mip
 
 go clean
 env GOOS=darwin GOARCH=amd64 go build -mod vendor -ldflags="-s -w"
+mkdir macos-x86_64
+ln dnscrypt-proxy macos-x86_64/
+ln ../LICENSE example-dnscrypt-proxy.toml localhost.pem example-*.txt macos-x86_64/
+tar czpvf dnscrypt-proxy-macos_x86_64-${PACKAGE_VERSION:-dev}.tar.gz macos-x86_64
+
+go clean
+env GOOS=darwin GOARCH=arm64 go build -mod vendor -ldflags="-s -w"
+mkdir macos-arm64
+ln dnscrypt-proxy macos-arm64/
+ln ../LICENSE example-dnscrypt-proxy.toml localhost.pem example-*.txt macos-arm64/
+tar czpvf dnscrypt-proxy-macos_arm64-${PACKAGE_VERSION:-dev}.tar.gz macos-arm64
 
 # Android
 
