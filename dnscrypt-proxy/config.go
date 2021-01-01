@@ -632,6 +632,24 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 		config.SourceDoH = true
 	}
 
+	var requiredProps stamps.ServerInformalProperties
+	if config.SourceRequireDNSSEC {
+		requiredProps |= stamps.ServerInformalPropertyDNSSEC
+	}
+	if config.SourceRequireNoLog {
+		requiredProps |= stamps.ServerInformalPropertyNoLog
+	}
+	if config.SourceRequireNoFilter {
+		requiredProps |= stamps.ServerInformalPropertyNoFilter
+	}
+	proxy.requiredProps = requiredProps
+	proxy.ServerNames = config.ServerNames
+	proxy.DisabledServerNames = config.DisabledServerNames
+	proxy.SourceIPv4 = config.SourceIPv4
+	proxy.SourceIPv6 = config.SourceIPv6
+	proxy.SourceDNSCrypt = config.SourceDNSCrypt
+	proxy.SourceDoH = config.SourceDoH
+
 	netprobeTimeout := config.NetprobeTimeout
 	flag.Visit(func(flag *flag.Flag) {
 		if flag.Name == "netprobe-timeout" && flags.NetprobeTimeoutOverride != nil {
@@ -750,22 +768,13 @@ func (config *Config) printRegisteredServers(proxy *Proxy, jsonOutput bool) erro
 }
 
 func (config *Config) loadSources(proxy *Proxy) error {
-	var requiredProps stamps.ServerInformalProperties
-	if config.SourceRequireDNSSEC {
-		requiredProps |= stamps.ServerInformalPropertyDNSSEC
-	}
-	if config.SourceRequireNoLog {
-		requiredProps |= stamps.ServerInformalPropertyNoLog
-	}
-	if config.SourceRequireNoFilter {
-		requiredProps |= stamps.ServerInformalPropertyNoFilter
-	}
 	for cfgSourceName, cfgSource_ := range config.SourcesConfig {
 		cfgSource := cfgSource_
-		if err := config.loadSource(proxy, requiredProps, cfgSourceName, &cfgSource); err != nil {
+		if err := config.loadSource(proxy, cfgSourceName, &cfgSource); err != nil {
 			return err
 		}
 	}
+	proxy.updateRegisteredServers()
 	for name, config := range config.StaticsConfig {
 		if stamp, err := stamps.NewServerStampFromString(config.Stamp); err == nil {
 			if stamp.Proto == stamps.StampProtoTypeDNSCryptRelay || stamp.Proto == stamps.StampProtoTypeODoHRelay {
@@ -801,7 +810,7 @@ func (config *Config) loadSources(proxy *Proxy) error {
 	return nil
 }
 
-func (config *Config) loadSource(proxy *Proxy, requiredProps stamps.ServerInformalProperties, cfgSourceName string, cfgSource *SourceConfig) error {
+func (config *Config) loadSource(proxy *Proxy, cfgSourceName string, cfgSource *SourceConfig) error {
 	if len(cfgSource.URLs) == 0 {
 		if len(cfgSource.URL) == 0 {
 			dlog.Debugf("Missing URLs for source [%s]", cfgSourceName)
@@ -820,8 +829,10 @@ func (config *Config) loadSource(proxy *Proxy, requiredProps stamps.ServerInform
 	}
 	if cfgSource.RefreshDelay <= 0 {
 		cfgSource.RefreshDelay = 72
+	} else if cfgSource.RefreshDelay > 168 {
+		cfgSource.RefreshDelay = 168
 	}
-	source, err := NewSource(cfgSourceName, proxy.xTransport, cfgSource.URLs, cfgSource.MinisignKeyStr, cfgSource.CacheFile, cfgSource.FormatStr, time.Duration(cfgSource.RefreshDelay)*time.Hour)
+	source, err := NewSource(cfgSourceName, proxy.xTransport, cfgSource.URLs, cfgSource.MinisignKeyStr, cfgSource.CacheFile, cfgSource.FormatStr, time.Duration(cfgSource.RefreshDelay)*time.Hour, cfgSource.Prefix)
 	if err != nil {
 		if len(source.in) <= 0 {
 			dlog.Criticalf("Unable to retrieve source [%s]: [%s]", cfgSourceName, err)
@@ -830,51 +841,6 @@ func (config *Config) loadSource(proxy *Proxy, requiredProps stamps.ServerInform
 		dlog.Infof("Downloading [%s] failed: %v, using cache file to startup", source.name, err)
 	}
 	proxy.sources = append(proxy.sources, source)
-	registeredServers, err := source.Parse(cfgSource.Prefix)
-	if err != nil {
-		if len(registeredServers) == 0 {
-			dlog.Criticalf("Unable to use source [%s]: [%s]", cfgSourceName, err)
-			return err
-		}
-		dlog.Warnf("Error in source [%s]: [%s] -- Continuing with reduced server count [%d]", cfgSourceName, err, len(registeredServers))
-	}
-	for _, registeredServer := range registeredServers {
-		if registeredServer.stamp.Proto != stamps.StampProtoTypeDNSCryptRelay && registeredServer.stamp.Proto != stamps.StampProtoTypeODoHRelay {
-			if len(config.ServerNames) > 0 {
-				if !includesName(config.ServerNames, registeredServer.name) {
-					continue
-				}
-			} else if registeredServer.stamp.Props&requiredProps != requiredProps {
-				continue
-			}
-		}
-		if includesName(config.DisabledServerNames, registeredServer.name) {
-			continue
-		}
-		if config.SourceIPv4 || config.SourceIPv6 {
-			isIPv4, isIPv6 := true, false
-			if registeredServer.stamp.Proto == stamps.StampProtoTypeDoH {
-				isIPv4, isIPv6 = true, true
-			}
-			if strings.HasPrefix(registeredServer.stamp.ServerAddrStr, "[") {
-				isIPv4, isIPv6 = false, true
-			}
-			if !(config.SourceIPv4 == isIPv4 || config.SourceIPv6 == isIPv6) {
-				continue
-			}
-		}
-		if registeredServer.stamp.Proto == stamps.StampProtoTypeDNSCryptRelay || registeredServer.stamp.Proto == stamps.StampProtoTypeODoHRelay {
-			dlog.Debugf("Adding [%s] to the set of available relays", registeredServer.name)
-			proxy.registeredRelays = append(proxy.registeredRelays, registeredServer)
-		} else {
-			if !((config.SourceDNSCrypt && registeredServer.stamp.Proto == stamps.StampProtoTypeDNSCrypt) ||
-				(config.SourceDoH && registeredServer.stamp.Proto == stamps.StampProtoTypeDoH)) {
-				continue
-			}
-			dlog.Debugf("Adding [%s] to the set of wanted resolvers", registeredServer.name)
-			proxy.registeredServers = append(proxy.registeredServers, registeredServer)
-		}
-	}
 	return nil
 }
 
