@@ -36,19 +36,19 @@ github.com/hashicorp/golang-lru/simplelru
 ## explicit
 github.com/hectane/go-acl
 github.com/hectane/go-acl/api
-# github.com/jedisct1/dlog v0.0.0-20201201133931-57e17ecd14f1
+# github.com/jedisct1/dlog v0.0.0-20210101122416-354ffe815216
 ## explicit
 github.com/jedisct1/dlog
-# github.com/jedisct1/go-clocksmith v0.0.0-20190707124905-73e087c7979c
+# github.com/jedisct1/go-clocksmith v0.0.0-20210101121932-da382b963868
 ## explicit
 github.com/jedisct1/go-clocksmith
-# github.com/jedisct1/go-dnsstamps v0.0.0-20201211123510-8d2deeae02b9
+# github.com/jedisct1/go-dnsstamps v0.0.0-20210101121956-16fbdadcf8f5
 ## explicit
 github.com/jedisct1/go-dnsstamps
-# github.com/jedisct1/go-minisign v0.0.0-20190909160543-45766022959e
+# github.com/jedisct1/go-minisign v0.0.0-20210101122305-335e26e05d5b
 ## explicit
 github.com/jedisct1/go-minisign
-# github.com/jedisct1/xsecretbox v0.0.0-20200921000858-23f5ec706e6a
+# github.com/jedisct1/xsecretbox v0.0.0-20210101122535-6ce87170fce4
 ## explicit
 github.com/jedisct1/xsecretbox
 # github.com/k-sone/critbitgo v1.4.0
@@ -94,7 +94,7 @@ golang.org/x/net/internal/socks
 golang.org/x/net/ipv4
 golang.org/x/net/ipv6
 golang.org/x/net/proxy
-# golang.org/x/sys v0.0.0-20201223074533-0d417f636930
+# golang.org/x/sys v0.0.0-20201231184435-2d18734c6014
 ## explicit
 golang.org/x/sys/cpu
 golang.org/x/sys/internal/unsafeheader
