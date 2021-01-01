@@ -40,6 +40,7 @@ type Proxy struct {
 	dohCreds                       *map[string]DOHClientCreds
 	allWeeklyRanges                *map[string]WeeklyRanges
 	routes                         *map[string][]string
+	captivePortalMap               *CaptivePortalMap
 	nxLogFormat                    string
 	localDoHCertFile               string
 	localDoHCertKeyFile            string

@@ -11,9 +11,9 @@ import (
 	"github.com/miekg/dns"
 )
 
-type CaptivePortalEntryips []net.IP
+type CaptivePortalEntryIPs []net.IP
 
-type CaptivePortalMap map[string]CaptivePortalEntryips
+type CaptivePortalMap map[string]CaptivePortalEntryIPs
 
 type CaptivePortalHandler struct {
 	cancelChannels []chan struct{}
@@ -24,6 +24,75 @@ func (captivePortalHandler *CaptivePortalHandler) Stop() {
 		cancelChannel <- struct{}{}
 		<-cancelChannel
 	}
+}
+
+func (ipsMap *CaptivePortalMap) GetEntry(msg *dns.Msg) (*dns.Question, *CaptivePortalEntryIPs) {
+	if len(msg.Question) != 1 {
+		return nil, nil
+	}
+	question := &msg.Question[0]
+	name, err := NormalizeQName(question.Name)
+	if err != nil {
+		return nil, nil
+	}
+	ips, ok := (*ipsMap)[name]
+	if !ok {
+		return nil, nil
+	}
+	if question.Qclass != dns.ClassINET {
+		return nil, nil
+	}
+	return question, &ips
+}
+
+func HandleCaptivePortalQuery(msg *dns.Msg, question *dns.Question, ips *CaptivePortalEntryIPs) *dns.Msg {
+	respMsg := EmptyResponseFromMessage(msg)
+	ttl := uint32(1)
+	if question.Qtype == dns.TypeA {
+		for _, xip := range *ips {
+			if ip := xip.To4(); ip != nil {
+				rr := new(dns.A)
+				rr.Hdr = dns.RR_Header{Name: question.Name, Rrtype: dns.TypeA, Class: dns.ClassINET, Ttl: ttl}
+				rr.A = ip
+				respMsg.Answer = append(respMsg.Answer, rr)
+			}
+		}
+	} else if question.Qtype == dns.TypeAAAA {
+		for _, xip := range *ips {
+			if ip := xip.To16(); ip != nil {
+				rr := new(dns.AAAA)
+				rr.Hdr = dns.RR_Header{Name: question.Name, Rrtype: dns.TypeAAAA, Class: dns.ClassINET, Ttl: ttl}
+				rr.AAAA = ip
+				respMsg.Answer = append(respMsg.Answer, rr)
+			}
+		}
+	} else if question.Qtype == dns.TypeHTTPS {
+		rr := new(dns.HTTPS)
+		rr.Hdr = dns.RR_Header{Name: question.Name, Rrtype: dns.TypeHTTPS, Class: dns.ClassINET, Ttl: ttl}
+		v4 := new(dns.SVCBIPv4Hint)
+		v6 := new(dns.SVCBIPv6Hint)
+		for _, xip := range *ips {
+			if ip := xip.To4(); ip != nil {
+				v4.Hint = append(v4.Hint, ip)
+			} else if ip := xip.To16(); ip != nil {
+				v6.Hint = append(v6.Hint, ip)
+			}
+		}
+		if len(v4.Hint) > 0 {
+			rr.Value = append(rr.Value, v4)
+		}
+		if len(v6.Hint) > 0 {
+			rr.Value = append(rr.Value, v6)
+		}
+		respMsg.Answer = []dns.RR{rr}
+	}
+
+	qType, ok := dns.TypeToString[question.Qtype]
+	if !ok {
+		qType = fmt.Sprint(question.Qtype)
+	}
+	dlog.Noticef("Query for captive portal detection: [%v] (%v)", question.Name, qType)
+	return respMsg
 }
 
 func handleColdStartClient(clientPc *net.UDPConn, cancelChannel chan struct{}, ipsMap *CaptivePortalMap) bool {
@@ -51,53 +120,17 @@ func handleColdStartClient(clientPc *net.UDPConn, cancelChannel chan struct{}, i
 	if err := msg.Unpack(packet); err != nil {
 		return false
 	}
-	if len(msg.Question) != 1 {
+	question, ips := ipsMap.GetEntry(msg)
+	if ips == nil {
 		return false
 	}
-	question := msg.Question[0]
-	qType, ok := dns.TypeToString[question.Qtype]
-	if !ok {
-		qType = string(qType)
-	}
-	name, err := NormalizeQName(question.Name)
-	if err != nil {
+	respMsg := HandleCaptivePortalQuery(msg, question, ips)
+	if respMsg == nil {
 		return false
-	}
-	ips, ok := (*ipsMap)[name]
-	if !ok {
-		dlog.Infof("Coldstart query: [%v] (%v)", name, qType)
-		return false
-	}
-	dlog.Noticef("Coldstart query for captive portal detection: [%v] (%v)", name, qType)
-	if question.Qclass != dns.ClassINET {
-		return false
-	}
-	respMsg := EmptyResponseFromMessage(msg)
-	ttl := uint32(1)
-	if question.Qtype == dns.TypeA {
-		for _, xip := range ips {
-			if ip := xip.To4(); ip != nil {
-				rr := new(dns.A)
-				rr.Hdr = dns.RR_Header{Name: question.Name, Rrtype: dns.TypeA, Class: dns.ClassINET, Ttl: ttl}
-				rr.A = ip
-				respMsg.Answer = []dns.RR{rr}
-				break
-			}
-		}
-	} else if question.Qtype == dns.TypeAAAA {
-		for _, xip := range ips {
-			if ip := xip.To16(); ip != nil {
-				rr := new(dns.AAAA)
-				rr.Hdr = dns.RR_Header{Name: question.Name, Rrtype: dns.TypeAAAA, Class: dns.ClassINET, Ttl: ttl}
-				rr.AAAA = ip
-				respMsg.Answer = []dns.RR{rr}
-				break
-			}
-		}
 	}
 	if response, err := respMsg.Pack(); err == nil {
 		clientPc.WriteTo(response, clientAddr)
-		dlog.Noticef("Coldstart query synthesized: [%v] (%v)", name, qType)
+		dlog.Notice("Response to coldstart captive portal query synthesized")
 	}
 	return false
 }
@@ -171,5 +204,6 @@ func ColdStart(proxy *Proxy) (*CaptivePortalHandler, error) {
 	captivePortalHandler := CaptivePortalHandler{
 		cancelChannels: cancelChannels,
 	}
+	proxy.captivePortalMap = &ipsMap
 	return &captivePortalHandler, nil
 }

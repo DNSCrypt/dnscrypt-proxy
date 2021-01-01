@@ -93,6 +93,9 @@ type PluginsState struct {
 func (proxy *Proxy) InitPluginsGlobals() error {
 	queryPlugins := &[]Plugin{}
 
+	if proxy.captivePortalMap != nil {
+		*queryPlugins = append(*queryPlugins, Plugin(new(PluginCaptivePortal)))
+	}
 	if len(proxy.queryMeta) != 0 {
 		*queryPlugins = append(*queryPlugins, Plugin(new(PluginQueryMeta)))
 	}
