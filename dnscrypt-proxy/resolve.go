@@ -16,7 +16,7 @@ const nonexistentName string = "nonexistent-zone.dnscrypt-test."
 
 func resolveQuery(server string, qName string, qType uint16) (*dns.Msg, error) {
 	client := new(dns.Client)
-	client.ReadTimeout = 10 * time.Second
+	client.ReadTimeout = 2 * time.Second
 	msg := &dns.Msg{
 		MsgHdr: dns.MsgHdr{
 			RecursionDesired: true,
@@ -35,9 +35,10 @@ func resolveQuery(server string, qName string, qType uint16) (*dns.Msg, error) {
 	options.SetUDPSize(uint16(MaxDNSPacketSize))
 	msg.Question[0] = dns.Question{Name: qName, Qtype: qType, Qclass: dns.ClassINET}
 	msg.Id = dns.Id()
-	for i := 0; i < 2; i++ {
+	for i := 0; i < 3; i++ {
 		response, rtt, err := client.Exchange(msg, server)
 		if neterr, ok := err.(net.Error); ok && neterr.Timeout() {
+			client.ReadTimeout *= 2
 			continue
 		}
 		_ = rtt
