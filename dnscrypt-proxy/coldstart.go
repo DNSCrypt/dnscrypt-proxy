@@ -68,25 +68,6 @@ func HandleCaptivePortalQuery(msg *dns.Msg, question *dns.Question, ips *Captive
 				}
 			}
 		}
-	} else if question.Qtype == dns.TypeHTTPS {
-		rr := new(dns.HTTPS)
-		rr.Hdr = dns.RR_Header{Name: question.Name, Rrtype: dns.TypeHTTPS, Class: dns.ClassINET, Ttl: ttl}
-		v4 := new(dns.SVCBIPv4Hint)
-		v6 := new(dns.SVCBIPv6Hint)
-		for _, xip := range *ips {
-			if ip := xip.To4(); ip != nil {
-				v4.Hint = append(v4.Hint, ip)
-			} else if ip := xip.To16(); ip != nil {
-				v6.Hint = append(v6.Hint, ip)
-			}
-		}
-		if len(v4.Hint) > 0 {
-			rr.Value = append(rr.Value, v4)
-		}
-		if len(v6.Hint) > 0 {
-			rr.Value = append(rr.Value, v6)
-		}
-		respMsg.Answer = []dns.RR{rr}
 	}
 
 	qType, ok := dns.TypeToString[question.Qtype]
