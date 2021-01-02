@@ -503,10 +503,10 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	proxy.nxLogFormat = config.NxLog.Format
 
 	if len(config.BlockName.File) > 0 && len(config.BlockNameLegacy.File) > 0 {
-		return errors.New("Don't specify both [blocked_names] and [blacklist] sections - Update your config file.")
+		return errors.New("Don't specify both [blocked_names] and [blacklist] sections - Update your config file")
 	}
 	if len(config.BlockNameLegacy.File) > 0 {
-		dlog.Notice("Use of [blacklist] is deprecated - Update your config file.")
+		dlog.Notice("Use of [blacklist] is deprecated - Update your config file")
 		config.BlockName.File = config.BlockNameLegacy.File
 		config.BlockName.Format = config.BlockNameLegacy.Format
 		config.BlockName.LogFile = config.BlockNameLegacy.LogFile
@@ -524,10 +524,10 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	proxy.blockNameLogFile = config.BlockName.LogFile
 
 	if len(config.AllowedName.File) > 0 && len(config.WhitelistNameLegacy.File) > 0 {
-		return errors.New("Don't specify both [whitelist] and [allowed_names] sections - Update your config file.")
+		return errors.New("Don't specify both [whitelist] and [allowed_names] sections - Update your config file")
 	}
 	if len(config.WhitelistNameLegacy.File) > 0 {
-		dlog.Notice("Use of [whitelist] is deprecated - Update your config file.")
+		dlog.Notice("Use of [whitelist] is deprecated - Update your config file")
 		config.AllowedName.File = config.WhitelistNameLegacy.File
 		config.AllowedName.Format = config.WhitelistNameLegacy.Format
 		config.AllowedName.LogFile = config.WhitelistNameLegacy.LogFile
@@ -545,10 +545,10 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	proxy.whitelistNameLogFile = config.AllowedName.LogFile
 
 	if len(config.BlockIP.File) > 0 && len(config.BlockIPLegacy.File) > 0 {
-		return errors.New("Don't specify both [blocked_ips] and [ip_blacklist] sections - Update your config file.")
+		return errors.New("Don't specify both [blocked_ips] and [ip_blacklist] sections - Update your config file")
 	}
 	if len(config.BlockIPLegacy.File) > 0 {
-		dlog.Notice("Use of [ip_blacklist] is deprecated - Update your config file.")
+		dlog.Notice("Use of [ip_blacklist] is deprecated - Update your config file")
 		config.BlockIP.File = config.BlockIPLegacy.File
 		config.BlockIP.Format = config.BlockIPLegacy.Format
 		config.BlockIP.LogFile = config.BlockIPLegacy.LogFile
@@ -598,7 +598,7 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	proxy.anonDirectCertFallback = config.AnonymizedDNS.DirectCertFallback
 
 	if config.DoHClientX509AuthLegacy.Creds != nil {
-		return errors.New("[tls_client_auth] has been renamed to [doh_client_x509_auth] - Update your config file.")
+		return errors.New("[tls_client_auth] has been renamed to [doh_client_x509_auth] - Update your config file")
 	}
 	configClientCreds := config.DoHClientX509Auth.Creds
 	creds := make(map[string]DOHClientCreds)
@@ -680,7 +680,7 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	// if 'userName' is set and we are the parent process drop privilege and exit
 	if len(proxy.userName) > 0 && !proxy.child {
 		proxy.dropPrivilege(proxy.userName, FileDescriptors)
-		return errors.New("Dropping privileges is not supporting on this operating system. Unset `user_name` in the configuration file.")
+		return errors.New("Dropping privileges is not supporting on this operating system. Unset `user_name` in the configuration file")
 	}
 	if !config.OfflineMode {
 		if err := config.loadSources(proxy); err != nil {
