@@ -1,0 +1,21 @@
+server_names = ['myserver']
+listen_addresses = ['127.0.0.1:5300']
+require_dnssec = true
+dnscrypt_ephemeral_keys = true
+tls_disable_session_tickets = false
+ignore_system_dns = false
+lb_strategy = 'p12'
+block_ipv6 = true
+block_unqualified = true
+block_undelegated = true
+cache = true
+
+[query_log]
+file = 'query.log'
+
+
+
+[static]
+
+  [static.'myserver']
+  stamp = 'sdns://AQcAAAAAAAAADjIxMi40Ny4yMjguMTM2IOgBuE6mBr-wusDOQ0RbsV66ZLAvo8SqMa4QY2oHkDJNHzIuZG5zY3J5cHQtY2VydC5mci5kbnNjcnlwdC5vcmc'
