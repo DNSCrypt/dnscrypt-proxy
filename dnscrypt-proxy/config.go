@@ -774,7 +774,6 @@ func (config *Config) loadSources(proxy *Proxy) error {
 			return err
 		}
 	}
-	proxy.updateRegisteredServers()
 	for name, config := range config.StaticsConfig {
 		if stamp, err := stamps.NewServerStampFromString(config.Stamp); err == nil {
 			if stamp.Proto == stamps.StampProtoTypeDNSCryptRelay || stamp.Proto == stamps.StampProtoTypeODoHRelay {
@@ -806,7 +805,7 @@ func (config *Config) loadSources(proxy *Proxy) error {
 	rand.Shuffle(len(proxy.registeredServers), func(i, j int) {
 		proxy.registeredServers[i], proxy.registeredServers[j] = proxy.registeredServers[j], proxy.registeredServers[i]
 	})
-
+	proxy.updateRegisteredServers()
 	return nil
 }
 
