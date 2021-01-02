@@ -70,7 +70,7 @@ func Resolve(server string, name string, singleResolver bool) {
 
 	cname := name
 
-	for {
+	for once := true; once; once = false {
 		response, err := resolveQuery(server, myResolverHost, dns.TypeA)
 		if err != nil {
 			fmt.Printf("Unable to resolve: [%s]\n", err)
@@ -108,11 +108,10 @@ func Resolve(server string, name string, singleResolver bool) {
 		} else {
 			fmt.Println(strings.Join(res, ", "))
 		}
-		break
 	}
 
 	if singleResolver {
-		for {
+		for once := true; once; once = false {
 			fmt.Printf("Lying         : ")
 			response, err := resolveQuery(server, nonexistentName, dns.TypeA)
 			if err != nil {
@@ -134,7 +133,6 @@ func Resolve(server string, name string, singleResolver bool) {
 					fmt.Println("no, the resolver doesn't support DNSSEC")
 				}
 			}
-			break
 		}
 	} else {
 		fmt.Println("Multiple resolvers have been configured; this is just one one of them.")
@@ -143,7 +141,7 @@ func Resolve(server string, name string, singleResolver bool) {
 	fmt.Println("")
 
 cname:
-	for {
+	for once := true; once; once = false {
 		fmt.Printf("Canonical name: ")
 		for i := 0; i < 100; i++ {
 			response, err := resolveQuery(server, cname, dns.TypeCNAME)
@@ -164,12 +162,11 @@ cname:
 			}
 		}
 		fmt.Println(cname)
-		break
 	}
 
 	fmt.Println("")
 
-	for {
+	for once := true; once; once = false {
 		fmt.Printf("IPv4 addresses: ")
 		response, err := resolveQuery(server, cname, dns.TypeA)
 		if err != nil {
@@ -187,10 +184,9 @@ cname:
 		} else {
 			fmt.Println(strings.Join(ipv4, ", "))
 		}
-		break
 	}
 
-	for {
+	for once := true; once; once = false {
 		fmt.Printf("IPv6 addresses: ")
 		response, err := resolveQuery(server, cname, dns.TypeAAAA)
 		if err != nil {
@@ -208,12 +204,11 @@ cname:
 		} else {
 			fmt.Println(strings.Join(ipv6, ", "))
 		}
-		break
 	}
 
 	fmt.Println("")
 
-	for {
+	for once := true; once; once = false {
 		fmt.Printf("Name servers  : ")
 		response, err := resolveQuery(server, cname, dns.TypeNS)
 		if err != nil {
@@ -238,10 +233,9 @@ cname:
 		} else {
 			fmt.Println("no")
 		}
-		break
 	}
 
-	for {
+	for once := true; once; once = false {
 		fmt.Printf("Mail servers  : ")
 		response, err := resolveQuery(server, cname, dns.TypeMX)
 		if err != nil {
@@ -261,12 +255,11 @@ cname:
 		} else {
 			fmt.Println("1 mail servers found")
 		}
-		break
 	}
 
 	fmt.Println("")
 
-	for {
+	for once := true; once; once = false {
 		fmt.Printf("HTTPS alias   : ")
 		response, err := resolveQuery(server, cname, dns.TypeHTTPS)
 		if err != nil {
@@ -308,12 +301,11 @@ cname:
 		} else {
 			fmt.Println(strings.Join(info, ", "))
 		}
-		break
 	}
 
 	fmt.Println("")
 
-	for {
+	for once := true; once; once = false {
 		fmt.Printf("TXT records   : ")
 		response, err := resolveQuery(server, cname, dns.TypeTXT)
 		if err != nil {
@@ -331,6 +323,5 @@ cname:
 		} else {
 			fmt.Println(strings.Join(txt, ", "))
 		}
-		break
 	}
 }
