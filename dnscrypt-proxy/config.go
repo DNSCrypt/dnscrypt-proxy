@@ -147,7 +147,7 @@ func newConfig() Config {
 		BrokenImplementations: BrokenImplementationsConfig{
 			FragmentsBlocked: []string{
 				"cisco", "cisco-ipv6", "cisco-familyshield", "cisco-familyshield-ipv6",
-				"cleanbrowsing-adult", "cleanbrowsing-family-ipv6", "cleanbrowsing-family", "cleanbrowsing-security",
+				"cleanbrowsing-adult", "cleanbrowsing-adult-ipv6", "cleanbrowsing-family", "cleanbrowsing-family-ipv6", "cleanbrowsing-security", "cleanbrowsing-security-ipv6",
 			},
 		},
 	}
