@@ -10,3 +10,7 @@
 dnscrypt-proxy/dnscrypt-proxy2
 dnscrypt-proxy/dnscrypt-proxy
 .idea
+.ci/*.log
+.ci/*.md
+.ci/*.md.minisig
+.ci/test-dnscrypt-proxy.toml
