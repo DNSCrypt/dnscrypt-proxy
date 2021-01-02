@@ -44,7 +44,7 @@ type Proxy struct {
 	nxLogFormat                    string
 	localDoHCertFile               string
 	localDoHCertKeyFile            string
-	captivePortalFile              string
+	captivePortalMapFile           string
 	localDoHPath                   string
 	mainProto                      string
 	cloakFile                      string

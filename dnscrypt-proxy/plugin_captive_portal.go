@@ -19,6 +19,7 @@ func (plugin *PluginCaptivePortal) Description() string {
 
 func (plugin *PluginCaptivePortal) Init(proxy *Proxy) error {
 	plugin.captivePortalMap = proxy.captivePortalMap
+	dlog.Notice("Captive portals handler enabled")
 	return nil
 }
 

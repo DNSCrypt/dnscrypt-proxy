@@ -346,6 +346,7 @@ reject_ttl = 600
 # cloak_ttl = 600
 
 
+
 ###########################
 #        DNS cache        #
 ###########################
@@ -378,6 +379,20 @@ cache_neg_min_ttl = 60
 ## Maximum TTL for negatively cached entries
 
 cache_neg_max_ttl = 600
+
+
+
+########################################
+#        Captive portal handling       #
+########################################
+
+[captive_portals]
+
+## A file that contains a set of names used by operating systems to
+## check for connectivity and captive portals, along with hard-coded
+## IP addresses to return.
+
+map_file = "example-captive-portals.txt"
 
 
 

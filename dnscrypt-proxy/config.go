@@ -70,7 +70,7 @@ type Config struct {
 	AllowIP                  AllowIPConfig               `toml:"allowed_ips"`
 	ForwardFile              string                      `toml:"forwarding_rules"`
 	CloakFile                string                      `toml:"cloaking_rules"`
-	CaptivePortalFile        string                      `toml:"captive_portal_handler"`
+	CaptivePortals           CaptivePortalsConfig        `toml:"captive_portals"`
 	StaticsConfig            map[string]StaticConfig     `toml:"static"`
 	SourcesConfig            map[string]SourceConfig     `toml:"sources"`
 	BrokenImplementations    BrokenImplementationsConfig `toml:"broken_implementations"`
@@ -270,6 +270,10 @@ type DoHClientX509AuthConfig struct {
 type DNS64Config struct {
 	Prefixes  []string `toml:"prefix"`
 	Resolvers []string `toml:"resolver"`
+}
+
+type CaptivePortalsConfig struct {
+	MapFile string `toml:"map_file"`
 }
 
 type ConfigFlags struct {
@@ -579,7 +583,7 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 
 	proxy.forwardFile = config.ForwardFile
 	proxy.cloakFile = config.CloakFile
-	proxy.captivePortalFile = config.CaptivePortalFile
+	proxy.captivePortalMapFile = config.CaptivePortals.MapFile
 
 	allWeeklyRanges, err := ParseAllWeeklyRanges(config.AllWeeklyRanges)
 	if err != nil {

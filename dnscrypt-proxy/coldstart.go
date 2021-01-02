@@ -59,11 +59,13 @@ func HandleCaptivePortalQuery(msg *dns.Msg, question *dns.Question, ips *Captive
 		}
 	} else if question.Qtype == dns.TypeAAAA {
 		for _, xip := range *ips {
-			if ip := xip.To16(); ip != nil {
-				rr := new(dns.AAAA)
-				rr.Hdr = dns.RR_Header{Name: question.Name, Rrtype: dns.TypeAAAA, Class: dns.ClassINET, Ttl: ttl}
-				rr.AAAA = ip
-				respMsg.Answer = append(respMsg.Answer, rr)
+			if xip.To4() == nil {
+				if ip := xip.To16(); ip != nil {
+					rr := new(dns.AAAA)
+					rr.Hdr = dns.RR_Header{Name: question.Name, Rrtype: dns.TypeAAAA, Class: dns.ClassINET, Ttl: ttl}
+					rr.AAAA = ip
+					respMsg.Answer = append(respMsg.Answer, rr)
+				}
 			}
 		}
 	} else if question.Qtype == dns.TypeHTTPS {
@@ -154,10 +156,10 @@ func addColdStartListener(proxy *Proxy, ipsMap *CaptivePortalMap, listenAddrStr 
 }
 
 func ColdStart(proxy *Proxy) (*CaptivePortalHandler, error) {
-	if len(proxy.captivePortalFile) == 0 {
+	if len(proxy.captivePortalMapFile) == 0 {
 		return nil, nil
 	}
-	bin, err := ReadTextFile(proxy.captivePortalFile)
+	bin, err := ReadTextFile(proxy.captivePortalMapFile)
 	if err != nil {
 		dlog.Warn(err)
 		return nil, err
