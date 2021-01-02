@@ -6,6 +6,10 @@
    * `generate-domains-blacklist.py` has been renamed to
      `generate-domains-blocklist.py`, and the configuration files
      have been renamed as well.
+ - `dnscrypt-proxy -resolve` has been completely revamped, and now requires
+the configuration file to be accessible. It will send a query to an IP address
+of the `dnscrypt-proxy` server by default. Sending queries to arbitrary
+servers is also supported with the `-resolve name,address` syntax.
  - Server lists can't be older than a week any more, even if directory
 permissions are incorrect and cache files cannot be written.
  - macOS/arm64 is now officially supported.

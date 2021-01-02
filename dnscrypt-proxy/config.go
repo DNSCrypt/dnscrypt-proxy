@@ -277,6 +277,7 @@ type CaptivePortalsConfig struct {
 }
 
 type ConfigFlags struct {
+	Resolve                 *string
 	List                    *bool
 	ListAll                 *bool
 	JSONOutput              *bool
@@ -314,6 +315,16 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	if err != nil {
 		return err
 	}
+
+	if flags.Resolve != nil && len(*flags.Resolve) > 0 {
+		addr := "127.0.0.1:53"
+		if len(config.ListenAddresses) > 0 {
+			addr = config.ListenAddresses[0]
+		}
+		Resolve(addr, *flags.Resolve, len(config.ServerNames) == 1)
+		os.Exit(0)
+	}
+
 	if err := cdFileDir(foundConfigFile); err != nil {
 		return err
 	}
