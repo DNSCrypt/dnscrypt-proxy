@@ -2,16 +2,16 @@
 #        Captive portal test names        #
 ###########################################
 
-# Some operating systems send queries to these names after a network change,
-# in order to check if connectivity beyond the router is possible without
-# going through a captive portal.
-#
-# This is a list of hard-coded IP addresses that will be returned when queries
-# for these names are received, even before the operating system an interface
-# as usable for reaching the Internet.
-#
-# Note that IPv6 addresses don't need to be specified within brackets,
-# as there are no port numbers.
+## Some operating systems send queries to these names after a network change,
+## in order to check if connectivity beyond the router is possible without
+## going through a captive portal.
+##
+## This is a list of hard-coded IP addresses that will be returned when queries
+## for these names are received, even before the operating system an interface
+## as usable for reaching the Internet.
+##
+## Note that IPv6 addresses don't need to be specified within brackets,
+## as there are no port numbers.
 
 captive.apple.com               17.253.109.201, 17.253.113.202
 connectivitycheck.gstatic.com   64.233.162.94, 64.233.164.94, 64.233.165.94, 64.233.177.94, 64.233.185.94, 74.125.132.94, 74.125.136.94, 74.125.20.94, 74.125.21.94, 74.125.28.94
