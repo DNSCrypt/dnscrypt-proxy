@@ -4,8 +4,8 @@
    * `[ip_blacklist]` has been renamed to `[blocked_ips]`
    * `[whitelist]` has been renamed to `[allowed_names]`
    * `generate-domains-blacklist.py` has been renamed to
-     `generate-domains-blocklist.py`, and the configuration files
-     have been renamed as well.
+     `generate-domains-blocklist.py`, and the configuration files have been
+     renamed as well.
  - `dnscrypt-proxy -resolve` has been completely revamped, and now requires
 the configuration file to be accessible. It will send a query to an IP address
 of the `dnscrypt-proxy` server by default. Sending queries to arbitrary
