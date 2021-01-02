@@ -35,6 +35,8 @@ properly measure CDNs such as Tencent that ignore the padding.
  - DoH: the `max-stale` cache control directive is now present in queries.
  - Logs can now be sent to `/dev/stdout` instead of actual files.
  - User switching is now supported on macOS.
+ - New download mirror (https://download.dnscrypt.net) for resolvers,
+relays and parental-control.
 
  Thanks to the nice people who contributed to this release:
 
