@@ -131,7 +131,6 @@ func Resolve(server string, name string, singleResolver bool) {
 					fmt.Println("yes, the resolver supports DNSSEC")
 				} else {
 					fmt.Println("no, the resolver doesn't support DNSSEC")
-					fmt.Println(response)
 				}
 			}
 			break
