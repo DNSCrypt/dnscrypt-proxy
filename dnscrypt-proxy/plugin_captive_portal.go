@@ -39,7 +39,6 @@ func (plugin *PluginCaptivePortal) Eval(pluginsState *PluginsState, msg *dns.Msg
 	if synth := HandleCaptivePortalQuery(msg, question, ips); synth != nil {
 		pluginsState.synthResponse = synth
 		pluginsState.action = PluginsActionSynth
-		dlog.Notice("Response to captive portal query synthesized")
 	}
 	return nil
 }

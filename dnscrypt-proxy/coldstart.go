@@ -113,7 +113,6 @@ func handleColdStartClient(clientPc *net.UDPConn, cancelChannel chan struct{}, i
 	}
 	if response, err := respMsg.Pack(); err == nil {
 		clientPc.WriteTo(response, clientAddr)
-		dlog.Debug("Response to coldstart captive portal query synthesized")
 	}
 	return false
 }
