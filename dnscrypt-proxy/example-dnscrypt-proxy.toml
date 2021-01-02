@@ -392,7 +392,7 @@ cache_neg_max_ttl = 600
 ## check for connectivity and captive portals, along with hard-coded
 ## IP addresses to return.
 
-map_file = "example-captive-portals.txt"
+# map_file = "example-captive-portals.txt"
 
 
 
