@@ -4,6 +4,7 @@ import (
 	"math/rand"
 	"net"
 
+	"github.com/jedisct1/dlog"
 	"github.com/miekg/dns"
 )
 
@@ -21,6 +22,7 @@ func (plugin *PluginECS) Description() string {
 
 func (plugin *PluginECS) Init(proxy *Proxy) error {
 	plugin.nets = proxy.ednsClientSubnets
+	dlog.Notice("ECS plugin enabled")
 	return nil
 }
 
