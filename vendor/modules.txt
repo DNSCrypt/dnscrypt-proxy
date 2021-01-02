@@ -48,7 +48,7 @@ github.com/jedisct1/go-dnsstamps
 # github.com/jedisct1/go-minisign v0.0.0-20210101122305-335e26e05d5b
 ## explicit
 github.com/jedisct1/go-minisign
-# github.com/jedisct1/xsecretbox v0.0.0-20210101122535-6ce87170fce4
+# github.com/jedisct1/xsecretbox v0.0.0-20210102102453-4ecb2081017a
 ## explicit
 github.com/jedisct1/xsecretbox
 # github.com/k-sone/critbitgo v1.4.0

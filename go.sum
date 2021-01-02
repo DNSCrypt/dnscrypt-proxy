@@ -57,8 +57,8 @@ github.com/jedisct1/go-dnsstamps v0.0.0-20210101121956-16fbdadcf8f5 h1:FnAupK0Gm
 github.com/jedisct1/go-dnsstamps v0.0.0-20210101121956-16fbdadcf8f5/go.mod h1:t35n6rsPE3nD3RXbc5hI5Ax1ci/SSYTpx0BdMXh/1aE=
 github.com/jedisct1/go-minisign v0.0.0-20210101122305-335e26e05d5b h1:MQP3X6s3sznGmz6SAtP0HQGWx1qszD5bT7wK6EA2Rnc=
 github.com/jedisct1/go-minisign v0.0.0-20210101122305-335e26e05d5b/go.mod h1:oPTyITpvr7hPx/9w76gWrgbZwbb+7gZ9/On8hFc+LNE=
-github.com/jedisct1/xsecretbox v0.0.0-20210101122535-6ce87170fce4 h1:0B/Sni0sK7mdkFanLf7pZbwX7MPmGGW7P2ZMRDhRT/Y=
-github.com/jedisct1/xsecretbox v0.0.0-20210101122535-6ce87170fce4/go.mod h1:WlwP8gEfKNJ4HoIq2vVUUS2mKV9/zUGFO1mJB5jLVsc=
+github.com/jedisct1/xsecretbox v0.0.0-20210102102453-4ecb2081017a h1:ptZ+a2DzulAgKEfMuqH2Ckfv6oio5BX14fRG5aShvXw=
+github.com/jedisct1/xsecretbox v0.0.0-20210102102453-4ecb2081017a/go.mod h1:WlwP8gEfKNJ4HoIq2vVUUS2mKV9/zUGFO1mJB5jLVsc=
 github.com/jtolds/gls v4.20.0+incompatible h1:xdiiI2gbIgH/gLH7ADydsJ1uDOEzR8yvV7C0MuV77Wo=
 github.com/jtolds/gls v4.20.0+incompatible/go.mod h1:QJZ7F/aHp+rZTRtaJ1ow/lLfFfVYBRgL+9YlvaHOwJU=
 github.com/k-sone/critbitgo v1.4.0 h1:l71cTyBGeh6X5ATh6Fibgw3+rtNT80BA0uNNWgkPrbE=

@@ -14,7 +14,7 @@ require (
 	github.com/jedisct1/go-clocksmith v0.0.0-20210101121932-da382b963868
 	github.com/jedisct1/go-dnsstamps v0.0.0-20210101121956-16fbdadcf8f5
 	github.com/jedisct1/go-minisign v0.0.0-20210101122305-335e26e05d5b
-	github.com/jedisct1/xsecretbox v0.0.0-20210101122535-6ce87170fce4
+	github.com/jedisct1/xsecretbox v0.0.0-20210102102453-4ecb2081017a
 	github.com/k-sone/critbitgo v1.4.0
 	github.com/kardianos/service v1.2.0
 	github.com/miekg/dns v1.1.35

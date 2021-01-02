@@ -18,7 +18,7 @@ func SharedKey(secretKey [32]byte, publicKey [32]byte) ([32]byte, error) {
 	}
 	if c == 0 {
 		if _, err := crypto_rand.Read(sharedKey[:]); err != nil {
-			return sharedKey, nil
+			return sharedKey, err
 		}
 		return sharedKey, errors.New("weak public key")
 	}
