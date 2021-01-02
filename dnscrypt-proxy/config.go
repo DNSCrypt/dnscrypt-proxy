@@ -806,10 +806,15 @@ func (config *Config) loadSources(proxy *Proxy) error {
 		}
 		proxy.registeredServers = append(proxy.registeredServers, RegisteredServer{name: serverName, stamp: stamp})
 	}
-	rand.Shuffle(len(proxy.registeredServers), func(i, j int) {
-		proxy.registeredServers[i], proxy.registeredServers[j] = proxy.registeredServers[j], proxy.registeredServers[i]
-	})
 	proxy.updateRegisteredServers()
+	rs1 := proxy.registeredServers
+	rs2 := proxy.serversInfo.registeredServers
+	rand.Shuffle(len(rs1), func(i, j int) {
+		rs1[i], rs1[j] = rs1[j], rs1[i]
+	})
+	rand.Shuffle(len(rs2), func(i, j int) {
+		rs2[i], rs2[j] = rs2[j], rs2[i]
+	})
 	return nil
 }
 
