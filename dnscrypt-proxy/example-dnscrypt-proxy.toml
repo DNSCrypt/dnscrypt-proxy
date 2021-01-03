@@ -751,9 +751,11 @@ fragments_blocked = ['cisco', 'cisco-ipv6', 'cisco-familyshield', 'cisco-familys
 ##
 ## Carefully choose relays and servers so that they are run by different entities.
 ##
-## "server_name" can also be set to "*" to define a default route, for all servers.
+## "server_name" can also be set to "*" to define a default route, for all servers:
+## { server_name='*', via=['anon-example-1', 'anon-example-2'] }
+##
 ## If a route is ["*"], the proxy automatically picks a relay on a distinct network.
-## { server_name='*', via=['*'] } is also supported, but is likely to be suboptimal.
+## { server_name='*', via=['*'] } is also an option, but is likely to be suboptimal.
 ##
 ## Manual selection is always recommended over automatic selection, so that you can
 ## select (relay,server) pairs that work well and fit your own criteria (close by or
