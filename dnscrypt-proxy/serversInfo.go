@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"math/bits"
 	"math/rand"
 	"net"
 	"net/url"
@@ -266,6 +267,57 @@ func fetchServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, isNew 
 	return ServerInfo{}, fmt.Errorf("Unsupported protocol for [%s]: [%s]", name, stamp.Proto.String())
 }
 
+func findFarthestRoute(proxy *Proxy, name string, relayStamps []stamps.ServerStamp) *stamps.ServerStamp {
+	var server *RegisteredServer
+	for _, registeredServer := range proxy.registeredServers {
+		if registeredServer.name == name {
+			server = &registeredServer
+			break
+		}
+	}
+	if server == nil {
+		return nil
+	}
+	serverAddrStr, _ := ExtractHostAndPort(server.stamp.ServerAddrStr, 443)
+	serverAddr := net.ParseIP(serverAddrStr)
+	if serverAddr == nil {
+		return nil
+	}
+	if len(proxy.registeredRelays) == 0 {
+		return nil
+	}
+	bestRelayIdxs := make([]int, 0)
+	bestRelaySamePrefixBits := 128
+	for relayIdx, relayStamp := range relayStamps {
+		relayAddrStr, _ := ExtractHostAndPort(relayStamp.ServerAddrStr, 443)
+		relayAddr := net.ParseIP(relayAddrStr)
+		if relayAddr == nil {
+			continue
+		}
+		relayIsIPv6 := relayAddr.To4() == nil
+		if relayIsIPv6 != (serverAddr.To4() == nil) {
+			continue
+		}
+		firstByte := 0
+		if !relayIsIPv6 {
+			firstByte = 12
+		}
+		samePrefixBits := 0
+		for i := firstByte; i < 16; i++ {
+			x := serverAddr[i] ^ relayAddr[i]
+			samePrefixBits += bits.LeadingZeros8(x)
+			if x != 0 {
+				break
+			}
+		}
+		if samePrefixBits <= bestRelaySamePrefixBits {
+			bestRelaySamePrefixBits = samePrefixBits
+			bestRelayIdxs = append(bestRelayIdxs, relayIdx)
+		}
+	}
+	return &relayStamps[bestRelayIdxs[rand.Intn(len(bestRelayIdxs))]]
+}
+
 func route(proxy *Proxy, name string) (*Relay, error) {
 	routes := proxy.routes
 	if routes == nil {
@@ -278,32 +330,35 @@ func route(proxy *Proxy, name string) (*Relay, error) {
 	if !ok {
 		return nil, nil
 	}
-	var relayName string
-	if len(relayNames) > 0 {
-		candidate := rand.Intn(len(relayNames))
-		relayName = relayNames[candidate]
-	}
-	var relayCandidateStamp *stamps.ServerStamp
-	if len(relayName) == 0 {
-		return nil, fmt.Errorf("Route declared for [%v] but the relay list is empty", name)
-	} else if relayStamp, err := stamps.NewServerStampFromString(relayName); err == nil {
-		relayCandidateStamp = &relayStamp
-	} else {
-		for _, registeredServer := range proxy.registeredRelays {
-			if registeredServer.name == relayName {
-				relayCandidateStamp = &registeredServer.stamp
-				break
+	relayStamps := make([]stamps.ServerStamp, 0)
+	for _, relayName := range relayNames {
+		if relayStamp, err := stamps.NewServerStampFromString(relayName); err == nil {
+			relayStamps = append(relayStamps, relayStamp)
+		} else if relayName == "*" {
+			for _, registeredServer := range proxy.registeredRelays {
+				relayStamps = append(relayStamps, registeredServer.stamp)
+			}
+		} else {
+			for _, registeredServer := range proxy.registeredRelays {
+				if registeredServer.name == relayName {
+					relayStamps = append(relayStamps, registeredServer.stamp)
+					break
+				}
+			}
+			for _, registeredServer := range proxy.registeredServers {
+				if registeredServer.name == relayName {
+					relayStamps = append(relayStamps, registeredServer.stamp)
+					break
+				}
 			}
 		}
-		for _, registeredServer := range proxy.registeredServers {
-			if registeredServer.name == relayName {
-				relayCandidateStamp = &registeredServer.stamp
-				break
-			}
-		}
 	}
+	if len(relayStamps) == 0 {
+		return nil, fmt.Errorf("Empty relay set for [%v]", name)
+	}
+	relayCandidateStamp := findFarthestRoute(proxy, name, relayStamps)
 	if relayCandidateStamp == nil {
-		return nil, fmt.Errorf("Undefined relay [%v] for server [%v]", relayName, name)
+		return nil, fmt.Errorf("No valid relay for server [%v]", name)
 	}
 	switch relayCandidateStamp.Proto {
 	case stamps.StampProtoTypeDNSCrypt, stamps.StampProtoTypeDNSCryptRelay:
@@ -315,11 +370,12 @@ func route(proxy *Proxy, name string) (*Relay, error) {
 		if err != nil {
 			return nil, err
 		}
+		dlog.Noticef("Anonymizing queries for [%v] via [%v]", name, relayCandidateStamp.ServerAddrStr)
 		return &Relay{Proto: stamps.StampProtoTypeDNSCryptRelay, Dnscrypt: &DNSCryptRelay{RelayUDPAddr: relayUDPAddr, RelayTCPAddr: relayTCPAddr}}, nil
 	case stamps.StampProtoTypeODoHRelay:
 		return &Relay{Proto: stamps.StampProtoTypeODoHRelay, ODoH: &ODoHRelay{}}, nil
 	}
-	return nil, fmt.Errorf("Invalid relay [%v] for server [%v]", relayName, name)
+	return nil, fmt.Errorf("Invalid relay set for server [%v]", name)
 }
 
 func fetchDNSCryptServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, isNew bool) (ServerInfo, error) {

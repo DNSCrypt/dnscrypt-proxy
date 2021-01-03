@@ -150,6 +150,9 @@ func newConfig() Config {
 				"cleanbrowsing-adult", "cleanbrowsing-adult-ipv6", "cleanbrowsing-family", "cleanbrowsing-family-ipv6", "cleanbrowsing-security", "cleanbrowsing-security-ipv6",
 			},
 		},
+		AnonymizedDNS: AnonymizedDNSConfig{
+			DirectCertFallback: true,
+		},
 	}
 }
 
