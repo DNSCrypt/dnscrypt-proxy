@@ -741,8 +741,8 @@ fragments_blocked = ['cisco', 'cisco-ipv6', 'cisco-familyshield', 'cisco-familys
 ## DNSCrypt stamp) or a server name.
 ##
 ## The following example routes "example-server-1" via `anon-example-1` or `anon-example-2`,
-## and "example-server-2" via the relay whose relay DNS stamp
-## is "sdns://gRIxMzcuNzQuMjIzLjIzNDo0NDM".
+## and "example-server-2" via the relay whose relay DNS stamp is
+## "sdns://gRIxMzcuNzQuMjIzLjIzNDo0NDM".
 ##
 ## !!! THESE ARE JUST EXAMPLES !!!
 ##
@@ -751,8 +751,13 @@ fragments_blocked = ['cisco', 'cisco-ipv6', 'cisco-familyshield', 'cisco-familys
 ##
 ## Carefully choose relays and servers so that they are run by different entities.
 ##
-## "server_name" can also be set to "*" to define a default route, but this is not
-## recommended. If you do so, keep "server_names" short and distinct from relays.
+## "server_name" can also be set to "*" to define a default route, for all servers.
+## If a route is ["*"], the proxy automatically picks a relay on a distinct network.
+## { server_name='*', via=['*'] } is also supported, but is likely to be suboptimal.
+##
+## Manual selection is always recommended over automatic selection, so that you can
+## select (relay,server) pairs that work well and fit your own criteria (close by or
+## in different countries, operated by different entities, on distinct ISPs...)
 
 # routes = [
 #    { server_name='example-server-1', via=['anon-example-1', 'anon-example-2'] },
