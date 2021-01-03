@@ -46,6 +46,7 @@ const (
 	PluginsReturnCodeNetworkError
 	PluginsReturnCodeCloak
 	PluginsReturnCodeServerTimeout
+	PluginsReturnCodeNotReady
 )
 
 var PluginsReturnCodeToString = map[PluginsReturnCode]string{
@@ -61,6 +62,7 @@ var PluginsReturnCodeToString = map[PluginsReturnCode]string{
 	PluginsReturnCodeNetworkError:  "NETWORK_ERROR",
 	PluginsReturnCodeCloak:         "CLOAK",
 	PluginsReturnCodeServerTimeout: "SERVER_TIMEOUT",
+	PluginsReturnCodeNotReady:      "NOT_READY",
 }
 
 type PluginsState struct {
