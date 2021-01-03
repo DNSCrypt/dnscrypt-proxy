@@ -612,7 +612,7 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 		}
 		proxy.routes = &routes
 	}
-	proxy.skipAnonIncompatbibleResolvers = config.AnonymizedDNS.SkipIncompatible
+	proxy.skipAnonIncompatibleResolvers = config.AnonymizedDNS.SkipIncompatible
 	proxy.anonDirectCertFallback = config.AnonymizedDNS.DirectCertFallback
 
 	if config.DoHClientX509AuthLegacy.Creds != nil {

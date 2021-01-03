@@ -426,11 +426,11 @@ func fetchDNSCryptServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp
 	}
 	if knownBugs.fragmentsBlocked && relay != nil && relay.Dnscrypt != nil {
 		relay = nil
-		if proxy.skipAnonIncompatbibleResolvers {
-			dlog.Infof("[%v] is incompatible with anonymization, it will be ignored", name)
-			return ServerInfo{}, errors.New("Resolver is incompatible with anonymization")
+		if proxy.skipAnonIncompatibleResolvers {
+			dlog.Infof("[%v] couldn't be reached anonymously, it will be ignored", name)
+			return ServerInfo{}, errors.New("Resolver couldn't be reached anonymously")
 		}
-		dlog.Warnf("[%v] is incompatible with anonymization", name)
+		dlog.Warnf("[%v] couldn't be reached anonymously - check the relay and that your router doesn't drop UDP fragments", name)
 	}
 	if err != nil {
 		return ServerInfo{}, err
