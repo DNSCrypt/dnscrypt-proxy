@@ -221,12 +221,15 @@ cname:
 			}
 			nss = append(nss, answer.(*dns.NS).Ns)
 		}
-		if len(nss) == 0 {
-			fmt.Println("No name servers found")
+		if response.Rcode == dns.RcodeNameError {
+			fmt.Println("name does not exist")
+		} else if response.Rcode != dns.RcodeSuccess {
+			fmt.Printf("server returned %s", dns.RcodeToString[response.Rcode])
+		} else if len(nss) == 0 {
+			fmt.Println("no name servers found")
 		} else {
 			fmt.Println(strings.Join(nss, ", "))
 		}
-
 		fmt.Printf("DNSSEC signed : ")
 		if response.AuthenticatedData {
 			fmt.Println("yes")
@@ -304,6 +307,26 @@ cname:
 	}
 
 	fmt.Println("")
+
+	for once := true; once; once = false {
+		fmt.Printf("Host info     : ")
+		response, err := resolveQuery(server, cname, dns.TypeHINFO)
+		if err != nil {
+			break
+		}
+		hinfo := make([]string, 0)
+		for _, answer := range response.Answer {
+			if answer.Header().Rrtype != dns.TypeHINFO || answer.Header().Class != dns.ClassINET {
+				continue
+			}
+			hinfo = append(hinfo, fmt.Sprintf("%s %s", answer.(*dns.HINFO).Cpu, answer.(*dns.HINFO).Os))
+		}
+		if len(hinfo) == 0 {
+			fmt.Println("-")
+		} else {
+			fmt.Println(strings.Join(hinfo, ", "))
+		}
+	}
 
 	for once := true; once; once = false {
 		fmt.Printf("TXT records   : ")
