@@ -766,8 +766,6 @@ fragments_blocked = ['cisco', 'cisco-ipv6', 'cisco-familyshield', 'cisco-familys
 #    { server_name='example-server-2', via=['sdns://gRIxMzcuNzQuMjIzLjIzNDo0NDM'] }
 # ]
 
-routes = { server_name='*', via = ['*'] }
-
 
 # Skip resolvers incompatible with anonymization instead of using them directly
 
