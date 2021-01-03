@@ -13,6 +13,7 @@ servers is also supported with the `-resolve name,address` syntax.
  - Relay lists can be set to `*` for automatic relay selection. When a wildcard
 is used, either for the list of servers or relays, the proxy ensures that
 relays and servers are on distinct networks.
+ - Lying resolvers are detected and reported.
  - Server lists can't be older than a week any more, even if directory
 permissions are incorrect and cache files cannot be written.
  - macOS/arm64 is now officially supported.
