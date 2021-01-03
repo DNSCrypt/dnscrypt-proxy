@@ -9,7 +9,7 @@
  - `dnscrypt-proxy -resolve` has been completely revamped, and now requires
 the configuration file to be accessible. It will send a query to an IP address
 of the `dnscrypt-proxy` server by default. Sending queries to arbitrary
-servers is also supported with the `-resolve name,address` syntax.
+servers is also supported with the new `-resolve name,address` syntax.
  - Relay lists can be set to `*` for automatic relay selection. When a wildcard
 is used, either for the list of servers or relays, the proxy ensures that
 relays and servers are on distinct networks.

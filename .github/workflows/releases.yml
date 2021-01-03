@@ -26,7 +26,6 @@ jobs:
       - name: Get the version
         id: get_version
         run: echo ::set-output name=VERSION::${GITHUB_REF/refs\/tags\//}
-          
 
       - name: Set up Go 1.16beta1
         uses: actions/setup-go@v1
