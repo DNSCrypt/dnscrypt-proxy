@@ -74,7 +74,7 @@ func HandleCaptivePortalQuery(msg *dns.Msg, question *dns.Question, ips *Captive
 	if !ok {
 		qType = fmt.Sprint(question.Qtype)
 	}
-	dlog.Noticef("Query for captive portal detection: [%v] (%v)", question.Name, qType)
+	dlog.Infof("Query for captive portal detection: [%v] (%v)", question.Name, qType)
 	return respMsg
 }
 
