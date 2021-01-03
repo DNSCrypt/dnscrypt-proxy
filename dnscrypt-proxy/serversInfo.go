@@ -323,8 +323,10 @@ func route(proxy *Proxy, name string) (*Relay, error) {
 	if routes == nil {
 		return nil, nil
 	}
+	wildcard := false
 	relayNames, ok := (*routes)[name]
 	if !ok {
+		wildcard = true
 		relayNames, ok = (*routes)["*"]
 	}
 	if !ok {
@@ -338,6 +340,8 @@ func route(proxy *Proxy, name string) (*Relay, error) {
 			for _, registeredServer := range proxy.registeredRelays {
 				relayStamps = append(relayStamps, registeredServer.stamp)
 			}
+			wildcard = true
+			break
 		} else {
 			for _, registeredServer := range proxy.registeredRelays {
 				if registeredServer.name == relayName {
@@ -356,9 +360,21 @@ func route(proxy *Proxy, name string) (*Relay, error) {
 	if len(relayStamps) == 0 {
 		return nil, fmt.Errorf("Empty relay set for [%v]", name)
 	}
-	relayCandidateStamp := findFarthestRoute(proxy, name, relayStamps)
+	var relayCandidateStamp *stamps.ServerStamp
+	if !wildcard || len(relayStamps) == 1 {
+		relayCandidateStamp = &relayStamps[rand.Intn(len(relayStamps))]
+	} else {
+		relayCandidateStamp = findFarthestRoute(proxy, name, relayStamps)
+	}
 	if relayCandidateStamp == nil {
 		return nil, fmt.Errorf("No valid relay for server [%v]", name)
+	}
+	relayName := relayCandidateStamp.ServerAddrStr
+	for _, registeredServer := range proxy.registeredRelays {
+		if registeredServer.stamp.ServerAddrStr == relayCandidateStamp.ServerAddrStr {
+			relayName = registeredServer.name
+			break
+		}
 	}
 	switch relayCandidateStamp.Proto {
 	case stamps.StampProtoTypeDNSCrypt, stamps.StampProtoTypeDNSCryptRelay:
@@ -370,7 +386,7 @@ func route(proxy *Proxy, name string) (*Relay, error) {
 		if err != nil {
 			return nil, err
 		}
-		dlog.Noticef("Anonymizing queries for [%v] via [%v]", name, relayCandidateStamp.ServerAddrStr)
+		dlog.Noticef("Anonymizing queries for [%v] via [%v]", name, relayName)
 		return &Relay{Proto: stamps.StampProtoTypeDNSCryptRelay, Dnscrypt: &DNSCryptRelay{RelayUDPAddr: relayUDPAddr, RelayTCPAddr: relayTCPAddr}}, nil
 	case stamps.StampProtoTypeODoHRelay:
 		return &Relay{Proto: stamps.StampProtoTypeODoHRelay, ODoH: &ODoHRelay{}}, nil
