@@ -435,7 +435,7 @@ func fetchDNSCryptServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp
 			dlog.Infof("[%v] couldn't be reached anonymously, it will be ignored", name)
 			return ServerInfo{}, errors.New("Resolver couldn't be reached anonymously")
 		}
-		dlog.Warnf("[%v] couldn't be reached anonymously - check the relay and that your router doesn't drop UDP fragments", name)
+		dlog.Warnf("[%v] couldn't be reached anonymously", name)
 	}
 	if err != nil {
 		return ServerInfo{}, err
