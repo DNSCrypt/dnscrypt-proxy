@@ -269,7 +269,8 @@ func fetchServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, isNew 
 
 func findFarthestRoute(proxy *Proxy, name string, relayStamps []stamps.ServerStamp) *stamps.ServerStamp {
 	serverIdx := -1
-	for i, registeredServer := range proxy.registeredServers {
+	proxy.serversInfo.RLock()
+	for i, registeredServer := range proxy.serversInfo.registeredServers {
 		if registeredServer.name == name {
 			serverIdx = i
 			break
@@ -278,7 +279,8 @@ func findFarthestRoute(proxy *Proxy, name string, relayStamps []stamps.ServerSta
 	if serverIdx < 0 {
 		return nil
 	}
-	server := proxy.registeredServers[serverIdx]
+	server := proxy.serversInfo.registeredServers[serverIdx]
+	proxy.serversInfo.RUnlock()
 	serverAddrStr, _ := ExtractHostAndPort(server.stamp.ServerAddrStr, 443)
 	serverAddr := net.ParseIP(serverAddrStr)
 	if serverAddr == nil {
@@ -350,12 +352,14 @@ func route(proxy *Proxy, name string) (*Relay, error) {
 					break
 				}
 			}
-			for _, registeredServer := range proxy.registeredServers {
+			proxy.serversInfo.RLock()
+			for _, registeredServer := range proxy.serversInfo.registeredServers {
 				if registeredServer.name == relayName {
 					relayStamps = append(relayStamps, registeredServer.stamp)
 					break
 				}
 			}
+			proxy.serversInfo.RUnlock()
 		}
 	}
 	if len(relayStamps) == 0 {
