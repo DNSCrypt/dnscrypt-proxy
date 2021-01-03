@@ -79,20 +79,20 @@ func (plugin *PluginCache) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 	}
 	cached := cachedAny.(CachedResponse)
 
-	synth := cached.msg
+	synth := cached.msg.Copy()
 	synth.Id = msg.Id
 	synth.Response = true
 	synth.Compress = true
 	synth.Question = msg.Question
 
 	if time.Now().After(cached.expiration) {
-		pluginsState.sessionData["stale"] = &synth
+		pluginsState.sessionData["stale"] = synth
 		return nil
 	}
 
 	updateTTL(&cached.msg, cached.expiration)
 
-	pluginsState.synthResponse = &synth
+	pluginsState.synthResponse = synth
 	pluginsState.action = PluginsActionSynth
 	pluginsState.cacheHit = true
 	return nil
