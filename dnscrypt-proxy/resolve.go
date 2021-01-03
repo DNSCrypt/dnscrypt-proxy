@@ -134,8 +134,6 @@ func Resolve(server string, name string, singleResolver bool) {
 				}
 			}
 		}
-	} else {
-		fmt.Println("Multiple resolvers have been configured; this is just one one of them.")
 	}
 
 	fmt.Println("")
@@ -347,4 +345,6 @@ cname:
 			fmt.Println(strings.Join(txt, ", "))
 		}
 	}
+
+	fmt.Println("")
 }
