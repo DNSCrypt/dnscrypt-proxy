@@ -116,12 +116,13 @@ type ServersInfo struct {
 	sync.RWMutex
 	inner             []*ServerInfo
 	registeredServers []RegisteredServer
+	registeredRelays  []RegisteredServer
 	lbStrategy        LBStrategy
 	lbEstimator       bool
 }
 
 func NewServersInfo() ServersInfo {
-	return ServersInfo{lbStrategy: DefaultLBStrategy, lbEstimator: true, registeredServers: make([]RegisteredServer, 0)}
+	return ServersInfo{lbStrategy: DefaultLBStrategy, lbEstimator: true, registeredServers: make([]RegisteredServer, 0), registeredRelays: make([]RegisteredServer, 0)}
 }
 
 func (serversInfo *ServersInfo) registerServer(name string, stamp stamps.ServerStamp) {
@@ -135,6 +136,19 @@ func (serversInfo *ServersInfo) registerServer(name string, stamp stamps.ServerS
 		}
 	}
 	serversInfo.registeredServers = append(serversInfo.registeredServers, newRegisteredServer)
+}
+
+func (serversInfo *ServersInfo) registerRelay(name string, stamp stamps.ServerStamp) {
+	newRegisteredServer := RegisteredServer{name: name, stamp: stamp}
+	serversInfo.Lock()
+	defer serversInfo.Unlock()
+	for i, oldRegisteredServer := range serversInfo.registeredRelays {
+		if oldRegisteredServer.name == name {
+			serversInfo.registeredRelays[i] = newRegisteredServer
+			return
+		}
+	}
+	serversInfo.registeredRelays = append(serversInfo.registeredRelays, newRegisteredServer)
 }
 
 func (serversInfo *ServersInfo) refreshServer(proxy *Proxy, name string, stamp stamps.ServerStamp) error {
