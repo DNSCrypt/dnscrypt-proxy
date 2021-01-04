@@ -300,7 +300,7 @@ func findFarthestRoute(proxy *Proxy, name string, relayStamps []stamps.ServerSta
 	if serverAddr == nil {
 		return nil
 	}
-	if len(proxy.registeredRelays) == 0 {
+	if len(proxy.serversInfo.registeredRelays) == 0 {
 		return nil
 	}
 	bestRelayIdxs := make([]int, 0)
@@ -354,19 +354,21 @@ func route(proxy *Proxy, name string) (*Relay, error) {
 		if relayStamp, err := stamps.NewServerStampFromString(relayName); err == nil {
 			relayStamps = append(relayStamps, relayStamp)
 		} else if relayName == "*" {
-			for _, registeredServer := range proxy.registeredRelays {
+			proxy.serversInfo.RLock()
+			for _, registeredServer := range proxy.serversInfo.registeredRelays {
 				relayStamps = append(relayStamps, registeredServer.stamp)
 			}
+			proxy.serversInfo.RUnlock()
 			wildcard = true
 			break
 		} else {
-			for _, registeredServer := range proxy.registeredRelays {
+			proxy.serversInfo.RLock()
+			for _, registeredServer := range proxy.serversInfo.registeredRelays {
 				if registeredServer.name == relayName {
 					relayStamps = append(relayStamps, registeredServer.stamp)
 					break
 				}
 			}
-			proxy.serversInfo.RLock()
 			for _, registeredServer := range proxy.serversInfo.registeredServers {
 				if registeredServer.name == relayName {
 					relayStamps = append(relayStamps, registeredServer.stamp)
@@ -389,12 +391,14 @@ func route(proxy *Proxy, name string) (*Relay, error) {
 		return nil, fmt.Errorf("No valid relay for server [%v]", name)
 	}
 	relayName := relayCandidateStamp.ServerAddrStr
-	for _, registeredServer := range proxy.registeredRelays {
+	proxy.serversInfo.RLock()
+	for _, registeredServer := range proxy.serversInfo.registeredRelays {
 		if registeredServer.stamp.ServerAddrStr == relayCandidateStamp.ServerAddrStr {
 			relayName = registeredServer.name
 			break
 		}
 	}
+	proxy.serversInfo.RUnlock()
 	switch relayCandidateStamp.Proto {
 	case stamps.StampProtoTypeDNSCrypt, stamps.StampProtoTypeDNSCryptRelay:
 		relayUDPAddr, err := net.ResolveUDPAddr("udp", relayCandidateStamp.ServerAddrStr)
