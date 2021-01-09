@@ -352,6 +352,9 @@ func (proxy *Proxy) updateRegisteredServers() error {
 	for _, registeredServer := range proxy.registeredServers {
 		proxy.serversInfo.registerServer(registeredServer.name, registeredServer.stamp)
 	}
+	for _, registeredRelay := range proxy.registeredRelays {
+		proxy.serversInfo.registerRelay(registeredRelay.name, registeredRelay.stamp)
+	}
 	return nil
 }
 

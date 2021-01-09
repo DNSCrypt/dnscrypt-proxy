@@ -116,12 +116,13 @@ type ServersInfo struct {
 	sync.RWMutex
 	inner             []*ServerInfo
 	registeredServers []RegisteredServer
+	registeredRelays  []RegisteredServer
 	lbStrategy        LBStrategy
 	lbEstimator       bool
 }
 
 func NewServersInfo() ServersInfo {
-	return ServersInfo{lbStrategy: DefaultLBStrategy, lbEstimator: true, registeredServers: make([]RegisteredServer, 0)}
+	return ServersInfo{lbStrategy: DefaultLBStrategy, lbEstimator: true, registeredServers: make([]RegisteredServer, 0), registeredRelays: make([]RegisteredServer, 0)}
 }
 
 func (serversInfo *ServersInfo) registerServer(name string, stamp stamps.ServerStamp) {
@@ -135,6 +136,19 @@ func (serversInfo *ServersInfo) registerServer(name string, stamp stamps.ServerS
 		}
 	}
 	serversInfo.registeredServers = append(serversInfo.registeredServers, newRegisteredServer)
+}
+
+func (serversInfo *ServersInfo) registerRelay(name string, stamp stamps.ServerStamp) {
+	newRegisteredServer := RegisteredServer{name: name, stamp: stamp}
+	serversInfo.Lock()
+	defer serversInfo.Unlock()
+	for i, oldRegisteredServer := range serversInfo.registeredRelays {
+		if oldRegisteredServer.name == name {
+			serversInfo.registeredRelays[i] = newRegisteredServer
+			return
+		}
+	}
+	serversInfo.registeredRelays = append(serversInfo.registeredRelays, newRegisteredServer)
 }
 
 func (serversInfo *ServersInfo) refreshServer(proxy *Proxy, name string, stamp stamps.ServerStamp) error {
@@ -286,7 +300,7 @@ func findFarthestRoute(proxy *Proxy, name string, relayStamps []stamps.ServerSta
 	if serverAddr == nil {
 		return nil
 	}
-	if len(proxy.registeredRelays) == 0 {
+	if len(proxy.serversInfo.registeredRelays) == 0 {
 		return nil
 	}
 	bestRelayIdxs := make([]int, 0)
@@ -340,19 +354,21 @@ func route(proxy *Proxy, name string) (*Relay, error) {
 		if relayStamp, err := stamps.NewServerStampFromString(relayName); err == nil {
 			relayStamps = append(relayStamps, relayStamp)
 		} else if relayName == "*" {
-			for _, registeredServer := range proxy.registeredRelays {
+			proxy.serversInfo.RLock()
+			for _, registeredServer := range proxy.serversInfo.registeredRelays {
 				relayStamps = append(relayStamps, registeredServer.stamp)
 			}
+			proxy.serversInfo.RUnlock()
 			wildcard = true
 			break
 		} else {
-			for _, registeredServer := range proxy.registeredRelays {
+			proxy.serversInfo.RLock()
+			for _, registeredServer := range proxy.serversInfo.registeredRelays {
 				if registeredServer.name == relayName {
 					relayStamps = append(relayStamps, registeredServer.stamp)
 					break
 				}
 			}
-			proxy.serversInfo.RLock()
 			for _, registeredServer := range proxy.serversInfo.registeredServers {
 				if registeredServer.name == relayName {
 					relayStamps = append(relayStamps, registeredServer.stamp)
@@ -375,12 +391,14 @@ func route(proxy *Proxy, name string) (*Relay, error) {
 		return nil, fmt.Errorf("No valid relay for server [%v]", name)
 	}
 	relayName := relayCandidateStamp.ServerAddrStr
-	for _, registeredServer := range proxy.registeredRelays {
+	proxy.serversInfo.RLock()
+	for _, registeredServer := range proxy.serversInfo.registeredRelays {
 		if registeredServer.stamp.ServerAddrStr == relayCandidateStamp.ServerAddrStr {
 			relayName = registeredServer.name
 			break
 		}
 	}
+	proxy.serversInfo.RUnlock()
 	switch relayCandidateStamp.Proto {
 	case stamps.StampProtoTypeDNSCrypt, stamps.StampProtoTypeDNSCryptRelay:
 		relayUDPAddr, err := net.ResolveUDPAddr("udp", relayCandidateStamp.ServerAddrStr)
