@@ -45,7 +45,7 @@ github.com/jedisct1/go-clocksmith
 # github.com/jedisct1/go-dnsstamps v0.0.0-20210101121956-16fbdadcf8f5
 ## explicit
 github.com/jedisct1/go-dnsstamps
-# github.com/jedisct1/go-minisign v0.0.0-20210101122305-335e26e05d5b
+# github.com/jedisct1/go-minisign v0.0.0-20210106175330-e54e81d562c7
 ## explicit
 github.com/jedisct1/go-minisign
 # github.com/jedisct1/xsecretbox v0.0.0-20210102102453-4ecb2081017a
@@ -81,7 +81,7 @@ golang.org/x/crypto/nacl/box
 golang.org/x/crypto/nacl/secretbox
 golang.org/x/crypto/poly1305
 golang.org/x/crypto/salsa20/salsa
-# golang.org/x/net v0.0.0-20201224014010-6772e930b67b
+# golang.org/x/net v0.0.0-20210119194325-5f4716e94777
 ## explicit
 golang.org/x/net/bpf
 golang.org/x/net/http/httpguts
@@ -94,7 +94,7 @@ golang.org/x/net/internal/socks
 golang.org/x/net/ipv4
 golang.org/x/net/ipv6
 golang.org/x/net/proxy
-# golang.org/x/sys v0.0.0-20201231184435-2d18734c6014
+# golang.org/x/sys v0.0.0-20210119212857-b64e53b001e4
 ## explicit
 golang.org/x/sys/cpu
 golang.org/x/sys/internal/unsafeheader

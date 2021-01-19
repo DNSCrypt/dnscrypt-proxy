@@ -45,18 +45,22 @@ func DecodePublicKey(in string) (PublicKey, error) {
 	return NewPublicKey(lines[1])
 }
 
+func trimCarriageReturn(input string) string {
+	return strings.TrimRight(input, "\r")
+}
+
 func DecodeSignature(in string) (Signature, error) {
 	var signature Signature
 	lines := strings.SplitN(in, "\n", 4)
 	if len(lines) < 4 {
 		return signature, errors.New("Incomplete encoded signature")
 	}
-	signature.UntrustedComment = lines[0]
+	signature.UntrustedComment = trimCarriageReturn(lines[0])
 	bin1, err := base64.StdEncoding.DecodeString(lines[1])
 	if err != nil || len(bin1) != 74 {
 		return signature, errors.New("Invalid encoded signature")
 	}
-	signature.TrustedComment = lines[2]
+	signature.TrustedComment = trimCarriageReturn(lines[2])
 	bin2, err := base64.StdEncoding.DecodeString(lines[3])
 	if err != nil || len(bin2) != 64 {
 		return signature, errors.New("Invalid encoded signature")
