@@ -35,6 +35,9 @@
 ## List of local addresses and ports to listen to. Can be IPv4 and/or IPv6.
 ## Example with both IPv4 and IPv6:
 ## listen_addresses = ['127.0.0.1:53', '[::1]:53']
+##
+## To listen to all IPv4 addresses, use `listen_addresses = ['0.0.0.0:53']`
+## To listen to all IPv4+IPv6 addresses, use `listen_addresses = ['[::]:53']`
 
 listen_addresses = ['127.0.0.1:53']
 
