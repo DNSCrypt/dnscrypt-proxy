@@ -197,9 +197,6 @@ func NewSource(name string, xTransport *XTransport, urls []string, minisignKeySt
 		return source, err
 	}
 	source.parseURLs(urls)
-	rand.Shuffle(len(source.urls), func(i, j int) {
-		source.urls[i], source.urls[j] = source.urls[j], source.urls[i]
-	})
 	if _, err = source.fetchWithCache(xTransport, timeNow()); err == nil {
 		dlog.Noticef("Source [%s] loaded", name)
 	}

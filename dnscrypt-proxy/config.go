@@ -788,6 +788,9 @@ func (config *Config) printRegisteredServers(proxy *Proxy, jsonOutput bool) erro
 func (config *Config) loadSources(proxy *Proxy) error {
 	for cfgSourceName, cfgSource_ := range config.SourcesConfig {
 		cfgSource := cfgSource_
+		rand.Shuffle(len(cfgSource.URLs), func(i, j int) {
+			cfgSource.URLs[i], cfgSource.URLs[j] = cfgSource.URLs[j], cfgSource.URLs[i]
+		})
 		if err := config.loadSource(proxy, cfgSourceName, &cfgSource); err != nil {
 			return err
 		}
