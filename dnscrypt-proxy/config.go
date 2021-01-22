@@ -345,8 +345,8 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 		if !*flags.Child {
 			FileDescriptors = append(FileDescriptors, dlog.GetFileDescriptor())
 		} else {
+			dlog.SetFileDescriptor(os.NewFile(uintptr(InheritedDescriptorsBase+FileDescriptorNum), "logFile"))
 			FileDescriptorNum++
-			dlog.SetFileDescriptor(os.NewFile(uintptr(3), "logFile"))
 		}
 	}
 	if !*flags.Child {
