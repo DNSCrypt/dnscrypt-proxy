@@ -9,7 +9,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"sort"
 	"strconv"
 	"strings"
 	"testing"
@@ -380,8 +379,6 @@ func TestNewSource(t *testing.T) {
 		} else {
 			c.Nil(err, "Unexpected error")
 		}
-		sort.SliceStable(got.urls, func(i, j int) bool { return got.urls[i].String() < got.urls[j].String() })
-		sort.SliceStable(e.Source.urls, func(i, j int) bool { return e.Source.urls[i].String() < e.Source.urls[j].String() })
 		c.DeepEqual(got, e.Source, "Unexpected return")
 		checkTestServer(c, d)
 		checkSourceCache(c, e)
