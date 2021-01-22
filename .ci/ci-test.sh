@@ -125,7 +125,7 @@ t || grep -Eq 'telemetry.example.*REJECT' query.log || fail
 t || grep -Eq 'dns.google.*REJECT' query.log || fail
 t || grep -Eq 'tracker.xdebian.org.*REJECT' query.log || fail
 t || grep -Eq 'tracker.debian.org.*PASS' query.log || fail
-t || cut -f2 query.log | grep -Eq -- '-' || fail
+t || grep -Eq '[.].*NS.*PASS' || fail
 
 section
 t || grep -Fq 'tracker.debian.org' allowed-names.log || fail
