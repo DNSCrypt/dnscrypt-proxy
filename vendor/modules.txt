@@ -57,7 +57,7 @@ github.com/k-sone/critbitgo
 # github.com/kardianos/service v1.2.0
 ## explicit
 github.com/kardianos/service
-# github.com/miekg/dns v1.1.35
+# github.com/miekg/dns v1.1.37
 ## explicit
 github.com/miekg/dns
 # github.com/pkg/errors v0.9.1
@@ -94,7 +94,7 @@ golang.org/x/net/internal/socks
 golang.org/x/net/ipv4
 golang.org/x/net/ipv6
 golang.org/x/net/proxy
-# golang.org/x/sys v0.0.0-20210119212857-b64e53b001e4
+# golang.org/x/sys v0.0.0-20210124154548-22da62e12c0c
 ## explicit
 golang.org/x/sys/cpu
 golang.org/x/sys/internal/unsafeheader
