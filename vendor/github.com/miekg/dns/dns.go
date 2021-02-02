@@ -134,9 +134,14 @@ func (rr *RFC3597) ToRFC3597(r RR) error {
 
 // fromRFC3597 converts an unknown RR representation from RFC 3597 to the known RR type.
 func (rr *RFC3597) fromRFC3597(r RR) error {
-	*r.Header() = rr.Hdr
+	hdr := r.Header()
+	*hdr = rr.Hdr
 
-	if len(rr.Rdata) == 0 {
+	// Can't overflow uint16 as the length of Rdata is validated in (*RFC3597).parse.
+	// We can only get here when rr was constructed with that method.
+	hdr.Rdlength = uint16(hex.DecodedLen(len(rr.Rdata)))
+
+	if noRdata(*hdr) {
 		// Dynamic update.
 		return nil
 	}

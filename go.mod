@@ -1,6 +1,6 @@
 module github.com/DNSCrypt/dnscrypt-proxy
 
-go 1.15
+go 1.16
 
 require (
 	github.com/BurntSushi/toml v0.3.1
@@ -17,8 +17,8 @@ require (
 	github.com/jedisct1/xsecretbox v0.0.0-20210102102453-4ecb2081017a
 	github.com/k-sone/critbitgo v1.4.0
 	github.com/kardianos/service v1.2.0
-	github.com/miekg/dns v1.1.37
-	github.com/powerman/check v1.3.0
+	github.com/miekg/dns v1.1.38
+	github.com/powerman/check v1.3.1
 	golang.org/x/crypto v0.0.0-20201221181555-eec23a3978ad
 	golang.org/x/net v0.0.0-20210119194325-5f4716e94777
 	golang.org/x/sys v0.0.0-20210124154548-22da62e12c0c

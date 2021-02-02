@@ -689,12 +689,12 @@ func (t *C) NotLen(actual interface{}, expected int, msg ...interface{}) bool {
 // Checking for nil is okay, but using Nil(actual) instead is more clean.
 func (t *C) Err(actual, expected error, msg ...interface{}) bool {
 	t.Helper()
-	actual = unwrapErr(actual)
-	equal := fmt.Sprintf("%#v", actual) == fmt.Sprintf("%#v", expected)
-	_, proto1 := actual.(interface{ GRPCStatus() *status.Status })
+	actual2 := unwrapErr(actual)
+	equal := fmt.Sprintf("%#v", actual2) == fmt.Sprintf("%#v", expected)
+	_, proto1 := actual2.(interface{ GRPCStatus() *status.Status })
 	_, proto2 := expected.(interface{ GRPCStatus() *status.Status })
 	if proto1 || proto2 {
-		equal = proto.Equal(status.Convert(actual).Proto(), status.Convert(expected).Proto())
+		equal = proto.Equal(status.Convert(actual2).Proto(), status.Convert(expected).Proto())
 	}
 	return t.report2(actual, expected, msg, equal)
 }
@@ -729,12 +729,12 @@ func unwrapErr(err error) (actual error) {
 // same error, and so is both nil.
 func (t *C) NotErr(actual, expected error, msg ...interface{}) bool {
 	t.Helper()
-	actual = unwrapErr(actual)
-	notEqual := fmt.Sprintf("%#v", actual) != fmt.Sprintf("%#v", expected)
-	_, proto1 := actual.(interface{ GRPCStatus() *status.Status })
+	actual2 := unwrapErr(actual)
+	notEqual := fmt.Sprintf("%#v", actual2) != fmt.Sprintf("%#v", expected)
+	_, proto1 := actual2.(interface{ GRPCStatus() *status.Status })
 	_, proto2 := expected.(interface{ GRPCStatus() *status.Status })
 	if proto1 || proto2 {
-		notEqual = !proto.Equal(status.Convert(actual).Proto(), status.Convert(expected).Proto())
+		notEqual = !proto.Equal(status.Convert(actual2).Proto(), status.Convert(expected).Proto())
 	}
 	return t.report1(actual, msg, notEqual)
 }
