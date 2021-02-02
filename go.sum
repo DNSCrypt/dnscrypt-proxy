@@ -73,6 +73,7 @@ github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZb
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/powerman/check v1.3.0 h1:GsncV4RbbC4nZEzLTVpUIdp1rgZil4N36D/XuPZUA60=
 github.com/powerman/check v1.3.0/go.mod h1:k/8NCUQwepaKJKctBBKjQo84jvGEvKiumD9pDl87RB0=
+github.com/powerman/check v1.3.1/go.mod h1:k/8NCUQwepaKJKctBBKjQo84jvGEvKiumD9pDl87RB0=
 github.com/prometheus/client_model v0.0.0-20190812154241-14fe0d1b01d4/go.mod h1:xMI15A0UPsDsEKsMN9yxemIoYk6Tm2C1GtYGdfGttqA=
 github.com/smartystreets/assertions v0.0.0-20180927180507-b2de0cb4f26d/go.mod h1:OnSkiWE9lh6wB0YB77sQom3nweQdgAjqCqsofrRNTgc=
 github.com/smartystreets/assertions v1.0.1 h1:voD4ITNjPL5jjBfgR/r8fPIIBrliWrWHeiJApdr3r4w=
