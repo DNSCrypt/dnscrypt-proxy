@@ -7,8 +7,8 @@ on:
     - cron: '0 14 * * 6'
 
 jobs:
-  CodeQL-Build:
-
+  analyze:
+    name: Analyze
     runs-on: ubuntu-latest
 
     steps:
@@ -16,9 +16,6 @@ jobs:
       uses: actions/checkout@v2
       with:      
         fetch-depth: 2
-
-    - run: git checkout HEAD^2
-      if: ${{ github.event_name == 'pull_request' }}
       
     - name: Initialize CodeQL
       uses: github/codeql-action/init@v1
