@@ -663,6 +663,7 @@ cache_neg_max_ttl = 600
   prefix = ''
 
   ## Anonymized DNS relays
+  ## `relays` is reserved name prefix for relay sources.
 
   [sources.'relays']
   urls = ['https://raw.githubusercontent.com/DNSCrypt/dnscrypt-resolvers/master/v3/relays.md', 'https://download.dnscrypt.info/resolvers-list/v3/relays.md', 'https://ipv6.download.dnscrypt.info/resolvers-list/v3/relays.md', 'https://download.dnscrypt.net/resolvers-list/v3/relays.md']
