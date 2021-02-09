@@ -778,7 +778,9 @@ skip_incompatible = false
 
 # direct_cert_fallback = false
 
-
+# If multiple relays are specified, one of them are randomly chosen when a query get issued.
+# Default value is false (non-randomized).
+# relay_randomization = true
 
 ###############################
 #            DNS64            #

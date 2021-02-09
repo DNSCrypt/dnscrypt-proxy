@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/binary"
 	"errors"
+	"math/rand"
 	"net"
 	"strings"
 	"time"
@@ -372,7 +373,7 @@ func DNSExchange(proxy *Proxy, proto string, query *dns.Msg, serverAddress strin
 			}
 			return nil, 0, false, err
 		}
-		dlog.Infof("Unable to get the public key for [%v] via relay [%v], retrying over a direct connection", *serverName, relay.RelayUDPAddr.IP)
+		dlog.Infof("Unable to get the public key for [%v] via relay [%v], retrying over a direct connection", *serverName, relay.RelayUDPAddrs)
 		relay = nil
 	}
 }
@@ -403,9 +404,16 @@ func _dnsExchange(proxy *Proxy, proto string, query *dns.Msg, serverAddress stri
 			return DNSExchangeResponse{err: err}
 		}
 		upstreamAddr := udpAddr
-		if relay != nil {
+		if relay != nil && len(relay.RelayUDPAddrs) > 0 {
+			var relayIdx int
+			if proxy.anonRelayRandomization {
+				relayIdx = rand.Intn(len(relay.RelayUDPAddrs))
+			} else {
+				relayIdx = 0
+			}
 			proxy.prepareForRelay(udpAddr.IP, udpAddr.Port, &binQuery)
-			upstreamAddr = relay.RelayUDPAddr
+			upstreamAddr = relay.RelayUDPAddrs[relayIdx]
+			dlog.Debugf("[%v] _dnsExchange: via relay [%v] (UDP)", serverAddress, relay.RelayUDPAddrs[relayIdx].IP)
 		}
 		now := time.Now()
 		pc, err := net.DialUDP("udp", nil, upstreamAddr)
@@ -436,9 +444,16 @@ func _dnsExchange(proxy *Proxy, proto string, query *dns.Msg, serverAddress stri
 			return DNSExchangeResponse{err: err}
 		}
 		upstreamAddr := tcpAddr
-		if relay != nil {
+		if relay != nil && len(relay.RelayTCPAddrs) > 0 {
+			var relayIdx int
+			if proxy.anonRelayRandomization {
+				relayIdx = rand.Intn(len(relay.RelayTCPAddrs))
+			} else {
+				relayIdx = 0
+			}
 			proxy.prepareForRelay(tcpAddr.IP, tcpAddr.Port, &binQuery)
-			upstreamAddr = relay.RelayTCPAddr
+			upstreamAddr = relay.RelayTCPAddrs[relayIdx]
+			dlog.Debugf("[%v] _dnsExchange: via relay [%v] (TCP)", serverAddress, relay.RelayTCPAddrs[relayIdx].IP)
 		}
 		now := time.Now()
 		var pc net.Conn

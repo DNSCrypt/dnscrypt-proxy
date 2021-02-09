@@ -4,6 +4,7 @@ import (
 	"context"
 	crypto_rand "crypto/rand"
 	"encoding/binary"
+	"math/rand"
 	"net"
 	"os"
 	"runtime"
@@ -91,6 +92,7 @@ type Proxy struct {
 	certIgnoreTimestamp           bool
 	skipAnonIncompatibleResolvers bool
 	anonDirectCertFallback        bool
+	anonRelayRandomization        bool
 	pluginBlockUndelegated        bool
 	child                         bool
 	daemonize                     bool
@@ -477,7 +479,14 @@ func (proxy *Proxy) prepareForRelay(ip net.IP, port int, encryptedQuery *[]byte)
 func (proxy *Proxy) exchangeWithUDPServer(serverInfo *ServerInfo, sharedKey *[32]byte, encryptedQuery []byte, clientNonce []byte) ([]byte, error) {
 	upstreamAddr := serverInfo.UDPAddr
 	if serverInfo.Relay != nil && serverInfo.Relay.Dnscrypt != nil {
-		upstreamAddr = serverInfo.Relay.Dnscrypt.RelayUDPAddr
+		var relayIdx int
+		if proxy.anonRelayRandomization {
+			relayIdx = rand.Intn(len(serverInfo.Relay.Dnscrypt.RelayUDPAddrs))
+		} else {
+			relayIdx = 0
+		}
+		upstreamAddr = serverInfo.Relay.Dnscrypt.RelayUDPAddrs[relayIdx]
+		dlog.Debugf("[%v] exchangeWithUDPServer: via relay [%v]", serverInfo.Name, serverInfo.Relay.Dnscrypt.RelayUDPAddrs[relayIdx].IP)
 	}
 	var err error
 	var pc net.Conn
@@ -515,7 +524,14 @@ func (proxy *Proxy) exchangeWithUDPServer(serverInfo *ServerInfo, sharedKey *[32
 func (proxy *Proxy) exchangeWithTCPServer(serverInfo *ServerInfo, sharedKey *[32]byte, encryptedQuery []byte, clientNonce []byte) ([]byte, error) {
 	upstreamAddr := serverInfo.TCPAddr
 	if serverInfo.Relay != nil && serverInfo.Relay.Dnscrypt != nil {
-		upstreamAddr = serverInfo.Relay.Dnscrypt.RelayTCPAddr
+		var relayIdx int
+		if proxy.anonRelayRandomization {
+			relayIdx = rand.Intn(len(serverInfo.Relay.Dnscrypt.RelayTCPAddrs))
+		} else {
+			relayIdx = 0
+		}
+		upstreamAddr = serverInfo.Relay.Dnscrypt.RelayTCPAddrs[relayIdx]
+		dlog.Debugf("[%v] exchangeWithTCPServer: via relay [%v]", serverInfo.Name, serverInfo.Relay.Dnscrypt.RelayTCPAddrs[relayIdx].IP)
 	}
 	var err error
 	var pc net.Conn

@@ -152,6 +152,7 @@ func newConfig() Config {
 		},
 		AnonymizedDNS: AnonymizedDNSConfig{
 			DirectCertFallback: true,
+			RelayRandomization: false,
 		},
 	}
 }
@@ -232,6 +233,7 @@ type AnonymizedDNSConfig struct {
 	Routes             []AnonymizedDNSRouteConfig `toml:"routes"`
 	SkipIncompatible   bool                       `toml:"skip_incompatible"`
 	DirectCertFallback bool                       `toml:"direct_cert_fallback"`
+	RelayRandomization bool                       `toml:"relay_randomization"`
 }
 
 type BrokenImplementationsConfig struct {
@@ -614,6 +616,7 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	}
 	proxy.skipAnonIncompatibleResolvers = config.AnonymizedDNS.SkipIncompatible
 	proxy.anonDirectCertFallback = config.AnonymizedDNS.DirectCertFallback
+	proxy.anonRelayRandomization = config.AnonymizedDNS.RelayRandomization
 
 	if config.DoHClientX509AuthLegacy.Creds != nil {
 		return errors.New("[tls_client_auth] has been renamed to [doh_client_x509_auth] - Update your config file")
@@ -732,6 +735,9 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 			} else {
 				dlog.Noticef("Anonymized DNS: routing everything via %v", via)
 			}
+		}
+		if proxy.anonRelayRandomization {
+			dlog.Noticef("Anonymized DNS: relay randomization turned on")
 		}
 	}
 	if *flags.Check {
