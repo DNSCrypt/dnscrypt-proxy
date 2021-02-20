@@ -208,27 +208,37 @@ cert_refresh_delay = 240
 # tls_cipher_suite = [52392, 49199]
 
 
-## Fallback resolvers
+## Bootstrap resolvers
+##
 ## These are normal, non-encrypted DNS resolvers, that will be only used
-## for one-shot queries when retrieving the initial resolvers list, and
-## only if the system DNS configuration doesn't work.
+## for one-shot queries when retrieving the initial resolvers list and the
+## the system DNS configuration doesn't work.
 ##
-## No user application queries will ever be leaked through these resolvers,
-## and they will not be used after IP addresses of resolvers URLs have been found.
-## They will never be used if lists have already been cached, and if stamps
-## don't include host names without IP addresses.
+## No user queries will ever be leaked through these resolvers, and they will
+## not be used after IP addresses of DoH resolvers have been found (if you are
+## using DoH).
 ##
-## They will not be used if the configured system DNS works.
+## They will never be used if lists have already been cached, and if the stamps
+## of the configured servers already include IP addresses (which is the case for
+## most of DoH servers, and for all DNSCrypt servers and relays).
+##
+## They will not be used if the configured system DNS works, or after the
+## proxy already has at least one usable secure resolver.
+##
 ## Resolvers supporting DNSSEC are recommended, and, if you are using
-## DoH, fallback resolvers should ideally be operated by a different entity than
-## the DoH servers you will be using, especially if you have IPv6 enabled.
+## DoH, bootstrap resolvers should ideally be operated by a different entity
+## than the DoH servers you will be using, especially if you have IPv6 enabled.
 ##
-## People in China may need to use 114.114.114.114:53 here.
-## Other popular options include 8.8.8.8 and 1.1.1.1.
+## People in China may want to use 114.114.114.114:53 here.
+## Other popular options include 8.8.8.8, 9.9.9.9 and 1.1.1.1.
 ##
 ## If more than one resolver is specified, they will be tried in sequence.
+##
+## TL;DR: put valid standard resolver addresess here. Your actual queries will
+## not be sent there. If you're using DNSCrypt or Anonymized DNS and your
+## lists are up to date, these resolvers will not even be used.
 
-fallback_resolvers = ['9.9.9.9:53', '8.8.8.8:53']
+bootstrap_resolvers = ['9.9.9.9:53', '8.8.8.8:53']
 
 
 ## Always use the fallback resolver before the system DNS settings.

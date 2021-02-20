@@ -28,12 +28,12 @@ import (
 )
 
 const (
-	DefaultFallbackResolver = "9.9.9.9:53"
-	DefaultKeepAlive        = 5 * time.Second
-	DefaultTimeout          = 30 * time.Second
-	SystemResolverIPTTL     = 24 * time.Hour
-	MinResolverIPTTL        = 12 * time.Hour
-	ExpiredCachedIPGraceTTL = 15 * time.Minute
+	DefaultBootstrapResolver = "9.9.9.9:53"
+	DefaultKeepAlive         = 5 * time.Second
+	DefaultTimeout           = 30 * time.Second
+	SystemResolverIPTTL      = 24 * time.Hour
+	MinResolverIPTTL         = 12 * time.Hour
+	ExpiredCachedIPGraceTTL  = 15 * time.Minute
 )
 
 type CachedIPItem struct {
@@ -51,7 +51,7 @@ type XTransport struct {
 	keepAlive                time.Duration
 	timeout                  time.Duration
 	cachedIPs                CachedIPs
-	fallbackResolvers        []string
+	bootstrapResolvers       []string
 	mainProto                string
 	ignoreSystemDNS          bool
 	useIPv4                  bool
@@ -64,14 +64,14 @@ type XTransport struct {
 }
 
 func NewXTransport() *XTransport {
-	if err := isIPAndPort(DefaultFallbackResolver); err != nil {
-		panic("DefaultFallbackResolver does not parse")
+	if err := isIPAndPort(DefaultBootstrapResolver); err != nil {
+		panic("DefaultBootstrapResolver does not parse")
 	}
 	xTransport := XTransport{
 		cachedIPs:                CachedIPs{cache: make(map[string]*CachedIPItem)},
 		keepAlive:                DefaultKeepAlive,
 		timeout:                  DefaultTimeout,
-		fallbackResolvers:        []string{DefaultFallbackResolver},
+		bootstrapResolvers:       []string{DefaultBootstrapResolver},
 		mainProto:                "",
 		ignoreSystemDNS:          true,
 		useIPv4:                  true,
@@ -272,12 +272,12 @@ func (xTransport *XTransport) resolveUsingResolvers(proto, host string, resolver
 		ip, ttl, err = xTransport.resolveUsingResolver(proto, host, resolver)
 		if err == nil {
 			if i > 0 {
-				dlog.Infof("Resolution succeeded with fallback resolver %s[%s]", proto, resolver)
+				dlog.Infof("Resolution succeeded with bootstrap resolver %s[%s]", proto, resolver)
 				resolvers[0], resolvers[i] = resolvers[i], resolvers[0]
 			}
 			break
 		}
-		dlog.Infof("Unable to resolve [%s] using fallback resolver %s[%s]: %v", host, proto, resolver, err)
+		dlog.Infof("Unable to resolve [%s] using bootstrap resolver %s[%s]: %v", host, proto, resolver, err)
 	}
 	return
 }
@@ -307,18 +307,18 @@ func (xTransport *XTransport) resolveAndUpdateCache(host string) error {
 		}
 		for _, proto := range protos {
 			if err != nil {
-				dlog.Noticef("System DNS configuration not usable yet, exceptionally resolving [%s] using fallback resolvers over %s", host, proto)
+				dlog.Noticef("System DNS configuration not usable yet, exceptionally resolving [%s] using bootstrap resolvers over %s", host, proto)
 			} else {
-				dlog.Debugf("Resolving [%s] using fallback resolvers over %s", host, proto)
+				dlog.Debugf("Resolving [%s] using bootstrap resolvers over %s", host, proto)
 			}
-			foundIP, ttl, err = xTransport.resolveUsingResolvers(proto, host, xTransport.fallbackResolvers)
+			foundIP, ttl, err = xTransport.resolveUsingResolvers(proto, host, xTransport.bootstrapResolvers)
 			if err == nil {
 				break
 			}
 		}
 	}
 	if err != nil && xTransport.ignoreSystemDNS {
-		dlog.Noticef("Fallback resolvers didn't respond - Trying with the system resolver as a last resort")
+		dlog.Noticef("Bootstrap resolvers didn't respond - Trying with the system resolver as a last resort")
 		foundIP, ttl, err = xTransport.resolveUsingSystem(host)
 	}
 	if ttl < MinResolverIPTTL {
@@ -364,7 +364,7 @@ func (xTransport *XTransport) Fetch(method string, url *url.URL, accept string, 
 		return nil, nil, 0, errors.New("Onion service is not reachable without Tor")
 	}
 	if err := xTransport.resolveAndUpdateCache(host); err != nil {
-		dlog.Errorf("Unable to resolve [%v] - Make sure that the system resolver works, or that `fallback_resolver` has been set to a resolver that can be reached", host)
+		dlog.Errorf("Unable to resolve [%v] - Make sure that the system resolver works, or that `bootstrap_resolvers` has been set to resolvers that can be reached", host)
 		return nil, nil, 0, err
 	}
 	req := &http.Request{
