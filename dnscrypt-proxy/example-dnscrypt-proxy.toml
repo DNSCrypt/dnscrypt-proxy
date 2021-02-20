@@ -234,7 +234,7 @@ cert_refresh_delay = 240
 ##
 ## If more than one resolver is specified, they will be tried in sequence.
 ##
-## TL;DR: put valid standard resolver addresess here. Your actual queries will
+## TL;DR: put valid standard resolver addresses here. Your actual queries will
 ## not be sent there. If you're using DNSCrypt or Anonymized DNS and your
 ## lists are up to date, these resolvers will not even be used.
 
