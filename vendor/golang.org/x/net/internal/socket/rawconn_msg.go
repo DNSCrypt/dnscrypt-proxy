@@ -9,7 +9,6 @@ package socket
 
 import (
 	"os"
-	"runtime"
 	"syscall"
 )
 
@@ -26,7 +25,7 @@ func (c *Conn) recvMsg(m *Message, flags int) error {
 	var n int
 	fn := func(s uintptr) bool {
 		n, operr = recvmsg(s, &h, flags)
-		if operr == syscall.EAGAIN || (runtime.GOOS == "zos" && operr == syscall.EWOULDBLOCK) {
+		if operr == syscall.EAGAIN || operr == syscall.EWOULDBLOCK {
 			return false
 		}
 		return true
@@ -63,7 +62,7 @@ func (c *Conn) sendMsg(m *Message, flags int) error {
 	var n int
 	fn := func(s uintptr) bool {
 		n, operr = sendmsg(s, &h, flags)
-		if operr == syscall.EAGAIN || (runtime.GOOS == "zos" && operr == syscall.EWOULDBLOCK) {
+		if operr == syscall.EAGAIN || operr == syscall.EWOULDBLOCK {
 			return false
 		}
 		return true
