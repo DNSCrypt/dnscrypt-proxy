@@ -29,6 +29,7 @@ type App struct {
 func main() {
 	TimezoneSetup()
 	dlog.Init("dnscrypt-proxy", dlog.SeverityNotice, "DAEMON")
+	runtime.MemProfileRate = 0
 
 	seed := make([]byte, 8)
 	crypto_rand.Read(seed)
