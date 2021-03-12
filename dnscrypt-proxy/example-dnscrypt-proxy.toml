@@ -55,7 +55,7 @@ max_clients = 250
 # user_name = 'nobody'
 
 
-## Require servers (from static + remote sources) to satisfy specific properties
+## Require servers (from remote sources) to satisfy specific properties
 
 # Use servers reachable over IPv4
 ipv4_servers = true
