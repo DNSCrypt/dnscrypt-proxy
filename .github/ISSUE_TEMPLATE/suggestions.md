@@ -1,5 +1,5 @@
 ---
-name: "\U0001F389 Suggestion"
+name: "\U0001F389 Suggestions"
 about: Suggest an improvement idea for this project
 title: ''
 labels: ''
