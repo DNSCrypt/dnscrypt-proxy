@@ -1,18 +1,13 @@
 ---
-name: "\U0001F389 Feature request"
-about: Suggest an idea for this project
+name: "\U0001F389 Suggestion"
+about: Suggest an improvement idea for this project
 title: ''
 labels: ''
 assignees: ''
 
 ---
 
-## Is your feature request related to a problem?
-<!-- A clear and concise description of what the problem is. -->
-
-
-
-## Describe the solution you'd like
+## Describe the improvement you are thinking of
 <!-- A clear and concise description of what you want to happen. -->
 
 

@@ -7,11 +7,17 @@ assignees: ''
 
 ---
 
-<!-- Thanks for the bug report! -->
+<!--
+Context: the LATEST version of `dnscrypt-proxy` (precompiled binaries downloaded from this
+repository) is correctly installed and configured on your system, but something doesn't
+seem to produce the expected result.
 
-## *Who* is the bug affecting?
+This is the right place to report it! Thanks for finding and reporting what may indeed be a bug!
 
-
+If the bug is not trivial to reproduce on any platform, please include ALL the steps required
+to reliably duplicate it, on a vanilla, generic install of macOS, Windows, OpenBSD or Ubuntu Linux
+system, in their most current version.
+-->
 
 ## *What* is affected by this bug?
 
