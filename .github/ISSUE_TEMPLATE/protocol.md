@@ -1,6 +1,6 @@
 ---
-name: "❓ Question"
-about: Questions about the DNSCrypt protocol (not dnscrypt-proxy)
+name: "🧚🏼‍♂️ Protocol"
+about: Questions about the DNSCrypt protocol (not dnscrypt-proxy) and its implementations
 title: ''
 labels: ''
 assignees: ''
