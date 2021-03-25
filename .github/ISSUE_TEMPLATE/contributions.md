@@ -1,6 +1,6 @@
 ---
 name: "⛹🏼 Contributions"
-about: Contributing to the project
+about: Contribute to the project
 title: ''
 labels: ''
 assignees: ''

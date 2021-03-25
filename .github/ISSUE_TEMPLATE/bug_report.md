@@ -1,6 +1,6 @@
 ---
 name: "\U0001F41E Bug report"
-about: Create a report about a reproducible bug
+about: Create a report about a reproducible bug in the current version
 title: ''
 labels: ''
 assignees: ''

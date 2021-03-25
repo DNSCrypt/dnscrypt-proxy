@@ -1,6 +1,6 @@
 ---
 name: "🙋🏽 Support"
-about: Support
+about: Free customer service line
 title: ''
 labels: ''
 assignees: ''
@@ -48,4 +48,6 @@ Finally, if the issue is solved, and this is something that wouldn't have happen
 it had been documented, feel free to proudly improve the documentation (it is a wiki).
 
 Thanks for reading all this, and have a wonderful day.
+
+(you can now delete all this to start writing a beautiful blank page)
 -->
