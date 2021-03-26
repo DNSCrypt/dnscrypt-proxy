@@ -1,11 +1,15 @@
 ---
-name: "\U0001F41E Bug report"
+name: "\U0001F41E Bug report (not support requests)"
 about: Create a report about a reproducible bug in the latest version
 title: ''
 labels: ''
 assignees: ''
 
 ---
+
+## Please read the context below before submitting a bug report
+
+This is not a place to ask for support.
 
 <!--
 Context: the LATEST version of `dnscrypt-proxy` (precompiled binaries downloaded from this
@@ -18,6 +22,16 @@ If the bug is not trivial to reproduce on any platform, please include ALL the s
 to reliably duplicate it, on a vanilla, generic install of macOS, Windows, OpenBSD or Ubuntu Linux
 system, in their most current version.
 -->
+
+## Output of the following commands:
+
+dnscrypt-proxy -version
+
+dnscrypt-proxy -check
+
+dnscrypt-proxy -resolve example.com
+
+
 
 ## *What* is affected by this bug?
 

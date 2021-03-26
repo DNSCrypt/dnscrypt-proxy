@@ -8,13 +8,17 @@ assignees: ''
 ---
 
 <!-- 
+Hi!
+
 Please understand that this project is maintained by volunteers, and that answering support
 tickets to help with specific, personal issues is time consuming, mentally exhausting, and
 is time not spend in improving the software itself.
 
-Saying hi, thank you and clearly describing what you tried and what happened would be
-fantastic. In order for the answer to be easy to find for other people hitting the same
-thing, please write a short summary in the title ("problem" and "doesn't work" are very
+Saying hi, thank you and clearly describing what problem you are trying to solve (not
+what you tried and didn't work) would be both polite and fantastic.
+
+In order for the answer to be easy to find for other people hitting the same thing,
+please write a short summary in the title ("problem" and "doesn't work" are very
 depressing to read, and don't make a description unique - show that you can do better!)
 
 Make sure that you are using the last version (downloaded from this repository or installed
@@ -28,7 +32,8 @@ time, making it difficult to pinpoint which one didn't work as expected. So, sta
 a standard configuration and do small, incremental changes.
 
 The only supported way to install the service is `dnscrypt-proxy -service install`.
-After having tried it interactively interactively.
+
+Prior to that, run `dnscrypt-proxy` interactively and check for any errors.
 
 You already saw `dnscrypt-proxy -resolve` in the documentation. If you are experiencing
 resolution issues, use this command to resolve DNS queries for diagnostics, not a web
@@ -47,7 +52,7 @@ all the time!
 Finally, if the issue is solved, and this is something that wouldn't have happened if
 it had been documented, feel free to proudly improve the documentation (it is a wiki).
 
-Thanks for reading all this, and have a wonderful day.
+Thanks for reading all this, and have a wonderful day!
 
 (you can now delete all this to start writing a beautiful blank page)
 -->
