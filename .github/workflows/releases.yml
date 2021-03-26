@@ -39,6 +39,7 @@ jobs:
       - name: Test suite
         run: |
           go version
+          go mod vendor
           cd .ci
           ./ci-test.sh
           cd -
