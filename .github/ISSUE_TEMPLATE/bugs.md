@@ -7,7 +7,7 @@ assignees: ''
 
 ---
 
-## Please read the context below before submitting a bug report
+## Please read before filling a bug report
 
 This tracker is dedicated to tracking bugs, reproducible in the context described in the
 "Context" section.
