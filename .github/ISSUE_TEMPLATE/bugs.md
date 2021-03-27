@@ -1,6 +1,6 @@
 ---
-name: "\U0001F41E Bug report (not support requests)"
-about: Create a report about a reproducible bug in the latest version
+name: "\U0001F41E Issues"
+about: Bug reports
 title: ''
 labels: ''
 assignees: ''
@@ -9,11 +9,11 @@ assignees: ''
 
 ## Please read the context below before submitting a bug report
 
-The issue tracker is reserved to tracking bugs, reproducible in the context described in the
+This tracker is dedicated to tracking bugs, reproducible in the context described in the
 "Context" section.
 
 Installation and configuration issues are not bugs, but individual assistance request.
-In order to ask for help, please use the [discussions](https://github.com/DNSCrypt/dnscrypt-proxy/discussions/categories/q-a) section instead.
+In order to ask for help, please use the [discussions (Q&A)](https://github.com/DNSCrypt/dnscrypt-proxy/discussions/categories/q-a)  section instead.
 
 Context: the LATEST version of `dnscrypt-proxy` (precompiled binaries downloaded from this
 repository) is correctly installed and configured on your system, but something doesn't
