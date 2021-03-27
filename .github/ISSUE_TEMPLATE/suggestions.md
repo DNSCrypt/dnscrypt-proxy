@@ -1,37 +1,22 @@
 ---
-name: "\U0001F389 Suggestions"
-about: Suggest an improvement idea for this project
+name: "🙋🏽 Planned changes"
+about: List of planned changes
 title: ''
 labels: ''
 assignees: ''
 
 ---
 
-## Describe the improvement you are thinking of
-<!-- A clear and concise description of what you want to happen. -->
+The starting point should be a discussion.
 
+https://github.com/DNSCrypt/dnscrypt-proxy/discussions/
 
+Possible bugs may be raised as a "Potential issue" discussion, suggestions may be raised as an "Ideas" discussion.
 
-## Alternatives you've considered
-<!-- A clear and concise description of any alternative solutions or features you've considered. -->
+We can then determine if the discussion needs to be escalated into a "planned change" or not.
 
+This will help us ensure that the issue tracker properly reflects ongoing or needed work on the project.
 
+---
 
-## Who will that feature be useful to?
-<!-- Is it solving a common problem, or is it an improvement that all current users will benefit from? -->
-
-
-
-## What have you done already?
-<!-- If you already built a prototype or a complete implementation of that feature, where is it possible to see it? -->
-
-
-
-## What are you going to contribute?
-<!-- Besides testing volunteering work made by other people, what are you going to contribute in order to help have that feature implemented, tested and documented? -->
-
-
-
-## Additional context
-<!-- Add any other context about the feature request here. -->
-
+- [ ] Initially raised as discussion #...
