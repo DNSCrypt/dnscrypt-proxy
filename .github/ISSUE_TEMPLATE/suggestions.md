@@ -11,7 +11,7 @@ The starting point should be a discussion.
 
 https://github.com/DNSCrypt/dnscrypt-proxy/discussions/
 
-Possible bugs may be raised as a "Potential issue" discussion, suggestions may be raised as an "Ideas" discussion.
+Suggestions may be raised as an "Ideas" discussion.
 
 We can then determine if the discussion needs to be escalated into a "planned change" or not.
 

@@ -13,7 +13,8 @@ This tracker is dedicated to tracking bugs, reproducible in the context describe
 "Context" section.
 
 Installation and configuration issues are not bugs, but individual assistance request.
-In order to ask for help, please use the [discussions (Q&A)](https://github.com/DNSCrypt/dnscrypt-proxy/discussions/categories/q-a)  section instead.
+In order to ask for help, please use the discussions (Q&A) section instead:
+https://github.com/DNSCrypt/dnscrypt-proxy/discussions/categories/q-a
 
 Context: the LATEST version of `dnscrypt-proxy` (precompiled binaries downloaded from this
 repository) is correctly installed and configured on your system, but something doesn't
@@ -27,11 +28,14 @@ system, in their most current version.
 
 ## Output of the following commands:
 
-dnscrypt-proxy -version
+./dnscrypt-proxy -version
 
-dnscrypt-proxy -check
+./dnscrypt-proxy -check
 
-dnscrypt-proxy -resolve example.com
+./dnscrypt-proxy -resolve example.com
+
+
+- [ ] Initially raised as discussion #...
 
 
 
