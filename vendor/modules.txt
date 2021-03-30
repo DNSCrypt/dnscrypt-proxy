@@ -4,14 +4,6 @@ github.com/BurntSushi/toml
 # github.com/VividCortex/ewma v1.1.1
 ## explicit
 github.com/VividCortex/ewma
-# github.com/aead/chacha20 v0.0.0-20180709150244-8b13a72661da
-github.com/aead/chacha20/chacha
-# github.com/aead/poly1305 v0.0.0-20180717145839-3fee0db0b635
-github.com/aead/poly1305
-# github.com/cisco/go-hpke v0.0.0-20210215210317-01c430f1f302
-## explicit
-# github.com/cloudflare/odoh-go v0.1.6
-## explicit
 # github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf
 ## explicit
 github.com/coreos/go-systemd/activation
@@ -55,7 +47,7 @@ github.com/jedisct1/go-hpke-compact
 # github.com/jedisct1/go-minisign v0.0.0-20210106175330-e54e81d562c7
 ## explicit
 github.com/jedisct1/go-minisign
-# github.com/jedisct1/xsecretbox v0.0.0-20210102102453-4ecb2081017a
+# github.com/jedisct1/xsecretbox v0.0.0-20210330110434-7cb86b57caf0
 ## explicit
 github.com/jedisct1/xsecretbox
 # github.com/k-sone/critbitgo v1.4.0
