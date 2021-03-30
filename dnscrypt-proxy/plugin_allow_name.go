@@ -13,24 +13,24 @@ import (
 	"github.com/miekg/dns"
 )
 
-type PluginWhitelistName struct {
+type PluginAllowName struct {
 	allWeeklyRanges *map[string]WeeklyRanges
 	patternMatcher  *PatternMatcher
 	logger          io.Writer
 	format          string
 }
 
-func (plugin *PluginWhitelistName) Name() string {
-	return "whitelist_name"
+func (plugin *PluginAllowName) Name() string {
+	return "allow_name"
 }
 
-func (plugin *PluginWhitelistName) Description() string {
-	return "Whitelists DNS queries matching name patterns"
+func (plugin *PluginAllowName) Description() string {
+	return "Allow names matching patterns"
 }
 
-func (plugin *PluginWhitelistName) Init(proxy *Proxy) error {
-	dlog.Noticef("Loading the set of whitelisting rules from [%s]", proxy.whitelistNameFile)
-	bin, err := ReadTextFile(proxy.whitelistNameFile)
+func (plugin *PluginAllowName) Init(proxy *Proxy) error {
+	dlog.Noticef("Loading the set of allowed names from [%s]", proxy.allowNameFile)
+	bin, err := ReadTextFile(proxy.allowNameFile)
 	if err != nil {
 		return err
 	}
@@ -47,7 +47,7 @@ func (plugin *PluginWhitelistName) Init(proxy *Proxy) error {
 			line = strings.TrimFunc(parts[0], unicode.IsSpace)
 			timeRangeName = strings.TrimFunc(parts[1], unicode.IsSpace)
 		} else if len(parts) > 2 {
-			dlog.Errorf("Syntax error in whitelist rules at line %d -- Unexpected @ character", 1+lineNo)
+			dlog.Errorf("Syntax error in allowed names at line %d -- Unexpected @ character", 1+lineNo)
 			continue
 		}
 		var weeklyRanges *WeeklyRanges
@@ -64,36 +64,36 @@ func (plugin *PluginWhitelistName) Init(proxy *Proxy) error {
 			continue
 		}
 	}
-	if len(proxy.whitelistNameLogFile) == 0 {
+	if len(proxy.allowNameLogFile) == 0 {
 		return nil
 	}
-	plugin.logger = Logger(proxy.logMaxSize, proxy.logMaxAge, proxy.logMaxBackups, proxy.whitelistNameLogFile)
-	plugin.format = proxy.whitelistNameFormat
+	plugin.logger = Logger(proxy.logMaxSize, proxy.logMaxAge, proxy.logMaxBackups, proxy.allowNameLogFile)
+	plugin.format = proxy.allowNameFormat
 
 	return nil
 }
 
-func (plugin *PluginWhitelistName) Drop() error {
+func (plugin *PluginAllowName) Drop() error {
 	return nil
 }
 
-func (plugin *PluginWhitelistName) Reload() error {
+func (plugin *PluginAllowName) Reload() error {
 	return nil
 }
 
-func (plugin *PluginWhitelistName) Eval(pluginsState *PluginsState, msg *dns.Msg) error {
+func (plugin *PluginAllowName) Eval(pluginsState *PluginsState, msg *dns.Msg) error {
 	qName := pluginsState.qName
-	whitelist, reason, xweeklyRanges := plugin.patternMatcher.Eval(qName)
+	allowList, reason, xweeklyRanges := plugin.patternMatcher.Eval(qName)
 	var weeklyRanges *WeeklyRanges
 	if xweeklyRanges != nil {
 		weeklyRanges = xweeklyRanges.(*WeeklyRanges)
 	}
-	if whitelist {
+	if allowList {
 		if weeklyRanges != nil && !weeklyRanges.Match() {
-			whitelist = false
+			allowList = false
 		}
 	}
-	if whitelist {
+	if allowList {
 		pluginsState.sessionData["whitelisted"] = true
 		if plugin.logger != nil {
 			var clientIPStr string

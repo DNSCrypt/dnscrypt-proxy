@@ -558,9 +558,9 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	if config.AllowedName.Format != "tsv" && config.AllowedName.Format != "ltsv" {
 		return errors.New("Unsupported allowed_names log format")
 	}
-	proxy.whitelistNameFile = config.AllowedName.File
-	proxy.whitelistNameFormat = config.AllowedName.Format
-	proxy.whitelistNameLogFile = config.AllowedName.LogFile
+	proxy.allowNameFile = config.AllowedName.File
+	proxy.allowNameFormat = config.AllowedName.Format
+	proxy.allowNameLogFile = config.AllowedName.LogFile
 
 	if len(config.BlockIP.File) > 0 && len(config.BlockIPLegacy.File) > 0 {
 		return errors.New("Don't specify both [blocked_ips] and [ip_blacklist] sections - Update your config file")

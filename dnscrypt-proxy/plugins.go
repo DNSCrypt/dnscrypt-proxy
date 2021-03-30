@@ -101,8 +101,8 @@ func (proxy *Proxy) InitPluginsGlobals() error {
 	if len(proxy.queryMeta) != 0 {
 		*queryPlugins = append(*queryPlugins, Plugin(new(PluginQueryMeta)))
 	}
-	if len(proxy.whitelistNameFile) != 0 {
-		*queryPlugins = append(*queryPlugins, Plugin(new(PluginWhitelistName)))
+	if len(proxy.allowNameFile) != 0 {
+		*queryPlugins = append(*queryPlugins, Plugin(new(PluginAllowName)))
 	}
 
 	*queryPlugins = append(*queryPlugins, Plugin(new(PluginFirefox)))

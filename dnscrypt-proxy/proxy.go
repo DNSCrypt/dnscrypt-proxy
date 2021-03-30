@@ -56,16 +56,16 @@ type Proxy struct {
 	allowedIPLogFile              string
 	queryLogFormat                string
 	blockIPFile                   string
-	whitelistNameFormat           string
-	whitelistNameLogFile          string
+	allowNameFile                 string
+	allowNameFormat               string
+	allowNameLogFile              string
 	blockNameLogFile              string
-	whitelistNameFile             string
+	blockNameFormat               string
 	blockNameFile                 string
 	queryLogFile                  string
 	blockedQueryResponse          string
 	userName                      string
 	nxLogFile                     string
-	blockNameFormat               string
 	proxySecretKey                [32]byte
 	proxyPublicKey                [32]byte
 	certRefreshDelayAfterFailure  time.Duration
