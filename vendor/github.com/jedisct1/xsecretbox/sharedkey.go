@@ -2,27 +2,20 @@ package xsecretbox
 
 import (
 	crypto_rand "crypto/rand"
-	"errors"
 
-	"github.com/aead/chacha20/chacha"
 	"golang.org/x/crypto/curve25519"
 )
 
 // SharedKey computes a shared secret compatible with the one used by `crypto_box_xchacha20poly1305``
 func SharedKey(secretKey [32]byte, publicKey [32]byte) ([32]byte, error) {
-	var sharedKey [32]byte
-	curve25519.ScalarMult(&sharedKey, &secretKey, &publicKey)
-	c := byte(0)
-	for i := 0; i < 32; i++ {
-		c |= sharedKey[i]
-	}
-	if c == 0 {
-		if _, err := crypto_rand.Read(sharedKey[:]); err != nil {
-			return sharedKey, err
+	var key [32]byte
+	xKey, err := curve25519.X25519(secretKey[:], publicKey[:])
+	if err != nil {
+		if _, err2 := crypto_rand.Read(key[:]); err != nil {
+			return key, err2
 		}
-		return sharedKey, errors.New("weak public key")
+		return key, err
 	}
-	var nonce [16]byte
-	chacha.HChaCha20(&sharedKey, &nonce, &sharedKey)
-	return sharedKey, nil
+	copy(key[:], xKey)
+	return key, nil
 }

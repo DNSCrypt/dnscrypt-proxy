@@ -5,8 +5,6 @@ go 1.16
 require (
 	github.com/BurntSushi/toml v0.3.1
 	github.com/VividCortex/ewma v1.1.1
-	github.com/cisco/go-hpke v0.0.0-20210215210317-01c430f1f302 // indirect
-	github.com/cloudflare/odoh-go v0.1.6 // indirect
 	github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf
 	github.com/dchest/safefile v0.0.0-20151022103144-855e8d98f185
 	github.com/hashicorp/go-immutable-radix v1.3.0
@@ -17,14 +15,14 @@ require (
 	github.com/jedisct1/go-dnsstamps v0.0.0-20210101121956-16fbdadcf8f5
 	github.com/jedisct1/go-hpke-compact v0.0.0-20210329192501-7ceabaabca65
 	github.com/jedisct1/go-minisign v0.0.0-20210106175330-e54e81d562c7
-	github.com/jedisct1/xsecretbox v0.0.0-20210102102453-4ecb2081017a
+	github.com/jedisct1/xsecretbox v0.0.0-20210330092250-b18752cb5f77
 	github.com/k-sone/critbitgo v1.4.0
 	github.com/kardianos/service v1.2.0
 	github.com/miekg/dns v1.1.41
 	github.com/powerman/check v1.3.1
 	golang.org/x/crypto v0.0.0-20210322153248-0c34fe9e7dc2
-	golang.org/x/net v0.0.0-20210316092652-d523dce5a7f4
-	golang.org/x/sys v0.0.0-20210320140829-1e4c9ba3b0c4
+	golang.org/x/net v0.0.0-20210330075724-22f4162a9025
+	golang.org/x/sys v0.0.0-20210326220804-49726bf1d181
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
