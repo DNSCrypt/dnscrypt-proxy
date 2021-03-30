@@ -24,6 +24,9 @@ If the bug is not trivial to reproduce on any platform, please include ALL the s
 to reliably duplicate it, on a vanilla, generic install of macOS, Windows, OpenBSD or Ubuntu Linux
 system, in their most current version.
 
+If you don't have any clear understanding of the issue or can't enumerate the steps to
+reproduce it, open a discussion instead:
+https://github.com/DNSCrypt/dnscrypt-proxy/discussions
 
 
 ## Output of the following commands:
