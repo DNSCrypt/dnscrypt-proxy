@@ -13,6 +13,7 @@ A flexible DNS proxy, with support for modern encrypted DNS protocols such as [D
 
 * **[dnscrypt-proxy documentation](https://dnscrypt.info/doc) ← Start here**
 * [DNSCrypt project home page](https://dnscrypt.info/)
+* [Discussions](https://github.com/DNSCrypt/dnscrypt-proxy/discussions)
 * [DNS-over-HTTPS and DNSCrypt resolvers](https://dnscrypt.info/public-servers)
 * [Server and client implementations](https://dnscrypt.info/implementations)
 * [DNS stamps](https://dnscrypt.info/stamps)
