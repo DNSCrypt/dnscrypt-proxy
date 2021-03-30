@@ -6,9 +6,11 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"math/bits"
 	"math/rand"
 	"net"
+	"net/http"
 	"net/url"
 	"sort"
 	"strings"
@@ -61,6 +63,7 @@ type ServerInfo struct {
 	knownBugs          ServerBugs
 	Proto              stamps.StampProtoType
 	useGet             bool
+	odohTargets        []ODoHTarget
 }
 
 type LBStrategy interface {
@@ -104,7 +107,9 @@ type DNSCryptRelay struct {
 	RelayTCPAddr *net.TCPAddr
 }
 
-type ODoHRelay struct{}
+type ODoHRelay struct {
+	url *url.URL
+}
 
 type Relay struct {
 	Proto    stamps.StampProtoType
@@ -277,6 +282,8 @@ func fetchServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, isNew 
 		return fetchDNSCryptServerInfo(proxy, name, stamp, isNew)
 	} else if stamp.Proto == stamps.StampProtoTypeDoH {
 		return fetchDoHServerInfo(proxy, name, stamp, isNew)
+	} else if stamp.Proto == stamps.StampProtoTypeODoHTarget {
+		return fetchODoHTargetInfo(proxy, name, stamp, isNew)
 	}
 	return ServerInfo{}, fmt.Errorf("Unsupported protocol for [%s]: [%s]", name, stamp.Proto.String())
 }
@@ -412,7 +419,26 @@ func route(proxy *Proxy, name string) (*Relay, error) {
 		dlog.Noticef("Anonymizing queries for [%v] via [%v]", name, relayName)
 		return &Relay{Proto: stamps.StampProtoTypeDNSCryptRelay, Dnscrypt: &DNSCryptRelay{RelayUDPAddr: relayUDPAddr, RelayTCPAddr: relayTCPAddr}}, nil
 	case stamps.StampProtoTypeODoHRelay:
-		return &Relay{Proto: stamps.StampProtoTypeODoHRelay, ODoH: &ODoHRelay{}}, nil
+		target, err := url.Parse("https://" + relayCandidateStamp.ProviderName + "/" + relayCandidateStamp.Path)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, server := range proxy.registeredServers {
+			if server.name == name && server.stamp.Proto == stamps.StampProtoTypeODoHTarget {
+				qs := target.Query()
+				qs.Add("targethost", server.stamp.ProviderName)
+				qs.Add("targetpath", server.stamp.Path)
+				target2 := *target
+				target2.RawQuery = qs.Encode()
+				target = &target2
+				break
+			}
+		}
+
+		return &Relay{Proto: stamps.StampProtoTypeODoHRelay, ODoH: &ODoHRelay{
+			url: target,
+		}}, nil
 	}
 	return nil, fmt.Errorf("Invalid relay set for server [%v]", name)
 }
@@ -550,15 +576,15 @@ func fetchDoHServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, isN
 		proxy.xTransport.rebuildTransport()
 	}
 	useGet := false
-	if _, _, _, err := proxy.xTransport.DoHQuery(useGet, url, body, proxy.timeout); err != nil {
+	if _, _, _, _, err := proxy.xTransport.DoHQuery(useGet, url, body, proxy.timeout); err != nil {
 		useGet = true
-		if _, _, _, err := proxy.xTransport.DoHQuery(useGet, url, body, proxy.timeout); err != nil {
+		if _, _, _, _, err := proxy.xTransport.DoHQuery(useGet, url, body, proxy.timeout); err != nil {
 			return ServerInfo{}, err
 		}
 		dlog.Debugf("Server [%s] doesn't appear to support POST; falling back to GET requests", name)
 	}
 	body = dohNXTestPacket(0xcafe)
-	serverResponse, tls, rtt, err := proxy.xTransport.DoHQuery(useGet, url, body, proxy.timeout)
+	serverResponse, _, tls, rtt, err := proxy.xTransport.DoHQuery(useGet, url, body, proxy.timeout)
 	if err != nil {
 		dlog.Infof("[%s] [%s]: %v", name, url, err)
 		return ServerInfo{}, err
@@ -629,6 +655,62 @@ func fetchDoHServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, isN
 		HostName:   stamp.ProviderName,
 		initialRtt: xrtt,
 		useGet:     useGet,
+	}, nil
+}
+
+func fetchTargetConfigsFromWellKnown(url string) ([]ODoHTarget, error) {
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	client := http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	bodyBytes, err := ioutil.ReadAll(resp.Body)
+	defer resp.Body.Close()
+	if err != nil {
+		return nil, err
+	}
+
+	return parseODoHTargetConfigs(bodyBytes)
+}
+
+func fetchODoHTargetInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, isNew bool) (ServerInfo, error) {
+	odohTargets, err := fetchTargetConfigsFromWellKnown("https://" + stamp.ProviderName + "/.well-known/odohconfigs")
+	if err != nil || len(odohTargets) == 0 {
+		return ServerInfo{}, fmt.Errorf("[%s] does not have an Oblivious DoH configuration", name)
+	}
+
+	relay, err := route(proxy, name)
+	if err != nil {
+		return ServerInfo{}, err
+	}
+	if relay == nil || relay.ODoH == nil {
+		relay = nil
+	}
+
+	if relay == nil {
+		dlog.Notice("Relay is empty for " + name)
+	}
+
+	url := &url.URL{
+		Scheme: "https",
+		Host:   stamp.ProviderName,
+		Path:   stamp.Path,
+	}
+
+	return ServerInfo{
+		Proto:       stamps.StampProtoTypeODoHTarget,
+		Name:        name,
+		Timeout:     proxy.timeout,
+		URL:         url,
+		HostName:    stamp.ProviderName,
+		useGet:      false,
+		odohTargets: odohTargets,
+		Relay:       relay,
 	}, nil
 }
 

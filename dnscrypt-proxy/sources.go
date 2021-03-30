@@ -132,7 +132,7 @@ func (source *Source) parseURLs(urls []string) {
 }
 
 func fetchFromURL(xTransport *XTransport, u *url.URL) (bin []byte, err error) {
-	bin, _, _, err = xTransport.Get(u, "", DefaultTimeout)
+	bin, _, _, _, err = xTransport.Get(u, "", DefaultTimeout)
 	return bin, err
 }
 

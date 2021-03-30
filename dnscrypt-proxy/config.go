@@ -718,8 +718,8 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 		hasSpecificRoutes := false
 		for _, server := range proxy.registeredServers {
 			if via, ok := (*proxy.routes)[server.name]; ok {
-				if server.stamp.Proto != stamps.StampProtoTypeDNSCrypt {
-					dlog.Errorf("DNS anonymization is only supported with the DNSCrypt protocol - Connections to [%v] cannot be anonymized", server.name)
+				if server.stamp.Proto != stamps.StampProtoTypeDNSCrypt && server.stamp.Proto != stamps.StampProtoTypeODoHTarget {
+					dlog.Errorf("DNS anonymization is only supported with the DNSCrypt and ODoH protocols - Connections to [%v] cannot be anonymized", server.name)
 				} else {
 					dlog.Noticef("Anonymized DNS: routing [%v] via %v", server.name, via)
 				}

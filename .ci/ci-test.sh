@@ -146,3 +146,25 @@ t || dig -p${DNS_PORT} A MICROSOFT.COM @127.0.0.1 | grep -Fq "NOERROR" || fail
 
 kill $(cat /tmp/dnscrypt-proxy.pidfile)
 sleep 5
+
+section
+../dnscrypt-proxy/dnscrypt-proxy -loglevel 3 -config test-odoh-direct.toml -pidfile /tmp/odoh-direct.pidfile &
+sleep 5
+
+section
+t || dig -p${DNS_PORT} A microsoft.com @127.0.0.1 | grep -Fq "NOERROR" || fail
+t || dig -p${DNS_PORT} A cloudflare.com @127.0.0.1 | grep -Fq "NOERROR" || fail
+
+kill $(cat /tmp/odoh-direct.pidfile)
+sleep 5
+
+section
+../dnscrypt-proxy/dnscrypt-proxy -loglevel 3 -config test-odoh-proxied.toml -pidfile /tmp/odoh-proxied.pidfile &
+sleep 5
+
+section
+t || dig -p${DNS_PORT} A microsoft.com @127.0.0.1 | grep -Fq "NOERROR" || fail
+t || dig -p${DNS_PORT} A cloudflare.com @127.0.0.1 | grep -Fq "NOERROR" || fail
+
+kill $(cat /tmp/odoh-proxied.pidfile)
+sleep 5

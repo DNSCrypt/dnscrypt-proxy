@@ -658,7 +658,7 @@ func (proxy *Proxy) processIncomingQuery(clientProto string, serverProto string,
 			tid := TransactionID(query)
 			SetTransactionID(query, 0)
 			serverInfo.noticeBegin(proxy)
-			serverResponse, tls, _, err := proxy.xTransport.DoHQuery(serverInfo.useGet, serverInfo.URL, query, proxy.timeout)
+			serverResponse, _, tls, _, err := proxy.xTransport.DoHQuery(serverInfo.useGet, serverInfo.URL, query, proxy.timeout)
 			SetTransactionID(query, tid)
 			if err == nil || tls == nil || !tls.HandshakeComplete {
 				response = nil
@@ -677,6 +677,42 @@ func (proxy *Proxy) processIncomingQuery(clientProto string, serverProto string,
 			}
 			if len(response) >= MinDNSPacketSize {
 				SetTransactionID(response, tid)
+			}
+		} else if serverInfo.Proto == stamps.StampProtoTypeODoHTarget {
+			tid := TransactionID(query)
+			target := serverInfo.odohTargets[0]
+			odohQuery, err := target.encryptQuery(query)
+			if err != nil {
+				dlog.Error("Failed to encrypt query")
+				response = nil
+			} else {
+				targetURL := serverInfo.URL
+				if serverInfo.Relay != nil && serverInfo.Relay.ODoH != nil {
+					targetURL = serverInfo.Relay.ODoH.url
+				}
+				responseBody, responseCode, _, _, err := proxy.xTransport.ObliviousDoHQuery(targetURL, odohQuery.odohMessage, proxy.timeout)
+				if err == nil && len(responseBody) > 0 && responseCode == 200 {
+					response, err = odohQuery.decryptResponse(responseBody)
+					if err != nil {
+						dlog.Error("Failed to decrypt response")
+						response = nil
+					}
+				} else if responseCode == 401 {
+					dlog.Notice("Forcing key update")
+					go proxy.serversInfo.refresh(proxy)
+					response = nil
+				} else {
+					dlog.Error("Failed to receive successful response")
+				}
+			}
+
+			if len(response) >= MinDNSPacketSize {
+				SetTransactionID(response, tid)
+			} else if response == nil {
+				pluginsState.returnCode = PluginsReturnCodeNetworkError
+				pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
+				serverInfo.noticeFailure(proxy)
+				return
 			}
 		} else {
 			dlog.Fatal("Unsupported protocol")
