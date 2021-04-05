@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-	"unicode"
 
 	"github.com/dchest/safefile"
 
@@ -247,12 +246,12 @@ func (source *Source) parseV2() ([]RegisteredServer, error) {
 	}
 	parts = parts[1:]
 	for _, part := range parts {
-		part = strings.TrimFunc(part, unicode.IsSpace)
+		part = strings.TrimSpace(part)
 		subparts := strings.Split(part, "\n")
 		if len(subparts) < 2 {
 			return registeredServers, fmt.Errorf("Invalid format for source at [%v]", source.urls)
 		}
-		name := strings.TrimFunc(subparts[0], unicode.IsSpace)
+		name := strings.TrimSpace(subparts[0])
 		if len(name) == 0 {
 			return registeredServers, fmt.Errorf("Invalid format for source at [%v]", source.urls)
 		}
@@ -261,7 +260,7 @@ func (source *Source) parseV2() ([]RegisteredServer, error) {
 		var stampStr, description string
 		stampStrs := make([]string, 0)
 		for _, subpart := range subparts {
-			subpart = strings.TrimFunc(subpart, unicode.IsSpace)
+			subpart = strings.TrimSpace(subpart)
 			if strings.HasPrefix(subpart, "sdns:") && len(subpart) >= 6 {
 				stampStrs = append(stampStrs, subpart)
 				continue

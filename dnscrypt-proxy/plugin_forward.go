@@ -5,7 +5,6 @@ import (
 	"math/rand"
 	"net"
 	"strings"
-	"unicode"
 
 	"github.com/jedisct1/dlog"
 	"github.com/miekg/dns"
@@ -49,7 +48,7 @@ func (plugin *PluginForward) Init(proxy *Proxy) error {
 		domain = strings.ToLower(domain)
 		var servers []string
 		for _, server := range strings.Split(serversStr, ",") {
-			server = strings.TrimFunc(server, unicode.IsSpace)
+			server = strings.TrimSpace(server)
 			if net.ParseIP(server) != nil {
 				server = fmt.Sprintf("%s:%d", server, 53)
 			}

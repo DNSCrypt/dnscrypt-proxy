@@ -126,7 +126,7 @@ func StringTwoFields(str string) (string, string, bool) {
 	if pos == -1 {
 		return "", "", false
 	}
-	a, b := strings.TrimFunc(str[:pos], unicode.IsSpace), strings.TrimFunc(str[pos+1:], unicode.IsSpace)
+	a, b := strings.TrimSpace(str[:pos]), strings.TrimSpace(str[pos+1:])
 	if len(a) == 0 || len(b) == 0 {
 		return a, b, false
 	}
@@ -156,7 +156,7 @@ func TrimAndStripInlineComments(str string) string {
 			str = str[:idx-1]
 		}
 	}
-	return strings.TrimFunc(str, unicode.IsSpace)
+	return strings.TrimSpace(str)
 }
 
 func ExtractHostAndPort(str string, defaultPort int) (host string, port int) {

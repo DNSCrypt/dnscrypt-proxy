@@ -52,8 +52,8 @@ func (plugin *PluginCloak) Init(proxy *Proxy) error {
 		var target string
 		parts := strings.FieldsFunc(line, unicode.IsSpace)
 		if len(parts) == 2 {
-			line = strings.TrimFunc(parts[0], unicode.IsSpace)
-			target = strings.TrimFunc(parts[1], unicode.IsSpace)
+			line = strings.TrimSpace(parts[0])
+			target = strings.TrimSpace(parts[1])
 		} else if len(parts) > 2 {
 			dlog.Errorf("Syntax error in cloaking rules at line %d -- Unexpected space character", 1+lineNo)
 			continue
