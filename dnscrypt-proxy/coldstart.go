@@ -5,7 +5,6 @@ import (
 	"net"
 	"strings"
 	"time"
-	"unicode"
 
 	"github.com/jedisct1/dlog"
 	"github.com/miekg/dns"
@@ -163,7 +162,7 @@ func ColdStart(proxy *Proxy) (*CaptivePortalHandler, error) {
 		}
 		var ips []net.IP
 		for _, ip := range strings.Split(ipsStr, ",") {
-			ipStr := strings.TrimFunc(ip, unicode.IsSpace)
+			ipStr := strings.TrimSpace(ip)
 			if ip := net.ParseIP(ipStr); ip != nil {
 				ips = append(ips, ip)
 			} else {

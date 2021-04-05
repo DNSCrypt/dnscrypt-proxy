@@ -7,7 +7,6 @@ import (
 	"net"
 	"strings"
 	"time"
-	"unicode"
 
 	"github.com/jedisct1/dlog"
 	"github.com/miekg/dns"
@@ -44,8 +43,8 @@ func (plugin *PluginAllowName) Init(proxy *Proxy) error {
 		parts := strings.Split(line, "@")
 		timeRangeName := ""
 		if len(parts) == 2 {
-			line = strings.TrimFunc(parts[0], unicode.IsSpace)
-			timeRangeName = strings.TrimFunc(parts[1], unicode.IsSpace)
+			line = strings.TrimSpace(parts[0])
+			timeRangeName = strings.TrimSpace(parts[1])
 		} else if len(parts) > 2 {
 			dlog.Errorf("Syntax error in allowed names at line %d -- Unexpected @ character", 1+lineNo)
 			continue
