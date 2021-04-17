@@ -704,6 +704,7 @@ func (proxy *Proxy) processIncomingQuery(clientProto string, serverProto string,
 							if err = proxy.serversInfo.refreshServer(proxy, registeredServer.name, registeredServer.stamp); err != nil {
 								// Failed to refresh the proxy server information.
 								dlog.Notice("Key update failed")
+								serverInfo.noticeFailure(proxy)
 							}
 							break
 						}
