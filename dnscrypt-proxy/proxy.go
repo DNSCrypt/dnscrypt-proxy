@@ -698,8 +698,17 @@ func (proxy *Proxy) processIncomingQuery(clientProto string, serverProto string,
 						response = nil
 					}
 				} else if responseCode == 401 {
-					dlog.Notice("Forcing key update")
-					go proxy.serversInfo.refresh(proxy)
+					dlog.Notice("Forcing key update for " + serverInfo.Name)
+					for _, registeredServer := range proxy.serversInfo.registeredServers {
+						if registeredServer.name == serverInfo.Name {
+							if err = proxy.serversInfo.refreshServer(proxy, registeredServer.name, registeredServer.stamp); err != nil {
+								// Failed to refresh the proxy server information.
+								dlog.Notice("Key update failed for " + serverInfo.Name)
+								serverInfo.noticeFailure(proxy)
+							}
+							break
+						}
+					}
 					response = nil
 				} else {
 					dlog.Error("Failed to receive successful response")
