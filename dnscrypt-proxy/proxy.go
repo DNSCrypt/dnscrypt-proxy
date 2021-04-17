@@ -683,7 +683,7 @@ func (proxy *Proxy) processIncomingQuery(clientProto string, serverProto string,
 			target := serverInfo.odohTargets[0]
 			odohQuery, err := target.encryptQuery(query)
 			if err != nil {
-				dlog.Error("Failed to encrypt query")
+				dlog.Errorf("Failed to encrypt query for [%v]", serverName)
 				response = nil
 			} else {
 				targetURL := serverInfo.URL
@@ -694,7 +694,7 @@ func (proxy *Proxy) processIncomingQuery(clientProto string, serverProto string,
 				if err == nil && len(responseBody) > 0 && responseCode == 200 {
 					response, err = odohQuery.decryptResponse(responseBody)
 					if err != nil {
-						dlog.Errorf("Failed to decrypt response from [%v]", serverName)
+						dlog.Warnf("Failed to decrypt response from [%v]", serverName)
 						response = nil
 					}
 				} else if responseCode == 401 {
@@ -711,7 +711,7 @@ func (proxy *Proxy) processIncomingQuery(clientProto string, serverProto string,
 					}
 					response = nil
 				} else {
-					dlog.Errorf("Failed to receive successful response from [%v]", serverName)
+					dlog.Warnf("Failed to receive successful response from [%v]", serverName)
 				}
 			}
 
