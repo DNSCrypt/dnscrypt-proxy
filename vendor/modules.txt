@@ -1,7 +1,7 @@
 # github.com/BurntSushi/toml v0.3.1
 ## explicit
 github.com/BurntSushi/toml
-# github.com/VividCortex/ewma v1.1.1
+# github.com/VividCortex/ewma v1.2.0
 ## explicit
 github.com/VividCortex/ewma
 # github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf
@@ -38,13 +38,13 @@ github.com/jedisct1/dlog
 # github.com/jedisct1/go-clocksmith v0.0.0-20210101121932-da382b963868
 ## explicit
 github.com/jedisct1/go-clocksmith
-# github.com/jedisct1/go-dnsstamps v0.0.0-20210101121956-16fbdadcf8f5
+# github.com/jedisct1/go-dnsstamps v0.0.0-20210414164033-fdb47fe0c84c
 ## explicit
 github.com/jedisct1/go-dnsstamps
 # github.com/jedisct1/go-hpke-compact v0.0.0-20210329192501-7ceabaabca65
 ## explicit
 github.com/jedisct1/go-hpke-compact
-# github.com/jedisct1/go-minisign v0.0.0-20210106175330-e54e81d562c7
+# github.com/jedisct1/go-minisign v0.0.0-20210414164026-819d7e2534ac
 ## explicit
 github.com/jedisct1/go-minisign
 # github.com/jedisct1/xsecretbox v0.0.0-20210330110434-7cb86b57caf0
@@ -69,7 +69,7 @@ github.com/powerman/check
 # github.com/smartystreets/goconvey v1.6.4
 github.com/smartystreets/goconvey/convey/gotest
 github.com/smartystreets/goconvey/convey/reporting
-# golang.org/x/crypto v0.0.0-20210322153248-0c34fe9e7dc2
+# golang.org/x/crypto v0.0.0-20210421170649-83a5a9bb288b
 ## explicit
 golang.org/x/crypto/blake2b
 golang.org/x/crypto/chacha20
@@ -83,7 +83,7 @@ golang.org/x/crypto/nacl/box
 golang.org/x/crypto/nacl/secretbox
 golang.org/x/crypto/poly1305
 golang.org/x/crypto/salsa20/salsa
-# golang.org/x/net v0.0.0-20210316092652-d523dce5a7f4
+# golang.org/x/net v0.0.0-20210423184538-5f58ad60dda6
 ## explicit
 golang.org/x/net/bpf
 golang.org/x/net/http/httpguts
@@ -96,7 +96,7 @@ golang.org/x/net/internal/socks
 golang.org/x/net/ipv4
 golang.org/x/net/ipv6
 golang.org/x/net/proxy
-# golang.org/x/sys v0.0.0-20210320140829-1e4c9ba3b0c4
+# golang.org/x/sys v0.0.0-20210426230700-d19ff857e887
 ## explicit
 golang.org/x/sys/cpu
 golang.org/x/sys/internal/unsafeheader
@@ -106,7 +106,7 @@ golang.org/x/sys/windows/registry
 golang.org/x/sys/windows/svc
 golang.org/x/sys/windows/svc/eventlog
 golang.org/x/sys/windows/svc/mgr
-# golang.org/x/text v0.3.3
+# golang.org/x/text v0.3.6
 golang.org/x/text/secure/bidirule
 golang.org/x/text/transform
 golang.org/x/text/unicode/bidi
