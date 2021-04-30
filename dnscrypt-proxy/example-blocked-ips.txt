@@ -9,6 +9,7 @@
 ## - https://github.com/tg12/bad_packets_blocklist
 ## - https://isc.sans.edu/block.txt
 ## - https://block.energized.pro/extensions/ips/formats/list.txt
+## - https://www.iblocklist.com/lists
 
 163.5.1.4
 94.46.118.*
