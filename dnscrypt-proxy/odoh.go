@@ -105,6 +105,9 @@ func (t ODoHTarget) encryptQuery(query []byte) (ODoHQuery, error) {
 
 	aad := append([]byte{0x01}, t.keyID...)
 	ciphertext, err := clientCtx.EncryptToServer(odohPlaintext, aad)
+	if err != nil {
+		return ODoHQuery{}, err
+	}
 
 	encryptedMessage := encodeLengthValue(append(encryptedSharedSecret, ciphertext...))
 	odohMessage := append(append([]byte{0x01}, t.keyID...), encryptedMessage...)
