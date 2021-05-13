@@ -40,7 +40,7 @@ func (plugin *PluginAllowName) Init(proxy *Proxy) error {
 		if len(line) == 0 {
 			continue
 		}
-		parts := strings.Split(line, "@")
+		parts := strings.Fields(line)
 		timeRangeName := ""
 		if len(parts) == 2 {
 			if timeRangeParts := strings.Split(parts[1], "@"); len(timeRangeParts) == 2 {
