@@ -14,7 +14,7 @@ const (
 	odohVersion = uint16(0xff06)
 )
 
-type ODoHTarget struct {
+type ODoHTargetConfig struct {
 	suite     *hpkecompact.Suite
 	keyID     []byte
 	publicKey []byte
@@ -26,48 +26,48 @@ func encodeLengthValue(b []byte) []byte {
 	return append(lengthBuffer, b...)
 }
 
-func parseODoHTargetConfig(config []byte) (ODoHTarget, error) {
+func parseODoHTargetConfig(config []byte) (ODoHTargetConfig, error) {
 	if len(config) < 8 {
-		return ODoHTarget{}, fmt.Errorf("Malformed config")
+		return ODoHTargetConfig{}, fmt.Errorf("Malformed config")
 	}
 	kemID := binary.BigEndian.Uint16(config[0:2])
 	kdfID := binary.BigEndian.Uint16(config[2:4])
 	aeadID := binary.BigEndian.Uint16(config[4:6])
 	publicKeyLength := binary.BigEndian.Uint16(config[6:8])
 	if len(config[8:]) != int(publicKeyLength) {
-		return ODoHTarget{}, fmt.Errorf("Malformed config")
+		return ODoHTargetConfig{}, fmt.Errorf("Malformed config")
 	}
 
 	suite, err := hpkecompact.NewSuite(hpkecompact.KemID(kemID), hpkecompact.KdfID(kdfID), hpkecompact.AeadID(aeadID))
 	if err != nil {
-		return ODoHTarget{}, err
+		return ODoHTargetConfig{}, err
 	}
 
 	publicKey := config[8:]
 	_, _, err = suite.NewClientContext(publicKey, []byte("odoh query"), nil)
 	if err != nil {
-		return ODoHTarget{}, err
+		return ODoHTargetConfig{}, err
 	}
 
 	keyID, err := suite.Expand(suite.Extract(config, nil), []byte("odoh key id"), uint16(suite.Hash().Size()))
 	if err != nil {
-		return ODoHTarget{}, err
+		return ODoHTargetConfig{}, err
 	}
 
-	return ODoHTarget{
+	return ODoHTargetConfig{
 		suite:     suite,
 		publicKey: publicKey,
 		keyID:     encodeLengthValue(keyID),
 	}, nil
 }
 
-func parseODoHTargetConfigs(configs []byte) ([]ODoHTarget, error) {
+func parseODoHTargetConfigs(configs []byte) ([]ODoHTargetConfig, error) {
 	length := binary.BigEndian.Uint16(configs)
 	if len(configs) != int(length)+2 {
 		return nil, fmt.Errorf("Malformed configs")
 	}
 
-	targets := make([]ODoHTarget, 0)
+	targets := make([]ODoHTargetConfig, 0)
 	offset := 2
 	for {
 		if offset+4 > len(configs) {
@@ -93,7 +93,7 @@ type ODoHQuery struct {
 	odohMessage   []byte
 }
 
-func (t ODoHTarget) encryptQuery(query []byte) (ODoHQuery, error) {
+func (t ODoHTargetConfig) encryptQuery(query []byte) (ODoHQuery, error) {
 	clientCtx, encryptedSharedSecret, err := t.suite.NewClientContext(t.publicKey, []byte("odoh query"), nil)
 	if err != nil {
 		return ODoHQuery{}, err

@@ -63,7 +63,7 @@ type ServerInfo struct {
 	knownBugs          ServerBugs
 	Proto              stamps.StampProtoType
 	useGet             bool
-	odohTargets        []ODoHTarget
+	odohTargetConfigs  []ODoHTargetConfig
 }
 
 type LBStrategy interface {
@@ -658,7 +658,7 @@ func fetchDoHServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, isN
 	}, nil
 }
 
-func fetchTargetConfigsFromWellKnown(url string) ([]ODoHTarget, error) {
+func fetchTargetConfigsFromWellKnown(url string) ([]ODoHTargetConfig, error) {
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
@@ -679,8 +679,8 @@ func fetchTargetConfigsFromWellKnown(url string) ([]ODoHTarget, error) {
 }
 
 func fetchODoHTargetInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, isNew bool) (ServerInfo, error) {
-	odohTargets, err := fetchTargetConfigsFromWellKnown("https://" + stamp.ProviderName + "/.well-known/odohconfigs")
-	if err != nil || len(odohTargets) == 0 {
+	odohTargetConfigs, err := fetchTargetConfigsFromWellKnown("https://" + url.PathEscape(stamp.ProviderName) + "/.well-known/odohconfigs")
+	if err != nil || len(odohTargetConfigs) == 0 {
 		return ServerInfo{}, fmt.Errorf("[%s] does not have an Oblivious DoH configuration", name)
 	}
 
@@ -693,7 +693,7 @@ func fetchODoHTargetInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, is
 	}
 
 	if relay == nil {
-		dlog.Notice("Relay is empty for " + name)
+		dlog.Noticef("Relay is empty for [%v]", name)
 	}
 
 	url := &url.URL{
@@ -703,14 +703,15 @@ func fetchODoHTargetInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, is
 	}
 
 	return ServerInfo{
-		Proto:       stamps.StampProtoTypeODoHTarget,
-		Name:        name,
-		Timeout:     proxy.timeout,
-		URL:         url,
-		HostName:    stamp.ProviderName,
-		useGet:      false,
-		odohTargets: odohTargets,
-		Relay:       relay,
+		Proto:             stamps.StampProtoTypeODoHTarget,
+		Name:              name,
+		Timeout:           proxy.timeout,
+		URL:               url,
+		HostName:          stamp.ProviderName,
+		initialRtt:        100000,
+		useGet:            false,
+		Relay:             relay,
+		odohTargetConfigs: odohTargetConfigs,
 	}, nil
 }
 
