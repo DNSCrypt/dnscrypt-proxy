@@ -680,6 +680,9 @@ func (proxy *Proxy) processIncomingQuery(clientProto string, serverProto string,
 			}
 		} else if serverInfo.Proto == stamps.StampProtoTypeODoHTarget {
 			tid := TransactionID(query)
+			if len(serverInfo.odohTargetConfigs) == 0 {
+				return
+			}
 			target := serverInfo.odohTargetConfigs[0]
 			odohQuery, err := target.encryptQuery(query)
 			if err != nil {
