@@ -84,7 +84,7 @@ func parseODoHTargetConfigs(configs []byte) ([]ODoHTargetConfig, error) {
 		}
 		offset = offset + int(configLength) + 4
 		if len(targets) >= maxODoHConfigs {
-			break
+			return nil, fmt.Errorf("Maximum configs reached")
 		}
 	}
 }
