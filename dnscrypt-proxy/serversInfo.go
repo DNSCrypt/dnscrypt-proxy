@@ -419,7 +419,7 @@ func route(proxy *Proxy, name string) (*Relay, error) {
 		dlog.Noticef("Anonymizing queries for [%v] via [%v]", name, relayName)
 		return &Relay{Proto: stamps.StampProtoTypeDNSCryptRelay, Dnscrypt: &DNSCryptRelay{RelayUDPAddr: relayUDPAddr, RelayTCPAddr: relayTCPAddr}}, nil
 	case stamps.StampProtoTypeODoHRelay:
-		target, err := url.Parse("https://" + relayCandidateStamp.ProviderName + "/" + relayCandidateStamp.Path)
+		target, err := url.Parse("https://" + url.PathEscape(relayCandidateStamp.ProviderName) + relayCandidateStamp.Path)
 		if err != nil {
 			return nil, err
 		}

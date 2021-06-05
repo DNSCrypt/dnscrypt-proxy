@@ -9,7 +9,7 @@ file = 'query.log'
   stamp = 'sdns://BQcAAAAAAAAAF29kb2guY2xvdWRmbGFyZS1kbnMuY29tCi9kbnMtcXVlcnk'
 
   [static.'odohrelay']
-  stamp = 'sdns://hQcAAAAAAAAAAAAdcHJveHkub2RvaC5jbG91ZGZsYXJlLWRucy5jb20FcHJveHk'
+  stamp = 'sdns://hQcAAAAAAAAAAAAdcHJveHkub2RvaC5jbG91ZGZsYXJlLWRucy5jb20GL3Byb3h5'
 
 [anonymized_dns]
 routes = [
