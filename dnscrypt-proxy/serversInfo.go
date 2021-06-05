@@ -702,6 +702,8 @@ func fetchODoHTargetInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, is
 		Path:   stamp.Path,
 	}
 
+	useGet := relay == nil
+
 	return ServerInfo{
 		Proto:             stamps.StampProtoTypeODoHTarget,
 		Name:              name,
@@ -709,7 +711,7 @@ func fetchODoHTargetInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, is
 		URL:               url,
 		HostName:          stamp.ProviderName,
 		initialRtt:        100000,
-		useGet:            false,
+		useGet:            useGet,
 		Relay:             relay,
 		odohTargetConfigs: odohTargetConfigs,
 	}, nil
