@@ -63,6 +63,9 @@ func parseODoHTargetConfig(config []byte) (ODoHTargetConfig, error) {
 }
 
 func parseODoHTargetConfigs(configs []byte) ([]ODoHTargetConfig, error) {
+	if len(configs) <= 2 {
+		return nil, fmt.Errorf("No configs")
+	}
 	length := binary.BigEndian.Uint16(configs)
 	if len(configs) != int(length)+2 {
 		return nil, fmt.Errorf("Malformed configs")
