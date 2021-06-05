@@ -11,7 +11,8 @@ import (
 )
 
 const (
-	odohVersion = uint16(0xff06)
+	odohVersion    = uint16(0xff06)
+	maxODoHConfigs = 10
 )
 
 type ODoHTargetConfig struct {
@@ -34,7 +35,8 @@ func parseODoHTargetConfig(config []byte) (ODoHTargetConfig, error) {
 	kdfID := binary.BigEndian.Uint16(config[2:4])
 	aeadID := binary.BigEndian.Uint16(config[4:6])
 	publicKeyLength := binary.BigEndian.Uint16(config[6:8])
-	if len(config[8:]) != int(publicKeyLength) {
+	publicKey := config[8:]
+	if len(publicKey) != int(publicKeyLength) {
 		return ODoHTargetConfig{}, fmt.Errorf("Malformed config")
 	}
 
@@ -43,7 +45,6 @@ func parseODoHTargetConfig(config []byte) (ODoHTargetConfig, error) {
 		return ODoHTargetConfig{}, err
 	}
 
-	publicKey := config[8:]
 	_, _, err = suite.NewClientContext(publicKey, []byte("odoh query"), nil)
 	if err != nil {
 		return ODoHTargetConfig{}, err
@@ -81,8 +82,10 @@ func parseODoHTargetConfigs(configs []byte) ([]ODoHTargetConfig, error) {
 				targets = append(targets, target)
 			}
 		}
-
 		offset = offset + int(configLength) + 4
+		if len(targets) >= maxODoHConfigs {
+			break
+		}
 	}
 }
 
