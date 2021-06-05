@@ -25,7 +25,7 @@ const (
 )
 
 const (
-	MaxHTTPBodyLength = 4000000
+	MaxHTTPBodyLength = 1000000
 )
 
 var (
