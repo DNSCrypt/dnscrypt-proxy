@@ -693,7 +693,7 @@ func (proxy *Proxy) processIncomingQuery(clientProto string, serverProto string,
 				if serverInfo.Relay != nil && serverInfo.Relay.ODoH != nil {
 					targetURL = serverInfo.Relay.ODoH.url
 				}
-				responseBody, responseCode, _, _, err := proxy.xTransport.ObliviousDoHQuery(targetURL, odohQuery.odohMessage, proxy.timeout)
+				responseBody, responseCode, _, _, err := proxy.xTransport.ObliviousDoHQuery(serverInfo.useGet, targetURL, odohQuery.odohMessage, proxy.timeout)
 				if err == nil && len(responseBody) > 0 && responseCode == 200 {
 					response, err = odohQuery.decryptResponse(responseBody)
 					if err != nil {
