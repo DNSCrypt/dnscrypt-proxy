@@ -71,8 +71,8 @@ func parseODoHTargetConfigs(configs []byte) ([]ODoHTargetConfig, error) {
 	targets := make([]ODoHTargetConfig, 0)
 	offset := 2
 	for {
-		if offset+4 > len(configs) {
-			return targets, nil
+		if offset+4 > len(configs) || len(targets) >= maxODoHConfigs {
+			break
 		}
 		configVersion := binary.BigEndian.Uint16(configs[offset : offset+2])
 		configLength := binary.BigEndian.Uint16(configs[offset+2 : offset+4])
@@ -83,10 +83,8 @@ func parseODoHTargetConfigs(configs []byte) ([]ODoHTargetConfig, error) {
 			}
 		}
 		offset = offset + int(configLength) + 4
-		if len(targets) >= maxODoHConfigs {
-			break
-		}
 	}
+	return targets, nil
 }
 
 type ODoHQuery struct {
