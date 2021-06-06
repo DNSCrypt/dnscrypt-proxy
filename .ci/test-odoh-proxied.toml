@@ -6,10 +6,10 @@ file = 'query.log'
 
 [static]
   [static.'odohtarget']
-  stamp = 'sdns://BQcAAAAAAAAAF29kb2guY2xvdWRmbGFyZS1kbnMuY29tCi9kbnMtcXVlcnk'
+  stamp = 'sdns://BQcAAAAAAAAADWRvaC5jcnlwdG8uc3gKL2Rucy1xdWVyeQ'
 
   [static.'odohrelay']
-  stamp = 'sdns://hQcAAAAAAAAAAAAdcHJveHkub2RvaC5jbG91ZGZsYXJlLWRucy5jb20GL3Byb3h5'
+  stamp = 'sdns://hQcAAAAAAAAAAAAab2RvaC1yZWxheS5lZGdlY29tcHV0ZS5hcHABLw'
 
 [anonymized_dns]
 routes = [
