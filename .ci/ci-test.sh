@@ -143,7 +143,7 @@ kill $(cat /tmp/dnscrypt-proxy.pidfile)
 sleep 5
 
 section
-../dnscrypt-proxy/dnscrypt-proxy -loglevel 3 -config test-odoh-direct.toml -pidfile /tmp/odoh-direct.pidfile &
+../dnscrypt-proxy/dnscrypt-proxy -loglevel 4 -config test-odoh-direct.toml -pidfile /tmp/odoh-direct.pidfile &
 sleep 5
 
 section
