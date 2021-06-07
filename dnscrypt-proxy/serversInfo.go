@@ -733,7 +733,7 @@ func _fetchODoHTargetInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, i
 			continue
 		}
 
-		useGet := relay == nil
+		useGet := false
 		if _, _, _, _, err := proxy.xTransport.DoHQuery(useGet, url, odohQuery.odohMessage, proxy.timeout); err != nil {
 			useGet = true
 			if _, _, _, _, err := proxy.xTransport.DoHQuery(useGet, url, odohQuery.odohMessage, proxy.timeout); err != nil {
