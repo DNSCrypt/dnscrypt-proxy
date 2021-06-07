@@ -706,7 +706,7 @@ func _fetchODoHTargetInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, i
 		dlog.Warnf("No ODoH relay defined for [%v]", name)
 	} else {
 		dlog.Debugf("Pausing after ODoH configuration retrieval")
-		delay := time.Duration(rand.Intn(10*1000)) * time.Millisecond
+		delay := time.Duration(rand.Intn(5*1000)) * time.Millisecond
 		clocksmith.Sleep(time.Duration(delay))
 		dlog.Debugf("Pausing done")
 	}
