@@ -79,6 +79,7 @@ type Config struct {
 	SourceRequireNoFilter    bool                        `toml:"require_nofilter"`
 	SourceDNSCrypt           bool                        `toml:"dnscrypt_servers"`
 	SourceDoH                bool                        `toml:"doh_servers"`
+	SourceODoH               bool                        `toml:"odoh_servers"`
 	SourceIPv4               bool                        `toml:"ipv4_servers"`
 	SourceIPv6               bool                        `toml:"ipv6_servers"`
 	MaxClients               uint32                      `toml:"max_clients"`
@@ -131,6 +132,7 @@ func newConfig() Config {
 		SourceIPv6:               false,
 		SourceDNSCrypt:           true,
 		SourceDoH:                true,
+		SourceODoH:               false,
 		MaxClients:               250,
 		BootstrapResolvers:       []string{DefaultBootstrapResolver},
 		IgnoreSystemDNS:          false,
@@ -651,6 +653,7 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 		config.SourceIPv6 = true
 		config.SourceDNSCrypt = true
 		config.SourceDoH = true
+		config.SourceODoH = true
 	}
 
 	var requiredProps stamps.ServerInformalProperties
@@ -670,6 +673,7 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	proxy.SourceIPv6 = config.SourceIPv6
 	proxy.SourceDNSCrypt = config.SourceDNSCrypt
 	proxy.SourceDoH = config.SourceDoH
+	proxy.SourceODoH = config.SourceODoH
 
 	netprobeTimeout := config.NetprobeTimeout
 	flag.Visit(func(flag *flag.Flag) {
