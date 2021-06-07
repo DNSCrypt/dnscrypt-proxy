@@ -1,3 +1,11 @@
+# Version 2.0.46beta1
+ - Source URLs are now randomized.
+ - On some platforms, redirecting the application log to a file was not
+compatible with user switching; this has been fixed.
+ - `fallback_resolvers` was renamed to `bootstrap_resolvers` for
+clarity. Please update your configuration file accordingly. 
+ - Preliminary support for ODoH (Oblivious DoH) was added.
+
 # Version 2.0.45
  - Configuration changes (to be required in versions 2.1.x):
    * `[blacklist]` has been renamed to `[blocked_names]`
