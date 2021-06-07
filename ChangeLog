@@ -4,7 +4,8 @@
 compatible with user switching; this has been fixed.
  - `fallback_resolvers` was renamed to `bootstrap_resolvers` for
 clarity. Please update your configuration file accordingly. 
- - Preliminary support for ODoH (Oblivious DoH) was added.
+ - Preliminary support for ODoH (Oblivious DoH) was added. Thanks to
+Chris Wood for his help on this! 
 
 # Version 2.0.45
  - Configuration changes (to be required in versions 2.1.x):
