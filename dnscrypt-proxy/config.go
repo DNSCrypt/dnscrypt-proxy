@@ -618,17 +618,17 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	if config.DoHClientX509AuthLegacy.Creds != nil {
 		return errors.New("[tls_client_auth] has been renamed to [doh_client_x509_auth] - Update your config file")
 	}
-	configClientCreds := config.DoHClientX509Auth.Creds
-	creds := make(map[string]DOHClientCreds)
-	for _, configClientCred := range configClientCreds {
-		credFiles := DOHClientCreds{
+	dohClientCreds := config.DoHClientX509Auth.Creds
+	if len(dohClientCreds) > 0 {
+		dlog.Noticef("Enabling TLS authentication")
+		configClientCred := dohClientCreds[0]
+		proxy.xTransport.tlsClientCreds = DOHClientCreds{
 			clientCert: configClientCred.ClientCert,
 			clientKey:  configClientCred.ClientKey,
 			rootCA:     configClientCred.RootCA,
 		}
-		creds[configClientCred.ServerName] = credFiles
+		proxy.xTransport.rebuildTransport()
 	}
-	proxy.dohCreds = &creds
 
 	// Backwards compatibility
 	config.BrokenImplementations.FragmentsBlocked = append(config.BrokenImplementations.FragmentsBlocked, config.BrokenImplementations.BrokenQueryPadding...)

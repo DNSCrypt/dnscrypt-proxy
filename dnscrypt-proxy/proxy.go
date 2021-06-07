@@ -37,7 +37,6 @@ type Proxy struct {
 	listenAddresses               []string
 	localDoHListenAddresses       []string
 	xTransport                    *XTransport
-	dohCreds                      *map[string]DOHClientCreds
 	allWeeklyRanges               *map[string]WeeklyRanges
 	routes                        *map[string][]string
 	captivePortalMap              *CaptivePortalMap

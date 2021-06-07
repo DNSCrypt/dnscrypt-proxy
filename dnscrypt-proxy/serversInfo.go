@@ -594,15 +594,7 @@ func fetchDoHServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, isN
 		Path:   stamp.Path,
 	}
 	body := dohTestPacket(0xcafe)
-	dohClientCreds, ok := (*proxy.dohCreds)[name]
-	if !ok {
-		dohClientCreds, ok = (*proxy.dohCreds)["*"]
-	}
-	if ok {
-		dlog.Noticef("Enabling TLS authentication for [%s]", name)
-		proxy.xTransport.tlsClientCreds = dohClientCreds
-		proxy.xTransport.rebuildTransport()
-	}
+
 	useGet := false
 	if _, _, _, _, err := proxy.xTransport.DoHQuery(useGet, url, body, proxy.timeout); err != nil {
 		useGet = true
