@@ -6,7 +6,7 @@ file = 'query.log'
 
 [static]
   [static.'odohtarget']
-  stamp = 'sdns://BQcAAAAAAAAADWRvaC5jcnlwdG8uc3gKL2Rucy1xdWVyeQ'
+  stamp = 'sdns://BQcAAAAAAAAAEmNsb3VkZmxhcmUtZG5zLmNvbQovZG5zLXF1ZXJ5'
 
   [static.'odohrelay']
   stamp = 'sdns://hQcAAAAAAAAAAAAab2RvaC1yZWxheS5lZGdlY29tcHV0ZS5hcHABLw'
