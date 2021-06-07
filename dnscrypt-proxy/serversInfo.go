@@ -17,6 +17,7 @@ import (
 
 	"github.com/VividCortex/ewma"
 	"github.com/jedisct1/dlog"
+	clocksmith "github.com/jedisct1/go-clocksmith"
 	stamps "github.com/jedisct1/go-dnsstamps"
 	"github.com/miekg/dns"
 	"golang.org/x/crypto/ed25519"
@@ -106,7 +107,7 @@ type DNSCryptRelay struct {
 }
 
 type ODoHRelay struct {
-	url *url.URL
+	URL *url.URL
 }
 
 type Relay struct {
@@ -417,25 +418,35 @@ func route(proxy *Proxy, name string) (*Relay, error) {
 		dlog.Noticef("Anonymizing queries for [%v] via [%v]", name, relayName)
 		return &Relay{Proto: stamps.StampProtoTypeDNSCryptRelay, Dnscrypt: &DNSCryptRelay{RelayUDPAddr: relayUDPAddr, RelayTCPAddr: relayTCPAddr}}, nil
 	case stamps.StampProtoTypeODoHRelay:
-		target, err := url.Parse("https://" + url.PathEscape(relayCandidateStamp.ProviderName) + relayCandidateStamp.Path)
+		relayBaseURL, err := url.Parse("https://" + url.PathEscape(relayCandidateStamp.ProviderName) + relayCandidateStamp.Path)
 		if err != nil {
 			return nil, err
 		}
-
+		var relayURLforTarget *url.URL
 		for _, server := range proxy.registeredServers {
-			if server.name == name && server.stamp.Proto == stamps.StampProtoTypeODoHTarget {
-				qs := target.Query()
-				qs.Add("targethost", server.stamp.ProviderName)
-				qs.Add("targetpath", server.stamp.Path)
-				target2 := *target
-				target2.RawQuery = qs.Encode()
-				target = &target2
-				break
+			if server.name != name || server.stamp.Proto != stamps.StampProtoTypeODoHTarget {
+				continue
+			}
+			qs := relayBaseURL.Query()
+			qs.Add("targethost", server.stamp.ProviderName)
+			qs.Add("targetpath", server.stamp.Path)
+			tmp := *relayBaseURL
+			tmp.RawQuery = qs.Encode()
+			relayURLforTarget = &tmp
+			break
+		}
+		if relayURLforTarget == nil {
+			return nil, fmt.Errorf("Relay [%v] not found", relayName)
+		}
+		if len(relayCandidateStamp.ServerAddrStr) > 0 {
+			ipOnly, _ := ExtractHostAndPort(relayCandidateStamp.ServerAddrStr, -1)
+			if ip := ParseIP(ipOnly); ip != nil {
+				proxy.xTransport.saveCachedIP(relayCandidateStamp.ProviderName, ip, -1*time.Second)
 			}
 		}
-
+		dlog.Noticef("Anonymizing queries for [%v] via [%v]", name, relayName)
 		return &Relay{Proto: stamps.StampProtoTypeODoHRelay, ODoH: &ODoHRelay{
-			url: target,
+			URL: relayURLforTarget,
 		}}, nil
 	}
 	return nil, fmt.Errorf("Invalid relay set for server [%v]", name)
@@ -668,10 +679,10 @@ func fetchTargetConfigsFromWellKnown(proxy *Proxy, url *url.URL) ([]ODoHTargetCo
 }
 
 func fetchODoHTargetInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, isNew bool) (ServerInfo, error) {
-	configUrl := &url.URL{Scheme: "https", Host: stamp.ProviderName, Path: "/.well-known/odohconfigs"}
-	odohTargetConfigs, err := fetchTargetConfigsFromWellKnown(proxy, configUrl)
+	configURL := &url.URL{Scheme: "https", Host: stamp.ProviderName, Path: "/.well-known/odohconfigs"}
+	odohTargetConfigs, err := fetchTargetConfigsFromWellKnown(proxy, configURL)
 	if err != nil || len(odohTargetConfigs) == 0 {
-		return ServerInfo{}, fmt.Errorf("[%s] does not have an Oblivious DoH configuration", name)
+		return ServerInfo{}, fmt.Errorf("[%s] does not have an ODoH configuration", name)
 	}
 
 	relay, err := route(proxy, name)
@@ -683,7 +694,12 @@ func fetchODoHTargetInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, is
 	}
 
 	if relay == nil {
-		dlog.Noticef("Relay is empty for [%v]", name)
+		dlog.Warnf("No ODoH relay defined for [%v]", name)
+	} else {
+		dlog.Debugf("Pausing after ODoH configuration retrieval")
+		delay := time.Duration(rand.Intn(10*1000)) * time.Millisecond
+		clocksmith.Sleep(time.Duration(delay))
+		dlog.Debugf("Pausing done")
 	}
 
 	url := &url.URL{
