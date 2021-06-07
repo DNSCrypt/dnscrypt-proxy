@@ -1,4 +1,4 @@
-server_names = ['odohtarget', 'odohrelay']
+server_names = ['odohtarget']
 listen_addresses = ['127.0.0.1:5300']
 
 [query_log]
