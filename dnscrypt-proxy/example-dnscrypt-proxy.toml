@@ -244,7 +244,7 @@ cert_refresh_delay = 240
 bootstrap_resolvers = ['9.9.9.9:53', '8.8.8.8:53']
 
 
-## Always use the fallback resolver before the system DNS settings.
+## Always use the bootstrap resolver before the system DNS settings.
 
 ignore_system_dns = true
 
