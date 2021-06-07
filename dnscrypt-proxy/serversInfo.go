@@ -737,7 +737,7 @@ func _fetchODoHTargetInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, i
 		if _, _, _, _, err := proxy.xTransport.DoHQuery(useGet, url, odohQuery.odohMessage, proxy.timeout); err != nil {
 			useGet = true
 			if _, _, _, _, err := proxy.xTransport.DoHQuery(useGet, url, odohQuery.odohMessage, proxy.timeout); err != nil {
-				return ServerInfo{}, err
+				continue
 			}
 			dlog.Debugf("Server [%s] doesn't appear to support POST; falling back to GET requests", name)
 		}
