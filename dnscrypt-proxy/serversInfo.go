@@ -712,7 +712,7 @@ func _fetchODoHTargetInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, i
 		dlog.Debugf("Pausing done")
 	}
 
-	url := &url.URL{
+	targetURL := &url.URL{
 		Scheme: "https",
 		Host:   stamp.ProviderName,
 		Path:   stamp.Path,
@@ -729,6 +729,10 @@ func _fetchODoHTargetInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, i
 		odohQuery, err := odohTargetConfig.encryptQuery(query)
 		if err != nil {
 			continue
+		}
+		url := targetURL
+		if relay != nil {
+			url = relay.ODoH.URL
 		}
 		responseBody, responseCode, tls, rtt, err := proxy.xTransport.ObliviousDoHQuery(useGet, url, odohQuery.odohMessage, proxy.timeout)
 		if err != nil {
@@ -803,7 +807,7 @@ func _fetchODoHTargetInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, i
 			Proto:             stamps.StampProtoTypeODoHTarget,
 			Name:              name,
 			Timeout:           proxy.timeout,
-			URL:               url,
+			URL:               targetURL,
 			HostName:          stamp.ProviderName,
 			initialRtt:        xrtt,
 			useGet:            useGet,
