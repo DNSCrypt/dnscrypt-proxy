@@ -9,7 +9,7 @@
 
 ## Overview
 
-A flexible DNS proxy, with support for modern encrypted DNS protocols such as [DNSCrypt v2](https://dnscrypt.info/protocol), [DNS-over-HTTPS](https://www.rfc-editor.org/rfc/rfc8484.txt) and [Anonymized DNSCrypt](https://github.com/DNSCrypt/dnscrypt-protocol/blob/master/ANONYMIZED-DNSCRYPT.txt).
+A flexible DNS proxy, with support for modern encrypted DNS protocols such as [DNSCrypt v2](https://dnscrypt.info/protocol), [DNS-over-HTTPS](https://www.rfc-editor.org/rfc/rfc8484.txt), [Anonymized DNSCrypt](https://github.com/DNSCrypt/dnscrypt-protocol/blob/master/ANONYMIZED-DNSCRYPT.txt) and [ODoH (Oblivious DoH)](https://github.com/DNSCrypt/dnscrypt-resolvers/blob/master/v3/odoh.md).
 
 * **[dnscrypt-proxy documentation](https://dnscrypt.info/doc) ← Start here**
 * [DNSCrypt project home page](https://dnscrypt.info/)
@@ -25,7 +25,7 @@ Available as source code and pre-built binaries for most operating systems and a
 
 ## Features
 
-* DNS traffic encryption and authentication. Supports DNS-over-HTTPS (DoH) using TLS 1.3, DNSCrypt and Anonymized DNS
+* DNS traffic encryption and authentication. Supports DNS-over-HTTPS (DoH) using TLS 1.3, DNSCrypt, Anonymized DNS and ODoH
 * Client IP addresses can be hidden using Tor, SOCKS proxies or Anonymized DNS relays
 * DNS query monitoring, with separate log files for regular and suspicious queries
 * Filtering: block ads, malware, and other unwanted content. Compatible with all DNS services
