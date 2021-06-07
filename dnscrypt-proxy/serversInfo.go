@@ -688,7 +688,7 @@ func fetchTargetConfigsFromWellKnown(proxy *Proxy, url *url.URL) ([]ODoHTargetCo
 	return parseODoHTargetConfigs(bin)
 }
 
-func fetchODoHTargetInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, isNew bool) (ServerInfo, error) {
+func _fetchODoHTargetInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, isNew bool) (ServerInfo, error) {
 	configURL := &url.URL{Scheme: "https", Host: stamp.ProviderName, Path: "/.well-known/odohconfigs"}
 	odohTargetConfigs, err := fetchTargetConfigsFromWellKnown(proxy, configURL)
 	if err != nil || len(odohTargetConfigs) == 0 {
@@ -721,6 +721,7 @@ func fetchODoHTargetInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, is
 	useGet := relay == nil
 
 	query := dohNXTestPacket(0xcafe)
+	workingConfigs := make([]ODoHTargetConfig, 0)
 	for _, odohTargetConfig := range odohTargetConfigs {
 		odohQuery, err := odohTargetConfig.encryptQuery(query)
 		if err != nil {
@@ -731,13 +732,15 @@ func fetchODoHTargetInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, is
 			continue
 		}
 		if responseCode == 401 {
-			return ServerInfo{}, fmt.Errorf("TODO: retry when the key changed during a probe")
+			return ServerInfo{}, fmt.Errorf("Configuration changed during a probe")
 		}
 		serverResponse, err := odohQuery.decryptResponse(responseBody)
 		if err != nil {
 			dlog.Warnf("Unable to decrypt response from [%v]: [%v]", name, err)
 			continue
 		}
+		workingConfigs = append(workingConfigs, odohTargetConfig)
+
 		msg := dns.Msg{}
 		if err := msg.Unpack(serverResponse); err != nil {
 			dlog.Warnf("[%s]: %v", name, err)
@@ -776,10 +779,23 @@ func fetchODoHTargetInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, is
 			initialRtt:        xrtt,
 			useGet:            useGet,
 			Relay:             relay,
-			odohTargetConfigs: odohTargetConfigs,
+			odohTargetConfigs: workingConfigs,
 		}, nil
 	}
 	return ServerInfo{}, fmt.Errorf("No valid network configuration for [%v]", name)
+}
+
+func fetchODoHTargetInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, isNew bool) (ServerInfo, error) {
+	var err error
+	var serverInfo ServerInfo
+	for i := 0; i < 2; i += 1 {
+		serverInfo, err = _fetchODoHTargetInfo(proxy, name, stamp, isNew)
+		if err == nil {
+			break
+		}
+		dlog.Infof("Trying to fetch the [%v] configuration again", name)
+	}
+	return serverInfo, nil
 }
 
 func (serverInfo *ServerInfo) noticeFailure(proxy *Proxy) {
