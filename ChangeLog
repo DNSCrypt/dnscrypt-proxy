@@ -1,4 +1,4 @@
-# Version 2.0.46beta1
+# Version 2.0.46-beta1
  - Source URLs are now randomized.
  - On some platforms, redirecting the application log to a file was not
 compatible with user switching; this has been fixed.
