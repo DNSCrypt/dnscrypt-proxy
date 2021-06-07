@@ -828,7 +828,7 @@ func fetchODoHTargetInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, is
 		}
 		dlog.Infof("Trying to fetch the [%v] configuration again", name)
 	}
-	return serverInfo, nil
+	return serverInfo, err
 }
 
 func (serverInfo *ServerInfo) noticeFailure(proxy *Proxy) {
