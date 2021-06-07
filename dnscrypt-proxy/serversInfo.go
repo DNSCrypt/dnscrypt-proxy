@@ -720,9 +720,12 @@ func _fetchODoHTargetInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, i
 
 	useGet := relay == nil
 
-	query := dohNXTestPacket(0xcafe)
 	workingConfigs := make([]ODoHTargetConfig, 0)
+	rand.Shuffle(len(odohTargetConfigs), func(i, j int) {
+		odohTargetConfigs[i], odohTargetConfigs[j] = odohTargetConfigs[j], odohTargetConfigs[i]
+	})
 	for _, odohTargetConfig := range odohTargetConfigs {
+		query := dohNXTestPacket(0xcafe)
 		odohQuery, err := odohTargetConfig.encryptQuery(query)
 		if err != nil {
 			continue
