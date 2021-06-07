@@ -594,7 +594,6 @@ func fetchDoHServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, isN
 		Path:   stamp.Path,
 	}
 	body := dohTestPacket(0xcafe)
-
 	useGet := false
 	if _, _, _, _, err := proxy.xTransport.DoHQuery(useGet, url, body, proxy.timeout); err != nil {
 		useGet = true
@@ -718,22 +717,37 @@ func _fetchODoHTargetInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, i
 		Path:   stamp.Path,
 	}
 
-	useGet := relay == nil
-
 	workingConfigs := make([]ODoHTargetConfig, 0)
 	rand.Shuffle(len(odohTargetConfigs), func(i, j int) {
 		odohTargetConfigs[i], odohTargetConfigs[j] = odohTargetConfigs[j], odohTargetConfigs[i]
 	})
 	for _, odohTargetConfig := range odohTargetConfigs {
-		query := dohNXTestPacket(0xcafe)
-		odohQuery, err := odohTargetConfig.encryptQuery(query)
-		if err != nil {
-			continue
-		}
 		url := targetURL
 		if relay != nil {
 			url = relay.ODoH.URL
 		}
+
+		query := dohTestPacket(0xcafe)
+		odohQuery, err := odohTargetConfig.encryptQuery(query)
+		if err != nil {
+			continue
+		}
+
+		useGet := relay == nil
+		if _, _, _, _, err := proxy.xTransport.DoHQuery(useGet, url, odohQuery.odohMessage, proxy.timeout); err != nil {
+			useGet = true
+			if _, _, _, _, err := proxy.xTransport.DoHQuery(useGet, url, odohQuery.odohMessage, proxy.timeout); err != nil {
+				return ServerInfo{}, err
+			}
+			dlog.Debugf("Server [%s] doesn't appear to support POST; falling back to GET requests", name)
+		}
+
+		query = dohNXTestPacket(0xcafe)
+		odohQuery, err = odohTargetConfig.encryptQuery(query)
+		if err != nil {
+			continue
+		}
+
 		responseBody, responseCode, tls, rtt, err := proxy.xTransport.ObliviousDoHQuery(useGet, url, odohQuery.odohMessage, proxy.timeout)
 		if err != nil {
 			continue
