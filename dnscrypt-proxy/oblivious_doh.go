@@ -1,8 +1,6 @@
 package main
 
 import (
-	"crypto/aes"
-	"crypto/cipher"
 	"crypto/subtle"
 	"encoding/binary"
 	"fmt"
@@ -157,12 +155,7 @@ func (q ODoHQuery) decryptResponse(response []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	block, err := aes.NewCipher(key)
-	if err != nil {
-		return nil, err
-	}
-
-	aesgcm, err := cipher.NewGCM(block)
+	cipher, err := q.suite.NewRawCipher(key)
 	if err != nil {
 		return nil, err
 	}
@@ -175,7 +168,7 @@ func (q ODoHQuery) decryptResponse(response []byte) ([]byte, error) {
 	ct := response[5+int(responseNonceLength):]
 	aad := response[0 : 3+int(responseNonceLength)]
 
-	responsePlaintext, err := aesgcm.Open(nil, nonce, ct, aad)
+	responsePlaintext, err := cipher.Open(nil, nonce, ct, aad)
 	if err != nil {
 		return nil, err
 	}
