@@ -12,6 +12,6 @@ file = 'query.log'
   stamp = 'sdns://hQcAAAAAAAAAACCi3jNJDEdtNW4tvHN8J3lpIklSa2Wrj7qaNCgEgci9_BpvZG9oLXJlbGF5LmVkZ2Vjb21wdXRlLmFwcAEv'
 
 [anonymized_dns]
-routes = [
+  routes = [
     { server_name='odohtarget', via=['odohrelay'] }
-]
+  ]
