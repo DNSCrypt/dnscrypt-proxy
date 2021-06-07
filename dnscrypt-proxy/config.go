@@ -622,6 +622,9 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	if len(dohClientCreds) > 0 {
 		dlog.Noticef("Enabling TLS authentication")
 		configClientCred := dohClientCreds[0]
+		if len(dohClientCreds) > 1 {
+			dlog.Fatal("Only one tls_client_auth entry is currently supported")
+		}
 		proxy.xTransport.tlsClientCreds = DOHClientCreds{
 			clientCert: configClientCred.ClientCert,
 			clientKey:  configClientCred.ClientKey,
