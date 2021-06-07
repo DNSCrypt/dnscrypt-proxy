@@ -301,6 +301,12 @@ func findFarthestRoute(proxy *Proxy, name string, relayStamps []stamps.ServerSta
 	}
 	server := proxy.serversInfo.registeredServers[serverIdx]
 	proxy.serversInfo.RUnlock()
+
+	// Fall back to random relays until the logic is implementeed for non-DNSCrypt relays
+	if server.stamp.Proto != stamps.StampProtoTypeDNSCrypt {
+		return &relayStamps[rand.Intn(len(relayStamps))]
+	}
+
 	serverAddrStr, _ := ExtractHostAndPort(server.stamp.ServerAddrStr, 443)
 	serverAddr := net.ParseIP(serverAddrStr)
 	if serverAddr == nil {
