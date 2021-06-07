@@ -655,9 +655,8 @@ func fetchDoHServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, isN
 		dlog.Criticalf("[%s] Certificate hash [%x] not found", name, wantedHash)
 		return ServerInfo{}, fmt.Errorf("Certificate hash not found")
 	}
-	respBody := serverResponse
-	if len(respBody) < MinDNSPacketSize || len(respBody) > MaxDNSPacketSize ||
-		respBody[0] != 0xca || respBody[1] != 0xfe || respBody[4] != 0x00 || respBody[5] != 0x01 {
+	if len(serverResponse) < MinDNSPacketSize || len(serverResponse) > MaxDNSPacketSize ||
+		serverResponse[0] != 0xca || serverResponse[1] != 0xfe || serverResponse[4] != 0x00 || serverResponse[5] != 0x01 {
 		dlog.Info("Webserver returned an unexpected response")
 		return ServerInfo{}, errors.New("Webserver returned an unexpected response")
 	}
@@ -721,17 +720,66 @@ func fetchODoHTargetInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, is
 
 	useGet := relay == nil
 
-	return ServerInfo{
-		Proto:             stamps.StampProtoTypeODoHTarget,
-		Name:              name,
-		Timeout:           proxy.timeout,
-		URL:               url,
-		HostName:          stamp.ProviderName,
-		initialRtt:        100000,
-		useGet:            useGet,
-		Relay:             relay,
-		odohTargetConfigs: odohTargetConfigs,
-	}, nil
+	query := dohNXTestPacket(0xcafe)
+	for _, odohTargetConfig := range odohTargetConfigs {
+		odohQuery, err := odohTargetConfig.encryptQuery(query)
+		if err != nil {
+			continue
+		}
+		responseBody, responseCode, tls, rtt, err := proxy.xTransport.ObliviousDoHQuery(useGet, url, odohQuery.odohMessage, proxy.timeout)
+		if err != nil {
+			continue
+		}
+		if responseCode == 401 {
+			return ServerInfo{}, fmt.Errorf("TODO: retry when the key changed during a probe")
+		}
+		serverResponse, err := odohQuery.decryptResponse(responseBody)
+		if err != nil {
+			dlog.Warnf("Unable to decrypt response from [%v]: [%v]", name, err)
+			continue
+		}
+		msg := dns.Msg{}
+		if err := msg.Unpack(serverResponse); err != nil {
+			dlog.Warnf("[%s]: %v", name, err)
+			return ServerInfo{}, err
+		}
+		if msg.Rcode != dns.RcodeNameError {
+			dlog.Criticalf("[%s] may be a lying resolver", name)
+		}
+
+		protocol := tls.NegotiatedProtocol
+		if len(protocol) == 0 {
+			protocol = "http/1.x"
+		}
+		if strings.HasPrefix(protocol, "http/1.") {
+			dlog.Warnf("[%s] does not support HTTP/2", name)
+		}
+		dlog.Infof("[%s] TLS version: %x - Protocol: %v - Cipher suite: %v", name, tls.Version, protocol, tls.CipherSuite)
+
+		if len(serverResponse) < MinDNSPacketSize || len(serverResponse) > MaxDNSPacketSize ||
+			serverResponse[0] != 0xca || serverResponse[1] != 0xfe || serverResponse[4] != 0x00 || serverResponse[5] != 0x01 {
+			dlog.Info("Webserver returned an unexpected response")
+			return ServerInfo{}, errors.New("Webserver returned an unexpected response")
+		}
+		xrtt := int(rtt.Nanoseconds() / 1000000)
+		if isNew {
+			dlog.Noticef("[%s] OK (ODoH) - rtt: %dms", name, xrtt)
+		} else {
+			dlog.Infof("[%s] OK (ODoH) - rtt: %dms", name, xrtt)
+		}
+		return ServerInfo{
+			Proto:             stamps.StampProtoTypeODoHTarget,
+			Name:              name,
+			Timeout:           proxy.timeout,
+			URL:               url,
+			HostName:          stamp.ProviderName,
+			initialRtt:        xrtt,
+			useGet:            useGet,
+			Relay:             relay,
+			odohTargetConfigs: odohTargetConfigs,
+		}, nil
+	}
+	return ServerInfo{}, fmt.Errorf("No valid network configuration for [%v]", name)
 }
 
 func (serverInfo *ServerInfo) noticeFailure(proxy *Proxy) {
