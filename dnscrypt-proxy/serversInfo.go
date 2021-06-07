@@ -303,10 +303,20 @@ func findFarthestRoute(proxy *Proxy, name string, relayStamps []stamps.ServerSta
 	proxy.serversInfo.RUnlock()
 
 	// Fall back to random relays until the logic is implementeed for non-DNSCrypt relays
-	if server.stamp.Proto != stamps.StampProtoTypeDNSCrypt {
-		return &relayStamps[rand.Intn(len(relayStamps))]
+	if server.stamp.Proto == stamps.StampProtoTypeODoHTarget {
+		candidates := make([]int, 0)
+		for relayIdx, relayStamp := range relayStamps {
+			if relayStamp.Proto != stamps.StampProtoTypeODoHRelay {
+				continue
+			}
+			candidates = append(candidates, relayIdx)
+		}
+		return &relayStamps[candidates[rand.Intn(len(candidates))]]
+	} else if server.stamp.Proto != stamps.StampProtoTypeDNSCrypt {
+		return nil
 	}
 
+	// Anonyimized DNSCrypt relays
 	serverAddrStr, _ := ExtractHostAndPort(server.stamp.ServerAddrStr, 443)
 	serverAddr := net.ParseIP(serverAddrStr)
 	if serverAddr == nil {
@@ -318,6 +328,9 @@ func findFarthestRoute(proxy *Proxy, name string, relayStamps []stamps.ServerSta
 	bestRelayIdxs := make([]int, 0)
 	bestRelaySamePrefixBits := 128
 	for relayIdx, relayStamp := range relayStamps {
+		if relayStamp.Proto != stamps.StampProtoTypeDNSCryptRelay {
+			continue
+		}
 		relayAddrStr, _ := ExtractHostAndPort(relayStamp.ServerAddrStr, 443)
 		relayAddr := net.ParseIP(relayAddrStr)
 		if relayAddr == nil {
