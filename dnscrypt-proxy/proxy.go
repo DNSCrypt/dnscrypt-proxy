@@ -4,6 +4,7 @@ import (
 	"context"
 	crypto_rand "crypto/rand"
 	"encoding/binary"
+	"math/rand"
 	"net"
 	"os"
 	"runtime"
@@ -682,7 +683,7 @@ func (proxy *Proxy) processIncomingQuery(clientProto string, serverProto string,
 			if len(serverInfo.odohTargetConfigs) == 0 {
 				return
 			}
-			target := serverInfo.odohTargetConfigs[0]
+			target := serverInfo.odohTargetConfigs[rand.Intn(len(serverInfo.odohTargetConfigs))]
 			odohQuery, err := target.encryptQuery(query)
 			if err != nil {
 				dlog.Errorf("Failed to encrypt query for [%v]", serverName)
