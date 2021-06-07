@@ -761,7 +761,33 @@ func _fetchODoHTargetInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, i
 			dlog.Warnf("[%s] does not support HTTP/2", name)
 		}
 		dlog.Infof("[%s] TLS version: %x - Protocol: %v - Cipher suite: %v", name, tls.Version, protocol, tls.CipherSuite)
-
+		showCerts := proxy.showCerts
+		found := false
+		var wantedHash [32]byte
+		for _, cert := range tls.PeerCertificates {
+			h := sha256.Sum256(cert.RawTBSCertificate)
+			if showCerts {
+				dlog.Noticef("Advertised relay cert: [%s] [%x]", cert.Subject, h)
+			} else {
+				dlog.Debugf("Advertised relay cert: [%s] [%x]", cert.Subject, h)
+			}
+			for _, hash := range stamp.Hashes {
+				if len(hash) == len(wantedHash) {
+					copy(wantedHash[:], hash)
+					if h == wantedHash {
+						found = true
+						break
+					}
+				}
+			}
+			if found {
+				break
+			}
+		}
+		if !found && len(stamp.Hashes) > 0 {
+			dlog.Criticalf("[%s] Certificate hash [%x] not found", name, wantedHash)
+			return ServerInfo{}, fmt.Errorf("Certificate hash not found")
+		}
 		if len(serverResponse) < MinDNSPacketSize || len(serverResponse) > MaxDNSPacketSize ||
 			serverResponse[0] != 0xca || serverResponse[1] != 0xfe || serverResponse[4] != 0x00 || serverResponse[5] != 0x01 {
 			dlog.Info("Webserver returned an unexpected response")
