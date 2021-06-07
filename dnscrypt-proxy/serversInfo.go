@@ -6,11 +6,9 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"math/bits"
 	"math/rand"
 	"net"
-	"net/http"
 	"net/url"
 	"sort"
 	"strings"
@@ -658,28 +656,23 @@ func fetchDoHServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, isN
 	}, nil
 }
 
-func fetchTargetConfigsFromWellKnown(url string) ([]ODoHTargetConfig, error) {
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+func fetchTargetConfigsFromWellKnown(proxy *Proxy, url *url.URL) ([]ODoHTargetConfig, error) {
+	bin, statusCode, _, _, err := proxy.xTransport.Get(url, "application/binary", 0)
 	if err != nil {
 		return nil, err
 	}
-
-	client := http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
+	if statusCode < 200 || statusCode >= 300 {
+		return nil, fmt.Errorf("HTTP status code was %v", statusCode)
 	}
-	bodyBytes, err := ioutil.ReadAll(resp.Body)
-	defer resp.Body.Close()
-	if err != nil {
-		return nil, err
-	}
-
-	return parseODoHTargetConfigs(bodyBytes)
+	return parseODoHTargetConfigs(bin)
 }
 
 func fetchODoHTargetInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, isNew bool) (ServerInfo, error) {
-	odohTargetConfigs, err := fetchTargetConfigsFromWellKnown("https://" + url.PathEscape(stamp.ProviderName) + "/.well-known/odohconfigs")
+	xurl, err := url.Parse("https://" + url.PathEscape(stamp.ProviderName) + "/.well-known/odohconfigs")
+	if err != nil {
+		return ServerInfo{}, err
+	}
+	odohTargetConfigs, err := fetchTargetConfigsFromWellKnown(proxy, xurl)
 	if err != nil || len(odohTargetConfigs) == 0 {
 		return ServerInfo{}, fmt.Errorf("[%s] does not have an Oblivious DoH configuration", name)
 	}

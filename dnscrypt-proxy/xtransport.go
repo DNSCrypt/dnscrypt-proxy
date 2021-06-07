@@ -428,7 +428,7 @@ func (xTransport *XTransport) Post(url *url.URL, accept string, contentType stri
 	return xTransport.Fetch("POST", url, accept, contentType, body, timeout)
 }
 
-func (xTransport *XTransport) doHQLikeuery(dataType string, useGet bool, url *url.URL, body []byte, timeout time.Duration) ([]byte, int, *tls.ConnectionState, time.Duration, error) {
+func (xTransport *XTransport) dohLikeQuery(dataType string, useGet bool, url *url.URL, body []byte, timeout time.Duration) ([]byte, int, *tls.ConnectionState, time.Duration, error) {
 	if useGet {
 		qs := url.Query()
 		encBody := base64.RawURLEncoding.EncodeToString(body)
@@ -441,9 +441,9 @@ func (xTransport *XTransport) doHQLikeuery(dataType string, useGet bool, url *ur
 }
 
 func (xTransport *XTransport) DoHQuery(useGet bool, url *url.URL, body []byte, timeout time.Duration) ([]byte, int, *tls.ConnectionState, time.Duration, error) {
-	return xTransport.doHQLikeuery("application/dns-message", useGet, url, body, timeout)
+	return xTransport.dohLikeQuery("application/dns-message", useGet, url, body, timeout)
 }
 
 func (xTransport *XTransport) ObliviousDoHQuery(useGet bool, url *url.URL, body []byte, timeout time.Duration) ([]byte, int, *tls.ConnectionState, time.Duration, error) {
-	return xTransport.doHQLikeuery("application/oblivious-dns-message", useGet, url, body, timeout)
+	return xTransport.dohLikeQuery("application/oblivious-dns-message", useGet, url, body, timeout)
 }
