@@ -835,7 +835,7 @@ func _fetchODoHTargetInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, i
 func fetchODoHTargetInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, isNew bool) (ServerInfo, error) {
 	var err error
 	var serverInfo ServerInfo
-	for i := 0; i < 2; i += 1 {
+	for i := 0; i < 3; i += 1 {
 		serverInfo, err = _fetchODoHTargetInfo(proxy, name, stamp, isNew)
 		if err == nil {
 			break
