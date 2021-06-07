@@ -41,7 +41,7 @@ github.com/jedisct1/go-clocksmith
 # github.com/jedisct1/go-dnsstamps v0.0.0-20210414164033-fdb47fe0c84c
 ## explicit
 github.com/jedisct1/go-dnsstamps
-# github.com/jedisct1/go-hpke-compact v0.0.0-20210329192501-7ceabaabca65
+# github.com/jedisct1/go-hpke-compact v0.0.0-20210607160958-a8af3a0d4a3c
 ## explicit
 github.com/jedisct1/go-hpke-compact
 # github.com/jedisct1/go-minisign v0.0.0-20210414164026-819d7e2534ac

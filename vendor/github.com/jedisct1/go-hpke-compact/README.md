@@ -126,4 +126,10 @@ secret1, err := clientCtx.Export("description 1")
 secret2, err := serverCtx.Export("description 2");
 ```
 
+### Access the raw cipher interface
+
+```go
+cipher, err := suite.NewRawCipher(key)
+```
+
 ## That's it!

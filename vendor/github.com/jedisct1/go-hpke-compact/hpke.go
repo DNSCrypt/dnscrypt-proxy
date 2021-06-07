@@ -508,6 +508,22 @@ func (suite *Suite) NewAuthenticatedServerContext(clientPk []byte, enc []byte, s
 	return ServerContext{inner: context}, nil
 }
 
+// NewRawCipher - Access the raw cipher interface
+func (suite *Suite) NewRawCipher(key []byte) (cipher.AEAD, error) {
+	switch suite.AeadID {
+	case AeadAes128Gcm, AeadAes256Gcm:
+		block, err := aes.NewCipher(key)
+		if err != nil {
+			return nil, err
+		}
+		return cipher.NewGCM(block)
+	case AeadChaCha20Poly1305:
+		return chacha20poly1305.New(key)
+	default:
+		return nil, errors.New("externally defined cipher")
+	}
+}
+
 func (state *aeadState) incrementCounter() error {
 	carry := uint16(1)
 	for i := len(state.counter); ; {
@@ -624,11 +640,11 @@ type aeadAesImpl struct {
 func newAesAead(key []byte) (aeadAesImpl, error) {
 	block, err := aes.NewCipher(key)
 	if err != nil {
-		return aeadAesImpl{}, nil
+		return aeadAesImpl{}, err
 	}
 	aesGcm, err := cipher.NewGCM(block)
 	if err != nil {
-		return aeadAesImpl{}, nil
+		return aeadAesImpl{}, err
 	}
 	aead := aeadAesImpl{impl: aesGcm}
 	return aead, nil
@@ -645,7 +661,7 @@ type aeadChaChaPolyImpl struct {
 func newChaChaPolyAead(key []byte) (aeadChaChaPolyImpl, error) {
 	impl, err := chacha20poly1305.New(key)
 	if err != nil {
-		return aeadChaChaPolyImpl{}, nil
+		return aeadChaChaPolyImpl{}, err
 	}
 	aead := aeadChaChaPolyImpl{impl: impl}
 	return aead, nil

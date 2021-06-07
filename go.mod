@@ -13,7 +13,7 @@ require (
 	github.com/jedisct1/dlog v0.0.0-20210101122416-354ffe815216
 	github.com/jedisct1/go-clocksmith v0.0.0-20210101121932-da382b963868
 	github.com/jedisct1/go-dnsstamps v0.0.0-20210414164033-fdb47fe0c84c
-	github.com/jedisct1/go-hpke-compact v0.0.0-20210329192501-7ceabaabca65
+	github.com/jedisct1/go-hpke-compact v0.0.0-20210607160958-a8af3a0d4a3c
 	github.com/jedisct1/go-minisign v0.0.0-20210414164026-819d7e2534ac
 	github.com/jedisct1/xsecretbox v0.0.0-20210330110434-7cb86b57caf0
 	github.com/k-sone/critbitgo v1.4.0
