@@ -668,11 +668,8 @@ func fetchTargetConfigsFromWellKnown(proxy *Proxy, url *url.URL) ([]ODoHTargetCo
 }
 
 func fetchODoHTargetInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, isNew bool) (ServerInfo, error) {
-	xurl, err := url.Parse("https://" + url.PathEscape(stamp.ProviderName) + "/.well-known/odohconfigs")
-	if err != nil {
-		return ServerInfo{}, err
-	}
-	odohTargetConfigs, err := fetchTargetConfigsFromWellKnown(proxy, xurl)
+	configUrl := &url.URL{Scheme: "https", Host: stamp.ProviderName, Path: "/.well-known/odohconfigs"}
+	odohTargetConfigs, err := fetchTargetConfigsFromWellKnown(proxy, configUrl)
 	if err != nil || len(odohTargetConfigs) == 0 {
 		return ServerInfo{}, fmt.Errorf("[%s] does not have an Oblivious DoH configuration", name)
 	}
