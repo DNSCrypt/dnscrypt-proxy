@@ -371,6 +371,7 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	proxy.xTransport.tlsCipherSuite = config.TLSCipherSuite
 	proxy.xTransport.mainProto = proxy.mainProto
 	if len(config.BootstrapResolvers) == 0 && len(config.BootstrapResolversLegacy) > 0 {
+		dlog.Warnf("fallback_resolvers was renamed to bootstrap_resolvers - Please update your configuration")
 		config.BootstrapResolvers = config.BootstrapResolversLegacy
 	}
 	if len(config.BootstrapResolvers) > 0 {
