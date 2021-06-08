@@ -360,7 +360,18 @@ func findFarthestRoute(proxy *Proxy, name string, relayStamps []stamps.ServerSta
 	return &relayStamps[bestRelayIdxs[rand.Intn(len(bestRelayIdxs))]]
 }
 
-func route(proxy *Proxy, name string) (*Relay, error) {
+func relayProtoForServerProto(proto stamps.StampProtoType) (stamps.StampProtoType, error) {
+	switch proto {
+	case stamps.StampProtoTypeDNSCrypt:
+		return stamps.StampProtoTypeDNSCryptRelay, nil
+	case stamps.StampProtoTypeODoHTarget:
+		return stamps.StampProtoTypeODoHRelay, nil
+	default:
+		return 0, errors.New("protocol cannot be anonymized")
+	}
+}
+
+func route(proxy *Proxy, name string, serverProto stamps.StampProtoType) (*Relay, error) {
 	routes := proxy.routes
 	if routes == nil {
 		return nil, nil
@@ -374,14 +385,24 @@ func route(proxy *Proxy, name string) (*Relay, error) {
 	if !ok || len(relayNames) == 0 {
 		return nil, nil
 	}
+
+	relayProto, err := relayProtoForServerProto(serverProto)
+	if err != nil {
+		dlog.Errorf("Server [%v]'s protocol doesn't support anonymization", name)
+		return nil, nil
+	}
 	relayStamps := make([]stamps.ServerStamp, 0)
 	for _, relayName := range relayNames {
 		if relayStamp, err := stamps.NewServerStampFromString(relayName); err == nil {
-			relayStamps = append(relayStamps, relayStamp)
+			if relayStamp.Proto == relayProto {
+				relayStamps = append(relayStamps, relayStamp)
+			}
 		} else if relayName == "*" {
 			proxy.serversInfo.RLock()
 			for _, registeredServer := range proxy.serversInfo.registeredRelays {
-				relayStamps = append(relayStamps, registeredServer.stamp)
+				if registeredServer.stamp.Proto == relayProto {
+					relayStamps = append(relayStamps, registeredServer.stamp)
+				}
 			}
 			proxy.serversInfo.RUnlock()
 			wildcard = true
@@ -389,13 +410,13 @@ func route(proxy *Proxy, name string) (*Relay, error) {
 		} else {
 			proxy.serversInfo.RLock()
 			for _, registeredServer := range proxy.serversInfo.registeredRelays {
-				if registeredServer.name == relayName {
+				if registeredServer.name == relayName && registeredServer.stamp.Proto == relayProto {
 					relayStamps = append(relayStamps, registeredServer.stamp)
 					break
 				}
 			}
 			for _, registeredServer := range proxy.serversInfo.registeredServers {
-				if registeredServer.name == relayName {
+				if registeredServer.name == relayName && registeredServer.stamp.Proto == relayProto {
 					relayStamps = append(relayStamps, registeredServer.stamp)
 					break
 				}
@@ -404,7 +425,8 @@ func route(proxy *Proxy, name string) (*Relay, error) {
 		}
 	}
 	if len(relayStamps) == 0 {
-		return nil, fmt.Errorf("Empty relay set for [%v]", name)
+		dlog.Warnf("Empty relay set for [%v]", name)
+		return nil, nil
 	}
 	var relayCandidateStamp *stamps.ServerStamp
 	if !wildcard || len(relayStamps) == 1 {
@@ -488,7 +510,7 @@ func fetchDNSCryptServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp
 			break
 		}
 	}
-	relay, err := route(proxy, name)
+	relay, err := route(proxy, name, stamp.Proto)
 	if err != nil {
 		return ServerInfo{}, err
 	}
@@ -698,7 +720,7 @@ func _fetchODoHTargetInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, i
 		return ServerInfo{}, fmt.Errorf("[%s] has an empty ODoH configuration", name)
 	}
 
-	relay, err := route(proxy, name)
+	relay, err := route(proxy, name, stamp.Proto)
 	if err != nil {
 		return ServerInfo{}, err
 	}
