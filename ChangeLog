@@ -1,4 +1,10 @@
-# Version 2.0.46-beta1
+# Version 2.0.46 (not released yet, may become 2.1.0)
+* beta 2:
+ - Relays are now mandatory for ODoH servers.
+ - Routes with `server_name = '*'` now correctly handle both relay types.
+ - A deprecation warning was added for `fallback_resolvers`.
+
+* beta 1:
  - Source URLs are now randomized.
  - On some platforms, redirecting the application log to a file was not
 compatible with user switching; this has been fixed.
