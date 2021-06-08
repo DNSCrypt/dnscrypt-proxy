@@ -371,7 +371,7 @@ func route(proxy *Proxy, name string) (*Relay, error) {
 		wildcard = true
 		relayNames, ok = (*routes)["*"]
 	}
-	if !ok {
+	if !ok || len(relayNames) == 0 {
 		return nil, nil
 	}
 	relayStamps := make([]stamps.ServerStamp, 0)
@@ -704,12 +704,13 @@ func _fetchODoHTargetInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, i
 	}
 
 	if relay == nil {
-		if relay.ODoH == nil {
-			dlog.Criticalf("No relay defined for [%v] - Configuring a relay is required for ODoH servers (see the `[anonymized_dns]` section)", name)
-		} else {
-			dlog.Criticalf("Wrong relay type defined for [%v] - ODoH servers require an ODoH relay", name)
-		}
+		dlog.Criticalf("No relay defined for [%v] - Configuring a relay is required for ODoH servers (see the `[anonymized_dns]` section)", name)
 		return ServerInfo{}, errors.New("No ODoH relay")
+	} else {
+		if relay.ODoH == nil {
+			dlog.Criticalf("Wrong relay type defined for [%v] - ODoH servers require an ODoH relay", name)
+			return ServerInfo{}, errors.New("Wrong ODoH relay type")
+		}
 	}
 
 	dlog.Debugf("Pausing after ODoH configuration retrieval")
