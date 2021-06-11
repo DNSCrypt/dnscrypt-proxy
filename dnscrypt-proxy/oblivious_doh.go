@@ -9,8 +9,9 @@ import (
 )
 
 const (
-	odohVersion    = uint16(0xff06)
-	maxODoHConfigs = 10
+	odohVersion     = uint16(0x0001)
+	odohTestVersion = uint16(0xff06)
+	maxODoHConfigs  = 10
 )
 
 type ODoHTargetConfig struct {
@@ -77,7 +78,7 @@ func parseODoHTargetConfigs(configs []byte) ([]ODoHTargetConfig, error) {
 		}
 		configVersion := binary.BigEndian.Uint16(configs[offset : offset+2])
 		configLength := binary.BigEndian.Uint16(configs[offset+2 : offset+4])
-		if configVersion == odohVersion {
+		if configVersion == odohVersion || configVersion == odohTestVersion {
 			target, err := parseODoHTargetConfig(configs[offset+4 : offset+4+int(configLength)])
 			if err == nil {
 				targets = append(targets, target)
