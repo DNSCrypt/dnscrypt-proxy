@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 
+	"github.com/jedisct1/dlog"
 	hpkecompact "github.com/jedisct1/go-hpke-compact"
 )
 
@@ -79,6 +80,9 @@ func parseODoHTargetConfigs(configs []byte) ([]ODoHTargetConfig, error) {
 		configVersion := binary.BigEndian.Uint16(configs[offset : offset+2])
 		configLength := binary.BigEndian.Uint16(configs[offset+2 : offset+4])
 		if configVersion == odohVersion || configVersion == odohTestVersion {
+			if configVersion != odohVersion {
+				dlog.Debugf("Server still uses the legacy 0x%x ODoH version", configVersion)
+			}
 			target, err := parseODoHTargetConfig(configs[offset+4 : offset+4+int(configLength)])
 			if err == nil {
 				targets = append(targets, target)
