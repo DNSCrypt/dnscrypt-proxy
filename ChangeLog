@@ -1,4 +1,7 @@
 # Version 2.0.46 (not released yet, may become 2.1.0)
+## beta 3:
+ - Add support for the final version of the Oblivious DoH specification.
+
 ## beta 2:
  - Relays are now mandatory for ODoH servers.
  - Routes with `server_name = '*'` now correctly handle both relay types.
