@@ -56,7 +56,7 @@ github.com/k-sone/critbitgo
 # github.com/kardianos/service v1.2.0
 ## explicit
 github.com/kardianos/service
-# github.com/miekg/dns v1.1.42
+# github.com/miekg/dns v1.1.43
 ## explicit
 github.com/miekg/dns
 # github.com/pkg/errors v0.9.1
