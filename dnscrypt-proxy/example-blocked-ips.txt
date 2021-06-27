@@ -14,7 +14,10 @@
 163.5.1.4
 94.46.118.*
 fe80:53:*          # IPv6 prefix example
-#extra protection with dnscrypt-proxy
+#extra protection with dnscrypt-proxy see https://github.com/DNSCrypt/dnscrypt-proxy/wiki/Filters#dns-rebinding-protection
+#Note: Some applications like Plex require rebinding protection to be disabled for local clients to be detected correctly.
+#Instead of disabling it globally, you can allow the relevant domain(s). In the case of Plex, add plex.direct to allowed-names.txt.
+#Captive portal domains which resolve to private addresses can also be allowed in the same way.
 # Localhost rebinding protection
 0.0.0.0
 127.0.0.*
