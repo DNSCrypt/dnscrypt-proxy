@@ -5,12 +5,14 @@ import (
 	"encoding/binary"
 	"fmt"
 
+	"github.com/jedisct1/dlog"
 	hpkecompact "github.com/jedisct1/go-hpke-compact"
 )
 
 const (
-	odohVersion    = uint16(0xff06)
-	maxODoHConfigs = 10
+	odohVersion     = uint16(0x0001)
+	odohTestVersion = uint16(0xff06)
+	maxODoHConfigs  = 10
 )
 
 type ODoHTargetConfig struct {
@@ -62,7 +64,7 @@ func parseODoHTargetConfig(config []byte) (ODoHTargetConfig, error) {
 
 func parseODoHTargetConfigs(configs []byte) ([]ODoHTargetConfig, error) {
 	if len(configs) <= 2 {
-		return nil, fmt.Errorf("No configs")
+		return nil, fmt.Errorf("Server didn't return any ODoH configurations")
 	}
 	length := binary.BigEndian.Uint16(configs)
 	if len(configs) != int(length)+2 {
@@ -77,7 +79,10 @@ func parseODoHTargetConfigs(configs []byte) ([]ODoHTargetConfig, error) {
 		}
 		configVersion := binary.BigEndian.Uint16(configs[offset : offset+2])
 		configLength := binary.BigEndian.Uint16(configs[offset+2 : offset+4])
-		if configVersion == odohVersion {
+		if configVersion == odohVersion || configVersion == odohTestVersion {
+			if configVersion != odohVersion {
+				dlog.Debugf("Server still uses the legacy 0x%x ODoH version", configVersion)
+			}
 			target, err := parseODoHTargetConfig(configs[offset+4 : offset+4+int(configLength)])
 			if err == nil {
 				targets = append(targets, target)

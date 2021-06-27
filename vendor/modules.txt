@@ -56,7 +56,7 @@ github.com/k-sone/critbitgo
 # github.com/kardianos/service v1.2.0
 ## explicit
 github.com/kardianos/service
-# github.com/miekg/dns v1.1.42
+# github.com/miekg/dns v1.1.43
 ## explicit
 github.com/miekg/dns
 # github.com/pkg/errors v0.9.1
@@ -69,7 +69,7 @@ github.com/powerman/check
 # github.com/smartystreets/goconvey v1.6.4
 github.com/smartystreets/goconvey/convey/gotest
 github.com/smartystreets/goconvey/convey/reporting
-# golang.org/x/crypto v0.0.0-20210513164829-c07d793c2f9a
+# golang.org/x/crypto v0.0.0-20210616213533-5ff15b29337e
 ## explicit
 golang.org/x/crypto/blake2b
 golang.org/x/crypto/chacha20
@@ -84,7 +84,7 @@ golang.org/x/crypto/nacl/box
 golang.org/x/crypto/nacl/secretbox
 golang.org/x/crypto/poly1305
 golang.org/x/crypto/salsa20/salsa
-# golang.org/x/net v0.0.0-20210525063256-abc453219eb5
+# golang.org/x/net v0.0.0-20210614182718-04defd469f4e
 ## explicit
 golang.org/x/net/bpf
 golang.org/x/net/http/httpguts
@@ -97,7 +97,7 @@ golang.org/x/net/internal/socks
 golang.org/x/net/ipv4
 golang.org/x/net/ipv6
 golang.org/x/net/proxy
-# golang.org/x/sys v0.0.0-20210603125802-9665404d3644
+# golang.org/x/sys v0.0.0-20210616094352-59db8d763f22
 ## explicit
 golang.org/x/sys/cpu
 golang.org/x/sys/internal/unsafeheader
