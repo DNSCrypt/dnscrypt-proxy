@@ -1,0 +1,6 @@
+linters:
+  enable-all: true
+  disable:
+  - funlen
+  - gochecknoglobals
+  - lll

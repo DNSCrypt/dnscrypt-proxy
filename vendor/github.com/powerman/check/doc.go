@@ -110,6 +110,7 @@
 //
 // There are few special functions (assertion, custom checkers, etc.).
 //
+//	Error
 //	Must
 //	Should
 //	TODO

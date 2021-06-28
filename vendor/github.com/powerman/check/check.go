@@ -17,6 +17,7 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
+//nolint:gochecknoglobals // Const.
 var (
 	typString  = reflect.TypeOf("")
 	typBytes   = reflect.TypeOf([]byte(nil))
@@ -47,7 +48,7 @@ func (t *C) Parallel() {
 	}
 }
 
-// T create and return new *C, which wraps given tt and supposed to be
+// T creates and returns new *C, which wraps given tt and supposed to be
 // used inplace of it, providing you with access to many useful helpers in
 // addition to standard methods of *testing.T.
 //
@@ -58,11 +59,11 @@ func (t *C) Parallel() {
 //		t := check.T(tt)
 //		// use only t in test and don't touch tt anymore
 //	}
-func T(tt *testing.T) *C {
+func T(tt *testing.T) *C { //nolint:thelper // With check we name it tt!
 	return &C{T: tt}
 }
 
-// TODO create and return new *C, which have only one difference from
+// TODO creates and returns new *C, which have only one difference from
 // original one: every passing check is now handled as failed and vice
 // versa (this doesn't affect boolean value returned by check).
 // You can continue using both old and new *C at same time.
@@ -159,7 +160,7 @@ func (t *C) report(ok bool, msg []interface{}, checker string, name []string, ar
 	failureLong := failure.String()
 
 	wantDiff := len(dump) == 2 && name[0] == nameActual && name[1] == nameExpected
-	if wantDiff {
+	if wantDiff { //nolint:nestif // No idea how to simplify.
 		if reportToGoConvey(dump[0].String(), dump[1].String(), failureShort) == nil {
 			t.Fail()
 		} else {
@@ -302,7 +303,8 @@ func (t *C) should1(f ShouldFunc1, args ...interface{}) bool {
 
 func (t *C) should2(f ShouldFunc2, args ...interface{}) bool {
 	t.Helper()
-	if len(args) < 2 {
+	const minArgs = 2
+	if len(args) < minArgs {
 		panic("not enough params for " + funcName(f))
 	}
 	actual, expected, msg := args[0], args[1], args[2:]
@@ -356,6 +358,13 @@ func isNil(actual interface{}) bool {
 		return actual == nil
 	case reflect.Chan, reflect.Func, reflect.Map, reflect.Ptr, reflect.Slice:
 		return val.IsNil()
+	case reflect.Uintptr, reflect.UnsafePointer: // Subtle cases documented above.
+	case reflect.Interface: // ???
+	// Can't be nil:
+	case reflect.Struct, reflect.Array, reflect.Bool, reflect.String:
+	case reflect.Complex128, reflect.Complex64, reflect.Float32, reflect.Float64:
+	case reflect.Int, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Int8:
+	case reflect.Uint, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uint8:
 	}
 	return false
 }
@@ -367,6 +376,14 @@ func (t *C) NotNil(actual interface{}, msg ...interface{}) bool {
 	t.Helper()
 	return t.report0(msg,
 		!isNil(actual))
+}
+
+// Error is equivalent to Log followed by Fail.
+//
+// It is like t.Errorf with TODO() and statistics support.
+func (t *C) Error(msg ...interface{}) {
+	t.Helper()
+	t.report0(msg, false)
 }
 
 // True checks for cond == true.
@@ -494,14 +511,14 @@ func (t *C) Match(actual, regex interface{}, msg ...interface{}) bool {
 
 // isMatch updates actual to be a real string used for matching, to make
 // dump easier to understand, but this result in losing type information.
-func isMatch(actual *interface{}, regex interface{}) bool {
+func isMatch(actual *interface{}, regex interface{}) bool { //nolint:gocritic // False positive.
 	if *actual == nil {
 		return false
 	}
 	if !stringify(actual) {
 		panic("actual is not a string, []byte, []rune, fmt.Stringer, error or nil")
 	}
-	s := (*actual).(string)
+	s := (*actual).(string) //nolint:forcetypeassert // False positive.
 
 	switch v := regex.(type) {
 	case *regexp.Regexp:
@@ -512,7 +529,7 @@ func isMatch(actual *interface{}, regex interface{}) bool {
 	panic("regex is not a *regexp.Regexp or string")
 }
 
-func stringify(arg *interface{}) bool {
+func stringify(arg *interface{}) bool { //nolint:gocritic // False positive.
 	switch v := (*arg).(type) {
 	case nil:
 		return false
@@ -522,10 +539,10 @@ func stringify(arg *interface{}) bool {
 		*arg = v.String()
 	default:
 		typ := reflect.TypeOf(*arg)
-		switch typ.Kind() {
+		switch typ.Kind() { //nolint:exhaustive // Covered by default case.
 		case reflect.String:
 		case reflect.Slice:
-			switch typ.Elem().Kind() {
+			switch typ.Elem().Kind() { //nolint:exhaustive // Covered by default case.
 			case reflect.Uint8, reflect.Int32:
 			default:
 				return false
@@ -567,14 +584,14 @@ func (t *C) Contains(actual, expected interface{}, msg ...interface{}) bool {
 }
 
 func isContains(actual, expected interface{}) (found bool) {
-	switch valActual := reflect.ValueOf(actual); valActual.Kind() {
+	switch valActual := reflect.ValueOf(actual); valActual.Kind() { //nolint:exhaustive // Covered by default case.
 	case reflect.String:
-		strActual := valActual.Convert(typString).Interface().(string)
+		strActual := valActual.Convert(typString).Interface().(string) //nolint:forcetypeassert // False positive.
 		valExpected := reflect.ValueOf(expected)
 		if valExpected.Kind() != reflect.String {
 			panic("expected underlying type is not a string")
 		}
-		strExpected := valExpected.Convert(typString).Interface().(string)
+		strExpected := valExpected.Convert(typString).Interface().(string) //nolint:forcetypeassert // False positive.
 		found = strings.Contains(strActual, strExpected)
 
 	case reflect.Map:
@@ -691,8 +708,8 @@ func (t *C) Err(actual, expected error, msg ...interface{}) bool {
 	t.Helper()
 	actual2 := unwrapErr(actual)
 	equal := fmt.Sprintf("%#v", actual2) == fmt.Sprintf("%#v", expected)
-	_, proto1 := actual2.(interface{ GRPCStatus() *status.Status })
-	_, proto2 := expected.(interface{ GRPCStatus() *status.Status })
+	_, proto1 := actual2.(interface{ GRPCStatus() *status.Status })  //nolint:errorlint // False positive.
+	_, proto2 := expected.(interface{ GRPCStatus() *status.Status }) //nolint:errorlint // False positive.
 	if proto1 || proto2 {
 		equal = proto.Equal(status.Convert(actual2).Proto(), status.Convert(expected).Proto())
 	}
@@ -704,7 +721,7 @@ func unwrapErr(err error) (actual error) {
 	actual = err
 	for {
 		actual = pkgerrors.Cause(actual)
-		wrapped, ok := actual.(interface{ Unwrap() error })
+		wrapped, ok := actual.(interface{ Unwrap() error }) //nolint:errorlint // False positive.
 		if !ok {
 			break
 		}
@@ -731,8 +748,8 @@ func (t *C) NotErr(actual, expected error, msg ...interface{}) bool {
 	t.Helper()
 	actual2 := unwrapErr(actual)
 	notEqual := fmt.Sprintf("%#v", actual2) != fmt.Sprintf("%#v", expected)
-	_, proto1 := actual2.(interface{ GRPCStatus() *status.Status })
-	_, proto2 := expected.(interface{ GRPCStatus() *status.Status })
+	_, proto1 := actual2.(interface{ GRPCStatus() *status.Status })  //nolint:errorlint // False positive.
+	_, proto2 := expected.(interface{ GRPCStatus() *status.Status }) //nolint:errorlint // False positive.
 	if proto1 || proto2 {
 		notEqual = !proto.Equal(status.Convert(actual2).Proto(), status.Convert(expected).Proto())
 	}
@@ -844,7 +861,7 @@ func (t *C) Less(actual, expected interface{}, msg ...interface{}) bool {
 }
 
 func isLess(actual, expected interface{}) bool {
-	switch v1, v2 := reflect.ValueOf(actual), reflect.ValueOf(expected); v1.Kind() {
+	switch v1, v2 := reflect.ValueOf(actual), reflect.ValueOf(expected); v1.Kind() { //nolint:exhaustive // Covered by default case.
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		return v1.Int() < v2.Int()
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
@@ -882,7 +899,7 @@ func (t *C) LessOrEqual(actual, expected interface{}, msg ...interface{}) bool {
 }
 
 func isGreater(actual, expected interface{}) bool {
-	switch v1, v2 := reflect.ValueOf(actual), reflect.ValueOf(expected); v1.Kind() {
+	switch v1, v2 := reflect.ValueOf(actual), reflect.ValueOf(expected); v1.Kind() { //nolint:exhaustive // Covered by default case.
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		return v1.Int() > v2.Int()
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
@@ -960,7 +977,7 @@ func (t *C) Between(actual, min, max interface{}, msg ...interface{}) bool {
 }
 
 func isBetween(actual, min, max interface{}) bool {
-	switch v, vmin, vmax := reflect.ValueOf(actual), reflect.ValueOf(min), reflect.ValueOf(max); v.Kind() {
+	switch v, vmin, vmax := reflect.ValueOf(actual), reflect.ValueOf(min), reflect.ValueOf(max); v.Kind() { //nolint:exhaustive // Covered by default case.
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		return vmin.Int() < v.Int() && v.Int() < vmax.Int()
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
@@ -971,7 +988,8 @@ func isBetween(actual, min, max interface{}) bool {
 		return vmin.String() < v.String() && v.String() < vmax.String()
 	default:
 		if actualTime, ok := actual.(time.Time); ok {
-			minTime, maxTime := min.(time.Time), max.(time.Time)
+			minTime := min.(time.Time) //nolint:forcetypeassert // Want panic.
+			maxTime := max.(time.Time) //nolint:forcetypeassert // Want panic.
 			return minTime.Before(actualTime) && actualTime.Before(maxTime)
 		}
 	}
@@ -1034,7 +1052,7 @@ func (t *C) InDelta(actual, expected, delta interface{}, msg ...interface{}) boo
 }
 
 func isInDelta(actual, expected, delta interface{}) bool {
-	switch v, e, d := reflect.ValueOf(actual), reflect.ValueOf(expected), reflect.ValueOf(delta); v.Kind() {
+	switch v, e, d := reflect.ValueOf(actual), reflect.ValueOf(expected), reflect.ValueOf(delta); v.Kind() { //nolint:exhaustive // Covered by default case.
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		min, max := e.Int()-d.Int(), e.Int()+d.Int()
 		return min <= v.Int() && v.Int() <= max
@@ -1046,7 +1064,8 @@ func isInDelta(actual, expected, delta interface{}) bool {
 		return min <= v.Float() && v.Float() <= max
 	default:
 		if actualTime, ok := actual.(time.Time); ok {
-			expectedTime, dur := expected.(time.Time), delta.(time.Duration)
+			expectedTime := expected.(time.Time) //nolint:forcetypeassert // Want panic.
+			dur := delta.(time.Duration)         //nolint:forcetypeassert // Want panic.
 			minTime, maxTime := expectedTime.Add(-dur), expectedTime.Add(dur)
 			return minTime.Before(actualTime) && actualTime.Before(maxTime) ||
 				actualTime.Equal(minTime) ||
@@ -1137,7 +1156,7 @@ func (t *C) HasPrefix(actual, expected interface{}, msg ...interface{}) bool {
 
 // isHasPrefix updates actual and expected to be a real string used for check,
 // to make dump easier to understand, but this result in losing type information.
-func isHasPrefix(actual, expected *interface{}) bool {
+func isHasPrefix(actual, expected *interface{}) bool { //nolint:gocritic // False positive.
 	if *actual == nil || *expected == nil {
 		return false
 	}
@@ -1178,7 +1197,7 @@ func (t *C) HasSuffix(actual, expected interface{}, msg ...interface{}) bool {
 
 // isHasSuffix updates actual and expected to be a real string used for check,
 // to make dump easier to understand, but this result in losing type information.
-func isHasSuffix(actual, expected *interface{}) bool {
+func isHasSuffix(actual, expected *interface{}) bool { //nolint:gocritic // False positive.
 	if *actual == nil || *expected == nil {
 		return false
 	}
@@ -1246,7 +1265,7 @@ func jsonify(arg interface{}) json.RawMessage {
 		}
 		return *v
 	}
-	buf := reflect.ValueOf(arg).Convert(typBytes).Interface().([]byte)
+	buf := reflect.ValueOf(arg).Convert(typBytes).Interface().([]byte) //nolint:forcetypeassert // Want panic.
 
 	var v interface{}
 	err := json.Unmarshal(buf, &v)

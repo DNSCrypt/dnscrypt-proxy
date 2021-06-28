@@ -50,8 +50,11 @@ func (c testStat) String() string {
 	return fmt.Sprintf("checks:  %s  %s  %s\t%s", c.passed, c.forged, c.failed, c.name)
 }
 
-var statsMu sync.Mutex
-var stats = map[*testing.T]*testStat{}
+//nolint:gochecknoglobals // By design.
+var (
+	statsMu sync.Mutex
+	stats   = map[*testing.T]*testStat{}
+)
 
 // Report output statistics about passed/failed checks.
 // It should be called from TestMain after m.Run(), for ex.:
