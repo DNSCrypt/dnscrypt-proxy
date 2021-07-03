@@ -70,3 +70,19 @@ Require [Go 1.9](https://golang.org/doc/go1.9#test-helper).
 ```
 go get github.com/powerman/check
 ```
+
+## TODO
+
+- Doc:
+  - [ ] Add testable examples.
+  - [ ] Show how text diff and stats looks like (both text and screenshot with colors).
+  - [ ] Show how `goconvey` diff looks like.
+- Questionable:
+  - [ ] Support custom checkers from gocheck etc.?
+  - [ ] Provide a way to force binary dump for utf8.Valid `string`/`[]byte`?
+  - [ ] Count skipped tests (will have to overload `Skip`, `Skipf`, `SkipNow`)?
+- Complicated:
+  - [ ] Show line of source_test.go with failed test (like gocheck).
+  - [ ] Auto-detect missed `t:=check.T(tt)` - try to intercept `Run()` and
+    `Parallel()` for detecting using wrong `t` (looks like golangci-lint's
+    tparallel catch at least `Parallel()` case).

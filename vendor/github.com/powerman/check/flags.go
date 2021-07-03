@@ -10,6 +10,7 @@ type peekFlags struct {
 	conveyJSON bool
 }
 
+//nolint:gochecknoglobals // By design.
 var flags peekFlags
 
 func (p *peekFlags) detect() *peekFlags {

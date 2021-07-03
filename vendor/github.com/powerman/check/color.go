@@ -5,6 +5,7 @@ import (
 	"strings"
 )
 
+//nolint:gochecknoglobals // By design.
 var (
 	ansiGreen  = "\033[32m"
 	ansiYellow = "\033[33m"
@@ -12,7 +13,7 @@ var (
 	ansiReset  = "\033[0m"
 )
 
-func init() {
+func init() { //nolint:gochecknoinits // By design.
 	if !wantColor() {
 		ansiGreen, ansiYellow, ansiRed, ansiReset = "", "", "", ""
 	}

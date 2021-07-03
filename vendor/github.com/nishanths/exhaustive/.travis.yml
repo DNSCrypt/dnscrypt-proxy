@@ -1,0 +1,12 @@
+language: go
+
+go:
+  - 1.x
+  - master
+
+# Only clone the most recent commit.
+git:
+  depth: 1
+
+notifications:
+  email: false

@@ -1,15 +1,15 @@
 module github.com/powerman/check
 
-go 1.13
+go 1.16
 
 require (
 	github.com/davecgh/go-spew v1.1.1
-	github.com/gopherjs/gopherjs v0.0.0-20191106031601-ce3c9ade29de // indirect
+	github.com/golangci/golangci-lint v1.41.1
+	github.com/mattn/goveralls v0.0.9
 	github.com/pkg/errors v0.9.1
 	github.com/pmezard/go-difflib v1.0.0
-	github.com/smartystreets/assertions v1.0.1 // indirect
 	github.com/smartystreets/goconvey v1.6.4
-	golang.org/x/sys v0.0.0-20200124204421-9fbb57f87de9
-	google.golang.org/grpc v1.27.0
-	google.golang.org/protobuf v1.25.0
+	golang.org/x/sys v0.0.0-20210616094352-59db8d763f22
+	google.golang.org/grpc v1.38.0
+	google.golang.org/protobuf v1.27.0
 )
