@@ -1,0 +1,10 @@
+# /name     - exclude path (* doesn't match /) to file/dir "name"  beginning in project root
+# na/me     - exclude path (* doesn't match /) to file/dir "na/me" anywhere
+# name      - exclude path (* do      match /) to file/dir "name"  anywhere
+# name/     - exclude path …                   to      dir …
+# **/name   - exclude path (* doesn't match /) to file/dir "name"  in any dir including project root
+# na/**/me  - exclude path (* doesn't match /) to file/dir "na/me", "na/*/me", "na/*/*/me", …
+# !name     - include previously excluded path …
+/.circleci/config-local.yml
+/.gobincache/
+/cover.out

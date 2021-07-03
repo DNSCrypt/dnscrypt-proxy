@@ -13,6 +13,7 @@ import (
 	"github.com/pmezard/go-difflib/difflib"
 )
 
+//nolint:gochecknoglobals // Const.
 var spewCfg = spew.ConfigState{
 	Indent:                  "  ",
 	DisablePointerAddresses: true,
@@ -65,8 +66,8 @@ func (v dump) diff(expected dump) string {
 //   - invalid utf8: use hexdump like for []byte
 // - []byte: same as string instead of hexdump for valid utf8
 // - []rune: use quoted char instead of number for valid runes in list
-// - json.RawMessage: indent, then same as string
-func newDump(i interface{}) (d dump) { // nolint:gocyclo,gocognit,funlen
+// - json.RawMessage: indent, then same as string.
+func newDump(i interface{}) (d dump) { //nolint:gocyclo,gocognit,funlen,cyclop // By design.
 	d.dump = spewCfg.Sdump(i)
 
 	if i == nil {
