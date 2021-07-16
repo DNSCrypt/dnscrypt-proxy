@@ -7,6 +7,10 @@
 ![ShiftLeft Scan](https://github.com/DNSCrypt/dnscrypt-proxy/workflows/ShiftLeft%20Scan/badge.svg)
 [![#dnscrypt-proxy:matrix.org](https://img.shields.io/matrix/dnscrypt-proxy:matrix.org.svg?label=DNSCrypt-Proxy%20Matrix%20Chat&server_fqdn=matrix.org&style=popout)](https://matrix.to/#/#dnscrypt-proxy:matrix.org)
 
+# 🎉 Celebrating 10 years of encrypted DNS! 🎉
+
+**🥂 DNSCrypt is now 10 years old! 🥂**
+
 ## Overview
 
 A flexible DNS proxy, with support for modern encrypted DNS protocols such as [DNSCrypt v2](https://dnscrypt.info/protocol), [DNS-over-HTTPS](https://www.rfc-editor.org/rfc/rfc8484.txt), [Anonymized DNSCrypt](https://github.com/DNSCrypt/dnscrypt-protocol/blob/master/ANONYMIZED-DNSCRYPT.txt) and [ODoH (Oblivious DoH)](https://github.com/DNSCrypt/dnscrypt-resolvers/blob/master/v3/odoh.md).
