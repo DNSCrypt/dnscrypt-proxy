@@ -331,7 +331,7 @@ block_undelegated = true
 ## TTL for synthetic responses sent when a request has been blocked (due to
 ## IPv6 or blocklists).
 
-reject_ttl = 60
+reject_ttl = 10
 
 
 
