@@ -201,13 +201,13 @@ github.com/jedisct1/go-clocksmith
 # github.com/jedisct1/go-dnsstamps v0.0.0-20210414164033-fdb47fe0c84c
 ## explicit
 github.com/jedisct1/go-dnsstamps
-# github.com/jedisct1/go-hpke-compact v0.0.0-20210607160958-a8af3a0d4a3c
+# github.com/jedisct1/go-hpke-compact v0.0.0-20210703085305-99282c7209f9
 ## explicit
 github.com/jedisct1/go-hpke-compact
-# github.com/jedisct1/go-minisign v0.0.0-20210414164026-819d7e2534ac
+# github.com/jedisct1/go-minisign v0.0.0-20210703085342-c1f07ee84431
 ## explicit
 github.com/jedisct1/go-minisign
-# github.com/jedisct1/xsecretbox v0.0.0-20210330110434-7cb86b57caf0
+# github.com/jedisct1/xsecretbox v0.0.0-20210703085425-7c05e6e89453
 ## explicit
 github.com/jedisct1/xsecretbox
 # github.com/jgautheron/goconst v1.5.1
@@ -396,7 +396,7 @@ github.com/ultraware/whitespace
 github.com/uudashr/gocognit
 # github.com/yeya24/promlinter v0.1.0
 github.com/yeya24/promlinter
-# golang.org/x/crypto v0.0.0-20210616213533-5ff15b29337e
+# golang.org/x/crypto v0.0.0-20210711020723-a769d52b0f97
 ## explicit
 golang.org/x/crypto/blake2b
 golang.org/x/crypto/chacha20
@@ -416,7 +416,7 @@ golang.org/x/mod/internal/lazyregexp
 golang.org/x/mod/modfile
 golang.org/x/mod/module
 golang.org/x/mod/semver
-# golang.org/x/net v0.0.0-20210614182718-04defd469f4e
+# golang.org/x/net v0.0.0-20210726213435-c6fcb2dbf985
 ## explicit
 golang.org/x/net/bpf
 golang.org/x/net/http/httpguts

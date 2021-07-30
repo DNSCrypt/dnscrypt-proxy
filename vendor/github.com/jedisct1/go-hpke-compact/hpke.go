@@ -619,12 +619,12 @@ func (context *ServerContext) ExporterSecret() []byte {
 	return context.inner.exporterSecret
 }
 
-// Export - Return the exporter secret
+// Export - Derive an arbitrary-long secret
 func (context *ClientContext) Export(exporterContext []byte, length uint16) ([]byte, error) {
 	return context.inner.export(exporterContext, length)
 }
 
-// Export - Return the exporter secret
+// Export - Derive an arbitrary-long secret
 func (context *ServerContext) Export(exporterContext []byte, length uint16) ([]byte, error) {
 	return context.inner.export(exporterContext, length)
 }

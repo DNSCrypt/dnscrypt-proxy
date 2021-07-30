@@ -13,15 +13,15 @@ require (
 	github.com/jedisct1/dlog v0.0.0-20210101122416-354ffe815216
 	github.com/jedisct1/go-clocksmith v0.0.0-20210101121932-da382b963868
 	github.com/jedisct1/go-dnsstamps v0.0.0-20210414164033-fdb47fe0c84c
-	github.com/jedisct1/go-hpke-compact v0.0.0-20210607160958-a8af3a0d4a3c
-	github.com/jedisct1/go-minisign v0.0.0-20210414164026-819d7e2534ac
-	github.com/jedisct1/xsecretbox v0.0.0-20210330110434-7cb86b57caf0
+	github.com/jedisct1/go-hpke-compact v0.0.0-20210703085305-99282c7209f9
+	github.com/jedisct1/go-minisign v0.0.0-20210703085342-c1f07ee84431
+	github.com/jedisct1/xsecretbox v0.0.0-20210703085425-7c05e6e89453
 	github.com/k-sone/critbitgo v1.4.0
 	github.com/kardianos/service v1.2.0
 	github.com/miekg/dns v1.1.43
 	github.com/powerman/check v1.5.0
-	golang.org/x/crypto v0.0.0-20210616213533-5ff15b29337e
-	golang.org/x/net v0.0.0-20210614182718-04defd469f4e
+	golang.org/x/crypto v0.0.0-20210711020723-a769d52b0f97
+	golang.org/x/net v0.0.0-20210726213435-c6fcb2dbf985
 	golang.org/x/sys v0.0.0-20210630005230-0f9fa26af87c
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 )
