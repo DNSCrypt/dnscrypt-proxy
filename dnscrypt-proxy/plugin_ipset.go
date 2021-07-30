@@ -76,7 +76,9 @@ func (plugin *PluginIPSet) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 	}
 	qName := pluginsState.qName
 	ipsetList, _, xIpset := plugin.patternMatcher.Eval(qName)
-	dlog.Noticef("xIpset: %s", xIpset.(anIPSet).ipsetName)
+	if xIpset == nil {
+		return nil
+	}
 	var ipStr string
 	var ipsetName = xIpset.(anIPSet).ipsetName
 	dlog.Noticef("ipsetName: %s", ipsetName)
