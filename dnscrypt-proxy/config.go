@@ -104,6 +104,7 @@ type Config struct {
 	DoHClientX509AuthLegacy  DoHClientX509AuthConfig     `toml:"tls_client_auth"`
 	DNS64                    DNS64Config                 `toml:"dns64"`
 	EDNSClientSubnet         []string                    `toml:"edns_client_subnet"`
+	IPSet                    IPSetConfig                 `toml:"ipset"`
 }
 
 func newConfig() Config {
@@ -275,6 +276,10 @@ type DoHClientX509AuthConfig struct {
 type DNS64Config struct {
 	Prefixes  []string `toml:"prefix"`
 	Resolvers []string `toml:"resolver"`
+}
+
+type IPSetConfig struct {
+	File    string `toml:"ipset_names_file"`
 }
 
 type CaptivePortalsConfig struct {
@@ -643,6 +648,8 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 
 	proxy.dns64Prefixes = config.DNS64.Prefixes
 	proxy.dns64Resolvers = config.DNS64.Resolvers
+
+	proxy.ipsetNameFile = config.IPSet.File
 
 	if *flags.ListAll {
 		config.ServerNames = nil

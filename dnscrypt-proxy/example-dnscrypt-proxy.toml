@@ -838,6 +838,21 @@ skip_incompatible = false
 
 
 
+###############################
+#            IPSET            #
+###############################
+
+## IP sets allows storing a list of IP addresses that can be matched
+## against by iptables (See: https://ipset.netfilter.org/).
+
+[ipset]
+
+ ## Path to the file of ipset rules (absolute, or relative to the same directory as the config file)
+
+  # ipset_names_file = 'ipset-names.txt'
+
+
+
 ########################################
 #            Static entries            #
 ########################################

@@ -26,6 +26,7 @@ type Proxy struct {
 	registeredServers             []RegisteredServer
 	dns64Resolvers                []string
 	dns64Prefixes                 []string
+	ipsetNameFile                 string
 	serversBlockingFragments      []string
 	ednsClientSubnets             []*net.IPNet
 	queryLogIgnoredQtypes         []string

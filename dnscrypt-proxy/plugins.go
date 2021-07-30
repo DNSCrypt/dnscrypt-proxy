@@ -149,6 +149,9 @@ func (proxy *Proxy) InitPluginsGlobals() error {
 	if len(proxy.dns64Resolvers) != 0 || len(proxy.dns64Prefixes) != 0 {
 		*responsePlugins = append(*responsePlugins, Plugin(new(PluginDNS64)))
 	}
+	if len(proxy.ipsetNameFile) != 0 {
+		*responsePlugins = append(*responsePlugins, Plugin(new(PluginIPSet)))
+	}
 	if proxy.cache {
 		*responsePlugins = append(*responsePlugins, Plugin(new(PluginCacheResponse)))
 	}
