@@ -409,12 +409,12 @@ func (xTransport *XTransport) Fetch(method string, url *url.URL, accept string, 
 			xTransport.tlsCipherSuite = nil
 			xTransport.rebuildTransport()
 		}
-		return nil, 0, nil, 0, err
+		return nil, resp.StatusCode, nil, rtt, err
 	}
 	tls := resp.TLS
 	bin, err := ioutil.ReadAll(io.LimitReader(resp.Body, MaxHTTPBodyLength))
 	if err != nil {
-		return nil, resp.StatusCode, tls, 0, err
+		return nil, resp.StatusCode, tls, rtt, err
 	}
 	resp.Body.Close()
 	return bin, resp.StatusCode, tls, rtt, err
