@@ -402,6 +402,10 @@ func (xTransport *XTransport) Fetch(method string, url *url.URL, accept string, 
 	} else {
 		(*xTransport.transport).CloseIdleConnections()
 	}
+	statusCode := 503
+	if resp != nil {
+		statusCode = resp.StatusCode
+	}
 	if err != nil {
 		dlog.Debugf("[%s]: [%s]", req.URL, err)
 		if xTransport.tlsCipherSuite != nil && strings.Contains(err.Error(), "handshake failure") {
@@ -409,15 +413,15 @@ func (xTransport *XTransport) Fetch(method string, url *url.URL, accept string, 
 			xTransport.tlsCipherSuite = nil
 			xTransport.rebuildTransport()
 		}
-		return nil, resp.StatusCode, nil, rtt, err
+		return nil, statusCode, nil, rtt, err
 	}
 	tls := resp.TLS
 	bin, err := ioutil.ReadAll(io.LimitReader(resp.Body, MaxHTTPBodyLength))
 	if err != nil {
-		return nil, resp.StatusCode, tls, rtt, err
+		return nil, statusCode, tls, rtt, err
 	}
 	resp.Body.Close()
-	return bin, resp.StatusCode, tls, rtt, err
+	return bin, statusCode, tls, rtt, err
 }
 
 func (xTransport *XTransport) Get(url *url.URL, accept string, timeout time.Duration) ([]byte, int, *tls.ConnectionState, time.Duration, error) {
