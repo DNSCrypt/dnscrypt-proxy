@@ -702,7 +702,10 @@ func (proxy *Proxy) processIncomingQuery(clientProto string, serverProto string,
 						dlog.Warnf("Failed to decrypt response from [%v]", serverName)
 						response = nil
 					}
-				} else if responseCode == 401 {
+				} else if responseCode == 401 || (responseCode == 200 && len(responseBody) == 0) {
+					if responseCode == 200 {
+						dlog.Warnf("ODoH relay for [%v] is buggy and returns a 200 status code instead of 401 after a key update", serverInfo.Name)
+					}
 					dlog.Infof("Forcing key update for [%v]", serverInfo.Name)
 					for _, registeredServer := range proxy.serversInfo.registeredServers {
 						if registeredServer.name == serverInfo.Name {
@@ -710,6 +713,7 @@ func (proxy *Proxy) processIncomingQuery(clientProto string, serverProto string,
 								// Failed to refresh the proxy server information.
 								dlog.Noticef("Key update failed for [%v]", serverName)
 								serverInfo.noticeFailure(proxy)
+								clocksmith.Sleep(10 * time.Second)
 							}
 							break
 						}
