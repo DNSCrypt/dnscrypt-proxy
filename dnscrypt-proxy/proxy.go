@@ -603,8 +603,11 @@ func (proxy *Proxy) processIncomingQuery(clientProto string, serverProto string,
 			return
 		}
 	}
-	if onlyCached && len(response) == 0 {
-		return
+	if onlyCached {
+		if len(response) == 0 {
+			return
+		}
+		serverInfo = nil
 	}
 	if len(response) == 0 && serverInfo != nil {
 		var ttl *uint32
