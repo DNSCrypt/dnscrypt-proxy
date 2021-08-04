@@ -369,14 +369,14 @@ func (proxy *Proxy) udpListener(clientPc *net.UDPConn) {
 			return
 		}
 		packet := buffer[:length]
+		if !proxy.clientsCountInc() {
+			dlog.Warnf("Too many incoming connections (max=%d)", proxy.maxClients)
+			proxy.processIncomingQuery("udp", proxy.mainProto, packet, &clientAddr, clientPc, time.Now()) // handle synchronously
+			continue
+		}
 		go func() {
-			if !proxy.clientsCountInc() {
-				dlog.Warnf("Too many incoming connections (max=%d)", proxy.maxClients)
-				return
-			}
 			defer proxy.clientsCountDec()
-			start := time.Now()
-			proxy.processIncomingQuery("udp", proxy.mainProto, packet, &clientAddr, clientPc, start)
+			proxy.processIncomingQuery("udp", proxy.mainProto, packet, &clientAddr, clientPc, time.Now())
 		}()
 	}
 }
@@ -388,12 +388,13 @@ func (proxy *Proxy) tcpListener(acceptPc *net.TCPListener) {
 		if err != nil {
 			continue
 		}
+		if !proxy.clientsCountInc() {
+			dlog.Warnf("Too many incoming connections (max=%d)", proxy.maxClients)
+			clientPc.Close()
+			continue
+		}
 		go func() {
 			defer clientPc.Close()
-			if !proxy.clientsCountInc() {
-				dlog.Warnf("Too many incoming connections (max=%d)", proxy.maxClients)
-				return
-			}
 			defer proxy.clientsCountDec()
 			if err := clientPc.SetDeadline(time.Now().Add(proxy.timeout)); err != nil {
 				return
