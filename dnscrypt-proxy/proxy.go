@@ -371,7 +371,7 @@ func (proxy *Proxy) udpListener(clientPc *net.UDPConn) {
 		packet := buffer[:length]
 		if !proxy.clientsCountInc() {
 			dlog.Warnf("Too many incoming connections (max=%d)", proxy.maxClients)
-			proxy.processIncomingQuery("udp", proxy.mainProto, packet, &clientAddr, clientPc, time.Now(), true) // handle synchronously
+			proxy.processIncomingQuery("udp", proxy.mainProto, packet, &clientAddr, clientPc, time.Now(), true) // respond synchronously, but only to cached/synthesized queries
 			continue
 		}
 		go func() {
