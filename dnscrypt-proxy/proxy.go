@@ -371,12 +371,12 @@ func (proxy *Proxy) udpListener(clientPc *net.UDPConn) {
 		packet := buffer[:length]
 		if !proxy.clientsCountInc() {
 			dlog.Warnf("Too many incoming connections (max=%d)", proxy.maxClients)
-			proxy.processIncomingQuery("udp", proxy.mainProto, packet, &clientAddr, clientPc, time.Now()) // handle synchronously
+			proxy.processIncomingQuery("udp", proxy.mainProto, packet, &clientAddr, clientPc, time.Now(), true) // handle synchronously
 			continue
 		}
 		go func() {
 			defer proxy.clientsCountDec()
-			proxy.processIncomingQuery("udp", proxy.mainProto, packet, &clientAddr, clientPc, time.Now())
+			proxy.processIncomingQuery("udp", proxy.mainProto, packet, &clientAddr, clientPc, time.Now(), false)
 		}()
 	}
 }
@@ -405,7 +405,7 @@ func (proxy *Proxy) tcpListener(acceptPc *net.TCPListener) {
 				return
 			}
 			clientAddr := clientPc.RemoteAddr()
-			proxy.processIncomingQuery("tcp", "tcp", packet, &clientAddr, clientPc, start)
+			proxy.processIncomingQuery("tcp", "tcp", packet, &clientAddr, clientPc, start, false)
 		}()
 	}
 }
@@ -573,7 +573,7 @@ func (proxy *Proxy) clientsCountDec() {
 	}
 }
 
-func (proxy *Proxy) processIncomingQuery(clientProto string, serverProto string, query []byte, clientAddr *net.Addr, clientPc net.Conn, start time.Time) (response []byte) {
+func (proxy *Proxy) processIncomingQuery(clientProto string, serverProto string, query []byte, clientAddr *net.Addr, clientPc net.Conn, start time.Time, onlyCached bool) (response []byte) {
 	if len(query) < MinDNSPacketSize {
 		return
 	}
@@ -602,6 +602,9 @@ func (proxy *Proxy) processIncomingQuery(clientProto string, serverProto string,
 			pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
 			return
 		}
+	}
+	if onlyCached && len(response) == 0 {
+		return
 	}
 	if len(response) == 0 && serverInfo != nil {
 		var ttl *uint32
