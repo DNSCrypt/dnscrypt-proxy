@@ -625,3 +625,8 @@ const (
 	PPS_GETCAP    = 0x800470a3
 	PPS_FETCH     = 0xc00470a4
 )
+
+type ifreq struct {
+	Ifrn [16]byte
+	Ifru [16]byte
+}

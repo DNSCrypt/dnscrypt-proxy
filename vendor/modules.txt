@@ -1,8 +1,9 @@
 # 4d63.com/gochecknoglobals v0.0.0-20201008074935-acfc0b28355a
 4d63.com/gochecknoglobals/checknoglobals
-# github.com/BurntSushi/toml v0.3.1
+# github.com/BurntSushi/toml v0.4.1
 ## explicit
 github.com/BurntSushi/toml
+github.com/BurntSushi/toml/internal
 # github.com/Djarvur/go-err113 v0.0.0-20210108212216-aea10b59be24
 github.com/Djarvur/go-err113
 # github.com/Masterminds/semver v1.5.0
@@ -416,7 +417,7 @@ golang.org/x/mod/internal/lazyregexp
 golang.org/x/mod/modfile
 golang.org/x/mod/module
 golang.org/x/mod/semver
-# golang.org/x/net v0.0.0-20210726213435-c6fcb2dbf985
+# golang.org/x/net v0.0.0-20210805182204-aaa1db679c0d
 ## explicit
 golang.org/x/net/bpf
 golang.org/x/net/http/httpguts
@@ -429,7 +430,7 @@ golang.org/x/net/internal/socks
 golang.org/x/net/ipv4
 golang.org/x/net/ipv6
 golang.org/x/net/proxy
-# golang.org/x/sys v0.0.0-20210630005230-0f9fa26af87c
+# golang.org/x/sys v0.0.0-20210806184541-e5e7981a1069
 ## explicit
 golang.org/x/sys/cpu
 golang.org/x/sys/execabs

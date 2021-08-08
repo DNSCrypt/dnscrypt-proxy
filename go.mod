@@ -3,7 +3,7 @@ module github.com/dnscrypt/dnscrypt-proxy
 go 1.16
 
 require (
-	github.com/BurntSushi/toml v0.3.1
+	github.com/BurntSushi/toml v0.4.1
 	github.com/VividCortex/ewma v1.2.0
 	github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf
 	github.com/dchest/safefile v0.0.0-20151022103144-855e8d98f185
@@ -21,7 +21,7 @@ require (
 	github.com/miekg/dns v1.1.43
 	github.com/powerman/check v1.5.0
 	golang.org/x/crypto v0.0.0-20210711020723-a769d52b0f97
-	golang.org/x/net v0.0.0-20210726213435-c6fcb2dbf985
-	golang.org/x/sys v0.0.0-20210630005230-0f9fa26af87c
+	golang.org/x/net v0.0.0-20210805182204-aaa1db679c0d
+	golang.org/x/sys v0.0.0-20210806184541-e5e7981a1069
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 )
