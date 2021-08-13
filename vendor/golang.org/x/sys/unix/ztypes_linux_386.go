@@ -170,6 +170,11 @@ type Cmsghdr struct {
 	Type  int32
 }
 
+type ifreq struct {
+	Ifrn [16]byte
+	Ifru [16]byte
+}
+
 const (
 	SizeofSockaddrNFCLLCP = 0x58
 	SizeofIovec           = 0x8
@@ -630,8 +635,3 @@ const (
 	PPS_GETCAP    = 0x800470a3
 	PPS_FETCH     = 0xc00470a4
 )
-
-type ifreq struct {
-	Ifrn [16]byte
-	Ifru [16]byte
-}

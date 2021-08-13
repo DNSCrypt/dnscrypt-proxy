@@ -111,6 +111,32 @@ func NewServerStampFromString(stampStr string) (ServerStamp, error) {
 	return ServerStamp{}, errors.New("Unsupported stamp version or protocol")
 }
 
+func NewRelayAndServerStampFromString(stampStr string) (ServerStamp, ServerStamp, error) {
+	if !strings.HasPrefix(stampStr, "sdns://") {
+		return ServerStamp{}, ServerStamp{}, errors.New("Stamps are expected to start with \"sdns://\"")
+	}
+	stampStr = stampStr[7:]
+	parts := strings.Split(stampStr, "/")
+	if len(parts) != 2 {
+		return ServerStamp{}, ServerStamp{}, errors.New("This is not a relay+server stamp")
+	}
+	relayStamp, err := NewServerStampFromString("sdns://" + parts[0])
+	if err != nil {
+		return ServerStamp{}, ServerStamp{}, err
+	}
+	serverStamp, err := NewServerStampFromString("sdns://" + parts[1])
+	if err != nil {
+		return ServerStamp{}, ServerStamp{}, err
+	}
+	if relayStamp.Proto != StampProtoTypeDNSCryptRelay && relayStamp.Proto != StampProtoTypeODoHRelay {
+		return ServerStamp{}, ServerStamp{}, errors.New("First stamp is not a relay")
+	}
+	if !(serverStamp.Proto != StampProtoTypeDNSCryptRelay && serverStamp.Proto != StampProtoTypeODoHRelay) {
+		return ServerStamp{}, ServerStamp{}, errors.New("Second stamp is a relay")
+	}
+	return relayStamp, serverStamp, nil
+}
+
 // id(u8)=0x01 props addrLen(1) serverAddr pkStrlen(1) pkStr providerNameLen(1) providerName
 
 func newDNSCryptServerStamp(bin []byte) (ServerStamp, error) {
