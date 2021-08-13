@@ -1,20 +1,13 @@
-# Version 2.0.46 (not released yet, may become 2.1.0)
-## beta 3:
- - Add support for the final version of the Oblivious DoH specification.
-
-## beta 2:
- - Relays are now mandatory for ODoH servers.
- - Routes with `server_name = '*'` now correctly handle both relay types.
+# Version 2.1.0
+ - `dnscrypt-proxy` now includes support for Oblivious DoH.
+ - If the proxy is overloaded, cached and synthetic queries now keep being
+served, while non-cached queries are delayed.
  - A deprecation warning was added for `fallback_resolvers`.
-
-## beta 1:
  - Source URLs are now randomized.
  - On some platforms, redirecting the application log to a file was not
 compatible with user switching; this has been fixed.
  - `fallback_resolvers` was renamed to `bootstrap_resolvers` for
 clarity. Please update your configuration file accordingly.
- - Preliminary support for ODoH (Oblivious DoH) was added. Thanks to
-Chris Wood for his help on this!
 
 # Version 2.0.45
  - Configuration changes (to be required in versions 2.1.x):
