@@ -12,6 +12,7 @@ import (
 	"time"
 
 	pkgerrors "github.com/pkg/errors"
+	"github.com/powerman/deepequal"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -478,6 +479,8 @@ func (t *C) NotBytesEqual(actual, expected []byte, msg ...interface{}) bool {
 }
 
 // DeepEqual checks for reflect.DeepEqual(actual, expected).
+// It will also use Equal method for types which implements it
+// (e.g. time.Time, decimal.Decimal, etc.).
 // It will use proto.Equal for protobuf messages.
 func (t *C) DeepEqual(actual, expected interface{}, msg ...interface{}) bool {
 	t.Helper()
@@ -488,11 +491,13 @@ func (t *C) DeepEqual(actual, expected interface{}, msg ...interface{}) bool {
 			proto.Equal(protoActual, protoExpected))
 	}
 	return t.report2(actual, expected, msg,
-		reflect.DeepEqual(actual, expected))
+		deepequal.DeepEqual(actual, expected))
 }
 
 // NotDeepEqual checks for !reflect.DeepEqual(actual, expected).
-// It will use !proto.Equal for protobuf messages.
+// It will also use Equal method for types which implements it
+// (e.g. time.Time, decimal.Decimal, etc.).
+// It will use proto.Equal for protobuf messages.
 func (t *C) NotDeepEqual(actual, expected interface{}, msg ...interface{}) bool {
 	t.Helper()
 	protoActual, proto1 := actual.(protoreflect.ProtoMessage)
@@ -502,7 +507,7 @@ func (t *C) NotDeepEqual(actual, expected interface{}, msg ...interface{}) bool 
 			!proto.Equal(protoActual, protoExpected))
 	}
 	return t.report1(actual, msg,
-		!reflect.DeepEqual(actual, expected))
+		!deepequal.DeepEqual(actual, expected))
 }
 
 // Match checks for regex.MatchString(actual).

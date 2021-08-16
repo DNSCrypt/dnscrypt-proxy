@@ -539,8 +539,11 @@ github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZN
 github.com/polyfloyd/go-errorlint v0.0.0-20210510181950-ab96adb96fea h1:Sk6Xawg57ZkjXmFYD1xCHSKN6FtYM+km51MM7Lveyyc=
 github.com/polyfloyd/go-errorlint v0.0.0-20210510181950-ab96adb96fea/go.mod h1:wi9BfjxjF/bwiZ701TzmfKu6UKC357IOAtNr0Td0Lvw=
 github.com/posener/complete v1.1.1/go.mod h1:em0nMJCgc9GFtwrmVmEMR/ZL6WyhyjMBndrE9hABlRI=
-github.com/powerman/check v1.5.0 h1:72YL13AQcqtdepmD0aFnd6UXwf5XnjaZAn2AFddzqE4=
 github.com/powerman/check v1.5.0/go.mod h1:rkG3EGrr9RzxN2N+ZAeOTMRIE1W+db7QGJjiIUlVsoA=
+github.com/powerman/check v1.6.0 h1:8J3QQFD2QaeMu+pDZz+EChgY62IQtRfpUSD7WHBEgg4=
+github.com/powerman/check v1.6.0/go.mod h1:sHb2NBEd2MdSGldglajwRsC1yxjcfngva5CGGsIMJDM=
+github.com/powerman/deepequal v0.1.0 h1:sVwtyTsBuYIvdbLR1O2wzRY63YgPqdGZmk/o80l+C/U=
+github.com/powerman/deepequal v0.1.0/go.mod h1:3k7aG/slufBhUANdN67o/UPg8i5YaiJ6FmibWX0cn04=
 github.com/prometheus/client_golang v0.9.1/go.mod h1:7SWBe2y4D6OKWSNQJUaRYU/AaXPKyh/dDVn+NZz0KFw=
 github.com/prometheus/client_golang v0.9.3/go.mod h1:/TN21ttK/J9q6uSwhBd54HahCDft0ttaMvbicHlPoso=
 github.com/prometheus/client_golang v1.0.0/go.mod h1:db9x61etRT2tGnBNRi70OPL5FsnadC4Ky3P0J6CfImo=
