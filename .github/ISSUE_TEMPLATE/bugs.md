@@ -7,25 +7,23 @@ assignees: ''
 
 ---
 
-## Please read before filling a bug report
+THE TRACKER IS DEDICATED TO KEEPING TRACK OF *BUGS*,
+preferably after they have been already discussed and confirmed to be reproducible.
 
-This tracker is dedicated to tracking bugs, reproducible in the context described in the
-"Context" section.
-
-Installation and configuration issues are not bugs, but individual assistance request.
-In order to ask for help, please use the discussions (Q&A) section instead:
+FOR ASSISTANCE, PLEASE CLOSE THIS FORM AND USE THE DISCUSSIONS SECTION INSTEAD:
 https://github.com/DNSCrypt/dnscrypt-proxy/discussions/categories/q-a
 
-Context: the LATEST version of `dnscrypt-proxy` (precompiled binaries downloaded from this
-repository) is correctly installed and configured on your system, but something doesn't
-seem to produce the expected result.
+~~~
 
-If the bug is not trivial to reproduce on any platform, please include ALL the steps required
-to reliably duplicate it, on a vanilla, generic install of macOS, Windows, OpenBSD or Ubuntu Linux
-system, in their most current version.
+Reported bugs must reproducible in the context described in the "Context" section.
 
-If you don't have any clear understanding of the issue or can't enumerate the steps to
-reproduce it, open a discussion instead:
+Installation and configuration issues are not bugs, but individual assistance request.
+
+Context: the LATEST version of `dnscrypt-proxy` (precompiled binaries downloaded from this repository) is correctly installed and configured on your system, but something doesn't seem to produce the expected result.
+
+If the bug is not trivial to reproduce on any platform, please include ALL the steps required to reliably duplicate it, on a vanilla, generic install of macOS, Windows, OpenBSD or Ubuntu Linux system, in their most current version.
+
+If you don't have any clear understanding of the issue or can't enumerate the steps to reproduce it, open a discussion instead:
 https://github.com/DNSCrypt/dnscrypt-proxy/discussions
 
 
