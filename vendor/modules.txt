@@ -304,9 +304,11 @@ github.com/pkg/errors
 github.com/pmezard/go-difflib/difflib
 # github.com/polyfloyd/go-errorlint v0.0.0-20210510181950-ab96adb96fea
 github.com/polyfloyd/go-errorlint/errorlint
-# github.com/powerman/check v1.5.0
+# github.com/powerman/check v1.6.0
 ## explicit
 github.com/powerman/check
+# github.com/powerman/deepequal v0.1.0
+github.com/powerman/deepequal
 # github.com/prometheus/client_golang v1.7.1
 github.com/prometheus/client_golang/prometheus
 github.com/prometheus/client_golang/prometheus/internal
