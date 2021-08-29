@@ -214,7 +214,7 @@ cert_refresh_delay = 240
 ## Bootstrap resolvers
 ##
 ## These are normal, non-encrypted DNS resolvers, that will be only used
-## for one-shot queries when retrieving the initial resolvers list and the
+## for one-shot queries when retrieving the initial resolvers list and if
 ## the system DNS configuration doesn't work.
 ##
 ## No user queries will ever be leaked through these resolvers, and they will
