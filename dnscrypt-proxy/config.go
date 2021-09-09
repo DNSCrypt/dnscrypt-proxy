@@ -36,7 +36,6 @@ type Config struct {
 	DisabledServerNames      []string       `toml:"disabled_server_names"`
 	ListenAddresses          []string       `toml:"listen_addresses"`
 	LocalDoH                 LocalDoHConfig `toml:"local_doh"`
-	Daemonize                bool
 	UserName                 string `toml:"user_name"`
 	ForceTCP                 bool   `toml:"force_tcp"`
 	Timeout                  int    `toml:"timeout"`
@@ -467,7 +466,6 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	proxy.localDoHPath = config.LocalDoH.Path
 	proxy.localDoHCertFile = config.LocalDoH.CertFile
 	proxy.localDoHCertKeyFile = config.LocalDoH.CertKeyFile
-	proxy.daemonize = config.Daemonize
 	proxy.pluginBlockIPv6 = config.BlockIPv6
 	proxy.pluginBlockUnqualified = config.BlockUnqualified
 	proxy.pluginBlockUndelegated = config.BlockUndelegated
