@@ -90,7 +90,7 @@ func (plugin *PluginCache) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 		return nil
 	}
 
-	updateTTL(&cached.msg, cached.expiration)
+	updateTTL(synth, cached.expiration)
 
 	pluginsState.synthResponse = synth
 	pluginsState.action = PluginsActionSynth
