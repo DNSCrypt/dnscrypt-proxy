@@ -78,6 +78,8 @@ func (plugin *PluginCache) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 		return nil
 	}
 	cached := cachedAny.(CachedResponse)
+	
+	updateTTL(&cached.msg, cached.expiration)
 
 	synth := cached.msg.Copy()
 	synth.Id = msg.Id
@@ -89,8 +91,6 @@ func (plugin *PluginCache) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 		pluginsState.sessionData["stale"] = synth
 		return nil
 	}
-
-	updateTTL(&cached.msg, cached.expiration)
 
 	pluginsState.synthResponse = synth
 	pluginsState.action = PluginsActionSynth
