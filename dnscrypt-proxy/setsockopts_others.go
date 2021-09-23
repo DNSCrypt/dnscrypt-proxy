@@ -1,3 +1,4 @@
+//go:build !freebsd && !openbsd && !windows && !darwin && !linux
 // +build !freebsd,!openbsd,!windows,!darwin,!linux
 
 package main
