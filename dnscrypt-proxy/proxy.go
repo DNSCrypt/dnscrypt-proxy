@@ -93,7 +93,6 @@ type Proxy struct {
 	anonDirectCertFallback        bool
 	pluginBlockUndelegated        bool
 	child                         bool
-	daemonize                     bool
 	requiredProps                 stamps.ServerInformalProperties
 	ServerNames                   []string
 	DisabledServerNames           []string

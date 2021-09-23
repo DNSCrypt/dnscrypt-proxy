@@ -482,7 +482,8 @@ func route(proxy *Proxy, name string, serverProto stamps.StampProtoType) (*Relay
 		if len(relayCandidateStamp.ServerAddrStr) > 0 {
 			ipOnly, _ := ExtractHostAndPort(relayCandidateStamp.ServerAddrStr, -1)
 			if ip := ParseIP(ipOnly); ip != nil {
-				proxy.xTransport.saveCachedIP(relayCandidateStamp.ProviderName, ip, -1*time.Second)
+				host, _ := ExtractHostAndPort(relayCandidateStamp.ProviderName, -1)
+				proxy.xTransport.saveCachedIP(host, ip, -1*time.Second)
 			}
 		}
 		dlog.Noticef("Anonymizing queries for [%v] via [%v]", name, relayName)
@@ -607,7 +608,8 @@ func fetchDoHServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, isN
 	if len(stamp.ServerAddrStr) > 0 {
 		ipOnly, _ := ExtractHostAndPort(stamp.ServerAddrStr, -1)
 		if ip := ParseIP(ipOnly); ip != nil {
-			proxy.xTransport.saveCachedIP(stamp.ProviderName, ip, -1*time.Second)
+			host, _ := ExtractHostAndPort(stamp.ProviderName, -1)
+			proxy.xTransport.saveCachedIP(host, ip, -1*time.Second)
 		}
 	}
 	url := &url.URL{
