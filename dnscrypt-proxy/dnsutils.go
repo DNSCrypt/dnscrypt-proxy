@@ -196,6 +196,9 @@ func updateTTL(msg *dns.Msg, expiration time.Time) {
 	ttl := uint32(0)
 	if until > 0 {
 		ttl = uint32(until / time.Second)
+		if until-time.Duration(ttl)*time.Second < until/2 {
+			ttl += 1
+		}
 	}
 	for _, rr := range msg.Answer {
 		rr.Header().Ttl = ttl
