@@ -28,7 +28,7 @@ def parse_trusted_list(content):
     rx_comment = re.compile(r"^(#|$)")
     rx_inline_comment = re.compile(r"\s*#\s*[a-z0-9-].*$")
     rx_trusted = re.compile(r"^([*a-z0-9.-]+)\s*(@\S+)?$")
-    rx_timed = re.compile(r".+\s*(@\S+)?$")
+    rx_timed = re.compile(r".+\s*@\S+$")
 
     names = set()
     time_restrictions = {}
