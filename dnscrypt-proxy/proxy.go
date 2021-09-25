@@ -573,6 +573,7 @@ func (proxy *Proxy) clientsCountDec() {
 }
 
 func (proxy *Proxy) processIncomingQuery(clientProto string, serverProto string, query []byte, clientAddr *net.Addr, clientPc net.Conn, start time.Time, onlyCached bool) (response []byte) {
+	response = nil
 	if len(query) < MinDNSPacketSize {
 		return
 	}
@@ -668,11 +669,12 @@ func (proxy *Proxy) processIncomingQuery(clientProto string, serverProto string,
 			serverInfo.noticeBegin(proxy)
 			serverResponse, _, tls, _, err := proxy.xTransport.DoHQuery(serverInfo.useGet, serverInfo.URL, query, proxy.timeout)
 			SetTransactionID(query, tid)
-			if err == nil || tls == nil || !tls.HandshakeComplete {
-				response = nil
-			} else if stale, ok := pluginsState.sessionData["stale"]; ok {
-				dlog.Debug("Serving stale response")
-				response, err = (stale.(*dns.Msg)).Pack()
+
+			if err != nil || tls == nil || !tls.HandshakeComplete {
+				if stale, ok := pluginsState.sessionData["stale"]; ok {
+					dlog.Debug("Serving stale response")
+					response, err = (stale.(*dns.Msg)).Pack()
+				}
 			}
 			if err != nil {
 				pluginsState.returnCode = PluginsReturnCodeNetworkError
