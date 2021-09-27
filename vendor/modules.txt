@@ -248,8 +248,8 @@ github.com/hectane/go-acl/api
 # github.com/inconshreveable/mousetrap v1.0.0
 ## explicit
 github.com/inconshreveable/mousetrap
-# github.com/jedisct1/dlog v0.0.0-20210101122416-354ffe815216
-## explicit; go 1.15
+# github.com/jedisct1/dlog v0.0.0-20210927135244-3381aa132e7f
+## explicit; go 1.17
 github.com/jedisct1/dlog
 # github.com/jedisct1/go-clocksmith v0.0.0-20210101121932-da382b963868
 ## explicit
@@ -257,14 +257,14 @@ github.com/jedisct1/go-clocksmith
 # github.com/jedisct1/go-dnsstamps v0.0.0-20210810213811-61cc83d2a354
 ## explicit; go 1.15
 github.com/jedisct1/go-dnsstamps
-# github.com/jedisct1/go-hpke-compact v0.0.0-20210813171635-5534dd969c17
-## explicit; go 1.16
+# github.com/jedisct1/go-hpke-compact v0.0.0-20210927135353-5b1ea328c479
+## explicit; go 1.17
 github.com/jedisct1/go-hpke-compact
-# github.com/jedisct1/go-minisign v0.0.0-20210813171713-0b9bfaa3a6f6
-## explicit; go 1.16
+# github.com/jedisct1/go-minisign v0.0.0-20210927135422-df01d8d3e6f4
+## explicit; go 1.17
 github.com/jedisct1/go-minisign
-# github.com/jedisct1/xsecretbox v0.0.0-20210813171751-8f930e127d47
-## explicit; go 1.16
+# github.com/jedisct1/xsecretbox v0.0.0-20210927135450-ebe41aef7bef
+## explicit; go 1.17
 github.com/jedisct1/xsecretbox
 # github.com/jgautheron/goconst v1.5.1
 ## explicit; go 1.13
