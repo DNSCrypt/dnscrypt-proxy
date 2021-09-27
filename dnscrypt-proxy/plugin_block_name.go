@@ -97,17 +97,13 @@ func (plugin *PluginBlockName) Init(proxy *Proxy) error {
 		if len(line) == 0 {
 			continue
 		}
-		parts := strings.Fields(line)
+		parts := strings.Split(line, "@")
 		timeRangeName := ""
 		if len(parts) == 2 {
-			if timeRangeParts := strings.Split(parts[1], "@"); len(timeRangeParts) == 2 {
-				timeRangeName = strings.TrimSpace(timeRangeParts[1])
-			} else {
-				dlog.Errorf("Syntax error in block rules at line %d", 1+lineNo)
-				continue
-			}
+			line = strings.TrimSpace(parts[0])
+			timeRangeName = strings.TrimSpace(parts[1])
 		} else if len(parts) > 2 {
-			dlog.Errorf("Syntax error in block rules at line %d", 1+lineNo)
+			dlog.Errorf("Syntax error in block rules at line %d -- Unexpected @ character", 1+lineNo)
 			continue
 		}
 		var weeklyRanges *WeeklyRanges

@@ -43,14 +43,10 @@ func (plugin *PluginAllowName) Init(proxy *Proxy) error {
 		parts := strings.Fields(line)
 		timeRangeName := ""
 		if len(parts) == 2 {
-			if timeRangeParts := strings.Split(parts[1], "@"); len(timeRangeParts) == 2 {
-				timeRangeName = strings.TrimSpace(timeRangeParts[1])
-			} else {
-				dlog.Errorf("Syntax error in allowed names at line %d", 1+lineNo)
-				continue
-			}
+			line = strings.TrimSpace(parts[0])
+			timeRangeName = strings.TrimSpace(parts[1])
 		} else if len(parts) > 2 {
-			dlog.Errorf("Syntax error in allowed names at line %d", 1+lineNo)
+			dlog.Errorf("Syntax error in allowed names at line %d -- Unexpected @ character", 1+lineNo)
 			continue
 		}
 		var weeklyRanges *WeeklyRanges
