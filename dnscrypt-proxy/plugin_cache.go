@@ -10,6 +10,8 @@ import (
 	"github.com/miekg/dns"
 )
 
+const StaleResponseTtl = 30 * time.Second
+
 type CachedResponse struct {
 	expiration time.Time
 	msg        dns.Msg
@@ -68,29 +70,35 @@ func (plugin *PluginCache) Reload() error {
 
 func (plugin *PluginCache) Eval(pluginsState *PluginsState, msg *dns.Msg) error {
 	cacheKey := computeCacheKey(pluginsState, msg)
+
 	cachedResponses.RLock()
-	defer cachedResponses.RUnlock()
 	if cachedResponses.cache == nil {
+		cachedResponses.RUnlock()
 		return nil
 	}
 	cachedAny, ok := cachedResponses.cache.Get(cacheKey)
 	if !ok {
+		cachedResponses.RUnlock()
 		return nil
 	}
 	cached := cachedAny.(CachedResponse)
-
+	expiration := cached.expiration
 	synth := cached.msg.Copy()
+	cachedResponses.RUnlock()
+
 	synth.Id = msg.Id
 	synth.Response = true
 	synth.Compress = true
 	synth.Question = msg.Question
 
-	if time.Now().After(cached.expiration) {
+	if time.Now().After(expiration) {
+		expiration2 := time.Now().Add(StaleResponseTtl)
+		updateTTL(synth, expiration2)
 		pluginsState.sessionData["stale"] = synth
 		return nil
 	}
 
-	updateTTL(synth, cached.expiration)
+	updateTTL(synth, expiration)
 
 	pluginsState.synthResponse = synth
 	pluginsState.action = PluginsActionSynth
