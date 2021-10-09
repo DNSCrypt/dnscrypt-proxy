@@ -13,16 +13,16 @@ require (
 	github.com/jedisct1/dlog v0.0.0-20210927135244-3381aa132e7f
 	github.com/jedisct1/go-clocksmith v0.0.0-20210101121932-da382b963868
 	github.com/jedisct1/go-dnsstamps v0.0.0-20210810213811-61cc83d2a354
-	github.com/jedisct1/go-hpke-compact v0.0.0-20210927135353-5b1ea328c479
-	github.com/jedisct1/go-minisign v0.0.0-20210927135422-df01d8d3e6f4
+	github.com/jedisct1/go-hpke-compact v0.0.0-20210930135406-0763750339f0
+	github.com/jedisct1/go-minisign v0.0.0-20211008170404-d0c644b276f4
 	github.com/jedisct1/xsecretbox v0.0.0-20210927135450-ebe41aef7bef
 	github.com/k-sone/critbitgo v1.4.0
 	github.com/kardianos/service v1.2.0
 	github.com/miekg/dns v1.1.43
 	github.com/powerman/check v1.6.0
 	golang.org/x/crypto v0.0.0-20210921155107-089bfa567519
-	golang.org/x/net v0.0.0-20210924151903-3ad01bbaa167
-	golang.org/x/sys v0.0.0-20210927094055-39ccf1dd6fa6
+	golang.org/x/net v0.0.0-20211008194852-3b03d305991f
+	golang.org/x/sys v0.0.0-20211007075335-d3039528d8ac
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 )
 

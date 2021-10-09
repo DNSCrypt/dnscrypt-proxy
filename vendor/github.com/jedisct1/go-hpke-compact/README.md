@@ -77,7 +77,7 @@ Second parameter is optional associated data.
 A message can also be encrypted by the server for the client:
 
 ```go
-ciphertext, err := clientCtx.EncryptToClient([]byte("response"), nil)
+ciphertext, err := serverCtx.EncryptToClient([]byte("response"), nil)
 ```
 
 Nonces are automatically incremented, so it is safe to call this function multiple times within the same context.
@@ -89,7 +89,7 @@ Second parameter is optional associated data.
 The client can decrypt a ciphertext sent by the server:
 
 ```go
-decrypted, err := serverCtx.DecryptFromServer(ciphertext, nil)
+decrypted, err := clientCtx.DecryptFromServer(ciphertext, nil)
 ```
 
 Second parameter is optional associated data.

@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"strings"
 
+	"golang.org/x/crypto/blake2b"
 	"golang.org/x/crypto/ed25519"
 )
 
@@ -94,7 +95,12 @@ func (publicKey *PublicKey) Verify(bin []byte, signature Signature) (bool, error
 	if publicKey.SignatureAlgorithm != signature.SignatureAlgorithm {
 		return false, errors.New("Incompatible signature algorithm")
 	}
-	if signature.SignatureAlgorithm[0] != 0x45 || signature.SignatureAlgorithm[1] != 0x64 {
+	prehashed := false
+	if signature.SignatureAlgorithm[0] == 0x45 && signature.SignatureAlgorithm[1] == 0x64 {
+		prehashed = false
+	} else if signature.SignatureAlgorithm[0] == 0x45 && signature.SignatureAlgorithm[1] == 0x44 {
+		prehashed = true
+	} else {
 		return false, errors.New("Unsupported signature algorithm")
 	}
 	if publicKey.KeyId != signature.KeyId {
@@ -102,6 +108,11 @@ func (publicKey *PublicKey) Verify(bin []byte, signature Signature) (bool, error
 	}
 	if !strings.HasPrefix(signature.TrustedComment, "trusted comment: ") {
 		return false, errors.New("Unexpected format for the trusted comment")
+	}
+
+	if prehashed {
+		h, _ := blake2b.New512(nil)
+		bin = h.Sum(bin)
 	}
 	if !ed25519.Verify(ed25519.PublicKey(publicKey.PublicKey[:]), bin, signature.Signature[:]) {
 		return false, errors.New("Invalid signature")
