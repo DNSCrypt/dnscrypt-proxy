@@ -490,7 +490,7 @@ cache_neg_max_ttl = 600
 
 
 ######################################################
-#        Pattern-based blocking (blocklists)        #
+#        Pattern-based blocking (blocklists)         #
 ######################################################
 
 ## Blocklists are made of one pattern per line. Example of valid patterns:
@@ -553,7 +553,7 @@ cache_neg_max_ttl = 600
 
 
 ######################################################
-#   Pattern-based allow lists (blocklists bypass)   #
+#   Pattern-based allow lists (blocklists bypass)    #
 ######################################################
 
 ## Allowlists support the same patterns as blocklists
