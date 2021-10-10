@@ -724,7 +724,7 @@ cache_neg_max_ttl = 600
 [broken_implementations]
 
 # Cisco servers currently cannot handle queries larger than 1472 bytes, and don't
-# truncate reponses larger than questions as expected by the DNSCrypt protocol.
+# truncate responses larger than questions as expected by the DNSCrypt protocol.
 # This prevents large responses from being received over UDP and over relays.
 #
 # Older versions of the `dnsdist` server software had a bug with queries larger
