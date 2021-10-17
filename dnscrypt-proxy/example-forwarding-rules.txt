@@ -14,12 +14,13 @@
 ## If this happens, set `block_ipv6` to `false` in the main config file.
 
 ## Forward *.lan, *.local, *.home, *.home.arpa, *.internal and *.localdomain to 192.168.1.1
-# lan             192.168.1.1
-# local           192.168.1.1
-# home            192.168.1.1
-# home.arpa       192.168.1.1
-# internal        192.168.1.1
-# localdomain     192.168.1.1
+# lan              192.168.1.1
+# local            192.168.1.1
+# home             192.168.1.1
+# home.arpa        192.168.1.1
+# internal         192.168.1.1
+# localdomain      192.168.1.1
+# 192.in-addr.arpa 192.168.1.1
 
 ## Forward queries for example.com and *.example.com to 9.9.9.9 and 8.8.8.8
 # example.com     9.9.9.9,8.8.8.8
