@@ -92,7 +92,7 @@ func NewSignatureFromFile(file string) (Signature, error) {
 }
 
 func (publicKey *PublicKey) Verify(bin []byte, signature Signature) (bool, error) {
-	if publicKey.SignatureAlgorithm != signature.SignatureAlgorithm {
+	if publicKey.SignatureAlgorithm != [2]byte{'E', 'd'} {
 		return false, errors.New("Incompatible signature algorithm")
 	}
 	prehashed := false
@@ -112,7 +112,8 @@ func (publicKey *PublicKey) Verify(bin []byte, signature Signature) (bool, error
 
 	if prehashed {
 		h, _ := blake2b.New512(nil)
-		bin = h.Sum(bin)
+		h.Write(bin)
+		bin = h.Sum(nil)
 	}
 	if !ed25519.Verify(ed25519.PublicKey(publicKey.PublicKey[:]), bin, signature.Signature[:]) {
 		return false, errors.New("Invalid signature")

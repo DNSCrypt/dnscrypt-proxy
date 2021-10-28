@@ -361,6 +361,8 @@ github.com/jedisct1/go-hpke-compact v0.0.0-20210930135406-0763750339f0 h1:RHAwzl
 github.com/jedisct1/go-hpke-compact v0.0.0-20210930135406-0763750339f0/go.mod h1:wDWQCpgsVR2M5u//vKIwqBZdbsS/f/rZiOuJPaFSkmk=
 github.com/jedisct1/go-minisign v0.0.0-20211008170404-d0c644b276f4 h1:kQYxZWkRu2ax22QivreeQ72p/FsfXN5D5LFLbfZGuFw=
 github.com/jedisct1/go-minisign v0.0.0-20211008170404-d0c644b276f4/go.mod h1:hQmNrgofl+IY/8L+n20H6E6PWBBTokdsv+q49j0QhsU=
+github.com/jedisct1/go-minisign v0.0.0-20211028175153-1c139d1cc84b h1:ZGiXF8sz7PDk6RgkP+A/SFfUD0ZR/AgG6SpRNEDKZy8=
+github.com/jedisct1/go-minisign v0.0.0-20211028175153-1c139d1cc84b/go.mod h1:hQmNrgofl+IY/8L+n20H6E6PWBBTokdsv+q49j0QhsU=
 github.com/jedisct1/xsecretbox v0.0.0-20210927135450-ebe41aef7bef h1:1Jom8JnCkrgivikTdt0lg5lHpZRvpP98hn8H1bIjFLk=
 github.com/jedisct1/xsecretbox v0.0.0-20210927135450-ebe41aef7bef/go.mod h1:dmX1e+PPjjbMjNI/wJk8EgjXmqAMZ5tgOzD1wxCgzhs=
 github.com/jgautheron/goconst v1.5.1 h1:HxVbL1MhydKs8R8n/HE5NPvzfaYmQJA3o879lE4+WcM=
