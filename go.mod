@@ -21,8 +21,8 @@ require (
 	github.com/miekg/dns v1.1.43
 	github.com/powerman/check v1.6.0
 	golang.org/x/crypto v0.0.0-20210921155107-089bfa567519
-	golang.org/x/net v0.0.0-20211008194852-3b03d305991f
-	golang.org/x/sys v0.0.0-20211007075335-d3039528d8ac
+	golang.org/x/net v0.0.0-20211104170005-ce137452f963
+	golang.org/x/sys v0.0.0-20211103235746-7861aae1554b
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 )
 
