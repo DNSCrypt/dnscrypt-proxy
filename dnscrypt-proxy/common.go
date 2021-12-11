@@ -182,36 +182,3 @@ func ReadTextFile(filename string) (string, error) {
 	bin = bytes.TrimPrefix(bin, []byte{0xef, 0xbb, 0xbf})
 	return string(bin), nil
 }
-
-// Reverse an IPV4 Address
-// Borrwed from https://github.com/coredns/coredns/blob/master/plugin/pkg/dnsutil/reverse.go
-func reverseIPv4(slice []string) string {
-	for i := 0; i < len(slice)/2; i++ {
-		j := len(slice) - i - 1
-		slice[i], slice[j] = slice[j], slice[i]
-	}
-	ip := net.ParseIP(strings.Join(slice, ".")).To4()
-	if ip == nil {
-		return ""
-	}
-	s := []string{ip.String(), IPv4Arpa}
-	return strings.Join(s, ".")
-}
-
-// Reverse an IPV6 Address
-func reverseIPv6(slice []string) string {
-	for i := 0; i < len(slice)/2; i++ {
-		j := len(slice) - i - 1
-		slice[i], slice[j] = slice[j], slice[i]
-	}
-	slice6 := []string{}
-	for i := 0; i < len(slice)/4; i++ {
-		slice6 = append(slice6, strings.Join(slice[i*4:i*4+4], ""))
-	}
-	ip := net.ParseIP(strings.Join(slice6, ":")).To16()
-	if ip == nil {
-		return ""
-	}
-	s := []string{ip.String(), IPv6Arpa}
-	return strings.Join(s, ".")
-}

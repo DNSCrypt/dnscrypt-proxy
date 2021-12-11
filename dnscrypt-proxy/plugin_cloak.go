@@ -93,10 +93,11 @@ func (plugin *PluginCloak) Init(proxy *Proxy) error {
 
 		var ptrLine string
 		if ipv4 := ip.To4(); ipv4 != nil {
-			ptrLine = reverseIPv4(strings.Split(ip.String(), "."))
-
+			reversed, _ :=  dns.ReverseAddr(ip.To4().String())
+			ptrLine = strings.TrimSuffix(reversed, ".")
 		} else {
-			ptrLine = reverseIPv6(strings.Split(string(cloakedName.ipv6[0]), ":"))
+			reversed, _ := dns.ReverseAddr(cloakedName.ipv6[0].To16().String())
+			ptrLine = strings.TrimSuffix(reversed, ".")
 		}
 		ptrQueryLine := ptrEntryToQuery(ptrLine)
 		ptrCloakedName, found := cloakedNames[ptrQueryLine]
@@ -121,6 +122,7 @@ func ptrEntryToQuery(ptrEntry string) string {
 }
 
 func ptrNameToFQDN(ptrLine string) string {
+	ptrLine = strings.TrimPrefix(ptrLine, "=")
 	return ptrLine + "."
 }
 
