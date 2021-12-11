@@ -1,3 +1,4 @@
 cloaked.*                one.one.one.one
 *.cloaked2.*             one.one.one.one # inline comment
 =www.dnscrypt-test       192.168.100.100
+=www.dnscrypt-test.com   192.168.100.101
