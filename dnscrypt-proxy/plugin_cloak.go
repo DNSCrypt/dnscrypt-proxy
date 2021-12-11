@@ -19,7 +19,7 @@ type CloakedName struct {
 	lastUpdate *time.Time
 	lineNo     int
 	isIP       bool
-	isPTR      bool
+	PTR        []string
 }
 
 type PluginCloak struct {
@@ -92,18 +92,17 @@ func (plugin *PluginCloak) Init(proxy *Proxy) error {
 		var ptrLine string
 		if ipv4 := ip.To4(); ipv4 != nil {
 			ptrLine = reverseIPv4(strings.Split(ip.String(), "."))
-			
+
 		} else {
 			ptrLine = reverseIPv6(strings.Split(string(cloakedName.ipv6[0]), ":"))
 		}
-		ptrCloakedName, found := cloakedNames[ptrLine]
+		ptrCloakedName, found := cloakedNames["="+ptrLine]
 		if !found {
 			ptrCloakedName = &CloakedName{}
 		}
-		ptrCloakedName.isPTR = true
 		ptrCloakedName.isIP = true
 		// note that the fully qualified name must end with a .
-		ptrCloakedName.target = line + "."
+		ptrCloakedName.PTR = append((*ptrCloakedName).PTR, line+".")
 		ptrCloakedName.lineNo = lineNo + 1
 		cloakedNames["="+ptrLine] = ptrCloakedName
 
@@ -190,10 +189,12 @@ func (plugin *PluginCloak) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 			synth.Answer = append(synth.Answer, rr)
 		}
 	} else if question.Qtype == dns.TypePTR {
-		rr := new(dns.PTR)
-		rr.Hdr = dns.RR_Header{Name: question.Name, Rrtype: dns.TypePTR, Class: dns.ClassINET, Ttl: ttl}
-		rr.Ptr = cloakedName.target
-		synth.Answer = append(synth.Answer, rr)
+		for _, ptr := range cloakedName.PTR {
+			rr := new(dns.PTR)
+			rr.Hdr = dns.RR_Header{Name: question.Name, Rrtype: dns.TypePTR, Class: dns.ClassINET, Ttl: ttl}
+			rr.Ptr = ptr
+			synth.Answer = append(synth.Answer, rr)
+		}
 	}
 	rand.Shuffle(len(synth.Answer), func(i, j int) { synth.Answer[i], synth.Answer[j] = synth.Answer[j], synth.Answer[i] })
 	pluginsState.synthResponse = synth
