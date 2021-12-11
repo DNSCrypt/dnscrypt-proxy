@@ -352,6 +352,8 @@ reject_ttl = 10
 ## Cloaking returns a predefined address for a specific name.
 ## In addition to acting as a HOSTS file, it can also return the IP address
 ## of a different name. It will also do CNAME flattening.
+## If 'cloak_ptr' is set, then PTR (reverse lookups) are enabled
+## for cloaking rules that do not contain wild cards.
 ##
 ## See the `example-cloaking-rules.txt` file for an example
 
@@ -360,6 +362,7 @@ reject_ttl = 10
 ## TTL used when serving entries in cloaking-rules.txt
 
 # cloak_ttl = 600
+# cloak_ptr = false
 
 
 

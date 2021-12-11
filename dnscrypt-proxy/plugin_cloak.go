@@ -26,6 +26,7 @@ type PluginCloak struct {
 	sync.RWMutex
 	patternMatcher *PatternMatcher
 	ttl            uint32
+	createPTR      bool
 }
 
 func (plugin *PluginCloak) Name() string {
@@ -43,6 +44,7 @@ func (plugin *PluginCloak) Init(proxy *Proxy) error {
 		return err
 	}
 	plugin.ttl = proxy.cloakTTL
+	plugin.createPTR = proxy.cloakedPTR
 	plugin.patternMatcher = NewPatternMatcher()
 	cloakedNames := make(map[string]*CloakedName)
 	for lineNo, line := range strings.Split(string(bin), "\n") {
@@ -85,7 +87,7 @@ func (plugin *PluginCloak) Init(proxy *Proxy) error {
 		cloakedName.lineNo = lineNo + 1
 		cloakedNames[line] = cloakedName
 
-		if strings.Contains(line, "*") || !cloakedName.isIP == true {
+		if !plugin.createPTR || strings.Contains(line, "*") || !cloakedName.isIP == true {
 			continue
 		}
 
