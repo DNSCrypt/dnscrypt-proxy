@@ -96,16 +96,15 @@ func (plugin *PluginCloak) Init(proxy *Proxy) error {
 		} else {
 			ptrLine = reverseIPv6(strings.Split(string(cloakedName.ipv6[0]), ":"))
 		}
-		ptrCloakedName, found := cloakedNames["="+ptrLine]
+		ptrQueryLine := ptrEntryToQuery(ptrLine)
+		ptrCloakedName, found := cloakedNames[ptrQueryLine]
 		if !found {
 			ptrCloakedName = &CloakedName{}
 		}
 		ptrCloakedName.isIP = true
-		// note that the fully qualified name must end with a .
-		ptrCloakedName.PTR = append((*ptrCloakedName).PTR, line+".")
+		ptrCloakedName.PTR = append((*ptrCloakedName).PTR, ptrNameToFQDN(line))
 		ptrCloakedName.lineNo = lineNo + 1
-		cloakedNames["="+ptrLine] = ptrCloakedName
-
+		cloakedNames[ptrQueryLine] = ptrCloakedName
 	}
 	for line, cloakedName := range cloakedNames {
 		if err := plugin.patternMatcher.Add(line, cloakedName, cloakedName.lineNo); err != nil {
@@ -113,6 +112,14 @@ func (plugin *PluginCloak) Init(proxy *Proxy) error {
 		}
 	}
 	return nil
+}
+
+func ptrEntryToQuery(ptrEntry string) string {
+	return "=" + ptrEntry
+}
+
+func ptrNameToFQDN(ptrLine string) string {
+	return ptrLine + "."
 }
 
 func (plugin *PluginCloak) Drop() error {
