@@ -47,6 +47,11 @@ const (
 	InheritedDescriptorsBase = uintptr(50)
 )
 
+const (
+	IPv4Arpa = "in-addr.arpa"
+	IPv6Arpa = "ip6.arpa"
+)
+
 func PrefixWithSize(packet []byte) ([]byte, error) {
 	packetLen := len(packet)
 	if packetLen > 0xffff {

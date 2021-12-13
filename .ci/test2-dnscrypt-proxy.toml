@@ -10,6 +10,7 @@ block_unqualified = true
 block_undelegated = true
 forwarding_rules = 'forwarding-rules.txt'
 cloaking_rules = 'cloaking-rules.txt'
+cloak_ptr = true
 cache = true
 
 [local_doh]

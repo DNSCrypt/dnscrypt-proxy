@@ -19,12 +19,14 @@ type CloakedName struct {
 	lastUpdate *time.Time
 	lineNo     int
 	isIP       bool
+	PTR        []string
 }
 
 type PluginCloak struct {
 	sync.RWMutex
 	patternMatcher *PatternMatcher
 	ttl            uint32
+	createPTR      bool
 }
 
 func (plugin *PluginCloak) Name() string {
@@ -42,6 +44,7 @@ func (plugin *PluginCloak) Init(proxy *Proxy) error {
 		return err
 	}
 	plugin.ttl = proxy.cloakTTL
+	plugin.createPTR = proxy.cloakedPTR
 	plugin.patternMatcher = NewPatternMatcher()
 	cloakedNames := make(map[string]*CloakedName)
 	for lineNo, line := range strings.Split(string(bin), "\n") {
@@ -67,7 +70,8 @@ func (plugin *PluginCloak) Init(proxy *Proxy) error {
 		if !found {
 			cloakedName = &CloakedName{}
 		}
-		if ip := net.ParseIP(target); ip != nil {
+		ip := net.ParseIP(target)
+		if ip != nil {
 			if ipv4 := ip.To4(); ipv4 != nil {
 				cloakedName.ipv4 = append((*cloakedName).ipv4, ipv4)
 			} else if ipv6 := ip.To16(); ipv6 != nil {
@@ -82,6 +86,28 @@ func (plugin *PluginCloak) Init(proxy *Proxy) error {
 		}
 		cloakedName.lineNo = lineNo + 1
 		cloakedNames[line] = cloakedName
+
+		if !plugin.createPTR || strings.Contains(line, "*") || !cloakedName.isIP == true {
+			continue
+		}
+
+		var ptrLine string
+		if ipv4 := ip.To4(); ipv4 != nil {
+			reversed, _ :=  dns.ReverseAddr(ip.To4().String())
+			ptrLine = strings.TrimSuffix(reversed, ".")
+		} else {
+			reversed, _ := dns.ReverseAddr(cloakedName.ipv6[0].To16().String())
+			ptrLine = strings.TrimSuffix(reversed, ".")
+		}
+		ptrQueryLine := ptrEntryToQuery(ptrLine)
+		ptrCloakedName, found := cloakedNames[ptrQueryLine]
+		if !found {
+			ptrCloakedName = &CloakedName{}
+		}
+		ptrCloakedName.isIP = true
+		ptrCloakedName.PTR = append((*ptrCloakedName).PTR, ptrNameToFQDN(line))
+		ptrCloakedName.lineNo = lineNo + 1
+		cloakedNames[ptrQueryLine] = ptrCloakedName
 	}
 	for line, cloakedName := range cloakedNames {
 		if err := plugin.patternMatcher.Add(line, cloakedName, cloakedName.lineNo); err != nil {
@@ -89,6 +115,15 @@ func (plugin *PluginCloak) Init(proxy *Proxy) error {
 		}
 	}
 	return nil
+}
+
+func ptrEntryToQuery(ptrEntry string) string {
+	return "=" + ptrEntry
+}
+
+func ptrNameToFQDN(ptrLine string) string {
+	ptrLine = strings.TrimPrefix(ptrLine, "=")
+	return ptrLine + "."
 }
 
 func (plugin *PluginCloak) Drop() error {
@@ -101,7 +136,7 @@ func (plugin *PluginCloak) Reload() error {
 
 func (plugin *PluginCloak) Eval(pluginsState *PluginsState, msg *dns.Msg) error {
 	question := msg.Question[0]
-	if question.Qclass != dns.ClassINET || (question.Qtype != dns.TypeA && question.Qtype != dns.TypeAAAA) {
+	if question.Qclass != dns.ClassINET || (question.Qtype != dns.TypeA && question.Qtype != dns.TypeAAAA && question.Qtype != dns.TypePTR) {
 		return nil
 	}
 	now := time.Now()
@@ -157,11 +192,18 @@ func (plugin *PluginCloak) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 			rr.A = ip
 			synth.Answer = append(synth.Answer, rr)
 		}
-	} else {
+	} else if question.Qtype == dns.TypeAAAA {
 		for _, ip := range cloakedName.ipv6 {
 			rr := new(dns.AAAA)
 			rr.Hdr = dns.RR_Header{Name: question.Name, Rrtype: dns.TypeAAAA, Class: dns.ClassINET, Ttl: ttl}
 			rr.AAAA = ip
+			synth.Answer = append(synth.Answer, rr)
+		}
+	} else if question.Qtype == dns.TypePTR {
+		for _, ptr := range cloakedName.PTR {
+			rr := new(dns.PTR)
+			rr.Hdr = dns.RR_Header{Name: question.Name, Rrtype: dns.TypePTR, Class: dns.ClassINET, Ttl: ttl}
+			rr.Ptr = ptr
 			synth.Answer = append(synth.Answer, rr)
 		}
 	}
