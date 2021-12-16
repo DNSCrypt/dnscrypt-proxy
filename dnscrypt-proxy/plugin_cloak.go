@@ -87,7 +87,7 @@ func (plugin *PluginCloak) Init(proxy *Proxy) error {
 		cloakedName.lineNo = lineNo + 1
 		cloakedNames[line] = cloakedName
 
-		if !plugin.createPTR || strings.Contains(line, "*") || !cloakedName.isIP == true {
+		if !plugin.createPTR || strings.Contains(line, "*") || !cloakedName.isIP {
 			continue
 		}
 
