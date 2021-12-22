@@ -14,6 +14,7 @@ const (
 	EDNS0LLQ          = 0x1     // long lived queries: http://tools.ietf.org/html/draft-sekar-dns-llq-01
 	EDNS0UL           = 0x2     // update lease draft: http://files.dns-sd.org/draft-sekar-dns-ul.txt
 	EDNS0NSID         = 0x3     // nsid (See RFC 5001)
+	EDNS0ESU          = 0x4     // ENUM Source-URI draft: https://datatracker.ietf.org/doc/html/draft-kaplan-enum-source-uri-00
 	EDNS0DAU          = 0x5     // DNSSEC Algorithm Understood
 	EDNS0DHU          = 0x6     // DS Hash Understood
 	EDNS0N3U          = 0x7     // NSEC3 Hash Understood
@@ -56,6 +57,8 @@ func makeDataOpt(code uint16) EDNS0 {
 		return new(EDNS0_PADDING)
 	case EDNS0EDE:
 		return new(EDNS0_EDE)
+	case EDNS0ESU:
+		return &EDNS0_ESU{Code: EDNS0ESU}
 	default:
 		e := new(EDNS0_LOCAL)
 		e.Code = code
@@ -111,6 +114,8 @@ func (rr *OPT) String() string {
 			s += "\n; PADDING: " + o.String()
 		case *EDNS0_EDE:
 			s += "\n; EDE: " + o.String()
+		case *EDNS0_ESU:
+			s += "\n; ESU: " + o.String()
 		}
 	}
 	return s
@@ -817,5 +822,21 @@ func (e *EDNS0_EDE) unpack(b []byte) error {
 	}
 	e.InfoCode = binary.BigEndian.Uint16(b[0:])
 	e.ExtraText = string(b[2:])
+	return nil
+}
+
+// The EDNS0_ESU option for ENUM Source-URI Extension
+type EDNS0_ESU struct {
+	Code uint16
+	Uri  string
+}
+
+// Option implements the EDNS0 interface.
+func (e *EDNS0_ESU) Option() uint16        { return EDNS0ESU }
+func (e *EDNS0_ESU) String() string        { return e.Uri }
+func (e *EDNS0_ESU) copy() EDNS0           { return &EDNS0_ESU{e.Code, e.Uri} }
+func (e *EDNS0_ESU) pack() ([]byte, error) { return []byte(e.Uri), nil }
+func (e *EDNS0_ESU) unpack(b []byte) error {
+	e.Uri = string(b)
 	return nil
 }
