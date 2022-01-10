@@ -186,7 +186,7 @@ func (s *darwinLaunchdService) Uninstall() error {
 func (s *darwinLaunchdService) Status() (Status, error) {
 	exitCode, out, err := runWithOutput("launchctl", "list", s.Name)
 	if exitCode == 0 && err != nil {
-		if !strings.Contains(err.Error(), "failed with StandardError") {
+		if !strings.Contains(err.Error(), "failed with stderr") {
 			return StatusUnknown, err
 		}
 	}

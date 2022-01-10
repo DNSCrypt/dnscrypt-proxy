@@ -40,7 +40,7 @@ func versionCompare(v1, v2 []int) (int, error) {
 	return 0, nil
 }
 
-// parseVersion will parse any integer type version seperated by periods.
+// parseVersion will parse any integer type version separated by periods.
 // This does not fully support semver style versions.
 func parseVersion(v string) []int {
 	version := make([]int, 3)
