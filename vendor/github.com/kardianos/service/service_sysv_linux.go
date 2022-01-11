@@ -213,7 +213,7 @@ get_pid() {
 }
 
 is_running() {
-    [ -f "$pid_file" ] && ps $(get_pid) > /dev/null 2>&1
+    [ -f "$pid_file" ] && cat /proc/$(get_pid)/stat > /dev/null 2>&1
 }
 
 case "$1" in

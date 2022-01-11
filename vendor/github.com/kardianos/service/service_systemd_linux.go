@@ -69,7 +69,7 @@ func (s *systemd) Platform() string {
 
 func (s *systemd) configPath() (cp string, err error) {
 	if !s.isUserService() {
-		cp = "/etc/systemd/system/" + s.Config.Name + ".service"
+		cp = "/etc/systemd/system/" + s.unitName()
 		return
 	}
 	homeDir, err := os.UserHomeDir()
@@ -81,8 +81,12 @@ func (s *systemd) configPath() (cp string, err error) {
 	if err != nil {
 		return
 	}
-	cp = filepath.Join(systemdUserDir, s.Config.Name+".service")
+	cp = filepath.Join(systemdUserDir, s.unitName())
 	return
+}
+
+func (s *systemd) unitName() string {
+	return s.Config.Name + ".service"
 }
 
 func (s *systemd) getSystemdVersion() int64 {
@@ -230,7 +234,7 @@ func (s *systemd) Run() (err error) {
 }
 
 func (s *systemd) Status() (Status, error) {
-	exitCode, out, err := runWithOutput("systemctl", "is-active", s.Name)
+	exitCode, out, err := runWithOutput("systemctl", "is-active", s.unitName())
 	if exitCode == 0 && err != nil {
 		return StatusUnknown, err
 	}
@@ -240,7 +244,7 @@ func (s *systemd) Status() (Status, error) {
 		return StatusRunning, nil
 	case strings.HasPrefix(out, "inactive"):
 		// inactive can also mean its not installed, check unit files
-		exitCode, out, err := runWithOutput("systemctl", "list-unit-files", "-t", "service", s.Name)
+		exitCode, out, err := runWithOutput("systemctl", "list-unit-files", "-t", "service", s.unitName())
 		if exitCode == 0 && err != nil {
 			return StatusUnknown, err
 		}
@@ -279,7 +283,7 @@ func (s *systemd) run(action string, args ...string) error {
 }
 
 func (s *systemd) runAction(action string) error {
-	return s.run(action, s.Name+".service")
+	return s.run(action, s.unitName())
 }
 
 const systemdScript = `[Unit]
