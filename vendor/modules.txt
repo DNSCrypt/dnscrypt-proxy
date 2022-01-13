@@ -1,7 +1,7 @@
 # 4d63.com/gochecknoglobals v0.0.0-20201008074935-acfc0b28355a
 ## explicit; go 1.15
 4d63.com/gochecknoglobals/checknoglobals
-# github.com/BurntSushi/toml v0.4.1
+# github.com/BurntSushi/toml v1.0.0
 ## explicit; go 1.16
 github.com/BurntSushi/toml
 github.com/BurntSushi/toml/internal
@@ -524,7 +524,7 @@ github.com/uudashr/gocognit
 # github.com/yeya24/promlinter v0.1.0
 ## explicit; go 1.14
 github.com/yeya24/promlinter
-# golang.org/x/crypto v0.0.0-20211215153901-e495a2d5b3d3
+# golang.org/x/crypto v0.0.0-20220112180741-5e0467b6c7ce
 ## explicit; go 1.17
 golang.org/x/crypto/blake2b
 golang.org/x/crypto/chacha20
