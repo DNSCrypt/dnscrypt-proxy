@@ -440,7 +440,7 @@ func route(proxy *Proxy, name string, serverProto stamps.StampProtoType) (*Relay
 	relayName := relayCandidateStamp.ServerAddrStr
 	proxy.serversInfo.RLock()
 	for _, registeredServer := range proxy.serversInfo.registeredRelays {
-		if registeredServer.stamp.ServerAddrStr == relayCandidateStamp.ServerAddrStr {
+		if registeredServer.stamp.Proto == relayProto && registeredServer.stamp.ServerAddrStr == relayCandidateStamp.ServerAddrStr {
 			relayName = registeredServer.name
 			break
 		}
