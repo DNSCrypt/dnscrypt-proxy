@@ -65,6 +65,7 @@ def parse_list(content, trusted=False):
         r"^@*\|\|([a-z0-9][a-z0-9.-]*[.][a-z]{2,})\^?(\$(popup|third-party))?$"
     )
     rx_l = re.compile(r"^([a-z0-9][a-z0-9.-]*[.][a-z]{2,})$")
+    rx_lw = re.compile(r"^[*][.]([a-z0-9][a-z0-9.-]*[.][a-z]{2,})$")
     rx_h = re.compile(
         r"^[0-9]{1,3}[.][0-9]{1,3}[.][0-9]{1,3}[.][0-9]{1,3}\s+([a-z0-9][a-z0-9.-]*[.][a-z]{2,})$"
     )
@@ -75,7 +76,7 @@ def parse_list(content, trusted=False):
     names = set()
     time_restrictions = {}
     globs = set()
-    rx_set = [rx_u, rx_l, rx_h, rx_mdl, rx_b, rx_dq]
+    rx_set = [rx_u, rx_l, rx_lw, rx_h, rx_mdl, rx_b, rx_dq]
     for line in content.splitlines():
         line = str.lower(str.strip(line))
         if rx_comment.match(line):
@@ -92,7 +93,8 @@ def parse_list(content, trusted=False):
 
 def print_restricted_name(output_fd, name, time_restrictions):
     if name in time_restrictions:
-        print("{}\t{}".format(name, time_restrictions[name]), file=output_fd, end="\n")
+        print("{}\t{}".format(
+            name, time_restrictions[name]), file=output_fd, end="\n")
     else:
         print(
             "# ignored: [{}] was in the time-restricted list, "
@@ -120,7 +122,8 @@ def load_from_url(url):
     except urllib.URLError as err:
         raise Exception("[{}] could not be loaded: {}\n".format(url, err))
     if trusted is False and response.getcode() != 200:
-        raise Exception("[{}] returned HTTP code {}\n".format(url, response.getcode()))
+        raise Exception("[{}] returned HTTP code {}\n".format(
+            url, response.getcode()))
     content = response.read()
     if URLLIB_NEW:
         content = content.decode("utf-8", errors="replace")
@@ -262,10 +265,12 @@ def blocklists_from_config_file(
 
         list_names.sort(key=name_cmp)
         if ignored:
-            print("# Ignored duplicates: {}".format(ignored), file=output_fd, end="\n")
+            print("# Ignored duplicates: {}".format(
+                ignored), file=output_fd, end="\n")
         if glob_ignored:
             print(
-                "# Ignored due to overlapping local patterns: {}".format(glob_ignored),
+                "# Ignored due to overlapping local patterns: {}".format(
+                    glob_ignored),
                 file=output_fd,
                 end="\n",
             )
