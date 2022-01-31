@@ -1,6 +1,8 @@
 package main
 
 import (
+	"encoding/base64"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net"
@@ -29,7 +31,27 @@ func (handler localDoHHandler) ServeHTTP(writer http.ResponseWriter, request *ht
 		writer.WriteHeader(404)
 		return
 	}
-	if request.Header.Get("Content-Type") != dataType {
+	packet := []byte{}
+	var err error
+	start := time.Now()
+	if request.Method == "POST" &&
+		request.Header.Get("Content-Type") == dataType {
+		packet, err = ioutil.ReadAll(io.LimitReader(request.Body, int64(MaxDNSPacketSize)))
+		if err != nil {
+			dlog.Warnf("No body in a local DoH query")
+			return
+		}
+	} else if request.Method == "GET" && request.Header.Get("Accept") == dataType {
+		encodedPacket := request.URL.Query().Get("dns")
+		if len(encodedPacket) >= MinDNSPacketSize*4/3 && len(encodedPacket) <= MaxDNSPacketSize*4/3 {
+			packet, err = base64.RawURLEncoding.DecodeString(encodedPacket)
+			if err != nil {
+				dlog.Warnf("Invalid base64 in a local DoH query")
+				return
+			}
+		}
+	}
+	if len(packet) < MinDNSPacketSize {
 		writer.Header().Set("Content-Type", "text/plain")
 		writer.WriteHeader(400)
 		writer.Write([]byte("dnscrypt-proxy local DoH server\n"))
@@ -41,12 +63,6 @@ func (handler localDoHHandler) ServeHTTP(writer http.ResponseWriter, request *ht
 		return
 	}
 	xClientAddr := net.Addr(clientAddr)
-	start := time.Now()
-	packet, err := ioutil.ReadAll(io.LimitReader(request.Body, MaxHTTPBodyLength))
-	if err != nil {
-		dlog.Warnf("No body in a local DoH query")
-		return
-	}
 	hasEDNS0Padding, err := hasEDNS0Padding(packet)
 	if err != nil {
 		writer.WriteHeader(400)
@@ -76,6 +92,7 @@ func (handler localDoHHandler) ServeHTTP(writer http.ResponseWriter, request *ht
 		writer.Header().Set("X-Pad", pad)
 	}
 	writer.Header().Set("Content-Type", dataType)
+	writer.Header().Set("Content-Length", fmt.Sprint(len(response)))
 	writer.WriteHeader(200)
 	writer.Write(response)
 }
