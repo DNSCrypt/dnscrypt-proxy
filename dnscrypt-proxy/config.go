@@ -757,7 +757,7 @@ func (config *Config) printRegisteredServers(proxy *Proxy, jsonOutput bool) erro
 		var hostAddr string
 		hostAddr, port = ExtractHostAndPort(addrStr, port)
 		addrs := make([]string, 0)
-		if registeredServer.stamp.Proto == stamps.StampProtoTypeDoH && len(registeredServer.stamp.ProviderName) > 0 {
+		if (registeredServer.stamp.Proto == stamps.StampProtoTypeDoH || registeredServer.stamp.Proto == stamps.StampProtoTypeODoHTarget) && len(registeredServer.stamp.ProviderName) > 0 {
 			providerName := registeredServer.stamp.ProviderName
 			var host string
 			host, port = ExtractHostAndPort(providerName, port)
