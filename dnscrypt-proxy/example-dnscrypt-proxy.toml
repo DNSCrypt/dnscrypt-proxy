@@ -454,20 +454,20 @@ cache_neg_max_ttl = 600
 
 [query_log]
 
-  ## Path to the query log file (absolute, or relative to the same directory as the config file)
-  ## Can be set to /dev/stdout in order to log to the standard output.
+## Path to the query log file (absolute, or relative to the same directory as the config file)
+## Can be set to /dev/stdout in order to log to the standard output.
 
-  # file = 'query.log'
-
-
-  ## Query log format (currently supported: tsv and ltsv)
-
-  format = 'tsv'
+# file = 'query.log'
 
 
-  ## Do not log these query types, to reduce verbosity. Keep empty to log everything.
+## Query log format (currently supported: tsv and ltsv)
 
-  # ignored_qtypes = ['DNSKEY', 'NS']
+format = 'tsv'
+
+
+## Do not log these query types, to reduce verbosity. Keep empty to log everything.
+
+# ignored_qtypes = ['DNSKEY', 'NS']
 
 
 
@@ -481,14 +481,14 @@ cache_neg_max_ttl = 600
 
 [nx_log]
 
-  ## Path to the query log file (absolute, or relative to the same directory as the config file)
+## Path to the query log file (absolute, or relative to the same directory as the config file)
 
-  # file = 'nx.log'
+# file = 'nx.log'
 
 
-  ## Query log format (currently supported: tsv and ltsv)
+## Query log format (currently supported: tsv and ltsv)
 
-  format = 'tsv'
+format = 'tsv'
 
 
 
@@ -511,19 +511,19 @@ cache_neg_max_ttl = 600
 
 [blocked_names]
 
-  ## Path to the file of blocking rules (absolute, or relative to the same directory as the config file)
+## Path to the file of blocking rules (absolute, or relative to the same directory as the config file)
 
-  # blocked_names_file = 'blocked-names.txt'
-
-
-  ## Optional path to a file logging blocked queries
-
-  # log_file = 'blocked-names.log'
+# blocked_names_file = 'blocked-names.txt'
 
 
-  ## Optional log format: tsv or ltsv (default: tsv)
+## Optional path to a file logging blocked queries
 
-  # log_format = 'tsv'
+# log_file = 'blocked-names.log'
+
+
+## Optional log format: tsv or ltsv (default: tsv)
+
+# log_format = 'tsv'
 
 
 
@@ -539,19 +539,19 @@ cache_neg_max_ttl = 600
 
 [blocked_ips]
 
-  ## Path to the file of blocking rules (absolute, or relative to the same directory as the config file)
+## Path to the file of blocking rules (absolute, or relative to the same directory as the config file)
 
-  # blocked_ips_file = 'blocked-ips.txt'
-
-
-  ## Optional path to a file logging blocked queries
-
-  # log_file = 'blocked-ips.log'
+# blocked_ips_file = 'blocked-ips.txt'
 
 
-  ## Optional log format: tsv or ltsv (default: tsv)
+## Optional path to a file logging blocked queries
 
-  # log_format = 'tsv'
+# log_file = 'blocked-ips.log'
+
+
+## Optional log format: tsv or ltsv (default: tsv)
+
+# log_format = 'tsv'
 
 
 
@@ -567,19 +567,19 @@ cache_neg_max_ttl = 600
 
 [allowed_names]
 
-  ## Path to the file of allow list rules (absolute, or relative to the same directory as the config file)
+## Path to the file of allow list rules (absolute, or relative to the same directory as the config file)
 
-  # allowed_names_file = 'allowed-names.txt'
-
-
-  ## Optional path to a file logging allowed queries
-
-  # log_file = 'allowed-names.log'
+# allowed_names_file = 'allowed-names.txt'
 
 
-  ## Optional log format: tsv or ltsv (default: tsv)
+## Optional path to a file logging allowed queries
 
-  # log_format = 'tsv'
+# log_file = 'allowed-names.log'
+
+
+## Optional log format: tsv or ltsv (default: tsv)
+
+# log_format = 'tsv'
 
 
 
@@ -595,18 +595,18 @@ cache_neg_max_ttl = 600
 
 [allowed_ips]
 
-  ## Path to the file of allowed ip rules (absolute, or relative to the same directory as the config file)
+## Path to the file of allowed ip rules (absolute, or relative to the same directory as the config file)
 
-  # allowed_ips_file = 'allowed-ips.txt'
+# allowed_ips_file = 'allowed-ips.txt'
 
 
-  ## Optional path to a file logging allowed queries
+## Optional path to a file logging allowed queries
 
-  # log_file = 'allowed-ips.log'
+# log_file = 'allowed-ips.log'
 
-  ## Optional log format: tsv or ltsv (default: tsv)
+## Optional log format: tsv or ltsv (default: tsv)
 
-  # log_format = 'tsv'
+# log_format = 'tsv'
 
 
 
@@ -627,21 +627,21 @@ cache_neg_max_ttl = 600
 
 [schedules]
 
-  # [schedules.'time-to-sleep']
-  # mon = [{after='21:00', before='7:00'}]
-  # tue = [{after='21:00', before='7:00'}]
-  # wed = [{after='21:00', before='7:00'}]
-  # thu = [{after='21:00', before='7:00'}]
-  # fri = [{after='23:00', before='7:00'}]
-  # sat = [{after='23:00', before='7:00'}]
-  # sun = [{after='21:00', before='7:00'}]
+# [schedules.'time-to-sleep']
+# mon = [{after='21:00', before='7:00'}]
+# tue = [{after='21:00', before='7:00'}]
+# wed = [{after='21:00', before='7:00'}]
+# thu = [{after='21:00', before='7:00'}]
+# fri = [{after='23:00', before='7:00'}]
+# sat = [{after='23:00', before='7:00'}]
+# sun = [{after='21:00', before='7:00'}]
 
-  # [schedules.'work']
-  # mon = [{after='9:00', before='18:00'}]
-  # tue = [{after='9:00', before='18:00'}]
-  # wed = [{after='9:00', before='18:00'}]
-  # thu = [{after='9:00', before='18:00'}]
-  # fri = [{after='9:00', before='17:00'}]
+# [schedules.'work']
+# mon = [{after='9:00', before='18:00'}]
+# tue = [{after='9:00', before='18:00'}]
+# wed = [{after='9:00', before='18:00'}]
+# thu = [{after='9:00', before='18:00'}]
+# fri = [{after='9:00', before='17:00'}]
 
 
 
@@ -669,7 +669,7 @@ cache_neg_max_ttl = 600
 
 [sources]
 
-  ## An example of a remote source from https://github.com/DNSCrypt/dnscrypt-resolvers
+## An example of a remote source from https://github.com/DNSCrypt/dnscrypt-resolvers
 
   [sources.'public-resolvers']
     urls = ['https://raw.githubusercontent.com/DNSCrypt/dnscrypt-resolvers/master/v3/public-resolvers.md', 'https://download.dnscrypt.info/resolvers-list/v3/public-resolvers.md', 'https://ipv6.download.dnscrypt.info/resolvers-list/v3/public-resolvers.md']
@@ -678,7 +678,7 @@ cache_neg_max_ttl = 600
     refresh_delay = 72
     prefix = ''
 
-  ## Anonymized DNS relays
+## Anonymized DNS relays
 
   [sources.'relays']
     urls = ['https://raw.githubusercontent.com/DNSCrypt/dnscrypt-resolvers/master/v3/relays.md', 'https://download.dnscrypt.info/resolvers-list/v3/relays.md', 'https://ipv6.download.dnscrypt.info/resolvers-list/v3/relays.md']
@@ -687,36 +687,36 @@ cache_neg_max_ttl = 600
     refresh_delay = 72
     prefix = ''
 
-  ## ODoH (Oblivious DoH) servers and relays
+## ODoH (Oblivious DoH) servers and relays
 
   # [sources.'odoh-servers']
-  #   urls = ['https://raw.githubusercontent.com/DNSCrypt/dnscrypt-resolvers/master/v3/odoh-servers.md', 'https://download.dnscrypt.info/resolvers-list/v3/odoh-servers.md', 'https://ipv6.download.dnscrypt.info/resolvers-list/v3/odoh-servers.md']
-  #   cache_file = 'odoh-servers.md'
-  #   minisign_key = 'RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3'
-  #   refresh_delay = 24
-  #   prefix = ''
+    # urls = ['https://raw.githubusercontent.com/DNSCrypt/dnscrypt-resolvers/master/v3/odoh-servers.md', 'https://download.dnscrypt.info/resolvers-list/v3/odoh-servers.md', 'https://ipv6.download.dnscrypt.info/resolvers-list/v3/odoh-servers.md']
+    # cache_file = 'odoh-servers.md'
+    # minisign_key = 'RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3'
+    # refresh_delay = 24
+    # prefix = ''
   # [sources.'odoh-relays']
-  #   urls = ['https://raw.githubusercontent.com/DNSCrypt/dnscrypt-resolvers/master/v3/odoh-relays.md', 'https://download.dnscrypt.info/resolvers-list/v3/odoh-relays.md', 'https://ipv6.download.dnscrypt.info/resolvers-list/v3/odoh-relays.md']
-  #   cache_file = 'odoh-relays.md'
-  #   minisign_key = 'RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3'
-  #   refresh_delay = 24
-  #   prefix = ''
+    # urls = ['https://raw.githubusercontent.com/DNSCrypt/dnscrypt-resolvers/master/v3/odoh-relays.md', 'https://download.dnscrypt.info/resolvers-list/v3/odoh-relays.md', 'https://ipv6.download.dnscrypt.info/resolvers-list/v3/odoh-relays.md']
+    # cache_file = 'odoh-relays.md'
+    # minisign_key = 'RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3'
+    # refresh_delay = 24
+    # prefix = ''
 
-  ## Quad9
+## Quad9
 
   # [sources.quad9-resolvers]
-  #   urls = ['https://www.quad9.net/quad9-resolvers.md']
-  #   minisign_key = 'RWQBphd2+f6eiAqBsvDZEBXBGHQBJfeG6G+wJPPKxCZMoEQYpmoysKUN'
-  #   cache_file = 'quad9-resolvers.md'
-  #   prefix = 'quad9-'
+    # urls = ['https://www.quad9.net/quad9-resolvers.md']
+    # minisign_key = 'RWQBphd2+f6eiAqBsvDZEBXBGHQBJfeG6G+wJPPKxCZMoEQYpmoysKUN'
+    # cache_file = 'quad9-resolvers.md'
+    # prefix = 'quad9-'
 
-  ## Another example source, with resolvers censoring some websites not appropriate for children
-  ## This is a subset of the `public-resolvers` list, so enabling both is useless
+## Another example source, with resolvers censoring some websites not appropriate for children
+## This is a subset of the `public-resolvers` list, so enabling both is useless
 
   # [sources.'parental-control']
-  #   urls = ['https://raw.githubusercontent.com/DNSCrypt/dnscrypt-resolvers/master/v3/parental-control.md', 'https://download.dnscrypt.info/resolvers-list/v3/parental-control.md', 'https://ipv6.download.dnscrypt.info/resolvers-list/v3/parental-control.md']
-  #   cache_file = 'parental-control.md'
-  #   minisign_key = 'RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3'
+    # urls = ['https://raw.githubusercontent.com/DNSCrypt/dnscrypt-resolvers/master/v3/parental-control.md', 'https://download.dnscrypt.info/resolvers-list/v3/parental-control.md', 'https://ipv6.download.dnscrypt.info/resolvers-list/v3/parental-control.md']
+    # cache_file = 'parental-control.md'
+    # minisign_key = 'RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3'
 
 
 
@@ -857,4 +857,4 @@ skip_incompatible = false
 [static]
 
   # [static.'myserver']
-  # stamp = 'sdns://AQcAAAAAAAAAAAAQMi5kbnNjcnlwdC1jZXJ0Lg'
+    # stamp = 'sdns://AQcAAAAAAAAAAAAQMi5kbnNjcnlwdC1jZXJ0Lg'
