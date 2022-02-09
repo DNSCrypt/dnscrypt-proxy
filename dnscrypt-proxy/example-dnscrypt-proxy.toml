@@ -726,16 +726,16 @@ format = 'tsv'
 
 [broken_implementations]
 
-# Cisco servers currently cannot handle queries larger than 1472 bytes, and don't
-# truncate responses larger than questions as expected by the DNSCrypt protocol.
-# This prevents large responses from being received over UDP and over relays.
-#
-# Older versions of the `dnsdist` server software had a bug with queries larger
-# than 1500 bytes. This is fixed since `dnsdist` version 1.5.0, but
-# some server may still run an outdated version.
-#
-# The list below enables workarounds to make non-relayed usage more reliable
-# until the servers are fixed.
+## Cisco servers currently cannot handle queries larger than 1472 bytes, and don't
+## truncate responses larger than questions as expected by the DNSCrypt protocol.
+## This prevents large responses from being received over UDP and over relays.
+## 
+## Older versions of the `dnsdist` server software had a bug with queries larger
+## than 1500 bytes. This is fixed since `dnsdist` version 1.5.0, but
+## some server may still run an outdated version.
+## 
+## The list below enables workarounds to make non-relayed usage more reliable
+## until the servers are fixed.
 
 fragments_blocked = ['cisco', 'cisco-ipv6', 'cisco-familyshield', 'cisco-familyshield-ipv6', 'cleanbrowsing-adult', 'cleanbrowsing-adult-ipv6', 'cleanbrowsing-family', 'cleanbrowsing-family-ipv6', 'cleanbrowsing-security', 'cleanbrowsing-security-ipv6']
 
@@ -745,11 +745,11 @@ fragments_blocked = ['cisco', 'cisco-ipv6', 'cisco-familyshield', 'cisco-familys
 #        Certificate-based client authentication for DoH        #
 #################################################################
 
-# Use a X509 certificate to authenticate yourself when connecting to DoH servers.
-# This is only useful if you are operating your own, private DoH server(s).
-# 'creds' maps servers to certificates, and supports multiple entries.
-# If you are not using the standard root CA, an optional "root_ca"
-# property set to the path to a root CRT file can be added to a server entry.
+## Use a X509 certificate to authenticate yourself when connecting to DoH servers.
+## This is only useful if you are operating your own, private DoH server(s).
+## 'creds' maps servers to certificates, and supports multiple entries.
+## If you are not using the standard root CA, an optional "root_ca"
+## property set to the path to a root CRT file can be added to a server entry.
 
 [doh_client_x509_auth]
 
@@ -800,14 +800,14 @@ fragments_blocked = ['cisco', 'cisco-ipv6', 'cisco-familyshield', 'cisco-familys
 # ]
 
 
-# Skip resolvers incompatible with anonymization instead of using them directly
+## Skip resolvers incompatible with anonymization instead of using them directly
 
 skip_incompatible = false
 
 
-# If public server certificates for a non-conformant server cannot be
-# retrieved via a relay, try getting them directly. Actual queries
-# will then always go through relays.
+## If public server certificates for a non-conformant server cannot be
+## retrieved via a relay, try getting them directly. Actual queries
+## will then always go through relays.
 
 # direct_cert_fallback = false
 
@@ -856,4 +856,4 @@ skip_incompatible = false
 [static]
 
   # [static.'myserver']
-    # stamp = 'sdns://AQcAAAAAAAAAAAAQMi5kbnNjcnlwdC1jZXJ0Lg'
+  #   stamp = 'sdns://AQcAAAAAAAAAAAAQMi5kbnNjcnlwdC1jZXJ0Lg'
