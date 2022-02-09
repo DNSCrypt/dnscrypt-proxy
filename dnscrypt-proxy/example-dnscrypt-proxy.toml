@@ -454,20 +454,20 @@ cache_neg_max_ttl = 600
 
 [query_log]
 
-  ## Path to the query log file (absolute, or relative to the same directory as the config file)
-  ## Can be set to /dev/stdout in order to log to the standard output.
+## Path to the query log file (absolute, or relative to the same directory as the config file)
+## Can be set to /dev/stdout in order to log to the standard output.
 
-  # file = 'query.log'
-
-
-  ## Query log format (currently supported: tsv and ltsv)
-
-  format = 'tsv'
+# file = 'query.log'
 
 
-  ## Do not log these query types, to reduce verbosity. Keep empty to log everything.
+## Query log format (currently supported: tsv and ltsv)
 
-  # ignored_qtypes = ['DNSKEY', 'NS']
+format = 'tsv'
+
+
+## Do not log these query types, to reduce verbosity. Keep empty to log everything.
+
+# ignored_qtypes = ['DNSKEY', 'NS']
 
 
 
@@ -481,14 +481,14 @@ cache_neg_max_ttl = 600
 
 [nx_log]
 
-  ## Path to the query log file (absolute, or relative to the same directory as the config file)
+## Path to the query log file (absolute, or relative to the same directory as the config file)
 
-  # file = 'nx.log'
+# file = 'nx.log'
 
 
-  ## Query log format (currently supported: tsv and ltsv)
+## Query log format (currently supported: tsv and ltsv)
 
-  format = 'tsv'
+format = 'tsv'
 
 
 
@@ -511,19 +511,19 @@ cache_neg_max_ttl = 600
 
 [blocked_names]
 
-  ## Path to the file of blocking rules (absolute, or relative to the same directory as the config file)
+## Path to the file of blocking rules (absolute, or relative to the same directory as the config file)
 
-  # blocked_names_file = 'blocked-names.txt'
-
-
-  ## Optional path to a file logging blocked queries
-
-  # log_file = 'blocked-names.log'
+# blocked_names_file = 'blocked-names.txt'
 
 
-  ## Optional log format: tsv or ltsv (default: tsv)
+## Optional path to a file logging blocked queries
 
-  # log_format = 'tsv'
+# log_file = 'blocked-names.log'
+
+
+## Optional log format: tsv or ltsv (default: tsv)
+
+# log_format = 'tsv'
 
 
 
@@ -539,19 +539,19 @@ cache_neg_max_ttl = 600
 
 [blocked_ips]
 
-  ## Path to the file of blocking rules (absolute, or relative to the same directory as the config file)
+## Path to the file of blocking rules (absolute, or relative to the same directory as the config file)
 
-  # blocked_ips_file = 'blocked-ips.txt'
-
-
-  ## Optional path to a file logging blocked queries
-
-  # log_file = 'blocked-ips.log'
+# blocked_ips_file = 'blocked-ips.txt'
 
 
-  ## Optional log format: tsv or ltsv (default: tsv)
+## Optional path to a file logging blocked queries
 
-  # log_format = 'tsv'
+# log_file = 'blocked-ips.log'
+
+
+## Optional log format: tsv or ltsv (default: tsv)
+
+# log_format = 'tsv'
 
 
 
@@ -567,19 +567,19 @@ cache_neg_max_ttl = 600
 
 [allowed_names]
 
-  ## Path to the file of allow list rules (absolute, or relative to the same directory as the config file)
+## Path to the file of allow list rules (absolute, or relative to the same directory as the config file)
 
-  # allowed_names_file = 'allowed-names.txt'
-
-
-  ## Optional path to a file logging allowed queries
-
-  # log_file = 'allowed-names.log'
+# allowed_names_file = 'allowed-names.txt'
 
 
-  ## Optional log format: tsv or ltsv (default: tsv)
+## Optional path to a file logging allowed queries
 
-  # log_format = 'tsv'
+# log_file = 'allowed-names.log'
+
+
+## Optional log format: tsv or ltsv (default: tsv)
+
+# log_format = 'tsv'
 
 
 
@@ -595,18 +595,18 @@ cache_neg_max_ttl = 600
 
 [allowed_ips]
 
-  ## Path to the file of allowed ip rules (absolute, or relative to the same directory as the config file)
+## Path to the file of allowed ip rules (absolute, or relative to the same directory as the config file)
 
-  # allowed_ips_file = 'allowed-ips.txt'
+# allowed_ips_file = 'allowed-ips.txt'
 
 
-  ## Optional path to a file logging allowed queries
+## Optional path to a file logging allowed queries
 
-  # log_file = 'allowed-ips.log'
+# log_file = 'allowed-ips.log'
 
-  ## Optional log format: tsv or ltsv (default: tsv)
+## Optional log format: tsv or ltsv (default: tsv)
 
-  # log_format = 'tsv'
+# log_format = 'tsv'
 
 
 
@@ -628,20 +628,20 @@ cache_neg_max_ttl = 600
 [schedules]
 
   # [schedules.'time-to-sleep']
-  # mon = [{after='21:00', before='7:00'}]
-  # tue = [{after='21:00', before='7:00'}]
-  # wed = [{after='21:00', before='7:00'}]
-  # thu = [{after='21:00', before='7:00'}]
-  # fri = [{after='23:00', before='7:00'}]
-  # sat = [{after='23:00', before='7:00'}]
-  # sun = [{after='21:00', before='7:00'}]
+  #   mon = [{after='21:00', before='7:00'}]
+  #   tue = [{after='21:00', before='7:00'}]
+  #   wed = [{after='21:00', before='7:00'}]
+  #   thu = [{after='21:00', before='7:00'}]
+  #   fri = [{after='23:00', before='7:00'}]
+  #   sat = [{after='23:00', before='7:00'}]
+  #   sun = [{after='21:00', before='7:00'}]
 
   # [schedules.'work']
-  # mon = [{after='9:00', before='18:00'}]
-  # tue = [{after='9:00', before='18:00'}]
-  # wed = [{after='9:00', before='18:00'}]
-  # thu = [{after='9:00', before='18:00'}]
-  # fri = [{after='9:00', before='17:00'}]
+  #   mon = [{after='9:00', before='18:00'}]
+  #   tue = [{after='9:00', before='18:00'}]
+  #   wed = [{after='9:00', before='18:00'}]
+  #   thu = [{after='9:00', before='18:00'}]
+  #   fri = [{after='9:00', before='17:00'}]
 
 
 
@@ -726,16 +726,16 @@ cache_neg_max_ttl = 600
 
 [broken_implementations]
 
-# Cisco servers currently cannot handle queries larger than 1472 bytes, and don't
-# truncate responses larger than questions as expected by the DNSCrypt protocol.
-# This prevents large responses from being received over UDP and over relays.
-#
-# Older versions of the `dnsdist` server software had a bug with queries larger
-# than 1500 bytes. This is fixed since `dnsdist` version 1.5.0, but
-# some server may still run an outdated version.
-#
-# The list below enables workarounds to make non-relayed usage more reliable
-# until the servers are fixed.
+## Cisco servers currently cannot handle queries larger than 1472 bytes, and don't
+## truncate responses larger than questions as expected by the DNSCrypt protocol.
+## This prevents large responses from being received over UDP and over relays.
+## 
+## Older versions of the `dnsdist` server software had a bug with queries larger
+## than 1500 bytes. This is fixed since `dnsdist` version 1.5.0, but
+## some server may still run an outdated version.
+## 
+## The list below enables workarounds to make non-relayed usage more reliable
+## until the servers are fixed.
 
 fragments_blocked = ['cisco', 'cisco-ipv6', 'cisco-familyshield', 'cisco-familyshield-ipv6', 'cleanbrowsing-adult', 'cleanbrowsing-adult-ipv6', 'cleanbrowsing-family', 'cleanbrowsing-family-ipv6', 'cleanbrowsing-security', 'cleanbrowsing-security-ipv6']
 
@@ -745,15 +745,14 @@ fragments_blocked = ['cisco', 'cisco-ipv6', 'cisco-familyshield', 'cisco-familys
 #        Certificate-based client authentication for DoH        #
 #################################################################
 
-# Use a X509 certificate to authenticate yourself when connecting to DoH servers.
-# This is only useful if you are operating your own, private DoH server(s).
-# 'creds' maps servers to certificates, and supports multiple entries.
-# If you are not using the standard root CA, an optional "root_ca"
-# property set to the path to a root CRT file can be added to a server entry.
+## Use a X509 certificate to authenticate yourself when connecting to DoH servers.
+## This is only useful if you are operating your own, private DoH server(s).
+## 'creds' maps servers to certificates, and supports multiple entries.
+## If you are not using the standard root CA, an optional "root_ca"
+## property set to the path to a root CRT file can be added to a server entry.
 
 [doh_client_x509_auth]
 
-#
 # creds = [
 #    { server_name='*', client_cert='client.crt', client_key='client.key' }
 # ]
@@ -801,14 +800,14 @@ fragments_blocked = ['cisco', 'cisco-ipv6', 'cisco-familyshield', 'cisco-familys
 # ]
 
 
-# Skip resolvers incompatible with anonymization instead of using them directly
+## Skip resolvers incompatible with anonymization instead of using them directly
 
 skip_incompatible = false
 
 
-# If public server certificates for a non-conformant server cannot be
-# retrieved via a relay, try getting them directly. Actual queries
-# will then always go through relays.
+## If public server certificates for a non-conformant server cannot be
+## retrieved via a relay, try getting them directly. Actual queries
+## will then always go through relays.
 
 # direct_cert_fallback = false
 
@@ -857,4 +856,4 @@ skip_incompatible = false
 [static]
 
   # [static.'myserver']
-  # stamp = 'sdns://AQcAAAAAAAAAAAAQMi5kbnNjcnlwdC1jZXJ0Lg'
+  #   stamp = 'sdns://AQcAAAAAAAAAAAAQMi5kbnNjcnlwdC1jZXJ0Lg'
