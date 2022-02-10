@@ -671,7 +671,7 @@ format = 'tsv'
 
   ### An example of a remote source from https://github.com/DNSCrypt/dnscrypt-resolvers
 
-  [sources.'public-resolvers']
+  [sources.public-resolvers]
     urls = ['https://raw.githubusercontent.com/DNSCrypt/dnscrypt-resolvers/master/v3/public-resolvers.md', 'https://download.dnscrypt.info/resolvers-list/v3/public-resolvers.md', 'https://ipv6.download.dnscrypt.info/resolvers-list/v3/public-resolvers.md']
     cache_file = 'public-resolvers.md'
     minisign_key = 'RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3'
@@ -680,7 +680,7 @@ format = 'tsv'
 
   ### Anonymized DNS relays
 
-  [sources.'relays']
+  [sources.relays]
     urls = ['https://raw.githubusercontent.com/DNSCrypt/dnscrypt-resolvers/master/v3/relays.md', 'https://download.dnscrypt.info/resolvers-list/v3/relays.md', 'https://ipv6.download.dnscrypt.info/resolvers-list/v3/relays.md']
     cache_file = 'relays.md'
     minisign_key = 'RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3'
@@ -689,13 +689,13 @@ format = 'tsv'
 
   ### ODoH (Oblivious DoH) servers and relays
 
-  # [sources.'odoh-servers']
+  # [sources.odoh-servers]
   #   urls = ['https://raw.githubusercontent.com/DNSCrypt/dnscrypt-resolvers/master/v3/odoh-servers.md', 'https://download.dnscrypt.info/resolvers-list/v3/odoh-servers.md', 'https://ipv6.download.dnscrypt.info/resolvers-list/v3/odoh-servers.md']
   #   cache_file = 'odoh-servers.md'
   #   minisign_key = 'RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3'
   #   refresh_delay = 24
   #   prefix = ''
-  # [sources.'odoh-relays']
+  # [sources.odoh-relays]
   #   urls = ['https://raw.githubusercontent.com/DNSCrypt/dnscrypt-resolvers/master/v3/odoh-relays.md', 'https://download.dnscrypt.info/resolvers-list/v3/odoh-relays.md', 'https://ipv6.download.dnscrypt.info/resolvers-list/v3/odoh-relays.md']
   #   cache_file = 'odoh-relays.md'
   #   minisign_key = 'RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3'
@@ -713,7 +713,7 @@ format = 'tsv'
   ### Another example source, with resolvers censoring some websites not appropriate for children
   ### This is a subset of the `public-resolvers` list, so enabling both is useless.
 
-  # [sources.'parental-control']
+  # [sources.parental-control]
   #   urls = ['https://raw.githubusercontent.com/DNSCrypt/dnscrypt-resolvers/master/v3/parental-control.md', 'https://download.dnscrypt.info/resolvers-list/v3/parental-control.md', 'https://ipv6.download.dnscrypt.info/resolvers-list/v3/parental-control.md']
   #   cache_file = 'parental-control.md'
   #   minisign_key = 'RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3'
@@ -729,11 +729,11 @@ format = 'tsv'
 ## Cisco servers currently cannot handle queries larger than 1472 bytes, and don't
 ## truncate responses larger than questions as expected by the DNSCrypt protocol.
 ## This prevents large responses from being received over UDP and over relays.
-## 
+##
 ## Older versions of the `dnsdist` server software had a bug with queries larger
 ## than 1500 bytes. This is fixed since `dnsdist` version 1.5.0, but
 ## some server may still run an outdated version.
-## 
+##
 ## The list below enables workarounds to make non-relayed usage more reliable
 ## until the servers are fixed.
 
@@ -835,13 +835,15 @@ skip_incompatible = false
 
 [dns64]
 
-## (Option 1) Static prefix(es) as Pref64::/n CIDRs.
+## Static prefix(es) as Pref64::/n CIDRs
+
 # prefix = ['64:ff9b::/96']
 
-## (Option 2) DNS64-enabled resolver(s) to discover Pref64::/n CIDRs.
+## DNS64-enabled resolver(s) to discover Pref64::/n CIDRs
 ## These resolvers are used to query for Well-Known IPv4-only Name (WKN) "ipv4only.arpa." to discover only.
 ## Set with your ISP's resolvers in case of custom prefixes (other than Well-Known Prefix 64:ff9b::/96).
 ## IMPORTANT: Default resolvers listed below support Well-Known Prefix 64:ff9b::/96 only.
+
 # resolver = ['[2606:4700:4700::64]:53', '[2001:4860:4860::64]:53']
 
 
@@ -855,5 +857,5 @@ skip_incompatible = false
 
 [static]
 
-  # [static.'myserver']
+  # [static.myserver]
   #   stamp = 'sdns://AQcAAAAAAAAAAAAQMi5kbnNjcnlwdC1jZXJ0Lg'
