@@ -226,35 +226,26 @@ func (serversInfo *ServersInfo) refresh(proxy *Proxy) (int, error) {
 }
 
 func (serversInfo *ServersInfo) estimatorUpdate() {
-	// serversInfo.RWMutex is assumed to be Locked
-	candidate := rand.Intn(len(serversInfo.inner))
+	// serversInfo.RWMutex is assumed to be locked
+	serversCount := len(serversInfo.inner)
+	for i := serversCount-1; i > 0; i-- {
+		if serversInfo.inner[i].rtt.Value() < serversInfo.inner[i-1].rtt.Value() {
+			serversInfo.inner[i-1], serversInfo.inner[i] = serversInfo.inner[i], serversInfo.inner[i-1]
+		}
+	}
+	currentBestRtt := serversInfo.inner[0].rtt.Value()
+	if currentBestRtt < 0 {
+		return
+	}
+	dlog.Debugf("Current best candidate: %s (RTT: %d)", serversInfo.inner[0].Name, int(currentBestRtt))
+	candidate := rand.Intn(serversCount)
 	if candidate == 0 {
 		return
 	}
-	candidateRtt, currentBestRtt := serversInfo.inner[candidate].rtt.Value(), serversInfo.inner[0].rtt.Value()
-	if currentBestRtt < 0 {
-		currentBestRtt = candidateRtt
-		serversInfo.inner[0].rtt.Set(currentBestRtt)
-	}
-	partialSort := false
-	if candidateRtt < currentBestRtt {
-		serversInfo.inner[candidate], serversInfo.inner[0] = serversInfo.inner[0], serversInfo.inner[candidate]
-		partialSort = true
-		dlog.Debugf("New preferred candidate: %v (rtt: %d vs previous: %d)", serversInfo.inner[0].Name, int(candidateRtt), int(currentBestRtt))
-	} else if candidateRtt > 0 && candidateRtt >= currentBestRtt*4.0 {
-		if time.Since(serversInfo.inner[candidate].lastActionTS) > time.Duration(1*time.Minute) {
-			serversInfo.inner[candidate].rtt.Add(MinF(MaxF(candidateRtt/2.0, currentBestRtt*2.0), candidateRtt))
-			dlog.Debugf("Giving a new chance to candidate [%s], lowering its RTT from %d to %d (best: %d)", serversInfo.inner[candidate].Name, int(candidateRtt), int(serversInfo.inner[candidate].rtt.Value()), int(currentBestRtt))
-			partialSort = true
-		}
-	}
-	if partialSort {
-		serversCount := len(serversInfo.inner)
-		for i := 1; i < serversCount; i++ {
-			if serversInfo.inner[i-1].rtt.Value() > serversInfo.inner[i].rtt.Value() {
-				serversInfo.inner[i-1], serversInfo.inner[i] = serversInfo.inner[i], serversInfo.inner[i-1]
-			}
-		}
+	candidateRtt := serversInfo.inner[candidate].rtt.Value()
+	if candidateRtt > 0 && time.Since(serversInfo.inner[candidate].lastActionTS) > time.Duration(1*time.Minute) {
+		serversInfo.inner[candidate].rtt.Set(0.5*(currentBestRtt+candidateRtt))
+		dlog.Debugf("Giving a new chance to candidate [%s], lowering its RTT from %d to %d (best: %d)", serversInfo.inner[candidate].Name, int(candidateRtt), int(serversInfo.inner[candidate].rtt.Value()), int(currentBestRtt))
 	}
 }
 
