@@ -101,20 +101,6 @@ func Max(a, b int) int {
 	return b
 }
 
-func MinF(a, b float64) float64 {
-	if a < b {
-		return a
-	}
-	return b
-}
-
-func MaxF(a, b float64) float64 {
-	if a > b {
-		return a
-	}
-	return b
-}
-
 func StringReverse(s string) string {
 	r := []rune(s)
 	for i, j := 0, len(r)-1; i < len(r)/2; i, j = i+1, j-1 {
