@@ -244,7 +244,7 @@ func (serversInfo *ServersInfo) estimatorUpdate() {
 	}
 	candidateRtt := serversInfo.inner[candidate].rtt.Value()
 	if candidateRtt > 0 && time.Since(serversInfo.inner[candidate].lastActionTS) > time.Duration(1*time.Minute) {
-		serversInfo.inner[candidate].rtt.Set(0.5*(currentBestRtt+candidateRtt))
+		serversInfo.inner[candidate].rtt.Add(0.9*currentBestRtt)
 		dlog.Debugf("Giving a new chance to candidate [%s], lowering its RTT from %d to %d (best: %d)", serversInfo.inner[candidate].Name, int(candidateRtt), int(serversInfo.inner[candidate].rtt.Value()), int(currentBestRtt))
 	}
 }
