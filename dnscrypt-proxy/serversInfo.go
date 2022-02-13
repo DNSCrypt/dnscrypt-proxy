@@ -24,7 +24,7 @@ import (
 )
 
 const (
-	RTTEwmaDecay = 10.0
+	RTTEwmaDecay = 19.0
 )
 
 type RegisteredServer struct {
@@ -240,13 +240,11 @@ func (serversInfo *ServersInfo) estimatorUpdate() {
 	if candidateRtt < currentBestRtt {
 		serversInfo.inner[candidate], serversInfo.inner[0] = serversInfo.inner[0], serversInfo.inner[candidate]
 		partialSort = true
-		dlog.Debugf("New preferred candidate: %v (rtt: %d vs previous: %d)", serversInfo.inner[0].Name, int(candidateRtt), int(currentBestRtt))
-	} else if candidateRtt > 0 && candidateRtt >= currentBestRtt*4.0 {
-		if time.Since(serversInfo.inner[candidate].lastActionTS) > time.Duration(1*time.Minute) {
-			serversInfo.inner[candidate].rtt.Add(MinF(MaxF(candidateRtt/2.0, currentBestRtt*2.0), candidateRtt))
-			dlog.Debugf("Giving a new chance to candidate [%s], lowering its RTT from %d to %d (best: %d)", serversInfo.inner[candidate].Name, int(candidateRtt), int(serversInfo.inner[candidate].rtt.Value()), int(currentBestRtt))
-			partialSort = true
-		}
+		dlog.Debugf("New preferred candidate: %s (RTT: %d vs previous: %d)", serversInfo.inner[0].Name, int(candidateRtt), int(currentBestRtt))
+	} else if candidateRtt > 0 && time.Since(serversInfo.inner[candidate].lastActionTS) > time.Duration(1*time.Minute) {
+		serversInfo.inner[candidate].rtt.Add(0.0)
+		dlog.Debugf("Giving a new chance to candidate [%s], lowering its RTT from %d to %d (best: %d)", serversInfo.inner[candidate].Name, int(candidateRtt), int(serversInfo.inner[candidate].rtt.Value()), int(currentBestRtt))
+		partialSort = true
 	}
 	if partialSort {
 		serversCount := len(serversInfo.inner)
