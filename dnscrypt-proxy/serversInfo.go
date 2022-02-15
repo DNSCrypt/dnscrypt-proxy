@@ -97,7 +97,7 @@ func (LBStrategyPH) getCandidate(serversCount int) int {
 }
 
 func (LBStrategyPH) getActiveCount(serversCount int) int {
-	return Max(Min(serversCount, 2), serversCount/2))
+	return Max(Min(serversCount, 2), serversCount/2)
 }
 
 type LBStrategyFirst struct{}
