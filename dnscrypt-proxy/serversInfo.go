@@ -253,8 +253,7 @@ func (serversInfo *ServersInfo) estimatorUpdate() {
 	if activeCount == serversCount {
 		return
 	}
-	currentActive := rand.Intn(activeCount)
-	candidate := rand.Intn(serversCount-activeCount)+activeCount
+	candidate, currentActive := rand.Intn(serversCount-activeCount)+activeCount, rand.Intn(activeCount)
 	candidateRtt, currentActiveRtt := serversInfo.inner[candidate].rtt.Value(), serversInfo.inner[currentActive].rtt.Value()
 	if currentActiveRtt < 0 {
 		currentActiveRtt = candidateRtt
