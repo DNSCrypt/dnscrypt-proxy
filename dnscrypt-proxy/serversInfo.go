@@ -264,9 +264,9 @@ func (serversInfo *ServersInfo) estimatorUpdate() {
 		serversInfo.inner[candidate], serversInfo.inner[currentActive] = serversInfo.inner[currentActive], serversInfo.inner[candidate]
 		dlog.Debugf("New preferred candidate: %s (RTT: %d vs previous: %d)", serversInfo.inner[currentActive].Name, int(candidateRtt), int(currentActiveRtt))
 		partialSort = true
-	} else if candidateRtt > 0 && candidateRtt >= serversInfo.inner[activeCount-1].rtt.Value()*2.0 {
+	} else if candidateRtt > 0 && candidateRtt >= (serversInfo.inner[0].rtt.Value()+serversInfo.inner[activeCount-1].rtt.Value())/2.0*4.0 {
 		if time.Since(serversInfo.inner[candidate].lastActionTS) > time.Duration(1*time.Minute) {
-			serversInfo.inner[candidate].rtt.Add(serversInfo.inner[activeCount-1].rtt.Value())
+			serversInfo.inner[candidate].rtt.Add(candidateRtt/2.0)
 			dlog.Debugf("Giving a new chance to candidate [%s], lowering its RTT from %d to %d (best: %d)", serversInfo.inner[candidate].Name, int(candidateRtt), int(serversInfo.inner[candidate].rtt.Value()), int(serversInfo.inner[0].rtt.Value()))
 			partialSort = true
 		}
