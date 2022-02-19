@@ -24,7 +24,7 @@ import (
 )
 
 const (
-	RTTEwmaDecay = 15.0
+	RTTEwmaDecay = 10.0
 )
 
 type RegisteredServer struct {
