@@ -194,6 +194,7 @@ func (serversInfo *ServersInfo) refreshServer(proxy *Proxy, name string, stamp s
 		dlog.Fatalf("[%s] != [%s]", name, newServer.Name)
 	}
 	newServer.rtt = ewma.NewMovingAverage(RTTEwmaDecay)
+	newServer.rtt.SetWarmupSamples(1)
 	newServer.rtt.Set(float64(newServer.initialRtt))
 	isNew = true
 	serversInfo.Lock()
