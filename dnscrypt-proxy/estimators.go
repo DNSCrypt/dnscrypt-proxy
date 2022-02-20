@@ -6,10 +6,6 @@ import (
 	"github.com/jedisct1/ewma"
 )
 
-const (
-	SizeEstimatorEwmaDecay = 100.0
-)
-
 type QuestionSizeEstimator struct {
 	sync.RWMutex
 	minQuestionSize int
@@ -17,7 +13,7 @@ type QuestionSizeEstimator struct {
 }
 
 func NewQuestionSizeEstimator() QuestionSizeEstimator {
-	return QuestionSizeEstimator{minQuestionSize: InitialMinQuestionSize, ewma: ewma.NewMovingAverage(SizeEstimatorEwmaDecay)}
+	return QuestionSizeEstimator{minQuestionSize: InitialMinQuestionSize, ewma: &ewma.SimpleEWMA{}}
 }
 
 func (questionSizeEstimator *QuestionSizeEstimator) MinQuestionSize() int {
