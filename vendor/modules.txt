@@ -14,9 +14,6 @@ github.com/Masterminds/semver
 # github.com/OpenPeeDeeP/depguard v1.0.1
 ## explicit; go 1.13
 github.com/OpenPeeDeeP/depguard
-# github.com/VividCortex/ewma v1.2.0
-## explicit; go 1.12
-github.com/VividCortex/ewma
 # github.com/alexkohler/prealloc v1.0.0
 ## explicit; go 1.15
 github.com/alexkohler/prealloc/pkg
@@ -251,6 +248,9 @@ github.com/inconshreveable/mousetrap
 # github.com/jedisct1/dlog v0.0.0-20210927135244-3381aa132e7f
 ## explicit; go 1.17
 github.com/jedisct1/dlog
+# github.com/jedisct1/ewma v1.2.1-0.20220220223311-a30af446ecb9
+## explicit; go 1.12
+github.com/jedisct1/ewma
 # github.com/jedisct1/go-clocksmith v0.0.0-20210101121932-da382b963868
 ## explicit
 github.com/jedisct1/go-clocksmith

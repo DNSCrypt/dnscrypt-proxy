@@ -52,8 +52,6 @@ github.com/OneOfOne/xxhash v1.2.2/go.mod h1:HSdplMjZKSmBqAxg5vPj2TmRDmfkzw+cTzAE
 github.com/OpenPeeDeeP/depguard v1.0.1 h1:VlW4R6jmBIv3/u1JNlawEvJMM4J+dPORPaZasQee8Us=
 github.com/OpenPeeDeeP/depguard v1.0.1/go.mod h1:xsIw86fROiiwelg+jB2uM9PiKihMMmUx/1V+TNhjQvM=
 github.com/StackExchange/wmi v0.0.0-20190523213315-cbe66965904d/go.mod h1:3eOhrUMpNV+6aFIbp5/iudMxNCF27Vw2OZgy4xEx0Fg=
-github.com/VividCortex/ewma v1.2.0 h1:f58SaIzcDXrSy3kWaHNvuJgJ3Nmz59Zji6XoJR/q1ow=
-github.com/VividCortex/ewma v1.2.0/go.mod h1:nz4BbCtbLyFDeC9SUHbtcT5644juEuWfUAUnGx7j5l4=
 github.com/alecthomas/template v0.0.0-20160405071501-a0175ee3bccc/go.mod h1:LOuyumcjzFXgccqObfd/Ljyb9UuFJ6TxHnclSeseNhc=
 github.com/alecthomas/template v0.0.0-20190718012654-fb15b899a751/go.mod h1:LOuyumcjzFXgccqObfd/Ljyb9UuFJ6TxHnclSeseNhc=
 github.com/alecthomas/units v0.0.0-20151022065526-2efee857e7cf/go.mod h1:ybxpYRFXyAe+OPACYpWeL0wqObRcbAqCMya13uyzqw0=
@@ -353,6 +351,8 @@ github.com/inconshreveable/mousetrap v1.0.0 h1:Z8tu5sraLXCXIcARxBp/8cbvlwVa7Z1NH
 github.com/inconshreveable/mousetrap v1.0.0/go.mod h1:PxqpIevigyE2G7u3NXJIT2ANytuPF1OarO4DADm73n8=
 github.com/jedisct1/dlog v0.0.0-20210927135244-3381aa132e7f h1:XICcphytniQKdtd4FGrK0b1ERzS7FBvFtVUCReSppmU=
 github.com/jedisct1/dlog v0.0.0-20210927135244-3381aa132e7f/go.mod h1:35aII3PkLMvmc8daWy0vcZXDU+a40lJczHHTFRJmnvw=
+github.com/jedisct1/ewma v1.2.1-0.20220220223311-a30af446ecb9 h1:U5QPCoM1KkMJ9RfEfP0joKNwwwIHG1oP9RzjvQTuh98=
+github.com/jedisct1/ewma v1.2.1-0.20220220223311-a30af446ecb9/go.mod h1:qCWdft6DX9wxyNsUS+sxS44UkxE7eQnNtBttTWoW0cU=
 github.com/jedisct1/go-clocksmith v0.0.0-20210101121932-da382b963868 h1:QZ79mRbNwYYYmiVjyv+X0NKgYE6nyN1yo3gtEFdzpiE=
 github.com/jedisct1/go-clocksmith v0.0.0-20210101121932-da382b963868/go.mod h1:SAINchklztk2jcLWJ4bpNF4KnwDUSUTX+cJbspWC2Rw=
 github.com/jedisct1/go-dnsstamps v0.0.0-20210810213811-61cc83d2a354 h1:sIB9mDh2spQdh95jeXF2h9uSNtObbehD0YbDCzmqbM8=
