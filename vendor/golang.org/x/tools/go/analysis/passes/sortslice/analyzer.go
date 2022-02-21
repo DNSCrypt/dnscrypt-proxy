@@ -45,8 +45,7 @@ func run(pass *analysis.Pass) (interface{}, error) {
 			return
 		}
 
-		fnName := fn.FullName()
-		if fnName != "sort.Slice" && fnName != "sort.SliceStable" && fnName != "sort.SliceIsSorted" {
+		if fn.FullName() != "sort.Slice" {
 			return
 		}
 
@@ -116,7 +115,7 @@ func run(pass *analysis.Pass) (interface{}, error) {
 		pass.Report(analysis.Diagnostic{
 			Pos:            call.Pos(),
 			End:            call.End(),
-			Message:        fmt.Sprintf("%s's argument must be a slice; is called with %s", fnName, typ.String()),
+			Message:        fmt.Sprintf("sort.Slice's argument must be a slice; is called with %s", typ.String()),
 			SuggestedFixes: fixes,
 		})
 	})

@@ -27,23 +27,23 @@ const (
 // RuneRoles detects the roles of each byte rune in an input string and stores it in the output
 // slice. The rune role depends on the input type. Stops when it parsed all the runes in the string
 // or when it filled the output. If output is nil, then it gets created.
-func RuneRoles(candidate []byte, reuse []RuneRole) []RuneRole {
+func RuneRoles(str string, reuse []RuneRole) []RuneRole {
 	var output []RuneRole
-	if cap(reuse) < len(candidate) {
-		output = make([]RuneRole, 0, len(candidate))
+	if cap(reuse) < len(str) {
+		output = make([]RuneRole, 0, len(str))
 	} else {
 		output = reuse[:0]
 	}
 
 	prev, prev2 := rtNone, rtNone
-	for i := 0; i < len(candidate); i++ {
-		r := rune(candidate[i])
+	for i := 0; i < len(str); i++ {
+		r := rune(str[i])
 
 		role := RNone
 
 		curr := rtLower
-		if candidate[i] <= unicode.MaxASCII {
-			curr = runeType(rt[candidate[i]] - '0')
+		if str[i] <= unicode.MaxASCII {
+			curr = runeType(rt[str[i]] - '0')
 		}
 
 		if curr == rtLower {
@@ -58,7 +58,7 @@ func RuneRoles(candidate []byte, reuse []RuneRole) []RuneRole {
 			if prev == rtUpper {
 				// This and previous characters are both upper case.
 
-				if i+1 == len(candidate) {
+				if i+1 == len(str) {
 					// This is last character, previous was also uppercase -> this is UCTail
 					// i.e., (current char is C): aBC / BC / ABC
 					role = RUCTail
@@ -118,26 +118,11 @@ func LastSegment(input string, roles []RuneRole) string {
 	return input[start+1 : end+1]
 }
 
-// fromChunks copies string chunks into the given buffer.
-func fromChunks(chunks []string, buffer []byte) []byte {
-	ii := 0
-	for _, chunk := range chunks {
-		for i := 0; i < len(chunk); i++ {
-			if ii >= cap(buffer) {
-				break
-			}
-			buffer[ii] = chunk[i]
-			ii++
-		}
-	}
-	return buffer[:ii]
-}
-
-// toLower transforms the input string to lower case, which is stored in the output byte slice.
+// ToLower transforms the input string to lower case, which is stored in the output byte slice.
 // The lower casing considers only ASCII values - non ASCII values are left unmodified.
 // Stops when parsed all input or when it filled the output slice. If output is nil, then it gets
 // created.
-func toLower(input []byte, reuse []byte) []byte {
+func ToLower(input string, reuse []byte) []byte {
 	output := reuse
 	if cap(reuse) < len(input) {
 		output = make([]byte, len(input))
@@ -145,7 +130,7 @@ func toLower(input []byte, reuse []byte) []byte {
 
 	for i := 0; i < len(input); i++ {
 		r := rune(input[i])
-		if input[i] <= unicode.MaxASCII {
+		if r <= unicode.MaxASCII {
 			if 'A' <= r && r <= 'Z' {
 				r += 'a' - 'A'
 			}

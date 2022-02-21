@@ -253,10 +253,6 @@ func (a *application) apply(parent ast.Node, name string, iter *iterator, n ast.
 		a.apply(n, "X", nil, n.X)
 		a.apply(n, "Index", nil, n.Index)
 
-	case *typeparams.IndexListExpr:
-		a.apply(n, "X", nil, n.X)
-		a.applyList(n, "Indices")
-
 	case *ast.SliceExpr:
 		a.apply(n, "X", nil, n.X)
 		a.apply(n, "Low", nil, n.Low)
@@ -443,7 +439,11 @@ func (a *application) apply(parent ast.Node, name string, iter *iterator, n ast.
 		}
 
 	default:
-		panic(fmt.Sprintf("Apply: unexpected node type %T", n))
+		if typeparams.IsListExpr(n) {
+			a.applyList(n, "ElemList")
+		} else {
+			panic(fmt.Sprintf("Apply: unexpected node type %T", n))
+		}
 	}
 
 	if a.post != nil && !a.post(&a.cursor) {

@@ -14,7 +14,6 @@ import (
 	"golang.org/x/tools/go/analysis/passes/inspect"
 	"golang.org/x/tools/go/ast/inspector"
 	"golang.org/x/tools/go/types/typeutil"
-	"golang.org/x/tools/internal/typeparams"
 )
 
 const Doc = `report passing non-pointer or non-interface values to unmarshal
@@ -86,7 +85,7 @@ func run(pass *analysis.Pass) (interface{}, error) {
 
 		t := pass.TypesInfo.Types[call.Args[argidx]].Type
 		switch t.Underlying().(type) {
-		case *types.Pointer, *types.Interface, *typeparams.TypeParam:
+		case *types.Pointer, *types.Interface:
 			return
 		}
 

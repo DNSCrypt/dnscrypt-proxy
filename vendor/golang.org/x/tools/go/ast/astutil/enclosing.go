@@ -11,8 +11,6 @@ import (
 	"go/ast"
 	"go/token"
 	"sort"
-
-	"golang.org/x/tools/internal/typeparams"
 )
 
 // PathEnclosingInterval returns the node that encloses the source
@@ -296,8 +294,8 @@ func childrenOf(n ast.Node) []ast.Node {
 
 	case *ast.FieldList:
 		children = append(children,
-			tok(n.Opening, len("(")), // or len("[")
-			tok(n.Closing, len(")"))) // or len("]")
+			tok(n.Opening, len("(")),
+			tok(n.Closing, len(")")))
 
 	case *ast.File:
 		// TODO test: Doc
@@ -324,9 +322,6 @@ func childrenOf(n ast.Node) []ast.Node {
 			children = append(children, n.Recv)
 		}
 		children = append(children, n.Name)
-		if tparams := typeparams.ForFuncType(n.Type); tparams != nil {
-			children = append(children, tparams)
-		}
 		if n.Type.Params != nil {
 			children = append(children, n.Type.Params)
 		}
@@ -376,13 +371,8 @@ func childrenOf(n ast.Node) []ast.Node {
 
 	case *ast.IndexExpr:
 		children = append(children,
-			tok(n.Lbrack, len("[")),
-			tok(n.Rbrack, len("]")))
-
-	case *typeparams.IndexListExpr:
-		children = append(children,
-			tok(n.Lbrack, len("[")),
-			tok(n.Rbrack, len("]")))
+			tok(n.Lbrack, len("{")),
+			tok(n.Rbrack, len("}")))
 
 	case *ast.InterfaceType:
 		children = append(children,
@@ -591,8 +581,6 @@ func NodeDescription(n ast.Node) string {
 		return "decrement statement"
 	case *ast.IndexExpr:
 		return "index expression"
-	case *typeparams.IndexListExpr:
-		return "index list expression"
 	case *ast.InterfaceType:
 		return "interface type"
 	case *ast.KeyValueExpr:

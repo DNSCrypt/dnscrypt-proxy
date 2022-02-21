@@ -9,7 +9,6 @@ package imports
 import (
 	"go/ast"
 	"go/token"
-	"log"
 	"sort"
 	"strconv"
 )
@@ -61,7 +60,6 @@ func sortImports(localPrefix string, fset *token.FileSet, f *ast.File) {
 
 // mergeImports merges all the import declarations into the first one.
 // Taken from golang.org/x/tools/ast/astutil.
-// This does not adjust line numbers properly
 func mergeImports(fset *token.FileSet, f *ast.File) {
 	if len(f.Decls) <= 1 {
 		return
@@ -239,17 +237,8 @@ func sortSpecs(localPrefix string, fset *token.FileSet, f *ast.File, specs []ast
 		p := s.Pos()
 		line := fset.File(p).Line(p)
 		for previousLine := line - 1; previousLine >= firstSpecLine; {
-			// MergeLine can panic. Avoid the panic at the cost of not removing the blank line
-			// golang/go#50329
-			if previousLine > 0 && previousLine < fset.File(p).LineCount() {
-				fset.File(p).MergeLine(previousLine)
-				previousLine--
-			} else {
-				// try to gather some data to diagnose how this could happen
-				req := "Please report what the imports section of your go file looked like."
-				log.Printf("panic avoided: first:%d line:%d previous:%d max:%d. %s",
-					firstSpecLine, line, previousLine, fset.File(p).LineCount(), req)
-			}
+			fset.File(p).MergeLine(previousLine)
+			previousLine--
 		}
 	}
 	return specs

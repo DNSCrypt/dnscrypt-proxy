@@ -3,17 +3,17 @@ package main
 import (
 	"sync"
 
-	"github.com/jedisct1/ewma"
+	"github.com/lifenjoiner/ewma"
 )
 
 type QuestionSizeEstimator struct {
 	sync.RWMutex
 	minQuestionSize int
-	ewma            ewma.MovingAverage
+	ewma            *ewma.EWMA
 }
 
 func NewQuestionSizeEstimator() QuestionSizeEstimator {
-	return QuestionSizeEstimator{minQuestionSize: InitialMinQuestionSize, ewma: &ewma.SimpleEWMA{}}
+	return QuestionSizeEstimator{minQuestionSize: InitialMinQuestionSize, ewma: &ewma.EWMA{}}
 }
 
 func (questionSizeEstimator *QuestionSizeEstimator) MinQuestionSize() int {

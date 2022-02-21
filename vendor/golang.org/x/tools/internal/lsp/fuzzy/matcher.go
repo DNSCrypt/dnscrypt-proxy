@@ -51,12 +51,8 @@ type Matcher struct {
 	lastCandidateLen     int // in bytes
 	lastCandidateMatched bool
 
-	// Reusable buffers to avoid allocating for every candidate.
-	//  - inputBuf stores the concatenated input chunks
-	//  - lowerBuf stores the last candidate in lower-case
-	//  - rolesBuf stores the calculated roles for each rune in the last
-	//    candidate.
-	inputBuf [MaxInputSize]byte
+	// Here we save the last candidate in lower-case. This is basically a byte slice we reuse for
+	// performance reasons, so the slice is not reallocated for every candidate.
 	lowerBuf [MaxInputSize]byte
 	rolesBuf [MaxInputSize]RuneRole
 }
@@ -76,7 +72,7 @@ func NewMatcher(pattern string) *Matcher {
 
 	m := &Matcher{
 		pattern:      pattern,
-		patternLower: toLower([]byte(pattern), nil),
+		patternLower: ToLower(pattern, nil),
 	}
 
 	for i, c := range m.patternLower {
@@ -92,7 +88,7 @@ func NewMatcher(pattern string) *Matcher {
 		m.patternShort = m.patternLower
 	}
 
-	m.patternRoles = RuneRoles([]byte(pattern), nil)
+	m.patternRoles = RuneRoles(pattern, nil)
 
 	if len(pattern) > 0 {
 		maxCharScore := 4
@@ -106,15 +102,10 @@ func NewMatcher(pattern string) *Matcher {
 // This is not designed for parallel use. Multiple candidates must be scored sequentially.
 // Returns a score between 0 and 1 (0 - no match, 1 - perfect match).
 func (m *Matcher) Score(candidate string) float32 {
-	return m.ScoreChunks([]string{candidate})
-}
-
-func (m *Matcher) ScoreChunks(chunks []string) float32 {
-	candidate := fromChunks(chunks, m.inputBuf[:])
 	if len(candidate) > MaxInputSize {
 		candidate = candidate[:MaxInputSize]
 	}
-	lower := toLower(candidate, m.lowerBuf[:])
+	lower := ToLower(candidate, m.lowerBuf[:])
 	m.lastCandidateLen = len(candidate)
 
 	if len(m.pattern) == 0 {
@@ -183,7 +174,7 @@ func (m *Matcher) MatchedRanges() []int {
 	return ret
 }
 
-func (m *Matcher) match(candidate []byte, candidateLower []byte) bool {
+func (m *Matcher) match(candidate string, candidateLower []byte) bool {
 	i, j := 0, 0
 	for ; i < len(candidateLower) && j < len(m.patternLower); i++ {
 		if candidateLower[i] == m.patternLower[j] {
@@ -201,7 +192,7 @@ func (m *Matcher) match(candidate []byte, candidateLower []byte) bool {
 	return true
 }
 
-func (m *Matcher) computeScore(candidate []byte, candidateLower []byte) int {
+func (m *Matcher) computeScore(candidate string, candidateLower []byte) int {
 	pattLen, candLen := len(m.pattern), len(candidate)
 
 	for j := 0; j <= len(m.pattern); j++ {
