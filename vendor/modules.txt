@@ -524,7 +524,7 @@ github.com/uudashr/gocognit
 # github.com/yeya24/promlinter v0.1.0
 ## explicit; go 1.14
 github.com/yeya24/promlinter
-# golang.org/x/crypto v0.0.0-20220208050332-20e1d8d225ab
+# golang.org/x/crypto v0.0.0-20220214200702-86341886e292
 ## explicit; go 1.17
 golang.org/x/crypto/blake2b
 golang.org/x/crypto/chacha20
@@ -539,8 +539,8 @@ golang.org/x/crypto/nacl/box
 golang.org/x/crypto/nacl/secretbox
 golang.org/x/crypto/poly1305
 golang.org/x/crypto/salsa20/salsa
-# golang.org/x/mod v0.4.2
-## explicit; go 1.12
+# golang.org/x/mod v0.5.1
+## explicit; go 1.17
 golang.org/x/mod/internal/lazyregexp
 golang.org/x/mod/modfile
 golang.org/x/mod/module
@@ -558,7 +558,7 @@ golang.org/x/net/internal/socks
 golang.org/x/net/ipv4
 golang.org/x/net/ipv6
 golang.org/x/net/proxy
-# golang.org/x/sys v0.0.0-20220207234003-57398862261d
+# golang.org/x/sys v0.0.0-20220209214540-3681064d5158
 ## explicit; go 1.17
 golang.org/x/sys/cpu
 golang.org/x/sys/execabs
@@ -576,7 +576,7 @@ golang.org/x/text/transform
 golang.org/x/text/unicode/bidi
 golang.org/x/text/unicode/norm
 golang.org/x/text/width
-# golang.org/x/tools v0.1.6-0.20210726203631-07bc1bf47fb2
+# golang.org/x/tools v0.1.9
 ## explicit; go 1.17
 golang.org/x/tools/cover
 golang.org/x/tools/go/analysis
