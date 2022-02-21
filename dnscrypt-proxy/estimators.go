@@ -6,6 +6,10 @@ import (
 	"github.com/lifenjoiner/ewma"
 )
 
+const (
+	SizeEstimatorEwmaDecay = 100.0
+)
+
 type QuestionSizeEstimator struct {
 	sync.RWMutex
 	minQuestionSize int
@@ -13,7 +17,7 @@ type QuestionSizeEstimator struct {
 }
 
 func NewQuestionSizeEstimator() QuestionSizeEstimator {
-	return QuestionSizeEstimator{minQuestionSize: InitialMinQuestionSize, ewma: &ewma.EWMA{}}
+	return QuestionSizeEstimator{minQuestionSize: InitialMinQuestionSize, ewma: ewma.NewMovingAverage(SizeEstimatorEwmaDecay)}
 }
 
 func (questionSizeEstimator *QuestionSizeEstimator) MinQuestionSize() int {
