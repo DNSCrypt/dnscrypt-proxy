@@ -15,10 +15,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/VividCortex/ewma"
 	"github.com/jedisct1/dlog"
 	clocksmith "github.com/jedisct1/go-clocksmith"
 	stamps "github.com/jedisct1/go-dnsstamps"
+	"github.com/lifenjoiner/ewma"
 	"github.com/miekg/dns"
 	"golang.org/x/crypto/ed25519"
 )
@@ -46,7 +46,7 @@ type DOHClientCreds struct {
 type ServerInfo struct {
 	DOHClientCreds     DOHClientCreds
 	lastActionTS       time.Time
-	rtt                ewma.MovingAverage
+	rtt                *ewma.EWMA
 	Name               string
 	HostName           string
 	UDPAddr            *net.UDPAddr
@@ -67,6 +67,7 @@ type ServerInfo struct {
 
 type LBStrategy interface {
 	getCandidate(serversCount int) int
+	getActiveCount(serversCount int) int
 }
 
 type LBStrategyP2 struct{}
@@ -75,10 +76,18 @@ func (LBStrategyP2) getCandidate(serversCount int) int {
 	return rand.Intn(Min(serversCount, 2))
 }
 
+func (LBStrategyP2) getActiveCount(serversCount int) int {
+	return Min(serversCount, 2)
+}
+
 type LBStrategyPN struct{ n int }
 
 func (s LBStrategyPN) getCandidate(serversCount int) int {
 	return rand.Intn(Min(serversCount, s.n))
+}
+
+func (s LBStrategyPN) getActiveCount(serversCount int) int {
+	return Min(serversCount, s.n)
 }
 
 type LBStrategyPH struct{}
@@ -87,16 +96,28 @@ func (LBStrategyPH) getCandidate(serversCount int) int {
 	return rand.Intn(Max(Min(serversCount, 2), serversCount/2))
 }
 
+func (LBStrategyPH) getActiveCount(serversCount int) int {
+	return Max(Min(serversCount, 2), serversCount/2)
+}
+
 type LBStrategyFirst struct{}
 
 func (LBStrategyFirst) getCandidate(int) int {
 	return 0
 }
 
+func (LBStrategyFirst) getActiveCount(int) int {
+	return 1
+}
+
 type LBStrategyRandom struct{}
 
 func (LBStrategyRandom) getCandidate(serversCount int) int {
 	return rand.Intn(serversCount)
+}
+
+func (LBStrategyRandom) getActiveCount(serversCount int) int {
+	return serversCount
 }
 
 var DefaultLBStrategy = LBStrategyP2{}
@@ -227,29 +248,30 @@ func (serversInfo *ServersInfo) refresh(proxy *Proxy) (int, error) {
 
 func (serversInfo *ServersInfo) estimatorUpdate() {
 	// serversInfo.RWMutex is assumed to be Locked
-	candidate := rand.Intn(len(serversInfo.inner))
-	if candidate == 0 {
+	serversCount := len(serversInfo.inner)
+	activeCount := serversInfo.lbStrategy.getActiveCount(serversCount)
+	if activeCount == serversCount {
 		return
 	}
-	candidateRtt, currentBestRtt := serversInfo.inner[candidate].rtt.Value(), serversInfo.inner[0].rtt.Value()
-	if currentBestRtt < 0 {
-		currentBestRtt = candidateRtt
-		serversInfo.inner[0].rtt.Set(currentBestRtt)
+	candidate, currentActive := rand.Intn(serversCount-activeCount)+activeCount, rand.Intn(activeCount)
+	candidateRtt, currentActiveRtt := serversInfo.inner[candidate].rtt.Value(), serversInfo.inner[currentActive].rtt.Value()
+	if currentActiveRtt < 0 {
+		currentActiveRtt = candidateRtt
+		serversInfo.inner[currentActive].rtt.Set(currentActiveRtt)
 	}
 	partialSort := false
-	if candidateRtt < currentBestRtt {
-		serversInfo.inner[candidate], serversInfo.inner[0] = serversInfo.inner[0], serversInfo.inner[candidate]
+	if candidateRtt < currentActiveRtt {
+		serversInfo.inner[candidate], serversInfo.inner[currentActive] = serversInfo.inner[currentActive], serversInfo.inner[candidate]
+		dlog.Debugf("New preferred candidate: %s (RTT: %d vs previous: %d)", serversInfo.inner[currentActive].Name, int(candidateRtt), int(currentActiveRtt))
 		partialSort = true
-		dlog.Debugf("New preferred candidate: %v (rtt: %d vs previous: %d)", serversInfo.inner[0].Name, int(candidateRtt), int(currentBestRtt))
-	} else if candidateRtt > 0 && candidateRtt >= currentBestRtt*4.0 {
+	} else if candidateRtt > 0 && candidateRtt >= (serversInfo.inner[0].rtt.Value()+serversInfo.inner[activeCount-1].rtt.Value())/2.0*4.0 {
 		if time.Since(serversInfo.inner[candidate].lastActionTS) > time.Duration(1*time.Minute) {
-			serversInfo.inner[candidate].rtt.Add(MinF(MaxF(candidateRtt/2.0, currentBestRtt*2.0), candidateRtt))
-			dlog.Debugf("Giving a new chance to candidate [%s], lowering its RTT from %d to %d (best: %d)", serversInfo.inner[candidate].Name, int(candidateRtt), int(serversInfo.inner[candidate].rtt.Value()), int(currentBestRtt))
+			serversInfo.inner[candidate].rtt.Add(candidateRtt / 2.0)
+			dlog.Debugf("Giving a new chance to candidate [%s], lowering its RTT from %d to %d (best: %d)", serversInfo.inner[candidate].Name, int(candidateRtt), int(serversInfo.inner[candidate].rtt.Value()), int(serversInfo.inner[0].rtt.Value()))
 			partialSort = true
 		}
 	}
 	if partialSort {
-		serversCount := len(serversInfo.inner)
 		for i := 1; i < serversCount; i++ {
 			if serversInfo.inner[i-1].rtt.Value() > serversInfo.inner[i].rtt.Value() {
 				serversInfo.inner[i-1], serversInfo.inner[i] = serversInfo.inner[i], serversInfo.inner[i-1]
