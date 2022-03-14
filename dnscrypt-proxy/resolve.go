@@ -14,7 +14,7 @@ import (
 const myResolverHost string = "resolver.dnscrypt.info."
 const nonexistentName string = "nonexistent-zone.dnscrypt-test."
 
-func resolveQuery(server string, qName string, qType uint16) (*dns.Msg, error) {
+func resolveQuery(server string, qName string, qType uint16, sendClientSubnet bool) (*dns.Msg, error) {
 	client := new(dns.Client)
 	client.ReadTimeout = 2 * time.Second
 	msg := &dns.Msg{
@@ -30,9 +30,27 @@ func resolveQuery(server string, qName string, qType uint16) (*dns.Msg, error) {
 			Rrtype: dns.TypeOPT,
 		},
 	}
+
+	if sendClientSubnet {
+		subnet := net.IPNet{IP: net.IPv4(93, 184, 216, 0), Mask: net.CIDRMask(24, 32)}
+		prr := dns.EDNS0_SUBNET{}
+		prr.Code = dns.EDNS0SUBNET
+		bits, totalSize := subnet.Mask.Size()
+		if totalSize == 32 {
+			prr.Family = 1
+		} else if totalSize == 128 { // if we want to test with IPv6
+			prr.Family = 2
+		}
+		prr.SourceNetmask = uint8(bits)
+		prr.SourceScope = 0
+		prr.Address = subnet.IP
+		options.Option = append(options.Option, &prr)
+	}
+
 	msg.Extra = append(msg.Extra, options)
 	options.SetDo()
 	options.SetUDPSize(uint16(MaxDNSPacketSize))
+
 	msg.Question[0] = dns.Question{Name: qName, Qtype: qType, Qclass: dns.ClassINET}
 	msg.Id = dns.Id()
 	for i := 0; i < 3; i++ {
@@ -69,9 +87,10 @@ func Resolve(server string, name string, singleResolver bool) {
 	name = dns.Fqdn(name)
 
 	cname := name
+	var clientSubnet string
 
 	for once := true; once; once = false {
-		response, err := resolveQuery(server, myResolverHost, dns.TypeTXT)
+		response, err := resolveQuery(server, myResolverHost, dns.TypeTXT, true)
 		if err != nil {
 			fmt.Printf("Unable to resolve: [%s]\n", err)
 			os.Exit(1)
@@ -86,14 +105,15 @@ func Resolve(server string, name string, singleResolver bool) {
 			for _, txt := range answer.(*dns.TXT).Txt {
 				if strings.HasPrefix(txt, "Resolver IP: ") {
 					ip = strings.TrimPrefix(txt, "Resolver IP: ")
-					break
+				} else if strings.HasPrefix(txt, "EDNS0 client subnet: ") {
+					clientSubnet = strings.TrimPrefix(txt, "EDNS0 client subnet: ")
 				}
 			}
 			if ip == "" {
 				continue
 			}
 			if rev, err := dns.ReverseAddr(ip); err == nil {
-				response, err = resolveQuery(server, rev, dns.TypePTR)
+				response, err = resolveQuery(server, rev, dns.TypePTR, false)
 				if err != nil {
 					break
 				}
@@ -117,7 +137,7 @@ func Resolve(server string, name string, singleResolver bool) {
 	if singleResolver {
 		for once := true; once; once = false {
 			fmt.Printf("Lying         : ")
-			response, err := resolveQuery(server, nonexistentName, dns.TypeA)
+			response, err := resolveQuery(server, nonexistentName, dns.TypeA, false)
 			if err != nil {
 				break
 			}
@@ -137,6 +157,13 @@ func Resolve(server string, name string, singleResolver bool) {
 					fmt.Println("no, the resolver doesn't support DNSSEC")
 				}
 			}
+
+			fmt.Printf("ECS           : ")
+			if clientSubnet != "" {
+				fmt.Println("client network address is sent to authoritative servers")
+			} else {
+				fmt.Println("ignored or selective")
+			}
 		}
 	}
 
@@ -146,7 +173,7 @@ cname:
 	for once := true; once; once = false {
 		fmt.Printf("Canonical name: ")
 		for i := 0; i < 100; i++ {
-			response, err := resolveQuery(server, cname, dns.TypeCNAME)
+			response, err := resolveQuery(server, cname, dns.TypeCNAME, false)
 			if err != nil {
 				break cname
 			}
@@ -170,7 +197,7 @@ cname:
 
 	for once := true; once; once = false {
 		fmt.Printf("IPv4 addresses: ")
-		response, err := resolveQuery(server, cname, dns.TypeA)
+		response, err := resolveQuery(server, cname, dns.TypeA, false)
 		if err != nil {
 			break
 		}
@@ -190,7 +217,7 @@ cname:
 
 	for once := true; once; once = false {
 		fmt.Printf("IPv6 addresses: ")
-		response, err := resolveQuery(server, cname, dns.TypeAAAA)
+		response, err := resolveQuery(server, cname, dns.TypeAAAA, false)
 		if err != nil {
 			break
 		}
@@ -212,7 +239,7 @@ cname:
 
 	for once := true; once; once = false {
 		fmt.Printf("Name servers  : ")
-		response, err := resolveQuery(server, cname, dns.TypeNS)
+		response, err := resolveQuery(server, cname, dns.TypeNS, false)
 		if err != nil {
 			break
 		}
@@ -242,7 +269,7 @@ cname:
 
 	for once := true; once; once = false {
 		fmt.Printf("Mail servers  : ")
-		response, err := resolveQuery(server, cname, dns.TypeMX)
+		response, err := resolveQuery(server, cname, dns.TypeMX, false)
 		if err != nil {
 			break
 		}
@@ -266,7 +293,7 @@ cname:
 
 	for once := true; once; once = false {
 		fmt.Printf("HTTPS alias   : ")
-		response, err := resolveQuery(server, cname, dns.TypeHTTPS)
+		response, err := resolveQuery(server, cname, dns.TypeHTTPS, false)
 		if err != nil {
 			break
 		}
@@ -312,7 +339,7 @@ cname:
 
 	for once := true; once; once = false {
 		fmt.Printf("Host info     : ")
-		response, err := resolveQuery(server, cname, dns.TypeHINFO)
+		response, err := resolveQuery(server, cname, dns.TypeHINFO, false)
 		if err != nil {
 			break
 		}
@@ -332,7 +359,7 @@ cname:
 
 	for once := true; once; once = false {
 		fmt.Printf("TXT records   : ")
-		response, err := resolveQuery(server, cname, dns.TypeTXT)
+		response, err := resolveQuery(server, cname, dns.TypeTXT, false)
 		if err != nil {
 			break
 		}
