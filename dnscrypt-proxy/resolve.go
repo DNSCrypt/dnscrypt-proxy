@@ -71,7 +71,7 @@ func Resolve(server string, name string, singleResolver bool) {
 	cname := name
 
 	for once := true; once; once = false {
-		response, err := resolveQuery(server, myResolverHost, dns.TypeA)
+		response, err := resolveQuery(server, myResolverHost, dns.TypeTXT)
 		if err != nil {
 			fmt.Printf("Unable to resolve: [%s]\n", err)
 			os.Exit(1)
@@ -79,14 +79,18 @@ func Resolve(server string, name string, singleResolver bool) {
 		fmt.Printf("Resolver      : ")
 		res := make([]string, 0)
 		for _, answer := range response.Answer {
-			if answer.Header().Class != dns.ClassINET {
+			if answer.Header().Class != dns.ClassINET || answer.Header().Rrtype != dns.TypeTXT {
 				continue
 			}
 			var ip string
-			if answer.Header().Rrtype == dns.TypeA {
-				ip = answer.(*dns.A).A.String()
-			} else if answer.Header().Rrtype == dns.TypeAAAA {
-				ip = answer.(*dns.AAAA).AAAA.String()
+			for _, txt := range answer.(*dns.TXT).Txt {
+				if strings.HasPrefix(txt, "Resolver IP: ") {
+					ip = strings.TrimPrefix(txt, "Resolver IP: ")
+					break
+				}
+			}
+			if ip == "" {
+				continue
 			}
 			if rev, err := dns.ReverseAddr(ip); err == nil {
 				response, err = resolveQuery(server, rev, dns.TypePTR)
