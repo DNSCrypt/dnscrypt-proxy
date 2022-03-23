@@ -17,7 +17,10 @@ type QuestionSizeEstimator struct {
 }
 
 func NewQuestionSizeEstimator() QuestionSizeEstimator {
-	return QuestionSizeEstimator{minQuestionSize: InitialMinQuestionSize, ewma: ewma.NewMovingAverage(SizeEstimatorEwmaDecay)}
+	return QuestionSizeEstimator{
+		minQuestionSize: InitialMinQuestionSize,
+		ewma:            ewma.NewMovingAverage(SizeEstimatorEwmaDecay),
+	}
 }
 
 func (questionSizeEstimator *QuestionSizeEstimator) MinQuestionSize() int {

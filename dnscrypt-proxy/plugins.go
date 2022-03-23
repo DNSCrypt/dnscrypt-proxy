@@ -206,7 +206,9 @@ func parseBlockedQueryResponse(blockedResponse string, pluginsGlobals *PluginsGl
 				(*pluginsGlobals).respondWithIPv6 = net.ParseIP(ipv6Response)
 
 				if (*pluginsGlobals).respondWithIPv6 == nil {
-					dlog.Notice("Error parsing IPv6 response given in blocked_query_response option, defaulting to IPv4")
+					dlog.Notice(
+						"Error parsing IPv6 response given in blocked_query_response option, defaulting to IPv4",
+					)
 				}
 			} else {
 				dlog.Noticef("Invalid IPv6 response given in blocked_query_response option [%s], the option should take the form 'a:<IPv4>,aaaa:<IPv6>'", blockedIPStrings[1])
@@ -238,7 +240,13 @@ type Plugin interface {
 	Eval(pluginsState *PluginsState, msg *dns.Msg) error
 }
 
-func NewPluginsState(proxy *Proxy, clientProto string, clientAddr *net.Addr, serverProto string, start time.Time) PluginsState {
+func NewPluginsState(
+	proxy *Proxy,
+	clientProto string,
+	clientAddr *net.Addr,
+	serverProto string,
+	start time.Time,
+) PluginsState {
 	return PluginsState{
 		action:                           PluginsActionContinue,
 		returnCode:                       PluginsReturnCodePass,
@@ -262,7 +270,11 @@ func NewPluginsState(proxy *Proxy, clientProto string, clientAddr *net.Addr, ser
 	}
 }
 
-func (pluginsState *PluginsState) ApplyQueryPlugins(pluginsGlobals *PluginsGlobals, packet []byte, needsEDNS0Padding bool) ([]byte, error) {
+func (pluginsState *PluginsState) ApplyQueryPlugins(
+	pluginsGlobals *PluginsGlobals,
+	packet []byte,
+	needsEDNS0Padding bool,
+) ([]byte, error) {
 	msg := dns.Msg{}
 	if err := msg.Unpack(packet); err != nil {
 		return packet, err
@@ -288,7 +300,13 @@ func (pluginsState *PluginsState) ApplyQueryPlugins(pluginsGlobals *PluginsGloba
 			return packet, err
 		}
 		if pluginsState.action == PluginsActionReject {
-			synth := RefusedResponseFromMessage(&msg, pluginsGlobals.refusedCodeInResponses, pluginsGlobals.respondWithIPv4, pluginsGlobals.respondWithIPv6, pluginsState.rejectTTL)
+			synth := RefusedResponseFromMessage(
+				&msg,
+				pluginsGlobals.refusedCodeInResponses,
+				pluginsGlobals.respondWithIPv4,
+				pluginsGlobals.respondWithIPv6,
+				pluginsState.rejectTTL,
+			)
 			pluginsState.synthResponse = synth
 		}
 		if pluginsState.action != PluginsActionContinue {
@@ -309,7 +327,11 @@ func (pluginsState *PluginsState) ApplyQueryPlugins(pluginsGlobals *PluginsGloba
 	return packet2, nil
 }
 
-func (pluginsState *PluginsState) ApplyResponsePlugins(pluginsGlobals *PluginsGlobals, packet []byte, ttl *uint32) ([]byte, error) {
+func (pluginsState *PluginsState) ApplyResponsePlugins(
+	pluginsGlobals *PluginsGlobals,
+	packet []byte,
+	ttl *uint32,
+) ([]byte, error) {
 	msg := dns.Msg{Compress: true}
 	if err := msg.Unpack(packet); err != nil {
 		if len(packet) >= MinDNSPacketSize && HasTCFlag(packet) {
@@ -336,7 +358,13 @@ func (pluginsState *PluginsState) ApplyResponsePlugins(pluginsGlobals *PluginsGl
 			return packet, err
 		}
 		if pluginsState.action == PluginsActionReject {
-			synth := RefusedResponseFromMessage(&msg, pluginsGlobals.refusedCodeInResponses, pluginsGlobals.respondWithIPv4, pluginsGlobals.respondWithIPv6, pluginsState.rejectTTL)
+			synth := RefusedResponseFromMessage(
+				&msg,
+				pluginsGlobals.refusedCodeInResponses,
+				pluginsGlobals.respondWithIPv4,
+				pluginsGlobals.respondWithIPv6,
+				pluginsState.rejectTTL,
+			)
 			pluginsState.synthResponse = synth
 		}
 		if pluginsState.action != PluginsActionContinue {

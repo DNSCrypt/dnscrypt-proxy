@@ -130,7 +130,14 @@ func (plugin *PluginAllowedIP) Eval(pluginsState *PluginsState, msg *dns.Msg) er
 				year, month, day := now.Date()
 				hour, minute, second := now.Clock()
 				tsStr := fmt.Sprintf("[%d-%02d-%02d %02d:%02d:%02d]", year, int(month), day, hour, minute, second)
-				line = fmt.Sprintf("%s\t%s\t%s\t%s\t%s\n", tsStr, clientIPStr, StringQuote(qName), StringQuote(ipStr), StringQuote(reason))
+				line = fmt.Sprintf(
+					"%s\t%s\t%s\t%s\t%s\n",
+					tsStr,
+					clientIPStr,
+					StringQuote(qName),
+					StringQuote(ipStr),
+					StringQuote(reason),
+				)
 			} else if plugin.format == "ltsv" {
 				line = fmt.Sprintf("time:%d\thost:%s\tqname:%s\tip:%s\tmessage:%s\n", time.Now().Unix(), clientIPStr, StringQuote(qName), StringQuote(ipStr), StringQuote(reason))
 			} else {

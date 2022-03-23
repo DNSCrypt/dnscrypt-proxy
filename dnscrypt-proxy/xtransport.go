@@ -187,7 +187,12 @@ func (xTransport *XTransport) rebuildTransport() {
 	if clientCreds.clientCert != "" {
 		cert, err := tls.LoadX509KeyPair(clientCreds.clientCert, clientCreds.clientKey)
 		if err != nil {
-			dlog.Fatalf("Unable to use certificate [%v] (key: [%v]): %v", clientCreds.clientCert, clientCreds.clientKey, err)
+			dlog.Fatalf(
+				"Unable to use certificate [%v] (key: [%v]): %v",
+				clientCreds.clientCert,
+				clientCreds.clientKey,
+				err,
+			)
 		}
 		tlsClientConfig.Certificates = []tls.Certificate{cert}
 	}
@@ -238,7 +243,10 @@ func (xTransport *XTransport) resolveUsingSystem(host string) (ip net.IP, ttl ti
 	return
 }
 
-func (xTransport *XTransport) resolveUsingResolver(proto, host string, resolver string) (ip net.IP, ttl time.Duration, err error) {
+func (xTransport *XTransport) resolveUsingResolver(
+	proto, host string,
+	resolver string,
+) (ip net.IP, ttl time.Duration, err error) {
 	dnsClient := dns.Client{Net: proto}
 	if xTransport.useIPv4 {
 		msg := dns.Msg{}
@@ -283,7 +291,10 @@ func (xTransport *XTransport) resolveUsingResolver(proto, host string, resolver 
 	return
 }
 
-func (xTransport *XTransport) resolveUsingResolvers(proto, host string, resolvers []string) (ip net.IP, ttl time.Duration, err error) {
+func (xTransport *XTransport) resolveUsingResolvers(
+	proto, host string,
+	resolvers []string,
+) (ip net.IP, ttl time.Duration, err error) {
 	for i, resolver := range resolvers {
 		ip, ttl, err = xTransport.resolveUsingResolver(proto, host, resolver)
 		if err == nil {
@@ -323,7 +334,11 @@ func (xTransport *XTransport) resolveAndUpdateCache(host string) error {
 		}
 		for _, proto := range protos {
 			if err != nil {
-				dlog.Noticef("System DNS configuration not usable yet, exceptionally resolving [%s] using bootstrap resolvers over %s", host, proto)
+				dlog.Noticef(
+					"System DNS configuration not usable yet, exceptionally resolving [%s] using bootstrap resolvers over %s",
+					host,
+					proto,
+				)
 			} else {
 				dlog.Debugf("Resolving [%s] using bootstrap resolvers over %s", host, proto)
 			}
@@ -354,7 +369,14 @@ func (xTransport *XTransport) resolveAndUpdateCache(host string) error {
 	return nil
 }
 
-func (xTransport *XTransport) Fetch(method string, url *url.URL, accept string, contentType string, body *[]byte, timeout time.Duration) ([]byte, int, *tls.ConnectionState, time.Duration, error) {
+func (xTransport *XTransport) Fetch(
+	method string,
+	url *url.URL,
+	accept string,
+	contentType string,
+	body *[]byte,
+	timeout time.Duration,
+) ([]byte, int, *tls.ConnectionState, time.Duration, error) {
 	if timeout <= 0 {
 		timeout = xTransport.timeout
 	}
@@ -380,7 +402,10 @@ func (xTransport *XTransport) Fetch(method string, url *url.URL, accept string, 
 		return nil, 0, nil, 0, errors.New("Onion service is not reachable without Tor")
 	}
 	if err := xTransport.resolveAndUpdateCache(host); err != nil {
-		dlog.Errorf("Unable to resolve [%v] - Make sure that the system resolver works, or that `bootstrap_resolvers` has been set to resolvers that can be reached", host)
+		dlog.Errorf(
+			"Unable to resolve [%v] - Make sure that the system resolver works, or that `bootstrap_resolvers` has been set to resolvers that can be reached",
+			host,
+		)
 		return nil, 0, nil, 0, err
 	}
 	req := &http.Request{
@@ -412,7 +437,9 @@ func (xTransport *XTransport) Fetch(method string, url *url.URL, accept string, 
 	if err != nil {
 		dlog.Debugf("[%s]: [%s]", req.URL, err)
 		if xTransport.tlsCipherSuite != nil && strings.Contains(err.Error(), "handshake failure") {
-			dlog.Warnf("TLS handshake failure - Try changing or deleting the tls_cipher_suite value in the configuration file")
+			dlog.Warnf(
+				"TLS handshake failure - Try changing or deleting the tls_cipher_suite value in the configuration file",
+			)
 			xTransport.tlsCipherSuite = nil
 			xTransport.rebuildTransport()
 		}
@@ -427,15 +454,31 @@ func (xTransport *XTransport) Fetch(method string, url *url.URL, accept string, 
 	return bin, statusCode, tls, rtt, err
 }
 
-func (xTransport *XTransport) Get(url *url.URL, accept string, timeout time.Duration) ([]byte, int, *tls.ConnectionState, time.Duration, error) {
+func (xTransport *XTransport) Get(
+	url *url.URL,
+	accept string,
+	timeout time.Duration,
+) ([]byte, int, *tls.ConnectionState, time.Duration, error) {
 	return xTransport.Fetch("GET", url, accept, "", nil, timeout)
 }
 
-func (xTransport *XTransport) Post(url *url.URL, accept string, contentType string, body *[]byte, timeout time.Duration) ([]byte, int, *tls.ConnectionState, time.Duration, error) {
+func (xTransport *XTransport) Post(
+	url *url.URL,
+	accept string,
+	contentType string,
+	body *[]byte,
+	timeout time.Duration,
+) ([]byte, int, *tls.ConnectionState, time.Duration, error) {
 	return xTransport.Fetch("POST", url, accept, contentType, body, timeout)
 }
 
-func (xTransport *XTransport) dohLikeQuery(dataType string, useGet bool, url *url.URL, body []byte, timeout time.Duration) ([]byte, int, *tls.ConnectionState, time.Duration, error) {
+func (xTransport *XTransport) dohLikeQuery(
+	dataType string,
+	useGet bool,
+	url *url.URL,
+	body []byte,
+	timeout time.Duration,
+) ([]byte, int, *tls.ConnectionState, time.Duration, error) {
 	if useGet {
 		qs := url.Query()
 		encBody := base64.RawURLEncoding.EncodeToString(body)
@@ -447,10 +490,20 @@ func (xTransport *XTransport) dohLikeQuery(dataType string, useGet bool, url *ur
 	return xTransport.Post(url, dataType, dataType, &body, timeout)
 }
 
-func (xTransport *XTransport) DoHQuery(useGet bool, url *url.URL, body []byte, timeout time.Duration) ([]byte, int, *tls.ConnectionState, time.Duration, error) {
+func (xTransport *XTransport) DoHQuery(
+	useGet bool,
+	url *url.URL,
+	body []byte,
+	timeout time.Duration,
+) ([]byte, int, *tls.ConnectionState, time.Duration, error) {
 	return xTransport.dohLikeQuery("application/dns-message", useGet, url, body, timeout)
 }
 
-func (xTransport *XTransport) ObliviousDoHQuery(useGet bool, url *url.URL, body []byte, timeout time.Duration) ([]byte, int, *tls.ConnectionState, time.Duration, error) {
+func (xTransport *XTransport) ObliviousDoHQuery(
+	useGet bool,
+	url *url.URL,
+	body []byte,
+	timeout time.Duration,
+) ([]byte, int, *tls.ConnectionState, time.Duration, error) {
 	return xTransport.dohLikeQuery("application/oblivious-dns-message", useGet, url, body, timeout)
 }

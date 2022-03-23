@@ -114,7 +114,25 @@ func (proxy *Proxy) localDoHListener(acceptPc *net.TCPListener) {
 }
 
 func dohPaddedLen(unpaddedLen int) int {
-	boundaries := [...]int{64, 128, 192, 256, 320, 384, 512, 704, 768, 896, 960, 1024, 1088, 1152, 2688, 4080, MaxDNSPacketSize}
+	boundaries := [...]int{
+		64,
+		128,
+		192,
+		256,
+		320,
+		384,
+		512,
+		704,
+		768,
+		896,
+		960,
+		1024,
+		1088,
+		1152,
+		2688,
+		4080,
+		MaxDNSPacketSize,
+	}
 	for _, boundary := range boundaries {
 		if boundary >= unpaddedLen {
 			return boundary

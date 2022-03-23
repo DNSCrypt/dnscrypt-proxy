@@ -147,7 +147,12 @@ type ServersInfo struct {
 }
 
 func NewServersInfo() ServersInfo {
-	return ServersInfo{lbStrategy: DefaultLBStrategy, lbEstimator: true, registeredServers: make([]RegisteredServer, 0), registeredRelays: make([]RegisteredServer, 0)}
+	return ServersInfo{
+		lbStrategy:        DefaultLBStrategy,
+		lbEstimator:       true,
+		registeredServers: make([]RegisteredServer, 0),
+		registeredRelays:  make([]RegisteredServer, 0),
+	}
 }
 
 func (serversInfo *ServersInfo) registerServer(name string, stamp stamps.ServerStamp) {
@@ -262,7 +267,12 @@ func (serversInfo *ServersInfo) estimatorUpdate() {
 	partialSort := false
 	if candidateRtt < currentActiveRtt {
 		serversInfo.inner[candidate], serversInfo.inner[currentActive] = serversInfo.inner[currentActive], serversInfo.inner[candidate]
-		dlog.Debugf("New preferred candidate: %s (RTT: %d vs previous: %d)", serversInfo.inner[currentActive].Name, int(candidateRtt), int(currentActiveRtt))
+		dlog.Debugf(
+			"New preferred candidate: %s (RTT: %d vs previous: %d)",
+			serversInfo.inner[currentActive].Name,
+			int(candidateRtt),
+			int(currentActiveRtt),
+		)
 		partialSort = true
 	} else if candidateRtt > 0 && candidateRtt >= (serversInfo.inner[0].rtt.Value()+serversInfo.inner[activeCount-1].rtt.Value())/2.0*4.0 {
 		if time.Since(serversInfo.inner[candidate].lastActionTS) > time.Duration(1*time.Minute) {
@@ -462,7 +472,8 @@ func route(proxy *Proxy, name string, serverProto stamps.StampProtoType) (*Relay
 	relayName := relayCandidateStamp.ServerAddrStr
 	proxy.serversInfo.RLock()
 	for _, registeredServer := range proxy.serversInfo.registeredRelays {
-		if registeredServer.stamp.Proto == relayProto && registeredServer.stamp.ServerAddrStr == relayCandidateStamp.ServerAddrStr {
+		if registeredServer.stamp.Proto == relayProto &&
+			registeredServer.stamp.ServerAddrStr == relayCandidateStamp.ServerAddrStr {
 			relayName = registeredServer.name
 			break
 		}
@@ -479,9 +490,14 @@ func route(proxy *Proxy, name string, serverProto stamps.StampProtoType) (*Relay
 			return nil, err
 		}
 		dlog.Noticef("Anonymizing queries for [%v] via [%v]", name, relayName)
-		return &Relay{Proto: stamps.StampProtoTypeDNSCryptRelay, Dnscrypt: &DNSCryptRelay{RelayUDPAddr: relayUDPAddr, RelayTCPAddr: relayTCPAddr}}, nil
+		return &Relay{
+			Proto:    stamps.StampProtoTypeDNSCryptRelay,
+			Dnscrypt: &DNSCryptRelay{RelayUDPAddr: relayUDPAddr, RelayTCPAddr: relayTCPAddr},
+		}, nil
 	case stamps.StampProtoTypeODoHRelay:
-		relayBaseURL, err := url.Parse("https://" + url.PathEscape(relayCandidateStamp.ProviderName) + relayCandidateStamp.Path)
+		relayBaseURL, err := url.Parse(
+			"https://" + url.PathEscape(relayCandidateStamp.ProviderName) + relayCandidateStamp.Path,
+		)
 		if err != nil {
 			return nil, err
 		}
@@ -541,7 +557,17 @@ func fetchDNSCryptServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp
 	if relay != nil {
 		dnscryptRelay = relay.Dnscrypt
 	}
-	certInfo, rtt, fragmentsBlocked, err := FetchCurrentDNSCryptCert(proxy, &name, proxy.mainProto, stamp.ServerPk, stamp.ServerAddrStr, stamp.ProviderName, isNew, dnscryptRelay, knownBugs)
+	certInfo, rtt, fragmentsBlocked, err := FetchCurrentDNSCryptCert(
+		proxy,
+		&name,
+		proxy.mainProto,
+		stamp.ServerPk,
+		stamp.ServerAddrStr,
+		stamp.ProviderName,
+		isNew,
+		dnscryptRelay,
+		knownBugs,
+	)
 	if !knownBugs.fragmentsBlocked && fragmentsBlocked {
 		dlog.Debugf("[%v] drops fragmented queries", name)
 		knownBugs.fragmentsBlocked = true
@@ -750,7 +776,10 @@ func _fetchODoHTargetInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, i
 	}
 
 	if relay == nil {
-		dlog.Criticalf("No relay defined for [%v] - Configuring a relay is required for ODoH servers (see the `[anonymized_dns]` section)", name)
+		dlog.Criticalf(
+			"No relay defined for [%v] - Configuring a relay is required for ODoH servers (see the `[anonymized_dns]` section)",
+			name,
+		)
 		return ServerInfo{}, errors.New("No ODoH relay")
 	} else {
 		if relay.ODoH == nil {
@@ -798,7 +827,12 @@ func _fetchODoHTargetInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, i
 			continue
 		}
 
-		responseBody, responseCode, tls, rtt, err := proxy.xTransport.ObliviousDoHQuery(useGet, url, odohQuery.odohMessage, proxy.timeout)
+		responseBody, responseCode, tls, rtt, err := proxy.xTransport.ObliviousDoHQuery(
+			useGet,
+			url,
+			odohQuery.odohMessage,
+			proxy.timeout,
+		)
 		if err != nil {
 			continue
 		}
@@ -828,7 +862,13 @@ func _fetchODoHTargetInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, i
 		if strings.HasPrefix(protocol, "http/1.") {
 			dlog.Warnf("[%s] does not support HTTP/2", name)
 		}
-		dlog.Infof("[%s] TLS version: %x - Protocol: %v - Cipher suite: %v", name, tls.Version, protocol, tls.CipherSuite)
+		dlog.Infof(
+			"[%s] TLS version: %x - Protocol: %v - Cipher suite: %v",
+			name,
+			tls.Version,
+			protocol,
+			tls.CipherSuite,
+		)
 		showCerts := proxy.showCerts
 		found := false
 		var wantedHash [32]byte

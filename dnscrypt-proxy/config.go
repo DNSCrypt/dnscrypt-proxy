@@ -314,7 +314,10 @@ func findConfigFile(configFile *string) (string, error) {
 func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	foundConfigFile, err := findConfigFile(flags.ConfigFile)
 	if err != nil {
-		return fmt.Errorf("Unable to load the configuration file [%s] -- Maybe use the -config command-line switch?", *flags.ConfigFile)
+		return fmt.Errorf(
+			"Unable to load the configuration file [%s] -- Maybe use the -config command-line switch?",
+			*flags.ConfigFile,
+		)
 	}
 	config := newConfig()
 	md, err := toml.DecodeFile(foundConfigFile, &config)
@@ -638,7 +641,9 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	}
 
 	// Backwards compatibility
-	config.BrokenImplementations.FragmentsBlocked = append(config.BrokenImplementations.FragmentsBlocked, config.BrokenImplementations.BrokenQueryPadding...)
+	config.BrokenImplementations.FragmentsBlocked = append(
+		config.BrokenImplementations.FragmentsBlocked,
+		config.BrokenImplementations.BrokenQueryPadding...)
 
 	proxy.serversBlockingFragments = config.BrokenImplementations.FragmentsBlocked
 
@@ -707,7 +712,9 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	// if 'userName' is set and we are the parent process drop privilege and exit
 	if len(proxy.userName) > 0 && !proxy.child {
 		proxy.dropPrivilege(proxy.userName, FileDescriptors)
-		return errors.New("Dropping privileges is not supporting on this operating system. Unset `user_name` in the configuration file")
+		return errors.New(
+			"Dropping privileges is not supporting on this operating system. Unset `user_name` in the configuration file",
+		)
 	}
 	if !config.OfflineMode {
 		if err := config.loadSources(proxy); err != nil {
@@ -727,8 +734,12 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 		hasSpecificRoutes := false
 		for _, server := range proxy.registeredServers {
 			if via, ok := (*proxy.routes)[server.name]; ok {
-				if server.stamp.Proto != stamps.StampProtoTypeDNSCrypt && server.stamp.Proto != stamps.StampProtoTypeODoHTarget {
-					dlog.Errorf("DNS anonymization is only supported with the DNSCrypt and ODoH protocols - Connections to [%v] cannot be anonymized", server.name)
+				if server.stamp.Proto != stamps.StampProtoTypeDNSCrypt &&
+					server.stamp.Proto != stamps.StampProtoTypeODoHTarget {
+					dlog.Errorf(
+						"DNS anonymization is only supported with the DNSCrypt and ODoH protocols - Connections to [%v] cannot be anonymized",
+						server.name,
+					)
 				} else {
 					dlog.Noticef("Anonymized DNS: routing [%v] via %v", server.name, via)
 				}
@@ -757,7 +768,8 @@ func (config *Config) printRegisteredServers(proxy *Proxy, jsonOutput bool) erro
 		var hostAddr string
 		hostAddr, port = ExtractHostAndPort(addrStr, port)
 		addrs := make([]string, 0)
-		if (registeredServer.stamp.Proto == stamps.StampProtoTypeDoH || registeredServer.stamp.Proto == stamps.StampProtoTypeODoHTarget) && len(registeredServer.stamp.ProviderName) > 0 {
+		if (registeredServer.stamp.Proto == stamps.StampProtoTypeDoH || registeredServer.stamp.Proto == stamps.StampProtoTypeODoHTarget) &&
+			len(registeredServer.stamp.ProviderName) > 0 {
 			providerName := registeredServer.stamp.ProviderName
 			var host string
 			host, port = ExtractHostAndPort(providerName, port)
@@ -866,7 +878,16 @@ func (config *Config) loadSource(proxy *Proxy, cfgSourceName string, cfgSource *
 	} else if cfgSource.RefreshDelay > 168 {
 		cfgSource.RefreshDelay = 168
 	}
-	source, err := NewSource(cfgSourceName, proxy.xTransport, cfgSource.URLs, cfgSource.MinisignKeyStr, cfgSource.CacheFile, cfgSource.FormatStr, time.Duration(cfgSource.RefreshDelay)*time.Hour, cfgSource.Prefix)
+	source, err := NewSource(
+		cfgSourceName,
+		proxy.xTransport,
+		cfgSource.URLs,
+		cfgSource.MinisignKeyStr,
+		cfgSource.CacheFile,
+		cfgSource.FormatStr,
+		time.Duration(cfgSource.RefreshDelay)*time.Hour,
+		cfgSource.Prefix,
+	)
 	if err != nil {
 		if len(source.in) <= 0 {
 			dlog.Criticalf("Unable to retrieve source [%s]: [%s]", cfgSourceName, err)
@@ -894,7 +915,10 @@ func cdFileDir(fileName string) error {
 func cdLocal() {
 	exeFileName, err := os.Executable()
 	if err != nil {
-		dlog.Warnf("Unable to determine the executable directory: [%s] -- You will need to specify absolute paths in the configuration file", err)
+		dlog.Warnf(
+			"Unable to determine the executable directory: [%s] -- You will need to specify absolute paths in the configuration file",
+			err,
+		)
 	} else if err := os.Chdir(filepath.Dir(exeFileName)); err != nil {
 		dlog.Warnf("Unable to change working directory to [%s]: %s", exeFileName, err)
 	}

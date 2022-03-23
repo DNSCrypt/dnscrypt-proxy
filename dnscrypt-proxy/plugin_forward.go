@@ -82,7 +82,8 @@ func (plugin *PluginForward) Eval(pluginsState *PluginsState, msg *dns.Msg) erro
 		if candidateLen > qNameLen {
 			continue
 		}
-		if qName[qNameLen-candidateLen:] == candidate.domain && (candidateLen == qNameLen || (qName[qNameLen-candidateLen-1] == '.')) {
+		if qName[qNameLen-candidateLen:] == candidate.domain &&
+			(candidateLen == qNameLen || (qName[qNameLen-candidateLen-1] == '.')) {
 			servers = candidate.servers
 			break
 		}

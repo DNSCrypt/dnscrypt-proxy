@@ -25,9 +25,19 @@ func (proxy *Proxy) dropPrivilege(userStr string, fds []*os.File) {
 	if err != nil {
 		uid, err2 := strconv.Atoi(userStr)
 		if err2 != nil || uid <= 0 {
-			dlog.Fatalf("Unable to retrieve any information about user [%s]: [%s] - Remove the user_name directive from the configuration file in order to avoid identity switch", userStr, err)
+			dlog.Fatalf(
+				"Unable to retrieve any information about user [%s]: [%s] - Remove the user_name directive from the configuration file in order to avoid identity switch",
+				userStr,
+				err,
+			)
 		}
-		dlog.Warnf("Unable to retrieve any information about user [%s]: [%s] - Switching to user id [%v] with the same group id, as [%v] looks like a user id. But you should remove or fix the user_name directive in the configuration file if possible", userStr, err, uid, uid)
+		dlog.Warnf(
+			"Unable to retrieve any information about user [%s]: [%s] - Switching to user id [%v] with the same group id, as [%v] looks like a user id. But you should remove or fix the user_name directive in the configuration file if possible",
+			userStr,
+			err,
+			uid,
+			uid,
+		)
 		userInfo = &user.User{Uid: userStr, Gid: userStr}
 	}
 	uid, err := strconv.Atoi(userInfo.Uid)

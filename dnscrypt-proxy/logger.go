@@ -22,7 +22,14 @@ func Logger(logMaxSize int, logMaxAge int, logMaxBackups int, fileName string) i
 		}
 		return fp
 	}
-	logger := &lumberjack.Logger{LocalTime: true, MaxSize: logMaxSize, MaxAge: logMaxAge, MaxBackups: logMaxBackups, Filename: fileName, Compress: true}
+	logger := &lumberjack.Logger{
+		LocalTime:  true,
+		MaxSize:    logMaxSize,
+		MaxAge:     logMaxAge,
+		MaxBackups: logMaxBackups,
+		Filename:   fileName,
+		Compress:   true,
+	}
 
 	return logger
 }

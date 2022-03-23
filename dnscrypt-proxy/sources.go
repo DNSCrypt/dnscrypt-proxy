@@ -180,11 +180,27 @@ func (source *Source) fetchWithCache(xTransport *XTransport, now time.Time) (del
 }
 
 // NewSource loads a new source using the given cacheFile and urls, ensuring it has a valid signature
-func NewSource(name string, xTransport *XTransport, urls []string, minisignKeyStr string, cacheFile string, formatStr string, refreshDelay time.Duration, prefix string) (source *Source, err error) {
+func NewSource(
+	name string,
+	xTransport *XTransport,
+	urls []string,
+	minisignKeyStr string,
+	cacheFile string,
+	formatStr string,
+	refreshDelay time.Duration,
+	prefix string,
+) (source *Source, err error) {
 	if refreshDelay < DefaultPrefetchDelay {
 		refreshDelay = DefaultPrefetchDelay
 	}
-	source = &Source{name: name, urls: []*url.URL{}, cacheFile: cacheFile, cacheTTL: refreshDelay, prefetchDelay: DefaultPrefetchDelay, prefix: prefix}
+	source = &Source{
+		name:          name,
+		urls:          []*url.URL{},
+		cacheFile:     cacheFile,
+		cacheTTL:      refreshDelay,
+		prefetchDelay: DefaultPrefetchDelay,
+		prefix:        prefix,
+	}
 	if formatStr == "v2" {
 		source.format = SourceFormatV2
 	} else {
