@@ -116,7 +116,12 @@ func handleColdStartClient(clientPc *net.UDPConn, cancelChannel chan struct{}, i
 	return false
 }
 
-func addColdStartListener(proxy *Proxy, ipsMap *CaptivePortalMap, listenAddrStr string, cancelChannel chan struct{}) error {
+func addColdStartListener(
+	proxy *Proxy,
+	ipsMap *CaptivePortalMap,
+	listenAddrStr string,
+	cancelChannel chan struct{},
+) error {
 	listenUDPAddr, err := net.ResolveUDPAddr("udp", listenAddrStr)
 	if err != nil {
 		return err

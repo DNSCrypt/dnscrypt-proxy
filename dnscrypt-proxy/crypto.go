@@ -45,7 +45,12 @@ func unpad(packet []byte) ([]byte, error) {
 	}
 }
 
-func ComputeSharedKey(cryptoConstruction CryptoConstruction, secretKey *[32]byte, serverPk *[32]byte, providerName *string) (sharedKey [32]byte) {
+func ComputeSharedKey(
+	cryptoConstruction CryptoConstruction,
+	secretKey *[32]byte,
+	serverPk *[32]byte,
+	providerName *string,
+) (sharedKey [32]byte) {
 	if cryptoConstruction == XChacha20Poly1305 {
 		var err error
 		sharedKey, err = xsecretbox.SharedKey(*secretKey, *serverPk)
@@ -68,7 +73,11 @@ func ComputeSharedKey(cryptoConstruction CryptoConstruction, secretKey *[32]byte
 	return
 }
 
-func (proxy *Proxy) Encrypt(serverInfo *ServerInfo, packet []byte, proto string) (sharedKey *[32]byte, encrypted []byte, clientNonce []byte, err error) {
+func (proxy *Proxy) Encrypt(
+	serverInfo *ServerInfo,
+	packet []byte,
+	proto string,
+) (sharedKey *[32]byte, encrypted []byte, clientNonce []byte, err error) {
 	nonce, clientNonce := make([]byte, NonceSize), make([]byte, HalfNonceSize)
 	crypto_rand.Read(clientNonce)
 	copy(nonce, clientNonce)
@@ -120,7 +129,12 @@ func (proxy *Proxy) Encrypt(serverInfo *ServerInfo, packet []byte, proto string)
 	return
 }
 
-func (proxy *Proxy) Decrypt(serverInfo *ServerInfo, sharedKey *[32]byte, encrypted []byte, nonce []byte) ([]byte, error) {
+func (proxy *Proxy) Decrypt(
+	serverInfo *ServerInfo,
+	sharedKey *[32]byte,
+	encrypted []byte,
+	nonce []byte,
+) ([]byte, error) {
 	serverMagicLen := len(ServerMagic)
 	responseHeaderLen := serverMagicLen + NonceSize
 	if len(encrypted) < responseHeaderLen+TagSize+int(MinDNSPacketSize) ||

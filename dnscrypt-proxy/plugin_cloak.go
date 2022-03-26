@@ -93,7 +93,7 @@ func (plugin *PluginCloak) Init(proxy *Proxy) error {
 
 		var ptrLine string
 		if ipv4 := ip.To4(); ipv4 != nil {
-			reversed, _ :=  dns.ReverseAddr(ip.To4().String())
+			reversed, _ := dns.ReverseAddr(ip.To4().String())
 			ptrLine = strings.TrimSuffix(reversed, ".")
 		} else {
 			reversed, _ := dns.ReverseAddr(cloakedName.ipv6[0].To16().String())
@@ -136,7 +136,8 @@ func (plugin *PluginCloak) Reload() error {
 
 func (plugin *PluginCloak) Eval(pluginsState *PluginsState, msg *dns.Msg) error {
 	question := msg.Question[0]
-	if question.Qclass != dns.ClassINET || (question.Qtype != dns.TypeA && question.Qtype != dns.TypeAAAA && question.Qtype != dns.TypePTR) {
+	if question.Qclass != dns.ClassINET ||
+		(question.Qtype != dns.TypeA && question.Qtype != dns.TypeAAAA && question.Qtype != dns.TypePTR) {
 		return nil
 	}
 	now := time.Now()
@@ -207,7 +208,10 @@ func (plugin *PluginCloak) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 			synth.Answer = append(synth.Answer, rr)
 		}
 	}
-	rand.Shuffle(len(synth.Answer), func(i, j int) { synth.Answer[i], synth.Answer[j] = synth.Answer[j], synth.Answer[i] })
+	rand.Shuffle(
+		len(synth.Answer),
+		func(i, j int) { synth.Answer[i], synth.Answer[j] = synth.Answer[j], synth.Answer[i] },
+	)
 	pluginsState.synthResponse = synth
 	pluginsState.action = PluginsActionSynth
 	pluginsState.returnCode = PluginsReturnCodeCloak

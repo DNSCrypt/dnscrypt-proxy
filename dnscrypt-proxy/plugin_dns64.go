@@ -87,7 +87,15 @@ func (plugin *PluginDNS64) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 	if !plugin.proxy.clientsCountInc() {
 		return errors.New("Too many concurrent connections to handle DNS64 subqueries")
 	}
-	respPacket := plugin.proxy.processIncomingQuery("trampoline", plugin.proxy.mainProto, msgAPacket, nil, nil, time.Now(), false)
+	respPacket := plugin.proxy.processIncomingQuery(
+		"trampoline",
+		plugin.proxy.mainProto,
+		msgAPacket,
+		nil,
+		nil,
+		time.Now(),
+		false,
+	)
 	plugin.proxy.clientsCountDec()
 	resp := dns.Msg{}
 	if err := resp.Unpack(respPacket); err != nil {
@@ -125,7 +133,12 @@ func (plugin *PluginDNS64) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 				for _, prefix := range plugin.pref64 {
 					ipv6 := translateToIPv6(ipv4, prefix)
 					synthAAAA := new(dns.AAAA)
-					synthAAAA.Hdr = dns.RR_Header{Name: header.Name, Rrtype: dns.TypeAAAA, Class: header.Class, Ttl: ttl}
+					synthAAAA.Hdr = dns.RR_Header{
+						Name:   header.Name,
+						Rrtype: dns.TypeAAAA,
+						Class:  header.Class,
+						Ttl:    ttl,
+					}
 					synthAAAA.AAAA = ipv6
 					synthAAAAs = append(synthAAAAs, synthAAAA)
 				}
@@ -190,7 +203,8 @@ func (plugin *PluginDNS64) fetchPref64(resolver string) error {
 			if ipv6 != nil && len(ipv6) == net.IPv6len {
 				prefEnd := 0
 
-				if wka := net.IPv4(ipv6[12], ipv6[13], ipv6[14], ipv6[15]); wka.Equal(rfc7050WKA1) || wka.Equal(rfc7050WKA2) { //96
+				if wka := net.IPv4(ipv6[12], ipv6[13], ipv6[14], ipv6[15]); wka.Equal(rfc7050WKA1) ||
+					wka.Equal(rfc7050WKA2) { //96
 					prefEnd = 12
 				} else if wka := net.IPv4(ipv6[9], ipv6[10], ipv6[11], ipv6[12]); wka.Equal(rfc7050WKA1) || wka.Equal(rfc7050WKA2) { //64
 					prefEnd = 8

@@ -135,7 +135,8 @@ func NormalizeQName(str string) (string, error) {
 }
 
 func getMinTTL(msg *dns.Msg, minTTL uint32, maxTTL uint32, cacheNegMinTTL uint32, cacheNegMaxTTL uint32) time.Duration {
-	if (msg.Rcode != dns.RcodeSuccess && msg.Rcode != dns.RcodeNameError) || (len(msg.Answer) <= 0 && len(msg.Ns) <= 0) {
+	if (msg.Rcode != dns.RcodeSuccess && msg.Rcode != dns.RcodeNameError) ||
+		(len(msg.Answer) <= 0 && len(msg.Ns) <= 0) {
 		return time.Duration(cacheNegMinTTL) * time.Second
 	}
 	var ttl uint32
@@ -304,7 +305,15 @@ type DNSExchangeResponse struct {
 	err              error
 }
 
-func DNSExchange(proxy *Proxy, proto string, query *dns.Msg, serverAddress string, relay *DNSCryptRelay, serverName *string, tryFragmentsSupport bool) (*dns.Msg, time.Duration, bool, error) {
+func DNSExchange(
+	proxy *Proxy,
+	proto string,
+	query *dns.Msg,
+	serverAddress string,
+	relay *DNSCryptRelay,
+	serverName *string,
+	tryFragmentsSupport bool,
+) (*dns.Msg, time.Duration, bool, error) {
 	for {
 		cancelChannel := make(chan struct{})
 		channel := make(chan DNSExchangeResponse)
@@ -375,12 +384,23 @@ func DNSExchange(proxy *Proxy, proto string, query *dns.Msg, serverAddress strin
 			}
 			return nil, 0, false, err
 		}
-		dlog.Infof("Unable to get the public key for [%v] via relay [%v], retrying over a direct connection", *serverName, relay.RelayUDPAddr.IP)
+		dlog.Infof(
+			"Unable to get the public key for [%v] via relay [%v], retrying over a direct connection",
+			*serverName,
+			relay.RelayUDPAddr.IP,
+		)
 		relay = nil
 	}
 }
 
-func _dnsExchange(proxy *Proxy, proto string, query *dns.Msg, serverAddress string, relay *DNSCryptRelay, paddedLen int) DNSExchangeResponse {
+func _dnsExchange(
+	proxy *Proxy,
+	proto string,
+	query *dns.Msg,
+	serverAddress string,
+	relay *DNSCryptRelay,
+	paddedLen int,
+) DNSExchangeResponse {
 	var packet []byte
 	var rtt time.Duration
 

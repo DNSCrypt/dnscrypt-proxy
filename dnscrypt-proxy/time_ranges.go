@@ -62,7 +62,15 @@ func parseTimeRanges(timeRangesStr []TimeRangeStr) ([]TimeRange, error) {
 
 func parseWeeklyRanges(weeklyRangesStr WeeklyRangesStr) (WeeklyRanges, error) {
 	weeklyRanges := WeeklyRanges{}
-	weeklyRangesStrX := [7][]TimeRangeStr{weeklyRangesStr.Sun, weeklyRangesStr.Mon, weeklyRangesStr.Tue, weeklyRangesStr.Wed, weeklyRangesStr.Thu, weeklyRangesStr.Fri, weeklyRangesStr.Sat}
+	weeklyRangesStrX := [7][]TimeRangeStr{
+		weeklyRangesStr.Sun,
+		weeklyRangesStr.Mon,
+		weeklyRangesStr.Tue,
+		weeklyRangesStr.Wed,
+		weeklyRangesStr.Thu,
+		weeklyRangesStr.Fri,
+		weeklyRangesStr.Sat,
+	}
 	for day, weeklyRangeStrX := range weeklyRangesStrX {
 		timeRanges, err := parseTimeRanges(weeklyRangeStrX)
 		if err != nil {
