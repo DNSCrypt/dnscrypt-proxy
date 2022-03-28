@@ -251,8 +251,8 @@ github.com/jedisct1/dlog
 # github.com/jedisct1/go-clocksmith v0.0.0-20210101121932-da382b963868
 ## explicit
 github.com/jedisct1/go-clocksmith
-# github.com/jedisct1/go-dnsstamps v0.0.0-20210810213811-61cc83d2a354
-## explicit; go 1.15
+# github.com/jedisct1/go-dnsstamps v0.0.0-20220328103132-6fb2da762370
+## explicit; go 1.18
 github.com/jedisct1/go-dnsstamps
 # github.com/jedisct1/go-hpke-compact v0.0.0-20210930135406-0763750339f0
 ## explicit; go 1.17
@@ -524,7 +524,7 @@ github.com/uudashr/gocognit
 # github.com/yeya24/promlinter v0.1.0
 ## explicit; go 1.14
 github.com/yeya24/promlinter
-# golang.org/x/crypto v0.0.0-20220313003712-b769efc7c000
+# golang.org/x/crypto v0.0.0-20220321153916-2c7772ba3064
 ## explicit; go 1.17
 golang.org/x/crypto/blake2b
 golang.org/x/crypto/chacha20
@@ -545,7 +545,7 @@ golang.org/x/mod/internal/lazyregexp
 golang.org/x/mod/modfile
 golang.org/x/mod/module
 golang.org/x/mod/semver
-# golang.org/x/net v0.0.0-20220225172249-27dd8689420f
+# golang.org/x/net v0.0.0-20220325170049-de3da57026de
 ## explicit; go 1.17
 golang.org/x/net/bpf
 golang.org/x/net/http/httpguts
@@ -558,7 +558,7 @@ golang.org/x/net/internal/socks
 golang.org/x/net/ipv4
 golang.org/x/net/ipv6
 golang.org/x/net/proxy
-# golang.org/x/sys v0.0.0-20220310020820-b874c991c1a5
+# golang.org/x/sys v0.0.0-20220327210214-530d0810a4d0
 ## explicit; go 1.17
 golang.org/x/sys/cpu
 golang.org/x/sys/execabs

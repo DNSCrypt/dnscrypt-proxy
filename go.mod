@@ -1,6 +1,6 @@
 module github.com/dnscrypt/dnscrypt-proxy
 
-go 1.17
+go 1.18
 
 require (
 	github.com/BurntSushi/toml v1.0.0
@@ -11,7 +11,7 @@ require (
 	github.com/hectane/go-acl v0.0.0-20190604041725-da78bae5fc95
 	github.com/jedisct1/dlog v0.0.0-20210927135244-3381aa132e7f
 	github.com/jedisct1/go-clocksmith v0.0.0-20210101121932-da382b963868
-	github.com/jedisct1/go-dnsstamps v0.0.0-20210810213811-61cc83d2a354
+	github.com/jedisct1/go-dnsstamps v0.0.0-20220328103132-6fb2da762370
 	github.com/jedisct1/go-hpke-compact v0.0.0-20210930135406-0763750339f0
 	github.com/jedisct1/go-minisign v0.0.0-20211028175153-1c139d1cc84b
 	github.com/jedisct1/xsecretbox v0.0.0-20210927135450-ebe41aef7bef
@@ -20,9 +20,9 @@ require (
 	github.com/lifenjoiner/ewma v0.0.0-20210320054258-4f227d7eb8a2
 	github.com/miekg/dns v1.1.47
 	github.com/powerman/check v1.6.0
-	golang.org/x/crypto v0.0.0-20220313003712-b769efc7c000
-	golang.org/x/net v0.0.0-20220225172249-27dd8689420f
-	golang.org/x/sys v0.0.0-20220310020820-b874c991c1a5
+	golang.org/x/crypto v0.0.0-20220321153916-2c7772ba3064
+	golang.org/x/net v0.0.0-20220325170049-de3da57026de
+	golang.org/x/sys v0.0.0-20220327210214-530d0810a4d0
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 )
 
