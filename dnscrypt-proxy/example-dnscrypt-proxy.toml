@@ -55,6 +55,11 @@ max_clients = 250
 # user_name = 'nobody'
 
 
+## Sleep mode: add an incremental delay to queries so that you eventually get some sleep instead of watching videos all night long.
+
+sleep_mode = false
+
+
 ## Require servers (from remote sources) to satisfy specific properties
 
 # Use servers reachable over IPv4

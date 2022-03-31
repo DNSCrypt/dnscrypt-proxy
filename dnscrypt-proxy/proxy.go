@@ -71,6 +71,7 @@ type Proxy struct {
 	certRefreshDelayAfterFailure  time.Duration
 	timeout                       time.Duration
 	certRefreshDelay              time.Duration
+	sleepDelay                    time.Duration
 	cacheSize                     int
 	logMaxBackups                 int
 	logMaxAge                     int
@@ -94,6 +95,7 @@ type Proxy struct {
 	anonDirectCertFallback        bool
 	pluginBlockUndelegated        bool
 	child                         bool
+	sleepMode                     bool
 	requiredProps                 stamps.ServerInformalProperties
 	ServerNames                   []string
 	DisabledServerNames           []string
@@ -617,6 +619,12 @@ func (proxy *Proxy) processIncomingQuery(
 	if len(query) < MinDNSPacketSize {
 		return response
 	}
+
+	if proxy.sleepMode {
+		time.Sleep(proxy.sleepDelay)
+		proxy.sleepDelay += 10 * time.Microsecond
+	}
+
 	pluginsState := NewPluginsState(proxy, clientProto, clientAddr, serverProto, start)
 	serverName := "-"
 	needsEDNS0Padding := false

@@ -49,6 +49,7 @@ type Config struct {
 	BlockIPv6                bool           `toml:"block_ipv6"`
 	BlockUnqualified         bool           `toml:"block_unqualified"`
 	BlockUndelegated         bool           `toml:"block_undelegated"`
+	SleepMode                bool           `toml:"sleep_mode"`
 	Cache                    bool
 	CacheSize                int                         `toml:"cache_size"`
 	CacheNegTTL              uint32                      `toml:"cache_neg_ttl"`
@@ -474,6 +475,8 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	proxy.pluginBlockIPv6 = config.BlockIPv6
 	proxy.pluginBlockUnqualified = config.BlockUnqualified
 	proxy.pluginBlockUndelegated = config.BlockUndelegated
+	proxy.sleepMode = config.SleepMode
+
 	proxy.cache = config.Cache
 	proxy.cacheSize = config.CacheSize
 
