@@ -16,9 +16,9 @@ import (
 	"time"
 
 	"github.com/jedisct1/dlog"
+	"github.com/jedisct1/ewma"
 	clocksmith "github.com/jedisct1/go-clocksmith"
 	stamps "github.com/jedisct1/go-dnsstamps"
-	"github.com/lifenjoiner/ewma"
 	"github.com/miekg/dns"
 	"golang.org/x/crypto/ed25519"
 )
@@ -199,6 +199,7 @@ func (serversInfo *ServersInfo) refreshServer(proxy *Proxy, name string, stamp s
 		dlog.Fatalf("[%s] != [%s]", name, newServer.Name)
 	}
 	newServer.rtt = ewma.NewMovingAverage(RTTEwmaDecay)
+	newServer.rtt.SetWarmupSamples(1)
 	newServer.rtt.Set(float64(newServer.initialRtt))
 	isNew = true
 	serversInfo.Lock()
