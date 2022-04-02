@@ -13,7 +13,7 @@ const (
 type QuestionSizeEstimator struct {
 	sync.RWMutex
 	minQuestionSize int
-	ewma            *ewma.EWMA
+	ewma            ewma.MovingAverage
 }
 
 func NewQuestionSizeEstimator() QuestionSizeEstimator {
