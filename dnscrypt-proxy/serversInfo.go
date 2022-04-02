@@ -46,7 +46,7 @@ type DOHClientCreds struct {
 type ServerInfo struct {
 	DOHClientCreds     DOHClientCreds
 	lastActionTS       time.Time
-	rtt                *ewma.EWMA
+	rtt                ewma.MovingAverage
 	Name               string
 	HostName           string
 	UDPAddr            *net.UDPAddr
