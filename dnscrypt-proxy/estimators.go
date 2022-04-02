@@ -3,7 +3,7 @@ package main
 import (
 	"sync"
 
-	"github.com/lifenjoiner/ewma"
+	"github.com/jedisct1/ewma"
 )
 
 const (
