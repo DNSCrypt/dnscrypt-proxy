@@ -10,7 +10,6 @@ require (
 	github.com/hashicorp/golang-lru v0.5.4
 	github.com/hectane/go-acl v0.0.0-20190604041725-da78bae5fc95
 	github.com/jedisct1/dlog v0.0.0-20210927135244-3381aa132e7f
-	github.com/jedisct1/ewma v1.2.1-0.20220220223311-a30af446ecb9
 	github.com/jedisct1/go-clocksmith v0.0.0-20210101121932-da382b963868
 	github.com/jedisct1/go-dnsstamps v0.0.0-20220328103132-6fb2da762370
 	github.com/jedisct1/go-hpke-compact v0.0.0-20210930135406-0763750339f0
@@ -18,6 +17,7 @@ require (
 	github.com/jedisct1/xsecretbox v0.0.0-20210927135450-ebe41aef7bef
 	github.com/k-sone/critbitgo v1.4.0
 	github.com/kardianos/service v1.2.1
+	github.com/lifenjoiner/ewma v0.0.0-20210320054258-4f227d7eb8a2
 	github.com/miekg/dns v1.1.47
 	github.com/powerman/check v1.6.0
 	golang.org/x/crypto v0.0.0-20220321153916-2c7772ba3064
