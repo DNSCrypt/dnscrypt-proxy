@@ -18,11 +18,11 @@ require (
 	github.com/k-sone/critbitgo v1.4.0
 	github.com/kardianos/service v1.2.1
 	github.com/lifenjoiner/ewma v0.0.0-20210320054258-4f227d7eb8a2
-	github.com/miekg/dns v1.1.47
+	github.com/miekg/dns v1.1.48
 	github.com/powerman/check v1.6.0
-	golang.org/x/crypto v0.0.0-20220321153916-2c7772ba3064
-	golang.org/x/net v0.0.0-20220325170049-de3da57026de
-	golang.org/x/sys v0.0.0-20220327210214-530d0810a4d0
+	golang.org/x/crypto v0.0.0-20220331220935-ae2d96664a29
+	golang.org/x/net v0.0.0-20220403103023-749bd193bc2b
+	golang.org/x/sys v0.0.0-20220403020550-483a9cbc67c0
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 )
 

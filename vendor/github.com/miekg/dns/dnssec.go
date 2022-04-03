@@ -140,12 +140,12 @@ func (k *DNSKEY) KeyTag() uint16 {
 	var keytag int
 	switch k.Algorithm {
 	case RSAMD5:
-		// Look at the bottom two bytes of the modules, which the last
-		// item in the pubkey.
 		// This algorithm has been deprecated, but keep this key-tag calculation.
+		// Look at the bottom two bytes of the modules, which the last item in the pubkey.
+		// See https://www.rfc-editor.org/errata/eid193 .
 		modulus, _ := fromBase64([]byte(k.PublicKey))
 		if len(modulus) > 1 {
-			x := binary.BigEndian.Uint16(modulus[len(modulus)-2:])
+			x := binary.BigEndian.Uint16(modulus[len(modulus)-3:])
 			keytag = int(x)
 		}
 	default:
