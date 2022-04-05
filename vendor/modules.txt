@@ -14,6 +14,9 @@ github.com/Masterminds/semver
 # github.com/OpenPeeDeeP/depguard v1.0.1
 ## explicit; go 1.13
 github.com/OpenPeeDeeP/depguard
+# github.com/VividCortex/ewma v1.2.0
+## explicit; go 1.12
+github.com/VividCortex/ewma
 # github.com/alexkohler/prealloc v1.0.0
 ## explicit; go 1.15
 github.com/alexkohler/prealloc/pkg
@@ -303,9 +306,6 @@ github.com/ldez/gomoddirectives
 # github.com/ldez/tagliatelle v0.2.0
 ## explicit; go 1.16
 github.com/ldez/tagliatelle
-# github.com/lifenjoiner/ewma v0.0.0-20210320054258-4f227d7eb8a2
-## explicit; go 1.16
-github.com/lifenjoiner/ewma
 # github.com/magiconair/properties v1.8.1
 ## explicit
 github.com/magiconair/properties

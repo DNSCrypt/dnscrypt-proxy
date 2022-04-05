@@ -3,23 +3,19 @@ package main
 import (
 	"sync"
 
-	"github.com/lifenjoiner/ewma"
-)
-
-const (
-	SizeEstimatorEwmaDecay = 100.0
+	"github.com/VividCortex/ewma"
 )
 
 type QuestionSizeEstimator struct {
 	sync.RWMutex
 	minQuestionSize int
-	ewma            *ewma.EWMA
+	ewma            ewma.MovingAverage
 }
 
 func NewQuestionSizeEstimator() QuestionSizeEstimator {
 	return QuestionSizeEstimator{
 		minQuestionSize: InitialMinQuestionSize,
-		ewma:            ewma.NewMovingAverage(SizeEstimatorEwmaDecay),
+		ewma:            &ewma.SimpleEWMA{},
 	}
 }
 

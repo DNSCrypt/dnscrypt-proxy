@@ -15,10 +15,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/VividCortex/ewma"
 	"github.com/jedisct1/dlog"
 	clocksmith "github.com/jedisct1/go-clocksmith"
 	stamps "github.com/jedisct1/go-dnsstamps"
-	"github.com/lifenjoiner/ewma"
 	"github.com/miekg/dns"
 	"golang.org/x/crypto/ed25519"
 )
@@ -46,7 +46,7 @@ type DOHClientCreds struct {
 type ServerInfo struct {
 	DOHClientCreds     DOHClientCreds
 	lastActionTS       time.Time
-	rtt                *ewma.EWMA
+	rtt                ewma.MovingAverage
 	Name               string
 	HostName           string
 	UDPAddr            *net.UDPAddr

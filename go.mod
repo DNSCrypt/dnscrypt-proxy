@@ -4,6 +4,7 @@ go 1.18
 
 require (
 	github.com/BurntSushi/toml v1.0.0
+	github.com/VividCortex/ewma v1.2.0
 	github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf
 	github.com/dchest/safefile v0.0.0-20151022103144-855e8d98f185
 	github.com/hashicorp/go-immutable-radix v1.3.1
@@ -17,7 +18,6 @@ require (
 	github.com/jedisct1/xsecretbox v0.0.0-20210927135450-ebe41aef7bef
 	github.com/k-sone/critbitgo v1.4.0
 	github.com/kardianos/service v1.2.1
-	github.com/lifenjoiner/ewma v0.0.0-20210320054258-4f227d7eb8a2
 	github.com/miekg/dns v1.1.48
 	github.com/powerman/check v1.6.0
 	golang.org/x/crypto v0.0.0-20220331220935-ae2d96664a29
