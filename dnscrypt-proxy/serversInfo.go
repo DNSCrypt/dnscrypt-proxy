@@ -251,14 +251,14 @@ func (serversInfo *ServersInfo) refresh(proxy *Proxy) (int, error) {
 	return liveServers, err
 }
 
-func (serversInfo *ServersInfo) estimatorUpdate() {
+func (serversInfo *ServersInfo) estimatorUpdate(currentActive int) {
 	// serversInfo.RWMutex is assumed to be Locked
 	serversCount := len(serversInfo.inner)
 	activeCount := serversInfo.lbStrategy.getActiveCount(serversCount)
 	if activeCount == serversCount {
 		return
 	}
-	candidate, currentActive := rand.Intn(serversCount-activeCount)+activeCount, rand.Intn(activeCount)
+	candidate := rand.Intn(serversCount-activeCount)+activeCount
 	candidateRtt, currentActiveRtt := serversInfo.inner[candidate].rtt.Value(), serversInfo.inner[currentActive].rtt.Value()
 	if currentActiveRtt < 0 {
 		currentActiveRtt = candidateRtt
@@ -297,10 +297,10 @@ func (serversInfo *ServersInfo) getOne() *ServerInfo {
 		serversInfo.Unlock()
 		return nil
 	}
-	if serversInfo.lbEstimator {
-		serversInfo.estimatorUpdate()
-	}
 	candidate := serversInfo.lbStrategy.getCandidate(serversCount)
+	if serversInfo.lbEstimator {
+		serversInfo.estimatorUpdate(candidate)
+	}
 	serverInfo := serversInfo.inner[candidate]
 	dlog.Debugf("Using candidate [%s] RTT: %d", (*serverInfo).Name, int((*serverInfo).rtt.Value()))
 	serversInfo.Unlock()
