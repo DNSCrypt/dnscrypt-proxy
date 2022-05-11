@@ -1,9 +1,9 @@
-// Copyright 2018 The Go Authors. All rights reserved.
+// Copyright 2022 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-//go:build riscv64 && linux
-// +build riscv64,linux
+//go:build loong64 && linux
+// +build loong64,linux
 
 package unix
 
@@ -19,7 +19,6 @@ import "unsafe"
 //sysnb	Getegid() (egid int)
 //sysnb	Geteuid() (euid int)
 //sysnb	Getgid() (gid int)
-//sysnb	Getrlimit(resource int, rlim *Rlimit) (err error)
 //sysnb	Getuid() (uid int)
 //sys	Listen(s int, n int) (err error)
 //sys	pread(fd int, p []byte, offset int64) (n int, err error) = SYS_PREAD64
@@ -40,7 +39,6 @@ func Select(nfd int, r *FdSet, w *FdSet, e *FdSet, timeout *Timeval) (n int, err
 //sysnb	Setregid(rgid int, egid int) (err error)
 //sysnb	Setresgid(rgid int, egid int, sgid int) (err error)
 //sysnb	Setresuid(ruid int, euid int, suid int) (err error)
-//sysnb	Setrlimit(resource int, rlim *Rlimit) (err error)
 //sysnb	Setreuid(ruid int, euid int) (err error)
 //sys	Shutdown(fd int, how int) (err error)
 //sys	Splice(rfd int, roff *int64, wfd int, woff *int64, len int, flags int) (n int64, err error)
@@ -92,6 +90,16 @@ func setTimeval(sec, usec int64) Timeval {
 	return Timeval{Sec: sec, Usec: usec}
 }
 
+func Getrlimit(resource int, rlim *Rlimit) (err error) {
+	err = Prlimit(0, resource, nil, rlim)
+	return
+}
+
+func Setrlimit(resource int, rlim *Rlimit) (err error) {
+	err = Prlimit(0, resource, rlim, nil)
+	return
+}
+
 func futimesat(dirfd int, path string, tv *[2]Timeval) (err error) {
 	if tv == nil {
 		return utimensat(dirfd, path, nil, 0)
@@ -136,9 +144,9 @@ func utimes(path string, tv *[2]Timeval) (err error) {
 	return utimensat(AT_FDCWD, path, (*[2]Timespec)(unsafe.Pointer(&ts[0])), 0)
 }
 
-func (r *PtraceRegs) PC() uint64 { return r.Pc }
+func (r *PtraceRegs) PC() uint64 { return r.Era }
 
-func (r *PtraceRegs) SetPC(pc uint64) { r.Pc = pc }
+func (r *PtraceRegs) SetPC(era uint64) { r.Era = era }
 
 func (iov *Iovec) SetLen(length int) {
 	iov.Len = uint64(length)
