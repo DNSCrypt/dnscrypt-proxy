@@ -263,6 +263,7 @@ func (serversInfo *ServersInfo) estimatorUpdate(currentActive int) {
 	if currentActiveRtt < 0 {
 		currentActiveRtt = candidateRtt
 		serversInfo.inner[currentActive].rtt.Set(currentActiveRtt)
+		return
 	}
 	partialSort := false
 	if candidateRtt < currentActiveRtt {
@@ -277,7 +278,13 @@ func (serversInfo *ServersInfo) estimatorUpdate(currentActive int) {
 	} else if candidateRtt > 0 && candidateRtt >= (serversInfo.inner[0].rtt.Value()+serversInfo.inner[activeCount-1].rtt.Value())/2.0*4.0 {
 		if time.Since(serversInfo.inner[candidate].lastActionTS) > time.Duration(1*time.Minute) {
 			serversInfo.inner[candidate].rtt.Add(candidateRtt / 2.0)
-			dlog.Debugf("Giving a new chance to candidate [%s], lowering its RTT from %d to %d (best: %d)", serversInfo.inner[candidate].Name, int(candidateRtt), int(serversInfo.inner[candidate].rtt.Value()), int(serversInfo.inner[0].rtt.Value()))
+			dlog.Debugf(
+				"Giving a new chance to candidate [%s], lowering its RTT from %d to %d (best: %d)",
+				serversInfo.inner[candidate].Name,
+				int(candidateRtt),
+				int(serversInfo.inner[candidate].rtt.Value()),
+				int(serversInfo.inner[0].rtt.Value()),
+			)
 			partialSort = true
 		}
 	}
