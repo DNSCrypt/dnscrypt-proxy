@@ -142,6 +142,13 @@ ln ../LICENSE example-dnscrypt-proxy.toml localhost.pem example-*.txt linux-mips
 tar czpvf dnscrypt-proxy-linux_mips64le-${PACKAGE_VERSION:-dev}.tar.gz linux-mips64le
 
 go clean
+env CGO_ENABLED=0 GOOS=linux GOARCH=riscv64 go build -mod vendor -ldflags="-s -w"
+mkdir linux-riscv64
+ln dnscrypt-proxy linux-riscv64/
+ln ../LICENSE example-dnscrypt-proxy.toml localhost.pem example-*.txt linux-riscv64/
+tar czpvf dnscrypt-proxy-linux_riscv64-${PACKAGE_VERSION:-dev}.tar.gz linux-riscv64
+
+go clean
 env GOOS=darwin GOARCH=amd64 go build -mod vendor -ldflags="-s -w"
 mkdir macos-x86_64
 ln dnscrypt-proxy macos-x86_64/
