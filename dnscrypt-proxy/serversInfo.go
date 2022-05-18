@@ -283,7 +283,7 @@ func (serversInfo *ServersInfo) estimatorUpdate(currentActive int) {
 				serversInfo.inner[candidate].Name,
 				int(candidateRtt),
 				int(serversInfo.inner[candidate].rtt.Value()),
-				int(serversInfo.inner[0].rtt.Value())
+				int(serversInfo.inner[0].rtt.Value()),
 			)
 			partialSort = true
 		}
