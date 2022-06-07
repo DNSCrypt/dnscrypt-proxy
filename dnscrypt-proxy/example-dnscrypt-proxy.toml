@@ -588,7 +588,7 @@ format = 'tsv'
 #########################################################
 
 ## Allowed IP lists support the same patterns as IP blocklists
-## If an IP response matches an allow ip entry, the corresponding session
+## If an IP response matches an allowed entry, the corresponding session
 ## will bypass IP filters.
 ##
 ## Time-based rules are also supported to make some websites only accessible at specific times of the day.
