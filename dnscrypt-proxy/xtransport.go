@@ -442,6 +442,11 @@ func (xTransport *XTransport) Fetch(
 			)
 			xTransport.tlsCipherSuite = nil
 			xTransport.rebuildTransport()
+		} else if len(xTransport.tlsClientCreds.clientCert) > 0 && strings.Contains(err.Error(), "bad certificate") {
+			dlog.Warnf(
+				"TLS certificate failure - Check the validity of the client certificate; reloading existing certificate",
+			)
+			xTransport.rebuildTransport()
 		}
 		return nil, statusCode, nil, rtt, err
 	}
