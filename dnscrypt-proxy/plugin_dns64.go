@@ -34,7 +34,10 @@ func (plugin *PluginDNS64) Description() string {
 }
 
 func (plugin *PluginDNS64) Init(proxy *Proxy) error {
-	plugin.ipv4Resolver = proxy.listenAddresses[0] //recursively to ourselves
+	if len(proxy.listenAddresses) == 0 {
+		return errors.New("At least one listening IP address must be configured for the DNS64 plugin to work")
+	}
+	plugin.ipv4Resolver = proxy.listenAddresses[0] // query is sent to ourselves
 	plugin.pref64Mutex = new(sync.RWMutex)
 	plugin.proxy = proxy
 
