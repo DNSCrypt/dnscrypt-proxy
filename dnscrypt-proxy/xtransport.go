@@ -203,7 +203,6 @@ func (xTransport *XTransport) rebuildTransport() {
 			tlsClientConfig.ClientSessionCache = tls.NewLRUClientSessionCache(10)
 		}
 		if xTransport.tlsCipherSuite != nil {
-			tlsClientConfig.PreferServerCipherSuites = false
 			tlsClientConfig.CipherSuites = xTransport.tlsCipherSuite
 		}
 	}
