@@ -223,7 +223,9 @@ func (serversInfo *ServersInfo) refreshServer(proxy *Proxy, name string, stamp s
 func (serversInfo *ServersInfo) refresh(proxy *Proxy) (int, error) {
 	dlog.Debug("Refreshing certificates")
 	serversInfo.RLock()
-	registeredServers := serversInfo.registeredServers
+	// Appending registeredServers slice from sources may allocate new memory.
+	registeredServers := make([]RegisteredServer, len(serversInfo.registeredServers))
+	copy(registeredServers, serversInfo.registeredServers)
 	serversInfo.RUnlock()
 	liveServers := 0
 	var err error
