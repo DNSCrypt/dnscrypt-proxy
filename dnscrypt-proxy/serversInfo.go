@@ -338,6 +338,7 @@ func findFarthestRoute(proxy *Proxy, name string, relayStamps []stamps.ServerSta
 		}
 	}
 	if serverIdx < 0 {
+		proxy.serversInfo.RUnlock()
 		return nil
 	}
 	server := proxy.serversInfo.registeredServers[serverIdx]
