@@ -124,7 +124,9 @@ func (plugin *PluginDNS64) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 	synthAAAAs := make([]dns.RR, 0)
 	for _, answer := range resp.Answer {
 		header := answer.Header()
-		if header.Rrtype == dns.TypeA {
+		if header.Rrtype == dns.TypeCNAME {
+			synthAAAAs = append(synthAAAAs, answer)
+		} else if header.Rrtype == dns.TypeA {
 			ttl := initialTTL
 			if ttl > header.Ttl {
 				ttl = header.Ttl
