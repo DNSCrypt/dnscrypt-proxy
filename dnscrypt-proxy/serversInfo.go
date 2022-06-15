@@ -236,6 +236,7 @@ func (serversInfo *ServersInfo) refresh(proxy *Proxy) (int, error) {
 	}
 	serversInfo.Lock()
 	sort.SliceStable(serversInfo.inner, func(i, j int) bool {
+		serversInfo.Unlock()
 		return serversInfo.inner[i].initialRtt < serversInfo.inner[j].initialRtt
 	})
 	inner := serversInfo.inner
