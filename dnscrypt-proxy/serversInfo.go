@@ -467,8 +467,9 @@ func route(proxy *Proxy, name string, serverProto stamps.StampProtoType) (*Relay
 		}
 	}
 	if len(relayStamps) == 0 {
-		dlog.Warnf("Empty relay set for [%v]", name)
-		return nil, fmt.Errorf("Invalid relay set for server [%v]", name)
+		err := fmt.Errorf("Invalid relay set for server [%v]", name)
+		dlog.Warn(err)
+		return nil, err
 	}
 	var relayCandidateStamp *stamps.ServerStamp
 	if !wildcard || len(relayStamps) == 1 {
