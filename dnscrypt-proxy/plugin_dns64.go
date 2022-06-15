@@ -121,11 +121,11 @@ func (plugin *PluginDNS64) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 		}
 	}
 
-	synthAAAAs := make([]dns.RR, 0)
+	synth64 := make([]dns.RR, 0)
 	for _, answer := range resp.Answer {
 		header := answer.Header()
 		if header.Rrtype == dns.TypeCNAME {
-			synthAAAAs = append(synthAAAAs, answer)
+			synth64 = append(synth64, answer)
 		} else if header.Rrtype == dns.TypeA {
 			ttl := initialTTL
 			if ttl > header.Ttl {
@@ -145,7 +145,7 @@ func (plugin *PluginDNS64) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 						Ttl:    ttl,
 					}
 					synthAAAA.AAAA = ipv6
-					synthAAAAs = append(synthAAAAs, synthAAAA)
+					synth64 = append(synth64, synthAAAA)
 				}
 				plugin.pref64Mutex.RUnlock()
 			}
@@ -153,7 +153,7 @@ func (plugin *PluginDNS64) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 	}
 
 	synth := EmptyResponseFromMessage(msg)
-	synth.Answer = append(synth.Answer, synthAAAAs...)
+	synth.Answer = append(synth.Answer, synth64...)
 
 	pluginsState.synthResponse = synth
 	pluginsState.action = PluginsActionSynth
