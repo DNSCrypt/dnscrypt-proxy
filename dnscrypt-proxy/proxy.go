@@ -813,7 +813,7 @@ func (proxy *Proxy) processIncomingQuery(
 			if pluginsState.dnssec {
 				dlog.Debug("A response had an invalid DNSSEC signature")
 			} else {
-				dlog.Infof("Server [%v] returned temporary error code SERVFAIL -- Invalid DNSSEC signature received or server may be experiencing connectivity issues", serverInfo.Name)
+				dlog.Infof("A response with status code 2 was received - this is usually a temporary, remote issue with the configuration of the domain name")
 				serverInfo.noticeFailure(proxy)
 			}
 		} else {
