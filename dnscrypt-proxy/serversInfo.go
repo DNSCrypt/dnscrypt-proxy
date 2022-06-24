@@ -468,7 +468,6 @@ func route(proxy *Proxy, name string, serverProto stamps.StampProtoType) (*Relay
 	}
 	if len(relayStamps) == 0 {
 		err := fmt.Errorf("Non-existent relay set for server [%v]", name)
-		dlog.Warn(err)
 		return nil, err
 	}
 	var relayCandidateStamp *stamps.ServerStamp
