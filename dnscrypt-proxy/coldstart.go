@@ -84,6 +84,7 @@ func handleColdStartClient(clientPc *net.UDPConn, cancelChannel chan struct{}, i
 	exit := false
 	select {
 	case <-cancelChannel:
+		cancelChannel <- struct{}{}
 		exit = true
 	default:
 	}
@@ -95,6 +96,12 @@ func handleColdStartClient(clientPc *net.UDPConn, cancelChannel chan struct{}, i
 	}
 	if err != nil {
 		dlog.Warn(err)
+		select {
+		case <-cancelChannel:
+			cancelChannel <- struct{}{}
+		default:
+			cancelChannel = make(chan struct{}, 1)
+		}
 		return true
 	}
 	packet := buffer[:length]
@@ -134,7 +141,6 @@ func addColdStartListener(
 		for !handleColdStartClient(clientPc, cancelChannel, ipsMap) {
 		}
 		clientPc.Close()
-		cancelChannel <- struct{}{}
 	}()
 	return nil
 }
