@@ -316,7 +316,7 @@ func DNSExchange(
 ) (*dns.Msg, time.Duration, bool, error) {
 	for {
 		cancelChannel := make(chan struct{})
-		channel := make(chan DNSExchangeResponse)
+		channel := make(chan DNSExchangeResponse, 6)
 		var err error
 		options := 0
 
@@ -325,32 +325,32 @@ func DNSExchange(
 				queryCopy := query.Copy()
 				queryCopy.Id += uint16(options)
 				go func(query *dns.Msg, delay time.Duration) {
-					option := _dnsExchange(proxy, proto, query, serverAddress, relay, 1500)
+					time.Sleep(delay)
+					option := DNSExchangeResponse{err: errors.New("Canceled")}
+					select {
+					case <-cancelChannel:
+					default:
+						option = _dnsExchange(proxy, proto, query, serverAddress, relay, 1500)
+					}
 					option.fragmentsBlocked = false
 					option.priority = 0
 					channel <- option
-					time.Sleep(delay)
-					select {
-					case <-cancelChannel:
-						return
-					default:
-					}
 				}(queryCopy, time.Duration(200*tries)*time.Millisecond)
 				options++
 			}
 			queryCopy := query.Copy()
 			queryCopy.Id += uint16(options)
 			go func(query *dns.Msg, delay time.Duration) {
-				option := _dnsExchange(proxy, proto, query, serverAddress, relay, 480)
+				time.Sleep(delay)
+				option := DNSExchangeResponse{err: errors.New("Canceled")}
+				select {
+				case <-cancelChannel:
+				default:
+					option = _dnsExchange(proxy, proto, query, serverAddress, relay, 480)
+				}
 				option.fragmentsBlocked = true
 				option.priority = 1
 				channel <- option
-				time.Sleep(delay)
-				select {
-				case <-cancelChannel:
-					return
-				default:
-				}
 			}(queryCopy, time.Duration(250*tries)*time.Millisecond)
 			options++
 		}
