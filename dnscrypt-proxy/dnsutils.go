@@ -316,11 +316,12 @@ func DNSExchange(
 ) (*dns.Msg, time.Duration, bool, error) {
 	for {
 		cancelChannel := make(chan struct{})
-		channel := make(chan DNSExchangeResponse, 6)
+		maxTries := 3
+		channel := make(chan DNSExchangeResponse, 2*maxTries)
 		var err error
 		options := 0
 
-		for tries := 0; tries < 3; tries++ {
+		for tries := 0; tries < maxTries; tries++ {
 			if tryFragmentsSupport {
 				queryCopy := query.Copy()
 				queryCopy.Id += uint16(options)
