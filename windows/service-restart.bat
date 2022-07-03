@@ -20,6 +20,7 @@ goto :end
 :admin
 pushd "%~dp0"
 dnscrypt-proxy.exe -service stop
+ipconfig /flushdns
 dnscrypt-proxy.exe -service start
 popd
 echo.
