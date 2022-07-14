@@ -180,7 +180,7 @@ func ColdStart(proxy *Proxy) (*CaptivePortalHandler, error) {
 	listenAddrStrs := proxy.listenAddresses
 	cancelChannels := make([]chan struct{}, 0)
 	for _, listenAddrStr := range listenAddrStrs {
-		cancelChannel := make(chan struct{}, 1)
+		cancelChannel := make(chan struct{})
 		if err := addColdStartListener(proxy, &ipsMap, listenAddrStr, cancelChannel); err == nil {
 			cancelChannels = append(cancelChannels, cancelChannel)
 		}
