@@ -20,8 +20,7 @@ type CaptivePortalHandler struct {
 
 func (captivePortalHandler *CaptivePortalHandler) Stop() {
 	for _, cancelChannel := range captivePortalHandler.cancelChannels {
-		cancelChannel <- struct{}{}
-		<-cancelChannel
+		close(cancelChannel)
 	}
 }
 
@@ -84,7 +83,6 @@ func handleColdStartClient(clientPc *net.UDPConn, cancelChannel chan struct{}, i
 	exit := false
 	select {
 	case <-cancelChannel:
-		cancelChannel <- struct{}{}
 		exit = true
 	default:
 	}
@@ -96,12 +94,6 @@ func handleColdStartClient(clientPc *net.UDPConn, cancelChannel chan struct{}, i
 	}
 	if err != nil {
 		dlog.Warn(err)
-		select {
-		case <-cancelChannel:
-			cancelChannel <- struct{}{}
-		default:
-			cancelChannel = make(chan struct{}, 1)
-		}
 		return true
 	}
 	packet := buffer[:length]
@@ -188,7 +180,7 @@ func ColdStart(proxy *Proxy) (*CaptivePortalHandler, error) {
 	listenAddrStrs := proxy.listenAddresses
 	cancelChannels := make([]chan struct{}, 0)
 	for _, listenAddrStr := range listenAddrStrs {
-		cancelChannel := make(chan struct{})
+		cancelChannel := make(chan struct{}, 1)
 		if err := addColdStartListener(proxy, &ipsMap, listenAddrStr, cancelChannel); err == nil {
 			cancelChannels = append(cancelChannels, cancelChannel)
 		}
