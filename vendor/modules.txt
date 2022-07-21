@@ -44,6 +44,12 @@ github.com/charithe/durationcheck
 # github.com/chavacava/garif v0.0.0-20210405164556-e8a0a408d6af
 ## explicit; go 1.16
 github.com/chavacava/garif
+# github.com/cheekybits/genny v1.0.0
+## explicit
+github.com/cheekybits/genny
+github.com/cheekybits/genny/generic
+github.com/cheekybits/genny/out
+github.com/cheekybits/genny/parse
 # github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf
 ## explicit
 github.com/coreos/go-systemd/activation
@@ -84,6 +90,9 @@ github.com/go-critic/go-critic/checkers
 github.com/go-critic/go-critic/checkers/internal/astwalk
 github.com/go-critic/go-critic/checkers/internal/lintutil
 github.com/go-critic/go-critic/framework/linter
+# github.com/go-task/slim-sprig v0.0.0-20210107165309-348f09dbbbc0
+## explicit; go 1.13
+github.com/go-task/slim-sprig
 # github.com/go-toolsmith/astcast v1.0.0
 ## explicit
 github.com/go-toolsmith/astcast
@@ -121,7 +130,7 @@ github.com/gobwas/glob/util/strings
 # github.com/gofrs/flock v0.8.0
 ## explicit
 github.com/gofrs/flock
-# github.com/golang/protobuf v1.5.0
+# github.com/golang/protobuf v1.5.2
 ## explicit; go 1.9
 github.com/golang/protobuf/proto
 github.com/golang/protobuf/ptypes
@@ -306,12 +315,43 @@ github.com/ldez/gomoddirectives
 # github.com/ldez/tagliatelle v0.2.0
 ## explicit; go 1.16
 github.com/ldez/tagliatelle
+# github.com/lucas-clemente/quic-go v0.28.0
+## explicit; go 1.16
+github.com/lucas-clemente/quic-go
+github.com/lucas-clemente/quic-go/http3
+github.com/lucas-clemente/quic-go/internal/ackhandler
+github.com/lucas-clemente/quic-go/internal/congestion
+github.com/lucas-clemente/quic-go/internal/flowcontrol
+github.com/lucas-clemente/quic-go/internal/handshake
+github.com/lucas-clemente/quic-go/internal/logutils
+github.com/lucas-clemente/quic-go/internal/protocol
+github.com/lucas-clemente/quic-go/internal/qerr
+github.com/lucas-clemente/quic-go/internal/qtls
+github.com/lucas-clemente/quic-go/internal/utils
+github.com/lucas-clemente/quic-go/internal/wire
+github.com/lucas-clemente/quic-go/logging
+github.com/lucas-clemente/quic-go/quicvarint
 # github.com/magiconair/properties v1.8.1
 ## explicit
 github.com/magiconair/properties
 # github.com/maratori/testpackage v1.0.1
 ## explicit; go 1.12
 github.com/maratori/testpackage/pkg/testpackage
+# github.com/marten-seemann/qpack v0.2.1
+## explicit; go 1.14
+github.com/marten-seemann/qpack
+# github.com/marten-seemann/qtls-go1-16 v0.1.5
+## explicit; go 1.16
+github.com/marten-seemann/qtls-go1-16
+# github.com/marten-seemann/qtls-go1-17 v0.1.2
+## explicit; go 1.17
+github.com/marten-seemann/qtls-go1-17
+# github.com/marten-seemann/qtls-go1-18 v0.1.2
+## explicit; go 1.18
+github.com/marten-seemann/qtls-go1-18
+# github.com/marten-seemann/qtls-go1-19 v0.1.0-beta.1
+## explicit; go 1.19
+github.com/marten-seemann/qtls-go1-19
 # github.com/matoous/godox v0.0.0-20210227103229-6504466cf951
 ## explicit; go 1.13
 github.com/matoous/godox
@@ -376,9 +416,41 @@ github.com/nishanths/exhaustive
 # github.com/nishanths/predeclared v0.2.1
 ## explicit; go 1.14
 github.com/nishanths/predeclared/passes/predeclared
+# github.com/nxadm/tail v1.4.8
+## explicit; go 1.13
+github.com/nxadm/tail
+github.com/nxadm/tail/ratelimiter
+github.com/nxadm/tail/util
+github.com/nxadm/tail/watch
+github.com/nxadm/tail/winfile
 # github.com/olekukonko/tablewriter v0.0.5
 ## explicit; go 1.12
 github.com/olekukonko/tablewriter
+# github.com/onsi/ginkgo v1.16.4
+## explicit; go 1.15
+github.com/onsi/ginkgo/config
+github.com/onsi/ginkgo/formatter
+github.com/onsi/ginkgo/ginkgo
+github.com/onsi/ginkgo/ginkgo/convert
+github.com/onsi/ginkgo/ginkgo/interrupthandler
+github.com/onsi/ginkgo/ginkgo/nodot
+github.com/onsi/ginkgo/ginkgo/outline
+github.com/onsi/ginkgo/ginkgo/testrunner
+github.com/onsi/ginkgo/ginkgo/testsuite
+github.com/onsi/ginkgo/ginkgo/watch
+github.com/onsi/ginkgo/internal/codelocation
+github.com/onsi/ginkgo/internal/containernode
+github.com/onsi/ginkgo/internal/failer
+github.com/onsi/ginkgo/internal/leafnodes
+github.com/onsi/ginkgo/internal/remote
+github.com/onsi/ginkgo/internal/spec
+github.com/onsi/ginkgo/internal/spec_iterator
+github.com/onsi/ginkgo/internal/writer
+github.com/onsi/ginkgo/reporters
+github.com/onsi/ginkgo/reporters/stenographer
+github.com/onsi/ginkgo/reporters/stenographer/support/go-colorable
+github.com/onsi/ginkgo/reporters/stenographer/support/go-isatty
+github.com/onsi/ginkgo/types
 # github.com/pelletier/go-toml v1.2.0
 ## explicit
 github.com/pelletier/go-toml
@@ -529,6 +601,8 @@ github.com/yeya24/promlinter
 golang.org/x/crypto/blake2b
 golang.org/x/crypto/chacha20
 golang.org/x/crypto/chacha20poly1305
+golang.org/x/crypto/cryptobyte
+golang.org/x/crypto/cryptobyte/asn1
 golang.org/x/crypto/curve25519
 golang.org/x/crypto/curve25519/internal/field
 golang.org/x/crypto/ed25519
@@ -699,6 +773,9 @@ gopkg.in/ini.v1
 # gopkg.in/natefinch/lumberjack.v2 v2.0.0
 ## explicit
 gopkg.in/natefinch/lumberjack.v2
+# gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7
+## explicit
+gopkg.in/tomb.v1
 # gopkg.in/yaml.v2 v2.4.0
 ## explicit; go 1.15
 gopkg.in/yaml.v2

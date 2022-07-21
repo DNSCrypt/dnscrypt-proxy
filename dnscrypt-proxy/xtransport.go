@@ -22,6 +22,7 @@ import (
 
 	"github.com/jedisct1/dlog"
 	stamps "github.com/jedisct1/go-dnsstamps"
+	"github.com/lucas-clemente/quic-go/http3"
 	"github.com/miekg/dns"
 	"golang.org/x/net/http2"
 	netproxy "golang.org/x/net/proxy"
@@ -46,11 +47,18 @@ type CachedIPs struct {
 	cache map[string]*CachedIPItem
 }
 
+type AltSupport struct {
+	sync.RWMutex
+	cache map[string]uint16
+}
+
 type XTransport struct {
 	transport                *http.Transport
+	h3Transport              *http3.RoundTripper
 	keepAlive                time.Duration
 	timeout                  time.Duration
 	cachedIPs                CachedIPs
+	altSupport               AltSupport
 	bootstrapResolvers       []string
 	mainProto                string
 	ignoreSystemDNS          bool
@@ -69,6 +77,7 @@ func NewXTransport() *XTransport {
 	}
 	xTransport := XTransport{
 		cachedIPs:                CachedIPs{cache: make(map[string]*CachedIPItem)},
+		altSupport:               AltSupport{cache: make(map[string]uint16)},
 		keepAlive:                DefaultKeepAlive,
 		timeout:                  DefaultTimeout,
 		bootstrapResolvers:       []string{DefaultBootstrapResolver},
@@ -212,6 +221,8 @@ func (xTransport *XTransport) rebuildTransport() {
 		http2Transport.AllowHTTP = false
 	}
 	xTransport.transport = transport
+	h3Transport := &http3.RoundTripper{DisableCompression: true, TLSClientConfig: &tlsClientConfig}
+	xTransport.h3Transport = h3Transport
 }
 
 func (xTransport *XTransport) resolveUsingSystem(host string) (ip net.IP, ttl time.Duration, err error) {
@@ -379,7 +390,20 @@ func (xTransport *XTransport) Fetch(
 	if timeout <= 0 {
 		timeout = xTransport.timeout
 	}
-	client := http.Client{Transport: xTransport.transport, Timeout: timeout}
+	client := http.Client{
+		Transport: xTransport.transport,
+		Timeout:   timeout,
+	}
+	host, port := ExtractHostAndPort(url.Host, 443)
+	xTransport.altSupport.RLock()
+	altPort, hasAltSupport := xTransport.altSupport.cache[url.Host]
+	xTransport.altSupport.RUnlock()
+	if hasAltSupport {
+		if int(altPort) == port {
+			client.Transport = xTransport.h3Transport
+			dlog.Debugf("Using HTTP/3 transport for [%s]", url.Host)
+		}
+	}
 	header := map[string][]string{"User-Agent": {"dnscrypt-proxy"}}
 	if len(accept) > 0 {
 		header["Accept"] = []string{accept}
@@ -396,7 +420,6 @@ func (xTransport *XTransport) Fetch(
 		url2.RawQuery = qs.Encode()
 		url = &url2
 	}
-	host, _ := ExtractHostAndPort(url.Host, 0)
 	if xTransport.proxyDialer == nil && strings.HasSuffix(host, ".onion") {
 		return nil, 0, nil, 0, errors.New("Onion service is not reachable without Tor")
 	}
@@ -443,6 +466,32 @@ func (xTransport *XTransport) Fetch(
 			xTransport.rebuildTransport()
 		}
 		return nil, statusCode, nil, rtt, err
+	}
+	if !hasAltSupport {
+		if alt, found := resp.Header["Alt-Svc"]; found {
+			dlog.Debugf("Alt-Svc [%s]: [%s]", url.Host, alt)
+			altPort := uint16(port)
+			for i, xalt := range alt {
+				for j, v := range strings.Split(xalt, ";") {
+					if i > 8 || j > 16 {
+						break
+					}
+					v = strings.TrimSpace(v)
+					if strings.HasPrefix(v, "h3=\":") {
+						v = strings.TrimPrefix(v, "h3=\":")
+						v = strings.TrimSuffix(v, "\"")
+						if xAltPort, err := strconv.ParseUint(v, 10, 16); err == nil && xAltPort <= 65536 {
+							altPort = uint16(xAltPort)
+							dlog.Debugf("Using HTTP/3 for [%s]", url.Host)
+							break
+						}
+					}
+				}
+			}
+			xTransport.altSupport.Lock()
+			xTransport.altSupport.cache[url.Host] = altPort
+			xTransport.altSupport.Unlock()
+		}
 	}
 	tls := resp.TLS
 	bin, err := ioutil.ReadAll(io.LimitReader(resp.Body, MaxHTTPBodyLength))
