@@ -1,7 +1,7 @@
 # 4d63.com/gochecknoglobals v0.0.0-20201008074935-acfc0b28355a
 ## explicit; go 1.15
 4d63.com/gochecknoglobals/checknoglobals
-# github.com/BurntSushi/toml v1.1.0
+# github.com/BurntSushi/toml v1.2.0
 ## explicit; go 1.16
 github.com/BurntSushi/toml
 github.com/BurntSushi/toml/internal
