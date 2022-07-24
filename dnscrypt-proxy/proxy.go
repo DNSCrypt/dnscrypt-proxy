@@ -68,6 +68,9 @@ type Proxy struct {
 	nxLogFile                     string
 	proxySecretKey                [32]byte
 	proxyPublicKey                [32]byte
+	ServerNames                   []string
+	DisabledServerNames           []string
+	requiredProps                 stamps.ServerInformalProperties
 	certRefreshDelayAfterFailure  time.Duration
 	timeout                       time.Duration
 	certRefreshDelay              time.Duration
@@ -94,9 +97,6 @@ type Proxy struct {
 	anonDirectCertFallback        bool
 	pluginBlockUndelegated        bool
 	child                         bool
-	requiredProps                 stamps.ServerInformalProperties
-	ServerNames                   []string
-	DisabledServerNames           []string
 	SourceIPv4                    bool
 	SourceIPv6                    bool
 	SourceDNSCrypt                bool

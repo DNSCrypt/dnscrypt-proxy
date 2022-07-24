@@ -64,6 +64,7 @@ type XTransport struct {
 	ignoreSystemDNS          bool
 	useIPv4                  bool
 	useIPv6                  bool
+	http3                    bool
 	tlsDisableSessionTickets bool
 	tlsCipherSuite           []uint16
 	proxyDialer              *netproxy.Dialer
@@ -221,8 +222,10 @@ func (xTransport *XTransport) rebuildTransport() {
 		http2Transport.AllowHTTP = false
 	}
 	xTransport.transport = transport
-	h3Transport := &http3.RoundTripper{DisableCompression: true, TLSClientConfig: &tlsClientConfig}
-	xTransport.h3Transport = h3Transport
+	if xTransport.http3 {
+		h3Transport := &http3.RoundTripper{DisableCompression: true, TLSClientConfig: &tlsClientConfig}
+		xTransport.h3Transport = h3Transport
+	}
 }
 
 func (xTransport *XTransport) resolveUsingSystem(host string) (ip net.IP, ttl time.Duration, err error) {
@@ -395,13 +398,16 @@ func (xTransport *XTransport) Fetch(
 		Timeout:   timeout,
 	}
 	host, port := ExtractHostAndPort(url.Host, 443)
-	xTransport.altSupport.RLock()
-	altPort, hasAltSupport := xTransport.altSupport.cache[url.Host]
-	xTransport.altSupport.RUnlock()
-	if hasAltSupport {
-		if int(altPort) == port {
-			client.Transport = xTransport.h3Transport
-			dlog.Debugf("Using HTTP/3 transport for [%s]", url.Host)
+	hasAltSupport := false
+	if xTransport.h3Transport != nil {
+		xTransport.altSupport.RLock()
+		altPort, hasAltSupport := xTransport.altSupport.cache[url.Host]
+		xTransport.altSupport.RUnlock()
+		if hasAltSupport {
+			if int(altPort) == port {
+				client.Transport = xTransport.h3Transport
+				dlog.Debugf("Using HTTP/3 transport for [%s]", url.Host)
+			}
 		}
 	}
 	header := map[string][]string{"User-Agent": {"dnscrypt-proxy"}}
@@ -467,7 +473,7 @@ func (xTransport *XTransport) Fetch(
 		}
 		return nil, statusCode, nil, rtt, err
 	}
-	if !hasAltSupport {
+	if xTransport.h3Transport != nil && !hasAltSupport {
 		if alt, found := resp.Header["Alt-Svc"]; found {
 			dlog.Debugf("Alt-Svc [%s]: [%s]", url.Host, alt)
 			altPort := uint16(port)
