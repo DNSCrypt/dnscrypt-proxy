@@ -110,7 +110,9 @@ func (r *hijackableBody) requestDone() {
 	if r.reqDoneClosed || r.reqDone == nil {
 		return
 	}
-	close(r.reqDone)
+	if r.reqDone != nil {
+		close(r.reqDone)
+	}
 	r.reqDoneClosed = true
 }
 
