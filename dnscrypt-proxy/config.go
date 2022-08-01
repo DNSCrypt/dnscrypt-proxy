@@ -929,7 +929,7 @@ func cdLocal() {
 
 func isIPAndPort(addrStr string) error {
 	host, port := ExtractHostAndPort(addrStr, -1)
-	if ip := ParseIP(host); ip == nil {
+	if _, err := ParseIP(host); err != nil {
 		return fmt.Errorf("Host does not parse as IP '%s'", addrStr)
 	} else if port == -1 {
 		return fmt.Errorf("Port missing '%s'", addrStr)
