@@ -84,6 +84,7 @@ type RoundTripOpt struct {
 	// If set true and no cached connection is available, RoundTripOpt will return ErrNoCachedConn.
 	OnlyCachedConn bool
 	// DontCloseRequestStream controls whether the request stream is closed after sending the request.
+	// If set, context cancellations have no effect after the response headers are received.
 	DontCloseRequestStream bool
 }
 
