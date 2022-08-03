@@ -25,7 +25,7 @@ Available as source code and pre-built binaries for most operating systems and a
 
 ## Features
 
-* DNS traffic encryption and authentication. Supports DNS-over-HTTPS (DoH) using TLS 1.3, DNSCrypt, Anonymized DNS and ODoH
+* DNS traffic encryption and authentication. Supports DNS-over-HTTPS (DoH) using TLS 1.3 and QUIC, DNSCrypt, Anonymized DNS and ODoH
 * Client IP addresses can be hidden using Tor, SOCKS proxies or Anonymized DNS relays
 * DNS query monitoring, with separate log files for regular and suspicious queries
 * Filtering: block ads, malware, and other unwanted content. Compatible with all DNS services
