@@ -346,7 +346,10 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 		dlog.SetLogLevel(dlog.SeverityInfo)
 	}
 	dlog.TruncateLogFile(config.LogFileLatest)
-	if config.UseSyslog {
+	proxy.showCerts = *flags.ShowCerts || len(os.Getenv("SHOW_CERTS")) > 0
+	isCommandMode := *flags.Check || proxy.showCerts || *flags.List || *flags.ListAll
+	if isCommandMode {
+	} else if config.UseSyslog {
 		dlog.UseSyslog(true)
 	} else if config.LogFile != nil {
 		dlog.UseLogFile(*config.LogFile)
@@ -697,8 +700,7 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	} else if len(config.BootstrapResolvers) > 0 {
 		netprobeAddress = config.BootstrapResolvers[0]
 	}
-	proxy.showCerts = *flags.ShowCerts || len(os.Getenv("SHOW_CERTS")) > 0
-	if !*flags.Check && !*flags.ShowCerts && !*flags.List && !*flags.ListAll {
+	if !isCommandMode {
 		if err := NetProbe(proxy, netprobeAddress, netprobeTimeout); err != nil {
 			return err
 		}
