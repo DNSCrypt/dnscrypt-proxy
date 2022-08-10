@@ -260,7 +260,7 @@ func (serversInfo *ServersInfo) estimatorUpdate(currentActive int) {
 	if activeCount == serversCount {
 		return
 	}
-	candidate := rand.Intn(serversCount-activeCount) + activeCount
+	candidate := rand.Intn(serversCount-activeCount)+activeCount
 	candidateRtt, currentActiveRtt := serversInfo.inner[candidate].rtt.Value(), serversInfo.inner[currentActive].rtt.Value()
 	if currentActiveRtt < 0 {
 		currentActiveRtt = candidateRtt
@@ -529,7 +529,7 @@ func route(proxy *Proxy, name string, serverProto stamps.StampProtoType) (*Relay
 		}
 		if len(relayCandidateStamp.ServerAddrStr) > 0 {
 			ipOnly, _ := ExtractHostAndPort(relayCandidateStamp.ServerAddrStr, -1)
-			if ip, err := ParseIP(ipOnly); err != nil {
+			if ip := ParseIP(ipOnly); ip != nil {
 				host, _ := ExtractHostAndPort(relayCandidateStamp.ProviderName, -1)
 				proxy.xTransport.saveCachedIP(host, ip, -1*time.Second)
 			}
@@ -665,7 +665,7 @@ func fetchDoHServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, isN
 	// in order to fingerprint clients across multiple IP addresses.
 	if len(stamp.ServerAddrStr) > 0 {
 		ipOnly, _ := ExtractHostAndPort(stamp.ServerAddrStr, -1)
-		if ip, err := ParseIP(ipOnly); err != nil {
+		if ip := ParseIP(ipOnly); ip != nil {
 			host, _ := ExtractHostAndPort(stamp.ProviderName, -1)
 			proxy.xTransport.saveCachedIP(host, ip, -1*time.Second)
 		}

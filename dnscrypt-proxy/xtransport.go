@@ -14,7 +14,6 @@ import (
 	"math/rand"
 	"net"
 	"net/http"
-	"net/netip"
 	"net/url"
 	"strconv"
 	"strings"
@@ -39,7 +38,7 @@ const (
 )
 
 type CachedIPItem struct {
-	ip         netip.Addr
+	ip         net.IP
 	expiration *time.Time
 }
 
@@ -93,13 +92,13 @@ func NewXTransport() *XTransport {
 	return &xTransport
 }
 
-func ParseIP(ipStr string) (netip.Addr, error) {
-	return netip.ParseAddr(strings.TrimRight(strings.TrimLeft(ipStr, "["), "]"))
+func ParseIP(ipStr string) net.IP {
+	return net.ParseIP(strings.TrimRight(strings.TrimLeft(ipStr, "["), "]"))
 }
 
 // If ttl < 0, never expire
 // Otherwise, ttl is set to max(ttl, MinResolverIPTTL)
-func (xTransport *XTransport) saveCachedIP(host string, ip netip.Addr, ttl time.Duration) {
+func (xTransport *XTransport) saveCachedIP(host string, ip net.IP, ttl time.Duration) {
 	item := &CachedIPItem{ip: ip, expiration: nil}
 	if ttl >= 0 {
 		if ttl < MinResolverIPTTL {
@@ -113,8 +112,8 @@ func (xTransport *XTransport) saveCachedIP(host string, ip netip.Addr, ttl time.
 	xTransport.cachedIPs.Unlock()
 }
 
-func (xTransport *XTransport) loadCachedIP(host string) (ip netip.Addr, expired bool) {
-	ip, expired = netip.IPv4Unspecified(), false
+func (xTransport *XTransport) loadCachedIP(host string) (ip net.IP, expired bool) {
+	ip, expired = nil, false
 	xTransport.cachedIPs.RLock()
 	item, ok := xTransport.cachedIPs.cache[host]
 	xTransport.cachedIPs.RUnlock()
@@ -149,9 +148,9 @@ func (xTransport *XTransport) rebuildTransport() {
 			// resolveAndUpdateCache() is always called in `Fetch()` before the `Dial()`
 			// method is used, so that a cached entry must be present at this point.
 			cachedIP, _ := xTransport.loadCachedIP(host)
-			if cachedIP != netip.IPv4Unspecified() {
-				if cachedIP.Is4() {
-					ipOnly = cachedIP.String()
+			if cachedIP != nil {
+				if ipv4 := cachedIP.To4(); ipv4 != nil {
+					ipOnly = ipv4.String()
 				} else {
 					ipOnly = "[" + cachedIP.String() + "]"
 				}
@@ -229,23 +228,23 @@ func (xTransport *XTransport) rebuildTransport() {
 	}
 }
 
-func (xTransport *XTransport) resolveUsingSystem(host string) (ip netip.Addr, ttl time.Duration, err error) {
+func (xTransport *XTransport) resolveUsingSystem(host string) (ip net.IP, ttl time.Duration, err error) {
 	ttl = SystemResolverIPTTL
 	var foundIPs []string
 	foundIPs, err = net.LookupHost(host)
 	if err != nil {
 		return
 	}
-	ips := make([]netip.Addr, 0)
+	ips := make([]net.IP, 0)
 	for _, ip := range foundIPs {
-		if foundIP, err := netip.ParseAddr(ip); err == nil {
+		if foundIP := net.ParseIP(ip); foundIP != nil {
 			if xTransport.useIPv4 {
-				if foundIP.Is4() {
+				if ipv4 := foundIP.To4(); ipv4 != nil {
 					ips = append(ips, foundIP)
 				}
 			}
 			if xTransport.useIPv6 {
-				if foundIP.Is6() || foundIP.Is4In6() {
+				if ipv6 := foundIP.To16(); ipv6 != nil {
 					ips = append(ips, foundIP)
 				}
 			}
@@ -260,7 +259,7 @@ func (xTransport *XTransport) resolveUsingSystem(host string) (ip netip.Addr, tt
 func (xTransport *XTransport) resolveUsingResolver(
 	proto, host string,
 	resolver string,
-) (ip netip.Addr, ttl time.Duration, err error) {
+) (ip net.IP, ttl time.Duration, err error) {
 	dnsClient := dns.Client{Net: proto}
 	if xTransport.useIPv4 {
 		msg := dns.Msg{}
@@ -276,7 +275,7 @@ func (xTransport *XTransport) resolveUsingResolver(
 			}
 			if len(answers) > 0 {
 				answer := answers[rand.Intn(len(answers))]
-				ip, _ = netip.ParseAddr(answer.(*dns.A).A.String())
+				ip = answer.(*dns.A).A
 				ttl = time.Duration(answer.Header().Ttl) * time.Second
 				return
 			}
@@ -296,7 +295,7 @@ func (xTransport *XTransport) resolveUsingResolver(
 			}
 			if len(answers) > 0 {
 				answer := answers[rand.Intn(len(answers))]
-				ip, _ = netip.ParseAddr(answer.(*dns.AAAA).AAAA.String())
+				ip = answer.(*dns.AAAA).AAAA
 				ttl = time.Duration(answer.Header().Ttl) * time.Second
 				return
 			}
@@ -308,7 +307,7 @@ func (xTransport *XTransport) resolveUsingResolver(
 func (xTransport *XTransport) resolveUsingResolvers(
 	proto, host string,
 	resolvers []string,
-) (ip netip.Addr, ttl time.Duration, err error) {
+) (ip net.IP, ttl time.Duration, err error) {
 	for i, resolver := range resolvers {
 		ip, ttl, err = xTransport.resolveUsingResolver(proto, host, resolver)
 		if err == nil {
@@ -328,18 +327,16 @@ func (xTransport *XTransport) resolveAndUpdateCache(host string) error {
 	if xTransport.proxyDialer != nil || xTransport.httpProxyFunction != nil {
 		return nil
 	}
-	_, err := ParseIP(host)
-	if err != nil {
+	if ParseIP(host) != nil {
 		return nil
 	}
-
 	cachedIP, expired := xTransport.loadCachedIP(host)
-	if cachedIP != netip.IPv4Unspecified() && !expired {
+	if cachedIP != nil && !expired {
 		return nil
 	}
-	var foundIP netip.Addr
+	var foundIP net.IP
 	var ttl time.Duration
-
+	var err error
 	if !xTransport.ignoreSystemDNS {
 		foundIP, ttl, err = xTransport.resolveUsingSystem(host)
 	}
@@ -372,7 +369,7 @@ func (xTransport *XTransport) resolveAndUpdateCache(host string) error {
 		ttl = MinResolverIPTTL
 	}
 	if err != nil {
-		if cachedIP != netip.IPv4Unspecified() {
+		if cachedIP != nil {
 			dlog.Noticef("Using stale [%v] cached address for a grace period", host)
 			foundIP = cachedIP
 			ttl = ExpiredCachedIPGraceTTL
