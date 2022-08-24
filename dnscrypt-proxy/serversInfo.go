@@ -706,7 +706,7 @@ func fetchDoHServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, isN
 		protocol = "http/1.x"
 	}
 	if strings.HasPrefix(protocol, "http/1.") {
-		dlog.Warnf("[%s] does not support HTTP/2", name)
+		dlog.Warnf("[%s] does not support HTTP/2 nor HTTP/3", name)
 	}
 	dlog.Infof("[%s] TLS version: %x - Protocol: %v - Cipher suite: %v", name, tls.Version, protocol, tls.CipherSuite)
 	showCerts := proxy.showCerts

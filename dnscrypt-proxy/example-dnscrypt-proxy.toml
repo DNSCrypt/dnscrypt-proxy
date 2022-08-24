@@ -125,7 +125,7 @@ http3 = false
 timeout = 5000
 
 
-## Keepalive for HTTP (HTTPS, HTTP/2) queries, in seconds
+## Keepalive for HTTP (HTTPS, HTTP/2, HTTP/3) queries, in seconds
 
 keepalive = 30
 
