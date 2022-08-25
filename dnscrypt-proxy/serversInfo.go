@@ -446,7 +446,7 @@ func route(proxy *Proxy, name string, serverProto stamps.StampProtoType) (*Relay
 			for _, registeredServer := range proxy.serversInfo.registeredRelays {
 				if registeredServer.stamp.Proto == relayProto {
 					relayStamps = append(relayStamps, registeredServer.stamp)
-					relayStampToName[registeredServer.stamp.String()] = relayName
+					relayStampToName[registeredServer.stamp.String()] = registeredServer.name
 				}
 			}
 			proxy.serversInfo.RUnlock()
