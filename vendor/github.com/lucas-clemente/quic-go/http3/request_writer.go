@@ -233,8 +233,8 @@ func authorityAddr(scheme string, authority string) (addr string) {
 // validPseudoPath reports whether v is a valid :path pseudo-header
 // value. It must be either:
 //
-//     *) a non-empty string starting with '/'
-//     *) the string '*', for OPTIONS requests.
+//	*) a non-empty string starting with '/'
+//	*) the string '*', for OPTIONS requests.
 //
 // For now this is only used a quick check for deciding when to clean
 // up Opaque URLs before sending requests from the Transport.

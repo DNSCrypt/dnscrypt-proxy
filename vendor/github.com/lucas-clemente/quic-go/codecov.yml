@@ -12,6 +12,7 @@ coverage:
     - internal/utils/newconnectionid_linkedlist.go
     - internal/utils/packetinterval_linkedlist.go
     - internal/utils/linkedlist/linkedlist.go
+    - logging/null_tracer.go
     - fuzzing/
     - metrics/
   status:

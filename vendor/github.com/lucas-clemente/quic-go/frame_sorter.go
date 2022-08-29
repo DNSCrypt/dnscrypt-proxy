@@ -4,8 +4,14 @@ import (
 	"errors"
 
 	"github.com/lucas-clemente/quic-go/internal/protocol"
-	"github.com/lucas-clemente/quic-go/internal/utils"
+	list "github.com/lucas-clemente/quic-go/internal/utils/linkedlist"
 )
+
+// byteInterval is an interval from one ByteCount to the other
+type byteInterval struct {
+	Start protocol.ByteCount
+	End   protocol.ByteCount
+}
 
 type frameSorterEntry struct {
 	Data   []byte
@@ -15,17 +21,17 @@ type frameSorterEntry struct {
 type frameSorter struct {
 	queue   map[protocol.ByteCount]frameSorterEntry
 	readPos protocol.ByteCount
-	gaps    *utils.ByteIntervalList
+	gaps    *list.List[byteInterval]
 }
 
 var errDuplicateStreamData = errors.New("duplicate stream data")
 
 func newFrameSorter() *frameSorter {
 	s := frameSorter{
-		gaps:  utils.NewByteIntervalList(),
+		gaps:  list.New[byteInterval](),
 		queue: make(map[protocol.ByteCount]frameSorterEntry),
 	}
-	s.gaps.PushFront(utils.ByteInterval{Start: 0, End: protocol.MaxByteCount})
+	s.gaps.PushFront(byteInterval{Start: 0, End: protocol.MaxByteCount})
 	return &s
 }
 
@@ -118,7 +124,7 @@ func (s *frameSorter) push(data []byte, offset protocol.ByteCount, doneCb func()
 
 	if !startGapEqualsEndGap {
 		s.deleteConsecutive(startGapEnd)
-		var nextGap *utils.ByteIntervalElement
+		var nextGap *list.Element[byteInterval]
 		for gap := startGapNext; gap.Value.End < endGapStart; gap = nextGap {
 			nextGap = gap.Next()
 			s.deleteConsecutive(gap.Value.End)
@@ -140,7 +146,7 @@ func (s *frameSorter) push(data []byte, offset protocol.ByteCount, doneCb func()
 	} else {
 		if startGapEqualsEndGap && adjustedStartGapEnd {
 			// The frame split the existing gap into two.
-			s.gaps.InsertAfter(utils.ByteInterval{Start: end, End: startGapEnd}, startGap)
+			s.gaps.InsertAfter(byteInterval{Start: end, End: startGapEnd}, startGap)
 		} else if !startGapEqualsEndGap {
 			endGap.Value.Start = end
 		}
@@ -164,7 +170,7 @@ func (s *frameSorter) push(data []byte, offset protocol.ByteCount, doneCb func()
 	return nil
 }
 
-func (s *frameSorter) findStartGap(offset protocol.ByteCount) (*utils.ByteIntervalElement, bool) {
+func (s *frameSorter) findStartGap(offset protocol.ByteCount) (*list.Element[byteInterval], bool) {
 	for gap := s.gaps.Front(); gap != nil; gap = gap.Next() {
 		if offset >= gap.Value.Start && offset <= gap.Value.End {
 			return gap, true
@@ -176,7 +182,7 @@ func (s *frameSorter) findStartGap(offset protocol.ByteCount) (*utils.ByteInterv
 	panic("no gap found")
 }
 
-func (s *frameSorter) findEndGap(startGap *utils.ByteIntervalElement, offset protocol.ByteCount) (*utils.ByteIntervalElement, bool) {
+func (s *frameSorter) findEndGap(startGap *list.Element[byteInterval], offset protocol.ByteCount) (*list.Element[byteInterval], bool) {
 	for gap := startGap; gap != nil; gap = gap.Next() {
 		if offset >= gap.Value.Start && offset < gap.Value.End {
 			return gap, true

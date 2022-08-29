@@ -1,6 +1,7 @@
 package handshake
 
 import (
+	"bytes"
 	"encoding/asn1"
 	"fmt"
 	"io"
@@ -17,12 +18,17 @@ const (
 
 // A Token is derived from the client address and can be used to verify the ownership of this address.
 type Token struct {
-	IsRetryToken bool
-	RemoteAddr   string
-	SentTime     time.Time
+	IsRetryToken      bool
+	SentTime          time.Time
+	encodedRemoteAddr []byte
 	// only set for retry tokens
 	OriginalDestConnectionID protocol.ConnectionID
 	RetrySrcConnectionID     protocol.ConnectionID
+}
+
+// ValidateRemoteAddr validates the address, but does not check expiration
+func (t *Token) ValidateRemoteAddr(addr net.Addr) bool {
+	return bytes.Equal(encodeRemoteAddr(addr), t.encodedRemoteAddr)
 }
 
 // token is the struct that is used for ASN1 serialization and deserialization
@@ -101,9 +107,9 @@ func (g *TokenGenerator) DecodeToken(encrypted []byte) (*Token, error) {
 		return nil, fmt.Errorf("rest when unpacking token: %d", len(rest))
 	}
 	token := &Token{
-		IsRetryToken: t.IsRetryToken,
-		RemoteAddr:   decodeRemoteAddr(t.RemoteAddr),
-		SentTime:     time.Unix(0, t.Timestamp),
+		IsRetryToken:      t.IsRetryToken,
+		SentTime:          time.Unix(0, t.Timestamp),
+		encodedRemoteAddr: t.RemoteAddr,
 	}
 	if t.IsRetryToken {
 		token.OriginalDestConnectionID = protocol.ConnectionID(t.OriginalDestConnectionID)
@@ -118,17 +124,4 @@ func encodeRemoteAddr(remoteAddr net.Addr) []byte {
 		return append([]byte{tokenPrefixIP}, udpAddr.IP...)
 	}
 	return append([]byte{tokenPrefixString}, []byte(remoteAddr.String())...)
-}
-
-// decodeRemoteAddr decodes the remote address saved in the token
-func decodeRemoteAddr(data []byte) string {
-	// data will never be empty for a token that we generated.
-	// Check it to be on the safe side
-	if len(data) == 0 {
-		return ""
-	}
-	if data[0] == tokenPrefixIP {
-		return net.IP(data[1:]).String()
-	}
-	return string(data[1:])
 }

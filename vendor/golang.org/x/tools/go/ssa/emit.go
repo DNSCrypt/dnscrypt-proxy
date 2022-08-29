@@ -50,7 +50,7 @@ func emitDebugRef(f *Function, e ast.Expr, v Value, isAddr bool) {
 		if isBlankIdent(id) {
 			return
 		}
-		obj = f.Pkg.objectOf(id)
+		obj = f.objectOf(id)
 		switch obj.(type) {
 		case *types.Nil, *types.Const, *types.Builtin:
 			return
@@ -74,9 +74,16 @@ func emitArith(f *Function, op token.Token, x, y Value, t types.Type, pos token.
 	case token.SHL, token.SHR:
 		x = emitConv(f, x, t)
 		// y may be signed or an 'untyped' constant.
-		// TODO(adonovan): whence signed values?
-		if b, ok := y.Type().Underlying().(*types.Basic); ok && b.Info()&types.IsUnsigned == 0 {
-			y = emitConv(f, y, types.Typ[types.Uint64])
+
+		// There is a runtime panic if y is signed and <0. Instead of inserting a check for y<0
+		// and converting to an unsigned value (like the compiler) leave y as is.
+
+		if b, ok := y.Type().Underlying().(*types.Basic); ok && b.Info()&types.IsUntyped != 0 {
+			// Untyped conversion:
+			// Spec https://go.dev/ref/spec#Operators:
+			// The right operand in a shift expression must have integer type or be an untyped constant
+			// representable by a value of type uint.
+			y = emitConv(f, y, types.Typ[types.Uint])
 		}
 
 	case token.ADD, token.SUB, token.MUL, token.QUO, token.REM, token.AND, token.OR, token.XOR, token.AND_NOT:
@@ -231,7 +238,7 @@ func emitConv(f *Function, val Value, typ types.Type) Value {
 	// Conversion from slice to array pointer?
 	if slice, ok := ut_src.(*types.Slice); ok {
 		if ptr, ok := ut_dst.(*types.Pointer); ok {
-			if arr, ok := ptr.Elem().(*types.Array); ok && types.Identical(slice.Elem(), arr.Elem()) {
+			if arr, ok := ptr.Elem().Underlying().(*types.Array); ok && types.Identical(slice.Elem(), arr.Elem()) {
 				c := &SliceToArrayPointer{X: val}
 				c.setType(ut_dst)
 				return f.emit(c)

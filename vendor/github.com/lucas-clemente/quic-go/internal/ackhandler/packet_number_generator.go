@@ -72,5 +72,5 @@ func (p *skippingPacketNumberGenerator) Pop() protocol.PacketNumber {
 func (p *skippingPacketNumberGenerator) generateNewSkip() {
 	// make sure that there are never two consecutive packet numbers that are skipped
 	p.nextToSkip = p.next + 2 + protocol.PacketNumber(p.rng.Int31n(int32(2*p.period)))
-	p.period = utils.MinPacketNumber(2*p.period, p.maxPeriod)
+	p.period = utils.Min(2*p.period, p.maxPeriod)
 }

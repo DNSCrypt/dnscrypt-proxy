@@ -637,7 +637,8 @@ var ErrNoAltSvcPort = errors.New("no port can be announced, specify it explicitl
 // If no listener's Addr().String() returns an address with a valid port, Server.Addr will be used
 // to extract the port, if specified.
 // For example, a server launched using ListenAndServe on an address with port 443 would set:
-// 	Alt-Svc: h3=":443"; ma=2592000,h3-29=":443"; ma=2592000
+//
+//	Alt-Svc: h3=":443"; ma=2592000,h3-29=":443"; ma=2592000
 func (s *Server) SetQuicHeaders(hdr http.Header) error {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
@@ -708,19 +709,20 @@ func ListenAndServe(addr, certFile, keyFile string, handler http.Handler) error 
 	tlsConn := tls.NewListener(tcpConn, config)
 	defer tlsConn.Close()
 
-	// Start the servers
-	httpServer := &http.Server{}
-	quicServer := &Server{
-		TLSConfig: config,
-	}
-
 	if handler == nil {
 		handler = http.DefaultServeMux
 	}
-	httpServer.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		quicServer.SetQuicHeaders(w.Header())
-		handler.ServeHTTP(w, r)
-	})
+	// Start the servers
+	quicServer := &Server{
+		TLSConfig: config,
+		Handler:   handler,
+	}
+	httpServer := &http.Server{
+		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			quicServer.SetQuicHeaders(w.Header())
+			handler.ServeHTTP(w, r)
+		}),
+	}
 
 	hErr := make(chan error)
 	qErr := make(chan error)
