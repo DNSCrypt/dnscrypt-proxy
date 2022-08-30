@@ -1,6 +1,6 @@
 module github.com/dnscrypt/dnscrypt-proxy
 
-go 1.18
+go 1.19
 
 require (
 	github.com/BurntSushi/toml v1.2.0
@@ -18,12 +18,12 @@ require (
 	github.com/jedisct1/xsecretbox v0.0.0-20210927135450-ebe41aef7bef
 	github.com/k-sone/critbitgo v1.4.0
 	github.com/kardianos/service v1.2.1
-	github.com/lucas-clemente/quic-go v0.28.1
+	github.com/lucas-clemente/quic-go v0.29.0
 	github.com/miekg/dns v1.1.50
 	github.com/powerman/check v1.6.0
-	golang.org/x/crypto v0.0.0-20220722155217-630584e8d5aa
-	golang.org/x/net v0.0.0-20220728211354-c7608f3a8462
-	golang.org/x/sys v0.0.0-20220731174439-a90be440212d
+	golang.org/x/crypto v0.0.0-20220829220503-c86fa9a7ed90
+	golang.org/x/net v0.0.0-20220826154423-83b083e8dc8b
+	golang.org/x/sys v0.0.0-20220829200755-d48e67d00261
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 )
 
@@ -41,7 +41,6 @@ require (
 	github.com/cespare/xxhash/v2 v2.1.1 // indirect
 	github.com/charithe/durationcheck v0.0.8 // indirect
 	github.com/chavacava/garif v0.0.0-20210405164556-e8a0a408d6af // indirect
-	github.com/cheekybits/genny v1.0.0 // indirect
 	github.com/daixiang0/gci v0.2.8 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/denis-tingajkin/go-header v0.4.2 // indirect
@@ -63,7 +62,8 @@ require (
 	github.com/go-xmlfmt/xmlfmt v0.0.0-20191208150333-d5b6f63a941b // indirect
 	github.com/gobwas/glob v0.2.3 // indirect
 	github.com/gofrs/flock v0.8.0 // indirect
-	github.com/golang/protobuf v1.5.2 // indirect
+	github.com/golang/mock v1.6.0 // indirect
+	github.com/golang/protobuf v1.5.0 // indirect
 	github.com/golangci/check v0.0.0-20180506172741-cfe4005ccda2 // indirect
 	github.com/golangci/dupl v0.0.0-20180902072040-3e9179ac440a // indirect
 	github.com/golangci/go-misc v0.0.0-20180628070357-927a3d87b613 // indirect
@@ -74,7 +74,7 @@ require (
 	github.com/golangci/misspell v0.3.5 // indirect
 	github.com/golangci/revgrep v0.0.0-20210208091834-cd28932614b5 // indirect
 	github.com/golangci/unconvert v0.0.0-20180507085042-28b1c447d1f4 // indirect
-	github.com/google/go-cmp v0.5.5 // indirect
+	github.com/google/go-cmp v0.5.8 // indirect
 	github.com/gordonklaus/ineffassign v0.0.0-20210225214923-2e10b2664254 // indirect
 	github.com/gostaticanalysis/analysisutil v0.4.1 // indirect
 	github.com/gostaticanalysis/comment v1.4.1 // indirect
@@ -99,10 +99,8 @@ require (
 	github.com/magiconair/properties v1.8.1 // indirect
 	github.com/maratori/testpackage v1.0.1 // indirect
 	github.com/marten-seemann/qpack v0.2.1 // indirect
-	github.com/marten-seemann/qtls-go1-16 v0.1.5 // indirect
-	github.com/marten-seemann/qtls-go1-17 v0.1.2 // indirect
 	github.com/marten-seemann/qtls-go1-18 v0.1.2 // indirect
-	github.com/marten-seemann/qtls-go1-19 v0.1.0-beta.1 // indirect
+	github.com/marten-seemann/qtls-go1-19 v0.1.0 // indirect
 	github.com/matoous/godox v0.0.0-20210227103229-6504466cf951 // indirect
 	github.com/mattn/go-colorable v0.1.8 // indirect
 	github.com/mattn/go-isatty v0.0.12 // indirect
@@ -162,9 +160,10 @@ require (
 	github.com/ultraware/whitespace v0.0.4 // indirect
 	github.com/uudashr/gocognit v1.0.1 // indirect
 	github.com/yeya24/promlinter v0.1.0 // indirect
-	golang.org/x/mod v0.4.2 // indirect
+	golang.org/x/exp v0.0.0-20220722155223-a9213eeb770e // indirect
+	golang.org/x/mod v0.6.0-dev.0.20220106191415-9b9b3d81d5e3 // indirect
 	golang.org/x/text v0.3.7 // indirect
-	golang.org/x/tools v0.1.6-0.20210726203631-07bc1bf47fb2 // indirect
+	golang.org/x/tools v0.1.10 // indirect
 	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect
 	google.golang.org/genproto v0.0.0-20200707001353-8e8330bf89df // indirect
 	google.golang.org/grpc v1.38.0 // indirect

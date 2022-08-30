@@ -55,10 +55,10 @@ type streamsMap struct {
 	newFlowController func(protocol.StreamID) flowcontrol.StreamFlowController
 
 	mutex               sync.Mutex
-	outgoingBidiStreams *outgoingBidiStreamsMap
-	outgoingUniStreams  *outgoingUniStreamsMap
-	incomingBidiStreams *incomingBidiStreamsMap
-	incomingUniStreams  *incomingUniStreamsMap
+	outgoingBidiStreams *outgoingStreamsMap[streamI]
+	outgoingUniStreams  *outgoingStreamsMap[sendStreamI]
+	incomingBidiStreams *incomingStreamsMap[streamI]
+	incomingUniStreams  *incomingStreamsMap[receiveStreamI]
 	reset               bool
 }
 
@@ -85,14 +85,16 @@ func newStreamsMap(
 }
 
 func (m *streamsMap) initMaps() {
-	m.outgoingBidiStreams = newOutgoingBidiStreamsMap(
+	m.outgoingBidiStreams = newOutgoingStreamsMap(
+		protocol.StreamTypeBidi,
 		func(num protocol.StreamNum) streamI {
 			id := num.StreamID(protocol.StreamTypeBidi, m.perspective)
 			return newStream(id, m.sender, m.newFlowController(id), m.version)
 		},
 		m.sender.queueControlFrame,
 	)
-	m.incomingBidiStreams = newIncomingBidiStreamsMap(
+	m.incomingBidiStreams = newIncomingStreamsMap(
+		protocol.StreamTypeBidi,
 		func(num protocol.StreamNum) streamI {
 			id := num.StreamID(protocol.StreamTypeBidi, m.perspective.Opposite())
 			return newStream(id, m.sender, m.newFlowController(id), m.version)
@@ -100,14 +102,16 @@ func (m *streamsMap) initMaps() {
 		m.maxIncomingBidiStreams,
 		m.sender.queueControlFrame,
 	)
-	m.outgoingUniStreams = newOutgoingUniStreamsMap(
+	m.outgoingUniStreams = newOutgoingStreamsMap(
+		protocol.StreamTypeUni,
 		func(num protocol.StreamNum) sendStreamI {
 			id := num.StreamID(protocol.StreamTypeUni, m.perspective)
 			return newSendStream(id, m.sender, m.newFlowController(id), m.version)
 		},
 		m.sender.queueControlFrame,
 	)
-	m.incomingUniStreams = newIncomingUniStreamsMap(
+	m.incomingUniStreams = newIncomingStreamsMap(
+		protocol.StreamTypeUni,
 		func(num protocol.StreamNum) receiveStreamI {
 			id := num.StreamID(protocol.StreamTypeUni, m.perspective.Opposite())
 			return newReceiveStream(id, m.sender, m.newFlowController(id), m.version)

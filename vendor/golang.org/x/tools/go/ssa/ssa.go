@@ -26,10 +26,11 @@ type Program struct {
 	mode       BuilderMode                 // set of mode bits for SSA construction
 	MethodSets typeutil.MethodSetCache     // cache of type-checker's method-sets
 
+	canon canonizer // type canonicalization map
+
 	methodsMu    sync.Mutex                 // guards the following maps:
 	methodSets   typeutil.Map               // maps type to its concrete methodSet
 	runtimeTypes typeutil.Map               // types for which rtypes are needed
-	canon        typeutil.Map               // type canonicalization map
 	bounds       map[*types.Func]*Function  // bounds for curried x.Method closures
 	thunks       map[selectionKey]*Function // thunks for T.Method expressions
 }
@@ -44,12 +45,12 @@ type Program struct {
 // and unspecified other things too.
 //
 type Package struct {
-	Prog    *Program               // the owning program
-	Pkg     *types.Package         // the corresponding go/types.Package
-	Members map[string]Member      // all package members keyed by name (incl. init and init#%d)
-	values  map[types.Object]Value // package members (incl. types and methods), keyed by object
-	init    *Function              // Func("init"); the package's init function
-	debug   bool                   // include full debug info in this package
+	Prog    *Program                // the owning program
+	Pkg     *types.Package          // the corresponding go/types.Package
+	Members map[string]Member       // all package members keyed by name (incl. init and init#%d)
+	objects map[types.Object]Member // mapping of package objects to members (incl. methods). Contains *NamedConst, *Global, *Function.
+	init    *Function               // Func("init"); the package's init function
+	debug   bool                    // include full debug info in this package
 
 	// The following fields are set transiently, then cleared
 	// after building.
@@ -320,6 +321,7 @@ type Function struct {
 	namedResults []*Alloc                // tuple of named results
 	targets      *targets                // linked stack of branch targets
 	lblocks      map[*ast.Object]*lblock // labelled blocks
+	info         *types.Info             // *types.Info to build from. nil for wrappers.
 }
 
 // BasicBlock represents an SSA basic block.

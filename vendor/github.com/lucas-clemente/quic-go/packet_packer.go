@@ -889,6 +889,6 @@ func (p *packetPacker) SetMaxPacketSize(s protocol.ByteCount) {
 // we need to reduce the size of packets we send.
 func (p *packetPacker) HandleTransportParameters(params *wire.TransportParameters) {
 	if params.MaxUDPPayloadSize != 0 {
-		p.maxPacketSize = utils.MinByteCount(p.maxPacketSize, params.MaxUDPPayloadSize)
+		p.maxPacketSize = utils.Min(p.maxPacketSize, params.MaxUDPPayloadSize)
 	}
 }

@@ -6,11 +6,18 @@ import (
 	"github.com/lucas-clemente/quic-go/internal/protocol"
 	"github.com/lucas-clemente/quic-go/internal/qerr"
 	"github.com/lucas-clemente/quic-go/internal/utils"
+	list "github.com/lucas-clemente/quic-go/internal/utils/linkedlist"
 	"github.com/lucas-clemente/quic-go/internal/wire"
 )
 
+type newConnID struct {
+	SequenceNumber      uint64
+	ConnectionID        protocol.ConnectionID
+	StatelessResetToken protocol.StatelessResetToken
+}
+
 type connIDManager struct {
-	queue utils.NewConnectionIDList
+	queue list.List[newConnID]
 
 	handshakeComplete         bool
 	activeSequenceNumber      uint64
@@ -71,7 +78,7 @@ func (h *connIDManager) add(f *wire.NewConnectionIDFrame) error {
 	// Retire elements in the queue.
 	// Doesn't retire the active connection ID.
 	if f.RetirePriorTo > h.highestRetired {
-		var next *utils.NewConnectionIDElement
+		var next *list.Element[newConnID]
 		for el := h.queue.Front(); el != nil; el = next {
 			if el.Value.SequenceNumber >= f.RetirePriorTo {
 				break
@@ -104,7 +111,7 @@ func (h *connIDManager) add(f *wire.NewConnectionIDFrame) error {
 func (h *connIDManager) addConnectionID(seq uint64, connID protocol.ConnectionID, resetToken protocol.StatelessResetToken) error {
 	// insert a new element at the end
 	if h.queue.Len() == 0 || h.queue.Back().Value.SequenceNumber < seq {
-		h.queue.PushBack(utils.NewConnectionID{
+		h.queue.PushBack(newConnID{
 			SequenceNumber:      seq,
 			ConnectionID:        connID,
 			StatelessResetToken: resetToken,
@@ -123,7 +130,7 @@ func (h *connIDManager) addConnectionID(seq uint64, connID protocol.ConnectionID
 			break
 		}
 		if el.Value.SequenceNumber > seq {
-			h.queue.InsertBefore(utils.NewConnectionID{
+			h.queue.InsertBefore(newConnID{
 				SequenceNumber:      seq,
 				ConnectionID:        connID,
 				StatelessResetToken: resetToken,
@@ -138,7 +145,7 @@ func (h *connIDManager) updateConnectionID() {
 	h.queueControlFrame(&wire.RetireConnectionIDFrame{
 		SequenceNumber: h.activeSequenceNumber,
 	})
-	h.highestRetired = utils.MaxUint64(h.highestRetired, h.activeSequenceNumber)
+	h.highestRetired = utils.Max(h.highestRetired, h.activeSequenceNumber)
 	if h.activeStatelessResetToken != nil {
 		h.removeStatelessResetToken(*h.activeStatelessResetToken)
 	}

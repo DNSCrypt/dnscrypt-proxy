@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 
 	"github.com/lucas-clemente/quic-go/internal/protocol"
 	"github.com/lucas-clemente/quic-go/quicvarint"
@@ -65,7 +64,7 @@ func parseNextFrame(r io.Reader, unknownFrameHandler unknownFrameHandlerFunc) (f
 		case 0xd: // MAX_PUSH_ID
 		}
 		// skip over unknown frames
-		if _, err := io.CopyN(ioutil.Discard, qr, int64(l)); err != nil {
+		if _, err := io.CopyN(io.Discard, qr, int64(l)); err != nil {
 			return nil, err
 		}
 	}

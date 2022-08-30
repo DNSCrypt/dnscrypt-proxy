@@ -169,7 +169,7 @@ func (a *updatableAEAD) Open(dst, src []byte, rcvTime time.Time, pn protocol.Pac
 		}
 	}
 	if err == nil {
-		a.highestRcvdPN = utils.MaxPacketNumber(a.highestRcvdPN, pn)
+		a.highestRcvdPN = utils.Max(a.highestRcvdPN, pn)
 	}
 	return dec, err
 }

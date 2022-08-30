@@ -2,22 +2,28 @@ package ackhandler
 
 import (
 	"github.com/lucas-clemente/quic-go/internal/protocol"
-	"github.com/lucas-clemente/quic-go/internal/utils"
+	list "github.com/lucas-clemente/quic-go/internal/utils/linkedlist"
 	"github.com/lucas-clemente/quic-go/internal/wire"
 )
+
+// interval is an interval from one PacketNumber to the other
+type interval struct {
+	Start protocol.PacketNumber
+	End   protocol.PacketNumber
+}
 
 // The receivedPacketHistory stores if a packet number has already been received.
 // It generates ACK ranges which can be used to assemble an ACK frame.
 // It does not store packet contents.
 type receivedPacketHistory struct {
-	ranges *utils.PacketIntervalList
+	ranges *list.List[interval]
 
 	deletedBelow protocol.PacketNumber
 }
 
 func newReceivedPacketHistory() *receivedPacketHistory {
 	return &receivedPacketHistory{
-		ranges: utils.NewPacketIntervalList(),
+		ranges: list.New[interval](),
 	}
 }
 
@@ -34,7 +40,7 @@ func (h *receivedPacketHistory) ReceivedPacket(p protocol.PacketNumber) bool /* 
 
 func (h *receivedPacketHistory) addToRanges(p protocol.PacketNumber) bool /* is a new packet (and not a duplicate / delayed packet) */ {
 	if h.ranges.Len() == 0 {
-		h.ranges.PushBack(utils.PacketInterval{Start: p, End: p})
+		h.ranges.PushBack(interval{Start: p, End: p})
 		return true
 	}
 
@@ -61,13 +67,13 @@ func (h *receivedPacketHistory) addToRanges(p protocol.PacketNumber) bool /* is 
 
 		// create a new range at the end
 		if p > el.Value.End {
-			h.ranges.InsertAfter(utils.PacketInterval{Start: p, End: p}, el)
+			h.ranges.InsertAfter(interval{Start: p, End: p}, el)
 			return true
 		}
 	}
 
 	// create a new range at the beginning
-	h.ranges.InsertBefore(utils.PacketInterval{Start: p, End: p}, h.ranges.Front())
+	h.ranges.InsertBefore(interval{Start: p, End: p}, h.ranges.Front())
 	return true
 }
 

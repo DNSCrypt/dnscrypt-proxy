@@ -10,7 +10,7 @@ import (
 )
 
 type connIDGenerator struct {
-	connIDLen  int
+	generator  ConnectionIDGenerator
 	highestSeq uint64
 
 	activeSrcConnIDs        map[uint64]protocol.ConnectionID
@@ -20,7 +20,7 @@ type connIDGenerator struct {
 	getStatelessResetToken func(protocol.ConnectionID) protocol.StatelessResetToken
 	removeConnectionID     func(protocol.ConnectionID)
 	retireConnectionID     func(protocol.ConnectionID)
-	replaceWithClosed      func(protocol.ConnectionID, packetHandler)
+	replaceWithClosed      func([]protocol.ConnectionID, protocol.Perspective, []byte)
 	queueControlFrame      func(wire.Frame)
 
 	version protocol.VersionNumber
@@ -33,12 +33,13 @@ func newConnIDGenerator(
 	getStatelessResetToken func(protocol.ConnectionID) protocol.StatelessResetToken,
 	removeConnectionID func(protocol.ConnectionID),
 	retireConnectionID func(protocol.ConnectionID),
-	replaceWithClosed func(protocol.ConnectionID, packetHandler),
+	replaceWithClosed func([]protocol.ConnectionID, protocol.Perspective, []byte),
 	queueControlFrame func(wire.Frame),
+	generator ConnectionIDGenerator,
 	version protocol.VersionNumber,
 ) *connIDGenerator {
 	m := &connIDGenerator{
-		connIDLen:              initialConnectionID.Len(),
+		generator:              generator,
 		activeSrcConnIDs:       make(map[uint64]protocol.ConnectionID),
 		addConnectionID:        addConnectionID,
 		getStatelessResetToken: getStatelessResetToken,
@@ -54,7 +55,7 @@ func newConnIDGenerator(
 }
 
 func (m *connIDGenerator) SetMaxActiveConnIDs(limit uint64) error {
-	if m.connIDLen == 0 {
+	if m.generator.ConnectionIDLen() == 0 {
 		return nil
 	}
 	// The active_connection_id_limit transport parameter is the number of
@@ -63,7 +64,7 @@ func (m *connIDGenerator) SetMaxActiveConnIDs(limit uint64) error {
 	// transport parameter.
 	// We currently don't send the preferred_address transport parameter,
 	// so we can issue (limit - 1) connection IDs.
-	for i := uint64(len(m.activeSrcConnIDs)); i < utils.MinUint64(limit, protocol.MaxIssuedConnectionIDs); i++ {
+	for i := uint64(len(m.activeSrcConnIDs)); i < utils.Min(limit, protocol.MaxIssuedConnectionIDs); i++ {
 		if err := m.issueNewConnID(); err != nil {
 			return err
 		}
@@ -99,7 +100,7 @@ func (m *connIDGenerator) Retire(seq uint64, sentWithDestConnID protocol.Connect
 }
 
 func (m *connIDGenerator) issueNewConnID() error {
-	connID, err := protocol.GenerateConnectionID(m.connIDLen)
+	connID, err := m.generator.GenerateConnectionID()
 	if err != nil {
 		return err
 	}
@@ -130,11 +131,13 @@ func (m *connIDGenerator) RemoveAll() {
 	}
 }
 
-func (m *connIDGenerator) ReplaceWithClosed(handler packetHandler) {
+func (m *connIDGenerator) ReplaceWithClosed(pers protocol.Perspective, connClose []byte) {
+	connIDs := make([]protocol.ConnectionID, 0, len(m.activeSrcConnIDs)+1)
 	if m.initialClientDestConnID != nil {
-		m.replaceWithClosed(m.initialClientDestConnID, handler)
+		connIDs = append(connIDs, m.initialClientDestConnID)
 	}
 	for _, connID := range m.activeSrcConnIDs {
-		m.replaceWithClosed(connID, handler)
+		connIDs = append(connIDs, connID)
 	}
+	m.replaceWithClosed(connIDs, pers, connClose)
 }
