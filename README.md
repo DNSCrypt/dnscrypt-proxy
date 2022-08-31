@@ -60,7 +60,8 @@ Up-to-date, pre-built binaries are available for:
 * Linux/mips64le
 * Linux/x86
 * Linux/x86_64
-* MacOS X
+* macOS/arm64
+* macOS/x86_64
 * NetBSD/x86
 * NetBSD/x86_64
 * OpenBSD/x86
