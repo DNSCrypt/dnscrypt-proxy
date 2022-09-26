@@ -18,12 +18,12 @@ require (
 	github.com/jedisct1/xsecretbox v0.0.0-20210927135450-ebe41aef7bef
 	github.com/k-sone/critbitgo v1.4.0
 	github.com/kardianos/service v1.2.1
-	github.com/lucas-clemente/quic-go v0.29.0
+	github.com/lucas-clemente/quic-go v0.29.1
 	github.com/miekg/dns v1.1.50
 	github.com/powerman/check v1.6.0
-	golang.org/x/crypto v0.0.0-20220829220503-c86fa9a7ed90
-	golang.org/x/net v0.0.0-20220826154423-83b083e8dc8b
-	golang.org/x/sys v0.0.0-20220829200755-d48e67d00261
+	golang.org/x/crypto v0.0.0-20220924013350-4ba4fb4dd9e7
+	golang.org/x/net v0.0.0-20220923203811-8be639271d50
+	golang.org/x/sys v0.0.0-20220919091848-fb04ddd9f9c8
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 )
 
