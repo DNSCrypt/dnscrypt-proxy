@@ -2,6 +2,7 @@
 // Use of this source code is governed by a zlib-style
 // license that can be found in the LICENSE file.
 
+//go:build linux || darwin || solaris || aix || freebsd
 // +build linux darwin solaris aix freebsd
 
 package service
@@ -15,6 +16,8 @@ import (
 	"os/exec"
 	"syscall"
 )
+
+const defaultLogDirectory = "/var/log"
 
 func newSysLogger(name string, errs chan<- error) (Logger, error) {
 	w, err := syslog.New(syslog.LOG_INFO, name)

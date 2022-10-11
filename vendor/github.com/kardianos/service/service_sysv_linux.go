@@ -58,9 +58,8 @@ func (s *sysv) template() *template.Template {
 
 	if customScript != "" {
 		return template.Must(template.New("").Funcs(tf).Parse(customScript))
-	} else {
-		return template.Must(template.New("").Funcs(tf).Parse(sysvScript))
 	}
+	return template.Must(template.New("").Funcs(tf).Parse(sysvScript))
 }
 
 func (s *sysv) Install() error {
@@ -86,10 +85,12 @@ func (s *sysv) Install() error {
 
 	var to = &struct {
 		*Config
-		Path string
+		Path         string
+		LogDirectory string
 	}{
 		s.Config,
 		path,
+		s.Option.string(optionLogDirectory, defaultLogDirectory),
 	}
 
 	err = s.template().Execute(f, to)
@@ -203,8 +204,12 @@ cmd="{{.Path}}{{range .Arguments}} {{.|cmd}}{{end}}"
 
 name=$(basename $(readlink -f $0))
 pid_file="/var/run/$name.pid"
-stdout_log="/var/log/$name.log"
-stderr_log="/var/log/$name.err"
+stdout_log="{{.LogDirectory}}/$name.log"
+stderr_log="{{.LogDirectory}}/$name.err"
+
+{{range $k, $v := .EnvVars -}}
+export {{$k}}={{$v}}
+{{end -}}
 
 [ -e /etc/sysconfig/$name ] && . /etc/sysconfig/$name
 

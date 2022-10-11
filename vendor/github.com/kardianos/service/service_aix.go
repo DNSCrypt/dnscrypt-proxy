@@ -159,11 +159,15 @@ func (s *aixService) Install() error {
 	if err = os.Chmod(confPath, 0755); err != nil {
 		return err
 	}
+	rcd := "/etc/rc"
+	if _, err = os.Stat("/etc/rc.d/rc2.d"); err == nil {
+		rcd = "/etc/rc.d/rc"
+	}
 	for _, i := range [...]string{"2", "3"} {
-		if err = os.Symlink(confPath, "/etc/rc"+i+".d/S50"+s.Name); err != nil {
+		if err = os.Symlink(confPath, rcd+i+".d/S50"+s.Name); err != nil {
 			continue
 		}
-		if err = os.Symlink(confPath, "/etc/rc"+i+".d/K02"+s.Name); err != nil {
+		if err = os.Symlink(confPath, rcd+i+".d/K02"+s.Name); err != nil {
 			continue
 		}
 	}

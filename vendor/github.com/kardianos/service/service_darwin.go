@@ -20,19 +20,25 @@ import (
 
 const maxPathSize = 32 * 1024
 
-const version = "darwin-launchd"
+const (
+	version                   = "darwin-launchd"
+	defaultDarwinLogDirectory = "/var/log"
+)
 
 type darwinSystem struct{}
 
 func (darwinSystem) String() string {
 	return version
 }
+
 func (darwinSystem) Detect() bool {
 	return true
 }
+
 func (darwinSystem) Interactive() bool {
 	return interactive
 }
+
 func (darwinSystem) New(i Interface, c *Config) (Service, error) {
 	s := &darwinLaunchdService{
 		i:      i,
@@ -106,6 +112,28 @@ func (s *darwinLaunchdService) getServiceFilePath() (string, error) {
 	return "/Library/LaunchDaemons/" + s.Name + ".plist", nil
 }
 
+func (s *darwinLaunchdService) logDir() (string, error) {
+	if customDir := s.Option.string(optionLogDirectory, ""); customDir != "" {
+		return customDir, nil
+	}
+	if !s.userService {
+		return defaultDarwinLogDirectory, nil
+	}
+	return s.getHomeDir()
+}
+
+func (s *darwinLaunchdService) getLogPaths() (string, string, error) {
+	logDir, err := s.logDir()
+	if err != nil {
+		return "", "", err
+	}
+	return s.getLogPath(logDir, "out"), s.getLogPath(logDir, "err"), nil
+}
+
+func (s *darwinLaunchdService) getLogPath(logDir, logType string) string {
+	return fmt.Sprintf("%s/%s.%s.log", logDir, s.Name, logType)
+}
+
 func (s *darwinLaunchdService) template() *template.Template {
 	functions := template.FuncMap{
 		"bool": func(v bool) string {
@@ -120,9 +148,8 @@ func (s *darwinLaunchdService) template() *template.Template {
 
 	if customConfig != "" {
 		return template.Must(template.New("").Funcs(functions).Parse(customConfig))
-	} else {
-		return template.Must(template.New("").Funcs(functions).Parse(launchdConfig))
 	}
+	return template.Must(template.New("").Funcs(functions).Parse(launchdConfig))
 }
 
 func (s *darwinLaunchdService) Install() error {
@@ -154,20 +181,23 @@ func (s *darwinLaunchdService) Install() error {
 		return err
 	}
 
+	stdOutPath, stdErrPath, _ := s.getLogPaths()
 	var to = &struct {
 		*Config
 		Path string
 
 		KeepAlive, RunAtLoad bool
 		SessionCreate        bool
-		StandardOut          bool
-		StandardError        bool
+		StandardOutPath      string
+		StandardErrorPath    string
 	}{
-		Config:        s.Config,
-		Path:          path,
-		KeepAlive:     s.Option.bool(optionKeepAlive, optionKeepAliveDefault),
-		RunAtLoad:     s.Option.bool(optionRunAtLoad, optionRunAtLoadDefault),
-		SessionCreate: s.Option.bool(optionSessionCreate, optionSessionCreateDefault),
+		Config:            s.Config,
+		Path:              path,
+		KeepAlive:         s.Option.bool(optionKeepAlive, optionKeepAliveDefault),
+		RunAtLoad:         s.Option.bool(optionRunAtLoad, optionRunAtLoadDefault),
+		SessionCreate:     s.Option.bool(optionSessionCreate, optionSessionCreateDefault),
+		StandardOutPath:   stdOutPath,
+		StandardErrorPath: stdErrPath,
 	}
 
 	return s.template().Execute(f, to)
@@ -216,6 +246,7 @@ func (s *darwinLaunchdService) Start() error {
 	}
 	return run("launchctl", "load", confPath)
 }
+
 func (s *darwinLaunchdService) Stop() error {
 	confPath, err := s.getServiceFilePath()
 	if err != nil {
@@ -223,6 +254,7 @@ func (s *darwinLaunchdService) Stop() error {
 	}
 	return run("launchctl", "unload", confPath)
 }
+
 func (s *darwinLaunchdService) Restart() error {
 	err := s.Stop()
 	if err != nil {
@@ -233,9 +265,7 @@ func (s *darwinLaunchdService) Restart() error {
 }
 
 func (s *darwinLaunchdService) Run() error {
-	var err error
-
-	err = s.i.Start(s)
+	err := s.i.Start(s)
 	if err != nil {
 		return err
 	}
@@ -255,44 +285,63 @@ func (s *darwinLaunchdService) Logger(errs chan<- error) (Logger, error) {
 	}
 	return s.SystemLogger(errs)
 }
+
 func (s *darwinLaunchdService) SystemLogger(errs chan<- error) (Logger, error) {
 	return newSysLogger(s.Name, errs)
 }
 
-var launchdConfig = `<?xml version='1.0' encoding='UTF-8'?>
-<!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN"
-"http://www.apple.com/DTDs/PropertyList-1.0.dtd" >
-<plist version='1.0'>
-  <dict>
-    <key>Label</key>
-    <string>{{html .Name}}</string>
-    <key>ProgramArguments</key>
-    <array>
-      <string>{{html .Path}}</string>
-    {{range .Config.Arguments}}
-      <string>{{html .}}</string>
-    {{end}}
-    </array>
-    {{if .UserName}}<key>UserName</key>
-    <string>{{html .UserName}}</string>{{end}}
-    {{if .ChRoot}}<key>RootDirectory</key>
-    <string>{{html .ChRoot}}</string>{{end}}
-    {{if .WorkingDirectory}}<key>WorkingDirectory</key>
-    <string>{{html .WorkingDirectory}}</string>{{end}}
-    <key>SessionCreate</key>
-    <{{bool .SessionCreate}}/>
-    <key>KeepAlive</key>
-    <{{bool .KeepAlive}}/>
-    <key>RunAtLoad</key>
-    <{{bool .RunAtLoad}}/>
-    <key>Disabled</key>
-    <false/>
-    
-    <key>StandardOutPath</key>
-    <string>/usr/local/var/log/{{html .Name}}.out.log</string>
-    <key>StandardErrorPath</key>
-    <string>/usr/local/var/log/{{html .Name}}.err.log</string>
-  
-  </dict>
+var launchdConfig = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Disabled</key>
+	<false/>
+	{{- if .EnvVars}}
+	<key>EnvironmentVariables</key>
+	<dict>
+		{{- range $k, $v := .EnvVars}}
+		<key>{{html $k}}</key>
+		<string>{{html $v}}</string>
+		{{- end}}
+	</dict>
+	{{- end}}
+	<key>KeepAlive</key>
+	<{{bool .KeepAlive}}/>
+	<key>Label</key>
+	<string>{{html .Name}}</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>{{html .Path}}</string>
+		{{- if .Config.Arguments}}
+		{{- range .Config.Arguments}}
+		<string>{{html .}}</string>
+		{{- end}}
+	{{- end}}
+	</array>
+	{{- if .ChRoot}}
+	<key>RootDirectory</key>
+	<string>{{html .ChRoot}}</string>
+	{{- end}}
+	<key>RunAtLoad</key>
+	<{{bool .RunAtLoad}}/>
+	<key>SessionCreate</key>
+	<{{bool .SessionCreate}}/>
+	{{- if .StandardErrorPath}}
+	<key>StandardErrorPath</key>
+	<string>{{html .StandardErrorPath}}</string>
+	{{- end}}
+	{{- if .StandardOutPath}}
+	<key>StandardOutPath</key>
+	<string>{{html .StandardOutPath}}</string>
+	{{- end}}
+	{{- if .UserName}}
+	<key>UserName</key>
+	<string>{{html .UserName}}</string>
+	{{- end}}
+	{{- if .WorkingDirectory}}
+	<key>WorkingDirectory</key>
+	<string>{{html .WorkingDirectory}}</string>
+	{{- end}}
+</dict>
 </plist>
 `
