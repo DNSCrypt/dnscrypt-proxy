@@ -209,7 +209,7 @@ type connection struct {
 
 	peerParams *wire.TransportParameters
 
-	timer *utils.Timer
+	timer connectionTimer
 	// keepAlivePingSent stores whether a keep alive PING is in flight.
 	// It is reset as soon as we receive a packet from the peer.
 	keepAlivePingSent bool
@@ -223,10 +223,9 @@ type connection struct {
 }
 
 var (
-	_                       Connection      = &connection{}
-	_                       EarlyConnection = &connection{}
-	_                       streamSender    = &connection{}
-	deadlineSendImmediately                 = time.Time{}.Add(42 * time.Millisecond) // any value > time.Time{} and before time.Now() is fine
+	_ Connection      = &connection{}
+	_ EarlyConnection = &connection{}
+	_ streamSender    = &connection{}
 )
 
 var newConnection = func(
@@ -548,7 +547,7 @@ func (s *connection) preSetup() {
 func (s *connection) run() error {
 	defer s.ctxCancel()
 
-	s.timer = utils.NewTimer()
+	s.timer = *newTimer()
 
 	handshaking := make(chan struct{})
 	go func() {
@@ -765,17 +764,12 @@ func (s *connection) maybeResetTimer() {
 		}
 	}
 
-	if ackAlarm := s.receivedPacketHandler.GetAlarmTimeout(); !ackAlarm.IsZero() {
-		deadline = utils.MinTime(deadline, ackAlarm)
-	}
-	if lossTime := s.sentPacketHandler.GetLossDetectionTimeout(); !lossTime.IsZero() {
-		deadline = utils.MinTime(deadline, lossTime)
-	}
-	if !s.pacingDeadline.IsZero() {
-		deadline = utils.MinTime(deadline, s.pacingDeadline)
-	}
-
-	s.timer.Reset(deadline)
+	s.timer.SetTimer(
+		deadline,
+		s.receivedPacketHandler.GetAlarmTimeout(),
+		s.sentPacketHandler.GetLossDetectionTimeout(),
+		s.pacingDeadline,
+	)
 }
 
 func (s *connection) idleTimeoutStartTime() time.Time {
@@ -1678,7 +1672,7 @@ func (s *connection) sendPackets() error {
 			}
 			// We can at most send a single ACK only packet.
 			// There will only be a new ACK after receiving new packets.
-			// SendAck is only returned when we're congestion limited, so we don't need to set the pacingt timer.
+			// SendAck is only returned when we're congestion limited, so we don't need to set the pacinggs timer.
 			return s.maybeSendAckOnlyPacket()
 		case ackhandler.SendPTOInitial:
 			if err := s.sendProbePacket(protocol.EncryptionInitial); err != nil {
