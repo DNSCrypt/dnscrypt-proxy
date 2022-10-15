@@ -17,13 +17,13 @@ require (
 	github.com/jedisct1/go-minisign v0.0.0-20211028175153-1c139d1cc84b
 	github.com/jedisct1/xsecretbox v0.0.0-20210927135450-ebe41aef7bef
 	github.com/k-sone/critbitgo v1.4.0
-	github.com/kardianos/service v1.2.1
-	github.com/lucas-clemente/quic-go v0.29.1
+	github.com/kardianos/service v1.2.2
+	github.com/lucas-clemente/quic-go v0.29.2
 	github.com/miekg/dns v1.1.50
 	github.com/powerman/check v1.6.0
-	golang.org/x/crypto v0.0.0-20220924013350-4ba4fb4dd9e7
-	golang.org/x/net v0.0.0-20220923203811-8be639271d50
-	golang.org/x/sys v0.0.0-20220919091848-fb04ddd9f9c8
+	golang.org/x/crypto v0.0.0-20221012134737-56aed061732a
+	golang.org/x/net v0.0.0-20221014081412-f15817d10f9b
+	golang.org/x/sys v0.0.0-20221013171732-95e765b1cc43
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 )
 
@@ -99,8 +99,8 @@ require (
 	github.com/magiconair/properties v1.8.1 // indirect
 	github.com/maratori/testpackage v1.0.1 // indirect
 	github.com/marten-seemann/qpack v0.2.1 // indirect
-	github.com/marten-seemann/qtls-go1-18 v0.1.2 // indirect
-	github.com/marten-seemann/qtls-go1-19 v0.1.0 // indirect
+	github.com/marten-seemann/qtls-go1-18 v0.1.3 // indirect
+	github.com/marten-seemann/qtls-go1-19 v0.1.1 // indirect
 	github.com/matoous/godox v0.0.0-20210227103229-6504466cf951 // indirect
 	github.com/mattn/go-colorable v0.1.8 // indirect
 	github.com/mattn/go-isatty v0.0.12 // indirect
