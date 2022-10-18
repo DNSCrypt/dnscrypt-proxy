@@ -15,8 +15,7 @@ import (
 )
 
 func (proxy *Proxy) dropPrivilege(userStr string, fds []*os.File) {
-	currentUser, err := user.Current()
-	if err != nil && currentUser.Uid != "0" {
+	if os.Geteuid() != 0 {
 		dlog.Fatal("Root privileges are required in order to switch to a different user. Maybe try again with 'sudo'")
 	}
 	userInfo, err := user.Lookup(userStr)
