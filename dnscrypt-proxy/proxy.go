@@ -234,9 +234,9 @@ func (proxy *Proxy) StartProxy() {
 	curve25519.ScalarBaseMult(&proxy.proxyPublicKey, &proxy.proxySecretKey)
 	proxy.startAcceptingClients()
 	if !proxy.child {
-		// Notify systemd that dnscrypt-proxy is ready. dnscrypt-proxy manages itself in case
-		// servers are not immediately live/reachable. Systemd may assume it is initialized and
-		// functioning properly. Note that the systemd notify 'Ready' signal is delayed if netprobe
+		// Notify the service manager that dnscrypt-proxy is ready. dnscrypt-proxy manages itself in case
+		// servers are not immediately live/reachable. The service manager may assume it is initialized and
+		// functioning properly. Note that the service manager 'Ready' signal is delayed if netprobe
 		// cannot reach the internet during start-up.
 		if err := ServiceManagerReadyNotify(); err != nil {
 			dlog.Fatal(err)
