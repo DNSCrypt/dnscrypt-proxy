@@ -26,10 +26,10 @@ func parsePathChallengeFrame(r *bytes.Reader, _ protocol.VersionNumber) (*PathCh
 	return frame, nil
 }
 
-func (f *PathChallengeFrame) Write(b *bytes.Buffer, _ protocol.VersionNumber) error {
-	b.WriteByte(0x1a)
-	b.Write(f.Data[:])
-	return nil
+func (f *PathChallengeFrame) Append(b []byte, _ protocol.VersionNumber) ([]byte, error) {
+	b = append(b, 0x1a)
+	b = append(b, f.Data[:]...)
+	return b, nil
 }
 
 // Length of a written frame

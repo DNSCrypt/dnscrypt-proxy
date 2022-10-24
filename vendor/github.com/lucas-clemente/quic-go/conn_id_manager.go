@@ -121,7 +121,7 @@ func (h *connIDManager) addConnectionID(seq uint64, connID protocol.ConnectionID
 	// insert a new element somewhere in the middle
 	for el := h.queue.Front(); el != nil; el = el.Next() {
 		if el.Value.SequenceNumber == seq {
-			if !el.Value.ConnectionID.Equal(connID) {
+			if el.Value.ConnectionID != connID {
 				return fmt.Errorf("received conflicting connection IDs for sequence number %d", seq)
 			}
 			if el.Value.StatelessResetToken != resetToken {

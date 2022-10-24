@@ -2,6 +2,7 @@ package utils
 
 import (
 	"bytes"
+	"encoding/binary"
 	"io"
 )
 
@@ -71,6 +72,19 @@ func (bigEndian) ReadUint16(b io.ByteReader) (uint16, error) {
 		return 0, err
 	}
 	return uint16(b1) + uint16(b2)<<8, nil
+}
+
+func (bigEndian) Uint32(b []byte) uint32 {
+	return binary.BigEndian.Uint32(b)
+}
+
+func (bigEndian) Uint24(b []byte) uint32 {
+	_ = b[2] // bounds check hint to compiler; see golang.org/issue/14808
+	return uint32(b[2]) | uint32(b[1])<<8 | uint32(b[0])<<16
+}
+
+func (bigEndian) Uint16(b []byte) uint16 {
+	return binary.BigEndian.Uint16(b)
 }
 
 // WriteUint32 writes a uint32

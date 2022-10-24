@@ -122,10 +122,15 @@ func newConn(c OOBCapablePacketConn) (*oobConn, error) {
 		bc = ipv4.NewPacketConn(c)
 	}
 
+	msgs := make([]ipv4.Message, batchSize)
+	for i := range msgs {
+		// preallocate the [][]byte
+		msgs[i].Buffers = make([][]byte, 1)
+	}
 	oobConn := &oobConn{
 		OOBCapablePacketConn: c,
 		batchConn:            bc,
-		messages:             make([]ipv4.Message, batchSize),
+		messages:             msgs,
 		readPos:              batchSize,
 	}
 	for i := 0; i < batchSize; i++ {
@@ -142,7 +147,7 @@ func (c *oobConn) ReadPacket() (*receivedPacket, error) {
 			buffer := getPacketBuffer()
 			buffer.Data = buffer.Data[:protocol.MaxPacketBufferSize]
 			c.buffers[i] = buffer
-			c.messages[i].Buffers = [][]byte{c.buffers[i].Data}
+			c.messages[i].Buffers[0] = c.buffers[i].Data
 		}
 		c.readPos = 0
 

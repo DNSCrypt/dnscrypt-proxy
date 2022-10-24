@@ -24,10 +24,10 @@ func parseRetireConnectionIDFrame(r *bytes.Reader, _ protocol.VersionNumber) (*R
 	return &RetireConnectionIDFrame{SequenceNumber: seq}, nil
 }
 
-func (f *RetireConnectionIDFrame) Write(b *bytes.Buffer, _ protocol.VersionNumber) error {
-	b.WriteByte(0x19)
-	quicvarint.Write(b, f.SequenceNumber)
-	return nil
+func (f *RetireConnectionIDFrame) Append(b []byte, _ protocol.VersionNumber) ([]byte, error) {
+	b = append(b, 0x19)
+	b = quicvarint.Append(b, f.SequenceNumber)
+	return b, nil
 }
 
 // Length of a written frame

@@ -107,17 +107,12 @@ func (h *receivedPacketHistory) DeleteBelow(p protocol.PacketNumber) {
 	}
 }
 
-// GetAckRanges gets a slice of all AckRanges that can be used in an AckFrame
-func (h *receivedPacketHistory) GetAckRanges() []wire.AckRange {
-	if h.ranges.Len() == 0 {
-		return nil
-	}
-
-	ackRanges := make([]wire.AckRange, h.ranges.Len())
-	i := 0
-	for el := h.ranges.Back(); el != nil; el = el.Prev() {
-		ackRanges[i] = wire.AckRange{Smallest: el.Value.Start, Largest: el.Value.End}
-		i++
+// AppendAckRanges appends to a slice of all AckRanges that can be used in an AckFrame
+func (h *receivedPacketHistory) AppendAckRanges(ackRanges []wire.AckRange) []wire.AckRange {
+	if h.ranges.Len() > 0 {
+		for el := h.ranges.Back(); el != nil; el = el.Prev() {
+			ackRanges = append(ackRanges, wire.AckRange{Smallest: el.Value.Start, Largest: el.Value.End})
+		}
 	}
 	return ackRanges
 }

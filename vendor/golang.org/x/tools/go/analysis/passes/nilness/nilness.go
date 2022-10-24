@@ -62,6 +62,7 @@ var Analyzer = &analysis.Analyzer{
 
 func run(pass *analysis.Pass) (interface{}, error) {
 	ssainput := pass.ResultOf[buildssa.Analyzer].(*buildssa.SSA)
+	// TODO(48525): ssainput.SrcFuncs is missing fn._Instances(). runFunc will be skipped.
 	for _, fn := range ssainput.SrcFuncs {
 		runFunc(pass, fn)
 	}
@@ -250,7 +251,7 @@ func (n nilness) String() string { return nilnessStrings[n+1] }
 // or unknown given the dominating stack of facts.
 func nilnessOf(stack []fact, v ssa.Value) nilness {
 	switch v := v.(type) {
-	// unwrap ChangeInterface values recursively, to detect if underlying
+	// unwrap ChangeInterface and Slice values recursively, to detect if underlying
 	// values have any facts recorded or are otherwise known with regard to nilness.
 	//
 	// This work must be in addition to expanding facts about
@@ -261,6 +262,10 @@ func nilnessOf(stack []fact, v ssa.Value) nilness {
 	// underlying values, rather than outer values, when the analysis is
 	// transitive in both directions.
 	case *ssa.ChangeInterface:
+		if underlying := nilnessOf(stack, v.X); underlying != unknown {
+			return underlying
+		}
+	case *ssa.Slice:
 		if underlying := nilnessOf(stack, v.X); underlying != unknown {
 			return underlying
 		}
@@ -342,7 +347,7 @@ func eq(b *ssa.BasicBlock) (op *ssa.BinOp, tsucc, fsucc *ssa.BasicBlock) {
 // ChangeInterface, have transitive nilness, such that if you know the
 // underlying value is nil, you also know the value itself is nil, and vice
 // versa. This operation allows callers to match on any of the related values
-// in analyses, rather than just the one form of the value that happend to
+// in analyses, rather than just the one form of the value that happened to
 // appear in a comparison.
 //
 // This work must be in addition to unwrapping values within nilnessOf because

@@ -17,9 +17,8 @@ func parseHandshakeDoneFrame(r *bytes.Reader, _ protocol.VersionNumber) (*Handsh
 	return &HandshakeDoneFrame{}, nil
 }
 
-func (f *HandshakeDoneFrame) Write(b *bytes.Buffer, _ protocol.VersionNumber) error {
-	b.WriteByte(0x1e)
-	return nil
+func (f *HandshakeDoneFrame) Append(b []byte, _ protocol.VersionNumber) ([]byte, error) {
+	return append(b, 0x1e), nil
 }
 
 // Length of a written frame

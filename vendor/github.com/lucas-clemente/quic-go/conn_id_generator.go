@@ -14,7 +14,7 @@ type connIDGenerator struct {
 	highestSeq uint64
 
 	activeSrcConnIDs        map[uint64]protocol.ConnectionID
-	initialClientDestConnID protocol.ConnectionID
+	initialClientDestConnID *protocol.ConnectionID // nil for the client
 
 	addConnectionID        func(protocol.ConnectionID)
 	getStatelessResetToken func(protocol.ConnectionID) protocol.StatelessResetToken
@@ -28,7 +28,7 @@ type connIDGenerator struct {
 
 func newConnIDGenerator(
 	initialConnectionID protocol.ConnectionID,
-	initialClientDestConnID protocol.ConnectionID, // nil for the client
+	initialClientDestConnID *protocol.ConnectionID, // nil for the client
 	addConnectionID func(protocol.ConnectionID),
 	getStatelessResetToken func(protocol.ConnectionID) protocol.StatelessResetToken,
 	removeConnectionID func(protocol.ConnectionID),
@@ -84,7 +84,7 @@ func (m *connIDGenerator) Retire(seq uint64, sentWithDestConnID protocol.Connect
 	if !ok {
 		return nil
 	}
-	if connID.Equal(sentWithDestConnID) {
+	if connID == sentWithDestConnID {
 		return &qerr.TransportError{
 			ErrorCode:    qerr.ProtocolViolation,
 			ErrorMessage: fmt.Sprintf("retired connection ID %d (%s), which was used as the Destination Connection ID on this packet", seq, connID),
@@ -117,14 +117,14 @@ func (m *connIDGenerator) issueNewConnID() error {
 
 func (m *connIDGenerator) SetHandshakeComplete() {
 	if m.initialClientDestConnID != nil {
-		m.retireConnectionID(m.initialClientDestConnID)
+		m.retireConnectionID(*m.initialClientDestConnID)
 		m.initialClientDestConnID = nil
 	}
 }
 
 func (m *connIDGenerator) RemoveAll() {
 	if m.initialClientDestConnID != nil {
-		m.removeConnectionID(m.initialClientDestConnID)
+		m.removeConnectionID(*m.initialClientDestConnID)
 	}
 	for _, connID := range m.activeSrcConnIDs {
 		m.removeConnectionID(connID)
@@ -134,7 +134,7 @@ func (m *connIDGenerator) RemoveAll() {
 func (m *connIDGenerator) ReplaceWithClosed(pers protocol.Perspective, connClose []byte) {
 	connIDs := make([]protocol.ConnectionID, 0, len(m.activeSrcConnIDs)+1)
 	if m.initialClientDestConnID != nil {
-		connIDs = append(connIDs, m.initialClientDestConnID)
+		connIDs = append(connIDs, *m.initialClientDestConnID)
 	}
 	for _, connID := range m.activeSrcConnIDs {
 		connIDs = append(connIDs, connID)

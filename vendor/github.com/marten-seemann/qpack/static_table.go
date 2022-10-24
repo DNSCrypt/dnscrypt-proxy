@@ -104,6 +104,7 @@ var staticTableEntries = [...]HeaderField{
 
 // Only needed for tests.
 // use go:linkname to retrieve the static table.
+//
 //nolint:deadcode,unused
 func getStaticTable() []HeaderField {
 	return staticTableEntries[:]

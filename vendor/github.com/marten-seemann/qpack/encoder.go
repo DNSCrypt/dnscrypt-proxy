@@ -51,9 +51,9 @@ func (e *Encoder) WriteField(f HeaderField) error {
 		e.writeLiteralFieldWithoutNameReference(f)
 	}
 
-	e.w.Write(e.buf)
+	_, err := e.w.Write(e.buf)
 	e.buf = e.buf[:0]
-	return nil
+	return err
 }
 
 // Close declares that the encoding is complete and resets the Encoder

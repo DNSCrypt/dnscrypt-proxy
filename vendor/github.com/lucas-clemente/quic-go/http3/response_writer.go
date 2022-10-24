@@ -15,6 +15,7 @@ import (
 type responseWriter struct {
 	conn        quic.Connection
 	bufferedStr *bufio.Writer
+	buf         []byte
 
 	header        http.Header
 	status        int // status code passed to WriteHeader
@@ -32,6 +33,7 @@ var (
 func newResponseWriter(str quic.Stream, conn quic.Connection, logger utils.Logger) *responseWriter {
 	return &responseWriter{
 		header:      http.Header{},
+		buf:         make([]byte, 16),
 		conn:        conn,
 		bufferedStr: bufio.NewWriter(str),
 		logger:      logger,
@@ -62,10 +64,10 @@ func (w *responseWriter) WriteHeader(status int) {
 		}
 	}
 
-	buf := &bytes.Buffer{}
-	(&headersFrame{Length: uint64(headers.Len())}).Write(buf)
+	w.buf = w.buf[:0]
+	w.buf = (&headersFrame{Length: uint64(headers.Len())}).Append(w.buf)
 	w.logger.Infof("Responding with %d", status)
-	if _, err := w.bufferedStr.Write(buf.Bytes()); err != nil {
+	if _, err := w.bufferedStr.Write(w.buf); err != nil {
 		w.logger.Errorf("could not write headers frame: %s", err.Error())
 	}
 	if _, err := w.bufferedStr.Write(headers.Bytes()); err != nil {
@@ -84,9 +86,9 @@ func (w *responseWriter) Write(p []byte) (int, error) {
 		return 0, http.ErrBodyNotAllowed
 	}
 	df := &dataFrame{Length: uint64(len(p))}
-	buf := &bytes.Buffer{}
-	df.Write(buf)
-	if _, err := w.bufferedStr.Write(buf.Bytes()); err != nil {
+	w.buf = w.buf[:0]
+	w.buf = df.Append(w.buf)
+	if _, err := w.bufferedStr.Write(w.buf); err != nil {
 		return 0, err
 	}
 	return w.bufferedStr.Write(p)

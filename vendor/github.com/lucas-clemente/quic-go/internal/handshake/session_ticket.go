@@ -18,11 +18,10 @@ type sessionTicket struct {
 }
 
 func (t *sessionTicket) Marshal() []byte {
-	b := &bytes.Buffer{}
-	quicvarint.Write(b, sessionTicketRevision)
-	quicvarint.Write(b, uint64(t.RTT.Microseconds()))
-	t.Parameters.MarshalForSessionTicket(b)
-	return b.Bytes()
+	b := make([]byte, 0, 256)
+	b = quicvarint.Append(b, sessionTicketRevision)
+	b = quicvarint.Append(b, uint64(t.RTT.Microseconds()))
+	return t.Parameters.MarshalForSessionTicket(b)
 }
 
 func (t *sessionTicket) Unmarshal(b []byte) error {

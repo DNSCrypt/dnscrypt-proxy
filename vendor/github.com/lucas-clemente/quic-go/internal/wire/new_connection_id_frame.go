@@ -38,9 +38,6 @@ func parseNewConnectionIDFrame(r *bytes.Reader, _ protocol.VersionNumber) (*NewC
 	if err != nil {
 		return nil, err
 	}
-	if connIDLen > protocol.MaxConnIDLen {
-		return nil, fmt.Errorf("invalid connection ID length: %d", connIDLen)
-	}
 	connID, err := protocol.ReadConnectionID(r, int(connIDLen))
 	if err != nil {
 		return nil, err
@@ -60,18 +57,18 @@ func parseNewConnectionIDFrame(r *bytes.Reader, _ protocol.VersionNumber) (*NewC
 	return frame, nil
 }
 
-func (f *NewConnectionIDFrame) Write(b *bytes.Buffer, _ protocol.VersionNumber) error {
-	b.WriteByte(0x18)
-	quicvarint.Write(b, f.SequenceNumber)
-	quicvarint.Write(b, f.RetirePriorTo)
+func (f *NewConnectionIDFrame) Append(b []byte, _ protocol.VersionNumber) ([]byte, error) {
+	b = append(b, 0x18)
+	b = quicvarint.Append(b, f.SequenceNumber)
+	b = quicvarint.Append(b, f.RetirePriorTo)
 	connIDLen := f.ConnectionID.Len()
 	if connIDLen > protocol.MaxConnIDLen {
-		return fmt.Errorf("invalid connection ID length: %d", connIDLen)
+		return nil, fmt.Errorf("invalid connection ID length: %d", connIDLen)
 	}
-	b.WriteByte(uint8(connIDLen))
-	b.Write(f.ConnectionID.Bytes())
-	b.Write(f.StatelessResetToken[:])
-	return nil
+	b = append(b, uint8(connIDLen))
+	b = append(b, f.ConnectionID.Bytes()...)
+	b = append(b, f.StatelessResetToken[:]...)
+	return b, nil
 }
 
 // Length of a written frame

@@ -88,6 +88,25 @@ func Write(w Writer, i uint64) {
 	}
 }
 
+func Append(b []byte, i uint64) []byte {
+	if i <= maxVarInt1 {
+		return append(b, uint8(i))
+	}
+	if i <= maxVarInt2 {
+		return append(b, []byte{uint8(i>>8) | 0x40, uint8(i)}...)
+	}
+	if i <= maxVarInt4 {
+		return append(b, []byte{uint8(i>>24) | 0x80, uint8(i >> 16), uint8(i >> 8), uint8(i)}...)
+	}
+	if i <= maxVarInt8 {
+		return append(b, []byte{
+			uint8(i>>56) | 0xc0, uint8(i >> 48), uint8(i >> 40), uint8(i >> 32),
+			uint8(i >> 24), uint8(i >> 16), uint8(i >> 8), uint8(i),
+		}...)
+	}
+	panic(fmt.Sprintf("%#x doesn't fit into 62 bits", i))
+}
+
 // WriteWithLen writes i in the QUIC varint format with the desired length to w.
 func WriteWithLen(w Writer, i uint64, length protocol.ByteCount) {
 	if length != 1 && length != 2 && length != 4 && length != 8 {

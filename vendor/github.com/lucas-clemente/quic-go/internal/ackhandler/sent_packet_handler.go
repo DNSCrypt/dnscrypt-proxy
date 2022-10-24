@@ -226,14 +226,20 @@ func (h *sentPacketHandler) packetsInFlight() int {
 	return packetsInFlight
 }
 
-func (h *sentPacketHandler) SentPacket(packet *Packet) {
-	h.bytesSent += packet.Length
+func (h *sentPacketHandler) SentPacket(p *Packet) {
+	h.bytesSent += p.Length
 	// For the client, drop the Initial packet number space when the first Handshake packet is sent.
-	if h.perspective == protocol.PerspectiveClient && packet.EncryptionLevel == protocol.EncryptionHandshake && h.initialPackets != nil {
+	if h.perspective == protocol.PerspectiveClient && p.EncryptionLevel == protocol.EncryptionHandshake && h.initialPackets != nil {
 		h.dropPackets(protocol.EncryptionInitial)
 	}
-	isAckEliciting := h.sentPacketImpl(packet)
-	h.getPacketNumberSpace(packet.EncryptionLevel).history.SentPacket(packet, isAckEliciting)
+	isAckEliciting := h.sentPacketImpl(p)
+	if isAckEliciting {
+		h.getPacketNumberSpace(p.EncryptionLevel).history.SentAckElicitingPacket(p)
+	} else {
+		h.getPacketNumberSpace(p.EncryptionLevel).history.SentNonAckElicitingPacket(p.PacketNumber, p.EncryptionLevel, p.SendTime)
+		putPacket(p)
+		p = nil //nolint:ineffassign // This is just to be on the safe side.
+	}
 	if h.tracer != nil && isAckEliciting {
 		h.tracer.UpdatedMetrics(h.rttStats, h.congestion.GetCongestionWindow(), h.bytesInFlight, h.packetsInFlight())
 	}
@@ -334,7 +340,11 @@ func (h *sentPacketHandler) ReceivedAck(ack *wire.AckFrame, encLevel protocol.En
 			acked1RTTPacket = true
 		}
 		h.removeFromBytesInFlight(p)
+		putPacket(p)
 	}
+	// After this point, we must not use ackedPackets any longer!
+	// We've already returned the buffers.
+	ackedPackets = nil //nolint:ineffassign // This is just to be on the safe side.
 
 	// Reset the pto_count unless the client is unsure if the server has validated the client's address.
 	if h.peerCompletedAddressValidation {

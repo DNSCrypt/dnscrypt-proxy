@@ -25,11 +25,10 @@ func parseDataBlockedFrame(r *bytes.Reader, _ protocol.VersionNumber) (*DataBloc
 	}, nil
 }
 
-func (f *DataBlockedFrame) Write(b *bytes.Buffer, version protocol.VersionNumber) error {
-	typeByte := uint8(0x14)
-	b.WriteByte(typeByte)
-	quicvarint.Write(b, uint64(f.MaximumData))
-	return nil
+func (f *DataBlockedFrame) Append(b []byte, version protocol.VersionNumber) ([]byte, error) {
+	b = append(b, 0x14)
+	b = quicvarint.Append(b, uint64(f.MaximumData))
+	return b, nil
 }
 
 // Length of a written frame

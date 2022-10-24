@@ -16,24 +16,29 @@ import (
 	"sync"
 
 	"golang.org/x/tools/go/types/typeutil"
+	"golang.org/x/tools/internal/typeparams"
 )
 
 // NewProgram returns a new SSA Program.
 //
 // mode controls diagnostics and checking during SSA construction.
-//
 func NewProgram(fset *token.FileSet, mode BuilderMode) *Program {
 	prog := &Program{
-		Fset:     fset,
-		imported: make(map[string]*Package),
-		packages: make(map[*types.Package]*Package),
-		thunks:   make(map[selectionKey]*Function),
-		bounds:   make(map[*types.Func]*Function),
-		mode:     mode,
+		Fset:          fset,
+		imported:      make(map[string]*Package),
+		packages:      make(map[*types.Package]*Package),
+		thunks:        make(map[selectionKey]*Function),
+		bounds:        make(map[boundsKey]*Function),
+		mode:          mode,
+		canon:         newCanonizer(),
+		ctxt:          typeparams.NewContext(),
+		instances:     make(map[*Function]*instanceSet),
+		parameterized: tpWalker{seen: make(map[types.Type]bool)},
 	}
 
 	h := typeutil.MakeHasher() // protected by methodsMu, in effect
 	prog.methodSets.SetHasher(h)
+	prog.runtimeTypes.SetHasher(h)
 
 	return prog
 }
@@ -44,7 +49,6 @@ func NewProgram(fset *token.FileSet, mode BuilderMode) *Program {
 // For objects from Go source code, syntax is the associated syntax
 // tree (for funcs and vars only); it will be used during the build
 // phase.
-//
 func memberFromObject(pkg *Package, obj types.Object, syntax ast.Node) {
 	name := obj.Name()
 	switch obj := obj.(type) {
@@ -85,18 +89,38 @@ func memberFromObject(pkg *Package, obj types.Object, syntax ast.Node) {
 			pkg.ninit++
 			name = fmt.Sprintf("init#%d", pkg.ninit)
 		}
-		fn := &Function{
-			name:      name,
-			object:    obj,
-			Signature: sig,
-			syntax:    syntax,
-			pos:       obj.Pos(),
-			Pkg:       pkg,
-			Prog:      pkg.Prog,
-			info:      pkg.info,
+
+		// Collect type parameters if this is a generic function/method.
+		var tparams []*typeparams.TypeParam
+		for i, rtparams := 0, typeparams.RecvTypeParams(sig); i < rtparams.Len(); i++ {
+			tparams = append(tparams, rtparams.At(i))
 		}
+		for i, sigparams := 0, typeparams.ForSignature(sig); i < sigparams.Len(); i++ {
+			tparams = append(tparams, sigparams.At(i))
+		}
+
+		fn := &Function{
+			name:        name,
+			object:      obj,
+			Signature:   sig,
+			syntax:      syntax,
+			pos:         obj.Pos(),
+			Pkg:         pkg,
+			Prog:        pkg.Prog,
+			_TypeParams: tparams,
+			info:        pkg.info,
+		}
+		pkg.created.Add(fn)
 		if syntax == nil {
 			fn.Synthetic = "loaded from gc object file"
+		}
+		if len(tparams) > 0 {
+			fn.Prog.createInstanceSet(fn)
+		}
+		if len(tparams) > 0 && syntax != nil {
+			fn.Synthetic = "generic function"
+			// TODO(taking): Allow for the function to be built once type params are supported.
+			fn.syntax = nil // Treating as an external function temporarily.
 		}
 
 		pkg.objects[obj] = fn
@@ -112,7 +136,6 @@ func memberFromObject(pkg *Package, obj types.Object, syntax ast.Node) {
 // membersFromDecl populates package pkg with members for each
 // typechecker object (var, func, const or type) associated with the
 // specified decl.
-//
 func membersFromDecl(pkg *Package, decl ast.Decl) {
 	switch decl := decl.(type) {
 	case *ast.GenDecl: // import, const, type or var
@@ -152,6 +175,19 @@ func membersFromDecl(pkg *Package, decl ast.Decl) {
 	}
 }
 
+// creator tracks functions that have finished their CREATE phases.
+//
+// All Functions belong to the same Program. May have differing packages.
+//
+// creators are not thread-safe.
+type creator []*Function
+
+func (c *creator) Add(fn *Function) {
+	*c = append(*c, fn)
+}
+func (c *creator) At(i int) *Function { return (*c)[i] }
+func (c *creator) Len() int           { return len(*c) }
+
 // CreatePackage constructs and returns an SSA Package from the
 // specified type-checked, error-free file ASTs, and populates its
 // Members mapping.
@@ -161,7 +197,6 @@ func membersFromDecl(pkg *Package, decl ast.Decl) {
 //
 // The real work of building SSA form for each function is not done
 // until a subsequent call to Package.Build().
-//
 func (prog *Program) CreatePackage(pkg *types.Package, files []*ast.File, info *types.Info, importable bool) *Package {
 	p := &Package{
 		Prog:    prog,
@@ -182,6 +217,7 @@ func (prog *Program) CreatePackage(pkg *types.Package, files []*ast.File, info *
 		info:      p.info,
 	}
 	p.Members[p.init.name] = p.init
+	p.created.Add(p.init)
 
 	// CREATE phase.
 	// Allocate all package members: vars, funcs, consts and types.
@@ -243,7 +279,6 @@ var printMu sync.Mutex
 
 // AllPackages returns a new slice containing all packages in the
 // program prog in unspecified order.
-//
 func (prog *Program) AllPackages() []*Package {
 	pkgs := make([]*Package, 0, len(prog.packages))
 	for _, pkg := range prog.packages {
@@ -265,7 +300,6 @@ func (prog *Program) AllPackages() []*Package {
 // false---yet this function remains very convenient.
 // Clients should use (*Program).Package instead where possible.
 // SSA doesn't really need a string-keyed map of packages.
-//
 func (prog *Program) ImportedPackage(path string) *Package {
 	return prog.imported[path]
 }

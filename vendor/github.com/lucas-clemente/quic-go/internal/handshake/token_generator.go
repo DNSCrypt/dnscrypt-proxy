@@ -65,8 +65,8 @@ func (g *TokenGenerator) NewRetryToken(
 	data, err := asn1.Marshal(token{
 		IsRetryToken:             true,
 		RemoteAddr:               encodeRemoteAddr(raddr),
-		OriginalDestConnectionID: origDestConnID,
-		RetrySrcConnectionID:     retrySrcConnID,
+		OriginalDestConnectionID: origDestConnID.Bytes(),
+		RetrySrcConnectionID:     retrySrcConnID.Bytes(),
 		Timestamp:                time.Now().UnixNano(),
 	})
 	if err != nil {
@@ -112,8 +112,8 @@ func (g *TokenGenerator) DecodeToken(encrypted []byte) (*Token, error) {
 		encodedRemoteAddr: t.RemoteAddr,
 	}
 	if t.IsRetryToken {
-		token.OriginalDestConnectionID = protocol.ConnectionID(t.OriginalDestConnectionID)
-		token.RetrySrcConnectionID = protocol.ConnectionID(t.RetrySrcConnectionID)
+		token.OriginalDestConnectionID = protocol.ParseConnectionID(t.OriginalDestConnectionID)
+		token.RetrySrcConnectionID = protocol.ParseConnectionID(t.RetrySrcConnectionID)
 	}
 	return token, nil
 }

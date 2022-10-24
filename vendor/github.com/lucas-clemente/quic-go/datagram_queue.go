@@ -8,6 +8,7 @@ import (
 
 type datagramQueue struct {
 	sendQueue chan *wire.DatagramFrame
+	nextFrame *wire.DatagramFrame
 	rcvQueue  chan []byte
 
 	closeErr error
@@ -49,15 +50,26 @@ func (h *datagramQueue) AddAndWait(f *wire.DatagramFrame) error {
 	}
 }
 
-// Get dequeues a DATAGRAM frame for sending.
-func (h *datagramQueue) Get() *wire.DatagramFrame {
+// Peek gets the next DATAGRAM frame for sending.
+// If actually sent out, Pop needs to be called before the next call to Peek.
+func (h *datagramQueue) Peek() *wire.DatagramFrame {
+	if h.nextFrame != nil {
+		return h.nextFrame
+	}
 	select {
-	case f := <-h.sendQueue:
+	case h.nextFrame = <-h.sendQueue:
 		h.dequeued <- struct{}{}
-		return f
 	default:
 		return nil
 	}
+	return h.nextFrame
+}
+
+func (h *datagramQueue) Pop() {
+	if h.nextFrame == nil {
+		panic("datagramQueue BUG: Pop called for nil frame")
+	}
+	h.nextFrame = nil
 }
 
 // HandleDatagramFrame handles a received DATAGRAM frame.

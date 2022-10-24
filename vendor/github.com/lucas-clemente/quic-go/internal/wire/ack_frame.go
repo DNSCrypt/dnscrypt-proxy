@@ -29,7 +29,7 @@ func parseAckFrame(r *bytes.Reader, ackDelayExponent uint8, _ protocol.VersionNu
 	}
 	ecn := typeByte&0x1 > 0
 
-	frame := &AckFrame{}
+	frame := GetAckFrame()
 
 	la, err := quicvarint.Read(r)
 	if err != nil {
@@ -106,41 +106,41 @@ func parseAckFrame(r *bytes.Reader, ackDelayExponent uint8, _ protocol.VersionNu
 	return frame, nil
 }
 
-// Write writes an ACK frame.
-func (f *AckFrame) Write(b *bytes.Buffer, _ protocol.VersionNumber) error {
+// Append appends an ACK frame.
+func (f *AckFrame) Append(b []byte, _ protocol.VersionNumber) ([]byte, error) {
 	hasECN := f.ECT0 > 0 || f.ECT1 > 0 || f.ECNCE > 0
 	if hasECN {
-		b.WriteByte(0x3)
+		b = append(b, 0b11)
 	} else {
-		b.WriteByte(0x2)
+		b = append(b, 0b10)
 	}
-	quicvarint.Write(b, uint64(f.LargestAcked()))
-	quicvarint.Write(b, encodeAckDelay(f.DelayTime))
+	b = quicvarint.Append(b, uint64(f.LargestAcked()))
+	b = quicvarint.Append(b, encodeAckDelay(f.DelayTime))
 
 	numRanges := f.numEncodableAckRanges()
-	quicvarint.Write(b, uint64(numRanges-1))
+	b = quicvarint.Append(b, uint64(numRanges-1))
 
 	// write the first range
 	_, firstRange := f.encodeAckRange(0)
-	quicvarint.Write(b, firstRange)
+	b = quicvarint.Append(b, firstRange)
 
 	// write all the other range
 	for i := 1; i < numRanges; i++ {
 		gap, len := f.encodeAckRange(i)
-		quicvarint.Write(b, gap)
-		quicvarint.Write(b, len)
+		b = quicvarint.Append(b, gap)
+		b = quicvarint.Append(b, len)
 	}
 
 	if hasECN {
-		quicvarint.Write(b, f.ECT0)
-		quicvarint.Write(b, f.ECT1)
-		quicvarint.Write(b, f.ECNCE)
+		b = quicvarint.Append(b, f.ECT0)
+		b = quicvarint.Append(b, f.ECT1)
+		b = quicvarint.Append(b, f.ECNCE)
 	}
-	return nil
+	return b, nil
 }
 
 // Length of a written frame
-func (f *AckFrame) Length(version protocol.VersionNumber) protocol.ByteCount {
+func (f *AckFrame) Length(_ protocol.VersionNumber) protocol.ByteCount {
 	largestAcked := f.AckRanges[0].Largest
 	numRanges := f.numEncodableAckRanges()
 
