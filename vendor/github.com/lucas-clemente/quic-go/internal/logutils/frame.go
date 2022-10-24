@@ -11,6 +11,10 @@ import (
 // Furthermore, it removes the data slices from CRYPTO and STREAM frames.
 func ConvertFrame(frame wire.Frame) logging.Frame {
 	switch f := frame.(type) {
+	case *wire.AckFrame:
+		// We use a pool for ACK frames.
+		// Implementations of the tracer interface may hold on to frames, so we need to make a copy here.
+		return ConvertAckFrame(f)
 	case *wire.CryptoFrame:
 		return &logging.CryptoFrame{
 			Offset: f.Offset,
@@ -30,4 +34,17 @@ func ConvertFrame(frame wire.Frame) logging.Frame {
 	default:
 		return logging.Frame(frame)
 	}
+}
+
+func ConvertAckFrame(f *wire.AckFrame) *logging.AckFrame {
+	ranges := make([]wire.AckRange, 0, len(f.AckRanges))
+	ranges = append(ranges, f.AckRanges...)
+	ack := &logging.AckFrame{
+		AckRanges: ranges,
+		DelayTime: f.DelayTime,
+		ECNCE:     f.ECNCE,
+		ECT0:      f.ECT0,
+		ECT1:      f.ECT1,
+	}
+	return ack
 }

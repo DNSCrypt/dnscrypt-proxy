@@ -17,27 +17,77 @@ import (
 // That means that the connection ID must not be used after the packet buffer is released.
 func ParseConnectionID(data []byte, shortHeaderConnIDLen int) (protocol.ConnectionID, error) {
 	if len(data) == 0 {
-		return nil, io.EOF
+		return protocol.ConnectionID{}, io.EOF
 	}
 	if !IsLongHeaderPacket(data[0]) {
 		if len(data) < shortHeaderConnIDLen+1 {
-			return nil, io.EOF
+			return protocol.ConnectionID{}, io.EOF
 		}
-		return protocol.ConnectionID(data[1 : 1+shortHeaderConnIDLen]), nil
+		return protocol.ParseConnectionID(data[1 : 1+shortHeaderConnIDLen]), nil
 	}
 	if len(data) < 6 {
-		return nil, io.EOF
+		return protocol.ConnectionID{}, io.EOF
 	}
 	destConnIDLen := int(data[5])
-	if len(data) < 6+destConnIDLen {
-		return nil, io.EOF
+	if destConnIDLen > protocol.MaxConnIDLen {
+		return protocol.ConnectionID{}, protocol.ErrInvalidConnectionIDLen
 	}
-	return protocol.ConnectionID(data[6 : 6+destConnIDLen]), nil
+	if len(data) < 6+destConnIDLen {
+		return protocol.ConnectionID{}, io.EOF
+	}
+	return protocol.ParseConnectionID(data[6 : 6+destConnIDLen]), nil
+}
+
+// ParseArbitraryLenConnectionIDs parses the most general form of a Long Header packet,
+// using only the version-independent packet format as described in Section 5.1 of RFC 8999:
+// https://datatracker.ietf.org/doc/html/rfc8999#section-5.1.
+// This function should only be called on Long Header packets for which we don't support the version.
+func ParseArbitraryLenConnectionIDs(data []byte) (bytesParsed int, dest, src protocol.ArbitraryLenConnectionID, _ error) {
+	r := bytes.NewReader(data)
+	remaining := r.Len()
+	src, dest, err := parseArbitraryLenConnectionIDs(r)
+	return remaining - r.Len(), src, dest, err
+}
+
+func parseArbitraryLenConnectionIDs(r *bytes.Reader) (dest, src protocol.ArbitraryLenConnectionID, _ error) {
+	r.Seek(5, io.SeekStart) // skip first byte and version field
+	destConnIDLen, err := r.ReadByte()
+	if err != nil {
+		return nil, nil, err
+	}
+	destConnID := make(protocol.ArbitraryLenConnectionID, destConnIDLen)
+	if _, err := io.ReadFull(r, destConnID); err != nil {
+		if err == io.ErrUnexpectedEOF {
+			err = io.EOF
+		}
+		return nil, nil, err
+	}
+	srcConnIDLen, err := r.ReadByte()
+	if err != nil {
+		return nil, nil, err
+	}
+	srcConnID := make(protocol.ArbitraryLenConnectionID, srcConnIDLen)
+	if _, err := io.ReadFull(r, srcConnID); err != nil {
+		if err == io.ErrUnexpectedEOF {
+			err = io.EOF
+		}
+		return nil, nil, err
+	}
+	return destConnID, srcConnID, nil
 }
 
 // IsLongHeaderPacket says if this is a Long Header packet
 func IsLongHeaderPacket(firstByte byte) bool {
 	return firstByte&0x80 > 0
+}
+
+// ParseVersion parses the QUIC version.
+// It should only be called for Long Header packets (Short Header packets don't contain a version number).
+func ParseVersion(data []byte) (protocol.VersionNumber, error) {
+	if len(data) < 5 {
+		return 0, io.EOF
+	}
+	return protocol.VersionNumber(binary.BigEndian.Uint32(data[1:5])), nil
 }
 
 // IsVersionNegotiationPacket says if this is a version negotiation packet

@@ -30,7 +30,6 @@ type sanity struct {
 //
 // Sanity-checking is intended to facilitate the debugging of code
 // transformation passes.
-//
 func sanityCheck(fn *Function, reporter io.Writer) bool {
 	if reporter == nil {
 		reporter = os.Stderr
@@ -40,7 +39,6 @@ func sanityCheck(fn *Function, reporter io.Writer) bool {
 
 // mustSanityCheck is like sanityCheck but panics instead of returning
 // a negative result.
-//
 func mustSanityCheck(fn *Function, reporter io.Writer) {
 	if !sanityCheck(fn, reporter) {
 		fn.WriteTo(os.Stderr)
@@ -404,6 +402,8 @@ func (s *sanity) checkFunction(fn *Function) bool {
 	// - check params match signature
 	// - check transient fields are nil
 	// - warn if any fn.Locals do not appear among block instructions.
+
+	// TODO(taking): Sanity check _Origin, _TypeParams, and _TypeArgs.
 	s.fn = fn
 	if fn.Prog == nil {
 		s.errorf("nil Prog")
@@ -419,14 +419,20 @@ func (s *sanity) checkFunction(fn *Function) bool {
 		if strings.HasPrefix(fn.Synthetic, "wrapper ") ||
 			strings.HasPrefix(fn.Synthetic, "bound ") ||
 			strings.HasPrefix(fn.Synthetic, "thunk ") ||
-			strings.HasSuffix(fn.name, "Error") {
+			strings.HasSuffix(fn.name, "Error") ||
+			strings.HasPrefix(fn.Synthetic, "instantiation") ||
+			(fn.parent != nil && len(fn._TypeArgs) > 0) /* anon fun in instance */ {
 			// ok
 		} else {
 			s.errorf("nil Pkg")
 		}
 	}
 	if src, syn := fn.Synthetic == "", fn.Syntax() != nil; src != syn {
-		s.errorf("got fromSource=%t, hasSyntax=%t; want same values", src, syn)
+		if strings.HasPrefix(fn.Synthetic, "instantiation") && fn.Prog.mode&InstantiateGenerics != 0 {
+			// ok
+		} else {
+			s.errorf("got fromSource=%t, hasSyntax=%t; want same values", src, syn)
+		}
 	}
 	for i, l := range fn.Locals {
 		if l.Parent() != fn {

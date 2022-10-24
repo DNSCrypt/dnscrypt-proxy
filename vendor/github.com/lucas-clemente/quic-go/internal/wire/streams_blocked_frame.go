@@ -38,15 +38,15 @@ func parseStreamsBlockedFrame(r *bytes.Reader, _ protocol.VersionNumber) (*Strea
 	return f, nil
 }
 
-func (f *StreamsBlockedFrame) Write(b *bytes.Buffer, _ protocol.VersionNumber) error {
+func (f *StreamsBlockedFrame) Append(b []byte, _ protocol.VersionNumber) ([]byte, error) {
 	switch f.Type {
 	case protocol.StreamTypeBidi:
-		b.WriteByte(0x16)
+		b = append(b, 0x16)
 	case protocol.StreamTypeUni:
-		b.WriteByte(0x17)
+		b = append(b, 0x17)
 	}
-	quicvarint.Write(b, uint64(f.StreamLimit))
-	return nil
+	b = quicvarint.Append(b, uint64(f.StreamLimit))
+	return b, nil
 }
 
 // Length of a written frame

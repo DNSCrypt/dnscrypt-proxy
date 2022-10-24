@@ -1,7 +1,6 @@
 package http3
 
 import (
-	"bytes"
 	"fmt"
 
 	"github.com/lucas-clemente/quic-go"
@@ -16,6 +15,8 @@ type Stream quic.Stream
 type stream struct {
 	quic.Stream
 
+	buf []byte
+
 	onFrameError          func()
 	bytesRemainingInFrame uint64
 }
@@ -23,7 +24,11 @@ type stream struct {
 var _ Stream = &stream{}
 
 func newStream(str quic.Stream, onFrameError func()) *stream {
-	return &stream{Stream: str, onFrameError: onFrameError}
+	return &stream{
+		Stream:       str,
+		onFrameError: onFrameError,
+		buf:          make([]byte, 0, 16),
+	}
 }
 
 func (s *stream) Read(b []byte) (int, error) {
@@ -62,9 +67,9 @@ func (s *stream) Read(b []byte) (int, error) {
 }
 
 func (s *stream) Write(b []byte) (int, error) {
-	buf := &bytes.Buffer{}
-	(&dataFrame{Length: uint64(len(b))}).Write(buf)
-	if _, err := s.Stream.Write(buf.Bytes()); err != nil {
+	s.buf = s.buf[:0]
+	s.buf = (&dataFrame{Length: uint64(len(b))}).Append(s.buf)
+	if _, err := s.Stream.Write(s.buf); err != nil {
 		return 0, err
 	}
 	return s.Stream.Write(b)

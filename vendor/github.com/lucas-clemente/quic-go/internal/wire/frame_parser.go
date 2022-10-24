@@ -11,6 +11,8 @@ import (
 )
 
 type frameParser struct {
+	r bytes.Reader // cached bytes.Reader, so we don't have to repeatedly allocate them
+
 	ackDelayExponent uint8
 
 	supportsDatagrams bool
@@ -21,6 +23,7 @@ type frameParser struct {
 // NewFrameParser creates a new frame parser.
 func NewFrameParser(supportsDatagrams bool, v protocol.VersionNumber) FrameParser {
 	return &frameParser{
+		r:                 *bytes.NewReader(nil),
 		supportsDatagrams: supportsDatagrams,
 		version:           v,
 	}
@@ -28,9 +31,18 @@ func NewFrameParser(supportsDatagrams bool, v protocol.VersionNumber) FrameParse
 
 // ParseNext parses the next frame.
 // It skips PADDING frames.
-func (p *frameParser) ParseNext(r *bytes.Reader, encLevel protocol.EncryptionLevel) (Frame, error) {
+func (p *frameParser) ParseNext(data []byte, encLevel protocol.EncryptionLevel) (int, Frame, error) {
+	startLen := len(data)
+	p.r.Reset(data)
+	frame, err := p.parseNext(&p.r, encLevel)
+	n := startLen - p.r.Len()
+	p.r.Reset(nil)
+	return n, frame, err
+}
+
+func (p *frameParser) parseNext(r *bytes.Reader, encLevel protocol.EncryptionLevel) (Frame, error) {
 	for r.Len() != 0 {
-		typeByte, _ := r.ReadByte()
+		typeByte, _ := p.r.ReadByte()
 		if typeByte == 0x0 { // PADDING frame
 			continue
 		}

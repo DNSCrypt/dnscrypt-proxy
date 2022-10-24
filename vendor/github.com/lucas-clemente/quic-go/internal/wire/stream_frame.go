@@ -26,9 +26,9 @@ func parseStreamFrame(r *bytes.Reader, _ protocol.VersionNumber) (*StreamFrame, 
 		return nil, err
 	}
 
-	hasOffset := typeByte&0x4 > 0
-	fin := typeByte&0x1 > 0
-	hasDataLen := typeByte&0x2 > 0
+	hasOffset := typeByte&0b100 > 0
+	fin := typeByte&0b1 > 0
+	hasDataLen := typeByte&0b10 > 0
 
 	streamID, err := quicvarint.Read(r)
 	if err != nil {
@@ -84,32 +84,32 @@ func parseStreamFrame(r *bytes.Reader, _ protocol.VersionNumber) (*StreamFrame, 
 }
 
 // Write writes a STREAM frame
-func (f *StreamFrame) Write(b *bytes.Buffer, version protocol.VersionNumber) error {
+func (f *StreamFrame) Append(b []byte, _ protocol.VersionNumber) ([]byte, error) {
 	if len(f.Data) == 0 && !f.Fin {
-		return errors.New("StreamFrame: attempting to write empty frame without FIN")
+		return nil, errors.New("StreamFrame: attempting to write empty frame without FIN")
 	}
 
 	typeByte := byte(0x8)
 	if f.Fin {
-		typeByte ^= 0x1
+		typeByte ^= 0b1
 	}
 	hasOffset := f.Offset != 0
 	if f.DataLenPresent {
-		typeByte ^= 0x2
+		typeByte ^= 0b10
 	}
 	if hasOffset {
-		typeByte ^= 0x4
+		typeByte ^= 0b100
 	}
-	b.WriteByte(typeByte)
-	quicvarint.Write(b, uint64(f.StreamID))
+	b = append(b, typeByte)
+	b = quicvarint.Append(b, uint64(f.StreamID))
 	if hasOffset {
-		quicvarint.Write(b, uint64(f.Offset))
+		b = quicvarint.Append(b, uint64(f.Offset))
 	}
 	if f.DataLenPresent {
-		quicvarint.Write(b, uint64(f.DataLen()))
+		b = quicvarint.Append(b, uint64(f.DataLen()))
 	}
-	b.Write(f.Data)
-	return nil
+	b = append(b, f.Data...)
+	return b, nil
 }
 
 // Length returns the total length of the STREAM frame

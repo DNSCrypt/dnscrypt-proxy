@@ -3,6 +3,7 @@ package wire
 import (
 	"bytes"
 	"crypto/rand"
+	"encoding/binary"
 	"errors"
 
 	"github.com/lucas-clemente/quic-go/internal/protocol"
@@ -10,32 +11,30 @@ import (
 )
 
 // ParseVersionNegotiationPacket parses a Version Negotiation packet.
-func ParseVersionNegotiationPacket(b *bytes.Reader) (*Header, []protocol.VersionNumber, error) {
-	hdr, err := parseHeader(b, 0)
+func ParseVersionNegotiationPacket(b []byte) (dest, src protocol.ArbitraryLenConnectionID, _ []protocol.VersionNumber, _ error) {
+	n, dest, src, err := ParseArbitraryLenConnectionIDs(b)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
-	if b.Len() == 0 {
+	b = b[n:]
+	if len(b) == 0 {
 		//nolint:stylecheck
-		return nil, nil, errors.New("Version Negotiation packet has empty version list")
+		return nil, nil, nil, errors.New("Version Negotiation packet has empty version list")
 	}
-	if b.Len()%4 != 0 {
+	if len(b)%4 != 0 {
 		//nolint:stylecheck
-		return nil, nil, errors.New("Version Negotiation packet has a version list with an invalid length")
+		return nil, nil, nil, errors.New("Version Negotiation packet has a version list with an invalid length")
 	}
-	versions := make([]protocol.VersionNumber, b.Len()/4)
-	for i := 0; b.Len() > 0; i++ {
-		v, err := utils.BigEndian.ReadUint32(b)
-		if err != nil {
-			return nil, nil, err
-		}
-		versions[i] = protocol.VersionNumber(v)
+	versions := make([]protocol.VersionNumber, len(b)/4)
+	for i := 0; len(b) > 0; i++ {
+		versions[i] = protocol.VersionNumber(binary.BigEndian.Uint32(b[:4]))
+		b = b[4:]
 	}
-	return hdr, versions, nil
+	return dest, src, versions, nil
 }
 
 // ComposeVersionNegotiation composes a Version Negotiation
-func ComposeVersionNegotiation(destConnID, srcConnID protocol.ConnectionID, versions []protocol.VersionNumber) []byte {
+func ComposeVersionNegotiation(destConnID, srcConnID protocol.ArbitraryLenConnectionID, versions []protocol.VersionNumber) []byte {
 	greasedVersions := protocol.GetGreasedVersions(versions)
 	expectedLen := 1 /* type byte */ + 4 /* version field */ + 1 /* dest connection ID length field */ + destConnID.Len() + 1 /* src connection ID length field */ + srcConnID.Len() + len(greasedVersions)*4
 	buf := bytes.NewBuffer(make([]byte, 0, expectedLen))
@@ -44,9 +43,9 @@ func ComposeVersionNegotiation(destConnID, srcConnID protocol.ConnectionID, vers
 	buf.WriteByte(r[0] | 0x80)
 	utils.BigEndian.WriteUint32(buf, 0) // version 0
 	buf.WriteByte(uint8(destConnID.Len()))
-	buf.Write(destConnID)
+	buf.Write(destConnID.Bytes())
 	buf.WriteByte(uint8(srcConnID.Len()))
-	buf.Write(srcConnID)
+	buf.Write(srcConnID.Bytes())
 	for _, v := range greasedVersions {
 		utils.BigEndian.WriteUint32(buf, uint32(v))
 	}

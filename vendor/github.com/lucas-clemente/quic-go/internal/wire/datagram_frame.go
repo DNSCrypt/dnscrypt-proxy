@@ -44,17 +44,17 @@ func parseDatagramFrame(r *bytes.Reader, _ protocol.VersionNumber) (*DatagramFra
 	return f, nil
 }
 
-func (f *DatagramFrame) Write(b *bytes.Buffer, _ protocol.VersionNumber) error {
+func (f *DatagramFrame) Append(b []byte, _ protocol.VersionNumber) ([]byte, error) {
 	typeByte := uint8(0x30)
 	if f.DataLenPresent {
-		typeByte ^= 0x1
+		typeByte ^= 0b1
 	}
-	b.WriteByte(typeByte)
+	b = append(b, typeByte)
 	if f.DataLenPresent {
-		quicvarint.Write(b, uint64(len(f.Data)))
+		b = quicvarint.Append(b, uint64(len(f.Data)))
 	}
-	b.Write(f.Data)
-	return nil
+	b = append(b, f.Data...)
+	return b, nil
 }
 
 // MaxDataLen returns the maximum data length

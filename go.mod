@@ -18,7 +18,7 @@ require (
 	github.com/jedisct1/xsecretbox v0.0.0-20210927135450-ebe41aef7bef
 	github.com/k-sone/critbitgo v1.4.0
 	github.com/kardianos/service v1.2.2
-	github.com/lucas-clemente/quic-go v0.29.2
+	github.com/lucas-clemente/quic-go v0.30.0
 	github.com/miekg/dns v1.1.50
 	github.com/powerman/check v1.6.0
 	golang.org/x/crypto v0.0.0-20221012134737-56aed061732a
@@ -63,7 +63,7 @@ require (
 	github.com/gobwas/glob v0.2.3 // indirect
 	github.com/gofrs/flock v0.8.0 // indirect
 	github.com/golang/mock v1.6.0 // indirect
-	github.com/golang/protobuf v1.5.0 // indirect
+	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/golangci/check v0.0.0-20180506172741-cfe4005ccda2 // indirect
 	github.com/golangci/dupl v0.0.0-20180902072040-3e9179ac440a // indirect
 	github.com/golangci/go-misc v0.0.0-20180628070357-927a3d87b613 // indirect
@@ -75,6 +75,7 @@ require (
 	github.com/golangci/revgrep v0.0.0-20210208091834-cd28932614b5 // indirect
 	github.com/golangci/unconvert v0.0.0-20180507085042-28b1c447d1f4 // indirect
 	github.com/google/go-cmp v0.5.8 // indirect
+	github.com/google/pprof v0.0.0-20210407192527-94a9f03dee38 // indirect
 	github.com/gordonklaus/ineffassign v0.0.0-20210225214923-2e10b2664254 // indirect
 	github.com/gostaticanalysis/analysisutil v0.4.1 // indirect
 	github.com/gostaticanalysis/comment v1.4.1 // indirect
@@ -98,7 +99,7 @@ require (
 	github.com/ldez/tagliatelle v0.2.0 // indirect
 	github.com/magiconair/properties v1.8.1 // indirect
 	github.com/maratori/testpackage v1.0.1 // indirect
-	github.com/marten-seemann/qpack v0.2.1 // indirect
+	github.com/marten-seemann/qpack v0.3.0 // indirect
 	github.com/marten-seemann/qtls-go1-18 v0.1.3 // indirect
 	github.com/marten-seemann/qtls-go1-19 v0.1.1 // indirect
 	github.com/matoous/godox v0.0.0-20210227103229-6504466cf951 // indirect
@@ -117,9 +118,9 @@ require (
 	github.com/nbutton23/zxcvbn-go v0.0.0-20210217022336-fa2cb2858354 // indirect
 	github.com/nishanths/exhaustive v0.1.0 // indirect
 	github.com/nishanths/predeclared v0.2.1 // indirect
-	github.com/nxadm/tail v1.4.8 // indirect
 	github.com/olekukonko/tablewriter v0.0.5 // indirect
 	github.com/onsi/ginkgo v1.16.4 // indirect
+	github.com/onsi/ginkgo/v2 v2.2.0 // indirect
 	github.com/pelletier/go-toml v1.2.0 // indirect
 	github.com/phayes/checkstyle v0.0.0-20170904204023-bfd46e6a821d // indirect
 	github.com/pkg/errors v0.9.1 // indirect
@@ -161,17 +162,15 @@ require (
 	github.com/uudashr/gocognit v1.0.1 // indirect
 	github.com/yeya24/promlinter v0.1.0 // indirect
 	golang.org/x/exp v0.0.0-20220722155223-a9213eeb770e // indirect
-	golang.org/x/mod v0.6.0-dev.0.20220106191415-9b9b3d81d5e3 // indirect
+	golang.org/x/mod v0.6.0-dev.0.20220419223038-86c51ed26bb4 // indirect
 	golang.org/x/text v0.3.7 // indirect
-	golang.org/x/tools v0.1.10 // indirect
-	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect
+	golang.org/x/tools v0.1.12 // indirect
 	google.golang.org/genproto v0.0.0-20200707001353-8e8330bf89df // indirect
 	google.golang.org/grpc v1.38.0 // indirect
-	google.golang.org/protobuf v1.27.0 // indirect
+	google.golang.org/protobuf v1.28.0 // indirect
 	gopkg.in/ini.v1 v1.51.0 // indirect
-	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
-	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 	honnef.co/go/tools v0.2.0 // indirect
 	mvdan.cc/gofumpt v0.1.1 // indirect
 	mvdan.cc/interfacer v0.0.0-20180901003855-c20040233aed // indirect

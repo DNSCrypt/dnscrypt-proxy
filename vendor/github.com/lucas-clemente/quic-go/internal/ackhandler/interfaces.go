@@ -7,26 +7,6 @@ import (
 	"github.com/lucas-clemente/quic-go/internal/wire"
 )
 
-// A Packet is a packet
-type Packet struct {
-	PacketNumber    protocol.PacketNumber
-	Frames          []Frame
-	LargestAcked    protocol.PacketNumber // InvalidPacketNumber if the packet doesn't contain an ACK
-	Length          protocol.ByteCount
-	EncryptionLevel protocol.EncryptionLevel
-	SendTime        time.Time
-
-	IsPathMTUProbePacket bool // We don't report the loss of Path MTU probe packets to the congestion controller.
-
-	includedInBytesInFlight bool
-	declaredLost            bool
-	skippedPacket           bool
-}
-
-func (p *Packet) outstanding() bool {
-	return !p.declaredLost && !p.skippedPacket && !p.IsPathMTUProbePacket
-}
-
 // SentPacketHandler handles ACKs received for outgoing packets
 type SentPacketHandler interface {
 	// SentPacket may modify the packet

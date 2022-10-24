@@ -42,12 +42,12 @@ func parseCryptoFrame(r *bytes.Reader, _ protocol.VersionNumber) (*CryptoFrame, 
 	return frame, nil
 }
 
-func (f *CryptoFrame) Write(b *bytes.Buffer, _ protocol.VersionNumber) error {
-	b.WriteByte(0x6)
-	quicvarint.Write(b, uint64(f.Offset))
-	quicvarint.Write(b, uint64(len(f.Data)))
-	b.Write(f.Data)
-	return nil
+func (f *CryptoFrame) Append(b []byte, _ protocol.VersionNumber) ([]byte, error) {
+	b = append(b, 0x6)
+	b = quicvarint.Append(b, uint64(f.Offset))
+	b = quicvarint.Append(b, uint64(len(f.Data)))
+	b = append(b, f.Data...)
+	return b, nil
 }
 
 // Length of a written frame

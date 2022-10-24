@@ -62,7 +62,7 @@ func NewInitialAEAD(connID protocol.ConnectionID, pers protocol.Perspective, v p
 }
 
 func computeSecrets(connID protocol.ConnectionID, v protocol.VersionNumber) (clientSecret, serverSecret []byte) {
-	initialSecret := hkdf.Extract(crypto.SHA256.New, connID, getSalt(v))
+	initialSecret := hkdf.Extract(crypto.SHA256.New, connID.Bytes(), getSalt(v))
 	clientSecret = hkdfExpandLabel(crypto.SHA256, initialSecret, []byte{}, "client in", crypto.SHA256.Size())
 	serverSecret = hkdfExpandLabel(crypto.SHA256, initialSecret, []byte{}, "server in", crypto.SHA256.Size())
 	return

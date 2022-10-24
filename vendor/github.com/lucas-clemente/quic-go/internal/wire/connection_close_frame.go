@@ -66,18 +66,18 @@ func (f *ConnectionCloseFrame) Length(protocol.VersionNumber) protocol.ByteCount
 	return length
 }
 
-func (f *ConnectionCloseFrame) Write(b *bytes.Buffer, version protocol.VersionNumber) error {
+func (f *ConnectionCloseFrame) Append(b []byte, _ protocol.VersionNumber) ([]byte, error) {
 	if f.IsApplicationError {
-		b.WriteByte(0x1d)
+		b = append(b, 0x1d)
 	} else {
-		b.WriteByte(0x1c)
+		b = append(b, 0x1c)
 	}
 
-	quicvarint.Write(b, f.ErrorCode)
+	b = quicvarint.Append(b, f.ErrorCode)
 	if !f.IsApplicationError {
-		quicvarint.Write(b, f.FrameType)
+		b = quicvarint.Append(b, f.FrameType)
 	}
-	quicvarint.Write(b, uint64(len(f.ReasonPhrase)))
-	b.WriteString(f.ReasonPhrase)
-	return nil
+	b = quicvarint.Append(b, uint64(len(f.ReasonPhrase)))
+	b = append(b, []byte(f.ReasonPhrase)...)
+	return b, nil
 }

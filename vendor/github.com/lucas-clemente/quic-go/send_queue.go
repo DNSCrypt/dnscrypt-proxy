@@ -36,6 +36,13 @@ func newSendQueue(conn sendConn) sender {
 func (h *sendQueue) Send(p *packetBuffer) {
 	select {
 	case h.queue <- p:
+		// clear available channel if we've reached capacity
+		if len(h.queue) == sendQueueCapacity {
+			select {
+			case <-h.available:
+			default:
+			}
+		}
 	case <-h.runStopped:
 	default:
 		panic("sendQueue.Send would have blocked")

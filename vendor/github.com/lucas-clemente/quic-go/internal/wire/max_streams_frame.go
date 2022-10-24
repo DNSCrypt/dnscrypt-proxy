@@ -38,15 +38,15 @@ func parseMaxStreamsFrame(r *bytes.Reader, _ protocol.VersionNumber) (*MaxStream
 	return f, nil
 }
 
-func (f *MaxStreamsFrame) Write(b *bytes.Buffer, _ protocol.VersionNumber) error {
+func (f *MaxStreamsFrame) Append(b []byte, _ protocol.VersionNumber) ([]byte, error) {
 	switch f.Type {
 	case protocol.StreamTypeBidi:
-		b.WriteByte(0x12)
+		b = append(b, 0x12)
 	case protocol.StreamTypeUni:
-		b.WriteByte(0x13)
+		b = append(b, 0x13)
 	}
-	quicvarint.Write(b, uint64(f.MaxStreamNum))
-	return nil
+	b = quicvarint.Append(b, uint64(f.MaxStreamNum))
+	return b, nil
 }
 
 // Length of a written frame

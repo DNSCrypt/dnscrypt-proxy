@@ -58,10 +58,9 @@ func (w *requestWriter) writeHeaders(wr io.Writer, req *http.Request, gzip bool)
 		return err
 	}
 
-	buf := &bytes.Buffer{}
-	hf := headersFrame{Length: uint64(w.headerBuf.Len())}
-	hf.Write(buf)
-	if _, err := wr.Write(buf.Bytes()); err != nil {
+	b := make([]byte, 0, 128)
+	b = (&headersFrame{Length: uint64(w.headerBuf.Len())}).Append(b)
+	if _, err := wr.Write(b); err != nil {
 		return err
 	}
 	_, err := wr.Write(w.headerBuf.Bytes())

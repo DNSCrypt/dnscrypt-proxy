@@ -432,11 +432,10 @@ func (h *cryptoSetup) handleTransportParameters(data []byte) {
 
 // must be called after receiving the transport parameters
 func (h *cryptoSetup) marshalDataForSessionState() []byte {
-	buf := &bytes.Buffer{}
-	quicvarint.Write(buf, clientSessionStateRevision)
-	quicvarint.Write(buf, uint64(h.rttStats.SmoothedRTT().Microseconds()))
-	h.peerParams.MarshalForSessionTicket(buf)
-	return buf.Bytes()
+	b := make([]byte, 0, 256)
+	b = quicvarint.Append(b, clientSessionStateRevision)
+	b = quicvarint.Append(b, uint64(h.rttStats.SmoothedRTT().Microseconds()))
+	return h.peerParams.MarshalForSessionTicket(b)
 }
 
 func (h *cryptoSetup) handleDataFromSessionState(data []byte) {

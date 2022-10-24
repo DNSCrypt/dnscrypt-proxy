@@ -1,6 +1,7 @@
 package ackhandler
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/lucas-clemente/quic-go/internal/protocol"
@@ -48,9 +49,9 @@ func newReceivedPacketTracker(
 	}
 }
 
-func (h *receivedPacketTracker) ReceivedPacket(packetNumber protocol.PacketNumber, ecn protocol.ECN, rcvTime time.Time, shouldInstigateAck bool) {
-	if packetNumber < h.ignoreBelow {
-		return
+func (h *receivedPacketTracker) ReceivedPacket(packetNumber protocol.PacketNumber, ecn protocol.ECN, rcvTime time.Time, shouldInstigateAck bool) error {
+	if isNew := h.packetHistory.ReceivedPacket(packetNumber); !isNew {
+		return fmt.Errorf("recevedPacketTracker BUG: ReceivedPacket called for old / duplicate packet %d", packetNumber)
 	}
 
 	isMissing := h.isMissing(packetNumber)
@@ -59,7 +60,7 @@ func (h *receivedPacketTracker) ReceivedPacket(packetNumber protocol.PacketNumbe
 		h.largestObservedReceivedTime = rcvTime
 	}
 
-	if isNew := h.packetHistory.ReceivedPacket(packetNumber); isNew && shouldInstigateAck {
+	if shouldInstigateAck {
 		h.hasNewAck = true
 	}
 	if shouldInstigateAck {
@@ -74,6 +75,7 @@ func (h *receivedPacketTracker) ReceivedPacket(packetNumber protocol.PacketNumbe
 	case protocol.ECNCE:
 		h.ecnce++
 	}
+	return nil
 }
 
 // IgnoreBelow sets a lower limit for acknowledging packets.
@@ -171,16 +173,16 @@ func (h *receivedPacketTracker) GetAckFrame(onlyIfQueued bool) *wire.AckFrame {
 		}
 	}
 
-	ack := &wire.AckFrame{
-		AckRanges: h.packetHistory.GetAckRanges(),
-		// Make sure that the DelayTime is always positive.
-		// This is not guaranteed on systems that don't have a monotonic clock.
-		DelayTime: utils.Max(0, now.Sub(h.largestObservedReceivedTime)),
-		ECT0:      h.ect0,
-		ECT1:      h.ect1,
-		ECNCE:     h.ecnce,
-	}
+	ack := wire.GetAckFrame()
+	ack.DelayTime = utils.Max(0, now.Sub(h.largestObservedReceivedTime))
+	ack.ECT0 = h.ect0
+	ack.ECT1 = h.ect1
+	ack.ECNCE = h.ecnce
+	ack.AckRanges = h.packetHistory.AppendAckRanges(ack.AckRanges)
 
+	if h.lastAck != nil {
+		wire.PutAckFrame(h.lastAck)
+	}
 	h.lastAck = ack
 	h.ackAlarm = time.Time{}
 	h.ackQueued = false
