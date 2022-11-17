@@ -105,7 +105,7 @@ var receiveBufferWarningOnce sync.Once
 func newPacketHandlerMap(
 	c net.PacketConn,
 	connIDLen int,
-	statelessResetKey []byte,
+	statelessResetKey *StatelessResetKey,
 	tracer logging.Tracer,
 	logger utils.Logger,
 ) (packetHandlerManager, error) {
@@ -132,10 +132,12 @@ func newPacketHandlerMap(
 		deleteRetiredConnsAfter: protocol.RetiredConnectionIDDeleteTimeout,
 		zeroRTTQueueDuration:    protocol.Max0RTTQueueingDuration,
 		closeQueue:              make(chan closePacket, 4),
-		statelessResetEnabled:   len(statelessResetKey) > 0,
-		statelessResetHasher:    hmac.New(sha256.New, statelessResetKey),
+		statelessResetEnabled:   statelessResetKey != nil,
 		tracer:                  tracer,
 		logger:                  logger,
+	}
+	if m.statelessResetEnabled {
+		m.statelessResetHasher = hmac.New(sha256.New, statelessResetKey[:])
 	}
 	go m.listen()
 	go m.runCloseQueue()

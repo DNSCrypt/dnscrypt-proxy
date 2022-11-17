@@ -738,6 +738,7 @@ func (s *connection) ConnectionState() ConnectionState {
 	return ConnectionState{
 		TLS:               s.cryptoStreamHandler.ConnectionState(),
 		SupportsDatagrams: s.supportsDatagrams(),
+		Version:           s.version,
 	}
 }
 
@@ -1217,7 +1218,7 @@ func (s *connection) handleUnpackedPacket(
 		// We create the connection as soon as we receive the first packet from the client.
 		// We do that before authenticating the packet.
 		// That means that if the source connection ID was corrupted,
-		// we might have create a connection with an incorrect source connection ID.
+		// we might have created a connection with an incorrect source connection ID.
 		// Once we authenticate the first packet, we need to update it.
 		if s.perspective == protocol.PerspectiveServer {
 			if packet.hdr.SrcConnectionID != s.handshakeDestConnID {

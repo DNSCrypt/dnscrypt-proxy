@@ -18,7 +18,7 @@ require (
 	github.com/jedisct1/xsecretbox v0.0.0-20210927135450-ebe41aef7bef
 	github.com/k-sone/critbitgo v1.4.0
 	github.com/kardianos/service v1.2.2
-	github.com/lucas-clemente/quic-go v0.30.0
+	github.com/lucas-clemente/quic-go v0.31.0
 	github.com/miekg/dns v1.1.50
 	github.com/powerman/check v1.6.0
 	golang.org/x/crypto v0.2.0
