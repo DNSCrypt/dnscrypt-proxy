@@ -201,10 +201,19 @@ type EarlyConnection interface {
 	NextConnection() Connection
 }
 
+// StatelessResetKey is a key used to derive stateless reset tokens.
+type StatelessResetKey [32]byte
+
 // A ConnectionID is a QUIC Connection ID, as defined in RFC 9000.
 // It is not able to handle QUIC Connection IDs longer than 20 bytes,
 // as they are allowed by RFC 8999.
 type ConnectionID = protocol.ConnectionID
+
+// ConnectionIDFromBytes interprets b as a Connection ID. It panics if b is
+// longer than 20 bytes.
+func ConnectionIDFromBytes(b []byte) ConnectionID {
+	return protocol.ParseConnectionID(b)
+}
 
 // A ConnectionIDGenerator is an interface that allows clients to implement their own format
 // for the Connection IDs that servers/clients use as SrcConnectionID in QUIC packets.
@@ -303,7 +312,7 @@ type Config struct {
 	MaxIncomingUniStreams int64
 	// The StatelessResetKey is used to generate stateless reset tokens.
 	// If no key is configured, sending of stateless resets is disabled.
-	StatelessResetKey []byte
+	StatelessResetKey *StatelessResetKey
 	// KeepAlivePeriod defines whether this peer will periodically send a packet to keep the connection alive.
 	// If set to 0, then no keep alive is sent. Otherwise, the keep alive is sent on that period (or at most
 	// every half of MaxIdleTimeout, whichever is smaller).
@@ -325,6 +334,7 @@ type Config struct {
 type ConnectionState struct {
 	TLS               handshake.ConnectionState
 	SupportsDatagrams bool
+	Version           VersionNumber
 }
 
 // A Listener for incoming QUIC connections

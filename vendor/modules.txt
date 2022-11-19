@@ -316,7 +316,7 @@ github.com/ldez/gomoddirectives
 # github.com/ldez/tagliatelle v0.2.0
 ## explicit; go 1.16
 github.com/ldez/tagliatelle
-# github.com/lucas-clemente/quic-go v0.30.0
+# github.com/lucas-clemente/quic-go v0.31.0
 ## explicit; go 1.18
 github.com/lucas-clemente/quic-go
 github.com/lucas-clemente/quic-go/http3
@@ -578,7 +578,7 @@ github.com/uudashr/gocognit
 # github.com/yeya24/promlinter v0.1.0
 ## explicit; go 1.14
 github.com/yeya24/promlinter
-# golang.org/x/crypto v0.2.0
+# golang.org/x/crypto v0.3.0
 ## explicit; go 1.17
 golang.org/x/crypto/blake2b
 golang.org/x/crypto/chacha20
