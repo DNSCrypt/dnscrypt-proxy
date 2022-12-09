@@ -81,7 +81,7 @@ func (e TransportErrorCode) String() string {
 		return "NO_VIABLE_PATH"
 	default:
 		if e.IsCryptoError() {
-			return fmt.Sprintf("CRYPTO_ERROR (%#x)", uint16(e))
+			return fmt.Sprintf("CRYPTO_ERROR %#x", uint16(e))
 		}
 		return fmt.Sprintf("unknown error code: %#x", uint16(e))
 	}

@@ -340,7 +340,7 @@ func (h *cryptoSetup) onError(alert uint8, message string) {
 	if alert == 0 {
 		err = &qerr.TransportError{ErrorCode: qerr.InternalError, ErrorMessage: message}
 	} else {
-		err = qerr.NewCryptoError(alert, message)
+		err = qerr.NewLocalCryptoError(alert, message)
 	}
 	h.runner.OnError(err)
 }
