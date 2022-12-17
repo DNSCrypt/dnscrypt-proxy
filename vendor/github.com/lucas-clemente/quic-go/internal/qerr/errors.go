@@ -21,8 +21,8 @@ type TransportError struct {
 
 var _ error = &TransportError{}
 
-// NewCryptoError create a new TransportError instance for a crypto error
-func NewCryptoError(tlsAlert uint8, errorMessage string) *TransportError {
+// NewLocalCryptoError create a new TransportError instance for a crypto error
+func NewLocalCryptoError(tlsAlert uint8, errorMessage string) *TransportError {
 	return &TransportError{
 		ErrorCode:    0x100 + TransportErrorCode(tlsAlert),
 		ErrorMessage: errorMessage,
@@ -30,7 +30,7 @@ func NewCryptoError(tlsAlert uint8, errorMessage string) *TransportError {
 }
 
 func (e *TransportError) Error() string {
-	str := e.ErrorCode.String()
+	str := fmt.Sprintf("%s (%s)", e.ErrorCode.String(), getRole(e.Remote))
 	if e.FrameType != 0 {
 		str += fmt.Sprintf(" (frame type: %#x)", e.FrameType)
 	}
@@ -68,9 +68,9 @@ var _ error = &ApplicationError{}
 
 func (e *ApplicationError) Error() string {
 	if len(e.ErrorMessage) == 0 {
-		return fmt.Sprintf("Application error %#x", e.ErrorCode)
+		return fmt.Sprintf("Application error %#x (%s)", e.ErrorCode, getRole(e.Remote))
 	}
-	return fmt.Sprintf("Application error %#x: %s", e.ErrorCode, e.ErrorMessage)
+	return fmt.Sprintf("Application error %#x (%s): %s", e.ErrorCode, getRole(e.Remote), e.ErrorMessage)
 }
 
 type IdleTimeoutError struct{}
@@ -122,3 +122,10 @@ func (e *StatelessResetError) Is(target error) bool {
 
 func (e *StatelessResetError) Timeout() bool   { return false }
 func (e *StatelessResetError) Temporary() bool { return true }
+
+func getRole(remote bool) string {
+	if remote {
+		return "remote"
+	}
+	return "local"
+}
