@@ -21,3 +21,7 @@ dns.msftncsi.com                131.107.255.255, fd3e:4f5a:5b81::1
 www.msftconnecttest.com         13.107.4.52
 ipv6.msftconnecttest.com        2a01:111:2003::52
 ipv4only.arpa                   192.0.0.170, 192.0.0.171
+
+## Adding IP addresses of NTP servers is also a good idea
+
+time.google.com                 216.239.35.0, 2001:4860:4806::
