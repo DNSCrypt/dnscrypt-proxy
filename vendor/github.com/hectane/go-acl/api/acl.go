@@ -85,14 +85,14 @@ type ExplicitAccess struct {
 
 // https://msdn.microsoft.com/en-us/library/windows/desktop/aa379576.aspx
 func SetEntriesInAcl(entries []ExplicitAccess, oldAcl windows.Handle, newAcl *windows.Handle) error {
-	ret, _, err := procSetEntriesInAclW.Call(
+	ret, _, _ := procSetEntriesInAclW.Call(
 		uintptr(len(entries)),
 		uintptr(unsafe.Pointer(&entries[0])),
 		uintptr(oldAcl),
 		uintptr(unsafe.Pointer(newAcl)),
 	)
 	if ret != 0 {
-		return err
+		return windows.Errno(ret)
 	}
 	return nil
 }

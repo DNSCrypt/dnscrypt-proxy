@@ -50,7 +50,7 @@ var (
 
 // https://msdn.microsoft.com/en-us/library/windows/desktop/aa446645.aspx
 func GetNamedSecurityInfo(objectName string, objectType int32, secInfo uint32, owner, group **windows.SID, dacl, sacl, secDesc *windows.Handle) error {
-	ret, _, err := procGetNamedSecurityInfoW.Call(
+	ret, _, _ := procGetNamedSecurityInfoW.Call(
 		uintptr(unsafe.Pointer(windows.StringToUTF16Ptr(objectName))),
 		uintptr(objectType),
 		uintptr(secInfo),
@@ -61,14 +61,14 @@ func GetNamedSecurityInfo(objectName string, objectType int32, secInfo uint32, o
 		uintptr(unsafe.Pointer(secDesc)),
 	)
 	if ret != 0 {
-		return err
+		return windows.Errno(ret)
 	}
 	return nil
 }
 
 // https://msdn.microsoft.com/en-us/library/windows/desktop/aa379579.aspx
 func SetNamedSecurityInfo(objectName string, objectType int32, secInfo uint32, owner, group *windows.SID, dacl, sacl windows.Handle) error {
-	ret, _, err := procSetNamedSecurityInfoW.Call(
+	ret, _, _ := procSetNamedSecurityInfoW.Call(
 		uintptr(unsafe.Pointer(windows.StringToUTF16Ptr(objectName))),
 		uintptr(objectType),
 		uintptr(secInfo),
@@ -78,7 +78,7 @@ func SetNamedSecurityInfo(objectName string, objectType int32, secInfo uint32, o
 		uintptr(sacl),
 	)
 	if ret != 0 {
-		return err
+		return windows.Errno(ret)
 	}
 	return nil
 }
