@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -134,7 +133,7 @@ func loadSnakeoil(t *testing.T, d *SourceTestData) {
 }
 
 func loadTestSourceNames(t *testing.T, d *SourceTestData) {
-	files, err := ioutil.ReadDir(filepath.Join("testdata", "sources"))
+	files, err := os.ReadDir(filepath.Join("testdata", "sources"))
 	if err != nil {
 		t.Fatalf("Unable to load list of test sources: %v", err)
 	}
@@ -196,7 +195,7 @@ func loadFixtures(t *testing.T, d *SourceTestData) {
 }
 
 func makeTempDir(t *testing.T, d *SourceTestData) {
-	name, err := ioutil.TempDir("", "sources_test.go."+t.Name())
+	name, err := os.MkdirTemp("", "sources_test.go."+t.Name())
 	if err != nil {
 		t.Fatalf("Unable to create temporary directory: %v", err)
 	}
