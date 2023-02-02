@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	AppVersion            = "2.1.2"
+	AppVersion            = "2.1.3"
 	DefaultConfigFileName = "dnscrypt-proxy.toml"
 )
 
