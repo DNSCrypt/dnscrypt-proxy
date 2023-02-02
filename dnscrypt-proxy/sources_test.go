@@ -69,7 +69,7 @@ type SourceTestExpect struct {
 }
 
 func readFixture(t *testing.T, name string) []byte {
-	bin, err := ioutil.ReadFile(filepath.Join("testdata", name))
+	bin, err := os.ReadFile(filepath.Join("testdata", name))
 	if err != nil {
 		t.Fatalf("Unable to read test fixture %s: %v", name, err)
 	}
@@ -86,7 +86,7 @@ func writeSourceCache(t *testing.T, e *SourceTestExpect) {
 		if perms == 0 {
 			perms = 0644
 		}
-		if err := ioutil.WriteFile(path, f.content, perms); err != nil {
+		if err := os.WriteFile(path, f.content, perms); err != nil {
 			t.Fatalf("Unable to write cache file %s: %v", path, err)
 		}
 		if err := acl.Chmod(path, perms); err != nil {
@@ -109,7 +109,7 @@ func checkSourceCache(c *check.C, e *SourceTestExpect) {
 	for _, f := range e.cache {
 		path := e.cachePath + f.suffix
 		_ = acl.Chmod(path, 0644) // don't worry if this fails, reading it will catch the same problem
-		got, err := ioutil.ReadFile(path)
+		got, err := os.ReadFile(path)
 		c.DeepEqual(got, f.content, "Unexpected content for cache file '%s', err %v", path, err)
 		if f.suffix != "" {
 			continue

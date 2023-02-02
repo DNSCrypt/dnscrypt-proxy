@@ -10,11 +10,11 @@ import (
 	"encoding/hex"
 	"errors"
 	"io"
-	"io/ioutil"
 	"math/rand"
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -179,7 +179,7 @@ func (xTransport *XTransport) rebuildTransport() {
 		if certPool == nil {
 			dlog.Fatalf("Additional CAs not supported on this platform: %v", certPoolErr)
 		}
-		additionalCaCert, err := ioutil.ReadFile(clientCreds.rootCA)
+		additionalCaCert, err := os.ReadFile(clientCreds.rootCA)
 		if err != nil {
 			dlog.Fatal(err)
 		}
@@ -470,7 +470,7 @@ func (xTransport *XTransport) Fetch(
 	}
 	if body != nil {
 		req.ContentLength = int64(len(*body))
-		req.Body = ioutil.NopCloser(bytes.NewReader(*body))
+		req.Body = io.NopCloser(bytes.NewReader(*body))
 	}
 	start := time.Now()
 	resp, err := client.Do(req)
@@ -528,7 +528,7 @@ func (xTransport *XTransport) Fetch(
 		}
 	}
 	tls := resp.TLS
-	bin, err := ioutil.ReadAll(io.LimitReader(resp.Body, MaxHTTPBodyLength))
+	bin, err := io.ReadAll(io.LimitReader(resp.Body, MaxHTTPBodyLength))
 	if err != nil {
 		return nil, statusCode, tls, rtt, err
 	}

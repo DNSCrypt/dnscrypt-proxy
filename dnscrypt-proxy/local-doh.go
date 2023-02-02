@@ -4,7 +4,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"strings"
@@ -36,7 +35,7 @@ func (handler localDoHHandler) ServeHTTP(writer http.ResponseWriter, request *ht
 	start := time.Now()
 	if request.Method == "POST" &&
 		request.Header.Get("Content-Type") == dataType {
-		packet, err = ioutil.ReadAll(io.LimitReader(request.Body, int64(MaxDNSPacketSize)))
+		packet, err = io.ReadAll(io.LimitReader(request.Body, int64(MaxDNSPacketSize)))
 		if err != nil {
 			dlog.Warnf("No body in a local DoH query")
 			return

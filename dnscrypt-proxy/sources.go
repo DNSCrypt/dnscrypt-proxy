@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
 	"math/rand"
 	"net/url"
 	"os"
@@ -54,10 +53,10 @@ var timeNow = time.Now
 
 func (source *Source) fetchFromCache(now time.Time) (delay time.Duration, err error) {
 	var bin, sig []byte
-	if bin, err = ioutil.ReadFile(source.cacheFile); err != nil {
+	if bin, err = os.ReadFile(source.cacheFile); err != nil {
 		return
 	}
-	if sig, err = ioutil.ReadFile(source.cacheFile + ".minisig"); err != nil {
+	if sig, err = os.ReadFile(source.cacheFile + ".minisig"); err != nil {
 		return
 	}
 	if err = source.checkSignature(bin, sig); err != nil {
