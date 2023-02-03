@@ -506,14 +506,14 @@ func (xTransport *XTransport) Fetch(
 			altPort := uint16(port)
 			for i, xalt := range alt {
 				for j, v := range strings.Split(xalt, ";") {
-					if i > 8 || j > 16 {
+					if i >= 8 || j >= 16 {
 						break
 					}
 					v = strings.TrimSpace(v)
 					if strings.HasPrefix(v, "h3=\":") {
 						v = strings.TrimPrefix(v, "h3=\":")
 						v = strings.TrimSuffix(v, "\"")
-						if xAltPort, err := strconv.ParseUint(v, 10, 16); err == nil && xAltPort <= 65536 {
+						if xAltPort, err := strconv.ParseUint(v, 10, 16); err == nil && xAltPort <= 65535 {
 							altPort = uint16(xAltPort)
 							dlog.Debugf("Using HTTP/3 for [%s]", url.Host)
 							break
