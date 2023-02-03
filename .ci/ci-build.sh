@@ -23,7 +23,7 @@ ln ../windows/* win64/
 zip -9 -r dnscrypt-proxy-win64-${PACKAGE_VERSION:-dev}.zip win64
 
 go clean
-env GO386=387 GOOS=openbsd GOARCH=386 go build -mod vendor -ldflags="-s -w"
+env GO386=softfloat GOOS=openbsd GOARCH=386 go build -mod vendor -ldflags="-s -w"
 mkdir openbsd-i386
 ln dnscrypt-proxy openbsd-i386/
 ln ../LICENSE example-dnscrypt-proxy.toml localhost.pem example-*.txt openbsd-i386/
