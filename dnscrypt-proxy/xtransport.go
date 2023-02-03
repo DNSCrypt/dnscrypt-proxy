@@ -503,7 +503,7 @@ func (xTransport *XTransport) Fetch(
 	if xTransport.h3Transport != nil && !hasAltSupport {
 		if alt, found := resp.Header["Alt-Svc"]; found {
 			dlog.Debugf("Alt-Svc [%s]: [%s]", url.Host, alt)
-			altPort := uint16(port)
+			altPort := uint16(port & 0xffff)
 			for i, xalt := range alt {
 				for j, v := range strings.Split(xalt, ";") {
 					if i > 8 || j > 16 {
