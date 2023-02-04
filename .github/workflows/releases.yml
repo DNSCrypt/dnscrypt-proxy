@@ -25,7 +25,7 @@ jobs:
     steps:
       - name: Get the version
         id: get_version
-        run: echo ::set-output name=VERSION::${GITHUB_REF/refs\/tags\//}
+        run: echo "VERSION=${GITHUB_REF/refs\/tags\//}" >> $GITHUB_OUTPUT
 
       - name: Set up Go
         uses: actions/setup-go@v3
