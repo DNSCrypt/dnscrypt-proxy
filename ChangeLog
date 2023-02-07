@@ -1,3 +1,8 @@
+# Version 2.1.4
+ - Fixes a regression from version 2.1.3: when cloaking was enabled,
+blocked responses were returned for records that were not A/AAAA/PTR
+even for names that were not in the cloaked list.
+
 # Version 2.1.3
  - DNS-over-HTTP/3 (QUIC) should be more reliable. In particular,
 version 2.1.2 required another (non-QUIC) resolver to be present for
