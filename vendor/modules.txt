@@ -754,8 +754,8 @@ google.golang.org/protobuf/types/known/timestamppb
 # gopkg.in/ini.v1 v1.51.0
 ## explicit
 gopkg.in/ini.v1
-# gopkg.in/natefinch/lumberjack.v2 v2.0.0
-## explicit
+# gopkg.in/natefinch/lumberjack.v2 v2.2.1
+## explicit; go 1.13
 gopkg.in/natefinch/lumberjack.v2
 # gopkg.in/yaml.v2 v2.4.0
 ## explicit; go 1.15
