@@ -67,6 +67,9 @@ t || dig -p${DNS_PORT} +dnssec www.darpa.mil @127.0.0.1 2>&1 | grep -Fvq 'RRSIG'
 
 section
 t || dig -p${DNS_PORT} +short cloaked.com @127.0.0.1 | grep -Eq '1.1.1.1|1.0.0.1' || fail
+t || dig -p${DNS_PORT} +short MX cloaked.com @127.0.0.1 | grep -Fq 'locally blocked' || fail
+t || dig -p${DNS_PORT} +short MX example.com @127.0.0.1 | grep -Fvq 'locally blocked' || fail
+t || dig -p${DNS_PORT} NS cloaked.com @127.0.0.1 | grep -Fiq 'gtld-servers.net' || fail
 t || dig -p${DNS_PORT} +short www.cloaked2.com @127.0.0.1 | grep -Eq '1.1.1.1|1.0.0.1' || fail
 t || dig -p${DNS_PORT} +short www.dnscrypt-test @127.0.0.1 | grep -Fq '192.168.100.100' || fail
 t || dig -p${DNS_PORT} a.www.dnscrypt-test @127.0.0.1 | grep -Fq 'NXDOMAIN' || fail

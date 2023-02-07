@@ -136,12 +136,7 @@ func (plugin *PluginCloak) Reload() error {
 
 func (plugin *PluginCloak) Eval(pluginsState *PluginsState, msg *dns.Msg) error {
 	question := msg.Question[0]
-	if question.Qclass != dns.ClassINET ||
-		(question.Qtype != dns.TypeA && question.Qtype != dns.TypeAAAA && question.Qtype != dns.TypePTR) {
-		if question.Qclass != dns.ClassINET || (question.Qtype != dns.TypeNS || question.Qtype == dns.TypeSOA) {
-			pluginsState.action = PluginsActionReject
-			pluginsState.returnCode = PluginsReturnCodeCloak
-		}
+	if question.Qclass != dns.ClassINET || question.Qtype == dns.TypeNS || question.Qtype == dns.TypeSOA {
 		return nil
 	}
 	now := time.Now()
@@ -149,6 +144,12 @@ func (plugin *PluginCloak) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 	_, _, xcloakedName := plugin.patternMatcher.Eval(pluginsState.qName)
 	if xcloakedName == nil {
 		plugin.RUnlock()
+		return nil
+	}
+	if question.Qtype != dns.TypeA && question.Qtype != dns.TypeAAAA && question.Qtype != dns.TypePTR {
+		plugin.RUnlock()
+		pluginsState.action = PluginsActionReject
+		pluginsState.returnCode = PluginsReturnCodeCloak
 		return nil
 	}
 	cloakedName := xcloakedName.(*CloakedName)
