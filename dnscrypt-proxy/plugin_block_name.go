@@ -71,8 +71,7 @@ func (blockedNames *BlockedNames) check(pluginsState *PluginsState, qName string
 
 // ---
 
-type PluginBlockName struct {
-}
+type PluginBlockName struct{}
 
 func (plugin *PluginBlockName) Name() string {
 	return "block_name"
@@ -148,8 +147,7 @@ func (plugin *PluginBlockName) Eval(pluginsState *PluginsState, msg *dns.Msg) er
 
 // ---
 
-type PluginBlockNameResponse struct {
-}
+type PluginBlockNameResponse struct{}
 
 func (plugin *PluginBlockNameResponse) Name() string {
 	return "block_name"

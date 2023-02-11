@@ -11,8 +11,10 @@ import (
 	"github.com/miekg/dns"
 )
 
-const myResolverHost string = "resolver.dnscrypt.info."
-const nonexistentName string = "nonexistent-zone.dnscrypt-test."
+const (
+	myResolverHost  string = "resolver.dnscrypt.info."
+	nonexistentName string = "nonexistent-zone.dnscrypt-test."
+)
 
 func resolveQuery(server string, qName string, qType uint16, sendClientSubnet bool) (*dns.Msg, error) {
 	client := new(dns.Client)

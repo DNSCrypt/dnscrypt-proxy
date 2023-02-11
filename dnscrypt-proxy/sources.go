@@ -78,11 +78,11 @@ func (source *Source) fetchFromCache(now time.Time) (delay time.Duration, err er
 
 func writeSource(f string, bin, sig []byte) (err error) {
 	var fSrc, fSig *safefile.File
-	if fSrc, err = safefile.Create(f, 0644); err != nil {
+	if fSrc, err = safefile.Create(f, 0o644); err != nil {
 		return
 	}
 	defer fSrc.Close()
-	if fSig, err = safefile.Create(f+".minisig", 0644); err != nil {
+	if fSig, err = safefile.Create(f+".minisig", 0o644); err != nil {
 		return
 	}
 	defer fSig.Close()

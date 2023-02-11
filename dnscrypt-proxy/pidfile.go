@@ -15,10 +15,10 @@ func PidFileCreate() error {
 	if pidFile == nil || len(*pidFile) == 0 {
 		return nil
 	}
-	if err := os.MkdirAll(filepath.Dir(*pidFile), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(*pidFile), 0o755); err != nil {
 		return err
 	}
-	return safefile.WriteFile(*pidFile, []byte(strconv.Itoa(os.Getpid())), 0644)
+	return safefile.WriteFile(*pidFile, []byte(strconv.Itoa(os.Getpid())), 0o644)
 }
 
 func PidFileRemove() error {

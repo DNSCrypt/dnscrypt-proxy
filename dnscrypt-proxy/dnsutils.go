@@ -71,8 +71,10 @@ func RefusedResponseFromMessage(srcMsg *dns.Msg, refusedCode bool, ipv4 net.IP, 
 
 		if sendHInfoResponse {
 			hinfo := new(dns.HINFO)
-			hinfo.Hdr = dns.RR_Header{Name: question.Name, Rrtype: dns.TypeHINFO,
-				Class: dns.ClassINET, Ttl: ttl}
+			hinfo.Hdr = dns.RR_Header{
+				Name: question.Name, Rrtype: dns.TypeHINFO,
+				Class: dns.ClassINET, Ttl: ttl,
+			}
 			hinfo.Cpu = "This query has been locally blocked"
 			hinfo.Os = "by dnscrypt-proxy"
 			dstMsg.Answer = []dns.RR{hinfo}

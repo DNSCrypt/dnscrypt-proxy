@@ -9,8 +9,7 @@ import (
 	"github.com/miekg/dns"
 )
 
-type PluginFirefox struct {
-}
+type PluginFirefox struct{}
 
 func (plugin *PluginFirefox) Name() string {
 	return "firefox"

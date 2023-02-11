@@ -45,8 +45,7 @@ func computeCacheKey(pluginsState *PluginsState, msg *dns.Msg) [32]byte {
 
 // ---
 
-type PluginCache struct {
-}
+type PluginCache struct{}
 
 func (plugin *PluginCache) Name() string {
 	return "cache"
@@ -108,8 +107,7 @@ func (plugin *PluginCache) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 
 // ---
 
-type PluginCacheResponse struct {
-}
+type PluginCacheResponse struct{}
 
 func (plugin *PluginCacheResponse) Name() string {
 	return "cache_response"

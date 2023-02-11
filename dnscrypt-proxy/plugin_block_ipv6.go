@@ -35,8 +35,10 @@ func (plugin *PluginBlockIPv6) Eval(pluginsState *PluginsState, msg *dns.Msg) er
 	}
 	synth := EmptyResponseFromMessage(msg)
 	hinfo := new(dns.HINFO)
-	hinfo.Hdr = dns.RR_Header{Name: question.Name, Rrtype: dns.TypeHINFO,
-		Class: dns.ClassINET, Ttl: 86400}
+	hinfo.Hdr = dns.RR_Header{
+		Name: question.Name, Rrtype: dns.TypeHINFO,
+		Class: dns.ClassINET, Ttl: 86400,
+	}
 	hinfo.Cpu = "AAAA queries have been locally blocked by dnscrypt-proxy"
 	hinfo.Os = "Set block_ipv6 to false to disable that feature"
 	synth.Answer = []dns.RR{hinfo}
@@ -54,8 +56,10 @@ func (plugin *PluginBlockIPv6) Eval(pluginsState *PluginsState, msg *dns.Msg) er
 	soa.Minttl = 2400
 	soa.Expire = 604800
 	soa.Retry = 300
-	soa.Hdr = dns.RR_Header{Name: parentZone, Rrtype: dns.TypeSOA,
-		Class: dns.ClassINET, Ttl: 60}
+	soa.Hdr = dns.RR_Header{
+		Name: parentZone, Rrtype: dns.TypeSOA,
+		Class: dns.ClassINET, Ttl: 60,
+	}
 	synth.Ns = []dns.RR{soa}
 	pluginsState.synthResponse = synth
 	pluginsState.action = PluginsActionSynth
