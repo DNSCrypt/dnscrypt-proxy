@@ -28,15 +28,13 @@ type globals struct {
 	occurrences     uint64
 }
 
-var (
-	_globals = globals{
-		logLevel:       SeverityLast,
-		appName:        "-",
-		lastMessage:    "",
-		lastOccurrence: time.Now(),
-		occurrences:    0,
-	}
-)
+var _globals = globals{
+	logLevel:       SeverityLast,
+	appName:        "-",
+	lastMessage:    "",
+	lastOccurrence: time.Now(),
+	occurrences:    0,
+}
 
 const (
 	SeverityDebug Severity = iota
@@ -209,7 +207,7 @@ func createFileDescriptor() {
 		} else {
 			mode |= os.O_APPEND
 		}
-		outFd, err := os.OpenFile(*_globals.fileName, mode, 0644)
+		outFd, err := os.OpenFile(*_globals.fileName, mode, 0o644)
 		if err == nil {
 			_globals.outFd = outFd
 		}
