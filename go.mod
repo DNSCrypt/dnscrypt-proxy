@@ -123,10 +123,10 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/polyfloyd/go-errorlint v0.0.0-20210510181950-ab96adb96fea // indirect
 	github.com/powerman/deepequal v0.1.0 // indirect
-	github.com/prometheus/client_golang v1.7.1 // indirect
+	github.com/prometheus/client_golang v1.11.1 // indirect
 	github.com/prometheus/client_model v0.2.0 // indirect
-	github.com/prometheus/common v0.10.0 // indirect
-	github.com/prometheus/procfs v0.1.3 // indirect
+	github.com/prometheus/common v0.26.0 // indirect
+	github.com/prometheus/procfs v0.6.0 // indirect
 	github.com/quasilyte/go-ruleguard v0.3.4 // indirect
 	github.com/quasilyte/regex/syntax v0.0.0-20200407221936-30656e2c4a95 // indirect
 	github.com/quic-go/qpack v0.4.0 // indirect
