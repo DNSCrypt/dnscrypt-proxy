@@ -458,12 +458,15 @@ func TestPrefetchSources(t *testing.T) {
 	teardown, d := setupSourceTest(t)
 	defer teardown()
 	checkResult := func(t *testing.T, expects []*SourceTestExpect, got time.Duration) {
+		var expectDelay time.Duration
 		c := check.T(t)
-		expectDelay := MinimumPrefetchInterval
 		for _, e := range expects {
-			if e.delay >= MinimumPrefetchInterval && (expectDelay == MinimumPrefetchInterval || expectDelay > e.delay) {
+			if expectDelay == 0 || expectDelay > e.delay {
 				expectDelay = e.delay
 			}
+		}
+		if expectDelay < MinimumPrefetchInterval {
+			expectDelay = MinimumPrefetchInterval
 		}
 		c.InDelta(got, expectDelay, time.Second, "Unexpected return")
 		checkTestServer(c, d)

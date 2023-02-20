@@ -222,8 +222,8 @@ func NewSource(
 
 // PrefetchSources downloads latest versions of given sources, ensuring they have a valid signature before caching
 func PrefetchSources(xTransport *XTransport, sources []*Source) (time.Duration, int) {
+	var interval time.Duration
 	now := timeNow()
-	interval := MinimumPrefetchInterval
 	downloaded := 0
 	for _, source := range sources {
 		var delay time.Duration
@@ -241,9 +241,13 @@ func PrefetchSources(xTransport *XTransport, sources []*Source) (time.Duration, 
 				downloaded++
 			}
 		}
-		if delay >= MinimumPrefetchInterval && (interval == MinimumPrefetchInterval || interval > delay) {
+		if interval == 0 || interval > delay {
 			interval = delay
 		}
+	}
+	if interval < MinimumPrefetchInterval {
+		dlog.Debugf("Prefetching delay %v is ceiled to %v", interval, MinimumPrefetchInterval)
+		interval = MinimumPrefetchInterval
 	}
 	return interval, downloaded
 }
