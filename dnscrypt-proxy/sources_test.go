@@ -14,9 +14,9 @@ import (
 	"time"
 
 	"github.com/hectane/go-acl"
-	"github.com/powerman/check"
-
+	"github.com/jedisct1/dlog"
 	"github.com/jedisct1/go-minisign"
+	"github.com/powerman/check"
 )
 
 type SourceFixture struct {
@@ -382,6 +382,10 @@ func setupSourceTestCase(t *testing.T, d *SourceTestData, i int,
 }
 
 func TestNewSource(t *testing.T) {
+	if testing.Verbose() {
+		dlog.SetLogLevel(dlog.SeverityDebug)
+		dlog.UseSyslog(false)
+	}
 	teardown, d := setupSourceTest(t)
 	defer teardown()
 	checkResult := func(t *testing.T, e *SourceTestExpect, got *Source, err error) {
@@ -443,6 +447,10 @@ func TestNewSource(t *testing.T) {
 }
 
 func TestPrefetchSources(t *testing.T) {
+	if testing.Verbose() {
+		dlog.SetLogLevel(dlog.SeverityDebug)
+		dlog.UseSyslog(false)
+	}
 	teardown, d := setupSourceTest(t)
 	defer teardown()
 	checkResult := func(t *testing.T, expects []*SourceTestExpect, got time.Duration) {
