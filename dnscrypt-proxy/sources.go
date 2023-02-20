@@ -23,21 +23,18 @@ const (
 	SourceFormatV2 = iota
 )
 
-const (
-	DefaultPrefetchDelay    time.Duration = 24 * time.Hour
-	MinimumPrefetchInterval time.Duration = 10 * time.Minute
-)
+const MinimumPrefetchInterval time.Duration = 10 * time.Minute
 
 type Source struct {
-	name                    string
-	urls                    []*url.URL
-	format                  SourceFormat
-	in                      []byte
-	minisignKey             *minisign.PublicKey
-	cacheFile               string
-	cacheTTL, prefetchDelay time.Duration
-	refresh                 time.Time
-	prefix                  string
+	name        string
+	urls        []*url.URL
+	format      SourceFormat
+	in          []byte
+	minisignKey *minisign.PublicKey
+	cacheFile   string
+	cacheTTL    time.Duration
+	refresh     time.Time
+	prefix      string
 }
 
 func (source *Source) checkSignature(bin, sig []byte) (err error) {
@@ -68,8 +65,8 @@ func (source *Source) fetchFromCache(now time.Time) (delay time.Duration, err er
 		return
 	}
 	if elapsed := now.Sub(fi.ModTime()); elapsed < source.cacheTTL {
-		delay = source.prefetchDelay - elapsed
-		dlog.Debugf("Source [%s] cache file [%s] is still fresh, next update: %v", source.name, source.cacheFile, delay)
+		delay = source.cacheTTL - elapsed
+		dlog.Debugf("Source [%s] cache file [%s] is still fresh, next update in %v", source.name, source.cacheFile, delay)
 	} else {
 		dlog.Debugf("Source [%s] cache file [%s] needs to be refreshed", source.name, source.cacheFile)
 	}
@@ -174,7 +171,7 @@ func (source *Source) fetchWithCache(xTransport *XTransport, now time.Time) (del
 		return
 	}
 	source.writeToCache(bin, sig, now)
-	delay = source.prefetchDelay
+	delay = source.cacheTTL
 	return
 }
 
@@ -189,16 +186,12 @@ func NewSource(
 	refreshDelay time.Duration,
 	prefix string,
 ) (source *Source, err error) {
-	if refreshDelay < DefaultPrefetchDelay {
-		refreshDelay = DefaultPrefetchDelay
-	}
 	source = &Source{
-		name:          name,
-		urls:          []*url.URL{},
-		cacheFile:     cacheFile,
-		cacheTTL:      refreshDelay,
-		prefetchDelay: DefaultPrefetchDelay,
-		prefix:        prefix,
+		name:      name,
+		urls:      []*url.URL{},
+		cacheFile: cacheFile,
+		cacheTTL:  refreshDelay,
+		prefix:    prefix,
 	}
 	if formatStr == "v2" {
 		source.format = SourceFormatV2

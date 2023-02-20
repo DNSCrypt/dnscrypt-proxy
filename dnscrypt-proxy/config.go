@@ -878,8 +878,8 @@ func (config *Config) loadSource(proxy *Proxy, cfgSourceName string, cfgSource *
 	if cfgSource.FormatStr == "" {
 		cfgSource.FormatStr = "v2"
 	}
-	if cfgSource.RefreshDelay <= 0 {
-		cfgSource.RefreshDelay = 72
+	if cfgSource.RefreshDelay < 24 {
+		cfgSource.RefreshDelay = 24
 	} else if cfgSource.RefreshDelay > 168 {
 		cfgSource.RefreshDelay = 168
 	}

@@ -677,9 +677,9 @@ format = 'tsv'
 ## If the `urls` property is missing, cache files and valid signatures
 ## must already be present. This doesn't prevent these cache files from
 ## expiring after `refresh_delay` hours.
-## Cache freshness is checked every 24 hours, so values for 'refresh_delay'
-## of less than 24 hours will have no effect.
-## A maximum delay of 168 hours (1 week) is imposed to ensure cache freshness.
+## `refresh_delay` is neared to integer in [24, 168].
+## The minimum delay of 24 hours (1 day) is imposed to ensure efficiency.
+## The maximum delay of 168 hours (1 week) is imposed to ensure cache freshness.
 
 [sources]
 
