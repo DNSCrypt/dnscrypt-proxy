@@ -71,7 +71,7 @@ func (source *Source) fetchFromCache(now time.Time) (delay time.Duration, err er
 		delay = source.prefetchDelay - elapsed
 		dlog.Debugf("Source [%s] cache file [%s] is still fresh, next update: %v", source.name, source.cacheFile, delay)
 	} else {
-		dlog.Debugf("Source [%s] cache file [%s] needs to be refreshed", source.name, source.cacheFile)
+		dlog.Noticef("Source [%s] cache file [%s] needs to be refreshed", source.name, source.cacheFile)
 	}
 	return
 }
@@ -134,23 +134,11 @@ func fetchFromURL(xTransport *XTransport, u *url.URL) (bin []byte, err error) {
 	return bin, err
 }
 
-func (source *Source) fetchWithCache(xTransport *XTransport, now time.Time) (delay time.Duration, err error) {
-	if delay, err = source.fetchFromCache(now); err != nil {
-		if len(source.urls) == 0 {
-			dlog.Errorf("Source [%s] cache file [%s] not present and no valid URL", source.name, source.cacheFile)
-			return
-		}
-		dlog.Debugf("Source [%s] cache file [%s] not present", source.name, source.cacheFile)
-	}
-	if len(source.urls) > 0 {
-		defer func() {
-			source.refresh = now.Add(delay)
-		}()
-	}
-	if len(source.urls) == 0 || delay > 0 {
+func (source *Source) fetchNew(xTransport *XTransport, now time.Time) (delay time.Duration, err error) {
+	delay = MinimumPrefetchInterval
+	if len(source.urls) == 0 {
 		return
 	}
-	delay = MinimumPrefetchInterval
 	var bin, sig []byte
 	for _, srcURL := range source.urls {
 		dlog.Infof("Source [%s] loading from URL [%s]", source.name, srcURL)
@@ -170,11 +158,11 @@ func (source *Source) fetchWithCache(xTransport *XTransport, now time.Time) (del
 		} // above err check inverted to make use of implicit continue
 		dlog.Debugf("Source [%s] failed signature check using URL [%s]", source.name, srcURL)
 	}
-	if err != nil {
-		return
+	if err == nil {
+		source.writeToCache(bin, sig, now)
+		delay = source.prefetchDelay
 	}
-	source.writeToCache(bin, sig, now)
-	delay = source.prefetchDelay
+	source.refresh = now.Add(delay)
 	return
 }
 
@@ -211,31 +199,53 @@ func NewSource(
 		return source, err
 	}
 	source.parseURLs(urls)
-	if _, err = source.fetchWithCache(xTransport, timeNow()); err == nil {
-		dlog.Noticef("Source [%s] loaded", name)
+	var delay time.Duration
+	now := timeNow()
+	if delay, err = source.fetchFromCache(now); err == nil {
+		dlog.Noticef("Source [%s] cache file [%s] loaded", source.name, source.cacheFile)
+		if len(source.urls) > 0 {
+			source.refresh = now.Add(delay)
+		}
+	} else {
+		dlog.Debugf("Source [%s] cache file [%s] not present or invalid", source.name, source.cacheFile)
+		if len(source.urls) > 0 {
+			if delay, err = source.fetchNew(xTransport, now); err == nil {
+				dlog.Noticef("Source [%s] fresh file [%s] loaded", source.name, source.cacheFile)
+				source.refresh = now.Add(delay)
+			}
+		} else {
+			dlog.Errorf("Source [%s] has no valid URL", source.name)
+		}
 	}
 	return
 }
 
 // PrefetchSources downloads latest versions of given sources, ensuring they have a valid signature before caching
-func PrefetchSources(xTransport *XTransport, sources []*Source) time.Duration {
+func PrefetchSources(xTransport *XTransport, sources []*Source) (time.Duration, int) {
 	now := timeNow()
 	interval := MinimumPrefetchInterval
+	downloaded := 0
 	for _, source := range sources {
-		if source.refresh.IsZero() || source.refresh.After(now) {
+		var delay time.Duration
+		var err error
+		if source.refresh.IsZero() {
 			continue
-		}
-		dlog.Debugf("Prefetching [%s]", source.name)
-		if delay, err := source.fetchWithCache(xTransport, now); err != nil {
-			dlog.Infof("Prefetching [%s] failed: %v, will retry in %v", source.name, err, interval)
+		} else if source.refresh.After(now) {
+			delay = source.refresh.Sub(now)
 		} else {
-			dlog.Debugf("Prefetching [%s] succeeded, next update: %v", source.name, delay)
-			if delay >= MinimumPrefetchInterval && (interval == MinimumPrefetchInterval || interval > delay) {
-				interval = delay
+			dlog.Debugf("Prefetching [%s]", source.name)
+			if delay, err = source.fetchNew(xTransport, now); err != nil {
+				dlog.Infof("Prefetching [%s] failed: %v, will retry in %v", source.name, err, delay)
+			} else {
+				dlog.Debugf("Prefetching [%s] succeeded, next update in %v", source.name, delay)
+				downloaded++
 			}
 		}
+		if delay >= MinimumPrefetchInterval && (interval == MinimumPrefetchInterval || interval > delay) {
+			interval = delay
+		}
 	}
-	return interval
+	return interval, downloaded
 }
 
 func (source *Source) Parse() ([]RegisteredServer, error) {

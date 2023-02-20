@@ -268,7 +268,7 @@ func setupSourceTest(t *testing.T) (func(), *SourceTestData) {
 	d.timeNow = time.Now().AddDate(0, 0, 0).Truncate(time.Second)
 	d.timeOld = d.timeNow.Add(DefaultPrefetchDelay * -4)
 	d.timeUpd = d.timeNow.Add(DefaultPrefetchDelay)
-	timeNow = func() time.Time { return d.timeNow } // originally defined in sources.go, replaced during testing to ensure consistent results
+	timeNow = func() time.Time { return d.timeNow } // originally defined in sources.go, restore real now for a new test
 	makeTempDir(t, d)
 	makeTestServer(t, d)
 	loadSnakeoil(t, d)
@@ -284,9 +284,9 @@ func prepSourceTestCache(t *testing.T, d *SourceTestData, e *SourceTestExpect, s
 	e.cache = []SourceFixture{d.fixtures[state][source], d.fixtures[state][source+".minisig"]}
 	switch state {
 	case TestStateCorrect:
-		e.Source.in, e.success = e.cache[0].content, true
-	case TestStateExpired:
-		e.Source.in = e.cache[0].content
+		e.Source.in, e.success, e.delay = e.cache[0].content, true, e.Source.prefetchDelay
+	case TestStateExpired: // no hard expired but need update
+		e.Source.in, e.success, e.delay = e.cache[0].content, true, 0
 	case TestStatePartial, TestStatePartialSig:
 		e.err = "signature"
 	case TestStateMissing, TestStateMissingSig, TestStateOpenErr, TestStateOpenSigErr:
@@ -305,6 +305,7 @@ func prepSourceTestDownload(
 	if len(downloadTest) == 0 {
 		return
 	}
+	lastStateWin := false
 	for _, state := range downloadTest {
 		path := "/" + strconv.FormatUint(uint64(state), 10) + "/" + source
 		serverURL := d.server.URL
@@ -334,6 +335,7 @@ func prepSourceTestDownload(
 		}
 		e.urls = append(e.urls, serverURL+path)
 		if e.success {
+			lastStateWin = true
 			continue
 		}
 		switch state {
@@ -350,7 +352,9 @@ func prepSourceTestDownload(
 	}
 	if e.success {
 		e.err = ""
-		e.delay = DefaultPrefetchDelay
+		if lastStateWin == false { // cache expired wins it
+			e.delay = e.Source.prefetchDelay
+		}
 	} else {
 		e.delay = MinimumPrefetchInterval
 	}
@@ -428,7 +432,7 @@ func TestNewSource(t *testing.T) {
 			d.n++
 			for i := range d.sources {
 				id, e := setupSourceTestCase(t, d, i, &cacheTest, downloadTest)
-				t.Run("cache "+cacheTestName+", download "+downloadTestName+"/"+id, func(t *testing.T) {
+				t.Run("cache "+cacheTestName+";download "+downloadTestName+"/"+id, func(t *testing.T) {
 					got, err := NewSource(
 						id,
 						d.xTransport,
@@ -478,11 +482,12 @@ func TestPrefetchSources(t *testing.T) {
 			s := &Source{}
 			*s = *e.Source
 			s.in = nil
+			s.refresh = d.timeNow
 			sources = append(sources, s)
 			expects = append(expects, e)
 		}
-		t.Run("download "+downloadTestName, func(t *testing.T) {
-			got := PrefetchSources(d.xTransport, sources)
+		t.Run("download "+downloadTestName+"/"+strconv.Itoa(d.n), func(t *testing.T) {
+			got, _ := PrefetchSources(d.xTransport, sources)
 			checkResult(t, expects, got)
 		})
 	}

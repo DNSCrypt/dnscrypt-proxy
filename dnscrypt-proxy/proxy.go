@@ -242,28 +242,35 @@ func (proxy *Proxy) StartProxy() {
 			dlog.Fatal(err)
 		}
 	}
+	if len(proxy.sources) > 0 {
+		go func() {
+			for {
+				delay, downloaded := PrefetchSources(proxy.xTransport, proxy.sources)
+				if downloaded > 0 {
+					proxy.updateRegisteredServers(false, false)
+					runtime.GC()
+				}
+				clocksmith.Sleep(delay)
+			}
+		}()
+	}
 	proxy.xTransport.internalResolverReady = false
 	proxy.xTransport.internalResolvers = proxy.listenAddresses
-	liveServers, err := proxy.serversInfo.refresh(proxy)
-	if liveServers > 0 {
-		proxy.certIgnoreTimestamp = false
+	var liveServers int
+	var err error
+	for proxy.serversInfo.getGotNewServers() {
+		liveServers, err = proxy.serversInfo.refresh(proxy)
 	}
 	if proxy.showCerts {
 		os.Exit(0)
 	}
 	if liveServers > 0 {
+		proxy.certIgnoreTimestamp = false
 		dlog.Noticef("dnscrypt-proxy is ready - live servers: %d", liveServers)
 	} else if err != nil {
 		dlog.Error(err)
 		dlog.Notice("dnscrypt-proxy is waiting for at least one server to be reachable")
 	}
-	go func() {
-		for {
-			clocksmith.Sleep(PrefetchSources(proxy.xTransport, proxy.sources))
-			proxy.updateRegisteredServers()
-			runtime.GC()
-		}
-	}()
 	if len(proxy.serversInfo.registeredServers) > 0 {
 		go func() {
 			for {
@@ -282,7 +289,7 @@ func (proxy *Proxy) StartProxy() {
 	}
 }
 
-func (proxy *Proxy) updateRegisteredServers() error {
+func (proxy *Proxy) updateRegisteredServers(gotNewRegisteredServers, gotNewRegisteredRelays bool) error {
 	for _, source := range proxy.sources {
 		registeredServers, err := source.Parse()
 		if err != nil {
@@ -337,13 +344,15 @@ func (proxy *Proxy) updateRegisteredServers() error {
 								registeredServer.stamp.String(),
 							)
 							proxy.registeredRelays[i].stamp = registeredServer.stamp
-							dlog.Debugf("Total count of registered relays %v", len(proxy.registeredRelays))
+							gotNewRegisteredRelays = true
 						}
 					}
 				}
 				if !found {
 					dlog.Debugf("Adding [%s] to the set of available relays", registeredServer.name)
 					proxy.registeredRelays = append(proxy.registeredRelays, registeredServer)
+					gotNewRegisteredRelays = true
+					dlog.Debugf("Total count of registered relays %v", len(proxy.registeredRelays))
 				}
 			} else {
 				if !((proxy.SourceDNSCrypt && registeredServer.stamp.Proto == stamps.StampProtoTypeDNSCrypt) ||
@@ -356,24 +365,38 @@ func (proxy *Proxy) updateRegisteredServers() error {
 					if currentRegisteredServer.name == registeredServer.name {
 						found = true
 						if currentRegisteredServer.stamp.String() != registeredServer.stamp.String() {
-							dlog.Infof("Updating stamp for [%s] was: %s now: %s", registeredServer.name, currentRegisteredServer.stamp.String(), registeredServer.stamp.String())
+							dlog.Infof(
+								"Updating stamp for [%s] was: %s now: %s",
+								registeredServer.name,
+								currentRegisteredServer.stamp.String(),
+								registeredServer.stamp.String(),
+							)
 							proxy.registeredServers[i].stamp = registeredServer.stamp
+							gotNewRegisteredServers = true
 						}
 					}
 				}
 				if !found {
 					dlog.Debugf("Adding [%s] to the set of wanted resolvers", registeredServer.name)
 					proxy.registeredServers = append(proxy.registeredServers, registeredServer)
+					gotNewRegisteredServers = true
 					dlog.Debugf("Total count of registered servers %v", len(proxy.registeredServers))
 				}
 			}
 		}
 	}
-	for _, registeredServer := range proxy.registeredServers {
-		proxy.serversInfo.registerServer(registeredServer.name, registeredServer.stamp)
+	if gotNewRegisteredServers {
+		for _, registeredServer := range proxy.registeredServers {
+			proxy.serversInfo.registerServer(registeredServer.name, registeredServer.stamp)
+		}
 	}
-	for _, registeredRelay := range proxy.registeredRelays {
-		proxy.serversInfo.registerRelay(registeredRelay.name, registeredRelay.stamp)
+	if gotNewRegisteredRelays {
+		for _, registeredRelay := range proxy.registeredRelays {
+			proxy.serversInfo.registerRelay(registeredRelay.name, registeredRelay.stamp)
+		}
+	}
+	if gotNewRegisteredServers || (gotNewRegisteredRelays && proxy.routes != nil && len(*proxy.routes) > 0) {
+		proxy.serversInfo.setGotNewServers(true)
 	}
 	return nil
 }

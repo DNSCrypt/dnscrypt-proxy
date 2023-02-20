@@ -821,12 +821,14 @@ func (config *Config) loadSources(proxy *Proxy) error {
 			return err
 		}
 	}
+	gotNewRegisteredServers, gotNewRegisteredRelays := false, false
 	for name, config := range config.StaticsConfig {
 		if stamp, err := stamps.NewServerStampFromString(config.Stamp); err == nil {
 			if stamp.Proto == stamps.StampProtoTypeDNSCryptRelay || stamp.Proto == stamps.StampProtoTypeODoHRelay {
 				dlog.Debugf("Adding [%s] to the set of available static relays", name)
 				registeredServer := RegisteredServer{name: name, stamp: stamp, description: "static relay"}
 				proxy.registeredRelays = append(proxy.registeredRelays, registeredServer)
+				gotNewRegisteredRelays = true
 			}
 		}
 	}
@@ -848,8 +850,9 @@ func (config *Config) loadSources(proxy *Proxy) error {
 			return fmt.Errorf("Stamp error for the static [%s] definition: [%v]", serverName, err)
 		}
 		proxy.registeredServers = append(proxy.registeredServers, RegisteredServer{name: serverName, stamp: stamp})
+		gotNewRegisteredServers = true
 	}
-	proxy.updateRegisteredServers()
+	proxy.updateRegisteredServers(gotNewRegisteredServers, gotNewRegisteredRelays)
 	rs1 := proxy.registeredServers
 	rs2 := proxy.serversInfo.registeredServers
 	rand.Shuffle(len(rs1), func(i, j int) {
@@ -894,11 +897,8 @@ func (config *Config) loadSource(proxy *Proxy, cfgSourceName string, cfgSource *
 		cfgSource.Prefix,
 	)
 	if err != nil {
-		if len(source.in) <= 0 {
-			dlog.Criticalf("Unable to retrieve source [%s]: [%s]", cfgSourceName, err)
-			return err
-		}
-		dlog.Infof("Downloading [%s] failed: %v, using cache file to startup", source.name, err)
+		dlog.Criticalf("Unable to retrieve source [%s]: [%s]", cfgSourceName, err)
+		return err
 	}
 	proxy.sources = append(proxy.sources, source)
 	return nil

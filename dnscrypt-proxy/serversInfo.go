@@ -144,6 +144,7 @@ type ServersInfo struct {
 	registeredRelays  []RegisteredServer
 	lbStrategy        LBStrategy
 	lbEstimator       bool
+	gotNewServers     bool
 }
 
 func NewServersInfo() ServersInfo {
@@ -179,6 +180,19 @@ func (serversInfo *ServersInfo) registerRelay(name string, stamp stamps.ServerSt
 		}
 	}
 	serversInfo.registeredRelays = append(serversInfo.registeredRelays, newRegisteredServer)
+}
+
+func (serversInfo *ServersInfo) setGotNewServers(value bool) {
+	serversInfo.Lock()
+	serversInfo.gotNewServers = value
+	serversInfo.Unlock()
+}
+
+func (serversInfo *ServersInfo) getGotNewServers() bool {
+	serversInfo.RLock()
+	value := serversInfo.gotNewServers
+	serversInfo.RUnlock()
+	return value
 }
 
 func (serversInfo *ServersInfo) refreshServer(proxy *Proxy, name string, stamp stamps.ServerStamp) error {
@@ -226,6 +240,9 @@ func (serversInfo *ServersInfo) refresh(proxy *Proxy) (int, error) {
 	// Appending registeredServers slice from sources may allocate new memory.
 	registeredServers := make([]RegisteredServer, len(serversInfo.registeredServers))
 	copy(registeredServers, serversInfo.registeredServers)
+	if serversInfo.gotNewServers {
+		serversInfo.gotNewServers = false
+	}
 	serversInfo.RUnlock()
 	liveServers := 0
 	var err error
@@ -233,6 +250,10 @@ func (serversInfo *ServersInfo) refresh(proxy *Proxy) (int, error) {
 		if err = serversInfo.refreshServer(proxy, registeredServer.name, registeredServer.stamp); err == nil {
 			liveServers++
 			proxy.xTransport.internalResolverReady = true
+		}
+		if serversInfo.getGotNewServers() {
+			dlog.Notice("Got new servers, will start new refreshing")
+			break
 		}
 	}
 	serversInfo.Lock()
