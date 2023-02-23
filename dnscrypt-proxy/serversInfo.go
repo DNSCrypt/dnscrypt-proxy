@@ -232,6 +232,7 @@ func (serversInfo *ServersInfo) refresh(proxy *Proxy) (int, error) {
 	for _, registeredServer := range registeredServers {
 		if err = serversInfo.refreshServer(proxy, registeredServer.name, registeredServer.stamp); err == nil {
 			liveServers++
+			proxy.xTransport.internalResolverReady = true
 		}
 	}
 	serversInfo.Lock()
