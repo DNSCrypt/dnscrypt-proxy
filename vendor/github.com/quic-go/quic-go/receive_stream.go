@@ -34,17 +34,13 @@ type receiveStream struct {
 
 	currentFrame       []byte
 	currentFrameDone   func()
-	currentFrameIsLast bool // is the currentFrame the last frame on this stream
 	readPosInFrame     int
+	currentFrameIsLast bool // is the currentFrame the last frame on this stream
 
+	finRead             bool // set once we read a frame with a Fin
 	closeForShutdownErr error
 	cancelReadErr       error
 	resetRemotelyErr    *StreamError
-
-	closedForShutdown bool // set when CloseForShutdown() is called
-	finRead           bool // set once we read a frame with a Fin
-	canceledRead      bool // set when CancelRead() is called
-	resetRemotely     bool // set when handleResetStreamFrame() is called
 
 	readChan chan struct{}
 	readOnce chan struct{} // cap: 1, to protect against concurrent use of Read
@@ -100,13 +96,13 @@ func (s *receiveStream) readImpl(p []byte) (bool /*stream completed */, int, err
 	if s.finRead {
 		return false, 0, io.EOF
 	}
-	if s.canceledRead {
+	if s.cancelReadErr != nil {
 		return false, 0, s.cancelReadErr
 	}
-	if s.resetRemotely {
+	if s.resetRemotelyErr != nil {
 		return false, 0, s.resetRemotelyErr
 	}
-	if s.closedForShutdown {
+	if s.closeForShutdownErr != nil {
 		return false, 0, s.closeForShutdownErr
 	}
 
@@ -122,13 +118,13 @@ func (s *receiveStream) readImpl(p []byte) (bool /*stream completed */, int, err
 
 		for {
 			// Stop waiting on errors
-			if s.closedForShutdown {
+			if s.closeForShutdownErr != nil {
 				return false, bytesRead, s.closeForShutdownErr
 			}
-			if s.canceledRead {
+			if s.cancelReadErr != nil {
 				return false, bytesRead, s.cancelReadErr
 			}
-			if s.resetRemotely {
+			if s.resetRemotelyErr != nil {
 				return false, bytesRead, s.resetRemotelyErr
 			}
 
@@ -175,8 +171,9 @@ func (s *receiveStream) readImpl(p []byte) (bool /*stream completed */, int, err
 		s.readPosInFrame += m
 		bytesRead += m
 
-		// when a RESET_STREAM was received, the was already informed about the final byteOffset for this stream
-		if !s.resetRemotely {
+		// when a RESET_STREAM was received, the flow controller was already
+		// informed about the final byteOffset for this stream
+		if s.resetRemotelyErr == nil {
 			s.flowController.AddBytesRead(protocol.ByteCount(m))
 		}
 
@@ -211,10 +208,9 @@ func (s *receiveStream) CancelRead(errorCode StreamErrorCode) {
 }
 
 func (s *receiveStream) cancelReadImpl(errorCode qerr.StreamErrorCode) bool /* completed */ {
-	if s.finRead || s.canceledRead || s.resetRemotely {
+	if s.finRead || s.cancelReadErr != nil || s.resetRemotelyErr != nil {
 		return false
 	}
-	s.canceledRead = true
 	s.cancelReadErr = &StreamError{StreamID: s.streamID, ErrorCode: errorCode, Remote: false}
 	s.signalRead()
 	s.sender.queueControlFrame(&wire.StopSendingFrame{
@@ -247,7 +243,7 @@ func (s *receiveStream) handleStreamFrameImpl(frame *wire.StreamFrame) (bool /* 
 		newlyRcvdFinalOffset = s.finalOffset == protocol.MaxByteCount
 		s.finalOffset = maxOffset
 	}
-	if s.canceledRead {
+	if s.cancelReadErr != nil {
 		return newlyRcvdFinalOffset, nil
 	}
 	if err := s.frameQueue.Push(frame.Data, frame.Offset, frame.PutBack); err != nil {
@@ -270,7 +266,7 @@ func (s *receiveStream) handleResetStreamFrame(frame *wire.ResetStreamFrame) err
 }
 
 func (s *receiveStream) handleResetStreamFrameImpl(frame *wire.ResetStreamFrame) (bool /*completed */, error) {
-	if s.closedForShutdown {
+	if s.closeForShutdownErr != nil {
 		return false, nil
 	}
 	if err := s.flowController.UpdateHighestReceived(frame.FinalSize, true); err != nil {
@@ -280,10 +276,9 @@ func (s *receiveStream) handleResetStreamFrameImpl(frame *wire.ResetStreamFrame)
 	s.finalOffset = frame.FinalSize
 
 	// ignore duplicate RESET_STREAM frames for this stream (after checking their final offset)
-	if s.resetRemotely {
+	if s.resetRemotelyErr != nil {
 		return false, nil
 	}
-	s.resetRemotely = true
 	s.resetRemotelyErr = &StreamError{
 		StreamID:  s.streamID,
 		ErrorCode: frame.ErrorCode,
@@ -310,7 +305,6 @@ func (s *receiveStream) SetReadDeadline(t time.Time) error {
 // The peer will NOT be informed about this: the stream is closed without sending a FIN or RESET.
 func (s *receiveStream) closeForShutdown(err error) {
 	s.mutex.Lock()
-	s.closedForShutdown = true
 	s.closeForShutdownErr = err
 	s.mutex.Unlock()
 	s.signalRead()

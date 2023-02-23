@@ -71,6 +71,7 @@ func Read(r io.ByteReader) (uint64, error) {
 }
 
 // Write writes i in the QUIC varint format to w.
+// Deprecated: use Append instead.
 func Write(w Writer, i uint64) {
 	if i <= maxVarInt1 {
 		w.WriteByte(uint8(i))
@@ -88,6 +89,7 @@ func Write(w Writer, i uint64) {
 	}
 }
 
+// Append appends i in the QUIC varint format.
 func Append(b []byte, i uint64) []byte {
 	if i <= maxVarInt1 {
 		return append(b, uint8(i))

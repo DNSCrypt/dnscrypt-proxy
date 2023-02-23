@@ -34,7 +34,7 @@ type sessionState struct {
 	usedOldKey bool
 }
 
-func (m *sessionState) marshal() []byte {
+func (m *sessionState) marshal() ([]byte, error) {
 	var b cryptobyte.Builder
 	b.AddUint16(m.vers)
 	b.AddUint16(m.cipherSuite)
@@ -49,7 +49,7 @@ func (m *sessionState) marshal() []byte {
 			})
 		}
 	})
-	return b.BytesOrPanic()
+	return b.Bytes()
 }
 
 func (m *sessionState) unmarshal(data []byte) bool {
@@ -94,7 +94,7 @@ type sessionStateTLS13 struct {
 	appData []byte
 }
 
-func (m *sessionStateTLS13) marshal() []byte {
+func (m *sessionStateTLS13) marshal() ([]byte, error) {
 	var b cryptobyte.Builder
 	b.AddUint16(VersionTLS13)
 	b.AddUint8(2) // revision
@@ -111,7 +111,7 @@ func (m *sessionStateTLS13) marshal() []byte {
 	b.AddUint16LengthPrefixed(func(b *cryptobyte.Builder) {
 		b.AddBytes(m.appData)
 	})
-	return b.BytesOrPanic()
+	return b.Bytes()
 }
 
 func (m *sessionStateTLS13) unmarshal(data []byte) bool {
@@ -227,8 +227,11 @@ func (c *Conn) getSessionTicketMsg(appData []byte) (*newSessionTicketMsgTLS13, e
 	if c.extraConfig != nil {
 		state.maxEarlyData = c.extraConfig.MaxEarlyData
 	}
-	var err error
-	m.label, err = c.encryptTicket(state.marshal())
+	stateBytes, err := state.marshal()
+	if err != nil {
+		return nil, err
+	}
+	m.label, err = c.encryptTicket(stateBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -270,5 +273,5 @@ func (c *Conn) GetSessionTicket(appData []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return m.marshal(), nil
+	return m.marshal()
 }
