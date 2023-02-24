@@ -5,7 +5,6 @@ import (
 	crypto_rand "crypto/rand"
 	"crypto/sha512"
 	"errors"
-	"math/rand"
 
 	"github.com/jedisct1/dlog"
 	"github.com/jedisct1/xsecretbox"
@@ -102,7 +101,7 @@ func (proxy *Proxy) Encrypt(
 		minQuestionSize = Max(proxy.questionSizeEstimator.MinQuestionSize(), minQuestionSize)
 	} else {
 		var xpad [1]byte
-		rand.Read(xpad[:])
+		crypto_rand.Read(xpad[:])
 		minQuestionSize += int(xpad[0])
 	}
 	paddedLength := Min(MaxDNSUDPPacketSize, (Max(minQuestionSize, QueryOverhead)+1+63) & ^63)
