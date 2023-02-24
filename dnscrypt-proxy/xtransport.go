@@ -56,6 +56,7 @@ type AltSupport struct {
 type XTransport struct {
 	transport                *http.Transport
 	h3Transport              *http3.RoundTripper
+	h3UDPConn                *net.UDPConn
 	keepAlive                time.Duration
 	timeout                  time.Duration
 	cachedIPs                CachedIPs
@@ -132,7 +133,15 @@ func (xTransport *XTransport) loadCachedIP(host string) (ip net.IP, expired bool
 func (xTransport *XTransport) rebuildTransport() {
 	dlog.Debug("Rebuilding transport")
 	if xTransport.transport != nil {
-		(*xTransport.transport).CloseIdleConnections()
+		if xTransport.h3Transport != nil {
+			xTransport.h3Transport.Close()
+			if xTransport.h3UDPConn != nil {
+				xTransport.h3UDPConn.Close()
+				xTransport.h3UDPConn = nil
+			}
+		} else {
+			xTransport.transport.CloseIdleConnections()
+		}
 	}
 	timeout := xTransport.timeout
 	transport := &http.Transport{
@@ -243,11 +252,15 @@ func (xTransport *XTransport) rebuildTransport() {
 			if err != nil {
 				return nil, err
 			}
-			udpConn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4zero, Port: 0})
-			if err != nil {
-				return nil, err
+			var udpConn *net.UDPConn
+			if xTransport.h3UDPConn == nil {
+				udpConn, err = net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4zero, Port: 0})
+				if err != nil {
+					return nil, err
+				}
+				xTransport.h3UDPConn = udpConn
 			}
-			return quic.DialEarlyContext(ctx, udpConn, udpAddr, host, tlsCfg, cfg)
+			return quic.DialEarlyContext(ctx, xTransport.h3UDPConn, udpAddr, host, tlsCfg, cfg)
 		}}
 		xTransport.h3Transport = h3Transport
 	}
@@ -482,8 +495,13 @@ func (xTransport *XTransport) Fetch(
 			err = errors.New(resp.Status)
 		}
 	} else {
-		dlog.Debugf("HTTP client error: [%v] - closing idle H3 connections", err)
-		(*xTransport.transport).CloseIdleConnections()
+		if hasAltSupport {
+			dlog.Debugf("HTTP client error: [%v] - closing H3 connections", err)
+			xTransport.h3Transport.Close()
+		} else {
+			dlog.Debugf("HTTP client error: [%v] - closing idle connections", err)
+			xTransport.transport.CloseIdleConnections()
+		}
 	}
 	statusCode := 503
 	if resp != nil {
