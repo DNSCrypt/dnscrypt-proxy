@@ -462,17 +462,14 @@ github.com/quasilyte/regex/syntax
 # github.com/quic-go/qpack v0.4.0
 ## explicit; go 1.18
 github.com/quic-go/qpack
-# github.com/quic-go/qtls-go1-18 v0.2.0
-## explicit; go 1.18
-github.com/quic-go/qtls-go1-18
-# github.com/quic-go/qtls-go1-19 v0.2.0
+# github.com/quic-go/qtls-go1-19 v0.2.1
 ## explicit; go 1.19
 github.com/quic-go/qtls-go1-19
-# github.com/quic-go/qtls-go1-20 v0.1.0
+# github.com/quic-go/qtls-go1-20 v0.1.1
 ## explicit; go 1.20
 github.com/quic-go/qtls-go1-20
-# github.com/quic-go/quic-go v0.32.0
-## explicit; go 1.18
+# github.com/quic-go/quic-go v0.33.0
+## explicit; go 1.19
 github.com/quic-go/quic-go
 github.com/quic-go/quic-go/http3
 github.com/quic-go/quic-go/internal/ackhandler

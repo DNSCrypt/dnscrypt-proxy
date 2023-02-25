@@ -12,7 +12,7 @@ In addition to the RFCs listed above, it currently implements the [IETF QUIC dra
 
 ## Guides
 
-*We currently support Go 1.18.x and Go 1.19.x.*
+*We currently support Go 1.19.x and Go 1.20.x*
 
 Running tests:
 

@@ -263,7 +263,7 @@ func newCryptoSetup(
 		alertChan:                 make(chan uint8),
 		clientHelloWrittenChan:    make(chan struct{}),
 		zeroRTTParametersChan:     zeroRTTParametersChan,
-		messageChan:               make(chan []byte, 100),
+		messageChan:               make(chan []byte, 1),
 		isReadingHandshakeMessage: make(chan struct{}),
 		closeChan:                 make(chan struct{}),
 		version:                   version,
@@ -368,8 +368,15 @@ func (h *cryptoSetup) HandleMessage(data []byte, encLevel protocol.EncryptionLev
 		h.onError(alertUnexpectedMessage, err.Error())
 		return false
 	}
-	h.messageChan <- data
+	if encLevel != protocol.Encryption1RTT {
+		select {
+		case h.messageChan <- data:
+		case <-h.handshakeDone: // handshake errored, nobody is going to consume this message
+			return false
+		}
+	}
 	if encLevel == protocol.Encryption1RTT {
+		h.messageChan <- data
 		h.handlePostHandshakeMessage()
 		return false
 	}
