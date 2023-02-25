@@ -22,6 +22,11 @@ func Logger(logMaxSize int, logMaxAge int, logMaxBackups int, fileName string) i
 		}
 		return fp
 	}
+	if fp, err := os.OpenFile(fileName, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o644); err == nil {
+		fp.Close()
+	} else {
+		dlog.Errorf("Unable to create [%v]: [%v]", fileName, err)
+	}
 	logger := &lumberjack.Logger{
 		LocalTime:  true,
 		MaxSize:    logMaxSize,
