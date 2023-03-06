@@ -15,6 +15,7 @@ import (
 	"golang.org/x/tools/go/analysis"
 	"golang.org/x/tools/go/analysis/passes/buildssa"
 	"golang.org/x/tools/go/ssa"
+	"golang.org/x/tools/internal/typeparams"
 )
 
 const Doc = `check for redundant or impossible nil comparisons
@@ -62,7 +63,6 @@ var Analyzer = &analysis.Analyzer{
 
 func run(pass *analysis.Pass) (interface{}, error) {
 	ssainput := pass.ResultOf[buildssa.Analyzer].(*buildssa.SSA)
-	// TODO(48525): ssainput.SrcFuncs is missing fn._Instances(). runFunc will be skipped.
 	for _, fn := range ssainput.SrcFuncs {
 		runFunc(pass, fn)
 	}
@@ -103,8 +103,11 @@ func runFunc(pass *analysis.Pass, fn *ssa.Function) {
 		for _, instr := range b.Instrs {
 			switch instr := instr.(type) {
 			case ssa.CallInstruction:
-				notNil(stack, instr, instr.Common().Value,
-					instr.Common().Description())
+				// A nil receiver may be okay for type params.
+				cc := instr.Common()
+				if !(cc.IsInvoke() && typeparams.IsTypeParam(cc.Value.Type())) {
+					notNil(stack, instr, cc.Value, cc.Description())
+				}
 			case *ssa.FieldAddr:
 				notNil(stack, instr, instr.X, "field selection")
 			case *ssa.IndexAddr:
@@ -307,9 +310,9 @@ func nilnessOf(stack []fact, v ssa.Value) nilness {
 		return isnonnil
 	case *ssa.Const:
 		if v.IsNil() {
-			return isnil
+			return isnil // nil or zero value of a pointer-like type
 		} else {
-			return isnonnil
+			return unknown // non-pointer
 		}
 	}
 
