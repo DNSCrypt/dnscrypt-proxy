@@ -56,12 +56,12 @@ func (a *address) typ() types.Type {
 }
 
 // An element is an lvalue represented by m[k], the location of an
-// element of a map or string.  These locations are not addressable
+// element of a map.  These locations are not addressable
 // since pointers cannot be formed from them, but they do support
-// load(), and in the case of maps, store().
+// load() and store().
 type element struct {
-	m, k Value      // map or string
-	t    types.Type // map element type or string byte type
+	m, k Value      // map
+	t    types.Type // map element type
 	pos  token.Pos  // source position of colon ({k:v}) or lbrack (m[k]=v)
 }
 
@@ -86,12 +86,48 @@ func (e *element) store(fn *Function, v Value) {
 }
 
 func (e *element) address(fn *Function) Value {
-	panic("map/string elements are not addressable")
+	panic("map elements are not addressable")
 }
 
 func (e *element) typ() types.Type {
 	return e.t
 }
+
+// A lazyAddress is an lvalue whose address is the result of an instruction.
+// These work like an *address except a new address.address() Value
+// is created on each load, store and address call.
+// A lazyAddress can be used to control when a side effect (nil pointer
+// dereference, index out of bounds) of using a location happens.
+type lazyAddress struct {
+	addr func(fn *Function) Value // emit to fn the computation of the address
+	t    types.Type               // type of the location
+	pos  token.Pos                // source position
+	expr ast.Expr                 // source syntax of the value (not address) [debug mode]
+}
+
+func (l *lazyAddress) load(fn *Function) Value {
+	load := emitLoad(fn, l.addr(fn))
+	load.pos = l.pos
+	return load
+}
+
+func (l *lazyAddress) store(fn *Function, v Value) {
+	store := emitStore(fn, l.addr(fn), v, l.pos)
+	if l.expr != nil {
+		// store.Val is v, converted for assignability.
+		emitDebugRef(fn, l.expr, store.Val, false)
+	}
+}
+
+func (l *lazyAddress) address(fn *Function) Value {
+	addr := l.addr(fn)
+	if l.expr != nil {
+		emitDebugRef(fn, l.expr, addr, true)
+	}
+	return addr
+}
+
+func (l *lazyAddress) typ() types.Type { return l.t }
 
 // A blank is a dummy variable whose name is "_".
 // It is not reified: loads are illegal and stores are ignored.

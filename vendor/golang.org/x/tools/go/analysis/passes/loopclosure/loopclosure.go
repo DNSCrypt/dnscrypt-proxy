@@ -14,34 +14,66 @@ import (
 	"golang.org/x/tools/go/analysis/passes/inspect"
 	"golang.org/x/tools/go/ast/inspector"
 	"golang.org/x/tools/go/types/typeutil"
-	"golang.org/x/tools/internal/analysisinternal"
 )
 
 const Doc = `check references to loop variables from within nested functions
 
-This analyzer checks for references to loop variables from within a function
-literal inside the loop body. It checks for patterns where access to a loop
-variable is known to escape the current loop iteration:
- 1. a call to go or defer at the end of the loop body
- 2. a call to golang.org/x/sync/errgroup.Group.Go at the end of the loop body
+This analyzer reports places where a function literal references the
+iteration variable of an enclosing loop, and the loop calls the function
+in such a way (e.g. with go or defer) that it may outlive the loop
+iteration and possibly observe the wrong value of the variable.
 
-The analyzer only considers references in the last statement of the loop body
-as it is not deep enough to understand the effects of subsequent statements
-which might render the reference benign.
+In this example, all the deferred functions run after the loop has
+completed, so all observe the final value of v.
 
-For example:
+    for _, v := range list {
+        defer func() {
+            use(v) // incorrect
+        }()
+    }
 
-	for i, v := range s {
-		go func() {
-			println(i, v) // not what you might expect
-		}()
-	}
+One fix is to create a new variable for each iteration of the loop:
+
+    for _, v := range list {
+        v := v // new var per iteration
+        defer func() {
+            use(v) // ok
+        }()
+    }
+
+The next example uses a go statement and has a similar problem.
+In addition, it has a data race because the loop updates v
+concurrent with the goroutines accessing it.
+
+    for _, v := range elem {
+        go func() {
+            use(v)  // incorrect, and a data race
+        }()
+    }
+
+A fix is the same as before. The checker also reports problems
+in goroutines started by golang.org/x/sync/errgroup.Group.
+A hard-to-spot variant of this form is common in parallel tests:
+
+    func Test(t *testing.T) {
+        for _, test := range tests {
+            t.Run(test.name, func(t *testing.T) {
+                t.Parallel()
+                use(test) // incorrect, and a data race
+            })
+        }
+    }
+
+The t.Parallel() call causes the rest of the function to execute
+concurrent with the loop.
+
+The analyzer reports references only in the last statement,
+as it is not deep enough to understand the effects of subsequent
+statements that might render the reference benign.
+("Last statement" is defined recursively in compound
+statements such as if, switch, and select.)
 
 See: https://golang.org/doc/go_faq.html#closures_and_goroutines`
-
-// TODO(rfindley): enable support for checking parallel subtests, pending
-// investigation, adding:
-// 3. a call testing.T.Run where the subtest body invokes t.Parallel()
 
 var Analyzer = &analysis.Analyzer{
 	Name:     "loopclosure",
@@ -95,59 +127,121 @@ func run(pass *analysis.Pass) (interface{}, error) {
 		//
 		// For go, defer, and errgroup.Group.Go, we ignore all but the last
 		// statement, because it's hard to prove go isn't followed by wait, or
-		// defer by return.
+		// defer by return. "Last" is defined recursively.
 		//
+		// TODO: consider allowing the "last" go/defer/Go statement to be followed by
+		// N "trivial" statements, possibly under a recursive definition of "trivial"
+		// so that that checker could, for example, conclude that a go statement is
+		// followed by an if statement made of only trivial statements and trivial expressions,
+		// and hence the go statement could still be checked.
+		forEachLastStmt(body.List, func(last ast.Stmt) {
+			var stmts []ast.Stmt
+			switch s := last.(type) {
+			case *ast.GoStmt:
+				stmts = litStmts(s.Call.Fun)
+			case *ast.DeferStmt:
+				stmts = litStmts(s.Call.Fun)
+			case *ast.ExprStmt: // check for errgroup.Group.Go
+				if call, ok := s.X.(*ast.CallExpr); ok {
+					stmts = litStmts(goInvoke(pass.TypesInfo, call))
+				}
+			}
+			for _, stmt := range stmts {
+				reportCaptured(pass, vars, stmt)
+			}
+		})
+
+		// Also check for testing.T.Run (with T.Parallel).
 		// We consider every t.Run statement in the loop body, because there is
-		// no such commonly used mechanism for synchronizing parallel subtests.
+		// no commonly used mechanism for synchronizing parallel subtests.
 		// It is of course theoretically possible to synchronize parallel subtests,
 		// though such a pattern is likely to be exceedingly rare as it would be
 		// fighting against the test runner.
-		lastStmt := len(body.List) - 1
-		for i, s := range body.List {
-			var stmts []ast.Stmt // statements that must be checked for escaping references
+		for _, s := range body.List {
 			switch s := s.(type) {
-			case *ast.GoStmt:
-				if i == lastStmt {
-					stmts = litStmts(s.Call.Fun)
-				}
-
-			case *ast.DeferStmt:
-				if i == lastStmt {
-					stmts = litStmts(s.Call.Fun)
-				}
-
-			case *ast.ExprStmt: // check for errgroup.Group.Go and testing.T.Run (with T.Parallel)
+			case *ast.ExprStmt:
 				if call, ok := s.X.(*ast.CallExpr); ok {
-					if i == lastStmt {
-						stmts = litStmts(goInvoke(pass.TypesInfo, call))
+					for _, stmt := range parallelSubtest(pass.TypesInfo, call) {
+						reportCaptured(pass, vars, stmt)
 					}
-					if stmts == nil && analysisinternal.LoopclosureParallelSubtests {
-						stmts = parallelSubtest(pass.TypesInfo, call)
-					}
-				}
-			}
 
-			for _, stmt := range stmts {
-				ast.Inspect(stmt, func(n ast.Node) bool {
-					id, ok := n.(*ast.Ident)
-					if !ok {
-						return true
-					}
-					obj := pass.TypesInfo.Uses[id]
-					if obj == nil {
-						return true
-					}
-					for _, v := range vars {
-						if v == obj {
-							pass.ReportRangef(id, "loop variable %s captured by func literal", id.Name)
-						}
-					}
-					return true
-				})
+				}
 			}
 		}
 	})
 	return nil, nil
+}
+
+// reportCaptured reports a diagnostic stating a loop variable
+// has been captured by a func literal if checkStmt has escaping
+// references to vars. vars is expected to be variables updated by a loop statement,
+// and checkStmt is expected to be a statements from the body of a func literal in the loop.
+func reportCaptured(pass *analysis.Pass, vars []types.Object, checkStmt ast.Stmt) {
+	ast.Inspect(checkStmt, func(n ast.Node) bool {
+		id, ok := n.(*ast.Ident)
+		if !ok {
+			return true
+		}
+		obj := pass.TypesInfo.Uses[id]
+		if obj == nil {
+			return true
+		}
+		for _, v := range vars {
+			if v == obj {
+				pass.ReportRangef(id, "loop variable %s captured by func literal", id.Name)
+			}
+		}
+		return true
+	})
+}
+
+// forEachLastStmt calls onLast on each "last" statement in a list of statements.
+// "Last" is defined recursively so, for example, if the last statement is
+// a switch statement, then each switch case is also visited to examine
+// its last statements.
+func forEachLastStmt(stmts []ast.Stmt, onLast func(last ast.Stmt)) {
+	if len(stmts) == 0 {
+		return
+	}
+
+	s := stmts[len(stmts)-1]
+	switch s := s.(type) {
+	case *ast.IfStmt:
+	loop:
+		for {
+			forEachLastStmt(s.Body.List, onLast)
+			switch e := s.Else.(type) {
+			case *ast.BlockStmt:
+				forEachLastStmt(e.List, onLast)
+				break loop
+			case *ast.IfStmt:
+				s = e
+			case nil:
+				break loop
+			}
+		}
+	case *ast.ForStmt:
+		forEachLastStmt(s.Body.List, onLast)
+	case *ast.RangeStmt:
+		forEachLastStmt(s.Body.List, onLast)
+	case *ast.SwitchStmt:
+		for _, c := range s.Body.List {
+			cc := c.(*ast.CaseClause)
+			forEachLastStmt(cc.Body, onLast)
+		}
+	case *ast.TypeSwitchStmt:
+		for _, c := range s.Body.List {
+			cc := c.(*ast.CaseClause)
+			forEachLastStmt(cc.Body, onLast)
+		}
+	case *ast.SelectStmt:
+		for _, c := range s.Body.List {
+			cc := c.(*ast.CommClause)
+			forEachLastStmt(cc.Body, onLast)
+		}
+	default:
+		onLast(s)
+	}
 }
 
 // litStmts returns all statements from the function body of a function
@@ -178,15 +272,19 @@ func goInvoke(info *types.Info, call *ast.CallExpr) ast.Expr {
 	return call.Args[0]
 }
 
-// parallelSubtest returns statements that would would be executed
-// asynchronously via the go test runner, as t.Run has been invoked with a
+// parallelSubtest returns statements that can be easily proven to execute
+// concurrently via the go test runner, as t.Run has been invoked with a
 // function literal that calls t.Parallel.
 //
 // In practice, users rely on the fact that statements before the call to
 // t.Parallel are synchronous. For example by declaring test := test inside the
 // function literal, but before the call to t.Parallel.
 //
-// Therefore, we only flag references that occur after the call to t.Parallel:
+// Therefore, we only flag references in statements that are obviously
+// dominated by a call to t.Parallel. As a simple heuristic, we only consider
+// statements following the final labeled statement in the function body, to
+// avoid scenarios where a jump would cause either the call to t.Parallel or
+// the problematic reference to be skipped.
 //
 //	import "testing"
 //
@@ -205,22 +303,91 @@ func parallelSubtest(info *types.Info, call *ast.CallExpr) []ast.Stmt {
 		return nil
 	}
 
+	if len(call.Args) != 2 {
+		// Ignore calls such as t.Run(fn()).
+		return nil
+	}
+
 	lit, _ := call.Args[1].(*ast.FuncLit)
 	if lit == nil {
 		return nil
 	}
 
-	for i, stmt := range lit.Body.List {
+	// Capture the *testing.T object for the first argument to the function
+	// literal.
+	if len(lit.Type.Params.List[0].Names) == 0 {
+		return nil
+	}
+
+	tObj := info.Defs[lit.Type.Params.List[0].Names[0]]
+	if tObj == nil {
+		return nil
+	}
+
+	// Match statements that occur after a call to t.Parallel following the final
+	// labeled statement in the function body.
+	//
+	// We iterate over lit.Body.List to have a simple, fast and "frequent enough"
+	// dominance relationship for t.Parallel(): lit.Body.List[i] dominates
+	// lit.Body.List[j] for i < j unless there is a jump.
+	var stmts []ast.Stmt
+	afterParallel := false
+	for _, stmt := range lit.Body.List {
+		stmt, labeled := unlabel(stmt)
+		if labeled {
+			// Reset: naively we don't know if a jump could have caused the
+			// previously considered statements to be skipped.
+			stmts = nil
+			afterParallel = false
+		}
+
+		if afterParallel {
+			stmts = append(stmts, stmt)
+			continue
+		}
+
+		// Check if stmt is a call to t.Parallel(), for the correct t.
 		exprStmt, ok := stmt.(*ast.ExprStmt)
 		if !ok {
 			continue
 		}
-		if isMethodCall(info, exprStmt.X, "testing", "T", "Parallel") {
-			return lit.Body.List[i+1:]
+		expr := exprStmt.X
+		if isMethodCall(info, expr, "testing", "T", "Parallel") {
+			call, _ := expr.(*ast.CallExpr)
+			if call == nil {
+				continue
+			}
+			x, _ := call.Fun.(*ast.SelectorExpr)
+			if x == nil {
+				continue
+			}
+			id, _ := x.X.(*ast.Ident)
+			if id == nil {
+				continue
+			}
+			if info.Uses[id] == tObj {
+				afterParallel = true
+			}
 		}
 	}
 
-	return nil
+	return stmts
+}
+
+// unlabel returns the inner statement for the possibly labeled statement stmt,
+// stripping any (possibly nested) *ast.LabeledStmt wrapper.
+//
+// The second result reports whether stmt was an *ast.LabeledStmt.
+func unlabel(stmt ast.Stmt) (ast.Stmt, bool) {
+	labeled := false
+	for {
+		labelStmt, ok := stmt.(*ast.LabeledStmt)
+		if !ok {
+			return stmt, labeled
+		}
+		labeled = true
+		stmt = labelStmt.Stmt
+	}
 }
 
 // isMethodCall reports whether expr is a method call of
