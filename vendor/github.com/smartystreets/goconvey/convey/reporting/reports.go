@@ -97,10 +97,12 @@ type AssertionResult struct {
 	Skipped    bool
 }
 
-func NewFailureReport(failure string) *AssertionResult {
+func NewFailureReport(failure string, showStack bool) *AssertionResult {
 	report := new(AssertionResult)
 	report.File, report.Line = caller()
-	report.StackTrace = stackTrace()
+	if showStack {
+		report.StackTrace = stackTrace()
+	}
 	parseFailure(failure, report)
 	return report
 }

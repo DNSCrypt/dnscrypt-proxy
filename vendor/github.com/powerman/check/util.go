@@ -30,7 +30,7 @@ func callerFuncName(stack int) string {
 	return strings.TrimPrefix(funcNameAt(pc), "(*C).")
 }
 
-func funcName(f interface{}) string {
+func funcName(f any) string {
 	return funcNameAt(reflect.ValueOf(f).Pointer())
 }
 
@@ -48,7 +48,7 @@ func funcNameAt(pc uintptr) string {
 	return name
 }
 
-func format(msg ...interface{}) string {
+func format(msg ...any) string {
 	if len(msg) > 1 {
 		return fmt.Sprintf(msg[0].(string), msg[1:]...)
 	}

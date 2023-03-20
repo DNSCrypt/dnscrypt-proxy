@@ -1,13 +1,13 @@
 // Package check provide helpers to complement Go testing package.
 //
-// Features
+// # Features
 //
 // This package is like testify/assert on steroids. :)
 //
 //   - Compelling output from failed tests:
-//     - Very easy-to-read dumps for expected and actual values.
-//     - Same text diff you loved in testify/assert.
-//     - Also visual diff in GoConvey web UI, if you use it (recommended).
+//   - Very easy-to-read dumps for expected and actual values.
+//   - Same text diff you loved in testify/assert.
+//   - Also visual diff in GoConvey web UI, if you use it (recommended).
 //   - Statistics with amount of passed/failed checks.
 //   - Colored output in terminal.
 //   - 100% compatible with testing package - check package just provide
@@ -17,7 +17,7 @@
 //   - Very easy to add your own check functions.
 //   - Concise, handy and consistent API, without dot-import!
 //
-// Quickstart
+// # Quickstart
 //
 // Just wrap each (including subtests) *testing.T using check.T() and write
 // tests as usually with testing package. Call new methods provided by
@@ -48,7 +48,7 @@
 //
 //	import _ "github.com/smartystreets/goconvey/convey"
 //
-// Hints
+// # Hints
 //
 // ★ How to check for errors:
 //
@@ -111,7 +111,7 @@
 //
 //	export GO_TEST_COLOR=1
 //
-// Contents
+// # Contents
 //
 // There are few special functions (assertion, custom checkers, etc.).
 //

@@ -56,7 +56,8 @@ var (
 	dotError        = "E"
 	dotSkip         = "S"
 	errorTemplate   = "* %s \nLine %d: - %v \n%s\n"
-	failureTemplate = "* %s \nLine %d:\n%s\n%s\n"
+	failureTemplate = "* %s \nLine %d:\n%s\n"
+	stackTemplate   = "%s\n"
 )
 
 var (
