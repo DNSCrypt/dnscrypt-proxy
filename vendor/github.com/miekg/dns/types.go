@@ -198,7 +198,7 @@ const (
 	_CD = 1 << 4  // checking disabled
 )
 
-// Various constants used in the LOC RR. See RFC 1887.
+// Various constants used in the LOC RR. See RFC 1876.
 const (
 	LOC_EQUATOR       = 1 << 31 // RFC 1876, Section 2.
 	LOC_PRIMEMERIDIAN = 1 << 31 // RFC 1876, Section 2.
@@ -631,8 +631,8 @@ func nextByte(s string, offset int) (byte, int) {
 		return 0, 0
 	case 2, 3: // too short to be \ddd
 	default: // maybe \ddd
-		if isDigit(s[offset+1]) && isDigit(s[offset+2]) && isDigit(s[offset+3]) {
-			return dddStringToByte(s[offset+1:]), 4
+		if isDDD(s[offset+1:]) {
+			return dddToByte(s[offset+1:]), 4
 		}
 	}
 	// not \ddd, just an RFC 1035 "quoted" character
@@ -792,7 +792,10 @@ type LOC struct {
 
 // cmToM takes a cm value expressed in RFC 1876 SIZE mantissa/exponent
 // format and returns a string in m (two decimals for the cm).
-func cmToM(m, e uint8) string {
+func cmToM(x uint8) string {
+	m := x & 0xf0 >> 4
+	e := x & 0x0f
+
 	if e < 2 {
 		if e == 1 {
 			m *= 10
@@ -848,10 +851,9 @@ func (rr *LOC) String() string {
 		s += fmt.Sprintf("%.0fm ", alt)
 	}
 
-	s += cmToM(rr.Size&0xf0>>4, rr.Size&0x0f) + "m "
-	s += cmToM(rr.HorizPre&0xf0>>4, rr.HorizPre&0x0f) + "m "
-	s += cmToM(rr.VertPre&0xf0>>4, rr.VertPre&0x0f) + "m"
-
+	s += cmToM(rr.Size) + "m "
+	s += cmToM(rr.HorizPre) + "m "
+	s += cmToM(rr.VertPre) + "m"
 	return s
 }
 
