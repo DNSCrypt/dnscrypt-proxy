@@ -258,15 +258,17 @@ cert_refresh_delay = 240
 bootstrap_resolvers = ['9.9.9.11:53', '8.8.8.8:53']
 
 
-## This is a switch for prior bootstrap resolvers.
+## When internal DNS resolution is required, for example to retrieve
+## the resolvers list:
 ##
-## Most of the time, the system DNS leads to dnscrypt-proxy itself,
-## if you set up dnscrypt-proxy in the system DNS chain.
+## - queries will be sent to dnscrypt-proxy itself, if it is already
+##   running with active servers (*)
+## - or else, queries will be sent to fallback servers
+## - finally, if `ignore_system_dns` is `false`, queries will be sent
+##   to the system DNS
 ##
-## If true, dnscrypt-proxy will directly try on its own service instead.
-## Together with bootstrap resolvers, upstream hosts will be resolved most
-## of the time.
-## The system DNS still will be a last resort, if it has been ignored.
+## (*) this is incompatible with systemd sockets.
+## `listen_addrs` must not be empty.
 
 ignore_system_dns = true
 
