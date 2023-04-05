@@ -62,10 +62,10 @@ type XTransport struct {
 	cachedIPs                CachedIPs
 	altSupport               AltSupport
 	internalResolvers        []string
-	internalResolverReady    bool
 	bootstrapResolvers       []string
 	mainProto                string
 	ignoreSystemDNS          bool
+	internalResolverReady    bool
 	useIPv4                  bool
 	useIPv6                  bool
 	http3                    bool
@@ -417,13 +417,13 @@ func (xTransport *XTransport) resolveAndUpdateCache(host string) error {
 			}
 		} else {
 			err = errors.New("Service is not usable yet")
-			dlog.Noticef("%s", err)
+			dlog.Notice(err)
 		}
 	} else {
 		foundIP, ttl, err = xTransport.resolveUsingSystem(host)
 		if err != nil {
 			err = errors.New("System DNS is not usable yet")
-			dlog.Noticef("%s", err)
+			dlog.Notice( err)
 		}
 	}
 	if err != nil {
