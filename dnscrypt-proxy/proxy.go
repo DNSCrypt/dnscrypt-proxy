@@ -242,6 +242,8 @@ func (proxy *Proxy) StartProxy() {
 			dlog.Fatal(err)
 		}
 	}
+	proxy.xTransport.internalResolverReady = false
+	proxy.xTransport.internalResolvers = proxy.listenAddresses
 	liveServers, err := proxy.serversInfo.refresh(proxy)
 	if liveServers > 0 {
 		proxy.certIgnoreTimestamp = false

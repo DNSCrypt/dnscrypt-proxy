@@ -61,6 +61,8 @@ type XTransport struct {
 	timeout                  time.Duration
 	cachedIPs                CachedIPs
 	altSupport               AltSupport
+	internalResolvers        []string
+	internalResolverReady    bool
 	bootstrapResolvers       []string
 	mainProto                string
 	ignoreSystemDNS          bool
@@ -371,16 +373,17 @@ func (xTransport *XTransport) resolveUsingResolvers(
 	proto, host string,
 	resolvers []string,
 ) (ip net.IP, ttl time.Duration, err error) {
+	err = errors.New("Empty resolvers")
 	for i, resolver := range resolvers {
 		ip, ttl, err = xTransport.resolveUsingResolver(proto, host, resolver)
 		if err == nil {
 			if i > 0 {
-				dlog.Infof("Resolution succeeded with bootstrap resolver %s[%s]", proto, resolver)
+				dlog.Infof("Resolution succeeded with resolver %s[%s]", proto, resolver)
 				resolvers[0], resolvers[i] = resolvers[i], resolvers[0]
 			}
 			break
 		}
-		dlog.Infof("Unable to resolve [%s] using bootstrap resolver %s[%s]: %v", host, proto, resolver, err)
+		dlog.Infof("Unable to resolve [%s] using resolver %s[%s]: %v", host, proto, resolver, err)
 	}
 	return
 }
@@ -400,23 +403,37 @@ func (xTransport *XTransport) resolveAndUpdateCache(host string) error {
 	var foundIP net.IP
 	var ttl time.Duration
 	var err error
-	if !xTransport.ignoreSystemDNS {
-		foundIP, ttl, err = xTransport.resolveUsingSystem(host)
+	protos := []string{"udp", "tcp"}
+	if xTransport.mainProto == "tcp" {
+		protos = []string{"tcp", "udp"}
 	}
-	if xTransport.ignoreSystemDNS || err != nil {
-		protos := []string{"udp", "tcp"}
-		if xTransport.mainProto == "tcp" {
-			protos = []string{"tcp", "udp"}
+	if xTransport.ignoreSystemDNS {
+		if xTransport.internalResolverReady {
+			for _, proto := range protos {
+				foundIP, ttl, err = xTransport.resolveUsingResolvers(proto, host, xTransport.internalResolvers)
+				if err == nil {
+					break
+				}
+			}
+		} else {
+			err = errors.New("Service is not usable yet")
+			dlog.Noticef("%s", err)
 		}
+	} else {
+		foundIP, ttl, err = xTransport.resolveUsingSystem(host)
+		if err != nil {
+			err = errors.New("System DNS is not usable yet")
+			dlog.Noticef("%s", err)
+		}
+	}
+	if err != nil {
 		for _, proto := range protos {
 			if err != nil {
 				dlog.Noticef(
-					"System DNS configuration not usable yet, exceptionally resolving [%s] using bootstrap resolvers over %s",
+					"Resolving server host [%s] using bootstrap resolvers over %s",
 					host,
 					proto,
 				)
-			} else {
-				dlog.Debugf("Resolving [%s] using bootstrap resolvers over %s", host, proto)
 			}
 			foundIP, ttl, err = xTransport.resolveUsingResolvers(proto, host, xTransport.bootstrapResolvers)
 			if err == nil {

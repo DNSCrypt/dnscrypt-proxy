@@ -258,7 +258,15 @@ cert_refresh_delay = 240
 bootstrap_resolvers = ['9.9.9.11:53', '8.8.8.8:53']
 
 
-## Always use the bootstrap resolver before the system DNS settings.
+## This is a switch for prior bootstrap resolvers.
+##
+## Most of the time, the system DNS leads to dnscrypt-proxy itself,
+## if you set up dnscrypt-proxy in the system DNS chain.
+##
+## If true, dnscrypt-proxy will directly try on its own service instead.
+## Together with bootstrap resolvers, upstream hosts will be resolved most
+## of the time.
+## The system DNS still will be a last resort, if it has been ignored.
 
 ignore_system_dns = true
 
