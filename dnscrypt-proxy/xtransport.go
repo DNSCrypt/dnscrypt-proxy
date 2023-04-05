@@ -423,7 +423,7 @@ func (xTransport *XTransport) resolveAndUpdateCache(host string) error {
 		foundIP, ttl, err = xTransport.resolveUsingSystem(host)
 		if err != nil {
 			err = errors.New("System DNS is not usable yet")
-			dlog.Notice( err)
+			dlog.Notice(err)
 		}
 	}
 	if err != nil {
