@@ -894,7 +894,7 @@ func (config *Config) loadSource(proxy *Proxy, cfgSourceName string, cfgSource *
 		cfgSource.Prefix,
 	)
 	if err != nil {
-		if len(source.in) <= 0 {
+		if len(source.bin) <= 0 {
 			dlog.Criticalf("Unable to retrieve source [%s]: [%s]", cfgSourceName, err)
 			return err
 		}
