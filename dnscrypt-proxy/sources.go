@@ -116,7 +116,8 @@ func (source *Source) writeToCache(bin, sig []byte, now time.Time) {
 			return
 		}
 	}
-	writeErr = os.Chtimes(f, now, now)
+	_ = os.Chtimes(f, now, now)
+	_ = os.Chtimes(f+".minisig", now, now)
 }
 
 func (source *Source) parseURLs(urls []string) {
