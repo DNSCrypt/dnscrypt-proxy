@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"math/rand"
 	"net"
@@ -414,6 +415,9 @@ func (xTransport *XTransport) resolveAndUpdateCache(host string) error {
 		} else {
 			return err
 		}
+	}
+	if foundIP == nil {
+		return fmt.Errorf("no IP address found for [%s]", host)
 	}
 	xTransport.saveCachedIP(host, foundIP, ttl)
 	dlog.Debugf("[%s] IP address [%s] added to the cache, valid for %v", host, foundIP, ttl)
