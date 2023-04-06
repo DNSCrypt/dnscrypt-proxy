@@ -280,13 +280,11 @@ func (xTransport *XTransport) rebuildTransport() {
 			if err != nil {
 				return nil, err
 			}
-			var udpConn *net.UDPConn
 			if xTransport.h3UDPConn == nil {
-				udpConn, err = net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4zero, Port: 0})
+				xTransport.h3UDPConn, err = net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4zero, Port: 0})
 				if err != nil {
 					return nil, err
 				}
-				xTransport.h3UDPConn = udpConn
 			}
 			return quic.DialEarlyContext(ctx, xTransport.h3UDPConn, udpAddr, host, tlsCfg, cfg)
 		}}
