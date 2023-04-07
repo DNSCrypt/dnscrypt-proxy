@@ -98,17 +98,24 @@ func writeSource(f string, bin, sig []byte) (err error) {
 	return fSig.Commit()
 }
 
-func (source *Source) updateCache(bin, sig []byte, now time.Time) {
+func (source *Source) updateCache(bin, sig []byte, now time.Time) error {
 	f := source.cacheFile
-	var writeErr error // an error writing cache isn't fatal
-	if !bytes.Equal(source.bin, bin) {
-		if writeErr = writeSource(f, bin, sig); writeErr != nil {
-			source.bin = bin
-			return
-		}
+	// If the data and signature are unchanged, update the files timestamps only
+	if bytes.Equal(source.bin, bin) {
+		_ = os.Chtimes(f, now, now)
+		_ = os.Chtimes(f+".minisig", now, now)
+		return nil
 	}
-	os.Chtimes(f, now, now)
-	source.bin = bin
+	// Otherwise, write the new data and signature
+	if err := writeSource(f, bin, sig); err != nil {
+		dlog.Warnf("Source [%s] failed to update cache file [%s]: %v", source.name, f, err)
+		return err
+	}
+	source.bin = bin // In-memory copy of the cache file content
+	// The tests require the timestamps to be updated, no idea why
+	_ = os.Chtimes(f, now, now)
+	_ = os.Chtimes(f+".minisig", now, now)
+	return nil
 }
 
 func (source *Source) parseURLs(urls []string) {
