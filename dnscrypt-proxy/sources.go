@@ -135,23 +135,23 @@ func fetchFromURL(xTransport *XTransport, u *url.URL) (bin []byte, err error) {
 	return bin, err
 }
 
-func (source *Source) fetchWithCache(xTransport *XTransport, now time.Time) (remaining time.Duration, err error) {
-	if remaining, err = source.fetchFromCache(now); err != nil {
+func (source *Source) fetchWithCache(xTransport *XTransport, now time.Time) (time.Duration, error) {
+	remaining, err := source.fetchFromCache(now)
+	if err != nil {
 		if len(source.urls) == 0 {
-			dlog.Errorf("Source [%s] cache file [%s] not present and no valid URL", source.name, source.cacheFile)
-			return
+			dlog.Fatalf("Source [%s] cache file [%s] not present and no valid URL", source.name, source.cacheFile)
+			return 0, err
 		}
 		dlog.Debugf("Source [%s] cache file [%s] not present", source.name, source.cacheFile)
 	}
-	if len(source.urls) > 0 {
-		defer func() {
-			source.refresh = now.Add(remaining)
-		}()
+	if len(source.urls) == 0 {
+		dlog.Debugf("No URL to update [%s]", source.name)
+		return 24 * time.Hour, nil
 	}
-	if len(source.urls) == 0 || remaining > 0 {
-		return
+	if remaining > 0 {
+		source.refresh = now.Add(remaining)
+		return remaining, nil
 	}
-	remaining = MinimumPrefetchInterval
 	var bin, sig []byte
 	for _, srcURL := range source.urls {
 		dlog.Infof("Source [%s] loading from URL [%s]", source.name, srcURL)
@@ -172,11 +172,13 @@ func (source *Source) fetchWithCache(xTransport *XTransport, now time.Time) (rem
 		dlog.Debugf("Source [%s] failed signature check using URL [%s]", source.name, srcURL)
 	}
 	if err != nil {
-		return
+		source.refresh = now.Add(MinimumPrefetchInterval)
+		return MinimumPrefetchInterval, err
 	}
 	source.updateCache(bin, sig, now)
 	remaining = source.prefetchDelay
-	return
+	source.refresh = now.Add(remaining)
+	return remaining, nil
 }
 
 // NewSource loads a new source using the given cacheFile and urls, ensuring it has a valid signature
