@@ -7,7 +7,6 @@ import (
 	"math/rand"
 	"net/url"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -102,22 +101,14 @@ func writeSource(f string, bin, sig []byte) (err error) {
 func (source *Source) updateCache(bin, sig []byte, now time.Time) {
 	f := source.cacheFile
 	var writeErr error // an error writing cache isn't fatal
-	defer func() {
-		source.bin = bin
-		if writeErr == nil {
-			return
-		}
-		if absPath, absErr := filepath.Abs(f); absErr == nil {
-			f = absPath
-		}
-		dlog.Warnf("%s: %s", f, writeErr)
-	}()
 	if !bytes.Equal(source.bin, bin) {
 		if writeErr = writeSource(f, bin, sig); writeErr != nil {
+			source.bin = bin
 			return
 		}
 	}
-	writeErr = os.Chtimes(f, now, now)
+	os.Chtimes(f, now, now)
+	source.bin = bin
 }
 
 func (source *Source) parseURLs(urls []string) {
