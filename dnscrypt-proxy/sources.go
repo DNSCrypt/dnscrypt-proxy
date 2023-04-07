@@ -100,7 +100,7 @@ func writeSource(f string, bin, sig []byte) (err error) {
 
 func (source *Source) updateCache(bin, sig []byte, now time.Time) error {
 	f := source.cacheFile
-	// If the data and signature are unchanged, update the files timestamps only
+	// If the data is unchanged, update the files timestamps only
 	if bytes.Equal(source.bin, bin) {
 		_ = os.Chtimes(f, now, now)
 		_ = os.Chtimes(f+".minisig", now, now)
