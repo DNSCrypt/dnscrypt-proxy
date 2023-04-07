@@ -52,7 +52,7 @@ func (source *Source) checkSignature(bin, sig []byte) (err error) {
 // timeNow() can be replaced by tests to provide a static value
 var timeNow = time.Now
 
-func (source *Source) fetchFromCache(now time.Time) (delay time.Duration, err error) {
+func (source *Source) fetchFromCache(now time.Time) (remaining time.Duration, err error) {
 	var bin, sig []byte
 	if bin, err = os.ReadFile(source.cacheFile); err != nil {
 		return
@@ -69,8 +69,8 @@ func (source *Source) fetchFromCache(now time.Time) (delay time.Duration, err er
 		return
 	}
 	if elapsed := now.Sub(fi.ModTime()); elapsed < source.cacheTTL {
-		delay = source.prefetchDelay - elapsed
-		dlog.Debugf("Source [%s] cache file [%s] is still fresh, next update: %v min", source.name, source.cacheFile, math.Round(delay.Minutes()))
+		remaining = source.prefetchDelay - elapsed
+		dlog.Debugf("Source [%s] cache file [%s] is still fresh, next update: %v min", source.name, source.cacheFile, math.Round(remaining.Minutes()))
 	} else {
 		dlog.Debugf("Source [%s] cache file [%s] needs to be refreshed", source.name, source.cacheFile)
 	}
@@ -135,8 +135,8 @@ func fetchFromURL(xTransport *XTransport, u *url.URL) (bin []byte, err error) {
 	return bin, err
 }
 
-func (source *Source) fetchWithCache(xTransport *XTransport, now time.Time) (delay time.Duration, err error) {
-	if delay, err = source.fetchFromCache(now); err != nil {
+func (source *Source) fetchWithCache(xTransport *XTransport, now time.Time) (remaining time.Duration, err error) {
+	if remaining, err = source.fetchFromCache(now); err != nil {
 		if len(source.urls) == 0 {
 			dlog.Errorf("Source [%s] cache file [%s] not present and no valid URL", source.name, source.cacheFile)
 			return
@@ -145,13 +145,13 @@ func (source *Source) fetchWithCache(xTransport *XTransport, now time.Time) (del
 	}
 	if len(source.urls) > 0 {
 		defer func() {
-			source.refresh = now.Add(delay)
+			source.refresh = now.Add(remaining)
 		}()
 	}
-	if len(source.urls) == 0 || delay > 0 {
+	if len(source.urls) == 0 || remaining > 0 {
 		return
 	}
-	delay = MinimumPrefetchInterval
+	remaining = MinimumPrefetchInterval
 	var bin, sig []byte
 	for _, srcURL := range source.urls {
 		dlog.Infof("Source [%s] loading from URL [%s]", source.name, srcURL)
@@ -175,7 +175,7 @@ func (source *Source) fetchWithCache(xTransport *XTransport, now time.Time) (del
 		return
 	}
 	source.updateCache(bin, sig, now)
-	delay = source.prefetchDelay
+	remaining = source.prefetchDelay
 	return
 }
 
