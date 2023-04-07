@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"math"
 	"math/rand"
 	"net/url"
 	"os"
@@ -31,13 +32,13 @@ const (
 type Source struct {
 	name                    string
 	urls                    []*url.URL
-	format                  SourceFormat
-	in                      []byte
+	bin                     []byte // copy of the file content - there's something wrong in our logic, we shouldn't need to keep that in memory
 	minisignKey             *minisign.PublicKey
 	cacheFile               string
+	prefix                  string
 	cacheTTL, prefetchDelay time.Duration
 	refresh                 time.Time
-	prefix                  string
+	format                  SourceFormat
 }
 
 func (source *Source) checkSignature(bin, sig []byte) (err error) {
@@ -48,7 +49,7 @@ func (source *Source) checkSignature(bin, sig []byte) (err error) {
 	return err
 }
 
-// timeNow can be replaced by tests to provide a static value
+// timeNow() can be replaced by tests to provide a static value
 var timeNow = time.Now
 
 func (source *Source) fetchFromCache(now time.Time) (delay time.Duration, err error) {
@@ -62,14 +63,14 @@ func (source *Source) fetchFromCache(now time.Time) (delay time.Duration, err er
 	if err = source.checkSignature(bin, sig); err != nil {
 		return
 	}
-	source.in = bin
+	source.bin = bin
 	var fi os.FileInfo
 	if fi, err = os.Stat(source.cacheFile); err != nil {
 		return
 	}
 	if elapsed := now.Sub(fi.ModTime()); elapsed < source.cacheTTL {
 		delay = source.prefetchDelay - elapsed
-		dlog.Debugf("Source [%s] cache file [%s] is still fresh, next update: %v", source.name, source.cacheFile, delay)
+		dlog.Debugf("Source [%s] cache file [%s] is still fresh, next update: %v min", source.name, source.cacheFile, math.Round(delay.Minutes()))
 	} else {
 		dlog.Debugf("Source [%s] cache file [%s] needs to be refreshed", source.name, source.cacheFile)
 	}
@@ -98,11 +99,11 @@ func writeSource(f string, bin, sig []byte) (err error) {
 	return fSig.Commit()
 }
 
-func (source *Source) writeToCache(bin, sig []byte, now time.Time) {
+func (source *Source) updateCache(bin, sig []byte, now time.Time) {
 	f := source.cacheFile
 	var writeErr error // an error writing cache isn't fatal
 	defer func() {
-		source.in = bin
+		source.bin = bin
 		if writeErr == nil {
 			return
 		}
@@ -111,7 +112,7 @@ func (source *Source) writeToCache(bin, sig []byte, now time.Time) {
 		}
 		dlog.Warnf("%s: %s", f, writeErr)
 	}()
-	if !bytes.Equal(source.in, bin) {
+	if !bytes.Equal(source.bin, bin) {
 		if writeErr = writeSource(f, bin, sig); writeErr != nil {
 			return
 		}
@@ -173,7 +174,7 @@ func (source *Source) fetchWithCache(xTransport *XTransport, now time.Time) (del
 	if err != nil {
 		return
 	}
-	source.writeToCache(bin, sig, now)
+	source.updateCache(bin, sig, now)
 	delay = source.prefetchDelay
 	return
 }
@@ -229,7 +230,7 @@ func PrefetchSources(xTransport *XTransport, sources []*Source) time.Duration {
 		if delay, err := source.fetchWithCache(xTransport, now); err != nil {
 			dlog.Infof("Prefetching [%s] failed: %v, will retry in %v", source.name, err, interval)
 		} else {
-			dlog.Debugf("Prefetching [%s] succeeded, next update: %v", source.name, delay)
+			dlog.Debugf("Prefetching [%s] succeeded, next update: %v min", source.name, math.Round(delay.Minutes()))
 			if delay >= MinimumPrefetchInterval && (interval == MinimumPrefetchInterval || interval > delay) {
 				interval = delay
 			}
@@ -254,8 +255,8 @@ func (source *Source) parseV2() ([]RegisteredServer, error) {
 		stampErrs = append(stampErrs, stampErr)
 		dlog.Warn(stampErr)
 	}
-	in := string(source.in)
-	parts := strings.Split(in, "## ")
+	bin := string(source.bin)
+	parts := strings.Split(bin, "## ")
 	if len(parts) < 2 {
 		return registeredServers, fmt.Errorf("Invalid format for source at [%v]", source.urls)
 	}

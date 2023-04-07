@@ -284,9 +284,9 @@ func prepSourceTestCache(t *testing.T, d *SourceTestData, e *SourceTestExpect, s
 	e.cache = []SourceFixture{d.fixtures[state][source], d.fixtures[state][source+".minisig"]}
 	switch state {
 	case TestStateCorrect:
-		e.Source.in, e.success = e.cache[0].content, true
+		e.Source.bin, e.success = e.cache[0].content, true
 	case TestStateExpired:
-		e.Source.in = e.cache[0].content
+		e.Source.bin = e.cache[0].content
 	case TestStatePartial, TestStatePartialSig:
 		e.err = "signature"
 	case TestStateMissing, TestStateMissingSig, TestStateOpenErr, TestStateOpenSigErr:
@@ -339,7 +339,7 @@ func prepSourceTestDownload(
 		switch state {
 		case TestStateCorrect:
 			e.cache = []SourceFixture{d.fixtures[state][source], d.fixtures[state][source+".minisig"]}
-			e.Source.in, e.success = e.cache[0].content, true
+			e.Source.bin, e.success = e.cache[0].content, true
 			fallthrough
 		case TestStateMissingSig, TestStatePartial, TestStatePartialSig, TestStateReadSigErr:
 			d.reqExpect[path+".minisig"]++
@@ -477,7 +477,7 @@ func TestPrefetchSources(t *testing.T) {
 			e.mtime = d.timeUpd
 			s := &Source{}
 			*s = *e.Source
-			s.in = nil
+			s.bin = nil
 			sources = append(sources, s)
 			expects = append(expects, e)
 		}
