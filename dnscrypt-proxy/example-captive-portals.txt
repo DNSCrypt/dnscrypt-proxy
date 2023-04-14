@@ -7,7 +7,7 @@
 ## going through a captive portal.
 ##
 ## This is a list of hard-coded IP addresses that will be returned when queries
-## for these names are received, even before the operating system an interface
+## for these names are received, even before the operating system reports an interface
 ## as usable for reaching the Internet.
 ##
 ## Note that IPv6 addresses don't need to be specified within brackets,
