@@ -463,6 +463,9 @@ cache_neg_max_ttl = 600
 
 
 ## Certificate file and key - Note that the certificate has to be trusted.
+## Can be generated using the following commands:
+## openssl genpkey -genparam -algorithm ec -pkeyopt ec_paramgen_curve:P-256 -out ECPARAM.pem
+## openssl req -x509 -nodes -newkey ec:ECPARAM.pem -subj "/C=XZ/L=own PC/O=localhost/CN=localhost/" -days 5000 -sha256 -keyout localhost.pem -out localhost.pem
 ## See the documentation (wiki) for more information.
 
 # cert_file = 'localhost.pem'
