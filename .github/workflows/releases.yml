@@ -27,14 +27,14 @@ jobs:
         id: get_version
         run: echo "VERSION=${GITHUB_REF/refs\/tags\//}" >> $GITHUB_OUTPUT
 
+      - name: Check out code
+        uses: actions/checkout@v3
+
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
           go-version: 1
         id: go
-
-      - name: Check out code into the Go module directory
-        uses: actions/checkout@v3
 
       - name: Test suite
         run: |
