@@ -57,6 +57,10 @@ var ConnectionTracingKey = connTracingCtxKey{}
 
 type connTracingCtxKey struct{}
 
+// QUICVersionContextKey can be used to find out the QUIC version of a TLS handshake from the
+// context returned by tls.Config.ClientHelloInfo.Context.
+var QUICVersionContextKey = handshake.QUICVersionContextKey
+
 // Stream is the interface implemented by QUIC streams
 // In addition to the errors listed on the Connection,
 // calls to stream functions can return a StreamError if the stream is canceled.
@@ -193,9 +197,10 @@ type EarlyConnection interface {
 	Connection
 
 	// HandshakeComplete blocks until the handshake completes (or fails).
-	// Data sent before completion of the handshake is encrypted with 1-RTT keys.
-	// Note that the client's identity hasn't been verified yet.
-	HandshakeComplete() context.Context
+	// For the client, data sent before completion of the handshake is encrypted with 0-RTT keys.
+	// For the serfer, data sent before completion of the handshake is encrypted with 1-RTT keys,
+	// however the client's identity is only verified once the handshake completes.
+	HandshakeComplete() <-chan struct{}
 
 	NextConnection() Connection
 }

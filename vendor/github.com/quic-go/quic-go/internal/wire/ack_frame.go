@@ -22,12 +22,8 @@ type AckFrame struct {
 }
 
 // parseAckFrame reads an ACK frame
-func parseAckFrame(r *bytes.Reader, ackDelayExponent uint8, _ protocol.VersionNumber) (*AckFrame, error) {
-	typeByte, err := r.ReadByte()
-	if err != nil {
-		return nil, err
-	}
-	ecn := typeByte&0x1 > 0
+func parseAckFrame(r *bytes.Reader, typ uint64, ackDelayExponent uint8, _ protocol.VersionNumber) (*AckFrame, error) {
+	ecn := typ == ackECNFrameType
 
 	frame := GetAckFrame()
 
@@ -110,9 +106,9 @@ func parseAckFrame(r *bytes.Reader, ackDelayExponent uint8, _ protocol.VersionNu
 func (f *AckFrame) Append(b []byte, _ protocol.VersionNumber) ([]byte, error) {
 	hasECN := f.ECT0 > 0 || f.ECT1 > 0 || f.ECNCE > 0
 	if hasECN {
-		b = append(b, 0b11)
+		b = append(b, ackECNFrameType)
 	} else {
-		b = append(b, 0b10)
+		b = append(b, ackFrameType)
 	}
 	b = quicvarint.Append(b, uint64(f.LargestAcked()))
 	b = quicvarint.Append(b, encodeAckDelay(f.DelayTime))

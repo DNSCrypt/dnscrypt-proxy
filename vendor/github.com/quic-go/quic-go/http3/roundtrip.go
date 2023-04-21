@@ -16,6 +16,9 @@ import (
 	"github.com/quic-go/quic-go"
 )
 
+// declare this as a variable, such that we can it mock it in the tests
+var quicDialer = quic.DialEarlyContext
+
 type roundTripCloser interface {
 	RoundTripOpt(*http.Request, RoundTripOpt) (*http.Response, error)
 	HandshakeComplete() bool
@@ -69,7 +72,8 @@ type RoundTripper struct {
 
 	// Dial specifies an optional dial function for creating QUIC
 	// connections for requests.
-	// If Dial is nil, quic.DialAddrEarlyContext will be used.
+	// If Dial is nil, a UDPConn will be created at the first request
+	// and will be reused for subsequent connections to other servers.
 	Dial func(ctx context.Context, addr string, tlsCfg *tls.Config, cfg *quic.Config) (quic.EarlyConnection, error)
 
 	// MaxResponseHeaderBytes specifies a limit on how many response bytes are
@@ -79,6 +83,7 @@ type RoundTripper struct {
 
 	newClient func(hostname string, tlsConf *tls.Config, opts *roundTripperOpts, conf *quic.Config, dialer dialFunc) (roundTripCloser, error) // so we can mock it in tests
 	clients   map[string]roundTripCloser
+	udpConn   *net.UDPConn
 }
 
 // RoundTripOpt are options for the Transport.RoundTripOpt method.
@@ -105,6 +110,10 @@ func (r *RoundTripper) RoundTripOpt(req *http.Request, opt RoundTripOpt) (*http.
 		closeRequestBody(req)
 		return nil, errors.New("http3: nil Request.URL")
 	}
+	if req.URL.Scheme != "https" {
+		closeRequestBody(req)
+		return nil, fmt.Errorf("http3: unsupported protocol scheme: %s", req.URL.Scheme)
+	}
 	if req.URL.Host == "" {
 		closeRequestBody(req)
 		return nil, errors.New("http3: no Host in request URL")
@@ -112,10 +121,6 @@ func (r *RoundTripper) RoundTripOpt(req *http.Request, opt RoundTripOpt) (*http.
 	if req.Header == nil {
 		closeRequestBody(req)
 		return nil, errors.New("http3: nil Request.Header")
-	}
-	if req.URL.Scheme != "https" {
-		closeRequestBody(req)
-		return nil, fmt.Errorf("http3: unsupported protocol scheme: %s", req.URL.Scheme)
 	}
 	for k, vv := range req.Header {
 		if !httpguts.ValidHeaderFieldName(k) {
@@ -173,6 +178,16 @@ func (r *RoundTripper) getClient(hostname string, onlyCached bool) (rtc roundTri
 		if r.newClient != nil {
 			newCl = r.newClient
 		}
+		dial := r.Dial
+		if dial == nil {
+			if r.udpConn == nil {
+				r.udpConn, err = net.ListenUDP("udp", nil)
+				if err != nil {
+					return nil, false, err
+				}
+			}
+			dial = r.makeDialer()
+		}
 		client, err = newCl(
 			hostname,
 			r.TLSClientConfig,
@@ -184,7 +199,7 @@ func (r *RoundTripper) getClient(hostname string, onlyCached bool) (rtc roundTri
 				UniStreamHijacker:  r.UniStreamHijacker,
 			},
 			r.QuicConfig,
-			r.Dial,
+			dial,
 		)
 		if err != nil {
 			return nil, false, err
@@ -205,7 +220,8 @@ func (r *RoundTripper) removeClient(hostname string) {
 	delete(r.clients, hostname)
 }
 
-// Close closes the QUIC connections that this RoundTripper has used
+// Close closes the QUIC connections that this RoundTripper has used.
+// It also closes the underlying UDPConn if it is not nil.
 func (r *RoundTripper) Close() error {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
@@ -215,6 +231,10 @@ func (r *RoundTripper) Close() error {
 		}
 	}
 	r.clients = nil
+	if r.udpConn != nil {
+		r.udpConn.Close()
+		r.udpConn = nil
+	}
 	return nil
 }
 
@@ -244,4 +264,15 @@ func validMethod(method string) bool {
 // copied from net/http/http.go
 func isNotToken(r rune) bool {
 	return !httpguts.IsTokenRune(r)
+}
+
+// makeDialer makes a QUIC dialer using r.udpConn.
+func (r *RoundTripper) makeDialer() func(ctx context.Context, addr string, tlsCfg *tls.Config, cfg *quic.Config) (quic.EarlyConnection, error) {
+	return func(ctx context.Context, addr string, tlsCfg *tls.Config, cfg *quic.Config) (quic.EarlyConnection, error) {
+		udpAddr, err := net.ResolveUDPAddr("udp", addr)
+		if err != nil {
+			return nil, err
+		}
+		return quicDialer(ctx, r.udpConn, udpAddr, addr, tlsCfg, cfg)
+	}
 }

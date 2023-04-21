@@ -2,6 +2,7 @@ package handshake
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	"errors"
 	"fmt"
@@ -19,6 +20,10 @@ import (
 	"github.com/quic-go/quic-go/logging"
 	"github.com/quic-go/quic-go/quicvarint"
 )
+
+type quicVersionContextKey struct{}
+
+var QUICVersionContextKey = &quicVersionContextKey{}
 
 // TLS unexpected_message alert
 const alertUnexpectedMessage uint8 = 10
@@ -64,30 +69,25 @@ const clientSessionStateRevision = 3
 
 type conn struct {
 	localAddr, remoteAddr net.Addr
-	version               protocol.VersionNumber
-}
-
-var _ ConnWithVersion = &conn{}
-
-func newConn(local, remote net.Addr, version protocol.VersionNumber) ConnWithVersion {
-	return &conn{
-		localAddr:  local,
-		remoteAddr: remote,
-		version:    version,
-	}
 }
 
 var _ net.Conn = &conn{}
 
-func (c *conn) Read([]byte) (int, error)               { return 0, nil }
-func (c *conn) Write([]byte) (int, error)              { return 0, nil }
-func (c *conn) Close() error                           { return nil }
-func (c *conn) RemoteAddr() net.Addr                   { return c.remoteAddr }
-func (c *conn) LocalAddr() net.Addr                    { return c.localAddr }
-func (c *conn) SetReadDeadline(time.Time) error        { return nil }
-func (c *conn) SetWriteDeadline(time.Time) error       { return nil }
-func (c *conn) SetDeadline(time.Time) error            { return nil }
-func (c *conn) GetQUICVersion() protocol.VersionNumber { return c.version }
+func newConn(local, remote net.Addr) net.Conn {
+	return &conn{
+		localAddr:  local,
+		remoteAddr: remote,
+	}
+}
+
+func (c *conn) Read([]byte) (int, error)         { return 0, nil }
+func (c *conn) Write([]byte) (int, error)        { return 0, nil }
+func (c *conn) Close() error                     { return nil }
+func (c *conn) RemoteAddr() net.Addr             { return c.remoteAddr }
+func (c *conn) LocalAddr() net.Addr              { return c.localAddr }
+func (c *conn) SetReadDeadline(time.Time) error  { return nil }
+func (c *conn) SetWriteDeadline(time.Time) error { return nil }
+func (c *conn) SetDeadline(time.Time) error      { return nil }
 
 type cryptoSetup struct {
 	tlsConf   *tls.Config
@@ -183,7 +183,7 @@ func NewCryptoSetupClient(
 		protocol.PerspectiveClient,
 		version,
 	)
-	cs.conn = qtls.Client(newConn(localAddr, remoteAddr, version), cs.tlsConf, cs.extraConf)
+	cs.conn = qtls.Client(newConn(localAddr, remoteAddr), cs.tlsConf, cs.extraConf)
 	return cs, clientHelloWritten
 }
 
@@ -218,7 +218,7 @@ func NewCryptoSetupServer(
 		version,
 	)
 	cs.allow0RTT = allow0RTT
-	cs.conn = qtls.Server(newConn(localAddr, remoteAddr, version), cs.tlsConf, cs.extraConf)
+	cs.conn = qtls.Server(newConn(localAddr, remoteAddr), cs.tlsConf, cs.extraConf)
 	return cs
 }
 
@@ -307,7 +307,7 @@ func (h *cryptoSetup) RunHandshake() {
 	handshakeErrChan := make(chan error, 1)
 	go func() {
 		defer close(h.handshakeDone)
-		if err := h.conn.Handshake(); err != nil {
+		if err := h.conn.HandshakeContext(context.WithValue(context.Background(), QUICVersionContextKey, h.version)); err != nil {
 			handshakeErrChan <- err
 			return
 		}
@@ -408,8 +408,7 @@ readLoop:
 func (h *cryptoSetup) checkEncryptionLevel(msgType messageType, encLevel protocol.EncryptionLevel) error {
 	var expected protocol.EncryptionLevel
 	switch msgType {
-	case typeClientHello,
-		typeServerHello:
+	case typeClientHello, typeServerHello:
 		expected = protocol.EncryptionInitial
 	case typeEncryptedExtensions,
 		typeCertificate,

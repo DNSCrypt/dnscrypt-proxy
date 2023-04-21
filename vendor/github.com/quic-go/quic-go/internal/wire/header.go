@@ -108,13 +108,15 @@ func Is0RTTPacket(b []byte) bool {
 		return false
 	}
 	version := protocol.VersionNumber(binary.BigEndian.Uint32(b[1:5]))
-	if !protocol.IsSupportedVersion(protocol.SupportedVersions, version) {
+	//nolint:exhaustive // We only need to test QUIC versions that we support.
+	switch version {
+	case protocol.Version1, protocol.VersionDraft29:
+		return b[0]>>4&0b11 == 0b01
+	case protocol.Version2:
+		return b[0]>>4&0b11 == 0b10
+	default:
 		return false
 	}
-	if version == protocol.Version2 {
-		return b[0]>>4&0b11 == 0b10
-	}
-	return b[0]>>4&0b11 == 0b01
 }
 
 var ErrUnsupportedVersion = errors.New("unsupported version")

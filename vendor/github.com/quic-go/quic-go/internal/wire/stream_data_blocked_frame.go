@@ -14,10 +14,6 @@ type StreamDataBlockedFrame struct {
 }
 
 func parseStreamDataBlockedFrame(r *bytes.Reader, _ protocol.VersionNumber) (*StreamDataBlockedFrame, error) {
-	if _, err := r.ReadByte(); err != nil {
-		return nil, err
-	}
-
 	sid, err := quicvarint.Read(r)
 	if err != nil {
 		return nil, err

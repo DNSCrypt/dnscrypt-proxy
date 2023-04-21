@@ -33,7 +33,7 @@ const (
 var defaultQuicConfig = &quic.Config{
 	MaxIncomingStreams: -1, // don't allow the server to create bidirectional streams
 	KeepAlivePeriod:    10 * time.Second,
-	Versions:           []protocol.VersionNumber{protocol.VersionTLS},
+	Versions:           []protocol.VersionNumber{protocol.Version1},
 }
 
 type dialFunc func(ctx context.Context, addr string, tlsCfg *tls.Config, cfg *quic.Config) (quic.EarlyConnection, error)
@@ -124,7 +124,7 @@ func (c *client) dial(ctx context.Context) error {
 	go func() {
 		if err := c.setupConn(conn); err != nil {
 			c.logger.Debugf("Setting up connection failed: %s", err)
-			conn.CloseWithError(quic.ApplicationErrorCode(errorInternalError), "")
+			conn.CloseWithError(quic.ApplicationErrorCode(ErrCodeInternalError), "")
 		}
 	}()
 
@@ -166,7 +166,7 @@ func (c *client) handleBidirectionalStreams(conn quic.EarlyConnection) {
 			if err != nil {
 				c.logger.Debugf("error handling stream: %s", err)
 			}
-			conn.CloseWithError(quic.ApplicationErrorCode(errorFrameUnexpected), "received HTTP/3 frame on bidirectional stream")
+			conn.CloseWithError(quic.ApplicationErrorCode(ErrCodeFrameUnexpected), "received HTTP/3 frame on bidirectional stream")
 		}(str)
 	}
 }
@@ -197,23 +197,23 @@ func (c *client) handleUnidirectionalStreams(conn quic.EarlyConnection) {
 				return
 			case streamTypePushStream:
 				// We never increased the Push ID, so we don't expect any push streams.
-				conn.CloseWithError(quic.ApplicationErrorCode(errorIDError), "")
+				conn.CloseWithError(quic.ApplicationErrorCode(ErrCodeIDError), "")
 				return
 			default:
 				if c.opts.UniStreamHijacker != nil && c.opts.UniStreamHijacker(StreamType(streamType), conn, str, nil) {
 					return
 				}
-				str.CancelRead(quic.StreamErrorCode(errorStreamCreationError))
+				str.CancelRead(quic.StreamErrorCode(ErrCodeStreamCreationError))
 				return
 			}
 			f, err := parseNextFrame(str, nil)
 			if err != nil {
-				conn.CloseWithError(quic.ApplicationErrorCode(errorFrameError), "")
+				conn.CloseWithError(quic.ApplicationErrorCode(ErrCodeFrameError), "")
 				return
 			}
 			sf, ok := f.(*settingsFrame)
 			if !ok {
-				conn.CloseWithError(quic.ApplicationErrorCode(errorMissingSettings), "")
+				conn.CloseWithError(quic.ApplicationErrorCode(ErrCodeMissingSettings), "")
 				return
 			}
 			if !sf.Datagram {
@@ -223,7 +223,7 @@ func (c *client) handleUnidirectionalStreams(conn quic.EarlyConnection) {
 			// we can expect it to have been negotiated both on the transport and on the HTTP/3 layer.
 			// Note: ConnectionState() will block until the handshake is complete (relevant when using 0-RTT).
 			if c.opts.EnableDatagram && !conn.ConnectionState().SupportsDatagrams {
-				conn.CloseWithError(quic.ApplicationErrorCode(errorSettingsError), "missing QUIC Datagram support")
+				conn.CloseWithError(quic.ApplicationErrorCode(ErrCodeSettingsError), "missing QUIC Datagram support")
 			}
 		}(str)
 	}
@@ -234,7 +234,7 @@ func (c *client) Close() error {
 	if conn == nil {
 		return nil
 	}
-	return (*conn).CloseWithError(quic.ApplicationErrorCode(errorNoError), "")
+	return (*conn).CloseWithError(quic.ApplicationErrorCode(ErrCodeNoError), "")
 }
 
 func (c *client) maxHeaderBytes() uint64 {
@@ -266,7 +266,7 @@ func (c *client) RoundTripOpt(req *http.Request, opt RoundTripOpt) (*http.Respon
 	} else {
 		// wait for the handshake to complete
 		select {
-		case <-conn.HandshakeComplete().Done():
+		case <-conn.HandshakeComplete():
 		case <-req.Context().Done():
 			return nil, req.Context().Err()
 		}
@@ -286,8 +286,8 @@ func (c *client) RoundTripOpt(req *http.Request, opt RoundTripOpt) (*http.Respon
 		defer close(done)
 		select {
 		case <-req.Context().Done():
-			str.CancelWrite(quic.StreamErrorCode(errorRequestCanceled))
-			str.CancelRead(quic.StreamErrorCode(errorRequestCanceled))
+			str.CancelWrite(quic.StreamErrorCode(ErrCodeRequestCanceled))
+			str.CancelRead(quic.StreamErrorCode(ErrCodeRequestCanceled))
 		case <-reqDone:
 		}
 	}()
@@ -339,7 +339,7 @@ func (c *client) sendRequestBody(str Stream, body io.ReadCloser) error {
 			if rerr == io.EOF {
 				break
 			}
-			str.CancelWrite(quic.StreamErrorCode(errorRequestCanceled))
+			str.CancelWrite(quic.StreamErrorCode(ErrCodeRequestCanceled))
 			return rerr
 		}
 	}
@@ -352,14 +352,14 @@ func (c *client) doRequest(req *http.Request, conn quic.EarlyConnection, str qui
 		requestGzip = true
 	}
 	if err := c.requestWriter.WriteRequestHeader(str, req, requestGzip); err != nil {
-		return nil, newStreamError(errorInternalError, err)
+		return nil, newStreamError(ErrCodeInternalError, err)
 	}
 
 	if req.Body == nil && !opt.DontCloseRequestStream {
 		str.Close()
 	}
 
-	hstr := newStream(str, func() { conn.CloseWithError(quic.ApplicationErrorCode(errorFrameUnexpected), "") })
+	hstr := newStream(str, func() { conn.CloseWithError(quic.ApplicationErrorCode(ErrCodeFrameUnexpected), "") })
 	if req.Body != nil {
 		// send the request body asynchronously
 		go func() {
@@ -374,23 +374,23 @@ func (c *client) doRequest(req *http.Request, conn quic.EarlyConnection, str qui
 
 	frame, err := parseNextFrame(str, nil)
 	if err != nil {
-		return nil, newStreamError(errorFrameError, err)
+		return nil, newStreamError(ErrCodeFrameError, err)
 	}
 	hf, ok := frame.(*headersFrame)
 	if !ok {
-		return nil, newConnError(errorFrameUnexpected, errors.New("expected first frame to be a HEADERS frame"))
+		return nil, newConnError(ErrCodeFrameUnexpected, errors.New("expected first frame to be a HEADERS frame"))
 	}
 	if hf.Length > c.maxHeaderBytes() {
-		return nil, newStreamError(errorFrameError, fmt.Errorf("HEADERS frame too large: %d bytes (max: %d)", hf.Length, c.maxHeaderBytes()))
+		return nil, newStreamError(ErrCodeFrameError, fmt.Errorf("HEADERS frame too large: %d bytes (max: %d)", hf.Length, c.maxHeaderBytes()))
 	}
 	headerBlock := make([]byte, hf.Length)
 	if _, err := io.ReadFull(str, headerBlock); err != nil {
-		return nil, newStreamError(errorRequestIncomplete, err)
+		return nil, newStreamError(ErrCodeRequestIncomplete, err)
 	}
 	hfs, err := c.decoder.DecodeFull(headerBlock)
 	if err != nil {
 		// TODO: use the right error code
-		return nil, newConnError(errorGeneralProtocolError, err)
+		return nil, newConnError(ErrCodeGeneralProtocolError, err)
 	}
 
 	connState := qtls.ToTLSConnectionState(conn.ConnectionState().TLS)
@@ -406,7 +406,7 @@ func (c *client) doRequest(req *http.Request, conn quic.EarlyConnection, str qui
 		case ":status":
 			status, err := strconv.Atoi(hf.Value)
 			if err != nil {
-				return nil, newStreamError(errorGeneralProtocolError, errors.New("malformed non-numeric status pseudo header"))
+				return nil, newStreamError(ErrCodeGeneralProtocolError, errors.New("malformed non-numeric status pseudo header"))
 			}
 			res.StatusCode = status
 			res.Status = hf.Value + " " + http.StatusText(status)
@@ -449,7 +449,7 @@ func (c *client) HandshakeComplete() bool {
 		return false
 	}
 	select {
-	case <-(*conn).HandshakeComplete().Done():
+	case <-(*conn).HandshakeComplete():
 		return true
 	default:
 		return false

@@ -14,14 +14,9 @@ type DatagramFrame struct {
 	Data           []byte
 }
 
-func parseDatagramFrame(r *bytes.Reader, _ protocol.VersionNumber) (*DatagramFrame, error) {
-	typeByte, err := r.ReadByte()
-	if err != nil {
-		return nil, err
-	}
-
+func parseDatagramFrame(r *bytes.Reader, typ uint64, _ protocol.VersionNumber) (*DatagramFrame, error) {
 	f := &DatagramFrame{}
-	f.DataLenPresent = typeByte&0x1 > 0
+	f.DataLenPresent = typ&0x1 > 0
 
 	var length uint64
 	if f.DataLenPresent {
@@ -45,11 +40,11 @@ func parseDatagramFrame(r *bytes.Reader, _ protocol.VersionNumber) (*DatagramFra
 }
 
 func (f *DatagramFrame) Append(b []byte, _ protocol.VersionNumber) ([]byte, error) {
-	typeByte := uint8(0x30)
+	typ := uint8(0x30)
 	if f.DataLenPresent {
-		typeByte ^= 0b1
+		typ ^= 0b1
 	}
-	b = append(b, typeByte)
+	b = append(b, typ)
 	if f.DataLenPresent {
 		b = quicvarint.Append(b, uint64(len(f.Data)))
 	}

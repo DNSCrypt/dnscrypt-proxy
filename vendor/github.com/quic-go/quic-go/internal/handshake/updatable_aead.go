@@ -19,6 +19,10 @@ import (
 // It's a package-level variable to allow modifying it for testing purposes.
 var KeyUpdateInterval uint64 = protocol.KeyUpdateInterval
 
+// FirstKeyUpdateInterval is the maximum number of packets we send or receive before initiating the first key update.
+// It's a package-level variable to allow modifying it for testing purposes.
+var FirstKeyUpdateInterval uint64 = 100
+
 type updatableAEAD struct {
 	suite *qtls.CipherSuiteTLS13
 
@@ -27,7 +31,6 @@ type updatableAEAD struct {
 	firstPacketNumber  protocol.PacketNumber
 	handshakeConfirmed bool
 
-	keyUpdateInterval  uint64
 	invalidPacketLimit uint64
 	invalidPacketCount uint64
 
@@ -74,7 +77,6 @@ func newUpdatableAEAD(rttStats *utils.RTTStats, tracer logging.ConnectionTracer,
 		largestAcked:            protocol.InvalidPacketNumber,
 		firstRcvdWithCurrentKey: protocol.InvalidPacketNumber,
 		firstSentWithCurrentKey: protocol.InvalidPacketNumber,
-		keyUpdateInterval:       KeyUpdateInterval,
 		rttStats:                rttStats,
 		tracer:                  tracer,
 		logger:                  logger,
@@ -116,6 +118,7 @@ func (a *updatableAEAD) getNextTrafficSecret(hash crypto.Hash, ts []byte) []byte
 	return hkdfExpandLabel(hash, ts, []byte{}, "quic ku", hash.Size())
 }
 
+// SetReadKey sets the read key.
 // For the client, this function is called before SetWriteKey.
 // For the server, this function is called after SetWriteKey.
 func (a *updatableAEAD) SetReadKey(suite *qtls.CipherSuiteTLS13, trafficSecret []byte) {
@@ -129,6 +132,7 @@ func (a *updatableAEAD) SetReadKey(suite *qtls.CipherSuiteTLS13, trafficSecret [
 	a.nextRcvAEAD = createAEAD(suite, a.nextRcvTrafficSecret, a.version)
 }
 
+// SetWriteKey sets the write key.
 // For the client, this function is called after SetReadKey.
 // For the server, this function is called before SetWriteKey.
 func (a *updatableAEAD) SetWriteKey(suite *qtls.CipherSuiteTLS13, trafficSecret []byte) {
@@ -284,11 +288,17 @@ func (a *updatableAEAD) shouldInitiateKeyUpdate() bool {
 	if !a.updateAllowed() {
 		return false
 	}
-	if a.numRcvdWithCurrentKey >= a.keyUpdateInterval {
+	// Initiate the first key update shortly after the handshake, in order to exercise the key update mechanism.
+	if a.keyPhase == 0 {
+		if a.numRcvdWithCurrentKey >= FirstKeyUpdateInterval || a.numSentWithCurrentKey >= FirstKeyUpdateInterval {
+			return true
+		}
+	}
+	if a.numRcvdWithCurrentKey >= KeyUpdateInterval {
 		a.logger.Debugf("Received %d packets with current key phase. Initiating key update to the next key phase: %d", a.numRcvdWithCurrentKey, a.keyPhase+1)
 		return true
 	}
-	if a.numSentWithCurrentKey >= a.keyUpdateInterval {
+	if a.numSentWithCurrentKey >= KeyUpdateInterval {
 		a.logger.Debugf("Sent %d packets with current key phase. Initiating key update to the next key phase: %d", a.numSentWithCurrentKey, a.keyPhase+1)
 		return true
 	}

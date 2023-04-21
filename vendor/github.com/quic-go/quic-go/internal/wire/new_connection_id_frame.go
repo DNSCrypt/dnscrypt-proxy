@@ -18,10 +18,6 @@ type NewConnectionIDFrame struct {
 }
 
 func parseNewConnectionIDFrame(r *bytes.Reader, _ protocol.VersionNumber) (*NewConnectionIDFrame, error) {
-	if _, err := r.ReadByte(); err != nil {
-		return nil, err
-	}
-
 	seq, err := quicvarint.Read(r)
 	if err != nil {
 		return nil, err
@@ -58,7 +54,7 @@ func parseNewConnectionIDFrame(r *bytes.Reader, _ protocol.VersionNumber) (*NewC
 }
 
 func (f *NewConnectionIDFrame) Append(b []byte, _ protocol.VersionNumber) ([]byte, error) {
-	b = append(b, 0x18)
+	b = append(b, newConnectionIDFrameType)
 	b = quicvarint.Append(b, f.SequenceNumber)
 	b = quicvarint.Append(b, f.RetirePriorTo)
 	connIDLen := f.ConnectionID.Len()

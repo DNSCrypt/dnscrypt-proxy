@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/quic-go/quic-go"
-	"github.com/quic-go/quic-go/internal/handshake"
 	"github.com/quic-go/quic-go/internal/protocol"
 	"github.com/quic-go/quic-go/internal/utils"
 	"github.com/quic-go/quic-go/quicvarint"
@@ -46,13 +45,15 @@ const (
 )
 
 func versionToALPN(v protocol.VersionNumber) string {
-	if v == protocol.Version1 || v == protocol.Version2 {
+	//nolint:exhaustive // These are all the versions we care about.
+	switch v {
+	case protocol.Version1, protocol.Version2:
 		return NextProtoH3
-	}
-	if v == protocol.VersionTLS || v == protocol.VersionDraft29 {
+	case protocol.VersionDraft29:
 		return NextProtoH3Draft29
+	default:
+		return ""
 	}
-	return ""
 }
 
 // ConfigureTLSConfig creates a new tls.Config which can be used
@@ -66,8 +67,9 @@ func ConfigureTLSConfig(tlsConf *tls.Config) *tls.Config {
 		GetConfigForClient: func(ch *tls.ClientHelloInfo) (*tls.Config, error) {
 			// determine the ALPN from the QUIC version used
 			proto := NextProtoH3
-			if qconn, ok := ch.Conn.(handshake.ConnWithVersion); ok {
-				proto = versionToALPN(qconn.GetQUICVersion())
+			val := ch.Context().Value(quic.QUICVersionContextKey)
+			if v, ok := val.(quic.VersionNumber); ok {
+				proto = versionToALPN(v)
 			}
 			config := tlsConf
 			if tlsConf.GetConfigForClient != nil {
@@ -107,15 +109,15 @@ var ServerContextKey = &contextKey{"http3-server"}
 
 type requestError struct {
 	err       error
-	streamErr errorCode
-	connErr   errorCode
+	streamErr ErrCode
+	connErr   ErrCode
 }
 
-func newStreamError(code errorCode, err error) requestError {
+func newStreamError(code ErrCode, err error) requestError {
 	return requestError{err: err, streamErr: code}
 }
 
-func newConnError(code errorCode, err error) requestError {
+func newConnError(code ErrCode, err error) requestError {
 	return requestError{err: err, connErr: code}
 }
 
@@ -442,14 +444,14 @@ func (s *Server) handleConn(conn quic.Connection) error {
 		str, err := conn.AcceptStream(context.Background())
 		if err != nil {
 			var appErr *quic.ApplicationError
-			if errors.As(err, &appErr) && appErr.ErrorCode == quic.ApplicationErrorCode(errorNoError) {
+			if errors.As(err, &appErr) && appErr.ErrorCode == quic.ApplicationErrorCode(ErrCodeNoError) {
 				return nil
 			}
 			return fmt.Errorf("accepting stream failed: %w", err)
 		}
 		go func() {
 			rerr := s.handleRequest(conn, str, decoder, func() {
-				conn.CloseWithError(quic.ApplicationErrorCode(errorFrameUnexpected), "")
+				conn.CloseWithError(quic.ApplicationErrorCode(ErrCodeFrameUnexpected), "")
 			})
 			if rerr.err == errHijacked {
 				return
@@ -498,23 +500,23 @@ func (s *Server) handleUnidirectionalStreams(conn quic.Connection) {
 				// TODO: check that only one stream of each type is opened.
 				return
 			case streamTypePushStream: // only the server can push
-				conn.CloseWithError(quic.ApplicationErrorCode(errorStreamCreationError), "")
+				conn.CloseWithError(quic.ApplicationErrorCode(ErrCodeStreamCreationError), "")
 				return
 			default:
 				if s.UniStreamHijacker != nil && s.UniStreamHijacker(StreamType(streamType), conn, str, nil) {
 					return
 				}
-				str.CancelRead(quic.StreamErrorCode(errorStreamCreationError))
+				str.CancelRead(quic.StreamErrorCode(ErrCodeStreamCreationError))
 				return
 			}
 			f, err := parseNextFrame(str, nil)
 			if err != nil {
-				conn.CloseWithError(quic.ApplicationErrorCode(errorFrameError), "")
+				conn.CloseWithError(quic.ApplicationErrorCode(ErrCodeFrameError), "")
 				return
 			}
 			sf, ok := f.(*settingsFrame)
 			if !ok {
-				conn.CloseWithError(quic.ApplicationErrorCode(errorMissingSettings), "")
+				conn.CloseWithError(quic.ApplicationErrorCode(ErrCodeMissingSettings), "")
 				return
 			}
 			if !sf.Datagram {
@@ -524,7 +526,7 @@ func (s *Server) handleUnidirectionalStreams(conn quic.Connection) {
 			// we can expect it to have been negotiated both on the transport and on the HTTP/3 layer.
 			// Note: ConnectionState() will block until the handshake is complete (relevant when using 0-RTT).
 			if s.EnableDatagrams && !conn.ConnectionState().SupportsDatagrams {
-				conn.CloseWithError(quic.ApplicationErrorCode(errorSettingsError), "missing QUIC Datagram support")
+				conn.CloseWithError(quic.ApplicationErrorCode(ErrCodeSettingsError), "missing QUIC Datagram support")
 			}
 		}(str)
 	}
@@ -547,28 +549,28 @@ func (s *Server) handleRequest(conn quic.Connection, str quic.Stream, decoder *q
 		if err == errHijacked {
 			return requestError{err: errHijacked}
 		}
-		return newStreamError(errorRequestIncomplete, err)
+		return newStreamError(ErrCodeRequestIncomplete, err)
 	}
 	hf, ok := frame.(*headersFrame)
 	if !ok {
-		return newConnError(errorFrameUnexpected, errors.New("expected first frame to be a HEADERS frame"))
+		return newConnError(ErrCodeFrameUnexpected, errors.New("expected first frame to be a HEADERS frame"))
 	}
 	if hf.Length > s.maxHeaderBytes() {
-		return newStreamError(errorFrameError, fmt.Errorf("HEADERS frame too large: %d bytes (max: %d)", hf.Length, s.maxHeaderBytes()))
+		return newStreamError(ErrCodeFrameError, fmt.Errorf("HEADERS frame too large: %d bytes (max: %d)", hf.Length, s.maxHeaderBytes()))
 	}
 	headerBlock := make([]byte, hf.Length)
 	if _, err := io.ReadFull(str, headerBlock); err != nil {
-		return newStreamError(errorRequestIncomplete, err)
+		return newStreamError(ErrCodeRequestIncomplete, err)
 	}
 	hfs, err := decoder.DecodeFull(headerBlock)
 	if err != nil {
 		// TODO: use the right error code
-		return newConnError(errorGeneralProtocolError, err)
+		return newConnError(ErrCodeGeneralProtocolError, err)
 	}
 	req, err := requestFromHeaders(hfs)
 	if err != nil {
 		// TODO: use the right error code
-		return newStreamError(errorGeneralProtocolError, err)
+		return newStreamError(ErrCodeGeneralProtocolError, err)
 	}
 
 	connState := conn.ConnectionState().TLS.ConnectionState
@@ -622,7 +624,7 @@ func (s *Server) handleRequest(conn quic.Connection, str quic.Stream, decoder *q
 		r.WriteHeader(http.StatusOK)
 	}
 	// If the EOF was read by the handler, CancelRead() is a no-op.
-	str.CancelRead(quic.StreamErrorCode(errorNoError))
+	str.CancelRead(quic.StreamErrorCode(ErrCodeNoError))
 	return requestError{}
 }
 
