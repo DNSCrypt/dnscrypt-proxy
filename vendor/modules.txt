@@ -70,7 +70,7 @@ github.com/k-sone/critbitgo
 # github.com/kardianos/service v1.2.2
 ## explicit; go 1.12
 github.com/kardianos/service
-# github.com/miekg/dns v1.1.53
+# github.com/miekg/dns v1.1.54
 ## explicit; go 1.19
 github.com/miekg/dns
 # github.com/onsi/ginkgo/v2 v2.2.0
