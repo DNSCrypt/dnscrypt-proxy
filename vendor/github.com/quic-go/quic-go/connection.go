@@ -696,8 +696,8 @@ func (s *connection) earlyConnReady() <-chan struct{} {
 	return s.earlyConnReadyChan
 }
 
-func (s *connection) HandshakeComplete() context.Context {
-	return s.handshakeCtx
+func (s *connection) HandshakeComplete() <-chan struct{} {
+	return s.handshakeCtx.Done()
 }
 
 func (s *connection) Context() context.Context {
@@ -2195,7 +2195,7 @@ func (s *connection) GetVersion() protocol.VersionNumber {
 }
 
 func (s *connection) NextConnection() Connection {
-	<-s.HandshakeComplete().Done()
+	<-s.HandshakeComplete()
 	s.streamsMap.UseResetMaps()
 	return s
 }

@@ -13,10 +13,6 @@ type RetireConnectionIDFrame struct {
 }
 
 func parseRetireConnectionIDFrame(r *bytes.Reader, _ protocol.VersionNumber) (*RetireConnectionIDFrame, error) {
-	if _, err := r.ReadByte(); err != nil {
-		return nil, err
-	}
-
 	seq, err := quicvarint.Read(r)
 	if err != nil {
 		return nil, err
@@ -25,7 +21,7 @@ func parseRetireConnectionIDFrame(r *bytes.Reader, _ protocol.VersionNumber) (*R
 }
 
 func (f *RetireConnectionIDFrame) Append(b []byte, _ protocol.VersionNumber) ([]byte, error) {
-	b = append(b, 0x19)
+	b = append(b, retireConnectionIDFrameType)
 	b = quicvarint.Append(b, f.SequenceNumber)
 	return b, nil
 }

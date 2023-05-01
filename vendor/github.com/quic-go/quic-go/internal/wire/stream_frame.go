@@ -20,15 +20,10 @@ type StreamFrame struct {
 	fromPool bool
 }
 
-func parseStreamFrame(r *bytes.Reader, _ protocol.VersionNumber) (*StreamFrame, error) {
-	typeByte, err := r.ReadByte()
-	if err != nil {
-		return nil, err
-	}
-
-	hasOffset := typeByte&0b100 > 0
-	fin := typeByte&0b1 > 0
-	hasDataLen := typeByte&0b10 > 0
+func parseStreamFrame(r *bytes.Reader, typ uint64, _ protocol.VersionNumber) (*StreamFrame, error) {
+	hasOffset := typ&0b100 > 0
+	fin := typ&0b1 > 0
+	hasDataLen := typ&0b10 > 0
 
 	streamID, err := quicvarint.Read(r)
 	if err != nil {
@@ -89,18 +84,18 @@ func (f *StreamFrame) Append(b []byte, _ protocol.VersionNumber) ([]byte, error)
 		return nil, errors.New("StreamFrame: attempting to write empty frame without FIN")
 	}
 
-	typeByte := byte(0x8)
+	typ := byte(0x8)
 	if f.Fin {
-		typeByte ^= 0b1
+		typ ^= 0b1
 	}
 	hasOffset := f.Offset != 0
 	if f.DataLenPresent {
-		typeByte ^= 0b10
+		typ ^= 0b10
 	}
 	if hasOffset {
-		typeByte ^= 0b100
+		typ ^= 0b100
 	}
-	b = append(b, typeByte)
+	b = append(b, typ)
 	b = quicvarint.Append(b, uint64(f.StreamID))
 	if hasOffset {
 		b = quicvarint.Append(b, uint64(f.Offset))

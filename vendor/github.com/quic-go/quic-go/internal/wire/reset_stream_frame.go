@@ -16,10 +16,6 @@ type ResetStreamFrame struct {
 }
 
 func parseResetStreamFrame(r *bytes.Reader, _ protocol.VersionNumber) (*ResetStreamFrame, error) {
-	if _, err := r.ReadByte(); err != nil { // read the TypeByte
-		return nil, err
-	}
-
 	var streamID protocol.StreamID
 	var byteOffset protocol.ByteCount
 	sid, err := quicvarint.Read(r)
@@ -45,7 +41,7 @@ func parseResetStreamFrame(r *bytes.Reader, _ protocol.VersionNumber) (*ResetStr
 }
 
 func (f *ResetStreamFrame) Append(b []byte, _ protocol.VersionNumber) ([]byte, error) {
-	b = append(b, 0x4)
+	b = append(b, resetStreamFrameType)
 	b = quicvarint.Append(b, uint64(f.StreamID))
 	b = quicvarint.Append(b, uint64(f.ErrorCode))
 	b = quicvarint.Append(b, uint64(f.FinalSize))

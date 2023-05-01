@@ -58,8 +58,8 @@ github.com/jedisct1/go-dnsstamps
 # github.com/jedisct1/go-hpke-compact v0.0.0-20230211184420-51d4440017ce
 ## explicit; go 1.19
 github.com/jedisct1/go-hpke-compact
-# github.com/jedisct1/go-minisign v0.0.0-20230211184525-1f273d8dc776
-## explicit; go 1.19
+# github.com/jedisct1/go-minisign v0.0.0-20230410063418-3d885d71f62c
+## explicit; go 1.20
 github.com/jedisct1/go-minisign
 # github.com/jedisct1/xsecretbox v0.0.0-20230211185120-2025cdbb9f0f
 ## explicit; go 1.19
@@ -70,7 +70,7 @@ github.com/k-sone/critbitgo
 # github.com/kardianos/service v1.2.2
 ## explicit; go 1.12
 github.com/kardianos/service
-# github.com/miekg/dns v1.1.53
+# github.com/miekg/dns v1.1.54
 ## explicit; go 1.19
 github.com/miekg/dns
 # github.com/onsi/ginkgo/v2 v2.2.0
@@ -106,13 +106,13 @@ github.com/powerman/deepequal
 # github.com/quic-go/qpack v0.4.0
 ## explicit; go 1.18
 github.com/quic-go/qpack
-# github.com/quic-go/qtls-go1-19 v0.2.1
+# github.com/quic-go/qtls-go1-19 v0.3.2
 ## explicit; go 1.19
 github.com/quic-go/qtls-go1-19
-# github.com/quic-go/qtls-go1-20 v0.1.1
+# github.com/quic-go/qtls-go1-20 v0.2.2
 ## explicit; go 1.20
 github.com/quic-go/qtls-go1-20
-# github.com/quic-go/quic-go v0.33.0
+# github.com/quic-go/quic-go v0.34.0
 ## explicit; go 1.19
 github.com/quic-go/quic-go
 github.com/quic-go/quic-go/http3

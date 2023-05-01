@@ -47,7 +47,6 @@ var generateConnectionIDForInitial = protocol.GenerateConnectionIDForInitial
 // DialAddr establishes a new QUIC connection to a server.
 // It uses a new UDP connection and closes this connection when the QUIC connection is closed.
 // The hostname for SNI is taken from the given address.
-// The tls.Config.CipherSuites allows setting of TLS 1.3 cipher suites.
 func DialAddr(
 	addr string,
 	tlsConf *tls.Config,
@@ -59,7 +58,6 @@ func DialAddr(
 // DialAddrEarly establishes a new 0-RTT QUIC connection to a server.
 // It uses a new UDP connection and closes this connection when the QUIC connection is closed.
 // The hostname for SNI is taken from the given address.
-// The tls.Config.CipherSuites allows setting of TLS 1.3 cipher suites.
 func DialAddrEarly(
 	addr string,
 	tlsConf *tls.Config,
@@ -325,7 +323,7 @@ func (c *client) dial(ctx context.Context) error {
 	case <-earlyConnChan:
 		// ready to send 0-RTT data
 		return nil
-	case <-c.conn.HandshakeComplete().Done():
+	case <-c.conn.HandshakeComplete():
 		// handshake successfully completed
 		return nil
 	}

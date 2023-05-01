@@ -8,6 +8,32 @@ import (
 
 	"github.com/quic-go/quic-go/internal/protocol"
 	"github.com/quic-go/quic-go/internal/qerr"
+	"github.com/quic-go/quic-go/quicvarint"
+)
+
+const (
+	pingFrameType               = 0x1
+	ackFrameType                = 0x2
+	ackECNFrameType             = 0x3
+	resetStreamFrameType        = 0x4
+	stopSendingFrameType        = 0x5
+	cryptoFrameType             = 0x6
+	newTokenFrameType           = 0x7
+	maxDataFrameType            = 0x10
+	maxStreamDataFrameType      = 0x11
+	bidiMaxStreamsFrameType     = 0x12
+	uniMaxStreamsFrameType      = 0x13
+	dataBlockedFrameType        = 0x14
+	streamDataBlockedFrameType  = 0x15
+	bidiStreamBlockedFrameType  = 0x16
+	uniStreamBlockedFrameType   = 0x17
+	newConnectionIDFrameType    = 0x18
+	retireConnectionIDFrameType = 0x19
+	pathChallengeFrameType      = 0x1a
+	pathResponseFrameType       = 0x1b
+	connectionCloseFrameType    = 0x1c
+	applicationCloseFrameType   = 0x1d
+	handshakeDoneFrameType      = 0x1e
 )
 
 type frameParser struct {
@@ -41,16 +67,21 @@ func (p *frameParser) ParseNext(data []byte, encLevel protocol.EncryptionLevel, 
 
 func (p *frameParser) parseNext(r *bytes.Reader, encLevel protocol.EncryptionLevel, v protocol.VersionNumber) (Frame, error) {
 	for r.Len() != 0 {
-		typeByte, _ := p.r.ReadByte()
-		if typeByte == 0x0 { // PADDING frame
-			continue
-		}
-		r.UnreadByte()
-
-		f, err := p.parseFrame(r, typeByte, encLevel, v)
+		typ, err := quicvarint.Read(r)
 		if err != nil {
 			return nil, &qerr.TransportError{
-				FrameType:    uint64(typeByte),
+				ErrorCode:    qerr.FrameEncodingError,
+				ErrorMessage: err.Error(),
+			}
+		}
+		if typ == 0x0 { // skip PADDING frames
+			continue
+		}
+
+		f, err := p.parseFrame(r, typ, encLevel, v)
+		if err != nil {
+			return nil, &qerr.TransportError{
+				FrameType:    typ,
 				ErrorCode:    qerr.FrameEncodingError,
 				ErrorMessage: err.Error(),
 			}
@@ -60,56 +91,56 @@ func (p *frameParser) parseNext(r *bytes.Reader, encLevel protocol.EncryptionLev
 	return nil, nil
 }
 
-func (p *frameParser) parseFrame(r *bytes.Reader, typeByte byte, encLevel protocol.EncryptionLevel, v protocol.VersionNumber) (Frame, error) {
+func (p *frameParser) parseFrame(r *bytes.Reader, typ uint64, encLevel protocol.EncryptionLevel, v protocol.VersionNumber) (Frame, error) {
 	var frame Frame
 	var err error
-	if typeByte&0xf8 == 0x8 {
-		frame, err = parseStreamFrame(r, v)
+	if typ&0xf8 == 0x8 {
+		frame, err = parseStreamFrame(r, typ, v)
 	} else {
-		switch typeByte {
-		case 0x1:
-			frame, err = parsePingFrame(r, v)
-		case 0x2, 0x3:
+		switch typ {
+		case pingFrameType:
+			frame = &PingFrame{}
+		case ackFrameType, ackECNFrameType:
 			ackDelayExponent := p.ackDelayExponent
 			if encLevel != protocol.Encryption1RTT {
 				ackDelayExponent = protocol.DefaultAckDelayExponent
 			}
-			frame, err = parseAckFrame(r, ackDelayExponent, v)
-		case 0x4:
+			frame, err = parseAckFrame(r, typ, ackDelayExponent, v)
+		case resetStreamFrameType:
 			frame, err = parseResetStreamFrame(r, v)
-		case 0x5:
+		case stopSendingFrameType:
 			frame, err = parseStopSendingFrame(r, v)
-		case 0x6:
+		case cryptoFrameType:
 			frame, err = parseCryptoFrame(r, v)
-		case 0x7:
+		case newTokenFrameType:
 			frame, err = parseNewTokenFrame(r, v)
-		case 0x10:
+		case maxDataFrameType:
 			frame, err = parseMaxDataFrame(r, v)
-		case 0x11:
+		case maxStreamDataFrameType:
 			frame, err = parseMaxStreamDataFrame(r, v)
-		case 0x12, 0x13:
-			frame, err = parseMaxStreamsFrame(r, v)
-		case 0x14:
+		case bidiMaxStreamsFrameType, uniMaxStreamsFrameType:
+			frame, err = parseMaxStreamsFrame(r, typ, v)
+		case dataBlockedFrameType:
 			frame, err = parseDataBlockedFrame(r, v)
-		case 0x15:
+		case streamDataBlockedFrameType:
 			frame, err = parseStreamDataBlockedFrame(r, v)
-		case 0x16, 0x17:
-			frame, err = parseStreamsBlockedFrame(r, v)
-		case 0x18:
+		case bidiStreamBlockedFrameType, uniStreamBlockedFrameType:
+			frame, err = parseStreamsBlockedFrame(r, typ, v)
+		case newConnectionIDFrameType:
 			frame, err = parseNewConnectionIDFrame(r, v)
-		case 0x19:
+		case retireConnectionIDFrameType:
 			frame, err = parseRetireConnectionIDFrame(r, v)
-		case 0x1a:
+		case pathChallengeFrameType:
 			frame, err = parsePathChallengeFrame(r, v)
-		case 0x1b:
+		case pathResponseFrameType:
 			frame, err = parsePathResponseFrame(r, v)
-		case 0x1c, 0x1d:
-			frame, err = parseConnectionCloseFrame(r, v)
-		case 0x1e:
-			frame, err = parseHandshakeDoneFrame(r, v)
+		case connectionCloseFrameType, applicationCloseFrameType:
+			frame, err = parseConnectionCloseFrame(r, typ, v)
+		case handshakeDoneFrameType:
+			frame = &HandshakeDoneFrame{}
 		case 0x30, 0x31:
 			if p.supportsDatagrams {
-				frame, err = parseDatagramFrame(r, v)
+				frame, err = parseDatagramFrame(r, typ, v)
 				break
 			}
 			fallthrough

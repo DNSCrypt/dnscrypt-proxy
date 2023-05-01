@@ -6,66 +6,66 @@ import (
 	"github.com/quic-go/quic-go"
 )
 
-type errorCode quic.ApplicationErrorCode
+type ErrCode quic.ApplicationErrorCode
 
 const (
-	errorNoError              errorCode = 0x100
-	errorGeneralProtocolError errorCode = 0x101
-	errorInternalError        errorCode = 0x102
-	errorStreamCreationError  errorCode = 0x103
-	errorClosedCriticalStream errorCode = 0x104
-	errorFrameUnexpected      errorCode = 0x105
-	errorFrameError           errorCode = 0x106
-	errorExcessiveLoad        errorCode = 0x107
-	errorIDError              errorCode = 0x108
-	errorSettingsError        errorCode = 0x109
-	errorMissingSettings      errorCode = 0x10a
-	errorRequestRejected      errorCode = 0x10b
-	errorRequestCanceled      errorCode = 0x10c
-	errorRequestIncomplete    errorCode = 0x10d
-	errorMessageError         errorCode = 0x10e
-	errorConnectError         errorCode = 0x10f
-	errorVersionFallback      errorCode = 0x110
-	errorDatagramError        errorCode = 0x4a1268
+	ErrCodeNoError              ErrCode = 0x100
+	ErrCodeGeneralProtocolError ErrCode = 0x101
+	ErrCodeInternalError        ErrCode = 0x102
+	ErrCodeStreamCreationError  ErrCode = 0x103
+	ErrCodeClosedCriticalStream ErrCode = 0x104
+	ErrCodeFrameUnexpected      ErrCode = 0x105
+	ErrCodeFrameError           ErrCode = 0x106
+	ErrCodeExcessiveLoad        ErrCode = 0x107
+	ErrCodeIDError              ErrCode = 0x108
+	ErrCodeSettingsError        ErrCode = 0x109
+	ErrCodeMissingSettings      ErrCode = 0x10a
+	ErrCodeRequestRejected      ErrCode = 0x10b
+	ErrCodeRequestCanceled      ErrCode = 0x10c
+	ErrCodeRequestIncomplete    ErrCode = 0x10d
+	ErrCodeMessageError         ErrCode = 0x10e
+	ErrCodeConnectError         ErrCode = 0x10f
+	ErrCodeVersionFallback      ErrCode = 0x110
+	ErrCodeDatagramError        ErrCode = 0x4a1268
 )
 
-func (e errorCode) String() string {
+func (e ErrCode) String() string {
 	switch e {
-	case errorNoError:
+	case ErrCodeNoError:
 		return "H3_NO_ERROR"
-	case errorGeneralProtocolError:
+	case ErrCodeGeneralProtocolError:
 		return "H3_GENERAL_PROTOCOL_ERROR"
-	case errorInternalError:
+	case ErrCodeInternalError:
 		return "H3_INTERNAL_ERROR"
-	case errorStreamCreationError:
+	case ErrCodeStreamCreationError:
 		return "H3_STREAM_CREATION_ERROR"
-	case errorClosedCriticalStream:
+	case ErrCodeClosedCriticalStream:
 		return "H3_CLOSED_CRITICAL_STREAM"
-	case errorFrameUnexpected:
+	case ErrCodeFrameUnexpected:
 		return "H3_FRAME_UNEXPECTED"
-	case errorFrameError:
+	case ErrCodeFrameError:
 		return "H3_FRAME_ERROR"
-	case errorExcessiveLoad:
+	case ErrCodeExcessiveLoad:
 		return "H3_EXCESSIVE_LOAD"
-	case errorIDError:
+	case ErrCodeIDError:
 		return "H3_ID_ERROR"
-	case errorSettingsError:
+	case ErrCodeSettingsError:
 		return "H3_SETTINGS_ERROR"
-	case errorMissingSettings:
+	case ErrCodeMissingSettings:
 		return "H3_MISSING_SETTINGS"
-	case errorRequestRejected:
+	case ErrCodeRequestRejected:
 		return "H3_REQUEST_REJECTED"
-	case errorRequestCanceled:
+	case ErrCodeRequestCanceled:
 		return "H3_REQUEST_CANCELLED"
-	case errorRequestIncomplete:
+	case ErrCodeRequestIncomplete:
 		return "H3_INCOMPLETE_REQUEST"
-	case errorMessageError:
+	case ErrCodeMessageError:
 		return "H3_MESSAGE_ERROR"
-	case errorConnectError:
+	case ErrCodeConnectError:
 		return "H3_CONNECT_ERROR"
-	case errorVersionFallback:
+	case ErrCodeVersionFallback:
 		return "H3_VERSION_FALLBACK"
-	case errorDatagramError:
+	case ErrCodeDatagramError:
 		return "H3_DATAGRAM_ERROR"
 	default:
 		return fmt.Sprintf("unknown error code: %#x", uint16(e))

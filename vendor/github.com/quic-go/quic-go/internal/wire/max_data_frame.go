@@ -14,10 +14,6 @@ type MaxDataFrame struct {
 
 // parseMaxDataFrame parses a MAX_DATA frame
 func parseMaxDataFrame(r *bytes.Reader, _ protocol.VersionNumber) (*MaxDataFrame, error) {
-	if _, err := r.ReadByte(); err != nil {
-		return nil, err
-	}
-
 	frame := &MaxDataFrame{}
 	byteOffset, err := quicvarint.Read(r)
 	if err != nil {
@@ -27,9 +23,8 @@ func parseMaxDataFrame(r *bytes.Reader, _ protocol.VersionNumber) (*MaxDataFrame
 	return frame, nil
 }
 
-// Write writes a MAX_STREAM_DATA frame
 func (f *MaxDataFrame) Append(b []byte, _ protocol.VersionNumber) ([]byte, error) {
-	b = append(b, 0x10)
+	b = append(b, maxDataFrameType)
 	b = quicvarint.Append(b, uint64(f.MaximumData))
 	return b, nil
 }

@@ -417,6 +417,9 @@ func (h *packetHandlerMap) handlePacket(p *receivedPacket) {
 	}
 	if wire.Is0RTTPacket(p.data) {
 		if h.numZeroRTTEntries >= protocol.Max0RTTQueues {
+			if h.tracer != nil {
+				h.tracer.DroppedPacket(p.remoteAddr, logging.PacketType0RTT, p.Size(), logging.PacketDropDOSPrevention)
+			}
 			return
 		}
 		h.numZeroRTTEntries++
@@ -456,8 +459,7 @@ func (h *packetHandlerMap) maybeHandleStatelessReset(data []byte) bool {
 		return false
 	}
 
-	var token protocol.StatelessResetToken
-	copy(token[:], data[len(data)-16:])
+	token := *(*protocol.StatelessResetToken)(data[len(data)-16:])
 	if sess, ok := h.resetTokens[token]; ok {
 		h.logger.Debugf("Received a stateless reset with token %#x. Closing connection.", token)
 		go sess.destroy(&StatelessResetError{Token: token})
