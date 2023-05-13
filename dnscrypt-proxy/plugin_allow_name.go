@@ -96,10 +96,14 @@ func (plugin *PluginAllowName) Eval(pluginsState *PluginsState, msg *dns.Msg) er
 		pluginsState.sessionData["whitelisted"] = true
 		if plugin.logger != nil {
 			var clientIPStr string
-			if pluginsState.clientProto == "udp" {
+			switch pluginsState.clientProto {
+			case "udp":
 				clientIPStr = (*pluginsState.clientAddr).(*net.UDPAddr).IP.String()
-			} else {
+			case "tcp", "local_doh":
 				clientIPStr = (*pluginsState.clientAddr).(*net.TCPAddr).IP.String()
+			default:
+				// Ignore internal flow.
+				return nil
 			}
 			var line string
 			if plugin.format == "tsv" {

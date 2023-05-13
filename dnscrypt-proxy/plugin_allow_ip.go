@@ -119,10 +119,14 @@ func (plugin *PluginAllowedIP) Eval(pluginsState *PluginsState, msg *dns.Msg) er
 		if plugin.logger != nil {
 			qName := pluginsState.qName
 			var clientIPStr string
-			if pluginsState.clientProto == "udp" {
+			switch pluginsState.clientProto {
+			case "udp":
 				clientIPStr = (*pluginsState.clientAddr).(*net.UDPAddr).IP.String()
-			} else {
+			case "tcp", "local_doh":
 				clientIPStr = (*pluginsState.clientAddr).(*net.TCPAddr).IP.String()
+			default:
+				// Ignore internal flow.
+				return nil
 			}
 			var line string
 			if plugin.format == "tsv" {

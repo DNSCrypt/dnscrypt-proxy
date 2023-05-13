@@ -43,6 +43,16 @@ func (plugin *PluginQueryLog) Reload() error {
 }
 
 func (plugin *PluginQueryLog) Eval(pluginsState *PluginsState, msg *dns.Msg) error {
+	var clientIPStr string
+	switch pluginsState.clientProto {
+	case "udp":
+		clientIPStr = (*pluginsState.clientAddr).(*net.UDPAddr).IP.String()
+	case "tcp", "local_doh":
+		clientIPStr = (*pluginsState.clientAddr).(*net.TCPAddr).IP.String()
+	default:
+		// Ignore internal flow.
+		return nil
+	}
 	question := msg.Question[0]
 	qType, ok := dns.TypeToString[question.Qtype]
 	if !ok {
@@ -54,12 +64,6 @@ func (plugin *PluginQueryLog) Eval(pluginsState *PluginsState, msg *dns.Msg) err
 				return nil
 			}
 		}
-	}
-	var clientIPStr string
-	if pluginsState.clientProto == "udp" {
-		clientIPStr = (*pluginsState.clientAddr).(*net.UDPAddr).IP.String()
-	} else {
-		clientIPStr = (*pluginsState.clientAddr).(*net.TCPAddr).IP.String()
 	}
 	qName := pluginsState.qName
 

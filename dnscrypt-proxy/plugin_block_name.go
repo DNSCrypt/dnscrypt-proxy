@@ -44,10 +44,14 @@ func (blockedNames *BlockedNames) check(pluginsState *PluginsState, qName string
 	pluginsState.returnCode = PluginsReturnCodeReject
 	if blockedNames.logger != nil {
 		var clientIPStr string
-		if pluginsState.clientProto == "udp" {
+		switch pluginsState.clientProto {
+		case "udp":
 			clientIPStr = (*pluginsState.clientAddr).(*net.UDPAddr).IP.String()
-		} else {
+		case "tcp", "local_doh":
 			clientIPStr = (*pluginsState.clientAddr).(*net.TCPAddr).IP.String()
+		default:
+			// Ignore internal flow.
+			return false, nil
 		}
 		var line string
 		if blockedNames.format == "tsv" {
