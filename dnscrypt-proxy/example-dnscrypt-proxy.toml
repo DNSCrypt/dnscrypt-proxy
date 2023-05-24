@@ -223,6 +223,14 @@ cert_refresh_delay = 240
 # tls_cipher_suite = [52392, 49199]
 
 
+## Log TLS key material to a file, for debugging purposes only.
+## This file will contain the TLS master key, which can be used to decrypt
+## all TLS traffic to/from DoH servers.
+## Never ever enable except for debugging purposes with a tool such as mitmproxy.
+
+# tls_key_log_file = '/tmp/keylog.txt'
+
+
 ## Bootstrap resolvers
 ##
 ## These are normal, non-encrypted DNS resolvers, that will be only used

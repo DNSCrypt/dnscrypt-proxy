@@ -75,6 +75,7 @@ type XTransport struct {
 	proxyDialer              *netproxy.Dialer
 	httpProxyFunction        func(*http.Request) (*url.URL, error)
 	tlsClientCreds           DOHClientCreds
+	keyLogWriter             io.Writer
 }
 
 func NewXTransport() *XTransport {
@@ -93,6 +94,7 @@ func NewXTransport() *XTransport {
 		useIPv6:                  false,
 		tlsDisableSessionTickets: false,
 		tlsCipherSuite:           nil,
+		keyLogWriter:             nil,
 	}
 	return &xTransport
 }
@@ -186,6 +188,10 @@ func (xTransport *XTransport) rebuildTransport() {
 
 	tlsClientConfig := tls.Config{}
 	certPool, certPoolErr := x509.SystemCertPool()
+
+	if xTransport.keyLogWriter != nil {
+		tlsClientConfig.KeyLogWriter = xTransport.keyLogWriter
+	}
 
 	if clientCreds.rootCA != "" {
 		if certPool == nil {
