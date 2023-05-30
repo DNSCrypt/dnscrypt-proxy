@@ -198,7 +198,7 @@ type EarlyConnection interface {
 
 	// HandshakeComplete blocks until the handshake completes (or fails).
 	// For the client, data sent before completion of the handshake is encrypted with 0-RTT keys.
-	// For the serfer, data sent before completion of the handshake is encrypted with 1-RTT keys,
+	// For the server, data sent before completion of the handshake is encrypted with 1-RTT keys,
 	// however the client's identity is only verified once the handshake completes.
 	HandshakeComplete() <-chan struct{}
 
@@ -239,21 +239,12 @@ type ConnectionIDGenerator interface {
 
 // Config contains all configuration data needed for a QUIC server or client.
 type Config struct {
+	// GetConfigForClient is called for incoming connections.
+	// If the error is not nil, the connection attempt is refused.
+	GetConfigForClient func(info *ClientHelloInfo) (*Config, error)
 	// The QUIC versions that can be negotiated.
 	// If not set, it uses all versions available.
 	Versions []VersionNumber
-	// The length of the connection ID in bytes.
-	// It can be 0, or any value between 4 and 18.
-	// If not set, the interpretation depends on where the Config is used:
-	// If used for dialing an address, a 0 byte connection ID will be used.
-	// If used for a server, or dialing on a packet conn, a 4 byte connection ID will be used.
-	// When dialing on a packet conn, the ConnectionIDLength value must be the same for every Dial call.
-	ConnectionIDLength int
-	// An optional ConnectionIDGenerator to be used for ConnectionIDs generated during the lifecycle of a QUIC connection.
-	// The goal is to give some control on how connection IDs, which can be useful in some scenarios, in particular for servers.
-	// By default, if not provided, random connection IDs with the length given by ConnectionIDLength is used.
-	// Otherwise, if one is provided, then ConnectionIDLength is ignored.
-	ConnectionIDGenerator ConnectionIDGenerator
 	// HandshakeIdleTimeout is the idle timeout before completion of the handshake.
 	// Specifically, if we don't receive any packet from the peer within this time, the connection attempt is aborted.
 	// If this value is zero, the timeout is set to 5 seconds.
@@ -314,9 +305,6 @@ type Config struct {
 	// If not set, it will default to 100.
 	// If set to a negative value, it doesn't allow any unidirectional streams.
 	MaxIncomingUniStreams int64
-	// The StatelessResetKey is used to generate stateless reset tokens.
-	// If no key is configured, sending of stateless resets is disabled.
-	StatelessResetKey *StatelessResetKey
 	// KeepAlivePeriod defines whether this peer will periodically send a packet to keep the connection alive.
 	// If set to 0, then no keep alive is sent. Otherwise, the keep alive is sent on that period (or at most
 	// every half of MaxIdleTimeout, whichever is smaller).
@@ -330,13 +318,15 @@ type Config struct {
 	// It has no effect for a client.
 	DisableVersionNegotiationPackets bool
 	// Allow0RTT allows the application to decide if a 0-RTT connection attempt should be accepted.
-	// When set, 0-RTT is enabled. When not set, 0-RTT is disabled.
 	// Only valid for the server.
-	// Warning: This API should not be considered stable and might change soon.
-	Allow0RTT func(net.Addr) bool
+	Allow0RTT bool
 	// Enable QUIC datagram support (RFC 9221).
 	EnableDatagrams bool
-	Tracer          logging.Tracer
+	Tracer          func(context.Context, logging.Perspective, ConnectionID) logging.ConnectionTracer
+}
+
+type ClientHelloInfo struct {
+	RemoteAddr net.Addr
 }
 
 // ConnectionState records basic details about a QUIC connection
@@ -344,25 +334,4 @@ type ConnectionState struct {
 	TLS               handshake.ConnectionState
 	SupportsDatagrams bool
 	Version           VersionNumber
-}
-
-// A Listener for incoming QUIC connections
-type Listener interface {
-	// Close the server. All active connections will be closed.
-	Close() error
-	// Addr returns the local network addr that the server is listening on.
-	Addr() net.Addr
-	// Accept returns new connections. It should be called in a loop.
-	Accept(context.Context) (Connection, error)
-}
-
-// An EarlyListener listens for incoming QUIC connections,
-// and returns them before the handshake completes.
-type EarlyListener interface {
-	// Close the server. All active connections will be closed.
-	Close() error
-	// Addr returns the local network addr that the server is listening on.
-	Addr() net.Addr
-	// Accept returns new early connections. It should be called in a loop.
-	Accept(context.Context) (EarlyConnection, error)
 }

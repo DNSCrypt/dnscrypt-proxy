@@ -23,8 +23,12 @@ import (
 
 // allows mocking of quic.Listen and quic.ListenAddr
 var (
-	quicListen     = quic.ListenEarly
-	quicListenAddr = quic.ListenAddrEarly
+	quicListen = func(conn net.PacketConn, tlsConf *tls.Config, config *quic.Config) (QUICEarlyListener, error) {
+		return quic.ListenEarly(conn, tlsConf, config)
+	}
+	quicListenAddr = func(addr string, tlsConf *tls.Config, config *quic.Config) (QUICEarlyListener, error) {
+		return quic.ListenAddrEarly(addr, tlsConf, config)
+	}
 )
 
 const (
@@ -43,6 +47,15 @@ const (
 	streamTypeQPACKEncoderStream = 2
 	streamTypeQPACKDecoderStream = 3
 )
+
+// A QUICEarlyListener listens for incoming QUIC connections.
+type QUICEarlyListener interface {
+	Accept(context.Context) (quic.EarlyConnection, error)
+	Addr() net.Addr
+	io.Closer
+}
+
+var _ QUICEarlyListener = &quic.EarlyListener{}
 
 func versionToALPN(v protocol.VersionNumber) string {
 	//nolint:exhaustive // These are all the versions we care about.
@@ -193,7 +206,7 @@ type Server struct {
 	UniStreamHijacker func(StreamType, quic.Connection, quic.ReceiveStream, error) (hijacked bool)
 
 	mutex     sync.RWMutex
-	listeners map[*quic.EarlyListener]listenerInfo
+	listeners map[*QUICEarlyListener]listenerInfo
 
 	closed bool
 
@@ -249,7 +262,7 @@ func (s *Server) ServeQUICConn(conn quic.Connection) error {
 // Make sure you use http3.ConfigureTLSConfig to configure a tls.Config
 // and use it to construct a http3-friendly QUIC listener.
 // Closing the server does close the listener.
-func (s *Server) ServeListener(ln quic.EarlyListener) error {
+func (s *Server) ServeListener(ln QUICEarlyListener) error {
 	if err := s.addListener(&ln); err != nil {
 		return err
 	}
@@ -275,7 +288,7 @@ func (s *Server) serveConn(tlsConf *tls.Config, conn net.PacketConn) error {
 	baseConf := ConfigureTLSConfig(tlsConf)
 	quicConf := s.QuicConfig
 	if quicConf == nil {
-		quicConf = &quic.Config{Allow0RTT: func(net.Addr) bool { return true }}
+		quicConf = &quic.Config{Allow0RTT: true}
 	} else {
 		quicConf = s.QuicConfig.Clone()
 	}
@@ -283,7 +296,7 @@ func (s *Server) serveConn(tlsConf *tls.Config, conn net.PacketConn) error {
 		quicConf.EnableDatagrams = true
 	}
 
-	var ln quic.EarlyListener
+	var ln QUICEarlyListener
 	var err error
 	if conn == nil {
 		addr := s.Addr
@@ -305,7 +318,7 @@ func (s *Server) serveConn(tlsConf *tls.Config, conn net.PacketConn) error {
 	return err
 }
 
-func (s *Server) serveListener(ln quic.EarlyListener) error {
+func (s *Server) serveListener(ln QUICEarlyListener) error {
 	for {
 		conn, err := ln.Accept(context.Background())
 		if err != nil {
@@ -391,7 +404,7 @@ func (s *Server) generateAltSvcHeader() {
 // We store a pointer to interface in the map set. This is safe because we only
 // call trackListener via Serve and can track+defer untrack the same pointer to
 // local variable there. We never need to compare a Listener from another caller.
-func (s *Server) addListener(l *quic.EarlyListener) error {
+func (s *Server) addListener(l *QUICEarlyListener) error {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
@@ -402,25 +415,24 @@ func (s *Server) addListener(l *quic.EarlyListener) error {
 		s.logger = utils.DefaultLogger.WithPrefix("server")
 	}
 	if s.listeners == nil {
-		s.listeners = make(map[*quic.EarlyListener]listenerInfo)
+		s.listeners = make(map[*QUICEarlyListener]listenerInfo)
 	}
 
 	if port, err := extractPort((*l).Addr().String()); err == nil {
 		s.listeners[l] = listenerInfo{port}
 	} else {
-		s.logger.Errorf(
-			"Unable to extract port from listener %+v, will not be announced using SetQuicHeaders: %s", err)
+		s.logger.Errorf("Unable to extract port from listener %+v, will not be announced using SetQuicHeaders: %s", err)
 		s.listeners[l] = listenerInfo{}
 	}
 	s.generateAltSvcHeader()
 	return nil
 }
 
-func (s *Server) removeListener(l *quic.EarlyListener) {
+func (s *Server) removeListener(l *QUICEarlyListener) {
 	s.mutex.Lock()
+	defer s.mutex.Unlock()
 	delete(s.listeners, l)
 	s.generateAltSvcHeader()
-	s.mutex.Unlock()
 }
 
 func (s *Server) handleConn(conn quic.Connection) error {

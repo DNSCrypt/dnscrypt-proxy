@@ -46,8 +46,8 @@ github.com/hashicorp/golang-lru/simplelru
 ## explicit; go 1.12
 github.com/hectane/go-acl
 github.com/hectane/go-acl/api
-# github.com/jedisct1/dlog v0.0.0-20230211133026-0338add8743f
-## explicit; go 1.17
+# github.com/jedisct1/dlog v0.0.0-20230513092435-93bc2a55ad59
+## explicit; go 1.20
 github.com/jedisct1/dlog
 # github.com/jedisct1/go-clocksmith v0.0.0-20230211133011-392c1afea73e
 ## explicit
@@ -55,14 +55,14 @@ github.com/jedisct1/go-clocksmith
 # github.com/jedisct1/go-dnsstamps v0.0.0-20230211133001-124a632de565
 ## explicit; go 1.18
 github.com/jedisct1/go-dnsstamps
-# github.com/jedisct1/go-hpke-compact v0.0.0-20230211184420-51d4440017ce
-## explicit; go 1.19
+# github.com/jedisct1/go-hpke-compact v0.0.0-20230513092519-91c912752223
+## explicit; go 1.20
 github.com/jedisct1/go-hpke-compact
-# github.com/jedisct1/go-minisign v0.0.0-20230410063418-3d885d71f62c
+# github.com/jedisct1/go-minisign v0.0.0-20230513092556-d96eb068239a
 ## explicit; go 1.20
 github.com/jedisct1/go-minisign
-# github.com/jedisct1/xsecretbox v0.0.0-20230211185120-2025cdbb9f0f
-## explicit; go 1.19
+# github.com/jedisct1/xsecretbox v0.0.0-20230513092623-8c0b2dff5e24
+## explicit; go 1.20
 github.com/jedisct1/xsecretbox
 # github.com/k-sone/critbitgo v1.4.0
 ## explicit
@@ -112,7 +112,7 @@ github.com/quic-go/qtls-go1-19
 # github.com/quic-go/qtls-go1-20 v0.2.2
 ## explicit; go 1.20
 github.com/quic-go/qtls-go1-20
-# github.com/quic-go/quic-go v0.34.0
+# github.com/quic-go/quic-go v0.35.0
 ## explicit; go 1.19
 github.com/quic-go/quic-go
 github.com/quic-go/quic-go/http3

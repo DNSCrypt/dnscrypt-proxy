@@ -9,12 +9,12 @@ import (
 
 // A Packet is a packet
 type Packet struct {
+	SendTime        time.Time
 	PacketNumber    protocol.PacketNumber
 	Frames          []*Frame
 	LargestAcked    protocol.PacketNumber // InvalidPacketNumber if the packet doesn't contain an ACK
 	Length          protocol.ByteCount
 	EncryptionLevel protocol.EncryptionLevel
-	SendTime        time.Time
 
 	IsPathMTUProbePacket bool // We don't report the loss of Path MTU probe packets to the congestion controller.
 

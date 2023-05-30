@@ -10,17 +10,17 @@ require (
 	github.com/hashicorp/go-immutable-radix v1.3.1
 	github.com/hashicorp/golang-lru v0.5.0
 	github.com/hectane/go-acl v0.0.0-20230122075934-ca0b05cb1adb
-	github.com/jedisct1/dlog v0.0.0-20230211133026-0338add8743f
+	github.com/jedisct1/dlog v0.0.0-20230513092435-93bc2a55ad59
 	github.com/jedisct1/go-clocksmith v0.0.0-20230211133011-392c1afea73e
 	github.com/jedisct1/go-dnsstamps v0.0.0-20230211133001-124a632de565
-	github.com/jedisct1/go-hpke-compact v0.0.0-20230211184420-51d4440017ce
-	github.com/jedisct1/go-minisign v0.0.0-20230410063418-3d885d71f62c
-	github.com/jedisct1/xsecretbox v0.0.0-20230211185120-2025cdbb9f0f
+	github.com/jedisct1/go-hpke-compact v0.0.0-20230513092519-91c912752223
+	github.com/jedisct1/go-minisign v0.0.0-20230513092556-d96eb068239a
+	github.com/jedisct1/xsecretbox v0.0.0-20230513092623-8c0b2dff5e24
 	github.com/k-sone/critbitgo v1.4.0
 	github.com/kardianos/service v1.2.2
 	github.com/miekg/dns v1.1.54
 	github.com/powerman/check v1.7.0
-	github.com/quic-go/quic-go v0.34.0
+	github.com/quic-go/quic-go v0.35.0
 	golang.org/x/crypto v0.9.0
 	golang.org/x/net v0.10.0
 	golang.org/x/sys v0.8.0

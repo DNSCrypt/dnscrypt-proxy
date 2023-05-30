@@ -90,13 +90,22 @@ func parseAckFrame(r *bytes.Reader, typ uint64, ackDelayExponent uint8, _ protoc
 		return nil, errInvalidAckRanges
 	}
 
-	// parse (and skip) the ECN section
 	if ecn {
-		for i := 0; i < 3; i++ {
-			if _, err := quicvarint.Read(r); err != nil {
-				return nil, err
-			}
+		ect0, err := quicvarint.Read(r)
+		if err != nil {
+			return nil, err
 		}
+		frame.ECT0 = ect0
+		ect1, err := quicvarint.Read(r)
+		if err != nil {
+			return nil, err
+		}
+		frame.ECT1 = ect1
+		ecnce, err := quicvarint.Read(r)
+		if err != nil {
+			return nil, err
+		}
+		frame.ECNCE = ecnce
 	}
 
 	return frame, nil
