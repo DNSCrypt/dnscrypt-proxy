@@ -32,7 +32,9 @@ func main() {
 	runtime.MemProfileRate = 0
 
 	seed := make([]byte, 8)
-	crypto_rand.Read(seed)
+	if _, err := crypto_rand.Read(seed); err != nil {
+		dlog.Fatal(err)
+	}
 	rand.Seed(int64(binary.LittleEndian.Uint64(seed[:])))
 
 	pwd, err := os.Getwd()
