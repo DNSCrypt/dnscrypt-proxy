@@ -11,16 +11,12 @@ import (
 	"github.com/BurntSushi/toml/internal"
 )
 
-var tomlNext = func() bool {
-	_, ok := os.LookupEnv("BURNTSUSHI_TOML_110")
-	return ok
-}()
-
 type parser struct {
 	lx         *lexer
 	context    Key      // Full key for the current hash in scope.
 	currentKey string   // Base key name for everything except hashes.
 	pos        Position // Current position in the TOML file.
+	tomlNext   bool
 
 	ordered []Key // List of keys in the order that they appear in the TOML data.
 
@@ -35,6 +31,8 @@ type keyInfo struct {
 }
 
 func parse(data string) (p *parser, err error) {
+	_, tomlNext := os.LookupEnv("BURNTSUSHI_TOML_110")
+
 	defer func() {
 		if r := recover(); r != nil {
 			if pErr, ok := r.(ParseError); ok {
@@ -74,9 +72,10 @@ func parse(data string) (p *parser, err error) {
 	p = &parser{
 		keyInfo:   make(map[string]keyInfo),
 		mapping:   make(map[string]interface{}),
-		lx:        lex(data),
+		lx:        lex(data, tomlNext),
 		ordered:   make([]Key, 0),
 		implicits: make(map[string]struct{}),
+		tomlNext:  tomlNext,
 	}
 	for {
 		item := p.next()
@@ -203,12 +202,12 @@ func (p *parser) topLevel(item item) {
 		for i := range context {
 			p.addImplicitContext(append(p.context, context[i:i+1]...))
 		}
+		p.ordered = append(p.ordered, p.context.add(p.currentKey))
 
 		/// Set value.
 		vItem := p.next()
 		val, typ := p.value(vItem, false)
 		p.set(p.currentKey, val, typ, vItem.pos)
-		p.ordered = append(p.ordered, p.context.add(p.currentKey))
 
 		/// Remove the context we added (preserving any context from [tbl] lines).
 		p.context = outerContext
@@ -361,7 +360,7 @@ func (p *parser) valueDatetime(it item) (interface{}, tomlType) {
 		err error
 	)
 	for _, dt := range dtTypes {
-		if dt.next && !tomlNext {
+		if dt.next && !p.tomlNext {
 			continue
 		}
 		t, err = time.ParseInLocation(dt.fmt, it.val, dt.zone)
@@ -445,11 +444,11 @@ func (p *parser) valueInlineTable(it item, parentIsArray bool) (interface{}, tom
 		for i := range context {
 			p.addImplicitContext(append(p.context, context[i:i+1]...))
 		}
+		p.ordered = append(p.ordered, p.context.add(p.currentKey))
 
 		/// Set the value.
 		val, typ := p.value(p.next(), false)
 		p.set(p.currentKey, val, typ, it.pos)
-		p.ordered = append(p.ordered, p.context.add(p.currentKey))
 		hash[p.currentKey] = val
 
 		/// Restore context.
@@ -570,7 +569,6 @@ func (p *parser) addContext(key Key, array bool) {
 func (p *parser) set(key string, val interface{}, typ tomlType, pos Position) {
 	p.setValue(key, val)
 	p.setType(key, typ, pos)
-
 }
 
 // setValue sets the given key to the given value in the current context.
@@ -651,14 +649,11 @@ func (p *parser) setType(key string, typ tomlType, pos Position) {
 
 // Implicit keys need to be created when tables are implied in "a.b.c.d = 1" and
 // "[a.b.c]" (the "a", "b", and "c" hashes are never created explicitly).
-func (p *parser) addImplicit(key Key)     { p.implicits[key.String()] = struct{}{} }
-func (p *parser) removeImplicit(key Key)  { delete(p.implicits, key.String()) }
-func (p *parser) isImplicit(key Key) bool { _, ok := p.implicits[key.String()]; return ok }
-func (p *parser) isArray(key Key) bool    { return p.keyInfo[key.String()].tomlType == tomlArray }
-func (p *parser) addImplicitContext(key Key) {
-	p.addImplicit(key)
-	p.addContext(key, false)
-}
+func (p *parser) addImplicit(key Key)        { p.implicits[key.String()] = struct{}{} }
+func (p *parser) removeImplicit(key Key)     { delete(p.implicits, key.String()) }
+func (p *parser) isImplicit(key Key) bool    { _, ok := p.implicits[key.String()]; return ok }
+func (p *parser) isArray(key Key) bool       { return p.keyInfo[key.String()].tomlType == tomlArray }
+func (p *parser) addImplicitContext(key Key) { p.addImplicit(key); p.addContext(key, false) }
 
 // current returns the full key name of the current context.
 func (p *parser) current() string {
@@ -768,7 +763,7 @@ func (p *parser) replaceEscapes(it item, str string) string {
 			replaced = append(replaced, rune(0x000D))
 			r += 1
 		case 'e':
-			if tomlNext {
+			if p.tomlNext {
 				replaced = append(replaced, rune(0x001B))
 				r += 1
 			}
@@ -779,7 +774,7 @@ func (p *parser) replaceEscapes(it item, str string) string {
 			replaced = append(replaced, rune(0x005C))
 			r += 1
 		case 'x':
-			if tomlNext {
+			if p.tomlNext {
 				escaped := p.asciiEscapeToUnicode(it, s[r+1:r+3])
 				replaced = append(replaced, escaped)
 				r += 3
