@@ -183,14 +183,13 @@ func (c *Client) Exchange(m *Msg, address string) (r *Msg, rtt time.Duration, er
 // This allows users of the library to implement their own connection management,
 // as opposed to Exchange, which will always use new connections and incur the added overhead
 // that entails when using "tcp" and especially "tcp-tls" clients.
-//
-// When the singleflight is set for this client the context is _not_ forwarded to the (shared) exchange, to
-// prevent one cancellation from canceling all outstanding requests.
 func (c *Client) ExchangeWithConn(m *Msg, conn *Conn) (r *Msg, rtt time.Duration, err error) {
-	return c.exchangeWithConnContext(context.Background(), m, conn)
+	return c.ExchangeWithConnContext(context.Background(), m, conn)
 }
 
-func (c *Client) exchangeWithConnContext(ctx context.Context, m *Msg, co *Conn) (r *Msg, rtt time.Duration, err error) {
+// ExchangeWithConnContext has the same behaviour as ExchangeWithConn and
+// additionally obeys deadlines from the passed Context.
+func (c *Client) ExchangeWithConnContext(ctx context.Context, m *Msg, co *Conn) (r *Msg, rtt time.Duration, err error) {
 	opt := m.IsEdns0()
 	// If EDNS0 is used use that for size.
 	if opt != nil && opt.UDPSize() >= MinMsgSize {
@@ -460,5 +459,5 @@ func (c *Client) ExchangeContext(ctx context.Context, m *Msg, a string) (r *Msg,
 	}
 	defer conn.Close()
 
-	return c.exchangeWithConnContext(ctx, m, conn)
+	return c.ExchangeWithConnContext(ctx, m, conn)
 }
