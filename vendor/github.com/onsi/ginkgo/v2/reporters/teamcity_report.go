@@ -60,19 +60,15 @@ func GenerateTeamcityReport(report types.Report, dst string) error {
 			}
 			fmt.Fprintf(f, "##teamcity[testIgnored name='%s' message='%s']\n", name, tcEscape(message))
 		case types.SpecStateFailed:
-			details := failureDescriptionForUnstructuredReporters(spec)
+			details := fmt.Sprintf("%s\n%s", spec.Failure.Location.String(), spec.Failure.Location.FullStackTrace)
 			fmt.Fprintf(f, "##teamcity[testFailed name='%s' message='failed - %s' details='%s']\n", name, tcEscape(spec.Failure.Message), tcEscape(details))
 		case types.SpecStatePanicked:
-			details := failureDescriptionForUnstructuredReporters(spec)
+			details := fmt.Sprintf("%s\n%s", spec.Failure.Location.String(), spec.Failure.Location.FullStackTrace)
 			fmt.Fprintf(f, "##teamcity[testFailed name='%s' message='panicked - %s' details='%s']\n", name, tcEscape(spec.Failure.ForwardedPanic), tcEscape(details))
-		case types.SpecStateTimedout:
-			details := failureDescriptionForUnstructuredReporters(spec)
-			fmt.Fprintf(f, "##teamcity[testFailed name='%s' message='timedout - %s' details='%s']\n", name, tcEscape(spec.Failure.Message), tcEscape(details))
 		case types.SpecStateInterrupted:
-			details := failureDescriptionForUnstructuredReporters(spec)
-			fmt.Fprintf(f, "##teamcity[testFailed name='%s' message='interrupted - %s' details='%s']\n", name, tcEscape(spec.Failure.Message), tcEscape(details))
+			fmt.Fprintf(f, "##teamcity[testFailed name='%s' message='interrupted' details='%s']\n", name, tcEscape(interruptDescriptionForUnstructuredReporters(spec.Failure)))
 		case types.SpecStateAborted:
-			details := failureDescriptionForUnstructuredReporters(spec)
+			details := fmt.Sprintf("%s\n%s", spec.Failure.Location.String(), spec.Failure.Location.FullStackTrace)
 			fmt.Fprintf(f, "##teamcity[testFailed name='%s' message='aborted - %s' details='%s']\n", name, tcEscape(spec.Failure.Message), tcEscape(details))
 		}
 

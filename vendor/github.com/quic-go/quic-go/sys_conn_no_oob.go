@@ -2,20 +2,14 @@
 
 package quic
 
-import (
-	"net"
-	"net/netip"
-)
+import "net"
 
-func newConn(c net.PacketConn, supportsDF bool) (*basicConn, error) {
-	return &basicConn{PacketConn: c, supportsDF: supportsDF}, nil
+func newConn(c net.PacketConn) (rawConn, error) {
+	return &basicConn{PacketConn: c}, nil
 }
 
-func inspectReadBuffer(any) (int, error)  { return 0, nil }
-func inspectWriteBuffer(any) (int, error) { return 0, nil }
-
-type packetInfo struct {
-	addr netip.Addr
+func inspectReadBuffer(interface{}) (int, error) {
+	return 0, nil
 }
 
 func (i *packetInfo) OOB() []byte { return nil }

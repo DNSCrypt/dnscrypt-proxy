@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/quic-go/quic-go/internal/utils"
+	"github.com/quic-go/quic-go/logging"
 )
 
 var (
@@ -13,11 +14,20 @@ var (
 	connMuxer     multiplexer
 )
 
-type indexableConn interface{ LocalAddr() net.Addr }
+type indexableConn interface {
+	LocalAddr() net.Addr
+}
 
 type multiplexer interface {
-	AddConn(conn indexableConn)
+	AddConn(c net.PacketConn, connIDLen int, statelessResetKey *StatelessResetKey, tracer logging.Tracer) (packetHandlerManager, error)
 	RemoveConn(indexableConn) error
+}
+
+type connManager struct {
+	connIDLen         int
+	statelessResetKey *StatelessResetKey
+	tracer            logging.Tracer
+	manager           packetHandlerManager
 }
 
 // The connMultiplexer listens on multiple net.PacketConns and dispatches
@@ -25,7 +35,9 @@ type multiplexer interface {
 type connMultiplexer struct {
 	mutex sync.Mutex
 
-	conns  map[string] /* LocalAddr().String() */ indexableConn
+	conns                   map[string] /* LocalAddr().String() */ connManager
+	newPacketHandlerManager func(net.PacketConn, int, *StatelessResetKey, logging.Tracer, utils.Logger) (packetHandlerManager, error) // so it can be replaced in the tests
+
 	logger utils.Logger
 }
 
@@ -34,38 +46,57 @@ var _ multiplexer = &connMultiplexer{}
 func getMultiplexer() multiplexer {
 	connMuxerOnce.Do(func() {
 		connMuxer = &connMultiplexer{
-			conns:  make(map[string]indexableConn),
-			logger: utils.DefaultLogger.WithPrefix("muxer"),
+			conns:                   make(map[string]connManager),
+			logger:                  utils.DefaultLogger.WithPrefix("muxer"),
+			newPacketHandlerManager: newPacketHandlerMap,
 		}
 	})
 	return connMuxer
 }
 
-func (m *connMultiplexer) index(addr net.Addr) string {
-	return addr.Network() + " " + addr.String()
-}
-
-func (m *connMultiplexer) AddConn(c indexableConn) {
+func (m *connMultiplexer) AddConn(
+	c net.PacketConn,
+	connIDLen int,
+	statelessResetKey *StatelessResetKey,
+	tracer logging.Tracer,
+) (packetHandlerManager, error) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
-	connIndex := m.index(c.LocalAddr())
+	addr := c.LocalAddr()
+	connIndex := addr.Network() + " " + addr.String()
 	p, ok := m.conns[connIndex]
-	if ok {
-		// Panics if we're already listening on this connection.
-		// This is a safeguard because we're introducing a breaking API change, see
-		// https://github.com/quic-go/quic-go/issues/3727 for details.
-		// We'll remove this at a later time, when most users of the library have made the switch.
-		panic("connection already exists") // TODO: write a nice message
+	if !ok {
+		manager, err := m.newPacketHandlerManager(c, connIDLen, statelessResetKey, tracer, m.logger)
+		if err != nil {
+			return nil, err
+		}
+		p = connManager{
+			connIDLen:         connIDLen,
+			statelessResetKey: statelessResetKey,
+			manager:           manager,
+			tracer:            tracer,
+		}
+		m.conns[connIndex] = p
+	} else {
+		if p.connIDLen != connIDLen {
+			return nil, fmt.Errorf("cannot use %d byte connection IDs on a connection that is already using %d byte connction IDs", connIDLen, p.connIDLen)
+		}
+		if statelessResetKey != nil && p.statelessResetKey != statelessResetKey {
+			return nil, fmt.Errorf("cannot use different stateless reset keys on the same packet conn")
+		}
+		if tracer != p.tracer {
+			return nil, fmt.Errorf("cannot use different tracers on the same packet conn")
+		}
 	}
-	m.conns[connIndex] = p
+	return p.manager, nil
 }
 
 func (m *connMultiplexer) RemoveConn(c indexableConn) error {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
-	connIndex := m.index(c.LocalAddr())
+	connIndex := c.LocalAddr().Network() + " " + c.LocalAddr().String()
 	if _, ok := m.conns[connIndex]; !ok {
 		return fmt.Errorf("cannote remove connection, connection is unknown")
 	}

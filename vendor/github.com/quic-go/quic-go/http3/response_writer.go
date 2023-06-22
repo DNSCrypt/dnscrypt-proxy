@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/quic-go/quic-go"
 	"github.com/quic-go/quic-go/internal/utils"
@@ -16,7 +15,6 @@ import (
 
 type responseWriter struct {
 	conn        quic.Connection
-	str         quic.Stream
 	bufferedStr *bufio.Writer
 	buf         []byte
 
@@ -38,7 +36,6 @@ func newResponseWriter(str quic.Stream, conn quic.Connection, logger utils.Logge
 		header:      http.Header{},
 		buf:         make([]byte, 16),
 		conn:        conn,
-		str:         str,
 		bufferedStr: bufio.NewWriter(str),
 		logger:      logger,
 	}
@@ -122,14 +119,6 @@ func (w *responseWriter) Flush() {
 
 func (w *responseWriter) StreamCreator() StreamCreator {
 	return w.conn
-}
-
-func (w *responseWriter) SetReadDeadline(deadline time.Time) error {
-	return w.str.SetReadDeadline(deadline)
-}
-
-func (w *responseWriter) SetWriteDeadline(deadline time.Time) error {
-	return w.str.SetWriteDeadline(deadline)
 }
 
 // copied from http2/http2.go

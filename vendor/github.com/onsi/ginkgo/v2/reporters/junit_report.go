@@ -15,31 +15,11 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/onsi/ginkgo/v2/config"
 	"github.com/onsi/ginkgo/v2/types"
 )
-
-type JunitReportConfig struct {
-	// Spec States for which no timeline should be emitted for system-err
-	// set this to types.SpecStatePassed|types.SpecStateSkipped|types.SpecStatePending to only match failing specs
-	OmitTimelinesForSpecState types.SpecState
-
-	// Enable OmitFailureMessageAttr to prevent failure messages appearing in the "message" attribute of the Failure and Error tags
-	OmitFailureMessageAttr bool
-
-	//Enable OmitCapturedStdOutErr to prevent captured stdout/stderr appearing in system-out
-	OmitCapturedStdOutErr bool
-
-	// Enable OmitSpecLabels to prevent labels from appearing in the spec name
-	OmitSpecLabels bool
-
-	// Enable OmitLeafNodeType to prevent the spec leaf node type from appearing in the spec name
-	OmitLeafNodeType bool
-
-	// Enable OmitSuiteSetupNodes to prevent the creation of testcase entries for setup nodes
-	OmitSuiteSetupNodes bool
-}
 
 type JUnitTestSuites struct {
 	XMLName xml.Name `xml:"testsuites"`
@@ -148,10 +128,6 @@ type JUnitFailure struct {
 }
 
 func GenerateJUnitReport(report types.Report, dst string) error {
-	return GenerateJUnitReportWithConfig(report, dst, JunitReportConfig{})
-}
-
-func GenerateJUnitReportWithConfig(report types.Report, dst string, config JunitReportConfig) error {
 	suite := JUnitTestSuite{
 		Name:      report.SuiteDescription,
 		Package:   report.SuitePath,
@@ -173,6 +149,7 @@ func GenerateJUnitReportWithConfig(report types.Report, dst string, config Junit
 				{"FailOnPending", fmt.Sprintf("%t", report.SuiteConfig.FailOnPending)},
 				{"FailFast", fmt.Sprintf("%t", report.SuiteConfig.FailFast)},
 				{"FlakeAttempts", fmt.Sprintf("%d", report.SuiteConfig.FlakeAttempts)},
+				{"EmitSpecProgress", fmt.Sprintf("%t", report.SuiteConfig.EmitSpecProgress)},
 				{"DryRun", fmt.Sprintf("%t", report.SuiteConfig.DryRun)},
 				{"ParallelTotal", fmt.Sprintf("%d", report.SuiteConfig.ParallelTotal)},
 				{"OutputInterceptorMode", report.SuiteConfig.OutputInterceptorMode},
@@ -180,33 +157,22 @@ func GenerateJUnitReportWithConfig(report types.Report, dst string, config Junit
 		},
 	}
 	for _, spec := range report.SpecReports {
-		if config.OmitSuiteSetupNodes && spec.LeafNodeType != types.NodeTypeIt {
-			continue
-		}
 		name := fmt.Sprintf("[%s]", spec.LeafNodeType)
-		if config.OmitLeafNodeType {
-			name = ""
-		}
 		if spec.FullText() != "" {
 			name = name + " " + spec.FullText()
 		}
 		labels := spec.Labels()
-		if len(labels) > 0 && !config.OmitSpecLabels {
+		if len(labels) > 0 {
 			name = name + " [" + strings.Join(labels, ", ") + "]"
 		}
-		name = strings.TrimSpace(name)
 
 		test := JUnitTestCase{
 			Name:      name,
 			Classname: report.SuiteDescription,
 			Status:    spec.State.String(),
 			Time:      spec.RunTime.Seconds(),
-		}
-		if !spec.State.Is(config.OmitTimelinesForSpecState) {
-			test.SystemErr = systemErrForUnstructuredReporters(spec)
-		}
-		if !config.OmitCapturedStdOutErr {
-			test.SystemOut = systemOutForUnstructuredReporters(spec)
+			SystemOut: systemOutForUnstructuredReporters(spec),
+			SystemErr: systemErrForUnstructuredReporters(spec),
 		}
 		suite.Tests += 1
 
@@ -225,50 +191,28 @@ func GenerateJUnitReportWithConfig(report types.Report, dst string, config Junit
 			test.Failure = &JUnitFailure{
 				Message:     spec.Failure.Message,
 				Type:        "failed",
-				Description: failureDescriptionForUnstructuredReporters(spec),
-			}
-			if config.OmitFailureMessageAttr {
-				test.Failure.Message = ""
-			}
-			suite.Failures += 1
-		case types.SpecStateTimedout:
-			test.Failure = &JUnitFailure{
-				Message:     spec.Failure.Message,
-				Type:        "timedout",
-				Description: failureDescriptionForUnstructuredReporters(spec),
-			}
-			if config.OmitFailureMessageAttr {
-				test.Failure.Message = ""
+				Description: fmt.Sprintf("%s\n%s", spec.Failure.Location.String(), spec.Failure.Location.FullStackTrace),
 			}
 			suite.Failures += 1
 		case types.SpecStateInterrupted:
 			test.Error = &JUnitError{
-				Message:     spec.Failure.Message,
+				Message:     "interrupted",
 				Type:        "interrupted",
-				Description: failureDescriptionForUnstructuredReporters(spec),
-			}
-			if config.OmitFailureMessageAttr {
-				test.Error.Message = ""
+				Description: interruptDescriptionForUnstructuredReporters(spec.Failure),
 			}
 			suite.Errors += 1
 		case types.SpecStateAborted:
 			test.Failure = &JUnitFailure{
 				Message:     spec.Failure.Message,
 				Type:        "aborted",
-				Description: failureDescriptionForUnstructuredReporters(spec),
-			}
-			if config.OmitFailureMessageAttr {
-				test.Failure.Message = ""
+				Description: fmt.Sprintf("%s\n%s", spec.Failure.Location.String(), spec.Failure.Location.FullStackTrace),
 			}
 			suite.Errors += 1
 		case types.SpecStatePanicked:
 			test.Error = &JUnitError{
 				Message:     spec.Failure.ForwardedPanic,
 				Type:        "panicked",
-				Description: failureDescriptionForUnstructuredReporters(spec),
-			}
-			if config.OmitFailureMessageAttr {
-				test.Error.Message = ""
+				Description: fmt.Sprintf("%s\n%s", spec.Failure.Location.String(), spec.Failure.Location.FullStackTrace),
 			}
 			suite.Errors += 1
 		}
@@ -334,27 +278,52 @@ func MergeAndCleanupJUnitReports(sources []string, dst string) ([]string, error)
 	return messages, f.Close()
 }
 
-func failureDescriptionForUnstructuredReporters(spec types.SpecReport) string {
+func interruptDescriptionForUnstructuredReporters(failure types.Failure) string {
 	out := &strings.Builder{}
-	NewDefaultReporter(types.ReporterConfig{NoColor: true, VeryVerbose: true}, out).emitFailure(0, spec.State, spec.Failure, true)
-	if len(spec.AdditionalFailures) > 0 {
-		out.WriteString("\nThere were additional failures detected after the initial failure. These are visible in the timeline\n")
-	}
+	out.WriteString(failure.Message + "\n")
+	NewDefaultReporter(types.ReporterConfig{NoColor: true}, out).EmitProgressReport(failure.ProgressReport)
 	return out.String()
 }
 
 func systemErrForUnstructuredReporters(spec types.SpecReport) string {
-	return RenderTimeline(spec, true)
-}
-
-func RenderTimeline(spec types.SpecReport, noColor bool) string {
 	out := &strings.Builder{}
-	NewDefaultReporter(types.ReporterConfig{NoColor: noColor, VeryVerbose: true}, out).emitTimeline(0, spec, spec.Timeline())
+	gw := spec.CapturedGinkgoWriterOutput
+	cursor := 0
+	for _, pr := range spec.ProgressReports {
+		if cursor < pr.GinkgoWriterOffset {
+			if pr.GinkgoWriterOffset < len(gw) {
+				out.WriteString(gw[cursor:pr.GinkgoWriterOffset])
+				cursor = pr.GinkgoWriterOffset
+			} else if cursor < len(gw) {
+				out.WriteString(gw[cursor:])
+				cursor = len(gw)
+			}
+		}
+		NewDefaultReporter(types.ReporterConfig{NoColor: true}, out).EmitProgressReport(pr)
+	}
+
+	if cursor < len(gw) {
+		out.WriteString(gw[cursor:])
+	}
+
 	return out.String()
 }
 
 func systemOutForUnstructuredReporters(spec types.SpecReport) string {
-	return spec.CapturedStdOutErr
+	systemOut := spec.CapturedStdOutErr
+	if len(spec.ReportEntries) > 0 {
+		systemOut += "\nReport Entries:\n"
+		for i, entry := range spec.ReportEntries {
+			systemOut += fmt.Sprintf("%s\n%s\n%s\n", entry.Name, entry.Location, entry.Time.Format(time.RFC3339Nano))
+			if representation := entry.StringRepresentation(); representation != "" {
+				systemOut += representation + "\n"
+			}
+			if i+1 < len(spec.ReportEntries) {
+				systemOut += "--\n"
+			}
+		}
+	}
+	return systemOut
 }
 
 // Deprecated JUnitReporter (so folks can still compile their suites)

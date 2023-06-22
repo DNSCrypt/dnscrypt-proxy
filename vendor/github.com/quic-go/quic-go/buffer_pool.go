@@ -51,22 +51,18 @@ func (b *packetBuffer) Release() {
 }
 
 // Len returns the length of Data
-func (b *packetBuffer) Len() protocol.ByteCount { return protocol.ByteCount(len(b.Data)) }
-func (b *packetBuffer) Cap() protocol.ByteCount { return protocol.ByteCount(cap(b.Data)) }
-
-func (b *packetBuffer) putBack() {
-	if cap(b.Data) == protocol.MaxPacketBufferSize {
-		bufferPool.Put(b)
-		return
-	}
-	if cap(b.Data) == protocol.MaxLargePacketBufferSize {
-		largeBufferPool.Put(b)
-		return
-	}
-	panic("putPacketBuffer called with packet of wrong size!")
+func (b *packetBuffer) Len() protocol.ByteCount {
+	return protocol.ByteCount(len(b.Data))
 }
 
-var bufferPool, largeBufferPool sync.Pool
+func (b *packetBuffer) putBack() {
+	if cap(b.Data) != int(protocol.MaxPacketBufferSize) {
+		panic("putPacketBuffer called with packet of wrong size!")
+	}
+	bufferPool.Put(b)
+}
+
+var bufferPool sync.Pool
 
 func getPacketBuffer() *packetBuffer {
 	buf := bufferPool.Get().(*packetBuffer)
@@ -75,18 +71,10 @@ func getPacketBuffer() *packetBuffer {
 	return buf
 }
 
-func getLargePacketBuffer() *packetBuffer {
-	buf := largeBufferPool.Get().(*packetBuffer)
-	buf.refCount = 1
-	buf.Data = buf.Data[:0]
-	return buf
-}
-
 func init() {
-	bufferPool.New = func() any {
-		return &packetBuffer{Data: make([]byte, 0, protocol.MaxPacketBufferSize)}
-	}
-	largeBufferPool.New = func() any {
-		return &packetBuffer{Data: make([]byte, 0, protocol.MaxLargePacketBufferSize)}
+	bufferPool.New = func() interface{} {
+		return &packetBuffer{
+			Data: make([]byte, 0, protocol.MaxPacketBufferSize),
+		}
 	}
 }

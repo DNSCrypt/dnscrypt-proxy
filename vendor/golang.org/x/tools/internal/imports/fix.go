@@ -414,16 +414,9 @@ func (p *pass) fix() ([]*ImportFix, bool) {
 			})
 		}
 	}
-	// Collecting fixes involved map iteration, so sort for stability. See
-	// golang/go#59976.
-	sortFixes(fixes)
 
-	// collect selected fixes in a separate slice, so that it can be sorted
-	// separately. Note that these fixes must occur after fixes to existing
-	// imports. TODO(rfindley): figure out why.
-	var selectedFixes []*ImportFix
 	for _, imp := range selected {
-		selectedFixes = append(selectedFixes, &ImportFix{
+		fixes = append(fixes, &ImportFix{
 			StmtInfo: ImportInfo{
 				Name:       p.importSpecName(imp),
 				ImportPath: imp.ImportPath,
@@ -432,25 +425,8 @@ func (p *pass) fix() ([]*ImportFix, bool) {
 			FixType:   AddImport,
 		})
 	}
-	sortFixes(selectedFixes)
 
-	return append(fixes, selectedFixes...), true
-}
-
-func sortFixes(fixes []*ImportFix) {
-	sort.Slice(fixes, func(i, j int) bool {
-		fi, fj := fixes[i], fixes[j]
-		if fi.StmtInfo.ImportPath != fj.StmtInfo.ImportPath {
-			return fi.StmtInfo.ImportPath < fj.StmtInfo.ImportPath
-		}
-		if fi.StmtInfo.Name != fj.StmtInfo.Name {
-			return fi.StmtInfo.Name < fj.StmtInfo.Name
-		}
-		if fi.IdentName != fj.IdentName {
-			return fi.IdentName < fj.IdentName
-		}
-		return fi.FixType < fj.FixType
-	})
+	return fixes, true
 }
 
 // importSpecName gets the import name of imp in the import spec.

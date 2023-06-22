@@ -18,17 +18,16 @@ var voidSender Void
 // It handles all the business logic to avoid duplication between the two servers
 
 type ServerHandler struct {
-	done                   chan interface{}
-	outputDestination      io.Writer
-	reporter               reporters.Reporter
-	alives                 []func() bool
-	lock                   *sync.Mutex
-	beforeSuiteState       BeforeSuiteState
-	reportBeforeSuiteState types.SpecState
-	parallelTotal          int
-	counter                int
-	counterLock            *sync.Mutex
-	shouldAbort            bool
+	done              chan interface{}
+	outputDestination io.Writer
+	reporter          reporters.Reporter
+	alives            []func() bool
+	lock              *sync.Mutex
+	beforeSuiteState  BeforeSuiteState
+	parallelTotal     int
+	counter           int
+	counterLock       *sync.Mutex
+	shouldAbort       bool
 
 	numSuiteDidBegins int
 	numSuiteDidEnds   int
@@ -38,12 +37,11 @@ type ServerHandler struct {
 
 func newServerHandler(parallelTotal int, reporter reporters.Reporter) *ServerHandler {
 	return &ServerHandler{
-		reporter:         reporter,
-		lock:             &sync.Mutex{},
-		counterLock:      &sync.Mutex{},
-		alives:           make([]func() bool, parallelTotal),
-		beforeSuiteState: BeforeSuiteState{Data: nil, State: types.SpecStateInvalid},
-
+		reporter:          reporter,
+		lock:              &sync.Mutex{},
+		counterLock:       &sync.Mutex{},
+		alives:            make([]func() bool, parallelTotal),
+		beforeSuiteState:  BeforeSuiteState{Data: nil, State: types.SpecStateInvalid},
 		parallelTotal:     parallelTotal,
 		outputDestination: os.Stdout,
 		done:              make(chan interface{}),
@@ -140,29 +138,6 @@ func (handler *ServerHandler) haveNonprimaryProcsFinished() bool {
 		}
 	}
 	return true
-}
-
-func (handler *ServerHandler) ReportBeforeSuiteCompleted(reportBeforeSuiteState types.SpecState, _ *Void) error {
-	handler.lock.Lock()
-	defer handler.lock.Unlock()
-	handler.reportBeforeSuiteState = reportBeforeSuiteState
-
-	return nil
-}
-
-func (handler *ServerHandler) ReportBeforeSuiteState(_ Void, reportBeforeSuiteState *types.SpecState) error {
-	proc1IsAlive := handler.procIsAlive(1)
-	handler.lock.Lock()
-	defer handler.lock.Unlock()
-	if handler.reportBeforeSuiteState == types.SpecStateInvalid {
-		if proc1IsAlive {
-			return ErrorEarly
-		} else {
-			return ErrorGone
-		}
-	}
-	*reportBeforeSuiteState = handler.reportBeforeSuiteState
-	return nil
 }
 
 func (handler *ServerHandler) BeforeSuiteCompleted(beforeSuiteState BeforeSuiteState, _ *Void) error {

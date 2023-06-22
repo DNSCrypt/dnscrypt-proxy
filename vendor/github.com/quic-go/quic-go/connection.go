@@ -61,6 +61,11 @@ type cryptoStreamHandler interface {
 	ConnectionState() handshake.ConnectionState
 }
 
+type packetInfo struct {
+	addr    net.IP
+	ifIndex uint32
+}
+
 type receivedPacket struct {
 	buffer *packetBuffer
 
@@ -70,7 +75,7 @@ type receivedPacket struct {
 
 	ecn protocol.ECN
 
-	info packetInfo // only valid if the contained IP address is valid
+	info *packetInfo
 }
 
 func (p *receivedPacket) Size() protocol.ByteCount { return protocol.ByteCount(len(p.data)) }
@@ -168,7 +173,7 @@ type connection struct {
 	oneRTTStream        cryptoStream // only set for the server
 	cryptoStreamHandler cryptoStreamHandler
 
-	receivedPackets  chan receivedPacket
+	receivedPackets  chan *receivedPacket
 	sendingScheduled chan struct{}
 
 	closeOnce sync.Once
@@ -180,8 +185,8 @@ type connection struct {
 	handshakeCtx       context.Context
 	handshakeCtxCancel context.CancelFunc
 
-	undecryptablePackets          []receivedPacket // undecryptable packets, waiting for a change in encryption level
-	undecryptablePacketsToProcess []receivedPacket
+	undecryptablePackets          []*receivedPacket // undecryptable packets, waiting for a change in encryption level
+	undecryptablePacketsToProcess []*receivedPacket
 
 	clientHelloWritten    <-chan *wire.TransportParameters
 	earlyConnReadyChan    chan struct{}
@@ -194,7 +199,6 @@ type connection struct {
 	versionNegotiated   bool
 	receivedFirstPacket bool
 
-	// the minimum of the max_idle_timeout values advertised by both endpoints
 	idleTimeout  time.Duration
 	creationTime time.Time
 	// The idle timeout is set based on the max of the time we received the last packet...
@@ -236,7 +240,6 @@ var newConnection = func(
 	clientDestConnID protocol.ConnectionID,
 	destConnID protocol.ConnectionID,
 	srcConnID protocol.ConnectionID,
-	connIDGenerator ConnectionIDGenerator,
 	statelessResetToken protocol.StatelessResetToken,
 	conf *Config,
 	tlsConf *tls.Config,
@@ -280,7 +283,7 @@ var newConnection = func(
 		runner.Retire,
 		runner.ReplaceWithClosed,
 		s.queueControlFrame,
-		connIDGenerator,
+		s.config.ConnectionIDGenerator,
 	)
 	s.preSetup()
 	s.ctx, s.ctxCancel = context.WithCancel(context.WithValue(context.Background(), ConnectionTracingKey, tracingID))
@@ -293,7 +296,6 @@ var newConnection = func(
 		s.tracer,
 		s.logger,
 	)
-	s.mtuDiscoverer = newMTUDiscoverer(s.rttStats, getMaxPacketSize(s.conn.RemoteAddr()), s.sentPacketHandler.SetMaxDatagramSize)
 	initialStream := newCryptoStream()
 	handshakeStream := newCryptoStream()
 	params := &wire.TransportParameters{
@@ -309,14 +311,9 @@ var newConnection = func(
 		DisableActiveMigration:          true,
 		StatelessResetToken:             &statelessResetToken,
 		OriginalDestinationConnectionID: origDestConnID,
-		// For interoperability with quic-go versions before May 2023, this value must be set to a value
-		// different from protocol.DefaultActiveConnectionIDLimit.
-		// If set to the default value, it will be omitted from the transport parameters, which will make
-		// old quic-go versions interpret it as 0, instead of the default value of 2.
-		// See https://github.com/quic-go/quic-go/pull/3806.
-		ActiveConnectionIDLimit:   protocol.MaxActiveConnectionIDs,
-		InitialSourceConnectionID: srcConnID,
-		RetrySourceConnectionID:   retrySrcConnID,
+		ActiveConnectionIDLimit:         protocol.MaxActiveConnectionIDs,
+		InitialSourceConnectionID:       srcConnID,
+		RetrySourceConnectionID:         retrySrcConnID,
 	}
 	if s.config.EnableDatagrams {
 		params.MaxDatagramFrameSize = protocol.MaxDatagramFrameSize
@@ -325,6 +322,10 @@ var newConnection = func(
 	}
 	if s.tracer != nil {
 		s.tracer.SentTransportParameters(params)
+	}
+	var allow0RTT func() bool
+	if conf.Allow0RTT != nil {
+		allow0RTT = func() bool { return conf.Allow0RTT(conn.RemoteAddr()) }
 	}
 	cs := handshake.NewCryptoSetupServer(
 		initialStream,
@@ -343,14 +344,14 @@ var newConnection = func(
 			},
 		},
 		tlsConf,
-		conf.Allow0RTT,
+		allow0RTT,
 		s.rttStats,
 		tracer,
 		logger,
 		s.version,
 	)
 	s.cryptoStreamHandler = cs
-	s.packer = newPacketPacker(srcConnID, s.connIDManager.Get, initialStream, handshakeStream, s.sentPacketHandler, s.retransmissionQueue, cs, s.framer, s.receivedPacketHandler, s.datagramQueue, s.perspective)
+	s.packer = newPacketPacker(srcConnID, s.connIDManager.Get, initialStream, handshakeStream, s.sentPacketHandler, s.retransmissionQueue, s.RemoteAddr(), cs, s.framer, s.receivedPacketHandler, s.datagramQueue, s.perspective)
 	s.unpacker = newPacketUnpacker(cs, s.srcConnIDLen)
 	s.cryptoStreamManager = newCryptoStreamManager(cs, initialStream, handshakeStream, s.oneRTTStream)
 	return s
@@ -362,7 +363,6 @@ var newClientConnection = func(
 	runner connRunner,
 	destConnID protocol.ConnectionID,
 	srcConnID protocol.ConnectionID,
-	connIDGenerator ConnectionIDGenerator,
 	conf *Config,
 	tlsConf *tls.Config,
 	initialPacketNumber protocol.PacketNumber,
@@ -402,7 +402,7 @@ var newClientConnection = func(
 		runner.Retire,
 		runner.ReplaceWithClosed,
 		s.queueControlFrame,
-		connIDGenerator,
+		s.config.ConnectionIDGenerator,
 	)
 	s.preSetup()
 	s.ctx, s.ctxCancel = context.WithCancel(context.WithValue(context.Background(), ConnectionTracingKey, tracingID))
@@ -415,7 +415,6 @@ var newClientConnection = func(
 		s.tracer,
 		s.logger,
 	)
-	s.mtuDiscoverer = newMTUDiscoverer(s.rttStats, getMaxPacketSize(s.conn.RemoteAddr()), s.sentPacketHandler.SetMaxDatagramSize)
 	initialStream := newCryptoStream()
 	handshakeStream := newCryptoStream()
 	params := &wire.TransportParameters{
@@ -429,13 +428,8 @@ var newClientConnection = func(
 		MaxAckDelay:                    protocol.MaxAckDelayInclGranularity,
 		AckDelayExponent:               protocol.AckDelayExponent,
 		DisableActiveMigration:         true,
-		// For interoperability with quic-go versions before May 2023, this value must be set to a value
-		// different from protocol.DefaultActiveConnectionIDLimit.
-		// If set to the default value, it will be omitted from the transport parameters, which will make
-		// old quic-go versions interpret it as 0, instead of the default value of 2.
-		// See https://github.com/quic-go/quic-go/pull/3806.
-		ActiveConnectionIDLimit:   protocol.MaxActiveConnectionIDs,
-		InitialSourceConnectionID: srcConnID,
+		ActiveConnectionIDLimit:        protocol.MaxActiveConnectionIDs,
+		InitialSourceConnectionID:      srcConnID,
 	}
 	if s.config.EnableDatagrams {
 		params.MaxDatagramFrameSize = protocol.MaxDatagramFrameSize
@@ -469,7 +463,7 @@ var newClientConnection = func(
 	s.cryptoStreamHandler = cs
 	s.cryptoStreamManager = newCryptoStreamManager(cs, initialStream, handshakeStream, newCryptoStream())
 	s.unpacker = newPacketUnpacker(cs, s.srcConnIDLen)
-	s.packer = newPacketPacker(srcConnID, s.connIDManager.Get, initialStream, handshakeStream, s.sentPacketHandler, s.retransmissionQueue, cs, s.framer, s.receivedPacketHandler, s.datagramQueue, s.perspective)
+	s.packer = newPacketPacker(srcConnID, s.connIDManager.Get, initialStream, handshakeStream, s.sentPacketHandler, s.retransmissionQueue, s.RemoteAddr(), cs, s.framer, s.receivedPacketHandler, s.datagramQueue, s.perspective)
 	if len(tlsConf.ServerName) > 0 {
 		s.tokenStoreKey = tlsConf.ServerName
 	} else {
@@ -510,7 +504,7 @@ func (s *connection) preSetup() {
 		s.perspective,
 	)
 	s.framer = newFramer(s.streamsMap)
-	s.receivedPackets = make(chan receivedPacket, protocol.MaxConnUnprocessedPackets)
+	s.receivedPackets = make(chan *receivedPacket, protocol.MaxConnUnprocessedPackets)
 	s.closeChan = make(chan closeError, 1)
 	s.sendingScheduled = make(chan struct{}, 1)
 	s.handshakeCtx, s.handshakeCtxCancel = context.WithCancel(context.Background())
@@ -663,7 +657,7 @@ runLoop:
 		} else {
 			idleTimeoutStartTime := s.idleTimeoutStartTime()
 			if (!s.handshakeComplete && now.Sub(idleTimeoutStartTime) >= s.config.HandshakeIdleTimeout) ||
-				(s.handshakeComplete && now.After(s.nextIdleTimeoutTime())) {
+				(s.handshakeComplete && now.Sub(idleTimeoutStartTime) >= s.idleTimeout) {
 				s.destroyImpl(qerr.ErrIdleTimeout)
 				continue
 			}
@@ -675,7 +669,7 @@ runLoop:
 			sendQueueAvailable = s.sendQueue.Available()
 			continue
 		}
-		if err := s.triggerSending(); err != nil {
+		if err := s.sendPackets(); err != nil {
 			s.closeLocal(err)
 		}
 		if s.sendQueue.WouldBlock() {
@@ -687,12 +681,12 @@ runLoop:
 
 	s.cryptoStreamHandler.Close()
 	<-handshaking
-	s.sendQueue.Close() // close the send queue before sending the CONNECTION_CLOSE
 	s.handleCloseError(&closeErr)
 	if e := (&errCloseForRecreating{}); !errors.As(closeErr.err, &e) && s.tracer != nil {
 		s.tracer.Close()
 	}
 	s.logger.Infof("Connection %s closed.", s.logID)
+	s.sendQueue.Close()
 	s.timer.Stop()
 	return closeErr.err
 }
@@ -721,20 +715,13 @@ func (s *connection) ConnectionState() ConnectionState {
 	return s.connState
 }
 
-// Time when the connection should time out
-func (s *connection) nextIdleTimeoutTime() time.Time {
-	idleTimeout := utils.Max(s.idleTimeout, s.rttStats.PTO(true)*3)
-	return s.idleTimeoutStartTime().Add(idleTimeout)
-}
-
 // Time when the next keep-alive packet should be sent.
 // It returns a zero time if no keep-alive should be sent.
 func (s *connection) nextKeepAliveTime() time.Time {
 	if s.config.KeepAlivePeriod == 0 || s.keepAlivePingSent || !s.firstAckElicitingPacketAfterIdleSentTime.IsZero() {
 		return time.Time{}
 	}
-	keepAliveInterval := utils.Max(s.keepAliveInterval, s.rttStats.PTO(true)*3/2)
-	return s.lastPacketReceivedTime.Add(keepAliveInterval)
+	return s.lastPacketReceivedTime.Add(s.keepAliveInterval)
 }
 
 func (s *connection) maybeResetTimer() {
@@ -748,7 +735,7 @@ func (s *connection) maybeResetTimer() {
 		if keepAliveTime := s.nextKeepAliveTime(); !keepAliveTime.IsZero() {
 			deadline = keepAliveTime
 		} else {
-			deadline = s.nextIdleTimeoutTime()
+			deadline = s.idleTimeoutStartTime().Add(s.idleTimeout)
 		}
 	}
 
@@ -805,16 +792,25 @@ func (s *connection) handleHandshakeConfirmed() {
 	s.sentPacketHandler.SetHandshakeConfirmed()
 	s.cryptoStreamHandler.SetHandshakeConfirmed()
 
-	if !s.config.DisablePathMTUDiscovery && s.conn.capabilities().DF {
+	if !s.config.DisablePathMTUDiscovery {
 		maxPacketSize := s.peerParams.MaxUDPPayloadSize
 		if maxPacketSize == 0 {
 			maxPacketSize = protocol.MaxByteCount
 		}
-		s.mtuDiscoverer.Start(utils.Min(maxPacketSize, protocol.MaxPacketBufferSize))
+		maxPacketSize = utils.Min(maxPacketSize, protocol.MaxPacketBufferSize)
+		s.mtuDiscoverer = newMTUDiscoverer(
+			s.rttStats,
+			getMaxPacketSize(s.conn.RemoteAddr()),
+			maxPacketSize,
+			func(size protocol.ByteCount) {
+				s.sentPacketHandler.SetMaxDatagramSize(size)
+				s.packer.SetMaxPacketSize(size)
+			},
+		)
 	}
 }
 
-func (s *connection) handlePacketImpl(rp receivedPacket) bool {
+func (s *connection) handlePacketImpl(rp *receivedPacket) bool {
 	s.sentPacketHandler.ReceivedBytes(rp.Size())
 
 	if wire.IsVersionNegotiationPacket(rp.data) {
@@ -830,7 +826,7 @@ func (s *connection) handlePacketImpl(rp receivedPacket) bool {
 	for len(data) > 0 {
 		var destConnID protocol.ConnectionID
 		if counter > 0 {
-			p = *(p.Clone())
+			p = p.Clone()
 			p.data = data
 
 			var err error
@@ -903,7 +899,7 @@ func (s *connection) handlePacketImpl(rp receivedPacket) bool {
 	return processed
 }
 
-func (s *connection) handleShortHeaderPacket(p receivedPacket, destConnID protocol.ConnectionID) bool {
+func (s *connection) handleShortHeaderPacket(p *receivedPacket, destConnID protocol.ConnectionID) bool {
 	var wasQueued bool
 
 	defer func() {
@@ -954,7 +950,7 @@ func (s *connection) handleShortHeaderPacket(p receivedPacket, destConnID protoc
 	return true
 }
 
-func (s *connection) handleLongHeaderPacket(p receivedPacket, hdr *wire.Header) bool /* was the packet successfully processed */ {
+func (s *connection) handleLongHeaderPacket(p *receivedPacket, hdr *wire.Header) bool /* was the packet successfully processed */ {
 	var wasQueued bool
 
 	defer func() {
@@ -1011,7 +1007,7 @@ func (s *connection) handleLongHeaderPacket(p receivedPacket, hdr *wire.Header) 
 	return true
 }
 
-func (s *connection) handleUnpackError(err error, p receivedPacket, pt logging.PacketType) (wasQueued bool) {
+func (s *connection) handleUnpackError(err error, p *receivedPacket, pt logging.PacketType) (wasQueued bool) {
 	switch err {
 	case handshake.ErrKeysDropped:
 		if s.tracer != nil {
@@ -1113,7 +1109,7 @@ func (s *connection) handleRetryPacket(hdr *wire.Header, data []byte) bool /* wa
 	return true
 }
 
-func (s *connection) handleVersionNegotiationPacket(p receivedPacket) {
+func (s *connection) handleVersionNegotiationPacket(p *receivedPacket) {
 	if s.perspective == protocol.PerspectiveServer || // servers never receive version negotiation packets
 		s.receivedFirstPacket || s.versionNegotiated { // ignore delayed / duplicated version negotiation packets
 		if s.tracer != nil {
@@ -1257,11 +1253,7 @@ func (s *connection) handleFrames(
 ) (isAckEliciting bool, _ error) {
 	// Only used for tracing.
 	// If we're not tracing, this slice will always remain empty.
-	var frames []logging.Frame
-	if log != nil {
-		frames = make([]logging.Frame, 0, 4)
-	}
-	var handleErr error
+	var frames []wire.Frame
 	for len(data) > 0 {
 		l, frame, err := s.frameParser.ParseNext(data, encLevel, s.version)
 		if err != nil {
@@ -1274,27 +1266,27 @@ func (s *connection) handleFrames(
 		if ackhandler.IsFrameAckEliciting(frame) {
 			isAckEliciting = true
 		}
-		if log != nil {
-			frames = append(frames, logutils.ConvertFrame(frame))
-		}
-		// An error occurred handling a previous frame.
-		// Don't handle the current frame.
-		if handleErr != nil {
-			continue
-		}
-		if err := s.handleFrame(frame, encLevel, destConnID); err != nil {
-			if log == nil {
+		// Only process frames now if we're not logging.
+		// If we're logging, we need to make sure that the packet_received event is logged first.
+		if log == nil {
+			if err := s.handleFrame(frame, encLevel, destConnID); err != nil {
 				return false, err
 			}
-			// If we're logging, we need to keep parsing (but not handling) all frames.
-			handleErr = err
+		} else {
+			frames = append(frames, frame)
 		}
 	}
 
 	if log != nil {
-		log(frames)
-		if handleErr != nil {
-			return false, handleErr
+		fs := make([]logging.Frame, len(frames))
+		for i, frame := range frames {
+			fs[i] = logutils.ConvertFrame(frame)
+		}
+		log(fs)
+		for _, frame := range frames {
+			if err := s.handleFrame(frame, encLevel, destConnID); err != nil {
+				return false, err
+			}
 		}
 	}
 	return
@@ -1310,6 +1302,7 @@ func (s *connection) handleFrame(f wire.Frame, encLevel protocol.EncryptionLevel
 		err = s.handleStreamFrame(frame)
 	case *wire.AckFrame:
 		err = s.handleAckFrame(frame, encLevel)
+		wire.PutAckFrame(frame)
 	case *wire.ConnectionCloseFrame:
 		s.handleConnectionCloseFrame(frame)
 	case *wire.ResetStreamFrame:
@@ -1348,7 +1341,7 @@ func (s *connection) handleFrame(f wire.Frame, encLevel protocol.EncryptionLevel
 }
 
 // handlePacket is called by the server with a new packet
-func (s *connection) handlePacket(p receivedPacket) {
+func (s *connection) handlePacket(p *receivedPacket) {
 	// Discard packets once the amount of queued packets is larger than
 	// the channel size, protocol.MaxConnUnprocessedPackets
 	select {
@@ -1722,6 +1715,7 @@ func (s *connection) applyTransportParameters() {
 	s.idleTimeout = utils.MinNonZeroDuration(s.config.MaxIdleTimeout, params.MaxIdleTimeout)
 	s.keepAliveInterval = utils.Min(s.config.KeepAlivePeriod, utils.Min(s.idleTimeout/2, protocol.MaxKeepAliveInterval))
 	s.streamsMap.UpdateLimits(params)
+	s.packer.HandleTransportParameters(params)
 	s.frameParser.SetAckDelayExponent(params.AckDelayExponent)
 	s.connFlowController.UpdateSendWindow(params.InitialMaxData)
 	s.rttStats.SetMaxAckDelay(params.MaxAckDelay)
@@ -1736,208 +1730,75 @@ func (s *connection) applyTransportParameters() {
 	}
 }
 
-func (s *connection) triggerSending() error {
+func (s *connection) sendPackets() error {
 	s.pacingDeadline = time.Time{}
-	now := time.Now()
 
-	sendMode := s.sentPacketHandler.SendMode(now)
-	//nolint:exhaustive // No need to handle pacing limited here.
-	switch sendMode {
-	case ackhandler.SendAny:
-		return s.sendPackets(now)
-	case ackhandler.SendNone:
-		return nil
-	case ackhandler.SendPacingLimited:
-		deadline := s.sentPacketHandler.TimeUntilSend()
-		if deadline.IsZero() {
-			deadline = deadlineSendImmediately
-		}
-		s.pacingDeadline = deadline
-		// Allow sending of an ACK if we're pacing limit.
-		// This makes sure that a peer that is mostly receiving data (and thus has an inaccurate cwnd estimate)
-		// sends enough ACKs to allow its peer to utilize the bandwidth.
-		fallthrough
-	case ackhandler.SendAck:
-		// We can at most send a single ACK only packet.
-		// There will only be a new ACK after receiving new packets.
-		// SendAck is only returned when we're congestion limited, so we don't need to set the pacinggs timer.
-		return s.maybeSendAckOnlyPacket(now)
-	case ackhandler.SendPTOInitial:
-		if err := s.sendProbePacket(protocol.EncryptionInitial, now); err != nil {
-			return err
-		}
-		if s.sendQueue.WouldBlock() {
-			s.scheduleSending()
-			return nil
-		}
-		return s.triggerSending()
-	case ackhandler.SendPTOHandshake:
-		if err := s.sendProbePacket(protocol.EncryptionHandshake, now); err != nil {
-			return err
-		}
-		if s.sendQueue.WouldBlock() {
-			s.scheduleSending()
-			return nil
-		}
-		return s.triggerSending()
-	case ackhandler.SendPTOAppData:
-		if err := s.sendProbePacket(protocol.Encryption1RTT, now); err != nil {
-			return err
-		}
-		if s.sendQueue.WouldBlock() {
-			s.scheduleSending()
-			return nil
-		}
-		return s.triggerSending()
-	default:
-		return fmt.Errorf("BUG: invalid send mode %d", sendMode)
-	}
-}
-
-func (s *connection) sendPackets(now time.Time) error {
-	// Path MTU Discovery
-	// Can't use GSO, since we need to send a single packet that's larger than our current maximum size.
-	// Performance-wise, this doesn't matter, since we only send a very small (<10) number of
-	// MTU probe packets per connection.
-	if s.handshakeConfirmed && s.mtuDiscoverer != nil && s.mtuDiscoverer.ShouldSendProbe(now) {
-		ping, size := s.mtuDiscoverer.GetPing()
-		p, buf, err := s.packer.PackMTUProbePacket(ping, size, s.version)
-		if err != nil {
-			return err
-		}
-		s.logShortHeaderPacket(p.DestConnID, p.Ack, p.Frames, p.StreamFrames, p.PacketNumber, p.PacketNumberLen, p.KeyPhase, buf.Len(), false)
-		s.registerPackedShortHeaderPacket(p, now)
-		s.sendQueue.Send(buf, buf.Len())
-		// This is kind of a hack. We need to trigger sending again somehow.
-		s.pacingDeadline = deadlineSendImmediately
-		return nil
-	}
-
-	if isBlocked, offset := s.connFlowController.IsNewlyBlocked(); isBlocked {
-		s.framer.QueueControlFrame(&wire.DataBlockedFrame{MaximumData: offset})
-	}
-	s.windowUpdateQueue.QueueAll()
-
-	if !s.handshakeConfirmed {
-		packet, err := s.packer.PackCoalescedPacket(false, s.mtuDiscoverer.CurrentSize(), s.version)
-		if err != nil || packet == nil {
-			return err
-		}
-		s.sentFirstPacket = true
-		s.sendPackedCoalescedPacket(packet, now)
-		sendMode := s.sentPacketHandler.SendMode(now)
-		if sendMode == ackhandler.SendPacingLimited {
-			s.resetPacingDeadline()
-		} else if sendMode == ackhandler.SendAny {
-			s.pacingDeadline = deadlineSendImmediately
-		}
-		return nil
-	}
-
-	if s.conn.capabilities().GSO {
-		return s.sendPacketsWithGSO(now)
-	}
-	return s.sendPacketsWithoutGSO(now)
-}
-
-func (s *connection) sendPacketsWithoutGSO(now time.Time) error {
+	var sentPacket bool // only used in for packets sent in send mode SendAny
 	for {
-		buf := getPacketBuffer()
-		if _, err := s.appendPacket(buf, s.mtuDiscoverer.CurrentSize(), now); err != nil {
-			if err == errNothingToPack {
-				buf.Release()
+		sendMode := s.sentPacketHandler.SendMode()
+		if sendMode == ackhandler.SendAny && s.handshakeComplete && !s.sentPacketHandler.HasPacingBudget() {
+			deadline := s.sentPacketHandler.TimeUntilSend()
+			if deadline.IsZero() {
+				deadline = deadlineSendImmediately
+			}
+			s.pacingDeadline = deadline
+			// Allow sending of an ACK if we're pacing limit (if we haven't sent out a packet yet).
+			// This makes sure that a peer that is mostly receiving data (and thus has an inaccurate cwnd estimate)
+			// sends enough ACKs to allow its peer to utilize the bandwidth.
+			if sentPacket {
 				return nil
 			}
-			return err
+			sendMode = ackhandler.SendAck
 		}
-
-		s.sendQueue.Send(buf, buf.Len())
-
-		if s.sendQueue.WouldBlock() {
+		switch sendMode {
+		case ackhandler.SendNone:
 			return nil
-		}
-		sendMode := s.sentPacketHandler.SendMode(now)
-		if sendMode == ackhandler.SendPacingLimited {
-			s.resetPacingDeadline()
-			return nil
-		}
-		if sendMode != ackhandler.SendAny {
-			return nil
-		}
-		// Prioritize receiving of packets over sending out more packets.
-		if len(s.receivedPackets) > 0 {
-			s.pacingDeadline = deadlineSendImmediately
-			return nil
-		}
-	}
-}
-
-func (s *connection) sendPacketsWithGSO(now time.Time) error {
-	buf := getLargePacketBuffer()
-	maxSize := s.mtuDiscoverer.CurrentSize()
-
-	for {
-		var dontSendMore bool
-		size, err := s.appendPacket(buf, maxSize, now)
-		if err != nil {
-			if err != errNothingToPack {
+		case ackhandler.SendAck:
+			// If we already sent packets, and the send mode switches to SendAck,
+			// as we've just become congestion limited.
+			// There's no need to try to send an ACK at this moment.
+			if sentPacket {
+				return nil
+			}
+			// We can at most send a single ACK only packet.
+			// There will only be a new ACK after receiving new packets.
+			// SendAck is only returned when we're congestion limited, so we don't need to set the pacinggs timer.
+			return s.maybeSendAckOnlyPacket()
+		case ackhandler.SendPTOInitial:
+			if err := s.sendProbePacket(protocol.EncryptionInitial); err != nil {
 				return err
 			}
-			if buf.Len() == 0 {
-				buf.Release()
-				return nil
+		case ackhandler.SendPTOHandshake:
+			if err := s.sendProbePacket(protocol.EncryptionHandshake); err != nil {
+				return err
 			}
-			dontSendMore = true
-		}
-
-		if !dontSendMore {
-			sendMode := s.sentPacketHandler.SendMode(now)
-			if sendMode == ackhandler.SendPacingLimited {
-				s.resetPacingDeadline()
+		case ackhandler.SendPTOAppData:
+			if err := s.sendProbePacket(protocol.Encryption1RTT); err != nil {
+				return err
 			}
-			if sendMode != ackhandler.SendAny {
-				dontSendMore = true
+		case ackhandler.SendAny:
+			sent, err := s.sendPacket()
+			if err != nil || !sent {
+				return err
 			}
+			sentPacket = true
+		default:
+			return fmt.Errorf("BUG: invalid send mode %d", sendMode)
 		}
-
-		// Append another packet if
-		// 1. The congestion controller and pacer allow sending more
-		// 2. The last packet appended was a full-size packet
-		// 3. We still have enough space for another full-size packet in the buffer
-		if !dontSendMore && size == maxSize && buf.Len()+maxSize <= buf.Cap() {
-			continue
-		}
-
-		s.sendQueue.Send(buf, maxSize)
-
-		if dontSendMore {
-			return nil
-		}
-		if s.sendQueue.WouldBlock() {
-			return nil
-		}
-
 		// Prioritize receiving of packets over sending out more packets.
 		if len(s.receivedPackets) > 0 {
 			s.pacingDeadline = deadlineSendImmediately
 			return nil
 		}
-
-		buf = getLargePacketBuffer()
+		if s.sendQueue.WouldBlock() {
+			return nil
+		}
 	}
 }
 
-func (s *connection) resetPacingDeadline() {
-	deadline := s.sentPacketHandler.TimeUntilSend()
-	if deadline.IsZero() {
-		deadline = deadlineSendImmediately
-	}
-	s.pacingDeadline = deadline
-}
-
-func (s *connection) maybeSendAckOnlyPacket(now time.Time) error {
+func (s *connection) maybeSendAckOnlyPacket() error {
 	if !s.handshakeConfirmed {
-		packet, err := s.packer.PackCoalescedPacket(true, s.mtuDiscoverer.CurrentSize(), s.version)
+		packet, err := s.packer.PackCoalescedPacket(true, s.version)
 		if err != nil {
 			return err
 		}
@@ -1948,20 +1809,20 @@ func (s *connection) maybeSendAckOnlyPacket(now time.Time) error {
 		return nil
 	}
 
-	p, buf, err := s.packer.PackAckOnlyPacket(s.mtuDiscoverer.CurrentSize(), s.version)
+	now := time.Now()
+	p, buffer, err := s.packer.PackPacket(true, now, s.version)
 	if err != nil {
 		if err == errNothingToPack {
 			return nil
 		}
 		return err
 	}
-	s.logShortHeaderPacket(p.DestConnID, p.Ack, p.Frames, p.StreamFrames, p.PacketNumber, p.PacketNumberLen, p.KeyPhase, buf.Len(), false)
-	s.registerPackedShortHeaderPacket(p, now)
-	s.sendQueue.Send(buf, buf.Len())
+	s.logShortHeaderPacket(p.DestConnID, p.Ack, p.Frames, p.PacketNumber, p.PacketNumberLen, p.KeyPhase, buffer.Len(), false)
+	s.sendPackedShortHeaderPacket(buffer, p.Packet, now)
 	return nil
 }
 
-func (s *connection) sendProbePacket(encLevel protocol.EncryptionLevel, now time.Time) error {
+func (s *connection) sendProbePacket(encLevel protocol.EncryptionLevel) error {
 	// Queue probe packets until we actually send out a packet,
 	// or until there are no more packets to queue.
 	var packet *coalescedPacket
@@ -1970,7 +1831,7 @@ func (s *connection) sendProbePacket(encLevel protocol.EncryptionLevel, now time
 			break
 		}
 		var err error
-		packet, err = s.packer.MaybePackProbePacket(encLevel, s.mtuDiscoverer.CurrentSize(), s.version)
+		packet, err = s.packer.MaybePackProbePacket(encLevel, s.version)
 		if err != nil {
 			return err
 		}
@@ -1979,9 +1840,19 @@ func (s *connection) sendProbePacket(encLevel protocol.EncryptionLevel, now time
 		}
 	}
 	if packet == nil {
-		s.retransmissionQueue.AddPing(encLevel)
+		//nolint:exhaustive // Cannot send probe packets for 0-RTT.
+		switch encLevel {
+		case protocol.EncryptionInitial:
+			s.retransmissionQueue.AddInitial(&wire.PingFrame{})
+		case protocol.EncryptionHandshake:
+			s.retransmissionQueue.AddHandshake(&wire.PingFrame{})
+		case protocol.Encryption1RTT:
+			s.retransmissionQueue.AddAppData(&wire.PingFrame{})
+		default:
+			panic("unexpected encryption level")
+		}
 		var err error
-		packet, err = s.packer.MaybePackProbePacket(encLevel, s.mtuDiscoverer.CurrentSize(), s.version)
+		packet, err = s.packer.MaybePackProbePacket(encLevel, s.version)
 		if err != nil {
 			return err
 		}
@@ -1989,35 +1860,55 @@ func (s *connection) sendProbePacket(encLevel protocol.EncryptionLevel, now time
 	if packet == nil || (len(packet.longHdrPackets) == 0 && packet.shortHdrPacket == nil) {
 		return fmt.Errorf("connection BUG: couldn't pack %s probe packet", encLevel)
 	}
-	s.sendPackedCoalescedPacket(packet, now)
+	s.sendPackedCoalescedPacket(packet, time.Now())
 	return nil
 }
 
-// appendPacket appends a new packet to the given packetBuffer.
-// If there was nothing to pack, the returned size is 0.
-func (s *connection) appendPacket(buf *packetBuffer, maxSize protocol.ByteCount, now time.Time) (protocol.ByteCount, error) {
-	startLen := buf.Len()
-	p, err := s.packer.AppendPacket(buf, maxSize, s.version)
-	if err != nil {
-		return 0, err
+func (s *connection) sendPacket() (bool, error) {
+	if isBlocked, offset := s.connFlowController.IsNewlyBlocked(); isBlocked {
+		s.framer.QueueControlFrame(&wire.DataBlockedFrame{MaximumData: offset})
 	}
-	size := buf.Len() - startLen
-	s.logShortHeaderPacket(p.DestConnID, p.Ack, p.Frames, p.StreamFrames, p.PacketNumber, p.PacketNumberLen, p.KeyPhase, size, false)
-	s.registerPackedShortHeaderPacket(p, now)
-	return size, nil
+	s.windowUpdateQueue.QueueAll()
+
+	now := time.Now()
+	if !s.handshakeConfirmed {
+		packet, err := s.packer.PackCoalescedPacket(false, s.version)
+		if err != nil || packet == nil {
+			return false, err
+		}
+		s.sentFirstPacket = true
+		s.sendPackedCoalescedPacket(packet, now)
+		return true, nil
+	} else if !s.config.DisablePathMTUDiscovery && s.mtuDiscoverer.ShouldSendProbe(now) {
+		ping, size := s.mtuDiscoverer.GetPing()
+		p, buffer, err := s.packer.PackMTUProbePacket(ping, size, now, s.version)
+		if err != nil {
+			return false, err
+		}
+		s.logShortHeaderPacket(p.DestConnID, p.Ack, p.Frames, p.PacketNumber, p.PacketNumberLen, p.KeyPhase, buffer.Len(), false)
+		s.sendPackedShortHeaderPacket(buffer, p.Packet, now)
+		return true, nil
+	}
+	p, buffer, err := s.packer.PackPacket(false, now, s.version)
+	if err != nil {
+		if err == errNothingToPack {
+			return false, nil
+		}
+		return false, err
+	}
+	s.logShortHeaderPacket(p.DestConnID, p.Ack, p.Frames, p.PacketNumber, p.PacketNumberLen, p.KeyPhase, buffer.Len(), false)
+	s.sendPackedShortHeaderPacket(buffer, p.Packet, now)
+	return true, nil
 }
 
-func (s *connection) registerPackedShortHeaderPacket(p shortHeaderPacket, now time.Time) {
-	if s.firstAckElicitingPacketAfterIdleSentTime.IsZero() && (len(p.StreamFrames) > 0 || ackhandler.HasAckElicitingFrames(p.Frames)) {
+func (s *connection) sendPackedShortHeaderPacket(buffer *packetBuffer, p *ackhandler.Packet, now time.Time) {
+	if s.firstAckElicitingPacketAfterIdleSentTime.IsZero() && ackhandler.HasAckElicitingFrames(p.Frames) {
 		s.firstAckElicitingPacketAfterIdleSentTime = now
 	}
 
-	largestAcked := protocol.InvalidPacketNumber
-	if p.Ack != nil {
-		largestAcked = p.Ack.LargestAcked()
-	}
-	s.sentPacketHandler.SentPacket(now, p.PacketNumber, largestAcked, p.StreamFrames, p.Frames, protocol.Encryption1RTT, p.Length, p.IsPathMTUProbePacket)
+	s.sentPacketHandler.SentPacket(p)
 	s.connIDManager.SentPacket()
+	s.sendQueue.Send(buffer)
 }
 
 func (s *connection) sendPackedCoalescedPacket(packet *coalescedPacket, now time.Time) {
@@ -2026,24 +1917,16 @@ func (s *connection) sendPackedCoalescedPacket(packet *coalescedPacket, now time
 		if s.firstAckElicitingPacketAfterIdleSentTime.IsZero() && p.IsAckEliciting() {
 			s.firstAckElicitingPacketAfterIdleSentTime = now
 		}
-		largestAcked := protocol.InvalidPacketNumber
-		if p.ack != nil {
-			largestAcked = p.ack.LargestAcked()
-		}
-		s.sentPacketHandler.SentPacket(now, p.header.PacketNumber, largestAcked, p.streamFrames, p.frames, p.EncryptionLevel(), p.length, false)
+		s.sentPacketHandler.SentPacket(p.ToAckHandlerPacket(now, s.retransmissionQueue))
 	}
 	if p := packet.shortHdrPacket; p != nil {
 		if s.firstAckElicitingPacketAfterIdleSentTime.IsZero() && p.IsAckEliciting() {
 			s.firstAckElicitingPacketAfterIdleSentTime = now
 		}
-		largestAcked := protocol.InvalidPacketNumber
-		if p.Ack != nil {
-			largestAcked = p.Ack.LargestAcked()
-		}
-		s.sentPacketHandler.SentPacket(now, p.PacketNumber, largestAcked, p.StreamFrames, p.Frames, protocol.Encryption1RTT, p.Length, p.IsPathMTUProbePacket)
+		s.sentPacketHandler.SentPacket(p.Packet)
 	}
 	s.connIDManager.SentPacket()
-	s.sendQueue.Send(packet.buffer, packet.buffer.Len())
+	s.sendQueue.Send(packet.buffer)
 }
 
 func (s *connection) sendConnectionClose(e error) ([]byte, error) {
@@ -2052,20 +1935,20 @@ func (s *connection) sendConnectionClose(e error) ([]byte, error) {
 	var transportErr *qerr.TransportError
 	var applicationErr *qerr.ApplicationError
 	if errors.As(e, &transportErr) {
-		packet, err = s.packer.PackConnectionClose(transportErr, s.mtuDiscoverer.CurrentSize(), s.version)
+		packet, err = s.packer.PackConnectionClose(transportErr, s.version)
 	} else if errors.As(e, &applicationErr) {
-		packet, err = s.packer.PackApplicationClose(applicationErr, s.mtuDiscoverer.CurrentSize(), s.version)
+		packet, err = s.packer.PackApplicationClose(applicationErr, s.version)
 	} else {
 		packet, err = s.packer.PackConnectionClose(&qerr.TransportError{
 			ErrorCode:    qerr.InternalError,
 			ErrorMessage: fmt.Sprintf("connection BUG: unspecified error type (msg: %s)", e.Error()),
-		}, s.mtuDiscoverer.CurrentSize(), s.version)
+		}, s.version)
 	}
 	if err != nil {
 		return nil, err
 	}
 	s.logCoalescedPacket(packet)
-	return packet.buffer.Data, s.conn.Write(packet.buffer.Data, packet.buffer.Len())
+	return packet.buffer.Data, s.conn.Write(packet.buffer.Data)
 }
 
 func (s *connection) logLongHeaderPacket(p *longHeaderPacket) {
@@ -2097,8 +1980,7 @@ func (s *connection) logLongHeaderPacket(p *longHeaderPacket) {
 func (s *connection) logShortHeaderPacket(
 	destConnID protocol.ConnectionID,
 	ackFrame *wire.AckFrame,
-	frames []ackhandler.Frame,
-	streamFrames []ackhandler.StreamFrame,
+	frames []*ackhandler.Frame,
 	pn protocol.PacketNumber,
 	pnLen protocol.PacketNumberLen,
 	kp protocol.KeyPhaseBit,
@@ -2114,21 +1996,15 @@ func (s *connection) logShortHeaderPacket(
 		if ackFrame != nil {
 			wire.LogFrame(s.logger, ackFrame, true)
 		}
-		for _, f := range frames {
-			wire.LogFrame(s.logger, f.Frame, true)
-		}
-		for _, f := range streamFrames {
-			wire.LogFrame(s.logger, f.Frame, true)
+		for _, frame := range frames {
+			wire.LogFrame(s.logger, frame.Frame, true)
 		}
 	}
 
 	// tracing
 	if s.tracer != nil {
-		fs := make([]logging.Frame, 0, len(frames)+len(streamFrames))
+		fs := make([]logging.Frame, 0, len(frames))
 		for _, f := range frames {
-			fs = append(fs, logutils.ConvertFrame(f.Frame))
-		}
-		for _, f := range streamFrames {
 			fs = append(fs, logutils.ConvertFrame(f.Frame))
 		}
 		var ack *logging.AckFrame
@@ -2158,7 +2034,6 @@ func (s *connection) logCoalescedPacket(packet *coalescedPacket) {
 				packet.shortHdrPacket.DestConnID,
 				packet.shortHdrPacket.Ack,
 				packet.shortHdrPacket.Frames,
-				packet.shortHdrPacket.StreamFrames,
 				packet.shortHdrPacket.PacketNumber,
 				packet.shortHdrPacket.PacketNumberLen,
 				packet.shortHdrPacket.KeyPhase,
@@ -2177,7 +2052,7 @@ func (s *connection) logCoalescedPacket(packet *coalescedPacket) {
 		s.logLongHeaderPacket(p)
 	}
 	if p := packet.shortHdrPacket; p != nil {
-		s.logShortHeaderPacket(p.DestConnID, p.Ack, p.Frames, p.StreamFrames, p.PacketNumber, p.PacketNumberLen, p.KeyPhase, p.Length, true)
+		s.logShortHeaderPacket(p.DestConnID, p.Ack, p.Frames, p.PacketNumber, p.PacketNumberLen, p.KeyPhase, p.Length, true)
 	}
 }
 
@@ -2238,7 +2113,7 @@ func (s *connection) scheduleSending() {
 
 // tryQueueingUndecryptablePacket queues a packet for which we're missing the decryption keys.
 // The logging.PacketType is only used for logging purposes.
-func (s *connection) tryQueueingUndecryptablePacket(p receivedPacket, pt logging.PacketType) {
+func (s *connection) tryQueueingUndecryptablePacket(p *receivedPacket, pt logging.PacketType) {
 	if s.handshakeComplete {
 		panic("shouldn't queue undecryptable packets after handshake completion")
 	}

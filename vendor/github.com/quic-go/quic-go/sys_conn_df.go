@@ -2,13 +2,11 @@
 
 package quic
 
-import (
-	"syscall"
-)
+import "syscall"
 
-func setDF(syscall.RawConn) (bool, error) {
+func setDF(rawConn syscall.RawConn) error {
 	// no-op on unsupported platforms
-	return false, nil
+	return nil
 }
 
 func isMsgSizeErr(err error) bool {

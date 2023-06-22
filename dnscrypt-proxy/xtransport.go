@@ -279,7 +279,7 @@ func (xTransport *XTransport) rebuildTransport() {
 					ipOnly = "[" + cachedIP.String() + "]"
 				}
 			} else {
-				dlog.Debugf("[%s] IP address was not cached in H3 context", host)
+				dlog.Debugf("[%s] IP address was not cached in H3 DialContext", host)
 			}
 			addrStr = ipOnly + ":" + strconv.Itoa(port)
 			udpAddr, err := net.ResolveUDPAddr("udp", addrStr)
@@ -292,8 +292,7 @@ func (xTransport *XTransport) rebuildTransport() {
 					return nil, err
 				}
 			}
-			tlsCfg.ServerName = host
-			return quic.DialEarly(ctx, xTransport.h3UDPConn, udpAddr, tlsCfg, cfg)
+			return quic.DialEarlyContext(ctx, xTransport.h3UDPConn, udpAddr, host, tlsCfg, cfg)
 		}}
 		xTransport.h3Transport = h3Transport
 	}
