@@ -15,23 +15,35 @@ import (
 	"github.com/quic-go/quic-go/internal/utils"
 )
 
+type connCapabilities struct {
+	// This connection has the Don't Fragment (DF) bit set.
+	// This means it makes to run DPLPMTUD.
+	DF bool
+	// GSO (Generic Segmentation Offload) supported
+	GSO bool
+}
+
 // rawConn is a connection that allow reading of a receivedPackeh.
 type rawConn interface {
-	ReadPacket() (*receivedPacket, error)
-	WritePacket(b []byte, addr net.Addr, oob []byte) (int, error)
+	ReadPacket() (receivedPacket, error)
+	// The size parameter is used for GSO.
+	// If GSO is not support, len(b) must be equal to size.
+	WritePacket(b []byte, size uint16, addr net.Addr, oob []byte) (int, error)
 	LocalAddr() net.Addr
 	SetReadDeadline(time.Time) error
 	io.Closer
+
+	capabilities() connCapabilities
 }
 
 type closePacket struct {
 	payload []byte
 	addr    net.Addr
-	info    *packetInfo
+	info    packetInfo
 }
 
 type unknownPacketHandler interface {
-	handlePacket(*receivedPacket)
+	handlePacket(receivedPacket)
 	setCloseError(error)
 }
 
@@ -165,7 +177,7 @@ func (h *packetHandlerMap) ReplaceWithClosed(ids []protocol.ConnectionID, pers p
 	var handler packetHandler
 	if connClosePacket != nil {
 		handler = newClosedLocalConn(
-			func(addr net.Addr, info *packetInfo) {
+			func(addr net.Addr, info packetInfo) {
 				h.enqueueClosePacket(closePacket{payload: connClosePacket, addr: addr, info: info})
 			},
 			pers,
