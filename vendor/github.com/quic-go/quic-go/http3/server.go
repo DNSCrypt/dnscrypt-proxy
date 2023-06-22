@@ -262,13 +262,26 @@ func (s *Server) ServeQUICConn(conn quic.Connection) error {
 // Make sure you use http3.ConfigureTLSConfig to configure a tls.Config
 // and use it to construct a http3-friendly QUIC listener.
 // Closing the server does close the listener.
+// ServeListener always returns a non-nil error. After Shutdown or Close, the returned error is http.ErrServerClosed.
 func (s *Server) ServeListener(ln QUICEarlyListener) error {
 	if err := s.addListener(&ln); err != nil {
 		return err
 	}
-	err := s.serveListener(ln)
-	s.removeListener(&ln)
-	return err
+	defer s.removeListener(&ln)
+	for {
+		conn, err := ln.Accept(context.Background())
+		if err == quic.ErrServerClosed {
+			return http.ErrServerClosed
+		}
+		if err != nil {
+			return err
+		}
+		go func() {
+			if err := s.handleConn(conn); err != nil {
+				s.logger.Debugf(err.Error())
+			}
+		}()
+	}
 }
 
 var errServerWithoutTLSConfig = errors.New("use of http3.Server without TLSConfig")
@@ -310,26 +323,7 @@ func (s *Server) serveConn(tlsConf *tls.Config, conn net.PacketConn) error {
 	if err != nil {
 		return err
 	}
-	if err := s.addListener(&ln); err != nil {
-		return err
-	}
-	err = s.serveListener(ln)
-	s.removeListener(&ln)
-	return err
-}
-
-func (s *Server) serveListener(ln QUICEarlyListener) error {
-	for {
-		conn, err := ln.Accept(context.Background())
-		if err != nil {
-			return err
-		}
-		go func() {
-			if err := s.handleConn(conn); err != nil {
-				s.logger.Debugf(err.Error())
-			}
-		}()
-	}
+	return s.ServeListener(ln)
 }
 
 func extractPort(addr string) (int, error) {

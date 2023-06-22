@@ -1,13 +1,13 @@
 package quic
 
 import (
-	"errors"
 	"fmt"
 	"net"
 	"time"
 
 	"github.com/quic-go/quic-go/internal/protocol"
 	"github.com/quic-go/quic-go/internal/utils"
+	"github.com/quic-go/quic-go/quicvarint"
 )
 
 // Clone clones a Config
@@ -24,11 +24,18 @@ func validateConfig(config *Config) error {
 	if config == nil {
 		return nil
 	}
-	if config.MaxIncomingStreams > 1<<60 {
-		return errors.New("invalid value for Config.MaxIncomingStreams")
+	const maxStreams = 1 << 60
+	if config.MaxIncomingStreams > maxStreams {
+		config.MaxIncomingStreams = maxStreams
 	}
-	if config.MaxIncomingUniStreams > 1<<60 {
-		return errors.New("invalid value for Config.MaxIncomingUniStreams")
+	if config.MaxIncomingUniStreams > maxStreams {
+		config.MaxIncomingUniStreams = maxStreams
+	}
+	if config.MaxStreamReceiveWindow > quicvarint.Max {
+		config.MaxStreamReceiveWindow = quicvarint.Max
+	}
+	if config.MaxConnectionReceiveWindow > quicvarint.Max {
+		config.MaxConnectionReceiveWindow = quicvarint.Max
 	}
 	// check that all QUIC versions are actually supported
 	for _, v := range config.Versions {

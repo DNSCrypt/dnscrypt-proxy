@@ -2,14 +2,13 @@ package wire
 
 import (
 	"bytes"
+	"crypto/rand"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
-	"math/rand"
 	"net"
 	"sort"
-	"sync"
 	"time"
 
 	"github.com/quic-go/quic-go/internal/protocol"
@@ -25,15 +24,6 @@ import (
 var AdditionalTransportParametersClient map[uint64][]byte
 
 const transportParameterMarshalingVersion = 1
-
-var (
-	randomMutex sync.Mutex
-	random      rand.Rand
-)
-
-func init() {
-	random = *rand.New(rand.NewSource(time.Now().UnixNano()))
-}
 
 type transportParameterID uint64
 
@@ -341,13 +331,12 @@ func (p *TransportParameters) Marshal(pers protocol.Perspective) []byte {
 	b := make([]byte, 0, 256)
 
 	// add a greased value
-	b = quicvarint.Append(b, uint64(27+31*rand.Intn(100)))
-	randomMutex.Lock()
-	length := random.Intn(16)
+	random := make([]byte, 18)
+	rand.Read(random)
+	b = quicvarint.Append(b, 27+31*uint64(random[0]))
+	length := random[1] % 16
 	b = quicvarint.Append(b, uint64(length))
-	b = b[:len(b)+length]
-	random.Read(b[len(b)-length:])
-	randomMutex.Unlock()
+	b = append(b, random[2:2+length]...)
 
 	// initial_max_stream_data_bidi_local
 	b = p.marshalVarintParam(b, initialMaxStreamDataBidiLocalParameterID, uint64(p.InitialMaxStreamDataBidiLocal))

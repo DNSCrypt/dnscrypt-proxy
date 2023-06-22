@@ -20,14 +20,19 @@ import (
 	"github.com/quic-go/quic-go/logging"
 )
 
+// The Transport is the central point to manage incoming and outgoing QUIC connections.
+// QUIC demultiplexes connections based on their QUIC Connection IDs, not based on the 4-tuple.
+// This means that a single UDP socket can be used for listening for incoming connections, as well as
+// for dialing an arbitrary number of outgoing connections.
+// A Transport handles a single net.PacketConn, and offers a range of configuration options
+// compared to the simple helper functions like Listen and Dial that this package provides.
 type Transport struct {
 	// A single net.PacketConn can only be handled by one Transport.
 	// Bad things will happen if passed to multiple Transports.
 	//
-	// If the connection satisfies the OOBCapablePacketConn interface
-	// (as a net.UDPConn does), ECN and packet info support will be enabled.
-	// In this case, optimized syscalls might be used, skipping the
-	// ReadFrom and WriteTo calls to read / write packets.
+	// If not done by the user, the connection is passed through OptimizeConn to enable a number of optimizations.
+	// After passing the connection to the Transport, it's invalid to call ReadFrom on the connection.
+	// Calling WriteTo is only valid on the connection returned by OptimizeConn.
 	Conn net.PacketConn
 
 	// The length of the connection ID in bytes.
@@ -44,6 +49,9 @@ type Transport struct {
 
 	// The StatelessResetKey is used to generate stateless reset tokens.
 	// If no key is configured, sending of stateless resets is disabled.
+	// It is highly recommended to configure a stateless reset key, as stateless resets
+	// allow the peer to quickly recover from crashes and reboots of this node.
+	// See section 10.3 of RFC 9000 for details.
 	StatelessResetKey *StatelessResetKey
 
 	// A Tracer traces events that don't belong to a single QUIC connection.
@@ -67,7 +75,7 @@ type Transport struct {
 	conn rawConn
 
 	closeQueue          chan closePacket
-	statelessResetQueue chan *receivedPacket
+	statelessResetQueue chan receivedPacket
 
 	listening   chan struct{} // is closed when listen returns
 	closed      bool
@@ -148,7 +156,7 @@ func (t *Transport) Dial(ctx context.Context, addr net.Addr, tlsConf *tls.Config
 	if t.isSingleUse {
 		onClose = func() { t.Close() }
 	}
-	return dial(ctx, newSendConn(t.conn, addr, nil), t.connIDGenerator, t.handlerMap, tlsConf, conf, onClose, false)
+	return dial(ctx, newSendConn(t.conn, addr), t.connIDGenerator, t.handlerMap, tlsConf, conf, onClose, false)
 }
 
 // DialEarly dials a new connection, attempting to use 0-RTT if possible.
@@ -164,18 +172,25 @@ func (t *Transport) DialEarly(ctx context.Context, addr net.Addr, tlsConf *tls.C
 	if t.isSingleUse {
 		onClose = func() { t.Close() }
 	}
-	return dial(ctx, newSendConn(t.conn, addr, nil), t.connIDGenerator, t.handlerMap, tlsConf, conf, onClose, true)
+	return dial(ctx, newSendConn(t.conn, addr), t.connIDGenerator, t.handlerMap, tlsConf, conf, onClose, true)
 }
 
 func (t *Transport) init(isServer bool) error {
 	t.initOnce.Do(func() {
 		getMultiplexer().AddConn(t.Conn)
 
-		conn, err := wrapConn(t.Conn)
-		if err != nil {
-			t.initErr = err
-			return
+		var conn rawConn
+		if c, ok := t.Conn.(rawConn); ok {
+			conn = c
+		} else {
+			var err error
+			conn, err = wrapConn(t.Conn)
+			if err != nil {
+				t.initErr = err
+				return
+			}
 		}
+		t.conn = conn
 
 		t.logger = utils.DefaultLogger // TODO: make this configurable
 		t.conn = conn
@@ -183,7 +198,7 @@ func (t *Transport) init(isServer bool) error {
 		t.listening = make(chan struct{})
 
 		t.closeQueue = make(chan closePacket, 4)
-		t.statelessResetQueue = make(chan *receivedPacket, 4)
+		t.statelessResetQueue = make(chan receivedPacket, 4)
 
 		if t.ConnectionIDGenerator != nil {
 			t.connIDGenerator = t.ConnectionIDGenerator
@@ -218,7 +233,7 @@ func (t *Transport) runSendQueue() {
 		case <-t.listening:
 			return
 		case p := <-t.closeQueue:
-			t.conn.WritePacket(p.payload, p.addr, p.info.OOB())
+			t.conn.WritePacket(p.payload, uint16(len(p.payload)), p.addr, p.info.OOB())
 		case p := <-t.statelessResetQueue:
 			t.sendStatelessReset(p)
 		}
@@ -230,14 +245,16 @@ func (t *Transport) runSendQueue() {
 func (t *Transport) Close() error {
 	t.close(errors.New("closing"))
 	if t.createdConn {
-		if err := t.conn.Close(); err != nil {
+		if err := t.Conn.Close(); err != nil {
 			return err
 		}
-	} else {
+	} else if t.conn != nil {
 		t.conn.SetReadDeadline(time.Now())
 		defer func() { t.conn.SetReadDeadline(time.Time{}) }()
 	}
-	<-t.listening // wait until listening returns
+	if t.listening != nil {
+		<-t.listening // wait until listening returns
+	}
 	return nil
 }
 
@@ -266,7 +283,9 @@ func (t *Transport) close(e error) {
 		return
 	}
 
-	t.handlerMap.Close(e)
+	if t.handlerMap != nil {
+		t.handlerMap.Close(e)
+	}
 	if t.server != nil {
 		t.server.setCloseError(e)
 	}
@@ -325,7 +344,7 @@ func (t *Transport) listen(conn rawConn) {
 	}
 }
 
-func (t *Transport) handlePacket(p *receivedPacket) {
+func (t *Transport) handlePacket(p receivedPacket) {
 	connID, err := wire.ParseConnectionID(p.data, t.connIDLen)
 	if err != nil {
 		t.logger.Debugf("error parsing connection ID on packet from %s: %s", p.remoteAddr, err)
@@ -357,7 +376,7 @@ func (t *Transport) handlePacket(p *receivedPacket) {
 	t.server.handlePacket(p)
 }
 
-func (t *Transport) maybeSendStatelessReset(p *receivedPacket) {
+func (t *Transport) maybeSendStatelessReset(p receivedPacket) {
 	if t.StatelessResetKey == nil {
 		p.buffer.Release()
 		return
@@ -378,7 +397,7 @@ func (t *Transport) maybeSendStatelessReset(p *receivedPacket) {
 	}
 }
 
-func (t *Transport) sendStatelessReset(p *receivedPacket) {
+func (t *Transport) sendStatelessReset(p receivedPacket) {
 	defer p.buffer.Release()
 
 	connID, err := wire.ParseConnectionID(p.data, t.connIDLen)
@@ -392,7 +411,7 @@ func (t *Transport) sendStatelessReset(p *receivedPacket) {
 	rand.Read(data)
 	data[0] = (data[0] & 0x7f) | 0x40
 	data = append(data, token[:]...)
-	if _, err := t.conn.WritePacket(data, p.remoteAddr, p.info.OOB()); err != nil {
+	if _, err := t.conn.WritePacket(data, uint16(len(data)), p.remoteAddr, p.info.OOB()); err != nil {
 		t.logger.Debugf("Error sending Stateless Reset to %s: %s", p.remoteAddr, err)
 	}
 }
