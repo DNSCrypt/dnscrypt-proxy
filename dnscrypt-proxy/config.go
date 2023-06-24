@@ -861,7 +861,9 @@ func (config *Config) loadSources(proxy *Proxy) error {
 		}
 		proxy.registeredServers = append(proxy.registeredServers, RegisteredServer{name: serverName, stamp: stamp})
 	}
-	proxy.updateRegisteredServers()
+	if err := proxy.updateRegisteredServers(); err != nil {
+		return err
+	}
 	rs1 := proxy.registeredServers
 	rs2 := proxy.serversInfo.registeredServers
 	rand.Shuffle(len(rs1), func(i, j int) {

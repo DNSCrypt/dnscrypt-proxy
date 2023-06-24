@@ -27,8 +27,11 @@ type App struct {
 }
 
 func main() {
-	TimezoneSetup()
+	tzErr := TimezoneSetup()
 	dlog.Init("dnscrypt-proxy", dlog.SeverityNotice, "DAEMON")
+	if tzErr != nil {
+		dlog.Errorf("Timezone setup failed: %v", tzErr)
+	}
 	runtime.MemProfileRate = 0
 
 	seed := make([]byte, 8)
@@ -141,7 +144,9 @@ func (app *App) AppMain() {
 }
 
 func (app *App) Stop(service service.Service) error {
-	PidFileRemove()
+	if err := PidFileRemove(); err != nil {
+		dlog.Warnf("Failed to remove the PID file: %v", err)
+	}
 	dlog.Notice("Stopped.")
 	return nil
 }
