@@ -127,7 +127,7 @@ func (proxy *Proxy) addDNSListener(listenAddrStr string) {
 	}
 
 	// if 'userName' is not set, continue as before
-	if len(proxy.userName) <= 0 {
+	if len(proxy.userName) == 0 {
 		if err := proxy.udpListenerFromAddr(listenUDPAddr); err != nil {
 			dlog.Fatal(err)
 		}
@@ -191,7 +191,7 @@ func (proxy *Proxy) addLocalDoHListener(listenAddrStr string) {
 	}
 
 	// if 'userName' is not set, continue as before
-	if len(proxy.userName) <= 0 {
+	if len(proxy.userName) == 0 {
 		if err := proxy.localDoHListenerFromAddr(listenTCPAddr); err != nil {
 			dlog.Fatal(err)
 		}
@@ -619,7 +619,7 @@ func (proxy *Proxy) processIncomingQuery(
 	start time.Time,
 	onlyCached bool,
 ) []byte {
-	var response []byte = nil
+	var response []byte
 	if len(query) < MinDNSPacketSize {
 		return response
 	}

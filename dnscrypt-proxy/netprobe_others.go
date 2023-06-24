@@ -11,7 +11,7 @@ import (
 )
 
 func NetProbe(proxy *Proxy, address string, timeout int) error {
-	if len(address) <= 0 || timeout == 0 {
+	if len(address) == 0 || timeout == 0 {
 		return nil
 	}
 	if captivePortalHandler, err := ColdStart(proxy); err == nil {

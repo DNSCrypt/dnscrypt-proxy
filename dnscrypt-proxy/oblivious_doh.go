@@ -181,7 +181,7 @@ func (q ODoHQuery) decryptResponse(response []byte) ([]byte, error) {
 	responseLength := binary.BigEndian.Uint16(responsePlaintext[0:2])
 	valid := 1
 	for i := 4 + int(responseLength); i < len(responsePlaintext); i++ {
-		valid = valid & subtle.ConstantTimeByteEq(response[i], 0x00)
+		valid &= subtle.ConstantTimeByteEq(response[i], 0x00)
 	}
 	if valid != 1 {
 		return nil, fmt.Errorf("Malformed response")

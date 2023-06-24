@@ -189,11 +189,11 @@ func parseBlockedQueryResponse(blockedResponse string, pluginsGlobals *PluginsGl
 
 	if strings.HasPrefix(blockedResponse, "a:") {
 		blockedIPStrings := strings.Split(blockedResponse, ",")
-		(*pluginsGlobals).respondWithIPv4 = net.ParseIP(strings.TrimPrefix(blockedIPStrings[0], "a:"))
+		pluginsGlobals.respondWithIPv4 = net.ParseIP(strings.TrimPrefix(blockedIPStrings[0], "a:"))
 
-		if (*pluginsGlobals).respondWithIPv4 == nil {
+		if pluginsGlobals.respondWithIPv4 == nil {
 			dlog.Notice("Error parsing IPv4 response given in blocked_query_response option, defaulting to `hinfo`")
-			(*pluginsGlobals).refusedCodeInResponses = false
+			pluginsGlobals.refusedCodeInResponses = false
 			return
 		}
 
@@ -203,9 +203,9 @@ func parseBlockedQueryResponse(blockedResponse string, pluginsGlobals *PluginsGl
 				if strings.HasPrefix(ipv6Response, "[") {
 					ipv6Response = strings.Trim(ipv6Response, "[]")
 				}
-				(*pluginsGlobals).respondWithIPv6 = net.ParseIP(ipv6Response)
+				pluginsGlobals.respondWithIPv6 = net.ParseIP(ipv6Response)
 
-				if (*pluginsGlobals).respondWithIPv6 == nil {
+				if pluginsGlobals.respondWithIPv6 == nil {
 					dlog.Notice(
 						"Error parsing IPv6 response given in blocked_query_response option, defaulting to IPv4",
 					)
@@ -215,18 +215,18 @@ func parseBlockedQueryResponse(blockedResponse string, pluginsGlobals *PluginsGl
 			}
 		}
 
-		if (*pluginsGlobals).respondWithIPv6 == nil {
-			(*pluginsGlobals).respondWithIPv6 = (*pluginsGlobals).respondWithIPv4
+		if pluginsGlobals.respondWithIPv6 == nil {
+			pluginsGlobals.respondWithIPv6 = pluginsGlobals.respondWithIPv4
 		}
 	} else {
 		switch blockedResponse {
 		case "refused":
-			(*pluginsGlobals).refusedCodeInResponses = true
+			pluginsGlobals.refusedCodeInResponses = true
 		case "hinfo":
-			(*pluginsGlobals).refusedCodeInResponses = false
+			pluginsGlobals.refusedCodeInResponses = false
 		default:
 			dlog.Noticef("Invalid blocked_query_response option [%s], defaulting to `hinfo`", blockedResponse)
-			(*pluginsGlobals).refusedCodeInResponses = false
+			pluginsGlobals.refusedCodeInResponses = false
 		}
 	}
 }

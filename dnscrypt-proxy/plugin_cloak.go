@@ -47,7 +47,7 @@ func (plugin *PluginCloak) Init(proxy *Proxy) error {
 	plugin.createPTR = proxy.cloakedPTR
 	plugin.patternMatcher = NewPatternMatcher()
 	cloakedNames := make(map[string]*CloakedName)
-	for lineNo, line := range strings.Split(string(bin), "\n") {
+	for lineNo, line := range strings.Split(bin, "\n") {
 		line = TrimAndStripInlineComments(line)
 		if len(line) == 0 {
 			continue
@@ -73,9 +73,9 @@ func (plugin *PluginCloak) Init(proxy *Proxy) error {
 		ip := net.ParseIP(target)
 		if ip != nil {
 			if ipv4 := ip.To4(); ipv4 != nil {
-				cloakedName.ipv4 = append((*cloakedName).ipv4, ipv4)
+				cloakedName.ipv4 = append(cloakedName.ipv4, ipv4)
 			} else if ipv6 := ip.To16(); ipv6 != nil {
-				cloakedName.ipv6 = append((*cloakedName).ipv6, ipv6)
+				cloakedName.ipv6 = append(cloakedName.ipv6, ipv6)
 			} else {
 				dlog.Errorf("Invalid IP address in cloaking rule at line %d", 1+lineNo)
 				continue
