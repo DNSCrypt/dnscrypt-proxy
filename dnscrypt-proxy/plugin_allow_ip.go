@@ -36,7 +36,7 @@ func (plugin *PluginAllowedIP) Init(proxy *Proxy) error {
 	}
 	plugin.allowedPrefixes = iradix.New()
 	plugin.allowedIPs = make(map[string]interface{})
-	for lineNo, line := range strings.Split(string(bin), "\n") {
+	for lineNo, line := range strings.Split(bin, "\n") {
 		line = TrimAndStripInlineComments(line)
 		if len(line) == 0 {
 			continue

@@ -35,7 +35,7 @@ func main() {
 	if _, err := crypto_rand.Read(seed); err != nil {
 		dlog.Fatal(err)
 	}
-	rand.Seed(int64(binary.LittleEndian.Uint64(seed[:])))
+	rand.Seed(int64(binary.LittleEndian.Uint64(seed)))
 
 	pwd, err := os.Getwd()
 	if err != nil {

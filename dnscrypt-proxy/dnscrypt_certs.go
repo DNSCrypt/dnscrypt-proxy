@@ -35,7 +35,7 @@ func FetchCurrentDNSCryptCert(
 		return CertInfo{}, 0, false, errors.New("Invalid public key length")
 	}
 	if !strings.HasSuffix(providerName, ".") {
-		providerName = providerName + "."
+		providerName += "."
 	}
 	if serverName == nil {
 		serverName = &providerName
