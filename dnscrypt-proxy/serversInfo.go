@@ -615,7 +615,9 @@ func dohTestPacket(msgID uint16) []byte {
 	msg.SetEdns0(uint16(MaxDNSPacketSize), false)
 	ext := new(dns.EDNS0_PADDING)
 	ext.Padding = make([]byte, 16)
-	crypto_rand.Read(ext.Padding)
+	if _, err := crypto_rand.Read(ext.Padding); err != nil {
+		dlog.Fatal(err)
+	}
 	edns0 := msg.IsEdns0()
 	edns0.Option = append(edns0.Option, ext)
 	body, err := msg.Pack()
@@ -638,7 +640,9 @@ func dohNXTestPacket(msgID uint16) []byte {
 	msg.SetEdns0(uint16(MaxDNSPacketSize), false)
 	ext := new(dns.EDNS0_PADDING)
 	ext.Padding = make([]byte, 16)
-	crypto_rand.Read(ext.Padding)
+	if _, err := crypto_rand.Read(ext.Padding); err != nil {
+		dlog.Fatal(err)
+	}
 	edns0 := msg.IsEdns0()
 	edns0.Option = append(edns0.Option, ext)
 	body, err := msg.Pack()
