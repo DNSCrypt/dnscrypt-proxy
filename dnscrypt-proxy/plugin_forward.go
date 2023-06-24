@@ -29,11 +29,11 @@ func (plugin *PluginForward) Description() string {
 
 func (plugin *PluginForward) Init(proxy *Proxy) error {
 	dlog.Noticef("Loading the set of forwarding rules from [%s]", proxy.forwardFile)
-	bin, err := ReadTextFile(proxy.forwardFile)
+	lines, err := ReadTextFile(proxy.forwardFile)
 	if err != nil {
 		return err
 	}
-	for lineNo, line := range strings.Split(string(bin), "\n") {
+	for lineNo, line := range strings.Split(lines, "\n") {
 		line = TrimAndStripInlineComments(line)
 		if len(line) == 0 {
 			continue

@@ -30,13 +30,13 @@ func (plugin *PluginAllowedIP) Description() string {
 
 func (plugin *PluginAllowedIP) Init(proxy *Proxy) error {
 	dlog.Noticef("Loading the set of allowed IP rules from [%s]", proxy.allowedIPFile)
-	bin, err := ReadTextFile(proxy.allowedIPFile)
+	lines, err := ReadTextFile(proxy.allowedIPFile)
 	if err != nil {
 		return err
 	}
 	plugin.allowedPrefixes = iradix.New()
 	plugin.allowedIPs = make(map[string]interface{})
-	for lineNo, line := range strings.Split(bin, "\n") {
+	for lineNo, line := range strings.Split(lines, "\n") {
 		line = TrimAndStripInlineComments(line)
 		if len(line) == 0 {
 			continue

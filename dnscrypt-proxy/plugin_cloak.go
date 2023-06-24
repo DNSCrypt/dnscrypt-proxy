@@ -39,7 +39,7 @@ func (plugin *PluginCloak) Description() string {
 
 func (plugin *PluginCloak) Init(proxy *Proxy) error {
 	dlog.Noticef("Loading the set of cloaking rules from [%s]", proxy.cloakFile)
-	bin, err := ReadTextFile(proxy.cloakFile)
+	lines, err := ReadTextFile(proxy.cloakFile)
 	if err != nil {
 		return err
 	}
@@ -47,7 +47,7 @@ func (plugin *PluginCloak) Init(proxy *Proxy) error {
 	plugin.createPTR = proxy.cloakedPTR
 	plugin.patternMatcher = NewPatternMatcher()
 	cloakedNames := make(map[string]*CloakedName)
-	for lineNo, line := range strings.Split(bin, "\n") {
+	for lineNo, line := range strings.Split(lines, "\n") {
 		line = TrimAndStripInlineComments(line)
 		if len(line) == 0 {
 			continue

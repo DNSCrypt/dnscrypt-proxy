@@ -30,13 +30,13 @@ func (plugin *PluginBlockIP) Description() string {
 
 func (plugin *PluginBlockIP) Init(proxy *Proxy) error {
 	dlog.Noticef("Loading the set of IP blocking rules from [%s]", proxy.blockIPFile)
-	bin, err := ReadTextFile(proxy.blockIPFile)
+	lines, err := ReadTextFile(proxy.blockIPFile)
 	if err != nil {
 		return err
 	}
 	plugin.blockedPrefixes = iradix.New()
 	plugin.blockedIPs = make(map[string]interface{})
-	for lineNo, line := range strings.Split(string(bin), "\n") {
+	for lineNo, line := range strings.Split(lines, "\n") {
 		line = TrimAndStripInlineComments(line)
 		if len(line) == 0 {
 			continue

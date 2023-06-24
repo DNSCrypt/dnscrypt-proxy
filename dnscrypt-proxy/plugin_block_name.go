@@ -87,7 +87,7 @@ func (plugin *PluginBlockName) Description() string {
 
 func (plugin *PluginBlockName) Init(proxy *Proxy) error {
 	dlog.Noticef("Loading the set of blocking rules from [%s]", proxy.blockNameFile)
-	bin, err := ReadTextFile(proxy.blockNameFile)
+	lines, err := ReadTextFile(proxy.blockNameFile)
 	if err != nil {
 		return err
 	}
@@ -95,7 +95,7 @@ func (plugin *PluginBlockName) Init(proxy *Proxy) error {
 		allWeeklyRanges: proxy.allWeeklyRanges,
 		patternMatcher:  NewPatternMatcher(),
 	}
-	for lineNo, line := range strings.Split(string(bin), "\n") {
+	for lineNo, line := range strings.Split(lines, "\n") {
 		line = TrimAndStripInlineComments(line)
 		if len(line) == 0 {
 			continue
