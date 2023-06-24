@@ -30,7 +30,7 @@ func main() {
 	tzErr := TimezoneSetup()
 	dlog.Init("dnscrypt-proxy", dlog.SeverityNotice, "DAEMON")
 	if tzErr != nil {
-		dlog.Errorf("Timezone setup failed: %v", tzErr)
+		dlog.Warnf("Timezone setup failed: [%v]", tzErr)
 	}
 	runtime.MemProfileRate = 0
 
@@ -129,7 +129,7 @@ func (app *App) AppMain() {
 		dlog.Fatal(err)
 	}
 	if err := PidFileCreate(); err != nil {
-		dlog.Criticalf("Unable to create the PID file: %v", err)
+		dlog.Errorf("Unable to create the PID file: [%v]", err)
 	}
 	if err := app.proxy.InitPluginsGlobals(); err != nil {
 		dlog.Fatal(err)
@@ -145,7 +145,7 @@ func (app *App) AppMain() {
 
 func (app *App) Stop(service service.Service) error {
 	if err := PidFileRemove(); err != nil {
-		dlog.Warnf("Failed to remove the PID file: %v", err)
+		dlog.Warnf("Failed to remove the PID file: [%v]", err)
 	}
 	dlog.Notice("Stopped.")
 	return nil
