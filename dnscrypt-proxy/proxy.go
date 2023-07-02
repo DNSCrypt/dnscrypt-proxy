@@ -297,6 +297,10 @@ func (proxy *Proxy) updateRegisteredServers() error {
 				len(registeredServers),
 			)
 		}
+		// Balance multiple stamps with the same name
+		rand.Shuffle(len(registeredServers), func(i, j int) {
+			registeredServers[i], registeredServers[j] = registeredServers[j], registeredServers[i]
+		})
 		for _, registeredServer := range registeredServers {
 			if registeredServer.stamp.Proto != stamps.StampProtoTypeDNSCryptRelay &&
 				registeredServer.stamp.Proto != stamps.StampProtoTypeODoHRelay {
