@@ -116,7 +116,7 @@ type cryptoSetup struct {
 	clientHelloWritten     bool
 	clientHelloWrittenChan chan struct{} // is closed as soon as the ClientHello is written
 	zeroRTTParametersChan  chan<- *wire.TransportParameters
-	allow0RTT              func() bool
+	allow0RTT              bool
 
 	rttStats *utils.RTTStats
 
@@ -197,7 +197,7 @@ func NewCryptoSetupServer(
 	tp *wire.TransportParameters,
 	runner handshakeRunner,
 	tlsConf *tls.Config,
-	allow0RTT func() bool,
+	allow0RTT bool,
 	rttStats *utils.RTTStats,
 	tracer logging.ConnectionTracer,
 	logger utils.Logger,
@@ -210,14 +210,13 @@ func NewCryptoSetupServer(
 		tp,
 		runner,
 		tlsConf,
-		allow0RTT != nil,
+		allow0RTT,
 		rttStats,
 		tracer,
 		logger,
 		protocol.PerspectiveServer,
 		version,
 	)
-	cs.allow0RTT = allow0RTT
 	cs.conn = qtls.Server(newConn(localAddr, remoteAddr), cs.tlsConf, cs.extraConf)
 	return cs
 }
@@ -253,6 +252,7 @@ func newCryptoSetup(
 		readEncLevel:              protocol.EncryptionInitial,
 		writeEncLevel:             protocol.EncryptionInitial,
 		runner:                    runner,
+		allow0RTT:                 enable0RTT,
 		ourParams:                 tp,
 		paramsChan:                extHandler.TransportParameters(),
 		rttStats:                  rttStats,
@@ -503,7 +503,7 @@ func (h *cryptoSetup) accept0RTT(sessionTicketData []byte) bool {
 		h.logger.Debugf("Transport parameters changed. Rejecting 0-RTT.")
 		return false
 	}
-	if !h.allow0RTT() {
+	if !h.allow0RTT {
 		h.logger.Debugf("0-RTT not allowed. Rejecting 0-RTT.")
 		return false
 	}

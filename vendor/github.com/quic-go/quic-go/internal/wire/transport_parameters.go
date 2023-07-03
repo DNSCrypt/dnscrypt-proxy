@@ -2,14 +2,13 @@ package wire
 
 import (
 	"bytes"
+	"crypto/rand"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
-	"math/rand"
 	"net"
 	"sort"
-	"sync"
 	"time"
 
 	"github.com/quic-go/quic-go/internal/protocol"
@@ -25,15 +24,6 @@ import (
 var AdditionalTransportParametersClient map[uint64][]byte
 
 const transportParameterMarshalingVersion = 1
-
-var (
-	randomMutex sync.Mutex
-	random      rand.Rand
-)
-
-func init() {
-	random = *rand.New(rand.NewSource(time.Now().UnixNano()))
-}
 
 type transportParameterID uint64
 
@@ -118,6 +108,7 @@ func (p *TransportParameters) unmarshal(r *bytes.Reader, sentBy protocol.Perspec
 	var (
 		readOriginalDestinationConnectionID bool
 		readInitialSourceConnectionID       bool
+		readActiveConnectionIDLimit         bool
 	)
 
 	p.AckDelayExponent = protocol.DefaultAckDelayExponent
@@ -139,6 +130,9 @@ func (p *TransportParameters) unmarshal(r *bytes.Reader, sentBy protocol.Perspec
 		}
 		parameterIDs = append(parameterIDs, paramID)
 		switch paramID {
+		case activeConnectionIDLimitParameterID:
+			readActiveConnectionIDLimit = true
+			fallthrough
 		case maxIdleTimeoutParameterID,
 			maxUDPPayloadSizeParameterID,
 			initialMaxDataParameterID,
@@ -148,7 +142,6 @@ func (p *TransportParameters) unmarshal(r *bytes.Reader, sentBy protocol.Perspec
 			initialMaxStreamsBidiParameterID,
 			initialMaxStreamsUniParameterID,
 			maxAckDelayParameterID,
-			activeConnectionIDLimitParameterID,
 			maxDatagramFrameSizeParameterID,
 			ackDelayExponentParameterID:
 			if err := p.readNumericTransportParameter(r, paramID, int(paramLen)); err != nil {
@@ -196,6 +189,9 @@ func (p *TransportParameters) unmarshal(r *bytes.Reader, sentBy protocol.Perspec
 		}
 	}
 
+	if !readActiveConnectionIDLimit {
+		p.ActiveConnectionIDLimit = protocol.DefaultActiveConnectionIDLimit
+	}
 	if !fromSessionTicket {
 		if sentBy == protocol.PerspectiveServer && !readOriginalDestinationConnectionID {
 			return errors.New("missing original_destination_connection_id")
@@ -335,13 +331,12 @@ func (p *TransportParameters) Marshal(pers protocol.Perspective) []byte {
 	b := make([]byte, 0, 256)
 
 	// add a greased value
-	b = quicvarint.Append(b, uint64(27+31*rand.Intn(100)))
-	randomMutex.Lock()
-	length := random.Intn(16)
+	random := make([]byte, 18)
+	rand.Read(random)
+	b = quicvarint.Append(b, 27+31*uint64(random[0]))
+	length := random[1] % 16
 	b = quicvarint.Append(b, uint64(length))
-	b = b[:len(b)+length]
-	random.Read(b[len(b)-length:])
-	randomMutex.Unlock()
+	b = append(b, random[2:2+length]...)
 
 	// initial_max_stream_data_bidi_local
 	b = p.marshalVarintParam(b, initialMaxStreamDataBidiLocalParameterID, uint64(p.InitialMaxStreamDataBidiLocal))
@@ -402,7 +397,9 @@ func (p *TransportParameters) Marshal(pers protocol.Perspective) []byte {
 		}
 	}
 	// active_connection_id_limit
-	b = p.marshalVarintParam(b, activeConnectionIDLimitParameterID, p.ActiveConnectionIDLimit)
+	if p.ActiveConnectionIDLimit != protocol.DefaultActiveConnectionIDLimit {
+		b = p.marshalVarintParam(b, activeConnectionIDLimitParameterID, p.ActiveConnectionIDLimit)
+	}
 	// initial_source_connection_id
 	b = quicvarint.Append(b, uint64(initialSourceConnectionIDParameterID))
 	b = quicvarint.Append(b, uint64(p.InitialSourceConnectionID.Len()))

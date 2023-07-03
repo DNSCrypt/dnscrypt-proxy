@@ -10,20 +10,20 @@ import (
 // SentPacketHandler handles ACKs received for outgoing packets
 type SentPacketHandler interface {
 	// SentPacket may modify the packet
-	SentPacket(packet *Packet)
-	ReceivedAck(ackFrame *wire.AckFrame, encLevel protocol.EncryptionLevel, recvTime time.Time) (bool /* 1-RTT packet acked */, error)
+	SentPacket(t time.Time, pn, largestAcked protocol.PacketNumber, streamFrames []StreamFrame, frames []Frame, encLevel protocol.EncryptionLevel, size protocol.ByteCount, isPathMTUProbePacket bool)
+	// ReceivedAck processes an ACK frame.
+	// It does not store a copy of the frame.
+	ReceivedAck(f *wire.AckFrame, encLevel protocol.EncryptionLevel, recvTime time.Time) (bool /* 1-RTT packet acked */, error)
 	ReceivedBytes(protocol.ByteCount)
 	DropPackets(protocol.EncryptionLevel)
 	ResetForRetry() error
 	SetHandshakeConfirmed()
 
 	// The SendMode determines if and what kind of packets can be sent.
-	SendMode() SendMode
+	SendMode(now time.Time) SendMode
 	// TimeUntilSend is the time when the next packet should be sent.
 	// It is used for pacing packets.
 	TimeUntilSend() time.Time
-	// HasPacingBudget says if the pacer allows sending of a (full size) packet at this moment.
-	HasPacingBudget() bool
 	SetMaxDatagramSize(count protocol.ByteCount)
 
 	// only to be called once the handshake is complete
