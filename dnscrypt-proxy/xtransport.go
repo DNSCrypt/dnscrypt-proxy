@@ -258,7 +258,7 @@ func (xTransport *XTransport) rebuildTransport() {
 	}
 	xTransport.transport = transport
 	if xTransport.http3 {
-		h3Transport := &http3.RoundTripper{DisableCompression: true, TLSClientConfig: &tlsClientConfig, Dial: func(ctx context.Context, addrStr string, tlsCfg *tls.Config, cfg *quic.Config) (quic.EarlyConnection, error) {
+		dial := func(ctx context.Context, addrStr string, tlsCfg *tls.Config, cfg *quic.Config) (quic.EarlyConnection, error) {
 			dlog.Debugf("Dialing for H3: [%v]", addrStr)
 			host, port := ExtractHostAndPort(addrStr, stamps.DefaultPort)
 			ipOnly := host
@@ -292,7 +292,8 @@ func (xTransport *XTransport) rebuildTransport() {
 			}
 			tlsCfg.ServerName = host
 			return quic.DialEarly(ctx, udpConn, udpAddr, tlsCfg, cfg)
-		}}
+		}
+		h3Transport := &http3.RoundTripper{DisableCompression: true, TLSClientConfig: &tlsClientConfig, Dial: dial}
 		xTransport.h3Transport = h3Transport
 	}
 }
