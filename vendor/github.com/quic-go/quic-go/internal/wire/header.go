@@ -13,8 +13,6 @@ import (
 )
 
 // ParseConnectionID parses the destination connection ID of a packet.
-// It uses the data slice for the connection ID.
-// That means that the connection ID must not be used after the packet buffer is released.
 func ParseConnectionID(data []byte, shortHeaderConnIDLen int) (protocol.ConnectionID, error) {
 	if len(data) == 0 {
 		return protocol.ConnectionID{}, io.EOF

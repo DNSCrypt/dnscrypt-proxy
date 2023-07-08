@@ -12,16 +12,16 @@ const maxBurstSizePackets = 10
 
 // The pacer implements a token bucket pacing algorithm.
 type pacer struct {
-	budgetAtLastSent     protocol.ByteCount
-	maxDatagramSize      protocol.ByteCount
-	lastSentTime         time.Time
-	getAdjustedBandwidth func() uint64 // in bytes/s
+	budgetAtLastSent  protocol.ByteCount
+	maxDatagramSize   protocol.ByteCount
+	lastSentTime      time.Time
+	adjustedBandwidth func() uint64 // in bytes/s
 }
 
 func newPacer(getBandwidth func() Bandwidth) *pacer {
 	p := &pacer{
 		maxDatagramSize: initialMaxDatagramSize,
-		getAdjustedBandwidth: func() uint64 {
+		adjustedBandwidth: func() uint64 {
 			// Bandwidth is in bits/s. We need the value in bytes/s.
 			bw := uint64(getBandwidth() / BytesPerSecond)
 			// Use a slightly higher value than the actual measured bandwidth.
@@ -49,13 +49,16 @@ func (p *pacer) Budget(now time.Time) protocol.ByteCount {
 	if p.lastSentTime.IsZero() {
 		return p.maxBurstSize()
 	}
-	budget := p.budgetAtLastSent + (protocol.ByteCount(p.getAdjustedBandwidth())*protocol.ByteCount(now.Sub(p.lastSentTime).Nanoseconds()))/1e9
+	budget := p.budgetAtLastSent + (protocol.ByteCount(p.adjustedBandwidth())*protocol.ByteCount(now.Sub(p.lastSentTime).Nanoseconds()))/1e9
+	if budget < 0 { // protect against overflows
+		budget = protocol.MaxByteCount
+	}
 	return utils.Min(p.maxBurstSize(), budget)
 }
 
 func (p *pacer) maxBurstSize() protocol.ByteCount {
 	return utils.Max(
-		protocol.ByteCount(uint64((protocol.MinPacingDelay+protocol.TimerGranularity).Nanoseconds())*p.getAdjustedBandwidth())/1e9,
+		protocol.ByteCount(uint64((protocol.MinPacingDelay+protocol.TimerGranularity).Nanoseconds())*p.adjustedBandwidth())/1e9,
 		maxBurstSizePackets*p.maxDatagramSize,
 	)
 }
@@ -68,7 +71,7 @@ func (p *pacer) TimeUntilSend() time.Time {
 	}
 	return p.lastSentTime.Add(utils.Max(
 		protocol.MinPacingDelay,
-		time.Duration(math.Ceil(float64(p.maxDatagramSize-p.budgetAtLastSent)*1e9/float64(p.getAdjustedBandwidth())))*time.Nanosecond,
+		time.Duration(math.Ceil(float64(p.maxDatagramSize-p.budgetAtLastSent)*1e9/float64(p.adjustedBandwidth())))*time.Nanosecond,
 	))
 }
 

@@ -120,8 +120,8 @@ func (c *cubicSender) TimeUntilSend(_ protocol.ByteCount) time.Time {
 	return c.pacer.TimeUntilSend()
 }
 
-func (c *cubicSender) HasPacingBudget() bool {
-	return c.pacer.Budget(c.clock.Now()) >= c.maxDatagramSize
+func (c *cubicSender) HasPacingBudget(now time.Time) bool {
+	return c.pacer.Budget(now) >= c.maxDatagramSize
 }
 
 func (c *cubicSender) maxCongestionWindow() protocol.ByteCount {

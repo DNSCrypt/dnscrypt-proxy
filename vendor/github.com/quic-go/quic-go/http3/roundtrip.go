@@ -10,19 +10,22 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"golang.org/x/net/http/httpguts"
 
 	"github.com/quic-go/quic-go"
 )
 
-// declare this as a variable, such that we can it mock it in the tests
-var quicDialer = quic.DialEarlyContext
-
 type roundTripCloser interface {
 	RoundTripOpt(*http.Request, RoundTripOpt) (*http.Response, error)
 	HandshakeComplete() bool
 	io.Closer
+}
+
+type roundTripCloserWithCount struct {
+	roundTripCloser
+	useCount atomic.Int64
 }
 
 // RoundTripper implements the http.RoundTripper interface
@@ -82,8 +85,8 @@ type RoundTripper struct {
 	MaxResponseHeaderBytes int64
 
 	newClient func(hostname string, tlsConf *tls.Config, opts *roundTripperOpts, conf *quic.Config, dialer dialFunc) (roundTripCloser, error) // so we can mock it in tests
-	clients   map[string]roundTripCloser
-	udpConn   *net.UDPConn
+	clients   map[string]*roundTripCloserWithCount
+	transport *quic.Transport
 }
 
 // RoundTripOpt are options for the Transport.RoundTripOpt method.
@@ -143,6 +146,7 @@ func (r *RoundTripper) RoundTripOpt(req *http.Request, opt RoundTripOpt) (*http.
 	if err != nil {
 		return nil, err
 	}
+	defer cl.useCount.Add(-1)
 	rsp, err := cl.RoundTripOpt(req, opt)
 	if err != nil {
 		r.removeClient(hostname)
@@ -160,12 +164,12 @@ func (r *RoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	return r.RoundTripOpt(req, RoundTripOpt{})
 }
 
-func (r *RoundTripper) getClient(hostname string, onlyCached bool) (rtc roundTripCloser, isReused bool, err error) {
+func (r *RoundTripper) getClient(hostname string, onlyCached bool) (rtc *roundTripCloserWithCount, isReused bool, err error) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 
 	if r.clients == nil {
-		r.clients = make(map[string]roundTripCloser)
+		r.clients = make(map[string]*roundTripCloserWithCount)
 	}
 
 	client, ok := r.clients[hostname]
@@ -180,15 +184,16 @@ func (r *RoundTripper) getClient(hostname string, onlyCached bool) (rtc roundTri
 		}
 		dial := r.Dial
 		if dial == nil {
-			if r.udpConn == nil {
-				r.udpConn, err = net.ListenUDP("udp", nil)
+			if r.transport == nil {
+				udpConn, err := net.ListenUDP("udp", nil)
 				if err != nil {
 					return nil, false, err
 				}
+				r.transport = &quic.Transport{Conn: udpConn}
 			}
 			dial = r.makeDialer()
 		}
-		client, err = newCl(
+		c, err := newCl(
 			hostname,
 			r.TLSClientConfig,
 			&roundTripperOpts{
@@ -204,10 +209,12 @@ func (r *RoundTripper) getClient(hostname string, onlyCached bool) (rtc roundTri
 		if err != nil {
 			return nil, false, err
 		}
+		client = &roundTripCloserWithCount{roundTripCloser: c}
 		r.clients[hostname] = client
 	} else if client.HandshakeComplete() {
 		isReused = true
 	}
+	client.useCount.Add(1)
 	return client, isReused, nil
 }
 
@@ -231,9 +238,14 @@ func (r *RoundTripper) Close() error {
 		}
 	}
 	r.clients = nil
-	if r.udpConn != nil {
-		r.udpConn.Close()
-		r.udpConn = nil
+	if r.transport != nil {
+		if err := r.transport.Close(); err != nil {
+			return err
+		}
+		if err := r.transport.Conn.Close(); err != nil {
+			return err
+		}
+		r.transport = nil
 	}
 	return nil
 }
@@ -273,6 +285,17 @@ func (r *RoundTripper) makeDialer() func(ctx context.Context, addr string, tlsCf
 		if err != nil {
 			return nil, err
 		}
-		return quicDialer(ctx, r.udpConn, udpAddr, addr, tlsCfg, cfg)
+		return r.transport.DialEarly(ctx, udpAddr, tlsCfg, cfg)
+	}
+}
+
+func (r *RoundTripper) CloseIdleConnections() {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+	for hostname, client := range r.clients {
+		if client.useCount.Load() == 0 {
+			client.Close()
+			delete(r.clients, hostname)
+		}
 	}
 }
