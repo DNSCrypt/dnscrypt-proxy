@@ -2,7 +2,11 @@ package quic
 
 import (
 	"fmt"
+	"log"
 	"net"
+	"os"
+	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -44,6 +48,27 @@ func wrapConn(pc net.PacketConn) (interface {
 	rawConn
 }, error,
 ) {
+	if err := setReceiveBuffer(pc); err != nil {
+		if !strings.Contains(err.Error(), "use of closed network connection") {
+			setBufferWarningOnce.Do(func() {
+				if disable, _ := strconv.ParseBool(os.Getenv("QUIC_GO_DISABLE_RECEIVE_BUFFER_WARNING")); disable {
+					return
+				}
+				log.Printf("%s. See https://github.com/quic-go/quic-go/wiki/UDP-Buffer-Sizes for details.", err)
+			})
+		}
+	}
+	if err := setSendBuffer(pc); err != nil {
+		if !strings.Contains(err.Error(), "use of closed network connection") {
+			setBufferWarningOnce.Do(func() {
+				if disable, _ := strconv.ParseBool(os.Getenv("QUIC_GO_DISABLE_RECEIVE_BUFFER_WARNING")); disable {
+					return
+				}
+				log.Printf("%s. See https://github.com/quic-go/quic-go/wiki/UDP-Buffer-Sizes for details.", err)
+			})
+		}
+	}
+
 	conn, ok := pc.(interface {
 		SyscallConn() (syscall.RawConn, error)
 	})

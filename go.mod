@@ -20,7 +20,7 @@ require (
 	github.com/kardianos/service v1.2.2
 	github.com/miekg/dns v1.1.55
 	github.com/powerman/check v1.7.0
-	github.com/quic-go/quic-go v0.36.1
+	github.com/quic-go/quic-go v0.36.2
 	golang.org/x/crypto v0.11.0
 	golang.org/x/net v0.12.0
 	golang.org/x/sys v0.10.0
