@@ -2,6 +2,7 @@ package quic
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"io"
 	"net"
@@ -19,10 +20,9 @@ type StreamID = protocol.StreamID
 type VersionNumber = protocol.VersionNumber
 
 const (
-	// VersionDraft29 is IETF QUIC draft-29
-	VersionDraft29 = protocol.VersionDraft29
 	// Version1 is RFC 9000
 	Version1 = protocol.Version1
+	// Version2 is RFC 9369
 	Version2 = protocol.Version2
 )
 
@@ -122,6 +122,8 @@ type SendStream interface {
 	// The Context is canceled as soon as the write-side of the stream is closed.
 	// This happens when Close() or CancelWrite() is called, or when the peer
 	// cancels the read-side of their stream.
+	// The cancellation cause is set to the error that caused the stream to
+	// close, or `context.Canceled` in case the stream is closed without error.
 	Context() context.Context
 	// SetWriteDeadline sets the deadline for future Write calls
 	// and any currently-blocked Write call.
@@ -178,6 +180,8 @@ type Connection interface {
 	// The error string will be sent to the peer.
 	CloseWithError(ApplicationErrorCode, string) error
 	// Context returns a context that is cancelled when the connection is closed.
+	// The cancellation cause is set to the error that caused the connection to
+	// close, or `context.Canceled` in case the listener is closed first.
 	Context() context.Context
 	// ConnectionState returns basic details about the QUIC connection.
 	// Warning: This API should not be considered stable and might change soon.
@@ -186,7 +190,7 @@ type Connection interface {
 	// SendMessage sends a message as a datagram, as specified in RFC 9221.
 	SendMessage([]byte) error
 	// ReceiveMessage gets a message received in a datagram, as specified in RFC 9221.
-	ReceiveMessage() ([]byte, error)
+	ReceiveMessage(context.Context) ([]byte, error)
 }
 
 // An EarlyConnection is a connection that is handshaking.
@@ -337,12 +341,14 @@ type ClientHelloInfo struct {
 // ConnectionState records basic details about a QUIC connection
 type ConnectionState struct {
 	// TLS contains information about the TLS connection state, incl. the tls.ConnectionState.
-	TLS handshake.ConnectionState
+	TLS tls.ConnectionState
 	// SupportsDatagrams says if support for QUIC datagrams (RFC 9221) was negotiated.
 	// This requires both nodes to support and enable the datagram extensions (via Config.EnableDatagrams).
 	// If datagram support was negotiated, datagrams can be sent and received using the
 	// SendMessage and ReceiveMessage methods on the Connection.
 	SupportsDatagrams bool
+	// Used0RTT says if 0-RTT resumption was used.
+	Used0RTT bool
 	// Version is the QUIC version of the QUIC connection.
 	Version VersionNumber
 }

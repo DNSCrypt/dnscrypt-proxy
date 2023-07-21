@@ -30,7 +30,7 @@ type sendStream struct {
 	retransmissionQueue  []*wire.StreamFrame
 
 	ctx       context.Context
-	ctxCancel context.CancelFunc
+	ctxCancel context.CancelCauseFunc
 
 	streamID protocol.StreamID
 	sender   streamSender
@@ -71,7 +71,7 @@ func newSendStream(
 		writeChan:      make(chan struct{}, 1),
 		writeOnce:      make(chan struct{}, 1), // cap: 1, to protect against concurrent use of Write
 	}
-	s.ctx, s.ctxCancel = context.WithCancel(context.Background())
+	s.ctx, s.ctxCancel = context.WithCancelCause(context.Background())
 	return s
 }
 
@@ -366,7 +366,7 @@ func (s *sendStream) Close() error {
 		s.mutex.Unlock()
 		return fmt.Errorf("close called for canceled stream %d", s.streamID)
 	}
-	s.ctxCancel()
+	s.ctxCancel(nil)
 	s.finishedWriting = true
 	s.mutex.Unlock()
 
@@ -385,8 +385,8 @@ func (s *sendStream) cancelWriteImpl(errorCode qerr.StreamErrorCode, remote bool
 		s.mutex.Unlock()
 		return
 	}
-	s.ctxCancel()
 	s.cancelWriteErr = &StreamError{StreamID: s.streamID, ErrorCode: errorCode, Remote: remote}
+	s.ctxCancel(s.cancelWriteErr)
 	s.numOutstandingFrames = 0
 	s.retransmissionQueue = nil
 	newlyCompleted := s.isNewlyCompleted()
@@ -435,7 +435,7 @@ func (s *sendStream) SetWriteDeadline(t time.Time) error {
 // The peer will NOT be informed about this: the stream is closed without sending a FIN or RST.
 func (s *sendStream) closeForShutdown(err error) {
 	s.mutex.Lock()
-	s.ctxCancel()
+	s.ctxCancel(err)
 	s.closeForShutdownErr = err
 	s.mutex.Unlock()
 	s.signalWrite()

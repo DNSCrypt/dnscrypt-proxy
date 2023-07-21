@@ -3,6 +3,7 @@ package http3
 import (
 	"bufio"
 	"bytes"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -23,6 +24,8 @@ type responseWriter struct {
 	header        http.Header
 	status        int // status code passed to WriteHeader
 	headerWritten bool
+	contentLen    int64 // if handler set valid Content-Length header
+	numWritten    int64 // bytes written
 
 	logger utils.Logger
 }
@@ -53,8 +56,30 @@ func (w *responseWriter) WriteHeader(status int) {
 		return
 	}
 
-	if status < 100 || status >= 200 {
+	// http status must be 3 digits
+	if status < 100 || status > 999 {
+		panic(fmt.Sprintf("invalid WriteHeader code %v", status))
+	}
+
+	if status >= 200 {
 		w.headerWritten = true
+		// Add Date header.
+		// This is what the standard library does.
+		// Can be disabled by setting the Date header to nil.
+		if _, ok := w.header["Date"]; !ok {
+			w.header.Set("Date", time.Now().UTC().Format(http.TimeFormat))
+		}
+		// Content-Length checking
+		// use ParseUint instead of ParseInt, as negative values are invalid
+		if clen := w.header.Get("Content-Length"); clen != "" {
+			if cl, err := strconv.ParseUint(clen, 10, 63); err == nil {
+				w.contentLen = int64(cl)
+			} else {
+				// emit a warning for malformed Content-Length and remove it
+				w.logger.Errorf("Malformed Content-Length %s", clen)
+				w.header.Del("Content-Length")
+			}
+		}
 	}
 	w.status = status
 
@@ -105,6 +130,12 @@ func (w *responseWriter) Write(p []byte) (int, error) {
 	if !bodyAllowed {
 		return 0, http.ErrBodyNotAllowed
 	}
+
+	w.numWritten += int64(len(p))
+	if w.contentLen != 0 && w.numWritten > w.contentLen {
+		return 0, http.ErrContentLength
+	}
+
 	df := &dataFrame{Length: uint64(len(p))}
 	w.buf = w.buf[:0]
 	w.buf = df.Append(w.buf)
@@ -114,8 +145,12 @@ func (w *responseWriter) Write(p []byte) (int, error) {
 	return w.bufferedStr.Write(p)
 }
 
+func (w *responseWriter) FlushError() error {
+	return w.bufferedStr.Flush()
+}
+
 func (w *responseWriter) Flush() {
-	if err := w.bufferedStr.Flush(); err != nil {
+	if err := w.FlushError(); err != nil {
 		w.logger.Errorf("could not flush to stream: %s", err.Error())
 	}
 }

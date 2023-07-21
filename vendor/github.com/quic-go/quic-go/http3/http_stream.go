@@ -1,9 +1,11 @@
 package http3
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/quic-go/quic-go"
+	"github.com/quic-go/quic-go/internal/utils"
 )
 
 // A Stream is a HTTP/3 stream.
@@ -66,6 +68,10 @@ func (s *stream) Read(b []byte) (int, error) {
 	return n, err
 }
 
+func (s *stream) hasMoreData() bool {
+	return s.bytesRemainingInFrame > 0
+}
+
 func (s *stream) Write(b []byte) (int, error) {
 	s.buf = s.buf[:0]
 	s.buf = (&dataFrame{Length: uint64(len(b))}).Append(s.buf)
@@ -73,4 +79,46 @@ func (s *stream) Write(b []byte) (int, error) {
 		return 0, err
 	}
 	return s.Stream.Write(b)
+}
+
+var errTooMuchData = errors.New("peer sent too much data")
+
+type lengthLimitedStream struct {
+	*stream
+	contentLength int64
+	read          int64
+	resetStream   bool
+}
+
+var _ Stream = &lengthLimitedStream{}
+
+func newLengthLimitedStream(str *stream, contentLength int64) *lengthLimitedStream {
+	return &lengthLimitedStream{
+		stream:        str,
+		contentLength: contentLength,
+	}
+}
+
+func (s *lengthLimitedStream) checkContentLengthViolation() error {
+	if s.read > s.contentLength || s.read == s.contentLength && s.hasMoreData() {
+		if !s.resetStream {
+			s.CancelRead(quic.StreamErrorCode(ErrCodeMessageError))
+			s.CancelWrite(quic.StreamErrorCode(ErrCodeMessageError))
+			s.resetStream = true
+		}
+		return errTooMuchData
+	}
+	return nil
+}
+
+func (s *lengthLimitedStream) Read(b []byte) (int, error) {
+	if err := s.checkContentLengthViolation(); err != nil {
+		return 0, err
+	}
+	n, err := s.stream.Read(b[:utils.Min(int64(len(b)), s.contentLength-s.read)])
+	s.read += int64(n)
+	if err := s.checkContentLengthViolation(); err != nil {
+		return n, err
+	}
+	return n, err
 }

@@ -10,7 +10,7 @@ import (
 	"github.com/quic-go/quic-go/quicvarint"
 )
 
-const sessionTicketRevision = 2
+const sessionTicketRevision = 3
 
 type sessionTicket struct {
 	Parameters *wire.TransportParameters

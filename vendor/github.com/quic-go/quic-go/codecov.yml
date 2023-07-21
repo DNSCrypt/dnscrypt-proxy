@@ -8,6 +8,7 @@ coverage:
     - http3/gzip_reader.go
     - interop/
     - internal/ackhandler/packet_linkedlist.go
+    - internal/handshake/cipher_suite.go
     - internal/utils/byteinterval_linkedlist.go
     - internal/utils/newconnectionid_linkedlist.go
     - internal/utils/packetinterval_linkedlist.go

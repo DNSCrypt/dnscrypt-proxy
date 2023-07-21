@@ -13,7 +13,7 @@ import (
 	"github.com/quic-go/quic-go/internal/utils"
 )
 
-func setSendBuffer(c net.PacketConn, logger utils.Logger) error {
+func setSendBuffer(c net.PacketConn) error {
 	conn, ok := c.(interface{ SetWriteBuffer(int) error })
 	if !ok {
 		return errors.New("connection doesn't allow setting of send buffer size. Not a *net.UDPConn?")
@@ -42,7 +42,7 @@ func setSendBuffer(c net.PacketConn, logger utils.Logger) error {
 		return fmt.Errorf("failed to determine send buffer size: %w", err)
 	}
 	if size >= protocol.DesiredSendBufferSize {
-		logger.Debugf("Conn has send buffer of %d kiB (wanted: at least %d kiB)", size/1024, protocol.DesiredSendBufferSize/1024)
+		utils.DefaultLogger.Debugf("Conn has send buffer of %d kiB (wanted: at least %d kiB)", size/1024, protocol.DesiredSendBufferSize/1024)
 		return nil
 	}
 	// Ignore the error. We check if we succeeded by querying the buffer size afterward.
@@ -65,6 +65,6 @@ func setSendBuffer(c net.PacketConn, logger utils.Logger) error {
 	if newSize < protocol.DesiredSendBufferSize {
 		return fmt.Errorf("failed to sufficiently increase send buffer size (was: %d kiB, wanted: %d kiB, got: %d kiB)", size/1024, protocol.DesiredSendBufferSize/1024, newSize/1024)
 	}
-	logger.Debugf("Increased send buffer size to %d kiB", newSize/1024)
+	utils.DefaultLogger.Debugf("Increased send buffer size to %d kiB", newSize/1024)
 	return nil
 }

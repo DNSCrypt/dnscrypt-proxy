@@ -2,7 +2,11 @@ package quic
 
 import (
 	"fmt"
+	"log"
 	"net"
+	"os"
+	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -23,27 +27,28 @@ type OOBCapablePacketConn interface {
 
 var _ OOBCapablePacketConn = &net.UDPConn{}
 
-// OptimizeConn takes a net.PacketConn and attempts to enable various optimizations that will improve QUIC performance:
-//  1. It enables the Don't Fragment (DF) bit on the IP header.
-//     This is required to run DPLPMTUD (Path MTU Discovery, RFC 8899).
-//  2. It enables reading of the ECN bits from the IP header.
-//     This allows the remote node to speed up its loss detection and recovery.
-//  3. It uses batched syscalls (recvmmsg) to more efficiently receive packets from the socket.
-//  4. It uses Generic Segmentation Offload (GSO) to efficiently send batches of packets (on Linux).
-//
-// In order for this to work, the connection needs to implement the OOBCapablePacketConn interface (as a *net.UDPConn does).
-//
-// It's only necessary to call this function explicitly if the application calls WriteTo
-// after passing the connection to the Transport.
-func OptimizeConn(c net.PacketConn) (net.PacketConn, error) {
-	return wrapConn(c)
-}
+func wrapConn(pc net.PacketConn) (rawConn, error) {
+	if err := setReceiveBuffer(pc); err != nil {
+		if !strings.Contains(err.Error(), "use of closed network connection") {
+			setBufferWarningOnce.Do(func() {
+				if disable, _ := strconv.ParseBool(os.Getenv("QUIC_GO_DISABLE_RECEIVE_BUFFER_WARNING")); disable {
+					return
+				}
+				log.Printf("%s. See https://github.com/quic-go/quic-go/wiki/UDP-Buffer-Sizes for details.", err)
+			})
+		}
+	}
+	if err := setSendBuffer(pc); err != nil {
+		if !strings.Contains(err.Error(), "use of closed network connection") {
+			setBufferWarningOnce.Do(func() {
+				if disable, _ := strconv.ParseBool(os.Getenv("QUIC_GO_DISABLE_RECEIVE_BUFFER_WARNING")); disable {
+					return
+				}
+				log.Printf("%s. See https://github.com/quic-go/quic-go/wiki/UDP-Buffer-Sizes for details.", err)
+			})
+		}
+	}
 
-func wrapConn(pc net.PacketConn) (interface {
-	net.PacketConn
-	rawConn
-}, error,
-) {
 	conn, ok := pc.(interface {
 		SyscallConn() (syscall.RawConn, error)
 	})

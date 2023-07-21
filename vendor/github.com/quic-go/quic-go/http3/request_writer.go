@@ -2,6 +2,7 @@ package http3
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -80,6 +81,9 @@ func (w *requestWriter) encodeHeaders(req *http.Request, addGzipHeader bool, tra
 	host, err := httpguts.PunycodeHostPort(host)
 	if err != nil {
 		return err
+	}
+	if !httpguts.ValidHostHeader(host) {
+		return errors.New("http3: invalid Host header")
 	}
 
 	// http.NewRequest sets this field to HTTP/1.1

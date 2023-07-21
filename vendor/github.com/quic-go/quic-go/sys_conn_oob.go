@@ -6,8 +6,10 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"log"
 	"net"
 	"net/netip"
+	"sync"
 	"syscall"
 	"time"
 
@@ -87,8 +89,8 @@ func newConn(c OOBCapablePacketConn, supportsDF bool) (*oobConn, error) {
 		errECNIPv6 = unix.SetsockoptInt(int(fd), unix.IPPROTO_IPV6, unix.IPV6_RECVTCLASS, 1)
 
 		if needsPacketInfo {
-			errPIIPv4 = unix.SetsockoptInt(int(fd), unix.IPPROTO_IP, ipv4RECVPKTINFO, 1)
-			errPIIPv6 = unix.SetsockoptInt(int(fd), unix.IPPROTO_IPV6, ipv6RECVPKTINFO, 1)
+			errPIIPv4 = unix.SetsockoptInt(int(fd), unix.IPPROTO_IP, ipv4PKTINFO, 1)
+			errPIIPv6 = unix.SetsockoptInt(int(fd), unix.IPPROTO_IPV6, unix.IPV6_RECVPKTINFO, 1)
 		}
 	}); err != nil {
 		return nil, err
@@ -149,6 +151,8 @@ func newConn(c OOBCapablePacketConn, supportsDF bool) (*oobConn, error) {
 	return oobConn, nil
 }
 
+var invalidCmsgOnceV4, invalidCmsgOnceV6 sync.Once
+
 func (c *oobConn) ReadPacket() (receivedPacket, error) {
 	if len(c.messages) == int(c.readPos) { // all messages read. Read the next batch of messages.
 		c.messages = c.messages[:batchSize]
@@ -188,51 +192,42 @@ func (c *oobConn) ReadPacket() (receivedPacket, error) {
 			switch hdr.Type {
 			case msgTypeIPTOS:
 				p.ecn = protocol.ECN(body[0] & ecnMask)
-			case msgTypeIPv4PKTINFO:
-				// struct in_pktinfo {
-				// 	unsigned int   ipi_ifindex;  /* Interface index */
-				// 	struct in_addr ipi_spec_dst; /* Local address */
-				// 	struct in_addr ipi_addr;     /* Header Destination
-				// 									address */
-				// };
-				var ip [4]byte
-				if len(body) == 12 {
-					copy(ip[:], body[8:12])
-					p.info.ifIndex = binary.LittleEndian.Uint32(body)
-				} else if len(body) == 4 {
-					// FreeBSD
-					copy(ip[:], body)
+			case ipv4PKTINFO:
+				ip, ifIndex, ok := parseIPv4PktInfo(body)
+				if ok {
+					p.info.addr = ip
+					p.info.ifIndex = ifIndex
+				} else {
+					invalidCmsgOnceV4.Do(func() {
+						log.Printf("Received invalid IPv4 packet info control message: %+x. "+
+							"This should never occur, please open a new issue and include details about the architecture.", body)
+					})
 				}
-				p.info.addr = netip.AddrFrom4(ip)
 			}
 		}
 		if hdr.Level == unix.IPPROTO_IPV6 {
 			switch hdr.Type {
 			case unix.IPV6_TCLASS:
 				p.ecn = protocol.ECN(body[0] & ecnMask)
-			case msgTypeIPv6PKTINFO:
+			case unix.IPV6_PKTINFO:
 				// struct in6_pktinfo {
 				// 	struct in6_addr ipi6_addr;    /* src/dst IPv6 address */
 				// 	unsigned int    ipi6_ifindex; /* send/recv interface index */
 				// };
 				if len(body) == 20 {
-					var ip [16]byte
-					copy(ip[:], body[:16])
-					p.info.addr = netip.AddrFrom16(ip)
+					p.info.addr = netip.AddrFrom16(*(*[16]byte)(body[:16]))
 					p.info.ifIndex = binary.LittleEndian.Uint32(body[16:])
+				} else {
+					invalidCmsgOnceV6.Do(func() {
+						log.Printf("Received invalid IPv6 packet info control message: %+x. "+
+							"This should never occur, please open a new issue and include details about the architecture.", body)
+					})
 				}
 			}
 		}
 		data = remainder
 	}
 	return p, nil
-}
-
-// WriteTo (re)implements the net.PacketConn method.
-// This is needed for users who call OptimizeConn to be able to send (non-QUIC) packets on the underlying connection.
-// With GSO enabled, this would otherwise not be needed, as the kernel requires the UDP_SEGMENT message to be set.
-func (c *oobConn) WriteTo(p []byte, addr net.Addr) (int, error) {
-	return c.WritePacket(p, uint16(len(p)), addr, nil)
 }
 
 // WritePacket writes a new packet.
