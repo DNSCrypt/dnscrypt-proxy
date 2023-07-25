@@ -348,6 +348,7 @@ block_ipv6 = false
 
 
 ## Immediately respond to A and AAAA queries for host names without a domain name
+## This also prevents "dotless domain names" from being resolved upstream.
 
 block_unqualified = true
 
