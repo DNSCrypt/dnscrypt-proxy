@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"net"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -104,6 +105,7 @@ func NewCryptoSetupClient(
 // NewCryptoSetupServer creates a new crypto setup for the server
 func NewCryptoSetupServer(
 	connID protocol.ConnectionID,
+	localAddr, remoteAddr net.Addr,
 	tp *wire.TransportParameters,
 	tlsConf *tls.Config,
 	allow0RTT bool,
@@ -125,6 +127,13 @@ func NewCryptoSetupServer(
 
 	quicConf := &qtls.QUICConfig{TLSConfig: tlsConf}
 	qtls.SetupConfigForServer(quicConf, cs.allow0RTT, cs.getDataForSessionTicket, cs.accept0RTT)
+	if quicConf.TLSConfig.GetConfigForClient != nil {
+		gcfc := quicConf.TLSConfig.GetConfigForClient
+		quicConf.TLSConfig.GetConfigForClient = func(info *tls.ClientHelloInfo) (*tls.Config, error) {
+			info.Conn = &conn{localAddr: localAddr, remoteAddr: remoteAddr}
+			return gcfc(info)
+		}
+	}
 
 	cs.tlsConf = quicConf.TLSConfig
 	cs.conn = qtls.QUICServer(quicConf)

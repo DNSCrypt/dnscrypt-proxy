@@ -429,8 +429,8 @@ func (c *client) doRequest(req *http.Request, conn quic.EarlyConnection, str qui
 	// Check that the server doesn't send more data in DATA frames than indicated by the Content-Length header (if set).
 	// See section 4.1.2 of RFC 9114.
 	var httpStr Stream
-	if _, ok := req.Header["Content-Length"]; ok && req.ContentLength >= 0 {
-		httpStr = newLengthLimitedStream(hstr, req.ContentLength)
+	if _, ok := res.Header["Content-Length"]; ok && res.ContentLength >= 0 {
+		httpStr = newLengthLimitedStream(hstr, res.ContentLength)
 	} else {
 		httpStr = hstr
 	}

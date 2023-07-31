@@ -315,6 +315,8 @@ var newConnection = func(
 	}
 	cs := handshake.NewCryptoSetupServer(
 		clientDestConnID,
+		conn.LocalAddr(),
+		conn.RemoteAddr(),
 		params,
 		tlsConf,
 		conf.Allow0RTT,
