@@ -134,6 +134,13 @@ func NewCryptoSetupServer(
 			return gcfc(info)
 		}
 	}
+	if quicConf.TLSConfig.GetCertificate != nil {
+		gc := quicConf.TLSConfig.GetCertificate
+		quicConf.TLSConfig.GetCertificate = func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
+			info.Conn = &conn{localAddr: localAddr, remoteAddr: remoteAddr}
+			return gc(info)
+		}
+	}
 
 	cs.tlsConf = quicConf.TLSConfig
 	cs.conn = qtls.QUICServer(quicConf)
