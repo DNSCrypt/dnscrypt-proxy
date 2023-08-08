@@ -8,7 +8,7 @@ require (
 	github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf
 	github.com/dchest/safefile v0.0.0-20151022103144-855e8d98f185
 	github.com/hashicorp/go-immutable-radix v1.3.1
-	github.com/hashicorp/golang-lru v0.5.0
+	github.com/hashicorp/golang-lru v1.0.2
 	github.com/hectane/go-acl v0.0.0-20230122075934-ca0b05cb1adb
 	github.com/jedisct1/dlog v0.0.0-20230513092435-93bc2a55ad59
 	github.com/jedisct1/go-clocksmith v0.0.0-20230211133011-392c1afea73e

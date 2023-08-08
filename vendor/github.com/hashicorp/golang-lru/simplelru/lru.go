@@ -25,7 +25,7 @@ type entry struct {
 // NewLRU constructs an LRU of the given size
 func NewLRU(size int, onEvict EvictCallback) (*LRU, error) {
 	if size <= 0 {
-		return nil, errors.New("Must provide a positive size")
+		return nil, errors.New("must provide a positive size")
 	}
 	c := &LRU{
 		size:      size,
@@ -73,6 +73,9 @@ func (c *LRU) Add(key, value interface{}) (evicted bool) {
 func (c *LRU) Get(key interface{}) (value interface{}, ok bool) {
 	if ent, ok := c.items[key]; ok {
 		c.evictList.MoveToFront(ent)
+		if ent.Value.(*entry) == nil {
+			return nil, false
+		}
 		return ent.Value.(*entry).value, true
 	}
 	return
@@ -106,7 +109,7 @@ func (c *LRU) Remove(key interface{}) (present bool) {
 }
 
 // RemoveOldest removes the oldest item from the cache.
-func (c *LRU) RemoveOldest() (key interface{}, value interface{}, ok bool) {
+func (c *LRU) RemoveOldest() (key, value interface{}, ok bool) {
 	ent := c.evictList.Back()
 	if ent != nil {
 		c.removeElement(ent)
@@ -117,7 +120,7 @@ func (c *LRU) RemoveOldest() (key interface{}, value interface{}, ok bool) {
 }
 
 // GetOldest returns the oldest entry
-func (c *LRU) GetOldest() (key interface{}, value interface{}, ok bool) {
+func (c *LRU) GetOldest() (key, value interface{}, ok bool) {
 	ent := c.evictList.Back()
 	if ent != nil {
 		kv := ent.Value.(*entry)
@@ -140,6 +143,19 @@ func (c *LRU) Keys() []interface{} {
 // Len returns the number of items in the cache.
 func (c *LRU) Len() int {
 	return c.evictList.Len()
+}
+
+// Resize changes the cache size.
+func (c *LRU) Resize(size int) (evicted int) {
+	diff := c.Len() - size
+	if diff < 0 {
+		diff = 0
+	}
+	for i := 0; i < diff; i++ {
+		c.removeOldest()
+	}
+	c.size = size
+	return diff
 }
 
 // removeOldest removes the oldest item from the cache.
