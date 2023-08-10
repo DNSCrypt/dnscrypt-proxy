@@ -139,3 +139,7 @@ func SetCipherSuite(id uint16) (reset func()) {
 		cipherSuitesModified = false
 	}
 }
+
+func SendSessionTicket(c *QUICConn, allow0RTT bool) error {
+	return c.SendSessionTicket(allow0RTT)
+}
