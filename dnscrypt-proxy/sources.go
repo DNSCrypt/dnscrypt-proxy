@@ -23,21 +23,18 @@ const (
 	SourceFormatV2 = iota
 )
 
-const (
-	DefaultPrefetchDelay    time.Duration = 24 * time.Hour
-	MinimumPrefetchInterval time.Duration = 10 * time.Minute
-)
+const MinimumPrefetchInterval time.Duration = 10 * time.Minute
 
 type Source struct {
-	name                    string
-	urls                    []*url.URL
-	bin                     []byte // copy of the file content - there's something wrong in our logic, we shouldn't need to keep that in memory
-	minisignKey             *minisign.PublicKey
-	cacheFile               string
-	prefix                  string
-	cacheTTL, prefetchDelay time.Duration
-	refresh                 time.Time
-	format                  SourceFormat
+	name        string
+	urls        []*url.URL
+	bin         []byte // copy of the file content - there's something wrong in our logic, we shouldn't need to keep that in memory
+	minisignKey *minisign.PublicKey
+	cacheFile   string
+	prefix      string
+	cacheTTL    time.Duration
+	refresh     time.Time
+	format      SourceFormat
 }
 
 func (source *Source) checkSignature(bin, sig []byte) (err error) {
@@ -68,8 +65,8 @@ func (source *Source) fetchFromCache(now time.Time) (remaining time.Duration, er
 		return
 	}
 	if elapsed := now.Sub(fi.ModTime()); elapsed < source.cacheTTL {
-		remaining = source.prefetchDelay - elapsed
-		dlog.Debugf("Source [%s] cache file [%s] is still fresh, next update: %v min", source.name, source.cacheFile, math.Round(remaining.Minutes()))
+		remaining = source.cacheTTL - elapsed
+		dlog.Debugf("Source [%s] cache file [%s] is still fresh, next update in %v min", source.name, source.cacheFile, math.Round(remaining.Minutes()))
 	} else {
 		dlog.Debugf("Source [%s] cache file [%s] needs to be refreshed", source.name, source.cacheFile)
 	}
@@ -174,7 +171,7 @@ func (source *Source) fetchWithCache(xTransport *XTransport, now time.Time) (tim
 		return MinimumPrefetchInterval, err
 	}
 	source.updateCache(bin, sig, now)
-	remaining = source.prefetchDelay
+	remaining = source.cacheTTL
 	source.refresh = now.Add(remaining)
 	return remaining, nil
 }
@@ -190,16 +187,12 @@ func NewSource(
 	refreshDelay time.Duration,
 	prefix string,
 ) (source *Source, err error) {
-	if refreshDelay < DefaultPrefetchDelay {
-		refreshDelay = DefaultPrefetchDelay
-	}
 	source = &Source{
-		name:          name,
-		urls:          []*url.URL{},
-		cacheFile:     cacheFile,
-		cacheTTL:      refreshDelay,
-		prefetchDelay: DefaultPrefetchDelay,
-		prefix:        prefix,
+		name:      name,
+		urls:      []*url.URL{},
+		cacheFile: cacheFile,
+		cacheTTL:  refreshDelay,
+		prefix:    prefix,
 	}
 	if formatStr == "v2" {
 		source.format = SourceFormatV2
