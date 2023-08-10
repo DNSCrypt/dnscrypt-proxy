@@ -359,7 +359,7 @@ func (h *cryptoSetup) GetSessionTicket() ([]byte, error) {
 	if h.tlsConf.SessionTicketsDisabled {
 		return nil, nil
 	}
-	if err := h.conn.SendSessionTicket(h.allow0RTT); err != nil {
+	if err := qtls.SendSessionTicket(h.conn, h.allow0RTT); err != nil {
 		return nil, err
 	}
 	ev := h.conn.NextEvent()
