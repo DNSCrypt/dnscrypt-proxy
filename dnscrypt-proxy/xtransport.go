@@ -388,7 +388,7 @@ func (xTransport *XTransport) resolveUsingResolvers(
 			}
 			break
 		}
-		dlog.Infof("Unable to resolve [%s] using resolver %s[%s]: %v", host, proto, resolver, err)
+		dlog.Infof("Unable to resolve [%s] using resolver [%s] (%s): %v", host, resolver, proto, err)
 	}
 	return
 }
