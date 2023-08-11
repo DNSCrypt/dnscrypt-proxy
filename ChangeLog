@@ -1,3 +1,11 @@
+# Version 2.1.5
+ - dnscrypt-proxy can be compiled with Go 1.21.0+
+ - Responses to blocked queries now include extended error codes
+ - Reliability of connections using HTTP/3 has been improved
+ - New configuration directive: `tls_key_log_file`. When defined, this
+is the path to a file where TLS secret keys will be written to, so
+that DoH traffic can be locally inspected.
+
 # Version 2.1.4
  - Fixes a regression from version 2.1.3: when cloaking was enabled,
 blocked responses were returned for records that were not A/AAAA/PTR
