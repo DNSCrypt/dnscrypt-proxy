@@ -10,12 +10,12 @@ require (
 	github.com/hashicorp/go-immutable-radix v1.3.1
 	github.com/hashicorp/golang-lru v1.0.2
 	github.com/hectane/go-acl v0.0.0-20230122075934-ca0b05cb1adb
-	github.com/jedisct1/dlog v0.0.0-20230513092435-93bc2a55ad59
+	github.com/jedisct1/dlog v0.0.0-20230811132706-443b333ff1b3
 	github.com/jedisct1/go-clocksmith v0.0.0-20230211133011-392c1afea73e
 	github.com/jedisct1/go-dnsstamps v0.0.0-20230211133001-124a632de565
-	github.com/jedisct1/go-hpke-compact v0.0.0-20230513092519-91c912752223
-	github.com/jedisct1/go-minisign v0.0.0-20230513092556-d96eb068239a
-	github.com/jedisct1/xsecretbox v0.0.0-20230513092623-8c0b2dff5e24
+	github.com/jedisct1/go-hpke-compact v0.0.0-20230811132953-4ee502b61f80
+	github.com/jedisct1/go-minisign v0.0.0-20230811132847-661be99b8267
+	github.com/jedisct1/xsecretbox v0.0.0-20230811132812-b950633f9f1f
 	github.com/k-sone/critbitgo v1.4.0
 	github.com/kardianos/service v1.2.2
 	github.com/miekg/dns v1.1.55
