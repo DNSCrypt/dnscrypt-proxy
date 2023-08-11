@@ -108,18 +108,16 @@ func (source *Source) updateCache(bin, sig []byte, now time.Time) {
 		absPath = resolved
 	}
 
-	if bytes.Equal(source.bin, bin) {
-		if err := os.Chtimes(file, now, now); err != nil {
-			dlog.Warnf("Couldn't update cache file [%s]: %s", absPath, err)
+	if !bytes.Equal(source.bin, bin) {
+		if err := writeSource(file, bin, sig); err != nil {
+			dlog.Warnf("Couldn't write cache file [%s]: %s", absPath, err) // an error writing to the cache isn't fatal
 		}
-		return
+	}
+	if err := os.Chtimes(file, now, now); err != nil {
+		dlog.Warnf("Couldn't update cache file [%s]: %s", absPath, err)
 	}
 
 	source.bin = bin
-
-	if err := writeSource(file, bin, sig); err != nil {
-		dlog.Warnf("Couldn't write cache file [%s]: %s", absPath, err) // an error writing to the cache isn't fatal
-	}
 }
 
 func (source *Source) parseURLs(urls []string) {
