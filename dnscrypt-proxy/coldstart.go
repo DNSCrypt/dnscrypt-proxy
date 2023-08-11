@@ -23,7 +23,7 @@ type CaptivePortalHandler struct {
 func (captivePortalHandler *CaptivePortalHandler) Stop() {
 	close(captivePortalHandler.cancelChannel)
 	for len(captivePortalHandler.countChannel) < captivePortalHandler.channelCount {
-		time.Sleep(time.Millisecond)
+		time.Sleep(10 * time.Millisecond)
 	}
 	close(captivePortalHandler.countChannel)
 }
