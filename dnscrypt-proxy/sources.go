@@ -145,15 +145,17 @@ func (source *Source) fetchWithCache(xTransport *XTransport, now time.Time) (tim
 		}
 		dlog.Debugf("Source [%s] cache file [%s] not present", source.name, source.cacheFile)
 	}
-	if len(source.urls) > 0 {
-		defer func() {
-			source.refresh = now.Add(ttl)
-		}()
-	}
-	if len(source.urls) == 0 || ttl > 0 {
+
+	if len(source.urls) == 0 {
 		return 0, err
 	}
+	if ttl > 0 {
+		source.refresh = now.Add(ttl)
+		return 0, err
+	}
+
 	ttl = MinimumPrefetchInterval
+	source.refresh = now.Add(ttl)
 	var bin, sig []byte
 	for _, srcURL := range source.urls {
 		dlog.Infof("Source [%s] loading from URL [%s]", source.name, srcURL)
@@ -168,16 +170,18 @@ func (source *Source) fetchWithCache(xTransport *XTransport, now time.Time) (tim
 			dlog.Debugf("Source [%s] failed to download signature from URL [%s]", source.name, sigURL)
 			continue
 		}
-		if err = source.checkSignature(bin, sig); err == nil {
-			break // valid signature
-		} // above err check inverted to make use of implicit continue
-		dlog.Debugf("Source [%s] failed signature check using URL [%s]", source.name, srcURL)
+		if err = source.checkSignature(bin, sig); err != nil {
+			dlog.Debugf("Source [%s] failed signature check using URL [%s]", source.name, srcURL)
+			continue
+		}
+		break // valid signature
 	}
 	if err != nil {
 		return 0, err
 	}
 	source.updateCache(bin, sig, now)
 	ttl = source.prefetchDelay
+	source.refresh = now.Add(ttl)
 	return ttl, nil
 }
 
