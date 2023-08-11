@@ -102,24 +102,24 @@ func writeSource(f string, bin, sig []byte) error {
 }
 
 func (source *Source) updateCache(bin, sig []byte, now time.Time) {
-	f := source.cacheFile
-	var writeErr error // an error writing cache isn't fatal
-	defer func() {
-		source.bin = bin
-		if writeErr == nil {
-			return
-		}
-		if absPath, absErr := filepath.Abs(f); absErr == nil {
-			f = absPath
-		}
-		dlog.Warnf("%s: %s", f, writeErr)
-	}()
-	if !bytes.Equal(source.bin, bin) {
-		if writeErr = writeSource(f, bin, sig); writeErr != nil {
-			return
-		}
+	file := source.cacheFile
+	absPath := file
+	if resolved, err := filepath.Abs(file); err != nil {
+		absPath = resolved
 	}
-	writeErr = os.Chtimes(f, now, now)
+
+	if bytes.Equal(source.bin, bin) {
+		if err := os.Chtimes(file, now, now); err != nil {
+			dlog.Warnf("Couldn't update cache file [%s]: %s", absPath, err)
+		}
+		return
+	}
+
+	source.bin = bin
+
+	if err := writeSource(file, bin, sig); err != nil {
+		dlog.Warnf("Couldn't write cache file [%s]: %s", absPath, err) // an error writing to the cache isn't fatal
+	}
 }
 
 func (source *Source) parseURLs(urls []string) {
