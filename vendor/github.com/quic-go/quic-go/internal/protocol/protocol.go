@@ -43,6 +43,21 @@ const (
 	ECNCE             // 11
 )
 
+func (e ECN) String() string {
+	switch e {
+	case ECNNon:
+		return "Not-ECT"
+	case ECT1:
+		return "ECT(1)"
+	case ECT0:
+		return "ECT(0)"
+	case ECNCE:
+		return "CE"
+	default:
+		return fmt.Sprintf("invalid ECN value: %d", e)
+	}
+}
+
 // A ByteCount in QUIC
 type ByteCount int64
 

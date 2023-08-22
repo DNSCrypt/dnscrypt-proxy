@@ -15,19 +15,61 @@ import (
 	"github.com/quic-go/qpack"
 )
 
+// The maximum length of an encoded HTTP/3 frame header is 16:
+// The frame has a type and length field, both QUIC varints (maximum 8 bytes in length)
+const frameHeaderLen = 16
+
+// headerWriter wraps the stream, so that the first Write call flushes the header to the stream
+type headerWriter struct {
+	str     quic.Stream
+	header  http.Header
+	status  int // status code passed to WriteHeader
+	written bool
+
+	logger utils.Logger
+}
+
+// writeHeader encodes and flush header to the stream
+func (hw *headerWriter) writeHeader() error {
+	var headers bytes.Buffer
+	enc := qpack.NewEncoder(&headers)
+	enc.WriteField(qpack.HeaderField{Name: ":status", Value: strconv.Itoa(hw.status)})
+
+	for k, v := range hw.header {
+		for index := range v {
+			enc.WriteField(qpack.HeaderField{Name: strings.ToLower(k), Value: v[index]})
+		}
+	}
+
+	buf := make([]byte, 0, frameHeaderLen+headers.Len())
+	buf = (&headersFrame{Length: uint64(headers.Len())}).Append(buf)
+	hw.logger.Infof("Responding with %d", hw.status)
+	buf = append(buf, headers.Bytes()...)
+
+	_, err := hw.str.Write(buf)
+	return err
+}
+
+// first Write will trigger flushing header
+func (hw *headerWriter) Write(p []byte) (int, error) {
+	if !hw.written {
+		if err := hw.writeHeader(); err != nil {
+			return 0, err
+		}
+		hw.written = true
+	}
+	return hw.str.Write(p)
+}
+
 type responseWriter struct {
+	*headerWriter
 	conn        quic.Connection
-	str         quic.Stream
 	bufferedStr *bufio.Writer
 	buf         []byte
 
-	header        http.Header
-	status        int // status code passed to WriteHeader
 	headerWritten bool
 	contentLen    int64 // if handler set valid Content-Length header
 	numWritten    int64 // bytes written
-
-	logger utils.Logger
 }
 
 var (
@@ -37,13 +79,16 @@ var (
 )
 
 func newResponseWriter(str quic.Stream, conn quic.Connection, logger utils.Logger) *responseWriter {
+	hw := &headerWriter{
+		str:    str,
+		header: http.Header{},
+		logger: logger,
+	}
 	return &responseWriter{
-		header:      http.Header{},
-		buf:         make([]byte, 16),
-		conn:        conn,
-		str:         str,
-		bufferedStr: bufio.NewWriter(str),
-		logger:      logger,
+		headerWriter: hw,
+		buf:          make([]byte, frameHeaderLen),
+		conn:         conn,
+		bufferedStr:  bufio.NewWriter(hw),
 	}
 }
 
@@ -83,27 +128,8 @@ func (w *responseWriter) WriteHeader(status int) {
 	}
 	w.status = status
 
-	var headers bytes.Buffer
-	enc := qpack.NewEncoder(&headers)
-	enc.WriteField(qpack.HeaderField{Name: ":status", Value: strconv.Itoa(status)})
-
-	for k, v := range w.header {
-		for index := range v {
-			enc.WriteField(qpack.HeaderField{Name: strings.ToLower(k), Value: v[index]})
-		}
-	}
-
-	w.buf = w.buf[:0]
-	w.buf = (&headersFrame{Length: uint64(headers.Len())}).Append(w.buf)
-	w.logger.Infof("Responding with %d", status)
-	if _, err := w.bufferedStr.Write(w.buf); err != nil {
-		w.logger.Errorf("could not write headers frame: %s", err.Error())
-	}
-	if _, err := w.bufferedStr.Write(headers.Bytes()); err != nil {
-		w.logger.Errorf("could not write header frame payload: %s", err.Error())
-	}
 	if !w.headerWritten {
-		w.Flush()
+		w.writeHeader()
 	}
 }
 
@@ -146,6 +172,15 @@ func (w *responseWriter) Write(p []byte) (int, error) {
 }
 
 func (w *responseWriter) FlushError() error {
+	if !w.headerWritten {
+		w.WriteHeader(http.StatusOK)
+	}
+	if !w.written {
+		if err := w.writeHeader(); err != nil {
+			return err
+		}
+		w.written = true
+	}
 	return w.bufferedStr.Flush()
 }
 

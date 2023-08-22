@@ -55,11 +55,11 @@ func DialAddr(ctx context.Context, addr string, tlsConf *tls.Config, conf *Confi
 	if err != nil {
 		return nil, err
 	}
-	dl, err := setupTransport(udpConn, tlsConf, true)
+	tr, err := setupTransport(udpConn, tlsConf, true)
 	if err != nil {
 		return nil, err
 	}
-	return dl.Dial(ctx, udpAddr, tlsConf, conf)
+	return tr.dial(ctx, udpAddr, addr, tlsConf, conf, false)
 }
 
 // DialAddrEarly establishes a new 0-RTT QUIC connection to a server.
@@ -73,13 +73,13 @@ func DialAddrEarly(ctx context.Context, addr string, tlsConf *tls.Config, conf *
 	if err != nil {
 		return nil, err
 	}
-	dl, err := setupTransport(udpConn, tlsConf, true)
+	tr, err := setupTransport(udpConn, tlsConf, true)
 	if err != nil {
 		return nil, err
 	}
-	conn, err := dl.DialEarly(ctx, udpAddr, tlsConf, conf)
+	conn, err := tr.dial(ctx, udpAddr, addr, tlsConf, conf, true)
 	if err != nil {
-		dl.Close()
+		tr.Close()
 		return nil, err
 	}
 	return conn, nil
@@ -163,12 +163,6 @@ func dial(
 }
 
 func newClient(sendConn sendConn, connIDGenerator ConnectionIDGenerator, config *Config, tlsConf *tls.Config, onClose func(), use0RTT bool) (*client, error) {
-	if tlsConf == nil {
-		tlsConf = &tls.Config{}
-	} else {
-		tlsConf = tlsConf.Clone()
-	}
-
 	srcConnID, err := connIDGenerator.GenerateConnectionID()
 	if err != nil {
 		return nil, err
