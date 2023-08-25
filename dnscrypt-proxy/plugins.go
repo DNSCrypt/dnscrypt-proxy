@@ -110,11 +110,11 @@ func (proxy *Proxy) InitPluginsGlobals() error {
 	if len(proxy.ednsClientSubnets) != 0 {
 		*queryPlugins = append(*queryPlugins, Plugin(new(PluginECS)))
 	}
-	if len(proxy.blockNameFile) != 0 {
-		*queryPlugins = append(*queryPlugins, Plugin(new(PluginBlockName)))
-	}
 	if proxy.pluginBlockIPv6 {
 		*queryPlugins = append(*queryPlugins, Plugin(new(PluginBlockIPv6)))
+	}
+	if len(proxy.blockNameFile) != 0 {
+		*queryPlugins = append(*queryPlugins, Plugin(new(PluginBlockName)))
 	}
 	if len(proxy.cloakFile) != 0 {
 		*queryPlugins = append(*queryPlugins, Plugin(new(PluginCloak)))
@@ -300,13 +300,22 @@ func (pluginsState *PluginsState) ApplyQueryPlugins(
 			return packet, err
 		}
 		if pluginsState.action == PluginsActionReject {
-			synth := RefusedResponseFromMessage(
-				&msg,
+			var msg2 *dns.Msg
+			if pluginsState.synthResponse != nil {
+				msg2 = pluginsState.synthResponse
+			} else {
+				msg2 = EmptyResponseFromMessage(&msg)
+			}
+			synth := RefusedResponseMessage(
+				msg2,
 				pluginsGlobals.refusedCodeInResponses,
 				pluginsGlobals.respondWithIPv4,
 				pluginsGlobals.respondWithIPv6,
 				pluginsState.rejectTTL,
 			)
+			if synth != msg2 {
+				pluginsState.returnCode = PluginsReturnCodeReject
+			}
 			pluginsState.synthResponse = synth
 		}
 		if pluginsState.action != PluginsActionContinue {
@@ -358,13 +367,22 @@ func (pluginsState *PluginsState) ApplyResponsePlugins(
 			return packet, err
 		}
 		if pluginsState.action == PluginsActionReject {
-			synth := RefusedResponseFromMessage(
-				&msg,
+			var msg2 *dns.Msg
+			if pluginsState.synthResponse != nil {
+				msg2 = pluginsState.synthResponse
+			} else {
+				msg2 = EmptyResponseFromMessage(&msg)
+			}
+			synth := RefusedResponseMessage(
+				msg2,
 				pluginsGlobals.refusedCodeInResponses,
 				pluginsGlobals.respondWithIPv4,
 				pluginsGlobals.respondWithIPv6,
 				pluginsState.rejectTTL,
 			)
+			if synth != msg2 {
+				pluginsState.returnCode = PluginsReturnCodeReject
+			}
 			pluginsState.synthResponse = synth
 		}
 		if pluginsState.action != PluginsActionContinue {

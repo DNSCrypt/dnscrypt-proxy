@@ -38,8 +38,11 @@ func TruncatedResponse(packet []byte) ([]byte, error) {
 	return dstMsg.Pack()
 }
 
-func RefusedResponseFromMessage(srcMsg *dns.Msg, refusedCode bool, ipv4 net.IP, ipv6 net.IP, ttl uint32) *dns.Msg {
-	dstMsg := EmptyResponseFromMessage(srcMsg)
+func RefusedResponseMessage(srcMsg *dns.Msg, refusedCode bool, ipv4 net.IP, ipv6 net.IP, ttl uint32) *dns.Msg {
+	dstMsg := srcMsg
+	if len(srcMsg.Answer) > 0 && refusedCode {
+		dstMsg = EmptyResponseFromMessage(srcMsg)
+	}
 	ede := new(dns.EDNS0_EDE)
 	if edns0 := dstMsg.IsEdns0(); edns0 != nil {
 		edns0.Option = append(edns0.Option, ede)
@@ -49,19 +52,20 @@ func RefusedResponseFromMessage(srcMsg *dns.Msg, refusedCode bool, ipv4 net.IP, 
 		dstMsg.Rcode = dns.RcodeRefused
 	} else {
 		dstMsg.Rcode = dns.RcodeSuccess
-		questions := srcMsg.Question
+		questions := dstMsg.Question
 		if len(questions) == 0 {
 			return dstMsg
 		}
 		question := questions[0]
-		sendHInfoResponse := true
+		sendHInfoResponse := len(dstMsg.Answer) == 0
 
+		var answer []dns.RR
 		if ipv4 != nil && question.Qtype == dns.TypeA {
 			rr := new(dns.A)
 			rr.Hdr = dns.RR_Header{Name: question.Name, Rrtype: dns.TypeA, Class: dns.ClassINET, Ttl: ttl}
 			rr.A = ipv4.To4()
 			if rr.A != nil {
-				dstMsg.Answer = []dns.RR{rr}
+				answer = []dns.RR{rr}
 				sendHInfoResponse = false
 				ede.InfoCode = dns.ExtendedErrorCodeForgedAnswer
 			}
@@ -70,7 +74,7 @@ func RefusedResponseFromMessage(srcMsg *dns.Msg, refusedCode bool, ipv4 net.IP, 
 			rr.Hdr = dns.RR_Header{Name: question.Name, Rrtype: dns.TypeAAAA, Class: dns.ClassINET, Ttl: ttl}
 			rr.AAAA = ipv6.To16()
 			if rr.AAAA != nil {
-				dstMsg.Answer = []dns.RR{rr}
+				answer = []dns.RR{rr}
 				sendHInfoResponse = false
 				ede.InfoCode = dns.ExtendedErrorCodeForgedAnswer
 			}
@@ -86,6 +90,15 @@ func RefusedResponseFromMessage(srcMsg *dns.Msg, refusedCode bool, ipv4 net.IP, 
 			hinfo.Os = "by dnscrypt-proxy"
 			dstMsg.Answer = []dns.RR{hinfo}
 		} else {
+			if answer != nil {
+				if len(srcMsg.Answer) > 0 {
+					extra := dstMsg.Extra
+					dstMsg = EmptyResponseFromMessage(srcMsg)
+					dstMsg.Extra = extra
+					dstMsg.Rcode = dns.RcodeSuccess
+				}
+				dstMsg.Answer = answer
+			}
 			ede.ExtraText = "This query has been locally blocked by dnscrypt-proxy"
 		}
 	}
