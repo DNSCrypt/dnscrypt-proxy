@@ -106,10 +106,10 @@ github.com/powerman/deepequal
 # github.com/quic-go/qpack v0.4.0
 ## explicit; go 1.18
 github.com/quic-go/qpack
-# github.com/quic-go/qtls-go1-20 v0.3.1
+# github.com/quic-go/qtls-go1-20 v0.3.3
 ## explicit; go 1.20
 github.com/quic-go/qtls-go1-20
-# github.com/quic-go/quic-go v0.37.4
+# github.com/quic-go/quic-go v0.38.1
 ## explicit; go 1.20
 github.com/quic-go/quic-go
 github.com/quic-go/quic-go/http3

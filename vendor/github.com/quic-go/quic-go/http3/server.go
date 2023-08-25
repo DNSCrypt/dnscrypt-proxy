@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -31,12 +32,8 @@ var (
 	}
 )
 
-const (
-	// NextProtoH3Draft29 is the ALPN protocol negotiated during the TLS handshake, for QUIC draft 29.
-	NextProtoH3Draft29 = "h3-29"
-	// NextProtoH3 is the ALPN protocol negotiated during the TLS handshake, for QUIC v1 and v2.
-	NextProtoH3 = "h3"
-)
+// NextProtoH3 is the ALPN protocol negotiated during the TLS handshake, for QUIC v1 and v2.
+const NextProtoH3 = "h3"
 
 // StreamType is the stream type of a unidirectional stream.
 type StreamType uint64
@@ -176,7 +173,7 @@ type Server struct {
 
 	// EnableDatagrams enables support for HTTP/3 datagrams.
 	// If set to true, QuicConfig.EnableDatagram will be set.
-	// See https://datatracker.ietf.org/doc/html/draft-ietf-masque-h3-datagram-07.
+	// See https://datatracker.ietf.org/doc/html/rfc9297.
 	EnableDatagrams bool
 
 	// MaxHeaderBytes controls the maximum number of bytes the server will
@@ -631,7 +628,12 @@ func (s *Server) handleRequest(conn quic.Connection, str quic.Stream, decoder *q
 
 	// only write response when there is no panic
 	if !panicked {
-		r.WriteHeader(http.StatusOK)
+		// response not written to the client yet, set Content-Length
+		if !r.written {
+			if _, haveCL := r.header["Content-Length"]; !haveCL {
+				r.header.Set("Content-Length", strconv.FormatInt(r.numWritten, 10))
+			}
+		}
 		r.Flush()
 	}
 	// If the EOF was read by the handler, CancelRead() is a no-op.

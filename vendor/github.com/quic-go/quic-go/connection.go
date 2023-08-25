@@ -243,7 +243,7 @@ var newConnection = func(
 		handshakeDestConnID: destConnID,
 		srcConnIDLen:        srcConnID.Len(),
 		tokenGenerator:      tokenGenerator,
-		oneRTTStream:        newCryptoStream(),
+		oneRTTStream:        newCryptoStream(true),
 		perspective:         protocol.PerspectiveServer,
 		tracer:              tracer,
 		logger:              logger,
@@ -391,7 +391,7 @@ var newClientConnection = func(
 		s.logger,
 	)
 	s.mtuDiscoverer = newMTUDiscoverer(s.rttStats, getMaxPacketSize(s.conn.RemoteAddr()), s.sentPacketHandler.SetMaxDatagramSize)
-	oneRTTStream := newCryptoStream()
+	oneRTTStream := newCryptoStream(true)
 	params := &wire.TransportParameters{
 		InitialMaxStreamDataBidiRemote: protocol.ByteCount(s.config.InitialStreamReceiveWindow),
 		InitialMaxStreamDataBidiLocal:  protocol.ByteCount(s.config.InitialStreamReceiveWindow),
@@ -447,8 +447,8 @@ var newClientConnection = func(
 }
 
 func (s *connection) preSetup() {
-	s.initialStream = newCryptoStream()
-	s.handshakeStream = newCryptoStream()
+	s.initialStream = newCryptoStream(false)
+	s.handshakeStream = newCryptoStream(false)
 	s.sendQueue = newSendQueue(s.conn)
 	s.retransmissionQueue = newRetransmissionQueue()
 	s.frameParser = wire.NewFrameParser(s.config.EnableDatagrams)
@@ -1687,6 +1687,14 @@ func (s *connection) handleTransportParameters(params *wire.TransportParameters)
 			ErrorMessage: err.Error(),
 		}
 	}
+
+	if s.perspective == protocol.PerspectiveClient && s.peerParams != nil && s.ConnectionState().Used0RTT && !params.ValidForUpdate(s.peerParams) {
+		return &qerr.TransportError{
+			ErrorCode:    qerr.ProtocolViolation,
+			ErrorMessage: "server sent reduced limits after accepting 0-RTT data",
+		}
+	}
+
 	s.peerParams = params
 	// On the client side we have to wait for handshake completion.
 	// During a 0-RTT connection, we are only allowed to use the new transport parameters for 1-RTT packets.

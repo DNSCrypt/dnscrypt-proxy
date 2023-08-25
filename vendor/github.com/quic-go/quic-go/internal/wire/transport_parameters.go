@@ -454,6 +454,10 @@ func (p *TransportParameters) MarshalForSessionTicket(b []byte) []byte {
 	b = p.marshalVarintParam(b, initialMaxStreamsBidiParameterID, uint64(p.MaxBidiStreamNum))
 	// initial_max_uni_streams
 	b = p.marshalVarintParam(b, initialMaxStreamsUniParameterID, uint64(p.MaxUniStreamNum))
+	// max_datagram_frame_size
+	if p.MaxDatagramFrameSize != protocol.InvalidByteCount {
+		b = p.marshalVarintParam(b, maxDatagramFrameSizeParameterID, uint64(p.MaxDatagramFrameSize))
+	}
 	// active_connection_id_limit
 	return p.marshalVarintParam(b, activeConnectionIDLimitParameterID, p.ActiveConnectionIDLimit)
 }
@@ -472,6 +476,9 @@ func (p *TransportParameters) UnmarshalFromSessionTicket(r *bytes.Reader) error 
 
 // ValidFor0RTT checks if the transport parameters match those saved in the session ticket.
 func (p *TransportParameters) ValidFor0RTT(saved *TransportParameters) bool {
+	if saved.MaxDatagramFrameSize != protocol.InvalidByteCount && (p.MaxDatagramFrameSize == protocol.InvalidByteCount || p.MaxDatagramFrameSize < saved.MaxDatagramFrameSize) {
+		return false
+	}
 	return p.InitialMaxStreamDataBidiLocal >= saved.InitialMaxStreamDataBidiLocal &&
 		p.InitialMaxStreamDataBidiRemote >= saved.InitialMaxStreamDataBidiRemote &&
 		p.InitialMaxStreamDataUni >= saved.InitialMaxStreamDataUni &&
@@ -479,6 +486,21 @@ func (p *TransportParameters) ValidFor0RTT(saved *TransportParameters) bool {
 		p.MaxBidiStreamNum >= saved.MaxBidiStreamNum &&
 		p.MaxUniStreamNum >= saved.MaxUniStreamNum &&
 		p.ActiveConnectionIDLimit == saved.ActiveConnectionIDLimit
+}
+
+// ValidForUpdate checks that the new transport parameters don't reduce limits after resuming a 0-RTT connection.
+// It is only used on the client side.
+func (p *TransportParameters) ValidForUpdate(saved *TransportParameters) bool {
+	if saved.MaxDatagramFrameSize != protocol.InvalidByteCount && (p.MaxDatagramFrameSize == protocol.InvalidByteCount || p.MaxDatagramFrameSize < saved.MaxDatagramFrameSize) {
+		return false
+	}
+	return p.ActiveConnectionIDLimit >= saved.ActiveConnectionIDLimit &&
+		p.InitialMaxData >= saved.InitialMaxData &&
+		p.InitialMaxStreamDataBidiLocal >= saved.InitialMaxStreamDataBidiLocal &&
+		p.InitialMaxStreamDataBidiRemote >= saved.InitialMaxStreamDataBidiRemote &&
+		p.InitialMaxStreamDataUni >= saved.InitialMaxStreamDataUni &&
+		p.MaxBidiStreamNum >= saved.MaxBidiStreamNum &&
+		p.MaxUniStreamNum >= saved.MaxUniStreamNum
 }
 
 // String returns a string representation, intended for logging.

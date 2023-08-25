@@ -26,9 +26,9 @@ type connCapabilities struct {
 // rawConn is a connection that allow reading of a receivedPackeh.
 type rawConn interface {
 	ReadPacket() (receivedPacket, error)
-	// The size parameter is used for GSO.
-	// If GSO is not support, len(b) must be equal to size.
-	WritePacket(b []byte, size uint16, addr net.Addr, oob []byte) (int, error)
+	// WritePacket writes a packet on the wire.
+	// If GSO is enabled, it's the caller's responsibility to set the correct control message.
+	WritePacket(b []byte, addr net.Addr, oob []byte) (int, error)
 	LocalAddr() net.Addr
 	SetReadDeadline(time.Time) error
 	io.Closer
