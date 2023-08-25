@@ -5,6 +5,7 @@ package quic
 import (
 	"encoding/binary"
 	"net/netip"
+	"syscall"
 
 	"golang.org/x/sys/unix"
 )
@@ -29,3 +30,5 @@ func parseIPv4PktInfo(body []byte) (ip netip.Addr, ifIndex uint32, ok bool) {
 	}
 	return netip.AddrFrom4(*(*[4]byte)(body[8:12])), binary.LittleEndian.Uint32(body), true
 }
+
+func isGSOSupported(syscall.RawConn) bool { return false }

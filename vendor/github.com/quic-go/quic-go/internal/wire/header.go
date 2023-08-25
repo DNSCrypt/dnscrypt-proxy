@@ -74,6 +74,10 @@ func parseArbitraryLenConnectionIDs(r *bytes.Reader) (dest, src protocol.Arbitra
 	return destConnID, srcConnID, nil
 }
 
+func IsPotentialQUICPacket(firstByte byte) bool {
+	return firstByte&0x40 > 0
+}
+
 // IsLongHeaderPacket says if this is a Long Header packet
 func IsLongHeaderPacket(firstByte byte) bool {
 	return firstByte&0x80 > 0

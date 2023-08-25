@@ -26,7 +26,7 @@ const (
 	ErrCodeMessageError         ErrCode = 0x10e
 	ErrCodeConnectError         ErrCode = 0x10f
 	ErrCodeVersionFallback      ErrCode = 0x110
-	ErrCodeDatagramError        ErrCode = 0x4a1268
+	ErrCodeDatagramError        ErrCode = 0x33
 )
 
 func (e ErrCode) String() string {

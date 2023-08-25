@@ -5,7 +5,6 @@ package quic
 import (
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"log"
 	"net"
 	"net/netip"
@@ -128,10 +127,6 @@ func newConn(c OOBCapablePacketConn, supportsDF bool) (*oobConn, error) {
 		bc = ipv4.NewPacketConn(c)
 	}
 
-	// Try enabling GSO.
-	// This will only succeed on Linux, and only for kernels > 4.18.
-	supportsGSO := maybeSetGSO(rawConn)
-
 	msgs := make([]ipv4.Message, batchSize)
 	for i := range msgs {
 		// preallocate the [][]byte
@@ -142,9 +137,11 @@ func newConn(c OOBCapablePacketConn, supportsDF bool) (*oobConn, error) {
 		batchConn:            bc,
 		messages:             msgs,
 		readPos:              batchSize,
+		cap: connCapabilities{
+			DF:  supportsDF,
+			GSO: isGSOSupported(rawConn),
+		},
 	}
-	oobConn.cap.DF = supportsDF
-	oobConn.cap.GSO = supportsGSO
 	for i := 0; i < batchSize; i++ {
 		oobConn.messages[i].OOB = make([]byte, oobBufferSize)
 	}
@@ -231,17 +228,9 @@ func (c *oobConn) ReadPacket() (receivedPacket, error) {
 }
 
 // WritePacket writes a new packet.
-// If the connection supports GSO (and we activated GSO support before),
-// it appends the UDP_SEGMENT size message to oob.
-// Callers are advised to make sure that oob has a sufficient capacity,
-// such that appending the UDP_SEGMENT size message doesn't cause an allocation.
-func (c *oobConn) WritePacket(b []byte, packetSize uint16, addr net.Addr, oob []byte) (n int, err error) {
-	if c.cap.GSO {
-		oob = appendUDPSegmentSizeMsg(oob, packetSize)
-	} else if uint16(len(b)) != packetSize {
-		panic(fmt.Sprintf("inconsistent length. got: %d. expected %d", packetSize, len(b)))
-	}
-	n, _, err = c.OOBCapablePacketConn.WriteMsgUDP(b, oob, addr.(*net.UDPAddr))
+// If the connection supports GSO, it's the caller's responsibility to append the right control mesage.
+func (c *oobConn) WritePacket(b []byte, addr net.Addr, oob []byte) (int, error) {
+	n, _, err := c.OOBCapablePacketConn.WriteMsgUDP(b, oob, addr.(*net.UDPAddr))
 	return n, err
 }
 
