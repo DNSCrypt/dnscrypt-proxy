@@ -64,6 +64,7 @@ t || dig -p${DNS_PORT} +dnssec PTR 168.192.in-addr.arpa @127.0.0.1 | grep -Fq 'f
 section
 t || dig -p${DNS_PORT} +dnssec darpa.mil @127.0.0.1 2>&1 | grep -Fvq 'RRSIG' || fail
 t || dig -p${DNS_PORT} +dnssec www.darpa.mil @127.0.0.1 2>&1 | grep -Fvq 'RRSIG' || fail
+t || dig -p${DNS_PORT} A download.windowsupdate.com @127.0.0.1 | grep -Fq "NOERROR" || fail
 
 section
 t || dig -p${DNS_PORT} +short cloaked.com @127.0.0.1 | grep -Eq '1.1.1.1|1.0.0.1' || fail
@@ -122,6 +123,7 @@ t || grep -Eq 'invalid.*SYNTH' query.log || fail
 t || grep -Eq '168.192.in-addr.arpa.*SYNTH' query.log || fail
 t || grep -Eq 'darpa.mil.*FORWARD' query.log || fail
 t || grep -Eq 'www.darpa.mil.*FORWARD' query.log || fail
+t || grep -Eq 'download.windowsupdate.com.*FORWARD' query.log || fail
 t || grep -Eq 'cloaked.com.*CLOAK' query.log || fail
 t || grep -Eq 'www.cloaked2.com.*CLOAK' query.log || fail
 t || grep -Eq 'www.dnscrypt-test.*CLOAK' query.log || fail
