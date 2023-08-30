@@ -25,6 +25,9 @@
 ## Forward queries for example.com and *.example.com to 9.9.9.9 and 8.8.8.8
 # example.com      9.9.9.9,8.8.8.8
 
+## Forward queries to a resolver using IPv6
+# ipv6.example.com [2001:DB8::42]:53
+
 ## Forward queries for .onion names to a local Tor client
 ## Tor must be configured with the following in the torrc file:
 ## DNSPort 9053
