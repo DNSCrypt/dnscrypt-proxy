@@ -259,7 +259,7 @@ type ServerSummary struct {
 	IPv6        bool     `json:"ipv6"`
 	Addrs       []string `json:"addrs,omitempty"`
 	Ports       []int    `json:"ports"`
-	DNSSEC      bool     `json:"dnssec"`
+	DNSSEC      *bool    `json:"dnssec,omitempty"`
 	NoLog       bool     `json:"nolog"`
 	NoFilter    bool     `json:"nofilter"`
 	Description string   `json:"description,omitempty"`
@@ -803,7 +803,6 @@ func (config *Config) printRegisteredServers(proxy *Proxy, jsonOutput bool, incl
 				IPv6:        strings.HasPrefix(addrStr, "["),
 				Ports:       []int{port},
 				Addrs:       addrs,
-				DNSSEC:      registeredRelay.stamp.Props&stamps.ServerInformalPropertyDNSSEC != 0,
 				NoLog:       registeredRelay.stamp.Props&stamps.ServerInformalPropertyNoLog != 0,
 				NoFilter:    registeredRelay.stamp.Props&stamps.ServerInformalPropertyNoFilter != 0,
 				Description: registeredRelay.description,
@@ -831,13 +830,14 @@ func (config *Config) printRegisteredServers(proxy *Proxy, jsonOutput bool, incl
 		if len(addrStr) > 0 {
 			addrs = append(addrs, hostAddr)
 		}
+		dnssec := registeredServer.stamp.Props&stamps.ServerInformalPropertyDNSSEC != 0
 		serverSummary := ServerSummary{
 			Name:        registeredServer.name,
 			Proto:       registeredServer.stamp.Proto.String(),
 			IPv6:        strings.HasPrefix(addrStr, "["),
 			Ports:       []int{port},
 			Addrs:       addrs,
-			DNSSEC:      registeredServer.stamp.Props&stamps.ServerInformalPropertyDNSSEC != 0,
+			DNSSEC:      &dnssec,
 			NoLog:       registeredServer.stamp.Props&stamps.ServerInformalPropertyNoLog != 0,
 			NoFilter:    registeredServer.stamp.Props&stamps.ServerInformalPropertyNoFilter != 0,
 			Description: registeredServer.description,
