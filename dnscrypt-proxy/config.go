@@ -797,14 +797,19 @@ func (config *Config) printRegisteredServers(proxy *Proxy, jsonOutput bool, incl
 			if len(addrStr) > 0 {
 				addrs = append(addrs, hostAddr)
 			}
+			nolog := true
+			nofilter := true
+			if registeredRelay.stamp.Proto == stamps.StampProtoTypeODoHRelay {
+				nolog = registeredRelay.stamp.Props&stamps.ServerInformalPropertyNoLog != 0
+			}
 			serverSummary := ServerSummary{
 				Name:        registeredRelay.name,
 				Proto:       registeredRelay.stamp.Proto.String(),
 				IPv6:        strings.HasPrefix(addrStr, "["),
 				Ports:       []int{port},
 				Addrs:       addrs,
-				NoLog:       registeredRelay.stamp.Props&stamps.ServerInformalPropertyNoLog != 0,
-				NoFilter:    registeredRelay.stamp.Props&stamps.ServerInformalPropertyNoFilter != 0,
+				NoLog:       nolog,
+				NoFilter:    nofilter,
 				Description: registeredRelay.description,
 				Stamp:       registeredRelay.stamp.String(),
 			}
