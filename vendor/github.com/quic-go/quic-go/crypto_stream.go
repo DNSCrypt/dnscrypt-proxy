@@ -30,17 +30,10 @@ type cryptoStreamImpl struct {
 
 	writeOffset protocol.ByteCount
 	writeBuf    []byte
-
-	// Reassemble TLS handshake messages before returning them from GetCryptoData.
-	// This is only needed because crypto/tls doesn't correctly handle post-handshake messages.
-	onlyCompleteMsg bool
 }
 
-func newCryptoStream(onlyCompleteMsg bool) cryptoStream {
-	return &cryptoStreamImpl{
-		queue:           newFrameSorter(),
-		onlyCompleteMsg: onlyCompleteMsg,
-	}
+func newCryptoStream() cryptoStream {
+	return &cryptoStreamImpl{queue: newFrameSorter()}
 }
 
 func (s *cryptoStreamImpl) HandleCryptoFrame(f *wire.CryptoFrame) error {
@@ -78,20 +71,6 @@ func (s *cryptoStreamImpl) HandleCryptoFrame(f *wire.CryptoFrame) error {
 
 // GetCryptoData retrieves data that was received in CRYPTO frames
 func (s *cryptoStreamImpl) GetCryptoData() []byte {
-	if s.onlyCompleteMsg {
-		if len(s.msgBuf) < 4 {
-			return nil
-		}
-		msgLen := 4 + int(s.msgBuf[1])<<16 + int(s.msgBuf[2])<<8 + int(s.msgBuf[3])
-		if len(s.msgBuf) < msgLen {
-			return nil
-		}
-		msg := make([]byte, msgLen)
-		copy(msg, s.msgBuf[:msgLen])
-		s.msgBuf = s.msgBuf[msgLen:]
-		return msg
-	}
-
 	b := s.msgBuf
 	s.msgBuf = nil
 	return b

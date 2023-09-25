@@ -318,13 +318,13 @@ func (c *client) RoundTripOpt(req *http.Request, opt RoundTripOpt) (*http.Respon
 			}
 			conn.CloseWithError(quic.ApplicationErrorCode(rerr.connErr), reason)
 		}
-		return nil, rerr.err
+		return nil, maybeReplaceError(rerr.err)
 	}
 	if opt.DontCloseRequestStream {
 		close(reqDone)
 		<-done
 	}
-	return rsp, rerr.err
+	return rsp, maybeReplaceError(rerr.err)
 }
 
 // cancelingReader reads from the io.Reader.

@@ -166,9 +166,10 @@ func (w *responseWriter) Write(p []byte) (int, error) {
 	w.buf = w.buf[:0]
 	w.buf = df.Append(w.buf)
 	if _, err := w.bufferedStr.Write(w.buf); err != nil {
-		return 0, err
+		return 0, maybeReplaceError(err)
 	}
-	return w.bufferedStr.Write(p)
+	n, err := w.bufferedStr.Write(p)
+	return n, maybeReplaceError(err)
 }
 
 func (w *responseWriter) FlushError() error {
@@ -177,7 +178,7 @@ func (w *responseWriter) FlushError() error {
 	}
 	if !w.written {
 		if err := w.writeHeader(); err != nil {
-			return err
+			return maybeReplaceError(err)
 		}
 		w.written = true
 	}

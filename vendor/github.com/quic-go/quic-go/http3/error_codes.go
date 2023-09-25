@@ -30,6 +30,14 @@ const (
 )
 
 func (e ErrCode) String() string {
+	s := e.string()
+	if s != "" {
+		return s
+	}
+	return fmt.Sprintf("unknown error code: %#x", uint16(e))
+}
+
+func (e ErrCode) string() string {
 	switch e {
 	case ErrCodeNoError:
 		return "H3_NO_ERROR"
@@ -68,6 +76,6 @@ func (e ErrCode) String() string {
 	case ErrCodeDatagramError:
 		return "H3_DATAGRAM_ERROR"
 	default:
-		return fmt.Sprintf("unknown error code: %#x", uint16(e))
+		return ""
 	}
 }
