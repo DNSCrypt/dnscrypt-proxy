@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"go/build"
 	"io"
-	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -32,7 +31,7 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/golang/mock/mockgen/model"
+	"go.uber.org/mock/mockgen/model"
 )
 
 var (
@@ -92,7 +91,7 @@ func writeProgram(importPath string, symbols []string) ([]byte, error) {
 
 // run the given program and parse the output as a model.Package.
 func run(program string) (*model.Package, error) {
-	f, err := ioutil.TempFile("", "")
+	f, err := os.CreateTemp("", "")
 	if err != nil {
 		return nil, err
 	}
@@ -133,7 +132,7 @@ func run(program string) (*model.Package, error) {
 // parses the output as a model.Package.
 func runInDir(program []byte, dir string) (*model.Package, error) {
 	// We use TempDir instead of TempFile so we can control the filename.
-	tmpDir, err := ioutil.TempDir(dir, "gomock_reflect_")
+	tmpDir, err := os.MkdirTemp(dir, "gomock_reflect_")
 	if err != nil {
 		return nil, err
 	}
@@ -149,7 +148,7 @@ func runInDir(program []byte, dir string) (*model.Package, error) {
 		progBinary += ".exe"
 	}
 
-	if err := ioutil.WriteFile(filepath.Join(tmpDir, progSource), program, 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, progSource), program, 0600); err != nil {
 		return nil, err
 	}
 
@@ -169,8 +168,8 @@ func runInDir(program []byte, dir string) (*model.Package, error) {
 	if err := cmd.Run(); err != nil {
 		sErr := buf.String()
 		if strings.Contains(sErr, `cannot find package "."`) &&
-			strings.Contains(sErr, "github.com/golang/mock/mockgen/model") {
-			fmt.Fprint(os.Stderr, "Please reference the steps in the README to fix this error:\n\thttps://github.com/golang/mock#reflect-vendoring-error.")
+			strings.Contains(sErr, "go.uber.org/mock/mockgen/model") {
+			fmt.Fprint(os.Stderr, "Please reference the steps in the README to fix this error:\n\thttps://go.uber.org/mock#reflect-vendoring-error.\n")
 			return nil, err
 		}
 		return nil, err
@@ -198,7 +197,7 @@ import (
 	"path"
 	"reflect"
 
-	"github.com/golang/mock/mockgen/model"
+	"go.uber.org/mock/mockgen/model"
 
 	pkg_ {{printf "%q" .ImportPath}}
 )

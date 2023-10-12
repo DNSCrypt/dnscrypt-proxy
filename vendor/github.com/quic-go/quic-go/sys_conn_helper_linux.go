@@ -19,6 +19,8 @@ const (
 	ipv4PKTINFO  = unix.IP_PKTINFO
 )
 
+const ecnIPv4DataLen = 4
+
 const batchSize = 8 // needs to smaller than MaxUint8 (otherwise the type of oobConn.readPos has to be changed)
 
 func forceSetReceiveBuffer(c syscall.RawConn, bytes int) error {
