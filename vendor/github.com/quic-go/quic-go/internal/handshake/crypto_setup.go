@@ -146,6 +146,9 @@ func addConnToClientHelloInfo(conf *tls.Config, localAddr, remoteAddr net.Addr) 
 			info.Conn = &conn{localAddr: localAddr, remoteAddr: remoteAddr}
 			c, err := gcfc(info)
 			if c != nil {
+				c = c.Clone()
+				// This won't be necessary anymore once https://github.com/golang/go/issues/63722 is accepted.
+				c.MinVersion = tls.VersionTLS13
 				// We're returning a tls.Config here, so we need to apply this recursively.
 				addConnToClientHelloInfo(c, localAddr, remoteAddr)
 			}
