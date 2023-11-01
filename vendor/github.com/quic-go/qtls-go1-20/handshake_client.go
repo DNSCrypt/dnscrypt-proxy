@@ -418,8 +418,12 @@ func (c *Conn) loadSession(hello *clientHelloMsg) (cacheKey string,
 	}
 
 	if c.quic != nil && maxEarlyData > 0 {
+		var earlyData bool
+		if session.vers == VersionTLS13 && c.extraConfig != nil && c.extraConfig.SetAppDataFromSessionState != nil {
+			earlyData = c.extraConfig.SetAppDataFromSessionState(appData)
+		}
 		// For 0-RTT, the cipher suite has to match exactly.
-		if mutualCipherSuiteTLS13(hello.cipherSuites, session.cipherSuite) != nil {
+		if earlyData && mutualCipherSuiteTLS13(hello.cipherSuites, session.cipherSuite) != nil {
 			hello.earlyData = true
 		}
 	}
@@ -449,9 +453,6 @@ func (c *Conn) loadSession(hello *clientHelloMsg) (cacheKey string,
 		return "", nil, nil, nil, err
 	}
 
-	if session.vers == VersionTLS13 && c.extraConfig != nil && c.extraConfig.SetAppDataFromSessionState != nil {
-		c.extraConfig.SetAppDataFromSessionState(appData)
-	}
 	return
 }
 

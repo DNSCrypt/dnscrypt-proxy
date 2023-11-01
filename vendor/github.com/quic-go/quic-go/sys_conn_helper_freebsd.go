@@ -14,7 +14,7 @@ const (
 	ipv4PKTINFO  = 0x7
 )
 
-const ecnIPv4DataLen = 4
+const ecnIPv4DataLen = 1
 
 const batchSize = 8
 

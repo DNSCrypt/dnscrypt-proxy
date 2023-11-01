@@ -12,6 +12,9 @@ In addition to these base RFCs, it also implements the following RFCs:
 * Unreliable Datagram Extension ([RFC 9221](https://datatracker.ietf.org/doc/html/rfc9221))
 * Datagram Packetization Layer Path MTU Discovery (DPLPMTUD, [RFC 8899](https://datatracker.ietf.org/doc/html/rfc8899))
 * QUIC Version 2 ([RFC 9369](https://datatracker.ietf.org/doc/html/rfc9369))
+* QUIC Event Logging using qlog ([draft-ietf-quic-qlog-main-schema](https://datatracker.ietf.org/doc/draft-ietf-quic-qlog-main-schema/) and [draft-ietf-quic-qlog-quic-events](https://datatracker.ietf.org/doc/draft-ietf-quic-qlog-quic-events/))
+
+Support for WebTransport over HTTP/3 ([draft-ietf-webtrans-http3](https://datatracker.ietf.org/doc/draft-ietf-webtrans-http3/)) is implemented in [webtransport-go](https://github.com/quic-go/webtransport-go).
 
 ## Using QUIC
 
@@ -158,22 +161,46 @@ On the receiver side, this is surfaced as a `quic.ApplicationError`.
 
 Unreliable datagrams are a QUIC extension ([RFC 9221](https://datatracker.ietf.org/doc/html/rfc9221)) that is negotiated during the handshake. Support can be enabled by setting the `quic.Config.EnableDatagram` flag. Note that this doesn't guarantee that the peer also supports datagrams. Whether or not the feature negotiation succeeded can be learned from the `quic.ConnectionState.SupportsDatagrams` obtained from `quic.Connection.ConnectionState()`.
 
-QUIC DATAGRAMs are a new QUIC frame type sent in QUIC 1-RTT packets (i.e. after completion of the handshake). Therefore, they're end-to-end encrypted and congestion-controlled. However, if a DATAGRAM frame is deemed lost by QUIC's loss detection mechanism, they are not automatically retransmitted.
+QUIC DATAGRAMs are a new QUIC frame type sent in QUIC 1-RTT packets (i.e. after completion of the handshake). Therefore, they're end-to-end encrypted and congestion-controlled. However, if a DATAGRAM frame is deemed lost by QUIC's loss detection mechanism, they are not retransmitted.
 
-Datagrams are sent using the `SendMessage` method on the `quic.Connection`:
+Datagrams are sent using the `SendDatagram` method on the `quic.Connection`:
 
 ```go
-conn.SendMessage([]byte("foobar"))
+conn.SendDatagram([]byte("foobar"))
 ```
 
-And received using `ReceiveMessage`:
+And received using `ReceiveDatagram`:
 
 ```go
-msg, err := conn.ReceiveMessage()
+msg, err := conn.ReceiveDatagram()
 ```
 
 Note that this code path is currently not optimized. It works for datagrams that are sent occasionally, but it doesn't achieve the same throughput as writing data on a stream. Please get in touch on issue #3766 if your use case relies on high datagram throughput, or if you'd like to help fix this issue. There are also some restrictions regarding the maximum message size (see #3599).
 
+### QUIC Event Logging using qlog
+
+quic-go logs a wide range of events defined in [draft-ietf-quic-qlog-quic-events](https://datatracker.ietf.org/doc/draft-ietf-quic-qlog-quic-events/), providing comprehensive insights in the internals of a QUIC connection. 
+
+qlog files can be processed by a number of 3rd-party tools. [qviz](https://qvis.quictools.info/) has proven very useful for debugging all kinds of QUIC connection failures.
+
+qlog is activated by setting a `Tracer` callback on the `Config`. It is called as soon as quic-go decides to starts the QUIC handshake on a new connection.
+A useful implementation of this callback could look like this:
+```go
+quic.Config{
+  Tracer: func(ctx context.Context, p logging.Perspective, connID quic.ConnectionID) *logging.ConnectionTracer {
+    role := "server"
+    if p == logging.PerspectiveClient {
+      role = "client"
+    }
+    filename := fmt.Sprintf("./log_%x_%s.qlog", connID, role)
+    f, err := os.Create(filename)
+    // handle the error
+    return qlog.NewConnectionTracer(f, p, connID)
+  }
+}
+```
+
+This implementation of the callback creates a new qlog file in the current directory named `log_<client / server>_<QUIC connection ID>.qlog`.
 
 
 ## Using HTTP/3
