@@ -49,6 +49,11 @@ jobs:
         run: |
           .ci/ci-build.sh "${{ steps.get_version.outputs.VERSION }}"
 
+      - name: Package
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          .ci/ci-package.sh "${{ steps.get_version.outputs.VERSION }}"
+
       - name: Install minisign and sign
         if: startsWith(github.ref, 'refs/tags/')
         run: |
@@ -87,3 +92,4 @@ jobs:
             dnscrypt-proxy/*.zip
             dnscrypt-proxy/*.tar.gz
             dnscrypt-proxy/*.minisig
+            dnscrypt-proxy/*.msi

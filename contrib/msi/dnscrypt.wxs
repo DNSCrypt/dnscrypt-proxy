@@ -1,0 +1,60 @@
+<?xml version="1.0"?>
+
+<?if $(var.Platform)="x64" ?>
+    <?define Program_Files="ProgramFiles64Folder"?>
+<?else ?>
+    <?define Program_Files="ProgramFilesFolder"?>
+<?endif ?>
+<?ifndef var.Version?>
+    <?error Undefined Version variable?>
+<?endif ?>
+<?ifndef var.Path?>
+    <?error Undefined Path variable?>
+<?endif ?>
+
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+    <Product Id="*"
+        UpgradeCode="fbf99dd8-c21e-4f9b-a632-de53bb64c45e"
+        Name="dnscrypt-proxy"
+        Version="$(var.Version)"
+        Manufacturer="DNSCrypt"
+        Language="1033">
+
+        <Package InstallerVersion="200" Compressed="yes" Comments="Windows Installer Package" InstallScope="perMachine" />
+        <Media Id="1" Cabinet="product.cab" EmbedCab="yes" />
+        <MajorUpgrade DowngradeErrorMessage="A later version of [ProductName] is already installed. Setup will now exit." />
+
+        <Upgrade Id="fbf99dd8-c21e-4f9b-a632-de53bb64c45e">
+            <UpgradeVersion Minimum="$(var.Version)" OnlyDetect="yes" Property="NEWERVERSIONDETECTED" />
+            <UpgradeVersion Minimum="2.1.0" Maximum="$(var.Version)" IncludeMinimum="yes" IncludeMaximum="no" Property="OLDERVERSIONBEINGUPGRADED" />
+        </Upgrade>
+        <Condition Message="A newer version of this software is already installed.">NOT NEWERVERSIONDETECTED</Condition>
+
+        <Directory Id="TARGETDIR" Name="SourceDir">
+            <Directory Id="$(var.Program_Files)">
+                <Directory Id="INSTALLDIR" Name="DNSCrypt">
+                    <Component Id="ApplicationFiles" Guid="7d693c0b-71d8-436a-9c84-60a11dc74092">
+                        <File Id="dnscryptproxy.exe" KeyPath="yes" Source="$(var.Path)\dnscrypt-proxy.exe" DiskId="1"/>
+                        <File Source="$(var.Path)\LICENSE"></File>
+                        <File Source="$(var.Path)\service-install.bat"></File>
+                        <File Source="$(var.Path)\service-restart.bat"></File>
+                        <File Source="$(var.Path)\service-uninstall.bat"></File>
+                        <File Source="$(var.Path)\example-dnscrypt-proxy.toml"></File>
+                    </Component>
+                    <Component Id="ConfigInstall" Guid="db7b691e-f7c7-4c9a-92e1-c6f21ce6430f" KeyPath="yes">
+                        <Condition><![CDATA[CONFIGFILE]]></Condition>
+                        <CopyFile Id="dnscryptproxytoml" DestinationDirectory="INSTALLDIR" DestinationName="dnscrypt-proxy.toml" SourceProperty="CONFIGFILE">
+                        </CopyFile>
+                        <RemoveFile Id="RemoveConfig" Directory="INSTALLDIR" Name="dnscrypt-proxy.toml" On="uninstall" />
+                    </Component>
+                </Directory>
+            </Directory>
+        </Directory>
+
+        <Feature Id="Complete" Level="1">
+            <ComponentRef Id="ApplicationFiles" />
+            <ComponentRef Id="ConfigInstall" />
+        </Feature>
+
+    </Product>
+</Wix>
