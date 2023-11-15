@@ -220,23 +220,6 @@ func (h *packetHandlerMap) GetByResetToken(token protocol.StatelessResetToken) (
 	return handler, ok
 }
 
-func (h *packetHandlerMap) CloseServer() {
-	h.mutex.Lock()
-	var wg sync.WaitGroup
-	for _, handler := range h.handlers {
-		if handler.getPerspective() == protocol.PerspectiveServer {
-			wg.Add(1)
-			go func(handler packetHandler) {
-				// blocks until the CONNECTION_CLOSE has been sent and the run-loop has stopped
-				handler.shutdown()
-				wg.Done()
-			}(handler)
-		}
-	}
-	h.mutex.Unlock()
-	wg.Wait()
-}
-
 func (h *packetHandlerMap) Close(e error) {
 	h.mutex.Lock()
 

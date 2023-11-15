@@ -8,7 +8,7 @@ import (
 
 type clientSessionCache struct {
 	getData func() []byte
-	setData func([]byte)
+	setData func([]byte) (allowEarlyData bool)
 	wrapped tls.ClientSessionCache
 }
 
@@ -46,10 +46,12 @@ func (c clientSessionCache) Get(key string) (*tls.ClientSessionState, bool) {
 		c.wrapped.Put(key, nil)
 		return nil, false
 	}
+	var earlyData bool
 	// restore QUIC transport parameters and RTT stored in state.Extra
 	if extra := findExtraData(state.Extra); extra != nil {
-		c.setData(extra)
+		earlyData = c.setData(extra)
 	}
+	state.EarlyData = earlyData
 	session, err := tls.NewResumptionState(ticket, state)
 	if err != nil {
 		// It's not clear why this would error.

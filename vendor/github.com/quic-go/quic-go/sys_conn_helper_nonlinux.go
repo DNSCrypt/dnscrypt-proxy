@@ -7,3 +7,4 @@ func forceSetSendBuffer(c any, bytes int) error    { return nil }
 
 func appendUDPSegmentSizeMsg([]byte, uint16) []byte { return nil }
 func isGSOError(error) bool                         { return false }
+func isPermissionError(err error) bool              { return false }

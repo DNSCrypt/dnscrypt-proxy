@@ -187,10 +187,10 @@ type Connection interface {
 	// Warning: This API should not be considered stable and might change soon.
 	ConnectionState() ConnectionState
 
-	// SendMessage sends a message as a datagram, as specified in RFC 9221.
-	SendMessage([]byte) error
-	// ReceiveMessage gets a message received in a datagram, as specified in RFC 9221.
-	ReceiveMessage(context.Context) ([]byte, error)
+	// SendDatagram sends a message as a datagram, as specified in RFC 9221.
+	SendDatagram([]byte) error
+	// ReceiveDatagram gets a message received in a datagram, as specified in RFC 9221.
+	ReceiveDatagram(context.Context) ([]byte, error)
 }
 
 // An EarlyConnection is a connection that is handshaking.
@@ -338,7 +338,7 @@ type ConnectionState struct {
 	// SupportsDatagrams says if support for QUIC datagrams (RFC 9221) was negotiated.
 	// This requires both nodes to support and enable the datagram extensions (via Config.EnableDatagrams).
 	// If datagram support was negotiated, datagrams can be sent and received using the
-	// SendMessage and ReceiveMessage methods on the Connection.
+	// SendDatagram and ReceiveDatagram methods on the Connection.
 	SupportsDatagrams bool
 	// Used0RTT says if 0-RTT resumption was used.
 	Used0RTT bool

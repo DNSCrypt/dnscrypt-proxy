@@ -275,7 +275,8 @@ func (t *Transport) runSendQueue() {
 	}
 }
 
-// Close closes the underlying connection and waits until listen has returned.
+// Close closes the underlying connection.
+// If any listener was started, it will be closed as well.
 // It is invalid to start new listeners or connections after that.
 func (t *Transport) Close() error {
 	t.close(errors.New("closing"))
@@ -294,7 +295,6 @@ func (t *Transport) Close() error {
 }
 
 func (t *Transport) closeServer() {
-	t.handlerMap.CloseServer()
 	t.mutex.Lock()
 	t.server = nil
 	if t.isSingleUse {
@@ -322,7 +322,7 @@ func (t *Transport) close(e error) {
 		t.handlerMap.Close(e)
 	}
 	if t.server != nil {
-		t.server.setCloseError(e)
+		t.server.close(e, false)
 	}
 	t.closed = true
 }

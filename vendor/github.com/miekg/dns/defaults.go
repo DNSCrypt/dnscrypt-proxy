@@ -5,7 +5,6 @@ import (
 	"net"
 	"strconv"
 	"strings"
-	"unicode"
 )
 
 const hexDigit = "0123456789abcdef"
@@ -23,8 +22,7 @@ func (dns *Msg) SetReply(request *Msg) *Msg {
 	}
 	dns.Rcode = RcodeSuccess
 	if len(request.Question) > 0 {
-		dns.Question = make([]Question, 1)
-		dns.Question[0] = request.Question[0]
+		dns.Question = []Question{request.Question[0]}
 	}
 	return dns
 }
@@ -293,26 +291,19 @@ func IsFqdn(s string) bool {
 	return (len(s)-i)%2 != 0
 }
 
-// IsRRset checks if a set of RRs is a valid RRset as defined by RFC 2181.
-// This means the RRs need to have the same type, name, and class. Returns true
-// if the RR set is valid, otherwise false.
+// IsRRset reports whether a set of RRs is a valid RRset as defined by RFC 2181.
+// This means the RRs need to have the same type, name, and class.
 func IsRRset(rrset []RR) bool {
 	if len(rrset) == 0 {
 		return false
 	}
-	if len(rrset) == 1 {
-		return true
-	}
-	rrHeader := rrset[0].Header()
-	rrType := rrHeader.Rrtype
-	rrClass := rrHeader.Class
-	rrName := rrHeader.Name
 
+	baseH := rrset[0].Header()
 	for _, rr := range rrset[1:] {
-		curRRHeader := rr.Header()
-		if curRRHeader.Rrtype != rrType || curRRHeader.Class != rrClass || curRRHeader.Name != rrName {
+		curH := rr.Header()
+		if curH.Rrtype != baseH.Rrtype || curH.Class != baseH.Class || curH.Name != baseH.Name {
 			// Mismatch between the records, so this is not a valid rrset for
-			//signing/verifying
+			// signing/verifying
 			return false
 		}
 	}
@@ -330,19 +321,15 @@ func Fqdn(s string) string {
 }
 
 // CanonicalName returns the domain name in canonical form. A name in canonical
-// form is lowercase and fully qualified. See Section 6.2 in RFC 4034.
-// According to the RFC all uppercase US-ASCII letters in the owner name of the
-// RR areeplaced by the corresponding lowercase US-ASCII letters.
+// form is lowercase and fully qualified. Only US-ASCII letters are affected. See
+// Section 6.2 in RFC 4034.
 func CanonicalName(s string) string {
-	var result strings.Builder
-	for _, ch := range s {
-		if unicode.IsUpper(ch) && (ch >= 0x00 && ch <= 0x7F) {
-			result.WriteRune(unicode.ToLower(ch))
-		} else {
-			result.WriteRune(ch)
+	return strings.Map(func(r rune) rune {
+		if r >= 'A' && r <= 'Z' {
+			r += 'a' - 'A'
 		}
-	}
-	return Fqdn(result.String())
+		return r
+	}, Fqdn(s))
 }
 
 // Copied from the official Go code.

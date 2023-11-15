@@ -739,7 +739,7 @@ type ExtraConfig struct {
 
 	// Is called when the client uses a session ticket.
 	// Restores the application data that was saved earlier on GetAppDataForSessionTicket.
-	SetAppDataFromSessionState func([]byte)
+	SetAppDataFromSessionState func([]byte) (allowEarlyData bool)
 }
 
 // Clone clones.

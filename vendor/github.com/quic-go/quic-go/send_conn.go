@@ -28,6 +28,9 @@ type sconn struct {
 	packetInfoOOB []byte
 	// If GSO enabled, and we receive a GSO error for this remote address, GSO is disabled.
 	gotGSOError bool
+	// Used to catch the error sometimes returned by the first sendmsg call on Linux,
+	// see https://github.com/golang/go/issues/63322.
+	wroteFirstPacket bool
 }
 
 var _ sendConn = &sconn{}
@@ -56,7 +59,7 @@ func newSendConn(c rawConn, remote net.Addr, info packetInfo, logger utils.Logge
 }
 
 func (c *sconn) Write(p []byte, gsoSize uint16, ecn protocol.ECN) error {
-	_, err := c.WritePacket(p, c.remoteAddr, c.packetInfoOOB, gsoSize, ecn)
+	err := c.writePacket(p, c.remoteAddr, c.packetInfoOOB, gsoSize, ecn)
 	if err != nil && isGSOError(err) {
 		// disable GSO for future calls
 		c.gotGSOError = true
@@ -69,13 +72,22 @@ func (c *sconn) Write(p []byte, gsoSize uint16, ecn protocol.ECN) error {
 			if l > int(gsoSize) {
 				l = int(gsoSize)
 			}
-			if _, err := c.WritePacket(p[:l], c.remoteAddr, c.packetInfoOOB, 0, ecn); err != nil {
+			if err := c.writePacket(p[:l], c.remoteAddr, c.packetInfoOOB, 0, ecn); err != nil {
 				return err
 			}
 			p = p[l:]
 		}
 		return nil
 	}
+	return err
+}
+
+func (c *sconn) writePacket(p []byte, addr net.Addr, oob []byte, gsoSize uint16, ecn protocol.ECN) error {
+	_, err := c.WritePacket(p, addr, oob, gsoSize, ecn)
+	if err != nil && !c.wroteFirstPacket && isPermissionError(err) {
+		_, err = c.WritePacket(p, addr, oob, gsoSize, ecn)
+	}
+	c.wroteFirstPacket = true
 	return err
 }
 
