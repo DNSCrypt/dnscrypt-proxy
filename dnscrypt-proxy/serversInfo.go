@@ -229,12 +229,23 @@ func (serversInfo *ServersInfo) refresh(proxy *Proxy) (int, error) {
 	serversInfo.RUnlock()
 	liveServers := 0
 	var err error
-	for _, registeredServer := range registeredServers {
-		if err = serversInfo.refreshServer(proxy, registeredServer.name, registeredServer.stamp); err == nil {
-			liveServers++
-			proxy.xTransport.internalResolverReady = true
-		}
+
+	// simultaneously refresh all servers
+	wg := sync.WaitGroup{}
+	wg.Add(len(registeredServers))
+	for i := range registeredServers {
+		go func(rs *RegisteredServer) {
+			if err = serversInfo.refreshServer(proxy, rs.name, rs.stamp); err == nil {
+				serversInfo.Lock()
+				liveServers++
+				proxy.xTransport.internalResolverReady = true
+				serversInfo.Unlock()
+			}
+			wg.Done()
+		}(&registeredServers[i])
 	}
+	wg.Wait()
+
 	serversInfo.Lock()
 	sort.SliceStable(serversInfo.inner, func(i, j int) bool {
 		return serversInfo.inner[i].initialRtt < serversInfo.inner[j].initialRtt
