@@ -183,6 +183,12 @@ keepalive = 30
 # use_syslog = true
 
 
+## The maximum concurrency to reload certificates from the resolvers.
+## Default is 10.
+
+# cert_refresh_concurrency = 10
+
+
 ## Delay, in minutes, after which certificates are reloaded
 
 cert_refresh_delay = 240
