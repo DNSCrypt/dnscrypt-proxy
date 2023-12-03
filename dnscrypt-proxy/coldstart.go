@@ -17,14 +17,13 @@ type CaptivePortalMap map[string]CaptivePortalEntryIPs
 type CaptivePortalHandler struct {
 	cancelChannel chan struct{}
 	countChannel  chan struct{}
+	waitChannel   chan struct{}
 	channelCount  int
 }
 
 func (captivePortalHandler *CaptivePortalHandler) Stop() {
 	close(captivePortalHandler.cancelChannel)
-	for len(captivePortalHandler.countChannel) < captivePortalHandler.channelCount {
-		time.Sleep(10 * time.Millisecond)
-	}
+	<-captivePortalHandler.waitChannel
 	close(captivePortalHandler.countChannel)
 }
 
@@ -138,6 +137,9 @@ func addColdStartListener(
 		}
 		clientPc.Close()
 		captivePortalHandler.countChannel <- struct{}{}
+		if len(captivePortalHandler.countChannel) == captivePortalHandler.channelCount {
+			close(captivePortalHandler.waitChannel)
+		}
 	}()
 	return nil
 }
@@ -186,6 +188,7 @@ func ColdStart(proxy *Proxy) (*CaptivePortalHandler, error) {
 	captivePortalHandler := CaptivePortalHandler{
 		cancelChannel: make(chan struct{}),
 		countChannel:  make(chan struct{}, len(listenAddrStrs)),
+		waitChannel:   make(chan struct{}),
 		channelCount:  0,
 	}
 	for _, listenAddrStr := range listenAddrStrs {
