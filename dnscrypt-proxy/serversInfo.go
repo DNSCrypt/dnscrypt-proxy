@@ -13,6 +13,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/VividCortex/ewma"
@@ -227,7 +228,7 @@ func (serversInfo *ServersInfo) refresh(proxy *Proxy) (int, error) {
 	registeredServers := make([]RegisteredServer, len(serversInfo.registeredServers))
 	copy(registeredServers, serversInfo.registeredServers)
 	serversInfo.RUnlock()
-	liveServers := 0
+	var liveServers atomic.Int32
 	countChannel := make(chan struct{}, proxy.certRefreshConcurrency)
 	waitChannel := make(chan struct{})
 	var err error
@@ -235,7 +236,7 @@ func (serversInfo *ServersInfo) refresh(proxy *Proxy) (int, error) {
 		countChannel <- struct{}{}
 		go func(registeredServer *RegisteredServer) {
 			if err = serversInfo.refreshServer(proxy, registeredServer.name, registeredServer.stamp); err == nil {
-				liveServers++
+				liveServers.Add(1)
 				proxy.xTransport.internalResolverReady = true
 			}
 			<-countChannel
@@ -261,7 +262,7 @@ func (serversInfo *ServersInfo) refresh(proxy *Proxy) (int, error) {
 		dlog.Noticef("Server with the lowest initial latency: %s (rtt: %dms)", inner[0].Name, inner[0].initialRtt)
 	}
 	serversInfo.Unlock()
-	return liveServers, err
+	return int(liveServers.Load()), err
 }
 
 func (serversInfo *ServersInfo) estimatorUpdate(currentActive int) {
