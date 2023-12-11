@@ -42,6 +42,7 @@ type Config struct {
 	Timeout                  int            `toml:"timeout"`
 	KeepAlive                int            `toml:"keepalive"`
 	Proxy                    string         `toml:"proxy"`
+	CertRefreshConcurrency   int            `toml:"cert_refresh_concurrency"`
 	CertRefreshDelay         int            `toml:"cert_refresh_delay"`
 	CertIgnoreTimestamp      bool           `toml:"cert_ignore_timestamp"`
 	EphemeralKeys            bool           `toml:"dnscrypt_ephemeral_keys"`
@@ -116,6 +117,7 @@ func newConfig() Config {
 		LocalDoH:                 LocalDoHConfig{Path: "/dns-query"},
 		Timeout:                  5000,
 		KeepAlive:                5,
+		CertRefreshConcurrency:   10,
 		CertRefreshDelay:         240,
 		HTTP3:                    false,
 		CertIgnoreTimestamp:      false,
@@ -437,6 +439,7 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	if config.ForceTCP {
 		proxy.mainProto = "tcp"
 	}
+	proxy.certRefreshConcurrency = Max(1, config.CertRefreshConcurrency)
 	proxy.certRefreshDelay = time.Duration(Max(60, config.CertRefreshDelay)) * time.Minute
 	proxy.certRefreshDelayAfterFailure = time.Duration(10 * time.Second)
 	proxy.certIgnoreTimestamp = config.CertIgnoreTimestamp
