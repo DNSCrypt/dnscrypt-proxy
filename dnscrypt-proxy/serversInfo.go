@@ -228,12 +228,10 @@ func (serversInfo *ServersInfo) refresh(proxy *Proxy) (int, error) {
 	copy(registeredServers, serversInfo.registeredServers)
 	serversInfo.RUnlock()
 
-	// Always have proxy.certRefreshConcurrency servers being refreshed in parallel
 	countChannel := make(chan struct{}, proxy.certRefreshConcurrency)
 	waitChannel := make(chan struct{})
 	var err error
 	for i := range registeredServers {
-		// Would block if countChannel is already filled
 		countChannel <- struct{}{}
 		go func(registeredServer *RegisteredServer) {
 			if err = serversInfo.refreshServer(proxy, registeredServer.name, registeredServer.stamp); err == nil {
