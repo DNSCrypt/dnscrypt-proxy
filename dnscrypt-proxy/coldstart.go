@@ -23,7 +23,9 @@ type CaptivePortalHandler struct {
 
 func (captivePortalHandler *CaptivePortalHandler) Stop() {
 	close(captivePortalHandler.cancelChannel)
-	<-captivePortalHandler.waitChannel
+	if captivePortalHandler.channelCount > 0 {
+		<-captivePortalHandler.waitChannel
+	}
 	close(captivePortalHandler.countChannel)
 }
 
