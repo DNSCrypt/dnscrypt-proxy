@@ -640,7 +640,13 @@ func (p *packetPacker) composeNextPacket(maxFrameSize protocol.ByteCount, onlyAc
 		pl.length += lengthAdded
 		// add handlers for the control frames that were added
 		for i := startLen; i < len(pl.frames); i++ {
-			pl.frames[i].Handler = p.retransmissionQueue.AppDataAckHandler()
+			switch pl.frames[i].Frame.(type) {
+			case *wire.PathChallengeFrame, *wire.PathResponseFrame:
+				// Path probing is currently not supported, therefore we don't need to set the OnAcked callback yet.
+				// PATH_CHALLENGE and PATH_RESPONSE are never retransmitted.
+			default:
+				pl.frames[i].Handler = p.retransmissionQueue.AppDataAckHandler()
+			}
 		}
 
 		pl.streamFrames, lengthAdded = p.framer.AppendStreamFrames(pl.streamFrames, maxFrameSize-pl.length, v)
