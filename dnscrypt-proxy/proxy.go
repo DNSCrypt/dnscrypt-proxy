@@ -517,7 +517,7 @@ func (proxy *Proxy) exchangeWithUDPServer(
 	var pc net.Conn
 	proxyDialer := proxy.xTransport.proxyDialer
 	if proxyDialer == nil {
-		pc, err = net.DialUDP("udp", nil, upstreamAddr)
+		pc, err = net.DialTimeout("udp", upstreamAddr.String(), serverInfo.Timeout)
 	} else {
 		pc, err = (*proxyDialer).Dial("udp", upstreamAddr.String())
 	}
@@ -560,7 +560,7 @@ func (proxy *Proxy) exchangeWithTCPServer(
 	var pc net.Conn
 	proxyDialer := proxy.xTransport.proxyDialer
 	if proxyDialer == nil {
-		pc, err = net.DialTCP("tcp", nil, upstreamAddr)
+		pc, err = net.DialTimeout("tcp", upstreamAddr.String(), serverInfo.Timeout)
 	} else {
 		pc, err = (*proxyDialer).Dial("tcp", upstreamAddr.String())
 	}
