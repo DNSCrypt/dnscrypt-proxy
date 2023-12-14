@@ -249,21 +249,20 @@ func (serversInfo *ServersInfo) refresh(proxy *Proxy) (int, error) {
 	sort.SliceStable(serversInfo.inner, func(i, j int) bool {
 		return serversInfo.inner[i].initialRtt < serversInfo.inner[j].initialRtt
 	})
+	serversInfo.Unlock()
+
+	serversInfo.RLock()
 	inner := serversInfo.inner
 	innerLen := len(inner)
-	if innerLen > 1 {
+	if innerLen > 0 {
 		dlog.Notice("Sorted latencies:")
 		for i := 0; i < innerLen; i++ {
 			dlog.Noticef("- %5dms %s", inner[i].initialRtt, inner[i].Name)
 		}
-	}
-	if innerLen > 0 {
 		dlog.Noticef("Server with the lowest initial latency: %s (rtt: %dms)", inner[0].Name, inner[0].initialRtt)
-	}
-	serversInfo.Unlock()
-	if innerLen > 0 {
 		err = nil
 	}
+	serversInfo.RUnlock()
 	return innerLen, err
 }
 
