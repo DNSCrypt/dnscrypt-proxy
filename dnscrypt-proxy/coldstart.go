@@ -122,11 +122,15 @@ func addColdStartListener(
 	listenAddrStr string,
 	captivePortalHandler *CaptivePortalHandler,
 ) error {
-	listenUDPAddr, err := net.ResolveUDPAddr("udp", listenAddrStr)
+	network := "udp"
+	if isDigit(listenAddrStr[0]) {
+		network = "udp4"
+	}
+	listenUDPAddr, err := net.ResolveUDPAddr(network, listenAddrStr)
 	if err != nil {
 		return err
 	}
-	clientPc, err := net.ListenUDP("udp", listenUDPAddr)
+	clientPc, err := net.ListenUDP(network, listenUDPAddr)
 	if err != nil {
 		return err
 	}

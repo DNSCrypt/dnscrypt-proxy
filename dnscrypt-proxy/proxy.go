@@ -118,11 +118,17 @@ func (proxy *Proxy) registerLocalDoHListener(listener *net.TCPListener) {
 }
 
 func (proxy *Proxy) addDNSListener(listenAddrStr string) {
-	listenUDPAddr, err := net.ResolveUDPAddr("udp", listenAddrStr)
+	udp := "udp"
+	tcp := "tcp"
+	if isDigit(listenAddrStr[0]) {
+		udp = "udp4"
+		tcp = "tcp4"
+	}
+	listenUDPAddr, err := net.ResolveUDPAddr(udp, listenAddrStr)
 	if err != nil {
 		dlog.Fatal(err)
 	}
-	listenTCPAddr, err := net.ResolveTCPAddr("tcp", listenAddrStr)
+	listenTCPAddr, err := net.ResolveTCPAddr(tcp, listenAddrStr)
 	if err != nil {
 		dlog.Fatal(err)
 	}
@@ -141,11 +147,11 @@ func (proxy *Proxy) addDNSListener(listenAddrStr string) {
 	// if 'userName' is set and we are the parent process
 	if !proxy.child {
 		// parent
-		listenerUDP, err := net.ListenUDP("udp", listenUDPAddr)
+		listenerUDP, err := net.ListenUDP(udp, listenUDPAddr)
 		if err != nil {
 			dlog.Fatal(err)
 		}
-		listenerTCP, err := net.ListenTCP("tcp", listenTCPAddr)
+		listenerTCP, err := net.ListenTCP(tcp, listenTCPAddr)
 		if err != nil {
 			dlog.Fatal(err)
 		}
@@ -186,7 +192,11 @@ func (proxy *Proxy) addDNSListener(listenAddrStr string) {
 }
 
 func (proxy *Proxy) addLocalDoHListener(listenAddrStr string) {
-	listenTCPAddr, err := net.ResolveTCPAddr("tcp", listenAddrStr)
+	network := "tcp"
+	if isDigit(listenAddrStr[0]) {
+		network = "tcp4"
+	}
+	listenTCPAddr, err := net.ResolveTCPAddr(network, listenAddrStr)
 	if err != nil {
 		dlog.Fatal(err)
 	}
@@ -202,7 +212,7 @@ func (proxy *Proxy) addLocalDoHListener(listenAddrStr string) {
 	// if 'userName' is set and we are the parent process
 	if !proxy.child {
 		// parent
-		listenerTCP, err := net.ListenTCP("tcp", listenTCPAddr)
+		listenerTCP, err := net.ListenTCP(network, listenTCPAddr)
 		if err != nil {
 			dlog.Fatal(err)
 		}
@@ -442,7 +452,12 @@ func (proxy *Proxy) udpListenerFromAddr(listenAddr *net.UDPAddr) error {
 	if err != nil {
 		return err
 	}
-	clientPc, err := listenConfig.ListenPacket(context.Background(), "udp", listenAddr.String())
+	listenAddrStr := listenAddr.String()
+	network := "udp"
+	if isDigit(listenAddrStr[0]) {
+		network = "udp4"
+	}
+	clientPc, err := listenConfig.ListenPacket(context.Background(), network, listenAddrStr)
 	if err != nil {
 		return err
 	}
@@ -456,7 +471,12 @@ func (proxy *Proxy) tcpListenerFromAddr(listenAddr *net.TCPAddr) error {
 	if err != nil {
 		return err
 	}
-	acceptPc, err := listenConfig.Listen(context.Background(), "tcp", listenAddr.String())
+	listenAddrStr := listenAddr.String()
+	network := "tcp"
+	if isDigit(listenAddrStr[0]) {
+		network = "tcp4"
+	}
+	acceptPc, err := listenConfig.Listen(context.Background(), network, listenAddrStr)
 	if err != nil {
 		return err
 	}
@@ -470,7 +490,12 @@ func (proxy *Proxy) localDoHListenerFromAddr(listenAddr *net.TCPAddr) error {
 	if err != nil {
 		return err
 	}
-	acceptPc, err := listenConfig.Listen(context.Background(), "tcp", listenAddr.String())
+	listenAddrStr := listenAddr.String()
+	network := "tcp"
+	if isDigit(listenAddrStr[0]) {
+		network = "tcp4"
+	}
+	acceptPc, err := listenConfig.Listen(context.Background(), network, listenAddrStr)
 	if err != nil {
 		return err
 	}

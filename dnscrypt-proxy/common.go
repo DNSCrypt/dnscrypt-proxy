@@ -166,6 +166,8 @@ func ReadTextFile(filename string) (string, error) {
 	return string(bin), nil
 }
 
+func isDigit(b byte) bool { return b >= '0' && b <= '9' }
+
 func maybeWritableByOtherUsers(p string) (bool, string, error) {
 	p = path.Clean(p)
 	for p != "/" && p != "." {
