@@ -241,9 +241,16 @@ func (serversInfo *ServersInfo) refresh(proxy *Proxy) (int, error) {
 			<-countChannel
 		}(&registeredServers[i])
 	}
+	liveServers := 0
 	var err error
 	for i := 0; i < serversCount; i++ {
 		err = <-errorChannel
+		if err == nil {
+			liveServers++
+		}
+	}
+	if liveServers > 0 {
+		err = nil
 	}
 	serversInfo.Lock()
 	sort.SliceStable(serversInfo.inner, func(i, j int) bool {
@@ -261,10 +268,7 @@ func (serversInfo *ServersInfo) refresh(proxy *Proxy) (int, error) {
 		dlog.Noticef("Server with the lowest initial latency: %s (rtt: %dms)", inner[0].Name, inner[0].initialRtt)
 	}
 	serversInfo.Unlock()
-	if innerLen > 0 {
-		err = nil
-	}
-	return innerLen, err
+	return liveServers, err
 }
 
 func (serversInfo *ServersInfo) estimatorUpdate(currentActive int) {
