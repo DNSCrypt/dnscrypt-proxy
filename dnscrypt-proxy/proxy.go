@@ -74,6 +74,7 @@ type Proxy struct {
 	certRefreshDelayAfterFailure  time.Duration
 	timeout                       time.Duration
 	certRefreshDelay              time.Duration
+	certRefreshConcurrency        int
 	cacheSize                     int
 	logMaxBackups                 int
 	logMaxAge                     int

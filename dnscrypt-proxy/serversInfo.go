@@ -224,16 +224,33 @@ func (serversInfo *ServersInfo) refresh(proxy *Proxy) (int, error) {
 	dlog.Debug("Refreshing certificates")
 	serversInfo.RLock()
 	// Appending registeredServers slice from sources may allocate new memory.
-	registeredServers := make([]RegisteredServer, len(serversInfo.registeredServers))
+	serversCount := len(serversInfo.registeredServers)
+	registeredServers := make([]RegisteredServer, serversCount)
 	copy(registeredServers, serversInfo.registeredServers)
 	serversInfo.RUnlock()
+	countChannel := make(chan struct{}, proxy.certRefreshConcurrency)
+	errorChannel := make(chan error, serversCount)
+	for i := range registeredServers {
+		countChannel <- struct{}{}
+		go func(registeredServer *RegisteredServer) {
+			err := serversInfo.refreshServer(proxy, registeredServer.name, registeredServer.stamp)
+			if err == nil {
+				proxy.xTransport.internalResolverReady = true
+			}
+			errorChannel <- err
+			<-countChannel
+		}(&registeredServers[i])
+	}
 	liveServers := 0
 	var err error
-	for _, registeredServer := range registeredServers {
-		if err = serversInfo.refreshServer(proxy, registeredServer.name, registeredServer.stamp); err == nil {
+	for i := 0; i < serversCount; i++ {
+		err = <-errorChannel
+		if err == nil {
 			liveServers++
-			proxy.xTransport.internalResolverReady = true
 		}
+	}
+	if liveServers > 0 {
+		err = nil
 	}
 	serversInfo.Lock()
 	sort.SliceStable(serversInfo.inner, func(i, j int) bool {
