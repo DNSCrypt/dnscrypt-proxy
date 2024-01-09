@@ -21,9 +21,9 @@ require (
 	github.com/miekg/dns v1.1.57
 	github.com/powerman/check v1.7.0
 	github.com/quic-go/quic-go v0.40.1
-	golang.org/x/crypto v0.16.0
-	golang.org/x/net v0.19.0
-	golang.org/x/sys v0.15.0
+	golang.org/x/crypto v0.18.0
+	golang.org/x/net v0.20.0
+	golang.org/x/sys v0.16.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 )
 
