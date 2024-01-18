@@ -542,10 +542,10 @@ func (s *baseServer) validateToken(token *handshake.Token, addr net.Addr) bool {
 
 func (s *baseServer) handleInitialImpl(p receivedPacket, hdr *wire.Header) error {
 	if len(hdr.Token) == 0 && hdr.DestConnectionID.Len() < protocol.MinConnectionIDLenInitial {
-		p.buffer.Release()
 		if s.tracer != nil && s.tracer.DroppedPacket != nil {
 			s.tracer.DroppedPacket(p.remoteAddr, logging.PacketTypeInitial, p.Size(), logging.PacketDropUnexpectedPacket)
 		}
+		p.buffer.Release()
 		return errors.New("too short connection ID")
 	}
 

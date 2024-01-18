@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/quic-go/quic-go"
-	"github.com/quic-go/quic-go/internal/utils"
 )
 
 // A Stream is a HTTP/3 stream.
@@ -115,7 +114,7 @@ func (s *lengthLimitedStream) Read(b []byte) (int, error) {
 	if err := s.checkContentLengthViolation(); err != nil {
 		return 0, err
 	}
-	n, err := s.stream.Read(b[:utils.Min(int64(len(b)), s.contentLength-s.read)])
+	n, err := s.stream.Read(b[:min(int64(len(b)), s.contentLength-s.read)])
 	s.read += int64(n)
 	if err := s.checkContentLengthViolation(); err != nil {
 		return n, err

@@ -254,6 +254,15 @@ func (c *client) maxHeaderBytes() uint64 {
 
 // RoundTripOpt executes a request and returns a response
 func (c *client) RoundTripOpt(req *http.Request, opt RoundTripOpt) (*http.Response, error) {
+	rsp, err := c.roundTripOpt(req, opt)
+	if err != nil && req.Context().Err() != nil {
+		// if the context was canceled, return the context cancellation error
+		err = req.Context().Err()
+	}
+	return rsp, err
+}
+
+func (c *client) roundTripOpt(req *http.Request, opt RoundTripOpt) (*http.Response, error) {
 	if authorityAddr("https", hostnameFromRequest(req)) != c.hostname {
 		return nil, fmt.Errorf("http3 client BUG: RoundTripOpt called for the wrong client (expected %s, got %s)", c.hostname, req.Host)
 	}
