@@ -8,7 +8,6 @@ require (
 	github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf
 	github.com/dchest/safefile v0.0.0-20151022103144-855e8d98f185
 	github.com/hashicorp/go-immutable-radix v1.3.1
-	github.com/hashicorp/golang-lru v1.0.2
 	github.com/hectane/go-acl v0.0.0-20230122075934-ca0b05cb1adb
 	github.com/jedisct1/dlog v0.0.0-20230811132706-443b333ff1b3
 	github.com/jedisct1/go-clocksmith v0.0.0-20230211133011-392c1afea73e
@@ -19,6 +18,7 @@ require (
 	github.com/k-sone/critbitgo v1.4.0
 	github.com/kardianos/service v1.2.2
 	github.com/miekg/dns v1.1.58
+	github.com/opencoff/go-sieve v0.2.1
 	github.com/powerman/check v1.7.0
 	github.com/quic-go/quic-go v0.41.0
 	golang.org/x/crypto v0.18.0
@@ -33,6 +33,7 @@ require (
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/google/pprof v0.0.0-20210407192527-94a9f03dee38 // indirect
 	github.com/hashicorp/go-syslog v1.0.0 // indirect
+	github.com/hashicorp/golang-lru v0.5.0 // indirect
 	github.com/onsi/ginkgo/v2 v2.9.5 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect

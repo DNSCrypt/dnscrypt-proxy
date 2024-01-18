@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	lru "github.com/hashicorp/golang-lru"
 	"github.com/miekg/dns"
+	sieve "github.com/opencoff/go-sieve"
 )
 
 const StaleResponseTTL = 30 * time.Second
@@ -19,7 +19,7 @@ type CachedResponse struct {
 
 type CachedResponses struct {
 	sync.RWMutex
-	cache *lru.ARCCache
+	cache *sieve.Sieve[[32]byte, CachedResponse]
 }
 
 var cachedResponses CachedResponses
@@ -75,12 +75,11 @@ func (plugin *PluginCache) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 		cachedResponses.RUnlock()
 		return nil
 	}
-	cachedAny, ok := cachedResponses.cache.Get(cacheKey)
+	cached, ok := cachedResponses.cache.Get(cacheKey)
 	if !ok {
 		cachedResponses.RUnlock()
 		return nil
 	}
-	cached := cachedAny.(CachedResponse)
 	expiration := cached.expiration
 	synth := cached.msg.Copy()
 	cachedResponses.RUnlock()
@@ -151,8 +150,8 @@ func (plugin *PluginCacheResponse) Eval(pluginsState *PluginsState, msg *dns.Msg
 	cachedResponses.Lock()
 	if cachedResponses.cache == nil {
 		var err error
-		cachedResponses.cache, err = lru.NewARC(pluginsState.cacheSize)
-		if err != nil {
+		cachedResponses.cache = sieve.New[[32]byte, CachedResponse](pluginsState.cacheSize)
+		if cachedResponses.cache == nil {
 			cachedResponses.Unlock()
 			return err
 		}
