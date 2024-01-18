@@ -20,7 +20,7 @@ type ConnectionTracer struct {
 	ReceivedLongHeaderPacket         func(*ExtendedHeader, ByteCount, ECN, []Frame)
 	ReceivedShortHeaderPacket        func(*ShortHeader, ByteCount, ECN, []Frame)
 	BufferedPacket                   func(PacketType, ByteCount)
-	DroppedPacket                    func(PacketType, ByteCount, PacketDropReason)
+	DroppedPacket                    func(PacketType, PacketNumber, ByteCount, PacketDropReason)
 	UpdatedMetrics                   func(rttStats *RTTStats, cwnd, bytesInFlight ByteCount, packetsInFlight int)
 	AcknowledgedPacket               func(EncryptionLevel, PacketNumber)
 	LostPacket                       func(EncryptionLevel, PacketNumber, PacketLossReason)
@@ -34,6 +34,7 @@ type ConnectionTracer struct {
 	LossTimerExpired                 func(TimerType, EncryptionLevel)
 	LossTimerCanceled                func()
 	ECNStateUpdated                  func(state ECNState, trigger ECNStateTrigger)
+	ChoseALPN                        func(protocol string)
 	// Close is called when the connection is closed.
 	Close func()
 	Debug func(name, msg string)
@@ -139,10 +140,10 @@ func NewMultiplexedConnectionTracer(tracers ...*ConnectionTracer) *ConnectionTra
 				}
 			}
 		},
-		DroppedPacket: func(typ PacketType, size ByteCount, reason PacketDropReason) {
+		DroppedPacket: func(typ PacketType, pn PacketNumber, size ByteCount, reason PacketDropReason) {
 			for _, t := range tracers {
 				if t.DroppedPacket != nil {
-					t.DroppedPacket(typ, size, reason)
+					t.DroppedPacket(typ, pn, size, reason)
 				}
 			}
 		},
@@ -234,6 +235,13 @@ func NewMultiplexedConnectionTracer(tracers ...*ConnectionTracer) *ConnectionTra
 			for _, t := range tracers {
 				if t.ECNStateUpdated != nil {
 					t.ECNStateUpdated(state, trigger)
+				}
+			}
+		},
+		ChoseALPN: func(protocol string) {
+			for _, t := range tracers {
+				if t.ChoseALPN != nil {
+					t.ChoseALPN(protocol)
 				}
 			}
 		},

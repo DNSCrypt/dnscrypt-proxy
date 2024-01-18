@@ -102,11 +102,8 @@ github.com/powerman/deepequal
 # github.com/quic-go/qpack v0.4.0
 ## explicit; go 1.18
 github.com/quic-go/qpack
-# github.com/quic-go/qtls-go1-20 v0.4.1
-## explicit; go 1.20
-github.com/quic-go/qtls-go1-20
-# github.com/quic-go/quic-go v0.40.1
-## explicit; go 1.20
+# github.com/quic-go/quic-go v0.41.0
+## explicit; go 1.21
 github.com/quic-go/quic-go
 github.com/quic-go/quic-go/http3
 github.com/quic-go/quic-go/internal/ackhandler
@@ -136,8 +133,6 @@ go.uber.org/mock/mockgen/model
 golang.org/x/crypto/blake2b
 golang.org/x/crypto/chacha20
 golang.org/x/crypto/chacha20poly1305
-golang.org/x/crypto/cryptobyte
-golang.org/x/crypto/cryptobyte/asn1
 golang.org/x/crypto/curve25519
 golang.org/x/crypto/curve25519/internal/field
 golang.org/x/crypto/ed25519
@@ -150,7 +145,6 @@ golang.org/x/crypto/poly1305
 golang.org/x/crypto/salsa20/salsa
 # golang.org/x/exp v0.0.0-20221205204356-47842c84f3db
 ## explicit; go 1.18
-golang.org/x/exp/constraints
 golang.org/x/exp/rand
 # golang.org/x/mod v0.12.0
 ## explicit; go 1.17

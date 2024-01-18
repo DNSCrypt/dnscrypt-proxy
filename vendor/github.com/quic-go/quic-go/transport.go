@@ -191,7 +191,6 @@ func (t *Transport) dial(ctx context.Context, addr net.Addr, host string, tlsCon
 		onClose = func() { t.Close() }
 	}
 	tlsConf = tlsConf.Clone()
-	tlsConf.MinVersion = tls.VersionTLS13
 	setTLSConfigServerName(tlsConf, addr, host)
 	return dial(ctx, newSendConn(t.conn, addr, packetInfo{}, utils.DefaultLogger), t.connIDGenerator, t.handlerMap, tlsConf, conf, onClose, use0RTT)
 }
