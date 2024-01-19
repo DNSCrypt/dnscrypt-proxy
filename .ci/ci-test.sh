@@ -66,11 +66,11 @@ t || dig -p${DNS_PORT} +dnssec darpa.mil @127.0.0.1 2>&1 | grep -Fvq 'RRSIG' || 
 t || dig -p${DNS_PORT} +dnssec www.darpa.mil @127.0.0.1 2>&1 | grep -Fvq 'RRSIG' || fail
 
 section
-t || dig -p${DNS_PORT} +short cloaked.com @127.0.0.1 | grep -Eq '1.1.1.1|1.0.0.1' || fail
-t || dig -p${DNS_PORT} +short MX cloaked.com @127.0.0.1 | grep -Fq 'locally blocked' || fail
+t || dig -p${DNS_PORT} +short cloakedunregistered.com @127.0.0.1 | grep -Eq '1.1.1.1|1.0.0.1' || fail
+t || dig -p${DNS_PORT} +short MX cloakedunregistered.com @127.0.0.1 | grep -Fq 'locally blocked' || fail
 t || dig -p${DNS_PORT} +short MX example.com @127.0.0.1 | grep -Fvq 'locally blocked' || fail
-t || dig -p${DNS_PORT} NS cloaked.com @127.0.0.1 | grep -Fiq 'gtld-servers.net' || fail
-t || dig -p${DNS_PORT} +short www.cloaked2.com @127.0.0.1 | grep -Eq '1.1.1.1|1.0.0.1' || fail
+t || dig -p${DNS_PORT} NS cloakedunregistered.com @127.0.0.1 | grep -Fiq 'gtld-servers.net' || fail
+t || dig -p${DNS_PORT} +short www.cloakedunregistered2.com @127.0.0.1 | grep -Eq '1.1.1.1|1.0.0.1' || fail
 t || dig -p${DNS_PORT} +short www.dnscrypt-test @127.0.0.1 | grep -Fq '192.168.100.100' || fail
 t || dig -p${DNS_PORT} a.www.dnscrypt-test @127.0.0.1 | grep -Fq 'NXDOMAIN' || fail
 t || dig -p${DNS_PORT} +short ptr 101.100.168.192.in-addr.arpa. @127.0.0.1 | grep -Eq 'www.dnscrypt-test.com' || fail
@@ -122,8 +122,8 @@ t || grep -Eq 'invalid.*SYNTH' query.log || fail
 t || grep -Eq '168.192.in-addr.arpa.*SYNTH' query.log || fail
 t || grep -Eq 'darpa.mil.*FORWARD' query.log || fail
 t || grep -Eq 'www.darpa.mil.*FORWARD' query.log || fail
-t || grep -Eq 'cloaked.com.*CLOAK' query.log || fail
-t || grep -Eq 'www.cloaked2.com.*CLOAK' query.log || fail
+t || grep -Eq 'cloakedunregistered.com.*CLOAK' query.log || fail
+t || grep -Eq 'www.cloakedunregistered2.com.*CLOAK' query.log || fail
 t || grep -Eq 'www.dnscrypt-test.*CLOAK' query.log || fail
 t || grep -Eq 'a.www.dnscrypt-test.*NXDOMAIN' query.log || fail
 t || grep -Eq 'telemetry.example.*REJECT' query.log || fail

@@ -13,8 +13,6 @@ cache = true
 [query_log]
 file = 'query.log'
 
-
-
 [static]
 
   [static.'myserver']
