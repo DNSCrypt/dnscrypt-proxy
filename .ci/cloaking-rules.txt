@@ -1,5 +1,5 @@
-cloaked.*                one.one.one.one
-*.cloaked2.*             one.one.one.one # inline comment
-=www.dnscrypt-test       192.168.100.100
-=www.dnscrypt-test.com   192.168.100.101
-=ipv6.dnscrypt-test.com  fd02::1
+cloakedunregistered.*       one.one.one.one
+*.cloakedunregistered2.*    one.one.one.one # inline comment
+=www.dnscrypt-test          192.168.100.100
+=www.dnscrypt-test.com      192.168.100.101
+=ipv6.dnscrypt-test.com     fd02::1
