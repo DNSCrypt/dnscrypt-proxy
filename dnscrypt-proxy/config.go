@@ -326,6 +326,7 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 			*flags.ConfigFile,
 		)
 	}
+	WarnIfMaybeWritableByOtherUsers(foundConfigFile)
 	config := newConfig()
 	md, err := toml.DecodeFile(foundConfigFile, &config)
 	if err != nil {
