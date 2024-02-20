@@ -66,6 +66,10 @@ func main() {
 		os.Exit(0)
 	}
 
+	if fullexecpath, err := os.Executable(); err == nil {
+		WarnIfMaybeWritableByOtherUsers(fullexecpath)
+	}
+
 	app := &App{
 		flags: &flags,
 	}
@@ -93,9 +97,6 @@ func main() {
 			dlog.Fatal(err)
 		}
 		if *svcFlag == "install" {
-			if fullexecpath, err := os.Executable(); err == nil {
-				WarnIfMaybeWritableByOtherUsers(fullexecpath)
-			}
 			dlog.Notice("Installed as a service. Use `-service start` to start")
 		} else if *svcFlag == "uninstall" {
 			dlog.Notice("Service uninstalled")
