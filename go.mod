@@ -1,6 +1,6 @@
 module github.com/dnscrypt/dnscrypt-proxy
 
-go 1.22.0
+go 1.22
 
 require (
 	github.com/BurntSushi/toml v1.3.2
