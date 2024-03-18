@@ -88,11 +88,18 @@ func (f *headersFrame) Append(b []byte) []byte {
 	return quicvarint.Append(b, f.Length)
 }
 
-const settingDatagram = 0x33
+const (
+	// Extended CONNECT, RFC 9220
+	settingExtendedConnect = 0x8
+	// HTTP Datagrams, RFC 9297
+	settingDatagram = 0x33
+)
 
 type settingsFrame struct {
-	Datagram bool
-	Other    map[uint64]uint64 // all settings that we don't explicitly recognize
+	Datagram        bool // HTTP Datagrams, RFC 9297
+	ExtendedConnect bool // Extended CONNECT, RFC 9220
+
+	Other map[uint64]uint64 // all settings that we don't explicitly recognize
 }
 
 func parseSettingsFrame(r io.Reader, l uint64) (*settingsFrame, error) {
@@ -108,7 +115,7 @@ func parseSettingsFrame(r io.Reader, l uint64) (*settingsFrame, error) {
 	}
 	frame := &settingsFrame{}
 	b := bytes.NewReader(buf)
-	var readDatagram bool
+	var readDatagram, readExtendedConnect bool
 	for b.Len() > 0 {
 		id, err := quicvarint.Read(b)
 		if err != nil { // should not happen. We allocated the whole frame already.
@@ -120,13 +127,22 @@ func parseSettingsFrame(r io.Reader, l uint64) (*settingsFrame, error) {
 		}
 
 		switch id {
+		case settingExtendedConnect:
+			if readExtendedConnect {
+				return nil, fmt.Errorf("duplicate setting: %d", id)
+			}
+			readExtendedConnect = true
+			if val != 0 && val != 1 {
+				return nil, fmt.Errorf("invalid value for SETTINGS_ENABLE_CONNECT_PROTOCOL: %d", val)
+			}
+			frame.ExtendedConnect = val == 1
 		case settingDatagram:
 			if readDatagram {
 				return nil, fmt.Errorf("duplicate setting: %d", id)
 			}
 			readDatagram = true
 			if val != 0 && val != 1 {
-				return nil, fmt.Errorf("invalid value for H3_DATAGRAM: %d", val)
+				return nil, fmt.Errorf("invalid value for SETTINGS_H3_DATAGRAM: %d", val)
 			}
 			frame.Datagram = val == 1
 		default:
@@ -151,9 +167,16 @@ func (f *settingsFrame) Append(b []byte) []byte {
 	if f.Datagram {
 		l += quicvarint.Len(settingDatagram) + quicvarint.Len(1)
 	}
+	if f.ExtendedConnect {
+		l += quicvarint.Len(settingExtendedConnect) + quicvarint.Len(1)
+	}
 	b = quicvarint.Append(b, uint64(l))
 	if f.Datagram {
 		b = quicvarint.Append(b, settingDatagram)
+		b = quicvarint.Append(b, 1)
+	}
+	if f.ExtendedConnect {
+		b = quicvarint.Append(b, settingExtendedConnect)
 		b = quicvarint.Append(b, 1)
 	}
 	for id, val := range f.Other {
