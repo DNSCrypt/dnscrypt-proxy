@@ -126,9 +126,14 @@ func requestFromHeaders(headerFields []qpack.HeaderField) (*http.Request, error)
 		return nil, errors.New(":path, :authority and :method must not be empty")
 	}
 
+	if !isExtendedConnected && len(hdr.Protocol) > 0 {
+		return nil, errors.New(":protocol must be empty")
+	}
+
 	var u *url.URL
 	var requestURI string
-	var protocol string
+
+	protocol := "HTTP/3.0"
 
 	if isConnect {
 		u = &url.URL{}
@@ -137,15 +142,14 @@ func requestFromHeaders(headerFields []qpack.HeaderField) (*http.Request, error)
 			if err != nil {
 				return nil, err
 			}
+			protocol = hdr.Protocol
 		} else {
 			u.Path = hdr.Path
 		}
 		u.Scheme = hdr.Scheme
 		u.Host = hdr.Authority
 		requestURI = hdr.Authority
-		protocol = hdr.Protocol
 	} else {
-		protocol = "HTTP/3.0"
 		u, err = url.ParseRequestURI(hdr.Path)
 		if err != nil {
 			return nil, fmt.Errorf("invalid content length: %w", err)

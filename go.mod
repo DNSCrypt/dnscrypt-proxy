@@ -20,10 +20,10 @@ require (
 	github.com/miekg/dns v1.1.58
 	github.com/opencoff/go-sieve v0.2.1
 	github.com/powerman/check v1.7.0
-	github.com/quic-go/quic-go v0.41.0
-	golang.org/x/crypto v0.19.0
-	golang.org/x/net v0.21.0
-	golang.org/x/sys v0.17.0
+	github.com/quic-go/quic-go v0.42.0
+	golang.org/x/crypto v0.21.0
+	golang.org/x/net v0.22.0
+	golang.org/x/sys v0.18.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 )
 
@@ -40,7 +40,7 @@ require (
 	github.com/powerman/deepequal v0.1.0 // indirect
 	github.com/quic-go/qpack v0.4.0 // indirect
 	github.com/smartystreets/goconvey v1.7.2 // indirect
-	go.uber.org/mock v0.3.0 // indirect
+	go.uber.org/mock v0.4.0 // indirect
 	golang.org/x/exp v0.0.0-20221205204356-47842c84f3db // indirect
 	golang.org/x/mod v0.14.0 // indirect
 	golang.org/x/text v0.14.0 // indirect

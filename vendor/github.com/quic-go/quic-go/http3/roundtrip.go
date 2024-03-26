@@ -17,6 +17,30 @@ import (
 	"github.com/quic-go/quic-go"
 )
 
+// Settings are HTTP/3 settings that apply to the underlying connection.
+type Settings struct {
+	// Support for HTTP/3 datagrams (RFC 9297)
+	EnableDatagram bool
+	// Extended CONNECT, RFC 9220
+	EnableExtendedConnect bool
+	// Other settings, defined by the application
+	Other map[uint64]uint64
+}
+
+// RoundTripOpt are options for the Transport.RoundTripOpt method.
+type RoundTripOpt struct {
+	// OnlyCachedConn controls whether the RoundTripper may create a new QUIC connection.
+	// If set true and no cached connection is available, RoundTripOpt will return ErrNoCachedConn.
+	OnlyCachedConn bool
+	// DontCloseRequestStream controls whether the request stream is closed after sending the request.
+	// If set, context cancellations have no effect after the response headers are received.
+	DontCloseRequestStream bool
+	// CheckSettings is run before the request is sent to the server.
+	// If not yet received, it blocks until the server's SETTINGS frame is received.
+	// If an error is returned, the request won't be sent to the server, and the error is returned.
+	CheckSettings func(Settings) error
+}
+
 type roundTripCloser interface {
 	RoundTripOpt(*http.Request, RoundTripOpt) (*http.Response, error)
 	HandshakeComplete() bool
@@ -50,9 +74,8 @@ type RoundTripper struct {
 	// If nil, reasonable default values will be used.
 	QuicConfig *quic.Config
 
-	// Enable support for HTTP/3 datagrams.
-	// If set to true, QuicConfig.EnableDatagram will be set.
-	// See https://datatracker.ietf.org/doc/html/rfc9297.
+	// Enable support for HTTP/3 datagrams (RFC 9297).
+	// If a QuicConfig is set, datagram support also needs to be enabled on the QUIC layer by setting EnableDatagrams.
 	EnableDatagrams bool
 
 	// Additional HTTP/3 settings.
@@ -87,16 +110,6 @@ type RoundTripper struct {
 	newClient func(hostname string, tlsConf *tls.Config, opts *roundTripperOpts, conf *quic.Config, dialer dialFunc) (roundTripCloser, error) // so we can mock it in tests
 	clients   map[string]*roundTripCloserWithCount
 	transport *quic.Transport
-}
-
-// RoundTripOpt are options for the Transport.RoundTripOpt method.
-type RoundTripOpt struct {
-	// OnlyCachedConn controls whether the RoundTripper may create a new QUIC connection.
-	// If set true and no cached connection is available, RoundTripOpt will return ErrNoCachedConn.
-	OnlyCachedConn bool
-	// DontCloseRequestStream controls whether the request stream is closed after sending the request.
-	// If set, context cancellations have no effect after the response headers are received.
-	DontCloseRequestStream bool
 }
 
 var (
