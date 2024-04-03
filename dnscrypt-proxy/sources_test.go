@@ -144,7 +144,7 @@ func loadTestSourceNames(t *testing.T, d *SourceTestData) {
 	}
 }
 
-func generateFixtureState(t *testing.T, d *SourceTestData, suffix, file string, state SourceTestState) {
+func generateFixtureState(_ *testing.T, d *SourceTestData, suffix, file string, state SourceTestState) {
 	if _, ok := d.fixtures[state]; !ok {
 		d.fixtures[state] = map[string]SourceFixture{}
 	}
@@ -296,7 +296,7 @@ func prepSourceTestCache(t *testing.T, d *SourceTestData, e *SourceTestExpect, s
 }
 
 func prepSourceTestDownload(
-	t *testing.T,
+	_ *testing.T,
 	d *SourceTestData,
 	e *SourceTestExpect,
 	source string,

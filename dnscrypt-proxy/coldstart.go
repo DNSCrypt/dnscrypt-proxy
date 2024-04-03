@@ -117,7 +117,6 @@ func handleColdStartClient(clientPc *net.UDPConn, cancelChannel chan struct{}, i
 }
 
 func addColdStartListener(
-	proxy *Proxy,
 	ipsMap *CaptivePortalMap,
 	listenAddrStr string,
 	captivePortalHandler *CaptivePortalHandler,
@@ -191,7 +190,7 @@ func ColdStart(proxy *Proxy) (*CaptivePortalHandler, error) {
 	}
 	ok := false
 	for _, listenAddrStr := range listenAddrStrs {
-		err = addColdStartListener(proxy, &ipsMap, listenAddrStr, &captivePortalHandler)
+		err = addColdStartListener(&ipsMap, listenAddrStr, &captivePortalHandler)
 		if err == nil {
 			ok = true
 		}
