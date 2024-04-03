@@ -176,7 +176,7 @@ func maybeWritableByOtherUsers(p string) (bool, string, error) {
 			return false, p, err
 		}
 		mode := st.Mode()
-		if mode&2 == 2 && !(st.IsDir() && mode&01000 == 01000) {
+		if mode.Perm()&2 != 0 && !(st.IsDir() && mode&os.ModeSticky == os.ModeSticky) {
 			return true, p, nil
 		}
 		p = path.Dir(p)
