@@ -183,7 +183,7 @@ func FetchCurrentDNSCryptCert(
 		certCountStr = " - additional certificate"
 	}
 	if certInfo.CryptoConstruction == UndefinedConstruction {
-		return certInfo, 0, fragmentsBlocked, errors.New("No useable certificate found")
+		return certInfo, 0, fragmentsBlocked, errors.New("No usable certificate found")
 	}
 	return certInfo, int(rtt.Nanoseconds() / 1000000), fragmentsBlocked, nil
 }
