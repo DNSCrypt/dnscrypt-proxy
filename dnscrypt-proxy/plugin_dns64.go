@@ -49,7 +49,7 @@ func (plugin *PluginDNS64) Init(proxy *Proxy) error {
 			if err != nil {
 				return err
 			}
-			dlog.Infof("Registered DNS64 prefix [%s]", pref.String())
+			dlog.Noticef("Registered DNS64 prefix [%s]", pref.String())
 			plugin.pref64 = append(plugin.pref64, pref)
 		}
 	} else if len(proxy.dns64Resolvers) != 0 {
@@ -57,7 +57,10 @@ func (plugin *PluginDNS64) Init(proxy *Proxy) error {
 		if err := plugin.refreshPref64(); err != nil {
 			return err
 		}
+	} else {
+		return nil
 	}
+	dlog.Notice("DNS64 map enabled")
 
 	return nil
 }
