@@ -152,11 +152,10 @@ func (plugin *PluginDNS64) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 		}
 	}
 
-	synth := EmptyResponseFromMessage(msg)
-	synth.Answer = append(synth.Answer, synth64...)
+	msg.Answer = synth64
+	msg.AuthenticatedData = false
+	msg.SetEdns0(uint16(MaxDNSUDPSafePacketSize), false)
 
-	pluginsState.synthResponse = synth
-	pluginsState.action = PluginsActionSynth
 	pluginsState.returnCode = PluginsReturnCodeCloak
 
 	return nil
