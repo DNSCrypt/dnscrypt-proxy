@@ -119,6 +119,7 @@ var undelegatedSet = []string{
 	"envoy",
 	"example",
 	"f.f.ip6.arpa",
+	"fritz.box",
 	"grp",
 	"gw==",
 	"home",
