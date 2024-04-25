@@ -131,7 +131,7 @@ func (source *Source) parseURLs(urls []string) {
 }
 
 func fetchFromURL(xTransport *XTransport, u *url.URL) ([]byte, error) {
-	bin, _, _, _, err := xTransport.Get(u, "", DefaultTimeout)
+	bin, _, _, _, err := xTransport.GetWithCompression(u, "", DefaultTimeout)
 	return bin, err
 }
 

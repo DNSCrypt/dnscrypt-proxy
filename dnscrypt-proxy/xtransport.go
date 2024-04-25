@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"crypto/sha512"
 	"crypto/tls"
@@ -482,6 +483,7 @@ func (xTransport *XTransport) Fetch(
 	contentType string,
 	body *[]byte,
 	timeout time.Duration,
+	compress bool,
 ) ([]byte, int, *tls.ConnectionState, time.Duration, error) {
 	if timeout <= 0 {
 		timeout = xTransport.timeout
@@ -529,6 +531,9 @@ func (xTransport *XTransport) Fetch(
 			host,
 		)
 		return nil, 0, nil, 0, err
+	}
+	if compress && body == nil {
+		header["Accept-Encoding"] = []string{"gzip"}
 	}
 	req := &http.Request{
 		Method: method,
@@ -596,7 +601,17 @@ func (xTransport *XTransport) Fetch(
 		}
 	}
 	tls := resp.TLS
-	bin, err := io.ReadAll(io.LimitReader(resp.Body, MaxHTTPBodyLength))
+
+	var bodyReader io.ReadCloser = resp.Body
+	if compress && resp.Header.Get("Content-Encoding") == "gzip" {
+		bodyReader, err = gzip.NewReader(io.LimitReader(resp.Body, MaxHTTPBodyLength))
+		if err != nil {
+			return nil, statusCode, tls, rtt, err
+		}
+		defer bodyReader.Close()
+	}
+
+	bin, err := io.ReadAll(io.LimitReader(bodyReader, MaxHTTPBodyLength))
 	if err != nil {
 		return nil, statusCode, tls, rtt, err
 	}
@@ -604,12 +619,20 @@ func (xTransport *XTransport) Fetch(
 	return bin, statusCode, tls, rtt, err
 }
 
+func (xTransport *XTransport) GetWithCompression(
+	url *url.URL,
+	accept string,
+	timeout time.Duration,
+) ([]byte, int, *tls.ConnectionState, time.Duration, error) {
+	return xTransport.Fetch("GET", url, accept, "", nil, timeout, true)
+}
+
 func (xTransport *XTransport) Get(
 	url *url.URL,
 	accept string,
 	timeout time.Duration,
 ) ([]byte, int, *tls.ConnectionState, time.Duration, error) {
-	return xTransport.Fetch("GET", url, accept, "", nil, timeout)
+	return xTransport.Fetch("GET", url, accept, "", nil, timeout, false)
 }
 
 func (xTransport *XTransport) Post(
@@ -619,7 +642,7 @@ func (xTransport *XTransport) Post(
 	body *[]byte,
 	timeout time.Duration,
 ) ([]byte, int, *tls.ConnectionState, time.Duration, error) {
-	return xTransport.Fetch("POST", url, accept, contentType, body, timeout)
+	return xTransport.Fetch("POST", url, accept, contentType, body, timeout, false)
 }
 
 func (xTransport *XTransport) dohLikeQuery(
