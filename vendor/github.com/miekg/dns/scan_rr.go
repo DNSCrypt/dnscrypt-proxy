@@ -51,25 +51,21 @@ func endingToTxtSlice(c *zlexer, errstr string) ([]string, *ParseError) {
 		switch l.value {
 		case zString:
 			empty = false
-			if len(l.token) > 255 {
-				// split up tokens that are larger than 255 into 255-chunks
-				sx := []string{}
-				p, i := 0, 255
-				for {
-					if i <= len(l.token) {
-						sx = append(sx, l.token[p:i])
-					} else {
-						sx = append(sx, l.token[p:])
-						break
+			// split up tokens that are larger than 255 into 255-chunks
+			sx := []string{}
+			p := 0
+			for {
+				i := escapedStringOffset(l.token[p:], 255)
+				if i != -1 && p+i != len(l.token) {
+					sx = append(sx, l.token[p:p+i])
+				} else {
+					sx = append(sx, l.token[p:])
+					break
 
-					}
-					p, i = p+255, i+255
 				}
-				s = append(s, sx...)
-				break
+				p += i
 			}
-
-			s = append(s, l.token)
+			s = append(s, sx...)
 		case zBlank:
 			if quote {
 				// zBlank can only be seen in between txt parts.
@@ -1919,4 +1915,33 @@ func (rr *APL) parse(c *zlexer, o string) *ParseError {
 
 	rr.Prefixes = prefixes
 	return nil
+}
+
+// escapedStringOffset finds the offset within a string (which may contain escape
+// sequences) that corresponds to a certain byte offset. If the input offset is
+// out of bounds, -1 is returned.
+func escapedStringOffset(s string, byteOffset int) int {
+	if byteOffset == 0 {
+		return 0
+	}
+
+	offset := 0
+	for i := 0; i < len(s); i++ {
+		offset += 1
+
+		// Skip escape sequences
+		if s[i] != '\\' {
+			// Not an escape sequence; nothing to do.
+		} else if isDDD(s[i+1:]) {
+			i += 3
+		} else {
+			i++
+		}
+
+		if offset >= byteOffset {
+			return i + 1
+		}
+	}
+
+	return -1
 }
