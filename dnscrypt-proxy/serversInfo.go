@@ -325,6 +325,8 @@ func fetchServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, isNew 
 		return fetchDoHServerInfo(proxy, name, stamp, isNew)
 	} else if stamp.Proto == stamps.StampProtoTypeODoHTarget {
 		return fetchODoHTargetInfo(proxy, name, stamp, isNew)
+	} else if stamp.Proto == stamps.StampProtoTypePlain {
+		return fetchPlainServerInfo(proxy, name, stamp, isNew)
 	}
 	return ServerInfo{}, fmt.Errorf("Unsupported protocol for [%s]: [%s]", name, stamp.Proto.String())
 }
@@ -942,6 +944,49 @@ func fetchODoHTargetInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, is
 		dlog.Infof("Trying to fetch the [%v] configuration again", name)
 	}
 	return serverInfo, err
+}
+
+func fetchPlainServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, isNew bool) (ServerInfo, error) {
+	relay, err := route(proxy, name, stamp.Proto)
+	if err != nil {
+		return ServerInfo{}, err
+	}
+	if relay != nil {
+		return ServerInfo{}, errors.New("Relay is not supported by plain DNS")
+	}
+
+	remoteUDPAddr, err := net.ResolveUDPAddr("udp", stamp.ServerAddrStr)
+	if err != nil {
+		return ServerInfo{}, err
+	}
+	remoteTCPAddr, err := net.ResolveTCPAddr("tcp", stamp.ServerAddrStr)
+	if err != nil {
+		return ServerInfo{}, err
+	}
+
+	testQuery := dns.Msg{}
+	testQuery.SetQuestion(".", dns.TypeNS)
+	testQuery.Id = 0xcafe
+	testQuery.MsgHdr.RecursionDesired = true
+	in, rtt, fragmentsBlocked, err := DNSExchange(proxy, "udp", &testQuery, stamp.ServerAddrStr,
+		nil, &name, false)
+
+	if in != nil && in.Rcode != dns.RcodeSuccess {
+		dlog.Warnf("Plain Server Target Test Rcode: %v", in.Rcode)
+	}
+	if err != nil {
+		return ServerInfo{}, err
+	}
+	return ServerInfo{
+		Proto:      stamps.StampProtoTypePlain,
+		Name:       name,
+		Timeout:    proxy.timeout,
+		UDPAddr:    remoteUDPAddr,
+		TCPAddr:    remoteTCPAddr,
+		Relay:      relay,
+		initialRtt: int(rtt.Nanoseconds() / 1000000),
+		knownBugs:  ServerBugs{fragmentsBlocked: fragmentsBlocked},
+	}, nil
 }
 
 func (serverInfo *ServerInfo) noticeFailure(proxy *Proxy) {

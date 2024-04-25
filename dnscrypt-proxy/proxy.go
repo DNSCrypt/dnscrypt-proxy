@@ -630,6 +630,10 @@ func (proxy *Proxy) processIncomingQuery(
 	if serverInfo != nil {
 		serverName = serverInfo.Name
 		needsEDNS0Padding = (serverInfo.Proto == stamps.StampProtoTypeDoH || serverInfo.Proto == stamps.StampProtoTypeTLS)
+
+		if serverInfo.Proto == stamps.StampProtoTypePlain && serverInfo.knownBugs.fragmentsBlocked {
+			pluginsState.maxPayloadSize = pluginsState.maxUnencryptedUDPSafePayloadSize
+		}
 	}
 	query, _ = pluginsState.ApplyQueryPlugins(&proxy.pluginsGlobals, query, needsEDNS0Padding)
 	if len(query) < MinDNSPacketSize || len(query) > MaxDNSPacketSize {
@@ -785,6 +789,31 @@ func (proxy *Proxy) processIncomingQuery(
 				pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
 				serverInfo.noticeFailure(proxy)
 				return response
+			}
+		} else if serverInfo.Proto == stamps.StampProtoTypePlain {
+			serverInfo.noticeBegin(proxy)
+			var relay *DNSCryptRelay
+			if serverInfo.Relay != nil && serverInfo.Relay.Dnscrypt != nil {
+				relay = serverInfo.Relay.Dnscrypt
+			}
+			truncated := false
+			if clientProto == "udp" {
+				response, _, err = udpExchange(proxy, serverInfo.UDPAddr.String(), relay, query)
+				if err != nil {
+					dlog.Warnf("Failed to exchange query with plain server [%v] %v", serverName, err)
+					response = nil
+				}
+				if len(response) >= MinDNSPacketSize {
+					truncated = HasTCFlag(response)
+				}
+			}
+
+			if truncated || clientProto == "tcp" {
+				response, _, err = tcpExchange(proxy, serverInfo.TCPAddr.String(), relay, query)
+				if err != nil {
+					dlog.Warnf("Failed to exchange query with plain server [%v] %v", serverName, err)
+					response = nil
+				}
 			}
 		} else {
 			dlog.Fatal("Unsupported protocol")

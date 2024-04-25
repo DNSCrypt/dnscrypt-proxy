@@ -94,6 +94,10 @@ func (plugin *PluginForward) Eval(pluginsState *PluginsState, msg *dns.Msg) erro
 			servers = candidate.servers
 			break
 		}
+		if "." == candidate.domain {
+			servers = candidate.servers
+			break
+		}
 	}
 	if len(servers) == 0 {
 		return nil

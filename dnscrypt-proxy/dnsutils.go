@@ -434,79 +434,107 @@ func _dnsExchange(
 		if err != nil {
 			return DNSExchangeResponse{err: err}
 		}
-		udpAddr, err := net.ResolveUDPAddr("udp", serverAddress)
+		packet, rtt, err = udpExchange(proxy, serverAddress, relay, binQuery)
 		if err != nil {
 			return DNSExchangeResponse{err: err}
 		}
-		upstreamAddr := udpAddr
-		if relay != nil {
-			proxy.prepareForRelay(udpAddr.IP, udpAddr.Port, &binQuery)
-			upstreamAddr = relay.RelayUDPAddr
-		}
-		now := time.Now()
-		pc, err := net.DialUDP("udp", nil, upstreamAddr)
-		if err != nil {
-			return DNSExchangeResponse{err: err}
-		}
-		defer pc.Close()
-		if err := pc.SetDeadline(time.Now().Add(proxy.timeout)); err != nil {
-			return DNSExchangeResponse{err: err}
-		}
-		if _, err := pc.Write(binQuery); err != nil {
-			return DNSExchangeResponse{err: err}
-		}
-		packet = make([]byte, MaxDNSPacketSize)
-		length, err := pc.Read(packet)
-		if err != nil {
-			return DNSExchangeResponse{err: err}
-		}
-		rtt = time.Since(now)
-		packet = packet[:length]
 	} else {
 		binQuery, err := query.Pack()
 		if err != nil {
 			return DNSExchangeResponse{err: err}
 		}
-		tcpAddr, err := net.ResolveTCPAddr("tcp", serverAddress)
+		packet, rtt, err = tcpExchange(proxy, serverAddress, relay, binQuery)
 		if err != nil {
 			return DNSExchangeResponse{err: err}
 		}
-		upstreamAddr := tcpAddr
-		if relay != nil {
-			proxy.prepareForRelay(tcpAddr.IP, tcpAddr.Port, &binQuery)
-			upstreamAddr = relay.RelayTCPAddr
-		}
-		now := time.Now()
-		var pc net.Conn
-		proxyDialer := proxy.xTransport.proxyDialer
-		if proxyDialer == nil {
-			pc, err = net.DialTCP("tcp", nil, upstreamAddr)
-		} else {
-			pc, err = (*proxyDialer).Dial("tcp", tcpAddr.String())
-		}
-		if err != nil {
-			return DNSExchangeResponse{err: err}
-		}
-		defer pc.Close()
-		if err := pc.SetDeadline(time.Now().Add(proxy.timeout)); err != nil {
-			return DNSExchangeResponse{err: err}
-		}
-		binQuery, err = PrefixWithSize(binQuery)
-		if err != nil {
-			return DNSExchangeResponse{err: err}
-		}
-		if _, err := pc.Write(binQuery); err != nil {
-			return DNSExchangeResponse{err: err}
-		}
-		packet, err = ReadPrefixed(&pc)
-		if err != nil {
-			return DNSExchangeResponse{err: err}
-		}
-		rtt = time.Since(now)
 	}
 	msg := dns.Msg{}
 	if err := msg.Unpack(packet); err != nil {
 		return DNSExchangeResponse{err: err}
 	}
 	return DNSExchangeResponse{response: &msg, rtt: rtt, err: nil}
+}
+
+func udpExchange(proxy *Proxy, serverAddress string, relay *DNSCryptRelay, query []byte) ([]byte, time.Duration, error) {
+	var rtt time.Duration
+	packet := []byte{}
+	udpAddr, err := net.ResolveUDPAddr("udp", serverAddress)
+	if err != nil {
+		return packet, rtt, err
+	}
+	upstreamAddr := udpAddr
+	if relay != nil {
+		proxy.prepareForRelay(udpAddr.IP, udpAddr.Port, &query)
+		upstreamAddr = relay.RelayUDPAddr
+	}
+	now := time.Now()
+	lAddr, err := net.ResolveUDPAddr("udp", ":0")
+	if err != nil {
+		return packet, rtt, err
+	}
+	pc, err := net.ListenUDP("udp", lAddr)
+	if err != nil {
+		return packet, rtt, err
+	}
+	defer pc.Close()
+	if err = pc.SetReadBuffer(MaxDNSPacketSize); err != nil {
+		return packet, rtt, err
+	}
+	if err = pc.SetDeadline(time.Now().Add(proxy.timeout)); err != nil {
+		return packet, rtt, err
+	}
+	if _, err = pc.WriteToUDPAddrPort(query, upstreamAddr.AddrPort()); err != nil {
+		return packet, rtt, err
+	}
+	packet = make([]byte, MaxDNSPacketSize)
+	length, _, err := pc.ReadFromUDPAddrPort(packet)
+	if err != nil {
+		return packet, rtt, err
+	}
+
+	rtt = time.Since(now)
+	packet = packet[:length]
+	return packet, rtt, err
+}
+
+func tcpExchange(proxy *Proxy, serverAddress string, relay *DNSCryptRelay, query []byte) ([]byte, time.Duration, error) {
+	var rtt time.Duration
+	packet := []byte{}
+	tcpAddr, err := net.ResolveTCPAddr("tcp", serverAddress)
+	if err != nil {
+		return packet, rtt, err
+	}
+	upstreamAddr := tcpAddr
+	if relay != nil {
+		proxy.prepareForRelay(tcpAddr.IP, tcpAddr.Port, &query)
+		upstreamAddr = relay.RelayTCPAddr
+	}
+	now := time.Now()
+	var pc net.Conn
+	proxyDialer := proxy.xTransport.proxyDialer
+	if proxyDialer == nil {
+		pc, err = net.DialTCP("tcp", nil, upstreamAddr)
+	} else {
+		pc, err = (*proxyDialer).Dial("tcp", tcpAddr.String())
+	}
+	if err != nil {
+		return packet, rtt, err
+	}
+	defer pc.Close()
+	if err := pc.SetDeadline(time.Now().Add(proxy.timeout)); err != nil {
+		return packet, rtt, err
+	}
+	query, err = PrefixWithSize(query)
+	if err != nil {
+		return packet, rtt, err
+	}
+	if _, err := pc.Write(query); err != nil {
+		return packet, rtt, err
+	}
+	packet, err = ReadPrefixed(&pc)
+	if err != nil {
+		return packet, rtt, err
+	}
+	rtt = time.Since(now)
+	return packet, rtt, err
 }
