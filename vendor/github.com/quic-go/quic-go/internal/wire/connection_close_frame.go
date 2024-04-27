@@ -54,9 +54,9 @@ func parseConnectionCloseFrame(r *bytes.Reader, typ uint64, _ protocol.Version) 
 
 // Length of a written frame
 func (f *ConnectionCloseFrame) Length(protocol.Version) protocol.ByteCount {
-	length := 1 + quicvarint.Len(f.ErrorCode) + quicvarint.Len(uint64(len(f.ReasonPhrase))) + protocol.ByteCount(len(f.ReasonPhrase))
+	length := 1 + protocol.ByteCount(quicvarint.Len(f.ErrorCode)+quicvarint.Len(uint64(len(f.ReasonPhrase)))) + protocol.ByteCount(len(f.ReasonPhrase))
 	if !f.IsApplicationError {
-		length += quicvarint.Len(f.FrameType) // for the frame type
+		length += protocol.ByteCount(quicvarint.Len(f.FrameType)) // for the frame type
 	}
 	return length
 }

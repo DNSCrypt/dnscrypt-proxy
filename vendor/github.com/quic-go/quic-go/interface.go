@@ -59,6 +59,9 @@ var Err0RTTRejected = errors.New("0-RTT rejected")
 // as well as on the context passed to logging.Tracer.NewConnectionTracer.
 var ConnectionTracingKey = connTracingCtxKey{}
 
+// ConnectionTracingID is the type of the context value saved under the ConnectionTracingKey.
+type ConnectionTracingID uint64
+
 type connTracingCtxKey struct{}
 
 // QUICVersionContextKey can be used to find out the QUIC version of a TLS handshake from the
@@ -121,7 +124,9 @@ type SendStream interface {
 	// CancelWrite aborts sending on this stream.
 	// Data already written, but not yet delivered to the peer is not guaranteed to be delivered reliably.
 	// Write will unblock immediately, and future calls to Write will fail.
-	// When called multiple times or after closing the stream it is a no-op.
+	// When called multiple times it is a no-op.
+	// When called after Close, it aborts delivery. Note that there is no guarantee if
+	// the peer will receive the FIN or the reset first.
 	CancelWrite(StreamErrorCode)
 	// The Context is canceled as soon as the write-side of the stream is closed.
 	// This happens when Close() or CancelWrite() is called, or when the peer

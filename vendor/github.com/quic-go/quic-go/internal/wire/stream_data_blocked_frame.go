@@ -37,6 +37,6 @@ func (f *StreamDataBlockedFrame) Append(b []byte, _ protocol.Version) ([]byte, e
 }
 
 // Length of a written frame
-func (f *StreamDataBlockedFrame) Length(version protocol.Version) protocol.ByteCount {
-	return 1 + quicvarint.Len(uint64(f.StreamID)) + quicvarint.Len(uint64(f.MaximumStreamData))
+func (f *StreamDataBlockedFrame) Length(protocol.Version) protocol.ByteCount {
+	return 1 + protocol.ByteCount(quicvarint.Len(uint64(f.StreamID))+quicvarint.Len(uint64(f.MaximumStreamData)))
 }

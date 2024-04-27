@@ -29,7 +29,7 @@ func parseMaxStreamDataFrame(r *bytes.Reader, _ protocol.Version) (*MaxStreamDat
 	}, nil
 }
 
-func (f *MaxStreamDataFrame) Append(b []byte, version protocol.Version) ([]byte, error) {
+func (f *MaxStreamDataFrame) Append(b []byte, _ protocol.Version) ([]byte, error) {
 	b = append(b, maxStreamDataFrameType)
 	b = quicvarint.Append(b, uint64(f.StreamID))
 	b = quicvarint.Append(b, uint64(f.MaximumStreamData))
@@ -37,6 +37,6 @@ func (f *MaxStreamDataFrame) Append(b []byte, version protocol.Version) ([]byte,
 }
 
 // Length of a written frame
-func (f *MaxStreamDataFrame) Length(version protocol.Version) protocol.ByteCount {
-	return 1 + quicvarint.Len(uint64(f.StreamID)) + quicvarint.Len(uint64(f.MaximumStreamData))
+func (f *MaxStreamDataFrame) Length(protocol.Version) protocol.ByteCount {
+	return 1 + protocol.ByteCount(quicvarint.Len(uint64(f.StreamID))+quicvarint.Len(uint64(f.MaximumStreamData)))
 }

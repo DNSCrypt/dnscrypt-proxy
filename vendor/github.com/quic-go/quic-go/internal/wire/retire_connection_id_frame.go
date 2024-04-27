@@ -28,5 +28,5 @@ func (f *RetireConnectionIDFrame) Append(b []byte, _ protocol.Version) ([]byte, 
 
 // Length of a written frame
 func (f *RetireConnectionIDFrame) Length(protocol.Version) protocol.ByteCount {
-	return 1 + quicvarint.Len(f.SequenceNumber)
+	return 1 + protocol.ByteCount(quicvarint.Len(f.SequenceNumber))
 }

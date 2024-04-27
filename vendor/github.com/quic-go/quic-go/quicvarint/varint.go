@@ -3,8 +3,6 @@ package quicvarint
 import (
 	"fmt"
 	"io"
-
-	"github.com/quic-go/quic-go/internal/protocol"
 )
 
 // taken from the QUIC draft
@@ -91,7 +89,7 @@ func Append(b []byte, i uint64) []byte {
 }
 
 // AppendWithLen append i in the QUIC varint format with the desired length.
-func AppendWithLen(b []byte, i uint64, length protocol.ByteCount) []byte {
+func AppendWithLen(b []byte, i uint64, length int) []byte {
 	if length != 1 && length != 2 && length != 4 && length != 8 {
 		panic("invalid varint length")
 	}
@@ -109,17 +107,17 @@ func AppendWithLen(b []byte, i uint64, length protocol.ByteCount) []byte {
 	} else if length == 8 {
 		b = append(b, 0b11000000)
 	}
-	for j := protocol.ByteCount(1); j < length-l; j++ {
+	for j := 1; j < length-l; j++ {
 		b = append(b, 0)
 	}
-	for j := protocol.ByteCount(0); j < l; j++ {
+	for j := 0; j < l; j++ {
 		b = append(b, uint8(i>>(8*(l-1-j))))
 	}
 	return b
 }
 
 // Len determines the number of bytes that will be needed to write the number i.
-func Len(i uint64) protocol.ByteCount {
+func Len(i uint64) int {
 	if i <= maxVarInt1 {
 		return 1
 	}

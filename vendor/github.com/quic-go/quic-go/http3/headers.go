@@ -171,9 +171,9 @@ func requestFromHeaders(headerFields []qpack.HeaderField) (*http.Request, error)
 	}, nil
 }
 
-func hostnameFromRequest(req *http.Request) string {
-	if req.URL != nil {
-		return req.URL.Host
+func hostnameFromURL(url *url.URL) string {
+	if url != nil {
+		return url.Host
 	}
 	return ""
 }

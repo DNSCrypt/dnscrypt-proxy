@@ -31,5 +31,5 @@ func (f *MaxDataFrame) Append(b []byte, _ protocol.Version) ([]byte, error) {
 
 // Length of a written frame
 func (f *MaxDataFrame) Length(_ protocol.Version) protocol.ByteCount {
-	return 1 + quicvarint.Len(uint64(f.MaximumData))
+	return 1 + protocol.ByteCount(quicvarint.Len(uint64(f.MaximumData)))
 }

@@ -35,7 +35,7 @@ type client struct {
 	conn quicConn
 
 	tracer    *logging.ConnectionTracer
-	tracingID uint64
+	tracingID ConnectionTracingID
 	logger    utils.Logger
 }
 

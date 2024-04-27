@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/quic-go/quic-go/internal/protocol"
 	"github.com/quic-go/quic-go/quicvarint"
 )
 
@@ -160,7 +159,7 @@ func parseSettingsFrame(r io.Reader, l uint64) (*settingsFrame, error) {
 
 func (f *settingsFrame) Append(b []byte) []byte {
 	b = quicvarint.Append(b, 0x4)
-	var l protocol.ByteCount
+	var l int
 	for id, val := range f.Other {
 		l += quicvarint.Len(id) + quicvarint.Len(val)
 	}

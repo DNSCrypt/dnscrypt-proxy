@@ -92,7 +92,7 @@ type baseServer struct {
 		*handshake.TokenGenerator,
 		bool, /* client address validated by an address validation token */
 		*logging.ConnectionTracer,
-		uint64,
+		ConnectionTracingID,
 		utils.Logger,
 		protocol.Version,
 	) quicConn

@@ -48,14 +48,14 @@ func (f *CryptoFrame) Append(b []byte, _ protocol.Version) ([]byte, error) {
 
 // Length of a written frame
 func (f *CryptoFrame) Length(_ protocol.Version) protocol.ByteCount {
-	return 1 + quicvarint.Len(uint64(f.Offset)) + quicvarint.Len(uint64(len(f.Data))) + protocol.ByteCount(len(f.Data))
+	return protocol.ByteCount(1 + quicvarint.Len(uint64(f.Offset)) + quicvarint.Len(uint64(len(f.Data))) + len(f.Data))
 }
 
 // MaxDataLen returns the maximum data length
 func (f *CryptoFrame) MaxDataLen(maxSize protocol.ByteCount) protocol.ByteCount {
 	// pretend that the data size will be 1 bytes
 	// if it turns out that varint encoding the length will consume 2 bytes, we need to adjust the data length afterwards
-	headerLen := 1 + quicvarint.Len(uint64(f.Offset)) + 1
+	headerLen := protocol.ByteCount(1 + quicvarint.Len(uint64(f.Offset)) + 1)
 	if headerLen > maxSize {
 		return 0
 	}

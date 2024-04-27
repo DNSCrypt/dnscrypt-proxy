@@ -5,11 +5,21 @@ linters-settings:
   misspell:
     ignore-words:
       - ect
+  depguard:
+    rules:
+      quicvarint:
+        list-mode: strict
+        files:
+          - "**/github.com/quic-go/quic-go/quicvarint/*"
+          - "!$test"
+        allow:
+          - $gostd
 
 linters:
   disable-all: true
   enable:
     - asciicheck
+    - depguard
     - exhaustive
     - exportloopref
     - goimports

@@ -1,95 +1,68 @@
 package http3
 
 import (
-	"bufio"
 	"bytes"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/quic-go/quic-go"
-	"github.com/quic-go/quic-go/internal/utils"
-
 	"github.com/quic-go/qpack"
 )
+
+// The HTTPStreamer allows taking over a HTTP/3 stream. The interface is implemented the http.Response.Body.
+// On the client side, the stream will be closed for writing, unless the DontCloseRequestStream RoundTripOpt was set.
+// When a stream is taken over, it's the caller's responsibility to close the stream.
+type HTTPStreamer interface {
+	HTTPStream() Stream
+}
 
 // The maximum length of an encoded HTTP/3 frame header is 16:
 // The frame has a type and length field, both QUIC varints (maximum 8 bytes in length)
 const frameHeaderLen = 16
 
-// headerWriter wraps the stream, so that the first Write call flushes the header to the stream
-type headerWriter struct {
-	str     quic.Stream
-	header  http.Header
-	status  int // status code passed to WriteHeader
-	written bool
-
-	logger utils.Logger
-}
-
-// writeHeader encodes and flush header to the stream
-func (hw *headerWriter) writeHeader() error {
-	var headers bytes.Buffer
-	enc := qpack.NewEncoder(&headers)
-	enc.WriteField(qpack.HeaderField{Name: ":status", Value: strconv.Itoa(hw.status)})
-
-	for k, v := range hw.header {
-		for index := range v {
-			enc.WriteField(qpack.HeaderField{Name: strings.ToLower(k), Value: v[index]})
-		}
-	}
-
-	buf := make([]byte, 0, frameHeaderLen+headers.Len())
-	buf = (&headersFrame{Length: uint64(headers.Len())}).Append(buf)
-	hw.logger.Infof("Responding with %d", hw.status)
-	buf = append(buf, headers.Bytes()...)
-
-	_, err := hw.str.Write(buf)
-	return err
-}
-
-// first Write will trigger flushing header
-func (hw *headerWriter) Write(p []byte) (int, error) {
-	if !hw.written {
-		if err := hw.writeHeader(); err != nil {
-			return 0, err
-		}
-		hw.written = true
-	}
-	return hw.str.Write(p)
-}
+const maxSmallResponseSize = 4096
 
 type responseWriter struct {
-	*headerWriter
-	conn        quic.Connection
-	bufferedStr *bufio.Writer
-	buf         []byte
+	str *stream
 
-	contentLen    int64 // if handler set valid Content-Length header
-	numWritten    int64 // bytes written
-	headerWritten bool
-	isHead        bool
+	conn   Connection
+	header http.Header
+	buf    []byte
+	status int // status code passed to WriteHeader
+
+	// for responses smaller than maxSmallResponseSize, we buffer calls to Write,
+	// and automatically add the Content-Length header
+	smallResponseBuf []byte
+
+	contentLen     int64 // if handler set valid Content-Length header
+	numWritten     int64 // bytes written
+	headerComplete bool  // set once WriteHeader is called with a status code >= 200
+	headerWritten  bool  // set once the response header has been serialized to the stream
+	isHead         bool
+
+	hijacked bool // set on HTTPStream is called
+
+	logger *slog.Logger
 }
 
 var (
 	_ http.ResponseWriter = &responseWriter{}
 	_ http.Flusher        = &responseWriter{}
 	_ Hijacker            = &responseWriter{}
+	_ HTTPStreamer        = &responseWriter{}
 )
 
-func newResponseWriter(str quic.Stream, conn quic.Connection, logger utils.Logger) *responseWriter {
-	hw := &headerWriter{
-		str:    str,
-		header: http.Header{},
-		logger: logger,
-	}
+func newResponseWriter(str *stream, conn Connection, isHead bool, logger *slog.Logger) *responseWriter {
 	return &responseWriter{
-		headerWriter: hw,
-		buf:          make([]byte, frameHeaderLen),
-		conn:         conn,
-		bufferedStr:  bufio.NewWriter(hw),
+		str:    str,
+		conn:   conn,
+		header: http.Header{},
+		buf:    make([]byte, frameHeaderLen),
+		isHead: isHead,
+		logger: logger,
 	}
 }
 
@@ -98,7 +71,7 @@ func (w *responseWriter) Header() http.Header {
 }
 
 func (w *responseWriter) WriteHeader(status int) {
-	if w.headerWritten {
+	if w.headerComplete {
 		return
 	}
 
@@ -106,51 +79,57 @@ func (w *responseWriter) WriteHeader(status int) {
 	if status < 100 || status > 999 {
 		panic(fmt.Sprintf("invalid WriteHeader code %v", status))
 	}
-
-	if status >= 200 {
-		w.headerWritten = true
-		// Add Date header.
-		// This is what the standard library does.
-		// Can be disabled by setting the Date header to nil.
-		if _, ok := w.header["Date"]; !ok {
-			w.header.Set("Date", time.Now().UTC().Format(http.TimeFormat))
-		}
-		// Content-Length checking
-		// use ParseUint instead of ParseInt, as negative values are invalid
-		if clen := w.header.Get("Content-Length"); clen != "" {
-			if cl, err := strconv.ParseUint(clen, 10, 63); err == nil {
-				w.contentLen = int64(cl)
-			} else {
-				// emit a warning for malformed Content-Length and remove it
-				w.logger.Errorf("Malformed Content-Length %s", clen)
-				w.header.Del("Content-Length")
-			}
-		}
-	}
 	w.status = status
 
-	if !w.headerWritten {
-		w.writeHeader()
+	// immediately write 1xx headers
+	if status < 200 {
+		w.writeHeader(status)
+		return
+	}
+
+	// We're done with headers once we write a status >= 200.
+	w.headerComplete = true
+	// Add Date header.
+	// This is what the standard library does.
+	// Can be disabled by setting the Date header to nil.
+	if _, ok := w.header["Date"]; !ok {
+		w.header.Set("Date", time.Now().UTC().Format(http.TimeFormat))
+	}
+	// Content-Length checking
+	// use ParseUint instead of ParseInt, as negative values are invalid
+	if clen := w.header.Get("Content-Length"); clen != "" {
+		if cl, err := strconv.ParseUint(clen, 10, 63); err == nil {
+			w.contentLen = int64(cl)
+		} else {
+			// emit a warning for malformed Content-Length and remove it
+			logger := w.logger
+			if logger == nil {
+				logger = slog.Default()
+			}
+			logger.Error("Malformed Content-Length", "value", clen)
+			w.header.Del("Content-Length")
+		}
+	}
+}
+
+func (w *responseWriter) sniffContentType(p []byte) {
+	// If no content type, apply sniffing algorithm to body.
+	// We can't use `w.header.Get` here since if the Content-Type was set to nil, we shouldn't do sniffing.
+	_, haveType := w.header["Content-Type"]
+
+	// If the Transfer-Encoding or Content-Encoding was set and is non-blank,
+	// we shouldn't sniff the body.
+	hasTE := w.header.Get("Transfer-Encoding") != ""
+	hasCE := w.header.Get("Content-Encoding") != ""
+	if !hasCE && !haveType && !hasTE && len(p) > 0 {
+		w.header.Set("Content-Type", http.DetectContentType(p))
 	}
 }
 
 func (w *responseWriter) Write(p []byte) (int, error) {
 	bodyAllowed := bodyAllowedForStatus(w.status)
-	if !w.headerWritten {
-		// If body is not allowed, we don't need to (and we can't) sniff the content type.
-		if bodyAllowed {
-			// If no content type, apply sniffing algorithm to body.
-			// We can't use `w.header.Get` here since if the Content-Type was set to nil, we shoundn't do sniffing.
-			_, haveType := w.header["Content-Type"]
-
-			// If the Transfer-Encoding or Content-Encoding was set and is non-blank,
-			// we shouldn't sniff the body.
-			hasTE := w.header.Get("Transfer-Encoding") != ""
-			hasCE := w.header.Get("Content-Encoding") != ""
-			if !hasCE && !haveType && !hasTE && len(p) > 0 {
-				w.header.Set("Content-Type", http.DetectContentType(p))
-			}
-		}
+	if !w.headerComplete {
+		w.sniffContentType(p)
 		w.WriteHeader(http.StatusOK)
 		bodyAllowed = true
 	}
@@ -167,36 +146,101 @@ func (w *responseWriter) Write(p []byte) (int, error) {
 		return len(p), nil
 	}
 
-	df := &dataFrame{Length: uint64(len(p))}
+	if !w.headerWritten {
+		// Buffer small responses.
+		// This allows us to automatically set the Content-Length field.
+		if len(w.smallResponseBuf)+len(p) < maxSmallResponseSize {
+			w.smallResponseBuf = append(w.smallResponseBuf, p...)
+			return len(p), nil
+		}
+	}
+	return w.doWrite(p)
+}
+
+func (w *responseWriter) doWrite(p []byte) (int, error) {
+	if !w.headerWritten {
+		w.sniffContentType(w.smallResponseBuf)
+		if err := w.writeHeader(w.status); err != nil {
+			return 0, maybeReplaceError(err)
+		}
+		w.headerWritten = true
+	}
+
+	l := uint64(len(w.smallResponseBuf) + len(p))
+	if l == 0 {
+		return 0, nil
+	}
+	df := &dataFrame{Length: l}
 	w.buf = w.buf[:0]
 	w.buf = df.Append(w.buf)
-	if _, err := w.bufferedStr.Write(w.buf); err != nil {
+	if _, err := w.str.writeUnframed(w.buf); err != nil {
 		return 0, maybeReplaceError(err)
 	}
-	n, err := w.bufferedStr.Write(p)
-	return n, maybeReplaceError(err)
+	if len(w.smallResponseBuf) > 0 {
+		if _, err := w.str.writeUnframed(w.smallResponseBuf); err != nil {
+			return 0, maybeReplaceError(err)
+		}
+		w.smallResponseBuf = nil
+	}
+	var n int
+	if len(p) > 0 {
+		var err error
+		n, err = w.str.writeUnframed(p)
+		if err != nil {
+			return n, maybeReplaceError(err)
+		}
+	}
+	return n, nil
+}
+
+func (w *responseWriter) writeHeader(status int) error {
+	var headers bytes.Buffer
+	enc := qpack.NewEncoder(&headers)
+	if err := enc.WriteField(qpack.HeaderField{Name: ":status", Value: strconv.Itoa(status)}); err != nil {
+		return err
+	}
+
+	for k, v := range w.header {
+		for index := range v {
+			if err := enc.WriteField(qpack.HeaderField{Name: strings.ToLower(k), Value: v[index]}); err != nil {
+				return err
+			}
+		}
+	}
+
+	buf := make([]byte, 0, frameHeaderLen+headers.Len())
+	buf = (&headersFrame{Length: uint64(headers.Len())}).Append(buf)
+	buf = append(buf, headers.Bytes()...)
+
+	_, err := w.str.writeUnframed(buf)
+	return err
 }
 
 func (w *responseWriter) FlushError() error {
-	if !w.headerWritten {
+	if !w.headerComplete {
 		w.WriteHeader(http.StatusOK)
 	}
-	if !w.written {
-		if err := w.writeHeader(); err != nil {
-			return maybeReplaceError(err)
-		}
-		w.written = true
-	}
-	return w.bufferedStr.Flush()
+	_, err := w.doWrite(nil)
+	return err
 }
 
 func (w *responseWriter) Flush() {
 	if err := w.FlushError(); err != nil {
-		w.logger.Errorf("could not flush to stream: %s", err.Error())
+		if w.logger != nil {
+			w.logger.Debug("could not flush to stream", "error", err)
+		}
 	}
 }
 
-func (w *responseWriter) StreamCreator() StreamCreator {
+func (w *responseWriter) HTTPStream() Stream {
+	w.hijacked = true
+	w.Flush()
+	return w.str
+}
+
+func (w *responseWriter) wasStreamHijacked() bool { return w.hijacked }
+
+func (w *responseWriter) Connection() Connection {
 	return w.conn
 }
 

@@ -27,5 +27,5 @@ func (f *DataBlockedFrame) Append(b []byte, version protocol.Version) ([]byte, e
 
 // Length of a written frame
 func (f *DataBlockedFrame) Length(version protocol.Version) protocol.ByteCount {
-	return 1 + quicvarint.Len(uint64(f.MaximumData))
+	return 1 + protocol.ByteCount(quicvarint.Len(uint64(f.MaximumData)))
 }

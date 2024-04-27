@@ -80,7 +80,7 @@ func (f *DatagramFrame) MaxDataLen(maxSize protocol.ByteCount, version protocol.
 func (f *DatagramFrame) Length(_ protocol.Version) protocol.ByteCount {
 	length := 1 + protocol.ByteCount(len(f.Data))
 	if f.DataLenPresent {
-		length += quicvarint.Len(uint64(len(f.Data)))
+		length += protocol.ByteCount(quicvarint.Len(uint64(len(f.Data))))
 	}
 	return length
 }

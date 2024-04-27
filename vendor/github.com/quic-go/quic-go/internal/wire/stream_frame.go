@@ -108,7 +108,7 @@ func (f *StreamFrame) Append(b []byte, _ protocol.Version) ([]byte, error) {
 }
 
 // Length returns the total length of the STREAM frame
-func (f *StreamFrame) Length(version protocol.Version) protocol.ByteCount {
+func (f *StreamFrame) Length(protocol.Version) protocol.ByteCount {
 	length := 1 + quicvarint.Len(uint64(f.StreamID))
 	if f.Offset != 0 {
 		length += quicvarint.Len(uint64(f.Offset))
@@ -116,7 +116,7 @@ func (f *StreamFrame) Length(version protocol.Version) protocol.ByteCount {
 	if f.DataLenPresent {
 		length += quicvarint.Len(uint64(f.DataLen()))
 	}
-	return length + f.DataLen()
+	return protocol.ByteCount(length) + f.DataLen()
 }
 
 // DataLen gives the length of data in bytes
@@ -126,14 +126,14 @@ func (f *StreamFrame) DataLen() protocol.ByteCount {
 
 // MaxDataLen returns the maximum data length
 // If 0 is returned, writing will fail (a STREAM frame must contain at least 1 byte of data).
-func (f *StreamFrame) MaxDataLen(maxSize protocol.ByteCount, version protocol.Version) protocol.ByteCount {
-	headerLen := 1 + quicvarint.Len(uint64(f.StreamID))
+func (f *StreamFrame) MaxDataLen(maxSize protocol.ByteCount, _ protocol.Version) protocol.ByteCount {
+	headerLen := 1 + protocol.ByteCount(quicvarint.Len(uint64(f.StreamID)))
 	if f.Offset != 0 {
-		headerLen += quicvarint.Len(uint64(f.Offset))
+		headerLen += protocol.ByteCount(quicvarint.Len(uint64(f.Offset)))
 	}
 	if f.DataLenPresent {
-		// pretend that the data size will be 1 bytes
-		// if it turns out that varint encoding the length will consume 2 bytes, we need to adjust the data length afterwards
+		// Pretend that the data size will be 1 byte.
+		// If it turns out that varint encoding the length will consume 2 bytes, we need to adjust the data length afterward
 		headerLen++
 	}
 	if headerLen > maxSize {

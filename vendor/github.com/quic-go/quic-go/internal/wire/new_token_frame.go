@@ -41,5 +41,5 @@ func (f *NewTokenFrame) Append(b []byte, _ protocol.Version) ([]byte, error) {
 
 // Length of a written frame
 func (f *NewTokenFrame) Length(protocol.Version) protocol.ByteCount {
-	return 1 + quicvarint.Len(uint64(len(f.Token))) + protocol.ByteCount(len(f.Token))
+	return 1 + protocol.ByteCount(quicvarint.Len(uint64(len(f.Token)))+len(f.Token))
 }
