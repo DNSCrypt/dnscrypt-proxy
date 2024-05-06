@@ -537,7 +537,7 @@ func (s *Server) handleRequest(conn *connection, str quic.Stream, datagrams *dat
 	ctx = context.WithValue(ctx, http.LocalAddrContextKey, conn.LocalAddr())
 	ctx = context.WithValue(ctx, RemoteAddrContextKey, conn.RemoteAddr())
 	if s.ConnContext != nil {
-		ctx = s.ConnContext(ctx, conn)
+		ctx = s.ConnContext(ctx, conn.Connection)
 		if ctx == nil {
 			panic("http3: ConnContext returned nil")
 		}
