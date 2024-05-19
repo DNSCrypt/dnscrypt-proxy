@@ -141,6 +141,7 @@ func Resolve(server string, name string, singleResolver bool) {
 			fmt.Printf("Lying         : ")
 			response, err := resolveQuery(server, nonexistentName, dns.TypeA, false)
 			if err != nil {
+				fmt.Printf("[%v]", err)
 				break
 			}
 			if response.Rcode == dns.RcodeSuccess {
