@@ -27,21 +27,19 @@ func newDatagrammer(sendDatagram func([]byte) error) *datagrammer {
 	}
 }
 
-func (d *datagrammer) SetReceiveError(err error) (isDone bool) {
+func (d *datagrammer) SetReceiveError(err error) {
 	d.mx.Lock()
 	defer d.mx.Unlock()
 
 	d.receiveErr = err
 	d.signalHasData()
-	return d.sendErr != nil
 }
 
-func (d *datagrammer) SetSendError(err error) (isDone bool) {
+func (d *datagrammer) SetSendError(err error) {
 	d.mx.Lock()
 	defer d.mx.Unlock()
 
 	d.sendErr = err
-	return d.receiveErr != nil
 }
 
 func (d *datagrammer) Send(b []byte) error {
@@ -85,9 +83,9 @@ start:
 		d.mx.Unlock()
 		return data, nil
 	}
-	if d.receiveErr != nil {
+	if receiveErr := d.receiveErr; receiveErr != nil {
 		d.mx.Unlock()
-		return nil, d.receiveErr
+		return nil, receiveErr
 	}
 	d.mx.Unlock()
 

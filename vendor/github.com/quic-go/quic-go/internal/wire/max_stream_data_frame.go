@@ -1,8 +1,6 @@
 package wire
 
 import (
-	"bytes"
-
 	"github.com/quic-go/quic-go/internal/protocol"
 	"github.com/quic-go/quic-go/quicvarint"
 )
@@ -13,20 +11,23 @@ type MaxStreamDataFrame struct {
 	MaximumStreamData protocol.ByteCount
 }
 
-func parseMaxStreamDataFrame(r *bytes.Reader, _ protocol.Version) (*MaxStreamDataFrame, error) {
-	sid, err := quicvarint.Read(r)
+func parseMaxStreamDataFrame(b []byte, _ protocol.Version) (*MaxStreamDataFrame, int, error) {
+	startLen := len(b)
+	sid, l, err := quicvarint.Parse(b)
 	if err != nil {
-		return nil, err
+		return nil, 0, replaceUnexpectedEOF(err)
 	}
-	offset, err := quicvarint.Read(r)
+	b = b[l:]
+	offset, l, err := quicvarint.Parse(b)
 	if err != nil {
-		return nil, err
+		return nil, 0, replaceUnexpectedEOF(err)
 	}
+	b = b[l:]
 
 	return &MaxStreamDataFrame{
 		StreamID:          protocol.StreamID(sid),
 		MaximumStreamData: protocol.ByteCount(offset),
-	}, nil
+	}, startLen - len(b), nil
 }
 
 func (f *MaxStreamDataFrame) Append(b []byte, _ protocol.Version) ([]byte, error) {

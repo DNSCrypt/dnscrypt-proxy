@@ -121,12 +121,16 @@ func (c *SingleDestinationRoundTripper) handleBidirectionalStreams() {
 			}
 			return
 		}
-		go func(str quic.Stream) {
-			_, err := parseNextFrame(str, func(ft FrameType, e error) (processed bool, err error) {
+		fp := &frameParser{
+			r:    str,
+			conn: c.hconn,
+			unknownFrameHandler: func(ft FrameType, e error) (processed bool, err error) {
 				id := c.hconn.Context().Value(quic.ConnectionTracingKey).(quic.ConnectionTracingID)
 				return c.StreamHijacker(ft, id, str, e)
-			})
-			if err == errHijacked {
+			},
+		}
+		go func() {
+			if _, err := fp.ParseNext(); err == errHijacked {
 				return
 			}
 			if err != nil {
@@ -135,7 +139,7 @@ func (c *SingleDestinationRoundTripper) handleBidirectionalStreams() {
 				}
 			}
 			c.hconn.CloseWithError(quic.ApplicationErrorCode(ErrCodeFrameUnexpected), "received HTTP/3 frame on bidirectional stream")
-		}(str)
+		}()
 	}
 }
 

@@ -1,7 +1,6 @@
 package wire
 
 import (
-	"bytes"
 	"io"
 
 	"github.com/quic-go/quic-go/internal/protocol"
@@ -14,28 +13,28 @@ type CryptoFrame struct {
 	Data   []byte
 }
 
-func parseCryptoFrame(r *bytes.Reader, _ protocol.Version) (*CryptoFrame, error) {
+func parseCryptoFrame(b []byte, _ protocol.Version) (*CryptoFrame, int, error) {
+	startLen := len(b)
 	frame := &CryptoFrame{}
-	offset, err := quicvarint.Read(r)
+	offset, l, err := quicvarint.Parse(b)
 	if err != nil {
-		return nil, err
+		return nil, 0, replaceUnexpectedEOF(err)
 	}
+	b = b[l:]
 	frame.Offset = protocol.ByteCount(offset)
-	dataLen, err := quicvarint.Read(r)
+	dataLen, l, err := quicvarint.Parse(b)
 	if err != nil {
-		return nil, err
+		return nil, 0, replaceUnexpectedEOF(err)
 	}
-	if dataLen > uint64(r.Len()) {
-		return nil, io.EOF
+	b = b[l:]
+	if dataLen > uint64(len(b)) {
+		return nil, 0, io.EOF
 	}
 	if dataLen != 0 {
 		frame.Data = make([]byte, dataLen)
-		if _, err := io.ReadFull(r, frame.Data); err != nil {
-			// this should never happen, since we already checked the dataLen earlier
-			return nil, err
-		}
+		copy(frame.Data, b)
 	}
-	return frame, nil
+	return frame, startLen - len(b) + int(dataLen), nil
 }
 
 func (f *CryptoFrame) Append(b []byte, _ protocol.Version) ([]byte, error) {

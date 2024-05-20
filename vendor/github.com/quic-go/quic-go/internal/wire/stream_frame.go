@@ -1,7 +1,6 @@
 package wire
 
 import (
-	"bytes"
 	"errors"
 	"io"
 
@@ -20,33 +19,41 @@ type StreamFrame struct {
 	fromPool bool
 }
 
-func parseStreamFrame(r *bytes.Reader, typ uint64, _ protocol.Version) (*StreamFrame, error) {
+func parseStreamFrame(b []byte, typ uint64, _ protocol.Version) (*StreamFrame, int, error) {
+	startLen := len(b)
 	hasOffset := typ&0b100 > 0
 	fin := typ&0b1 > 0
 	hasDataLen := typ&0b10 > 0
 
-	streamID, err := quicvarint.Read(r)
+	streamID, l, err := quicvarint.Parse(b)
 	if err != nil {
-		return nil, err
+		return nil, 0, replaceUnexpectedEOF(err)
 	}
+	b = b[l:]
 	var offset uint64
 	if hasOffset {
-		offset, err = quicvarint.Read(r)
+		offset, l, err = quicvarint.Parse(b)
 		if err != nil {
-			return nil, err
+			return nil, 0, replaceUnexpectedEOF(err)
 		}
+		b = b[l:]
 	}
 
 	var dataLen uint64
 	if hasDataLen {
 		var err error
-		dataLen, err = quicvarint.Read(r)
+		var l int
+		dataLen, l, err = quicvarint.Parse(b)
 		if err != nil {
-			return nil, err
+			return nil, 0, replaceUnexpectedEOF(err)
+		}
+		b = b[l:]
+		if dataLen > uint64(len(b)) {
+			return nil, 0, io.EOF
 		}
 	} else {
 		// The rest of the packet is data
-		dataLen = uint64(r.Len())
+		dataLen = uint64(len(b))
 	}
 
 	var frame *StreamFrame
@@ -57,7 +64,7 @@ func parseStreamFrame(r *bytes.Reader, typ uint64, _ protocol.Version) (*StreamF
 		// The STREAM frame can't be larger than the StreamFrame we obtained from the buffer,
 		// since those StreamFrames have a buffer length of the maximum packet size.
 		if dataLen > uint64(cap(frame.Data)) {
-			return nil, io.EOF
+			return nil, 0, io.EOF
 		}
 		frame.Data = frame.Data[:dataLen]
 	}
@@ -68,17 +75,14 @@ func parseStreamFrame(r *bytes.Reader, typ uint64, _ protocol.Version) (*StreamF
 	frame.DataLenPresent = hasDataLen
 
 	if dataLen != 0 {
-		if _, err := io.ReadFull(r, frame.Data); err != nil {
-			return nil, err
-		}
+		copy(frame.Data, b)
 	}
 	if frame.Offset+frame.DataLen() > protocol.MaxByteCount {
-		return nil, errors.New("stream data overflows maximum offset")
+		return nil, 0, errors.New("stream data overflows maximum offset")
 	}
-	return frame, nil
+	return frame, startLen - len(b) + int(dataLen), nil
 }
 
-// Write writes a STREAM frame
 func (f *StreamFrame) Append(b []byte, _ protocol.Version) ([]byte, error) {
 	if len(f.Data) == 0 && !f.Fin {
 		return nil, errors.New("StreamFrame: attempting to write empty frame without FIN")

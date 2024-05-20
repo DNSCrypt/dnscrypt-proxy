@@ -1,7 +1,6 @@
 package wire
 
 import (
-	"bytes"
 	"io"
 
 	"github.com/quic-go/quic-go/internal/protocol"
@@ -20,29 +19,29 @@ type DatagramFrame struct {
 	Data           []byte
 }
 
-func parseDatagramFrame(r *bytes.Reader, typ uint64, _ protocol.Version) (*DatagramFrame, error) {
+func parseDatagramFrame(b []byte, typ uint64, _ protocol.Version) (*DatagramFrame, int, error) {
+	startLen := len(b)
 	f := &DatagramFrame{}
 	f.DataLenPresent = typ&0x1 > 0
 
 	var length uint64
 	if f.DataLenPresent {
 		var err error
-		len, err := quicvarint.Read(r)
+		var l int
+		length, l, err = quicvarint.Parse(b)
 		if err != nil {
-			return nil, err
+			return nil, 0, replaceUnexpectedEOF(err)
 		}
-		if len > uint64(r.Len()) {
-			return nil, io.EOF
+		b = b[l:]
+		if length > uint64(len(b)) {
+			return nil, 0, io.EOF
 		}
-		length = len
 	} else {
-		length = uint64(r.Len())
+		length = uint64(len(b))
 	}
 	f.Data = make([]byte, length)
-	if _, err := io.ReadFull(r, f.Data); err != nil {
-		return nil, err
-	}
-	return f, nil
+	copy(f.Data, b)
+	return f, startLen - len(b) + int(length), nil
 }
 
 func (f *DatagramFrame) Append(b []byte, _ protocol.Version) ([]byte, error) {

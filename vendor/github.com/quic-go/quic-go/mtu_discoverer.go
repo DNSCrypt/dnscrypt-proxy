@@ -1,19 +1,19 @@
 package quic
 
 import (
-	"net"
 	"time"
 
 	"github.com/quic-go/quic-go/internal/ackhandler"
 	"github.com/quic-go/quic-go/internal/protocol"
 	"github.com/quic-go/quic-go/internal/utils"
 	"github.com/quic-go/quic-go/internal/wire"
+	"github.com/quic-go/quic-go/logging"
 )
 
 type mtuDiscoverer interface {
 	// Start starts the MTU discovery process.
 	// It's unnecessary to call ShouldSendProbe before that.
-	Start(maxPacketSize protocol.ByteCount)
+	Start()
 	ShouldSendProbe(now time.Time) bool
 	CurrentSize() protocol.ByteCount
 	GetPing() (ping ackhandler.Frame, datagramSize protocol.ByteCount)
@@ -27,20 +27,6 @@ const (
 	mtuProbeDelay = 5
 )
 
-func getMaxPacketSize(addr net.Addr) protocol.ByteCount {
-	maxSize := protocol.ByteCount(protocol.MinInitialPacketSize)
-	// If this is not a UDP address, we don't know anything about the MTU.
-	// Use the minimum size of an Initial packet as the max packet size.
-	if udpAddr, ok := addr.(*net.UDPAddr); ok {
-		if utils.IsIPv4(udpAddr.IP) {
-			maxSize = protocol.InitialPacketSizeIPv4
-		} else {
-			maxSize = protocol.InitialPacketSizeIPv6
-		}
-	}
-	return maxSize
-}
-
 type mtuFinder struct {
 	lastProbeTime time.Time
 	mtuIncreased  func(protocol.ByteCount)
@@ -49,16 +35,25 @@ type mtuFinder struct {
 	inFlight protocol.ByteCount // the size of the probe packet currently in flight. InvalidByteCount if none is in flight
 	current  protocol.ByteCount
 	max      protocol.ByteCount // the maximum value, as advertised by the peer (or our maximum size buffer)
+
+	tracer *logging.ConnectionTracer
 }
 
 var _ mtuDiscoverer = &mtuFinder{}
 
-func newMTUDiscoverer(rttStats *utils.RTTStats, start protocol.ByteCount, mtuIncreased func(protocol.ByteCount)) *mtuFinder {
+func newMTUDiscoverer(
+	rttStats *utils.RTTStats,
+	start, max protocol.ByteCount,
+	mtuIncreased func(protocol.ByteCount),
+	tracer *logging.ConnectionTracer,
+) *mtuFinder {
 	return &mtuFinder{
 		inFlight:     protocol.InvalidByteCount,
 		current:      start,
+		max:          max,
 		rttStats:     rttStats,
 		mtuIncreased: mtuIncreased,
+		tracer:       tracer,
 	}
 }
 
@@ -66,9 +61,15 @@ func (f *mtuFinder) done() bool {
 	return f.max-f.current <= maxMTUDiff+1
 }
 
-func (f *mtuFinder) Start(maxPacketSize protocol.ByteCount) {
+func (f *mtuFinder) SetMax(max protocol.ByteCount) {
+	f.max = max
+}
+
+func (f *mtuFinder) Start() {
+	if f.max == protocol.InvalidByteCount {
+		panic("invalid")
+	}
 	f.lastProbeTime = time.Now() // makes sure the first probe packet is not sent immediately
-	f.max = maxPacketSize
 }
 
 func (f *mtuFinder) ShouldSendProbe(now time.Time) bool {
@@ -87,7 +88,7 @@ func (f *mtuFinder) GetPing() (ackhandler.Frame, protocol.ByteCount) {
 	f.inFlight = size
 	return ackhandler.Frame{
 		Frame:   &wire.PingFrame{},
-		Handler: (*mtuFinderAckHandler)(f),
+		Handler: &mtuFinderAckHandler{f},
 	}, size
 }
 
@@ -95,7 +96,9 @@ func (f *mtuFinder) CurrentSize() protocol.ByteCount {
 	return f.current
 }
 
-type mtuFinderAckHandler mtuFinder
+type mtuFinderAckHandler struct {
+	*mtuFinder
+}
 
 var _ ackhandler.FrameHandler = &mtuFinderAckHandler{}
 
@@ -106,6 +109,9 @@ func (h *mtuFinderAckHandler) OnAcked(wire.Frame) {
 	}
 	h.inFlight = protocol.InvalidByteCount
 	h.current = size
+	if h.tracer != nil && h.tracer.UpdatedMTU != nil {
+		h.tracer.UpdatedMTU(size, h.done())
+	}
 	h.mtuIncreased(size)
 }
 
