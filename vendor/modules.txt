@@ -1,5 +1,5 @@
-# github.com/BurntSushi/toml v1.3.2
-## explicit; go 1.16
+# github.com/BurntSushi/toml v1.4.0
+## explicit; go 1.18
 github.com/BurntSushi/toml
 github.com/BurntSushi/toml/internal
 # github.com/VividCortex/ewma v1.2.0
