@@ -1,7 +1,6 @@
 package handshake
 
 import (
-	"bytes"
 	"context"
 	"crypto/tls"
 	"errors"
@@ -338,25 +337,26 @@ func (h *cryptoSetup) handleDataFromSessionState(data []byte, earlyData bool) (a
 	return false
 }
 
-func decodeDataFromSessionState(data []byte, earlyData bool) (time.Duration, *wire.TransportParameters, error) {
-	r := bytes.NewReader(data)
-	ver, err := quicvarint.Read(r)
+func decodeDataFromSessionState(b []byte, earlyData bool) (time.Duration, *wire.TransportParameters, error) {
+	ver, l, err := quicvarint.Parse(b)
 	if err != nil {
 		return 0, nil, err
 	}
+	b = b[l:]
 	if ver != clientSessionStateRevision {
 		return 0, nil, fmt.Errorf("mismatching version. Got %d, expected %d", ver, clientSessionStateRevision)
 	}
-	rttEncoded, err := quicvarint.Read(r)
+	rttEncoded, l, err := quicvarint.Parse(b)
 	if err != nil {
 		return 0, nil, err
 	}
+	b = b[l:]
 	rtt := time.Duration(rttEncoded) * time.Microsecond
 	if !earlyData {
 		return rtt, nil, nil
 	}
 	var tp wire.TransportParameters
-	if err := tp.UnmarshalFromSessionTicket(r); err != nil {
+	if err := tp.UnmarshalFromSessionTicket(b); err != nil {
 		return 0, nil, err
 	}
 	return rtt, &tp, nil

@@ -1,8 +1,6 @@
 package wire
 
 import (
-	"bytes"
-
 	"github.com/quic-go/quic-go/internal/protocol"
 	"github.com/quic-go/quic-go/quicvarint"
 )
@@ -12,12 +10,12 @@ type DataBlockedFrame struct {
 	MaximumData protocol.ByteCount
 }
 
-func parseDataBlockedFrame(r *bytes.Reader, _ protocol.Version) (*DataBlockedFrame, error) {
-	offset, err := quicvarint.Read(r)
+func parseDataBlockedFrame(b []byte, _ protocol.Version) (*DataBlockedFrame, int, error) {
+	offset, l, err := quicvarint.Parse(b)
 	if err != nil {
-		return nil, err
+		return nil, 0, replaceUnexpectedEOF(err)
 	}
-	return &DataBlockedFrame{MaximumData: protocol.ByteCount(offset)}, nil
+	return &DataBlockedFrame{MaximumData: protocol.ByteCount(offset)}, l, nil
 }
 
 func (f *DataBlockedFrame) Append(b []byte, version protocol.Version) ([]byte, error) {

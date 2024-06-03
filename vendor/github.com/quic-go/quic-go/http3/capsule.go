@@ -21,13 +21,29 @@ func (r *exactReader) Read(b []byte) (int, error) {
 	return n, err
 }
 
+type countingByteReader struct {
+	io.ByteReader
+	Read int
+}
+
+func (r *countingByteReader) ReadByte() (byte, error) {
+	b, err := r.ByteReader.ReadByte()
+	if err == nil {
+		r.Read++
+	}
+	return b, err
+}
+
 // ParseCapsule parses the header of a Capsule.
 // It returns an io.LimitedReader that can be used to read the Capsule value.
 // The Capsule value must be read entirely (i.e. until the io.EOF) before using r again.
 func ParseCapsule(r quicvarint.Reader) (CapsuleType, io.Reader, error) {
-	ct, err := quicvarint.Read(r)
+	cbr := countingByteReader{ByteReader: r}
+	ct, err := quicvarint.Read(&cbr)
 	if err != nil {
-		if err == io.EOF {
+		// If an io.EOF is returned without consuming any bytes, return it unmodified.
+		// Otherwise, return an io.ErrUnexpectedEOF.
+		if err == io.EOF && cbr.Read > 0 {
 			return 0, nil, io.ErrUnexpectedEOF
 		}
 		return 0, nil, err

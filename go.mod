@@ -3,7 +3,7 @@ module github.com/dnscrypt/dnscrypt-proxy
 go 1.22
 
 require (
-	github.com/BurntSushi/toml v1.3.2
+	github.com/BurntSushi/toml v1.4.0
 	github.com/VividCortex/ewma v1.2.0
 	github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf
 	github.com/dchest/safefile v0.0.0-20151022103144-855e8d98f185
@@ -20,7 +20,7 @@ require (
 	github.com/miekg/dns v1.1.59
 	github.com/opencoff/go-sieve v0.2.1
 	github.com/powerman/check v1.7.0
-	github.com/quic-go/quic-go v0.43.1
+	github.com/quic-go/quic-go v0.44.0
 	golang.org/x/crypto v0.23.0
 	golang.org/x/net v0.25.0
 	golang.org/x/sys v0.20.0
@@ -41,10 +41,11 @@ require (
 	github.com/quic-go/qpack v0.4.0 // indirect
 	github.com/smartystreets/goconvey v1.7.2 // indirect
 	go.uber.org/mock v0.4.0 // indirect
-	golang.org/x/exp v0.0.0-20221205204356-47842c84f3db // indirect
-	golang.org/x/mod v0.16.0 // indirect
+	golang.org/x/exp v0.0.0-20240506185415-9bf2ced13842 // indirect
+	golang.org/x/mod v0.17.0 // indirect
+	golang.org/x/sync v0.7.0 // indirect
 	golang.org/x/text v0.15.0 // indirect
-	golang.org/x/tools v0.19.0 // indirect
+	golang.org/x/tools v0.21.0 // indirect
 	google.golang.org/genproto v0.0.0-20230110181048-76db0878b65f // indirect
 	google.golang.org/grpc v1.53.0 // indirect
 	google.golang.org/protobuf v1.30.0 // indirect

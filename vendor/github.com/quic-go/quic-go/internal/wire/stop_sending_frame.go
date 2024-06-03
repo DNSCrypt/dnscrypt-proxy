@@ -1,8 +1,6 @@
 package wire
 
 import (
-	"bytes"
-
 	"github.com/quic-go/quic-go/internal/protocol"
 	"github.com/quic-go/quic-go/internal/qerr"
 	"github.com/quic-go/quic-go/quicvarint"
@@ -15,20 +13,23 @@ type StopSendingFrame struct {
 }
 
 // parseStopSendingFrame parses a STOP_SENDING frame
-func parseStopSendingFrame(r *bytes.Reader, _ protocol.Version) (*StopSendingFrame, error) {
-	streamID, err := quicvarint.Read(r)
+func parseStopSendingFrame(b []byte, _ protocol.Version) (*StopSendingFrame, int, error) {
+	startLen := len(b)
+	streamID, l, err := quicvarint.Parse(b)
 	if err != nil {
-		return nil, err
+		return nil, 0, replaceUnexpectedEOF(err)
 	}
-	errorCode, err := quicvarint.Read(r)
+	b = b[l:]
+	errorCode, l, err := quicvarint.Parse(b)
 	if err != nil {
-		return nil, err
+		return nil, 0, replaceUnexpectedEOF(err)
 	}
+	b = b[l:]
 
 	return &StopSendingFrame{
 		StreamID:  protocol.StreamID(streamID),
 		ErrorCode: qerr.StreamErrorCode(errorCode),
-	}, nil
+	}, startLen - len(b), nil
 }
 
 // Length of a written frame
