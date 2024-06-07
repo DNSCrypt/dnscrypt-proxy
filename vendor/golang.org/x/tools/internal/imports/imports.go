@@ -84,7 +84,7 @@ func FixImports(ctx context.Context, filename string, src []byte, opt *Options) 
 // env is needed.
 func ApplyFixes(fixes []*ImportFix, filename string, src []byte, opt *Options, extraMode parser.Mode) (formatted []byte, err error) {
 	// Don't use parse() -- we don't care about fragments or statement lists
-	// here, and we need to work with unparseable files.
+	// here, and we need to work with unparsable files.
 	fileSet := token.NewFileSet()
 	parserMode := parser.Mode(0)
 	if opt.Comments {

@@ -39,7 +39,7 @@ const (
 	TestStateReadSigErr                        // I/O error on reading .minisig (download only)
 	TestStateOpenErr                           // I/O error on opening files
 	TestStateOpenSigErr                        // I/O error on opening .minisig
-	TestStatePathErr                           // unparseable path to files (download only)
+	TestStatePathErr                           // unparsable path to files (download only)
 )
 
 type SourceTestData struct {
