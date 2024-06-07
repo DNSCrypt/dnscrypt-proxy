@@ -52,7 +52,7 @@ type streamManager interface {
 }
 
 type cryptoStreamHandler interface {
-	StartHandshake() error
+	StartHandshake(context.Context) error
 	ChangeConnectionID(protocol.ConnectionID)
 	SetLargest1RTTAcked(protocol.PacketNumber) error
 	SetHandshakeConfirmed()
@@ -169,10 +169,9 @@ type connection struct {
 	// closeChan is used to notify the run loop that it should terminate
 	closeChan chan closeError
 
-	ctx                context.Context
-	ctxCancel          context.CancelCauseFunc
-	handshakeCtx       context.Context
-	handshakeCtxCancel context.CancelFunc
+	ctx                   context.Context
+	ctxCancel             context.CancelCauseFunc
+	handshakeCompleteChan chan struct{}
 
 	undecryptablePackets          []receivedPacket // undecryptable packets, waiting for a change in encryption level
 	undecryptablePacketsToProcess []receivedPacket
@@ -222,6 +221,8 @@ var (
 )
 
 var newConnection = func(
+	ctx context.Context,
+	ctxCancel context.CancelCauseFunc,
 	conn sendConn,
 	runner connRunner,
 	origDestConnID protocol.ConnectionID,
@@ -236,11 +237,12 @@ var newConnection = func(
 	tokenGenerator *handshake.TokenGenerator,
 	clientAddressValidated bool,
 	tracer *logging.ConnectionTracer,
-	tracingID ConnectionTracingID,
 	logger utils.Logger,
 	v protocol.Version,
 ) quicConn {
 	s := &connection{
+		ctx:                 ctx,
+		ctxCancel:           ctxCancel,
 		conn:                conn,
 		config:              conf,
 		handshakeDestConnID: destConnID,
@@ -274,7 +276,6 @@ var newConnection = func(
 		s.queueControlFrame,
 		connIDGenerator,
 	)
-	s.ctx, s.ctxCancel = context.WithCancelCause(context.WithValue(context.Background(), ConnectionTracingKey, tracingID))
 	s.preSetup()
 	s.sentPacketHandler, s.receivedPacketHandler = ackhandler.NewAckHandler(
 		0,
@@ -339,6 +340,7 @@ var newConnection = func(
 
 // declare this as a variable, such that we can it mock it in the tests
 var newClientConnection = func(
+	ctx context.Context,
 	conn sendConn,
 	runner connRunner,
 	destConnID protocol.ConnectionID,
@@ -350,7 +352,6 @@ var newClientConnection = func(
 	enable0RTT bool,
 	hasNegotiatedVersion bool,
 	tracer *logging.ConnectionTracer,
-	tracingID ConnectionTracingID,
 	logger utils.Logger,
 	v protocol.Version,
 ) quicConn {
@@ -384,7 +385,7 @@ var newClientConnection = func(
 		s.queueControlFrame,
 		connIDGenerator,
 	)
-	s.ctx, s.ctxCancel = context.WithCancelCause(context.WithValue(context.Background(), ConnectionTracingKey, tracingID))
+	s.ctx, s.ctxCancel = context.WithCancelCause(ctx)
 	s.preSetup()
 	s.sentPacketHandler, s.receivedPacketHandler = ackhandler.NewAckHandler(
 		initialPacketNumber,
@@ -486,7 +487,7 @@ func (s *connection) preSetup() {
 	s.receivedPackets = make(chan receivedPacket, protocol.MaxConnUnprocessedPackets)
 	s.closeChan = make(chan closeError, 1)
 	s.sendingScheduled = make(chan struct{}, 1)
-	s.handshakeCtx, s.handshakeCtxCancel = context.WithCancel(context.Background())
+	s.handshakeCompleteChan = make(chan struct{})
 
 	now := time.Now()
 	s.lastPacketReceivedTime = now
@@ -500,13 +501,11 @@ func (s *connection) preSetup() {
 // run the connection main loop
 func (s *connection) run() error {
 	var closeErr closeError
-	defer func() {
-		s.ctxCancel(closeErr.err)
-	}()
+	defer func() { s.ctxCancel(closeErr.err) }()
 
 	s.timer = *newTimer()
 
-	if err := s.cryptoStreamHandler.StartHandshake(); err != nil {
+	if err := s.cryptoStreamHandler.StartHandshake(s.ctx); err != nil {
 		return err
 	}
 	if err := s.handleHandshakeEvents(); err != nil {
@@ -667,7 +666,7 @@ func (s *connection) earlyConnReady() <-chan struct{} {
 }
 
 func (s *connection) HandshakeComplete() <-chan struct{} {
-	return s.handshakeCtx.Done()
+	return s.handshakeCompleteChan
 }
 
 func (s *connection) Context() context.Context {
@@ -732,7 +731,7 @@ func (s *connection) idleTimeoutStartTime() time.Time {
 }
 
 func (s *connection) handleHandshakeComplete() error {
-	defer s.handshakeCtxCancel()
+	defer close(s.handshakeCompleteChan)
 	// Once the handshake completes, we have derived 1-RTT keys.
 	// There's no point in queueing undecryptable packets for later decryption anymore.
 	s.undecryptablePackets = nil
@@ -2425,10 +2424,17 @@ func (s *connection) GetVersion() protocol.Version {
 	return s.version
 }
 
-func (s *connection) NextConnection() Connection {
-	<-s.HandshakeComplete()
-	s.streamsMap.UseResetMaps()
-	return s
+func (s *connection) NextConnection(ctx context.Context) (Connection, error) {
+	// The handshake might fail after the server rejected 0-RTT.
+	// This could happen if the Finished message is malformed or never received.
+	select {
+	case <-ctx.Done():
+		return nil, context.Cause(ctx)
+	case <-s.Context().Done():
+	case <-s.HandshakeComplete():
+		s.streamsMap.UseResetMaps()
+	}
+	return s, nil
 }
 
 // estimateMaxPayloadSize estimates the maximum payload size for short header packets.

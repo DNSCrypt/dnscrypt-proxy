@@ -82,7 +82,13 @@ func (c *SingleDestinationRoundTripper) Start() Connection {
 func (c *SingleDestinationRoundTripper) init() {
 	c.decoder = qpack.NewDecoder(func(hf qpack.HeaderField) {})
 	c.requestWriter = newRequestWriter()
-	c.hconn = newConnection(c.Connection, c.EnableDatagrams, protocol.PerspectiveClient, c.Logger)
+	c.hconn = newConnection(
+		c.Connection.Context(),
+		c.Connection,
+		c.EnableDatagrams,
+		protocol.PerspectiveClient,
+		c.Logger,
+	)
 	// send the SETTINGs frame, using 0-RTT data, if possible
 	go func() {
 		if err := c.setupConn(c.hconn); err != nil {
