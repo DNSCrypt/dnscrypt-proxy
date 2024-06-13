@@ -478,7 +478,6 @@ func (s *sendStream) SetWriteDeadline(t time.Time) error {
 // The peer will NOT be informed about this: the stream is closed without sending a FIN or RST.
 func (s *sendStream) closeForShutdown(err error) {
 	s.mutex.Lock()
-	s.ctxCancel(err)
 	s.closeForShutdownErr = err
 	s.mutex.Unlock()
 	s.signalWrite()

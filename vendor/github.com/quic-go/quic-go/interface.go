@@ -57,9 +57,11 @@ var Err0RTTRejected = errors.New("0-RTT rejected")
 // ConnectionTracingKey can be used to associate a ConnectionTracer with a Connection.
 // It is set on the Connection.Context() context,
 // as well as on the context passed to logging.Tracer.NewConnectionTracer.
+// Deprecated: Applications can set their own tracing key using Transport.ConnContext.
 var ConnectionTracingKey = connTracingCtxKey{}
 
 // ConnectionTracingID is the type of the context value saved under the ConnectionTracingKey.
+// Deprecated: Applications can set their own tracing key using Transport.ConnContext.
 type ConnectionTracingID uint64
 
 type connTracingCtxKey struct{}
@@ -222,7 +224,7 @@ type EarlyConnection interface {
 	// however the client's identity is only verified once the handshake completes.
 	HandshakeComplete() <-chan struct{}
 
-	NextConnection() Connection
+	NextConnection(context.Context) (Connection, error)
 }
 
 // StatelessResetKey is a key used to derive stateless reset tokens.
@@ -334,7 +336,6 @@ type Config struct {
 	// DisablePathMTUDiscovery disables Path MTU Discovery (RFC 8899).
 	// This allows the sending of QUIC packets that fully utilize the available MTU of the path.
 	// Path MTU discovery is only available on systems that allow setting of the Don't Fragment (DF) bit.
-	// If unavailable or disabled, packets will be at most 1280 bytes in size.
 	DisablePathMTUDiscovery bool
 	// Allow0RTT allows the application to decide if a 0-RTT connection attempt should be accepted.
 	// Only valid for the server.

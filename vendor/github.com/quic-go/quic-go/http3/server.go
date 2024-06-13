@@ -94,6 +94,10 @@ func ConfigureTLSConfig(tlsConf *tls.Config) *tls.Config {
 			if config == nil {
 				return nil, nil
 			}
+			// Workaround for https://github.com/golang/go/issues/60506.
+			// This initializes the session tickets _before_ cloning the config.
+			_, _ = config.DecryptTicket(nil, tls.ConnectionState{})
+
 			config = config.Clone()
 			config.NextProtos = []string{proto}
 			return config, nil
@@ -194,9 +198,8 @@ type Server struct {
 	// In that case, the stream type will not be set.
 	UniStreamHijacker func(StreamType, quic.ConnectionTracingID, quic.ReceiveStream, error) (hijacked bool)
 
-	// ConnContext optionally specifies a function that modifies
-	// the context used for a new connection c. The provided ctx
-	// has a ServerContextKey value.
+	// ConnContext optionally specifies a function that modifies the context used for a new connection c.
+	// The provided ctx has a ServerContextKey value.
 	ConnContext func(ctx context.Context, c quic.Connection) context.Context
 
 	Logger *slog.Logger
@@ -436,7 +439,19 @@ func (s *Server) handleConn(conn quic.Connection) error {
 	}).Append(b)
 	str.Write(b)
 
+	ctx := conn.Context()
+	ctx = context.WithValue(ctx, ServerContextKey, s)
+	ctx = context.WithValue(ctx, http.LocalAddrContextKey, conn.LocalAddr())
+	ctx = context.WithValue(ctx, RemoteAddrContextKey, conn.RemoteAddr())
+	if s.ConnContext != nil {
+		ctx = s.ConnContext(ctx, conn)
+		if ctx == nil {
+			panic("http3: ConnContext returned nil")
+		}
+	}
+
 	hconn := newConnection(
+		ctx,
 		conn,
 		s.EnableDatagrams,
 		protocol.PerspectiveServer,
@@ -533,17 +548,10 @@ func (s *Server) handleRequest(conn *connection, str quic.Stream, datagrams *dat
 		s.Logger.Debug("handling request", "method", req.Method, "host", req.Host, "uri", req.RequestURI)
 	}
 
-	ctx := str.Context()
-	ctx = context.WithValue(ctx, ServerContextKey, s)
-	ctx = context.WithValue(ctx, http.LocalAddrContextKey, conn.LocalAddr())
-	ctx = context.WithValue(ctx, RemoteAddrContextKey, conn.RemoteAddr())
-	if s.ConnContext != nil {
-		ctx = s.ConnContext(ctx, conn.Connection)
-		if ctx == nil {
-			panic("http3: ConnContext returned nil")
-		}
-	}
+	ctx, cancel := context.WithCancel(conn.Context())
 	req = req.WithContext(ctx)
+	context.AfterFunc(str.Context(), cancel)
+
 	r := newResponseWriter(hstr, conn, req.Method == http.MethodHead, s.Logger)
 	handler := s.Handler
 	if handler == nil {
