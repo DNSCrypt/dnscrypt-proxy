@@ -166,6 +166,7 @@ func (r *RoundTripper) RoundTripOpt(req *http.Request, opt RoundTripOpt) (*http.
 	}
 
 	if cl.dialErr != nil {
+		r.removeClient(hostname)
 		return nil, cl.dialErr
 	}
 	defer cl.useCount.Add(-1)
@@ -258,6 +259,7 @@ func (r *RoundTripper) getClient(ctx context.Context, hostname string, onlyCache
 	select {
 	case <-cl.dialing:
 		if cl.dialErr != nil {
+			delete(r.clients, hostname)
 			return nil, false, cl.dialErr
 		}
 		select {
