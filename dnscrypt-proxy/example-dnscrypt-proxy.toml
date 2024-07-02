@@ -121,6 +121,7 @@ http3 = false
 ## If you have a network with *a lot* of latency, you may need to
 ## increase this. Startup may be slower if you do so.
 ## Don't increase it too much. 10000 is the highest reasonable value.
+## A timeout below 5000 is not recommended.
 
 timeout = 5000
 
