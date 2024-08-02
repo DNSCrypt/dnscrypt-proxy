@@ -379,7 +379,7 @@ func (s *sendStream) isNewlyCompleted() bool {
 	// 1. the application called CancelWrite, or
 	// 2. we received a STOP_SENDING, and
 	// 		* the application consumed the error via Write, or
-	//		* the application called CLsoe
+	//		* the application called Close
 	if s.cancelWriteErr != nil && (s.cancellationFlagged || s.finishedWriting) {
 		s.completed = true
 		return true
@@ -421,6 +421,17 @@ func (s *sendStream) cancelWriteImpl(errorCode qerr.StreamErrorCode, remote bool
 	s.mutex.Lock()
 	if !remote {
 		s.cancellationFlagged = true
+		if s.cancelWriteErr != nil {
+			completed := s.isNewlyCompleted()
+			s.mutex.Unlock()
+			// The user has called CancelWrite. If the previous cancellation was
+			// because of a STOP_SENDING, we don't need to flag the error to the
+			// user any more.
+			if completed {
+				s.sender.onStreamCompleted(s.streamID)
+			}
+			return
+		}
 	}
 	if s.cancelWriteErr != nil {
 		s.mutex.Unlock()
