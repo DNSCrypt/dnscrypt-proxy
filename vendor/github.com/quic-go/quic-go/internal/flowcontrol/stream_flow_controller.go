@@ -13,8 +13,6 @@ type streamFlowController struct {
 
 	streamID protocol.StreamID
 
-	queueWindowUpdate func()
-
 	connection connectionFlowControllerI
 
 	receivedFinalOffset bool
@@ -29,14 +27,12 @@ func NewStreamFlowController(
 	receiveWindow protocol.ByteCount,
 	maxReceiveWindow protocol.ByteCount,
 	initialSendWindow protocol.ByteCount,
-	queueWindowUpdate func(protocol.StreamID),
 	rttStats *utils.RTTStats,
 	logger utils.Logger,
 ) StreamFlowController {
 	return &streamFlowController{
-		streamID:          streamID,
-		connection:        cfc.(connectionFlowControllerI),
-		queueWindowUpdate: func() { queueWindowUpdate(streamID) },
+		streamID:   streamID,
+		connection: cfc.(connectionFlowControllerI),
 		baseFlowController: baseFlowController{
 			rttStats:             rttStats,
 			receiveWindow:        receiveWindow,
@@ -97,15 +93,13 @@ func (c *streamFlowController) UpdateHighestReceived(offset protocol.ByteCount, 
 	return c.connection.IncrementHighestReceived(increment)
 }
 
-func (c *streamFlowController) AddBytesRead(n protocol.ByteCount) {
+func (c *streamFlowController) AddBytesRead(n protocol.ByteCount) (shouldQueueWindowUpdate bool) {
 	c.mutex.Lock()
 	c.baseFlowController.addBytesRead(n)
-	shouldQueueWindowUpdate := c.shouldQueueWindowUpdate()
+	shouldQueueWindowUpdate = c.shouldQueueWindowUpdate()
 	c.mutex.Unlock()
-	if shouldQueueWindowUpdate {
-		c.queueWindowUpdate()
-	}
 	c.connection.AddBytesRead(n)
+	return
 }
 
 func (c *streamFlowController) Abandon() {
@@ -125,6 +119,11 @@ func (c *streamFlowController) AddBytesSent(n protocol.ByteCount) {
 
 func (c *streamFlowController) SendWindowSize() protocol.ByteCount {
 	return min(c.baseFlowController.sendWindowSize(), c.connection.SendWindowSize())
+}
+
+func (c *streamFlowController) IsNewlyBlocked() bool {
+	blocked, _ := c.baseFlowController.IsNewlyBlocked()
+	return blocked
 }
 
 func (c *streamFlowController) shouldQueueWindowUpdate() bool {

@@ -88,6 +88,7 @@ func (c *SingleDestinationRoundTripper) init() {
 		c.EnableDatagrams,
 		protocol.PerspectiveClient,
 		c.Logger,
+		0,
 	)
 	// send the SETTINGs frame, using 0-RTT data, if possible
 	go func() {

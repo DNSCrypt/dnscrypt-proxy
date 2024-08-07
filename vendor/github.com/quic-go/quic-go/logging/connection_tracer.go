@@ -8,14 +8,14 @@ import (
 // A ConnectionTracer records events.
 type ConnectionTracer struct {
 	StartedConnection                func(local, remote net.Addr, srcConnID, destConnID ConnectionID)
-	NegotiatedVersion                func(chosen VersionNumber, clientVersions, serverVersions []VersionNumber)
+	NegotiatedVersion                func(chosen Version, clientVersions, serverVersions []Version)
 	ClosedConnection                 func(error)
 	SentTransportParameters          func(*TransportParameters)
 	ReceivedTransportParameters      func(*TransportParameters)
 	RestoredTransportParameters      func(parameters *TransportParameters) // for 0-RTT
 	SentLongHeaderPacket             func(*ExtendedHeader, ByteCount, ECN, *AckFrame, []Frame)
 	SentShortHeaderPacket            func(*ShortHeader, ByteCount, ECN, *AckFrame, []Frame)
-	ReceivedVersionNegotiationPacket func(dest, src ArbitraryLenConnectionID, _ []VersionNumber)
+	ReceivedVersionNegotiationPacket func(dest, src ArbitraryLenConnectionID, _ []Version)
 	ReceivedRetry                    func(*Header)
 	ReceivedLongHeaderPacket         func(*ExtendedHeader, ByteCount, ECN, []Frame)
 	ReceivedShortHeaderPacket        func(*ShortHeader, ByteCount, ECN, []Frame)
@@ -57,7 +57,7 @@ func NewMultiplexedConnectionTracer(tracers ...*ConnectionTracer) *ConnectionTra
 				}
 			}
 		},
-		NegotiatedVersion: func(chosen VersionNumber, clientVersions, serverVersions []VersionNumber) {
+		NegotiatedVersion: func(chosen Version, clientVersions, serverVersions []Version) {
 			for _, t := range tracers {
 				if t.NegotiatedVersion != nil {
 					t.NegotiatedVersion(chosen, clientVersions, serverVersions)
@@ -106,7 +106,7 @@ func NewMultiplexedConnectionTracer(tracers ...*ConnectionTracer) *ConnectionTra
 				}
 			}
 		},
-		ReceivedVersionNegotiationPacket: func(dest, src ArbitraryLenConnectionID, versions []VersionNumber) {
+		ReceivedVersionNegotiationPacket: func(dest, src ArbitraryLenConnectionID, versions []Version) {
 			for _, t := range tracers {
 				if t.ReceivedVersionNegotiationPacket != nil {
 					t.ReceivedVersionNegotiationPacket(dest, src, versions)

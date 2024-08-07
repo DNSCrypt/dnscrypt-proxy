@@ -14,11 +14,16 @@ type sentPacketHistory struct {
 	highestPacketNumber protocol.PacketNumber
 }
 
-func newSentPacketHistory() *sentPacketHistory {
-	return &sentPacketHistory{
-		packets:             make([]*packet, 0, 32),
+func newSentPacketHistory(isAppData bool) *sentPacketHistory {
+	h := &sentPacketHistory{
 		highestPacketNumber: protocol.InvalidPacketNumber,
 	}
+	if isAppData {
+		h.packets = make([]*packet, 0, 32)
+	} else {
+		h.packets = make([]*packet, 0, 6)
+	}
+	return h
 }
 
 func (h *sentPacketHistory) checkSequentialPacketNumberUse(pn protocol.PacketNumber) {

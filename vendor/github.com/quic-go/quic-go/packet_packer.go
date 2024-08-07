@@ -121,8 +121,8 @@ type packetPacker struct {
 	perspective protocol.Perspective
 	cryptoSetup sealingManager
 
-	initialStream   cryptoStream
-	handshakeStream cryptoStream
+	initialStream   *cryptoStream
+	handshakeStream *cryptoStream
 
 	token []byte
 
@@ -141,7 +141,7 @@ var _ packer = &packetPacker{}
 func newPacketPacker(
 	srcConnID protocol.ConnectionID,
 	getDestConnID func() protocol.ConnectionID,
-	initialStream, handshakeStream cryptoStream,
+	initialStream, handshakeStream *cryptoStream,
 	packetNumberManager packetNumberManager,
 	retransmissionQueue *retransmissionQueue,
 	cryptoSetup sealingManager,
@@ -482,7 +482,7 @@ func (p *packetPacker) maybeGetCryptoPacket(maxPacketSize protocol.ByteCount, en
 		return nil, payload{}
 	}
 
-	var s cryptoStream
+	var s *cryptoStream
 	var handler ackhandler.FrameHandler
 	var hasRetransmission bool
 	//nolint:exhaustive // Initial and Handshake are the only two encryption levels here.
@@ -645,6 +645,9 @@ func (p *packetPacker) composeNextPacket(maxFrameSize protocol.ByteCount, onlyAc
 		pl.length += lengthAdded
 		// add handlers for the control frames that were added
 		for i := startLen; i < len(pl.frames); i++ {
+			if pl.frames[i].Handler != nil {
+				continue
+			}
 			switch pl.frames[i].Frame.(type) {
 			case *wire.PathChallengeFrame, *wire.PathResponseFrame:
 				// Path probing is currently not supported, therefore we don't need to set the OnAcked callback yet.
