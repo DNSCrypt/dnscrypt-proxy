@@ -12,8 +12,6 @@ import (
 
 type connectionFlowController struct {
 	baseFlowController
-
-	queueWindowUpdate func()
 }
 
 var _ ConnectionFlowController = &connectionFlowController{}
@@ -23,7 +21,6 @@ var _ ConnectionFlowController = &connectionFlowController{}
 func NewConnectionFlowController(
 	receiveWindow protocol.ByteCount,
 	maxReceiveWindow protocol.ByteCount,
-	queueWindowUpdate func(),
 	allowWindowIncrease func(size protocol.ByteCount) bool,
 	rttStats *utils.RTTStats,
 	logger utils.Logger,
@@ -37,7 +34,6 @@ func NewConnectionFlowController(
 			allowWindowIncrease:  allowWindowIncrease,
 			logger:               logger,
 		},
-		queueWindowUpdate: queueWindowUpdate,
 	}
 }
 
@@ -63,18 +59,14 @@ func (c *connectionFlowController) IncrementHighestReceived(increment protocol.B
 func (c *connectionFlowController) AddBytesRead(n protocol.ByteCount) {
 	c.mutex.Lock()
 	c.baseFlowController.addBytesRead(n)
-	shouldQueueWindowUpdate := c.hasWindowUpdate()
 	c.mutex.Unlock()
-	if shouldQueueWindowUpdate {
-		c.queueWindowUpdate()
-	}
 }
 
 func (c *connectionFlowController) GetWindowUpdate() protocol.ByteCount {
 	c.mutex.Lock()
 	oldWindowSize := c.receiveWindowSize
 	offset := c.baseFlowController.getWindowUpdate()
-	if oldWindowSize < c.receiveWindowSize {
+	if c.logger.Debug() && oldWindowSize < c.receiveWindowSize {
 		c.logger.Debugf("Increasing receive flow control window for the connection to %d kB", c.receiveWindowSize/(1<<10))
 	}
 	c.mutex.Unlock()

@@ -89,8 +89,8 @@ type ReceiveStream interface {
 	// Read reads data from the stream.
 	// Read can be made to time out and return a net.Error with Timeout() == true
 	// after a fixed time limit; see SetDeadline and SetReadDeadline.
-	// If the stream was canceled by the peer, the error implements the StreamError
-	// interface, and Canceled() == true.
+	// If the stream was canceled by the peer, the error is a StreamError and
+	// Remote == true.
 	// If the connection was closed due to a timeout, the error satisfies
 	// the net.Error interface, and Timeout() will be true.
 	io.Reader
@@ -113,8 +113,8 @@ type SendStream interface {
 	// Write writes data to the stream.
 	// Write can be made to time out and return a net.Error with Timeout() == true
 	// after a fixed time limit; see SetDeadline and SetWriteDeadline.
-	// If the stream was canceled by the peer, the error implements the StreamError
-	// interface, and Canceled() == true.
+	// If the stream was canceled by the peer, the error is a StreamError and
+	// Remote == true.
 	// If the connection was closed due to a timeout, the error satisfies
 	// the net.Error interface, and Timeout() will be true.
 	io.Writer
@@ -150,7 +150,7 @@ type SendStream interface {
 // * TransportError: for errors triggered by the QUIC transport (in many cases a misbehaving peer)
 // * IdleTimeoutError: when the peer goes away unexpectedly (this is a net.Error timeout error)
 // * HandshakeTimeoutError: when the cryptographic handshake takes too long (this is a net.Error timeout error)
-// * StatelessResetError: when we receive a stateless reset (this is a net.Error temporary error)
+// * StatelessResetError: when we receive a stateless reset
 // * VersionNegotiationError: returned by the client, when there's no version overlap between the peers
 type Connection interface {
 	// AcceptStream returns the next stream opened by the peer, blocking until one is available.
@@ -163,28 +163,29 @@ type Connection interface {
 	AcceptUniStream(context.Context) (ReceiveStream, error)
 	// OpenStream opens a new bidirectional QUIC stream.
 	// There is no signaling to the peer about new streams:
-	// The peer can only accept the stream after data has been sent on the stream.
-	// If the error is non-nil, it satisfies the net.Error interface.
-	// When reaching the peer's stream limit, err.Temporary() will be true.
-	// If the connection was closed due to a timeout, Timeout() will be true.
+	// The peer can only accept the stream after data has been sent on the stream,
+	// or the stream has been reset or closed.
+	// When reaching the peer's stream limit, it is not possible to open a new stream until the
+	// peer raises the stream limit. In that case, a StreamLimitReachedError is returned.
 	OpenStream() (Stream, error)
 	// OpenStreamSync opens a new bidirectional QUIC stream.
 	// It blocks until a new stream can be opened.
 	// There is no signaling to the peer about new streams:
 	// The peer can only accept the stream after data has been sent on the stream,
 	// or the stream has been reset or closed.
-	// If the error is non-nil, it satisfies the net.Error interface.
-	// If the connection was closed due to a timeout, Timeout() will be true.
 	OpenStreamSync(context.Context) (Stream, error)
 	// OpenUniStream opens a new outgoing unidirectional QUIC stream.
-	// If the error is non-nil, it satisfies the net.Error interface.
-	// When reaching the peer's stream limit, Temporary() will be true.
-	// If the connection was closed due to a timeout, Timeout() will be true.
+	// There is no signaling to the peer about new streams:
+	// The peer can only accept the stream after data has been sent on the stream,
+	// or the stream has been reset or closed.
+	// When reaching the peer's stream limit, it is not possible to open a new stream until the
+	// peer raises the stream limit. In that case, a StreamLimitReachedError is returned.
 	OpenUniStream() (SendStream, error)
 	// OpenUniStreamSync opens a new outgoing unidirectional QUIC stream.
 	// It blocks until a new stream can be opened.
-	// If the error is non-nil, it satisfies the net.Error interface.
-	// If the connection was closed due to a timeout, Timeout() will be true.
+	// There is no signaling to the peer about new streams:
+	// The peer can only accept the stream after data has been sent on the stream,
+	// or the stream has been reset or closed.
 	OpenUniStreamSync(context.Context) (SendStream, error)
 	// LocalAddr returns the local address.
 	LocalAddr() net.Addr

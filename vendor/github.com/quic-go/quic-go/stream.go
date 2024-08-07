@@ -24,8 +24,8 @@ var errDeadline net.Error = &deadlineError{}
 
 // The streamSender is notified by the stream about various events.
 type streamSender interface {
-	queueControlFrame(wire.Frame)
-	onHasStreamData(protocol.StreamID)
+	onHasStreamData(protocol.StreamID, sendStreamI)
+	onHasStreamControlFrame(protocol.StreamID, streamControlFrameGetter)
 	// must be called without holding the mutex that is acquired by closeForShutdown
 	onStreamCompleted(protocol.StreamID)
 }
@@ -34,19 +34,16 @@ type streamSender interface {
 // This is necessary in order to keep track when both halves have been completed.
 type uniStreamSender struct {
 	streamSender
-	onStreamCompletedImpl func()
+	onStreamCompletedImpl       func()
+	onHasStreamControlFrameImpl func(protocol.StreamID, streamControlFrameGetter)
 }
 
-func (s *uniStreamSender) queueControlFrame(f wire.Frame) {
-	s.streamSender.queueControlFrame(f)
+func (s *uniStreamSender) onHasStreamData(id protocol.StreamID, str sendStreamI) {
+	s.streamSender.onHasStreamData(id, str)
 }
-
-func (s *uniStreamSender) onHasStreamData(id protocol.StreamID) {
-	s.streamSender.onHasStreamData(id)
-}
-
-func (s *uniStreamSender) onStreamCompleted(protocol.StreamID) {
-	s.onStreamCompletedImpl()
+func (s *uniStreamSender) onStreamCompleted(protocol.StreamID) { s.onStreamCompletedImpl() }
+func (s *uniStreamSender) onHasStreamControlFrame(id protocol.StreamID, str streamControlFrameGetter) {
+	s.onHasStreamControlFrameImpl(id, str)
 }
 
 var _ streamSender = &uniStreamSender{}
@@ -57,7 +54,6 @@ type streamI interface {
 	// for receiving
 	handleStreamFrame(*wire.StreamFrame) error
 	handleResetStreamFrame(*wire.ResetStreamFrame) error
-	getWindowUpdate() protocol.ByteCount
 	// for sending
 	hasData() bool
 	handleStopSendingFrame(*wire.StopSendingFrame)
@@ -83,7 +79,10 @@ type stream struct {
 	sendStreamCompleted    bool
 }
 
-var _ Stream = &stream{}
+var (
+	_ Stream                   = &stream{}
+	_ streamControlFrameGetter = &receiveStream{}
+)
 
 // newStream creates a new Stream
 func newStream(
@@ -101,6 +100,9 @@ func newStream(
 			s.checkIfCompleted()
 			s.completedMutex.Unlock()
 		},
+		onHasStreamControlFrameImpl: func(id protocol.StreamID, str streamControlFrameGetter) {
+			sender.onHasStreamControlFrame(streamID, s)
+		},
 	}
 	s.sendStream = *newSendStream(ctx, streamID, senderForSendStream, flowController)
 	senderForReceiveStream := &uniStreamSender{
@@ -110,6 +112,9 @@ func newStream(
 			s.receiveStreamCompleted = true
 			s.checkIfCompleted()
 			s.completedMutex.Unlock()
+		},
+		onHasStreamControlFrameImpl: func(id protocol.StreamID, str streamControlFrameGetter) {
+			sender.onHasStreamControlFrame(streamID, s)
 		},
 	}
 	s.receiveStream = *newReceiveStream(streamID, senderForReceiveStream, flowController)
@@ -124,6 +129,14 @@ func (s *stream) StreamID() protocol.StreamID {
 
 func (s *stream) Close() error {
 	return s.sendStream.Close()
+}
+
+func (s *stream) getControlFrame() (_ ackhandler.Frame, ok, hasMore bool) {
+	f, ok, _ := s.sendStream.getControlFrame()
+	if ok {
+		return f, true, true
+	}
+	return s.receiveStream.getControlFrame()
 }
 
 func (s *stream) SetDeadline(t time.Time) error {

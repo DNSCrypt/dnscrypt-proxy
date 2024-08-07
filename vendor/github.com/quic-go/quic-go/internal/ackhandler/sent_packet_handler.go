@@ -28,7 +28,7 @@ const (
 )
 
 type packetNumberSpace struct {
-	history *sentPacketHistory
+	history sentPacketHistory
 	pns     packetNumberGenerator
 
 	lossTime                   time.Time
@@ -38,15 +38,15 @@ type packetNumberSpace struct {
 	largestSent  protocol.PacketNumber
 }
 
-func newPacketNumberSpace(initialPN protocol.PacketNumber, skipPNs bool) *packetNumberSpace {
+func newPacketNumberSpace(initialPN protocol.PacketNumber, isAppData bool) *packetNumberSpace {
 	var pns packetNumberGenerator
-	if skipPNs {
+	if isAppData {
 		pns = newSkippingPacketNumberGenerator(initialPN, protocol.SkipPacketInitialPeriod, protocol.SkipPacketMaxPeriod)
 	} else {
 		pns = newSequentialPacketNumberGenerator(initialPN)
 	}
 	return &packetNumberSpace{
-		history:      newSentPacketHistory(),
+		history:      *newSentPacketHistory(isAppData),
 		pns:          pns,
 		largestSent:  protocol.InvalidPacketNumber,
 		largestAcked: protocol.InvalidPacketNumber,

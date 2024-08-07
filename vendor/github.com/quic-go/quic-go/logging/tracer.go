@@ -5,7 +5,7 @@ import "net"
 // A Tracer traces events.
 type Tracer struct {
 	SentPacket                   func(net.Addr, *Header, ByteCount, []Frame)
-	SentVersionNegotiationPacket func(_ net.Addr, dest, src ArbitraryLenConnectionID, _ []VersionNumber)
+	SentVersionNegotiationPacket func(_ net.Addr, dest, src ArbitraryLenConnectionID, _ []Version)
 	DroppedPacket                func(net.Addr, PacketType, ByteCount, PacketDropReason)
 	Debug                        func(name, msg string)
 	Close                        func()
@@ -27,7 +27,7 @@ func NewMultiplexedTracer(tracers ...*Tracer) *Tracer {
 				}
 			}
 		},
-		SentVersionNegotiationPacket: func(remote net.Addr, dest, src ArbitraryLenConnectionID, versions []VersionNumber) {
+		SentVersionNegotiationPacket: func(remote net.Addr, dest, src ArbitraryLenConnectionID, versions []Version) {
 			for _, t := range tracers {
 				if t.SentVersionNegotiationPacket != nil {
 					t.SentVersionNegotiationPacket(remote, dest, src, versions)
