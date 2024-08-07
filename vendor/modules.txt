@@ -130,7 +130,7 @@ github.com/smartystreets/goconvey/convey/reporting
 ## explicit; go 1.20
 go.uber.org/mock/mockgen
 go.uber.org/mock/mockgen/model
-# golang.org/x/crypto v0.25.0
+# golang.org/x/crypto v0.26.0
 ## explicit; go 1.20
 golang.org/x/crypto/blake2b
 golang.org/x/crypto/chacha20
@@ -166,10 +166,10 @@ golang.org/x/net/internal/socks
 golang.org/x/net/ipv4
 golang.org/x/net/ipv6
 golang.org/x/net/proxy
-# golang.org/x/sync v0.7.0
+# golang.org/x/sync v0.8.0
 ## explicit; go 1.18
 golang.org/x/sync/errgroup
-# golang.org/x/sys v0.22.0
+# golang.org/x/sys v0.23.0
 ## explicit; go 1.18
 golang.org/x/sys/cpu
 golang.org/x/sys/unix
@@ -178,7 +178,7 @@ golang.org/x/sys/windows/registry
 golang.org/x/sys/windows/svc
 golang.org/x/sys/windows/svc/eventlog
 golang.org/x/sys/windows/svc/mgr
-# golang.org/x/text v0.16.0
+# golang.org/x/text v0.17.0
 ## explicit; go 1.18
 golang.org/x/text/secure/bidirule
 golang.org/x/text/transform
