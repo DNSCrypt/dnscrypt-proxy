@@ -101,11 +101,11 @@ github.com/powerman/check
 # github.com/powerman/deepequal v0.1.0
 ## explicit; go 1.16
 github.com/powerman/deepequal
-# github.com/quic-go/qpack v0.4.0
-## explicit; go 1.18
+# github.com/quic-go/qpack v0.5.1
+## explicit; go 1.22
 github.com/quic-go/qpack
-# github.com/quic-go/quic-go v0.46.0
-## explicit; go 1.21
+# github.com/quic-go/quic-go v0.47.0
+## explicit; go 1.22
 github.com/quic-go/quic-go
 github.com/quic-go/quic-go/http3
 github.com/quic-go/quic-go/internal/ackhandler

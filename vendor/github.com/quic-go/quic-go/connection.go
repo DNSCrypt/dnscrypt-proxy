@@ -864,7 +864,9 @@ func (s *connection) handlePacketImpl(rp receivedPacket) bool {
 			if counter > 0 {
 				p.buffer.Split()
 			}
-			processed = s.handleShortHeaderPacket(p)
+			if wasProcessed := s.handleShortHeaderPacket(p); wasProcessed {
+				processed = true
+			}
 			break
 		}
 	}
@@ -1766,8 +1768,9 @@ func (s *connection) applyTransportParameters() {
 	params := s.peerParams
 	// Our local idle timeout will always be > 0.
 	s.idleTimeout = s.config.MaxIdleTimeout
-	if s.idleTimeout > 0 && params.MaxIdleTimeout < s.idleTimeout {
-		s.idleTimeout = params.MaxIdleTimeout
+	// If the peer advertised an idle timeout, take the minimum of the values.
+	if params.MaxIdleTimeout > 0 {
+		s.idleTimeout = min(s.idleTimeout, params.MaxIdleTimeout)
 	}
 	s.keepAliveInterval = min(s.config.KeepAlivePeriod, min(s.idleTimeout/2, protocol.MaxKeepAliveInterval))
 	s.streamsMap.UpdateLimits(params)

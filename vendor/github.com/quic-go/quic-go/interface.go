@@ -19,10 +19,6 @@ type StreamID = protocol.StreamID
 // A Version is a QUIC version number.
 type Version = protocol.Version
 
-// A VersionNumber is a QUIC version number.
-// Deprecated: VersionNumber was renamed to Version.
-type VersionNumber = Version
-
 const (
 	// Version1 is RFC 9000
 	Version1 = protocol.Version1

@@ -756,7 +756,7 @@ func (h *sentPacketHandler) PeekPacketNumber(encLevel protocol.EncryptionLevel) 
 	pnSpace := h.getPacketNumberSpace(encLevel)
 	pn := pnSpace.pns.Peek()
 	// See section 17.1 of RFC 9000.
-	return pn, protocol.GetPacketNumberLengthForHeader(pn, pnSpace.largestAcked)
+	return pn, protocol.PacketNumberLengthForHeader(pn, pnSpace.largestAcked)
 }
 
 func (h *sentPacketHandler) PopPacketNumber(encLevel protocol.EncryptionLevel) protocol.PacketNumber {

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/textproto"
 	"net/url"
 	"strconv"
 	"strings"
@@ -22,10 +23,19 @@ type header struct {
 	Status    string
 	// for Extended connect
 	Protocol string
-	// parsed and deduplicated
+	// parsed and deduplicated. -1 if no Content-Length header is sent
 	ContentLength int64
 	// all non-pseudo headers
 	Headers http.Header
+}
+
+// connection-specific header fields must not be sent on HTTP/3
+var invalidHeaderFields = [...]string{
+	"connection",
+	"keep-alive",
+	"proxy-connection",
+	"transfer-encoding",
+	"upgrade",
 }
 
 func parseHeaders(headers []qpack.HeaderField, isRequest bool) (header, error) {
@@ -73,6 +83,14 @@ func parseHeaders(headers []qpack.HeaderField, isRequest bool) (header, error) {
 			if !httpguts.ValidHeaderFieldName(h.Name) {
 				return header{}, fmt.Errorf("invalid header field name: %q", h.Name)
 			}
+			for _, invalidField := range invalidHeaderFields {
+				if h.Name == invalidField {
+					return header{}, fmt.Errorf("invalid header field name: %q", h.Name)
+				}
+			}
+			if h.Name == "te" && h.Value != "trailers" {
+				return header{}, fmt.Errorf("invalid TE header field value: %q", h.Value)
+			}
 			readFirstRegularHeader = true
 			switch h.Name {
 			case "content-length":
@@ -89,6 +107,7 @@ func parseHeaders(headers []qpack.HeaderField, isRequest bool) (header, error) {
 			}
 		}
 	}
+	hdr.ContentLength = -1
 	if len(contentLengthStr) > 0 {
 		// use ParseUint instead of ParseInt, so that parsing fails on negative values
 		cl, err := strconv.ParseUint(contentLengthStr, 10, 63)
@@ -99,6 +118,17 @@ func parseHeaders(headers []qpack.HeaderField, isRequest bool) (header, error) {
 		hdr.ContentLength = int64(cl)
 	}
 	return hdr, nil
+}
+
+func parseTrailers(headers []qpack.HeaderField) (http.Header, error) {
+	h := make(http.Header, len(headers))
+	for _, field := range headers {
+		if field.IsPseudo() {
+			return nil, fmt.Errorf("http3: received pseudo header in trailer: %s", field.Name)
+		}
+		h.Add(field.Name, field.Value)
+	}
+	return h, nil
 }
 
 func requestFromHeaders(headerFields []qpack.HeaderField) (*http.Request, error) {
@@ -178,25 +208,53 @@ func hostnameFromURL(url *url.URL) string {
 	return ""
 }
 
-func responseFromHeaders(headerFields []qpack.HeaderField) (*http.Response, error) {
+// updateResponseFromHeaders sets up http.Response as an HTTP/3 response,
+// using the decoded qpack header filed.
+// It is only called for the HTTP header (and not the HTTP trailer).
+// It takes an http.Response as an argument to allow the caller to set the trailer later on.
+func updateResponseFromHeaders(rsp *http.Response, headerFields []qpack.HeaderField) error {
 	hdr, err := parseHeaders(headerFields, false)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	if hdr.Status == "" {
-		return nil, errors.New("missing status field")
+		return errors.New("missing status field")
 	}
-	rsp := &http.Response{
-		Proto:         "HTTP/3.0",
-		ProtoMajor:    3,
-		Header:        hdr.Headers,
-		ContentLength: hdr.ContentLength,
-	}
+	rsp.Proto = "HTTP/3.0"
+	rsp.ProtoMajor = 3
+	rsp.Header = hdr.Headers
+	processTrailers(rsp)
+	rsp.ContentLength = hdr.ContentLength
+
 	status, err := strconv.Atoi(hdr.Status)
 	if err != nil {
-		return nil, fmt.Errorf("invalid status code: %w", err)
+		return fmt.Errorf("invalid status code: %w", err)
 	}
 	rsp.StatusCode = status
 	rsp.Status = hdr.Status + " " + http.StatusText(status)
-	return rsp, nil
+	return nil
+}
+
+// processTrailers initializes the rsp.Trailer map, and adds keys for every announced header value.
+// The Trailer header is removed from the http.Response.Header map.
+// It handles both duplicate as well as comma-separated values for the Trailer header.
+// For example:
+//
+//	Trailer: Trailer1, Trailer2
+//	Trailer: Trailer3
+//
+// Will result in a http.Response.Trailer map containing the keys "Trailer1", "Trailer2", "Trailer3".
+func processTrailers(rsp *http.Response) {
+	rawTrailers, ok := rsp.Header["Trailer"]
+	if !ok {
+		return
+	}
+
+	rsp.Trailer = make(http.Header)
+	for _, rawVal := range rawTrailers {
+		for _, val := range strings.Split(rawVal, ",") {
+			rsp.Trailer[http.CanonicalHeaderKey(textproto.TrimString(val))] = nil
+		}
+	}
+	delete(rsp.Header, "Trailer")
 }
