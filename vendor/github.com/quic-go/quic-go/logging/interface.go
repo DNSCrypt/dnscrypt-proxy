@@ -36,9 +36,6 @@ type (
 	StreamNum = protocol.StreamNum
 	// The StreamType is the type of the stream (unidirectional or bidirectional).
 	StreamType = protocol.StreamType
-	// The VersionNumber is the QUIC version.
-	// Deprecated: use Version instead.
-	VersionNumber = protocol.Version
 	// The Version is the QUIC version.
 	Version = protocol.Version
 

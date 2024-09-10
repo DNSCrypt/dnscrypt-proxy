@@ -571,7 +571,7 @@ func (s *Server) handleRequest(conn *connection, str quic.Stream, datagrams *dat
 	if _, ok := req.Header["Content-Length"]; ok && req.ContentLength >= 0 {
 		contentLength = req.ContentLength
 	}
-	hstr := newStream(str, conn, datagrams)
+	hstr := newStream(str, conn, datagrams, nil)
 	body := newRequestBody(hstr, contentLength, conn.Context(), conn.ReceivedSettings(), conn.Settings)
 	req.Body = body
 
@@ -625,6 +625,7 @@ func (s *Server) handleRequest(conn *connection, str quic.Stream, datagrams *dat
 			}
 		}
 		r.Flush()
+		r.flushTrailers()
 	}
 
 	// abort the stream when there is a panic

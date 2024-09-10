@@ -4,24 +4,20 @@ linters:
   disable-all: true
   enable:
     - asciicheck
-    - deadcode
+    - copyloopvar
     - exhaustive
-    - exportloopref
     - goconst
     - gofmt # redundant, since gofmt *should* be a no-op after gofumpt
     - gofumpt
     - goimports
     - gosimple
+    - govet
     - ineffassign
     - misspell
     - prealloc
-    - scopelint
     - staticcheck
     - stylecheck
-    - structcheck
     - unconvert
     - unparam
     - unused
-    - varcheck
-    - vet
 

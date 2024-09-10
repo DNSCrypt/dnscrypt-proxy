@@ -196,9 +196,13 @@ func (d *Decoder) parseIndexedHeaderField() error {
 
 func (d *Decoder) parseLiteralHeaderField() error {
 	buf := d.buf
-	if buf[0]&0x20 > 0 || buf[0]&0x10 == 0 {
+	if buf[0]&0x10 == 0 {
 		return errNoDynamicTable
 	}
+	// We don't need to check the value of the N-bit here.
+	// It's only relevant when re-encoding header fields,
+	// and determines whether the header field can be added to the dynamic table.
+	// Since we don't support the dynamic table, we can ignore it.
 	index, buf, err := readVarInt(4, buf)
 	if err != nil {
 		return err
