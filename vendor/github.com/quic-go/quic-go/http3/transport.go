@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"strings"
@@ -30,7 +31,7 @@ type Settings struct {
 
 // RoundTripOpt are options for the Transport.RoundTripOpt method.
 type RoundTripOpt struct {
-	// OnlyCachedConn controls whether the RoundTripper may create a new QUIC connection.
+	// OnlyCachedConn controls whether the Transport may create a new QUIC connection.
 	// If set true and no cached connection is available, RoundTripOpt will return ErrNoCachedConn.
 	OnlyCachedConn bool
 }
@@ -59,10 +60,8 @@ func (r *roundTripperWithCount) Close() error {
 	return nil
 }
 
-// RoundTripper implements the http.RoundTripper interface
-type RoundTripper struct {
-	mutex sync.Mutex
-
+// Transport implements the http.RoundTripper interface
+type Transport struct {
 	// TLSClientConfig specifies the TLS configuration to use with
 	// tls.Client. If nil, the default configuration is used.
 	TLSClientConfig *tls.Config
@@ -97,6 +96,13 @@ type RoundTripper struct {
 	// However, if the user explicitly requested gzip it is not automatically uncompressed.
 	DisableCompression bool
 
+	StreamHijacker    func(FrameType, quic.ConnectionTracingID, quic.Stream, error) (hijacked bool, err error)
+	UniStreamHijacker func(StreamType, quic.ConnectionTracingID, quic.ReceiveStream, error) (hijacked bool)
+
+	Logger *slog.Logger
+
+	mutex sync.Mutex
+
 	initOnce sync.Once
 	initErr  error
 
@@ -107,18 +113,56 @@ type RoundTripper struct {
 }
 
 var (
-	_ http.RoundTripper = &RoundTripper{}
-	_ io.Closer         = &RoundTripper{}
+	_ http.RoundTripper = &Transport{}
+	_ io.Closer         = &Transport{}
 )
 
-// ErrNoCachedConn is returned when RoundTripper.OnlyCachedConn is set
+// Deprecated: RoundTripper was renamed to Transport.
+type RoundTripper = Transport
+
+// ErrNoCachedConn is returned when Transport.OnlyCachedConn is set
 var ErrNoCachedConn = errors.New("http3: no cached connection was available")
 
+func (t *Transport) init() error {
+	if t.newClient == nil {
+		t.newClient = func(conn quic.EarlyConnection) singleRoundTripper {
+			return newClientConn(
+				conn,
+				t.EnableDatagrams,
+				t.AdditionalSettings,
+				t.StreamHijacker,
+				t.UniStreamHijacker,
+				t.MaxResponseHeaderBytes,
+				t.DisableCompression,
+				t.Logger,
+			)
+		}
+	}
+	if t.QUICConfig == nil {
+		t.QUICConfig = defaultQuicConfig.Clone()
+		t.QUICConfig.EnableDatagrams = t.EnableDatagrams
+	}
+	if t.EnableDatagrams && !t.QUICConfig.EnableDatagrams {
+		return errors.New("HTTP Datagrams enabled, but QUIC Datagrams disabled")
+	}
+	if len(t.QUICConfig.Versions) == 0 {
+		t.QUICConfig = t.QUICConfig.Clone()
+		t.QUICConfig.Versions = []quic.Version{protocol.SupportedVersions[0]}
+	}
+	if len(t.QUICConfig.Versions) != 1 {
+		return errors.New("can only use a single QUIC version for dialing a HTTP/3 connection")
+	}
+	if t.QUICConfig.MaxIncomingStreams == 0 {
+		t.QUICConfig.MaxIncomingStreams = -1 // don't allow any bidirectional streams
+	}
+	return nil
+}
+
 // RoundTripOpt is like RoundTrip, but takes options.
-func (r *RoundTripper) RoundTripOpt(req *http.Request, opt RoundTripOpt) (*http.Response, error) {
-	r.initOnce.Do(func() { r.initErr = r.init() })
-	if r.initErr != nil {
-		return nil, r.initErr
+func (t *Transport) RoundTripOpt(req *http.Request, opt RoundTripOpt) (*http.Response, error) {
+	t.initOnce.Do(func() { t.initErr = t.init() })
+	if t.initErr != nil {
+		return nil, t.initErr
 	}
 
 	if req.URL == nil {
@@ -154,7 +198,7 @@ func (r *RoundTripper) RoundTripOpt(req *http.Request, opt RoundTripOpt) (*http.
 	}
 
 	hostname := authorityAddr(hostnameFromURL(req.URL))
-	cl, isReused, err := r.getClient(req.Context(), hostname, opt.OnlyCachedConn)
+	cl, isReused, err := t.getClient(req.Context(), hostname, opt.OnlyCachedConn)
 	if err != nil {
 		return nil, err
 	}
@@ -166,7 +210,7 @@ func (r *RoundTripper) RoundTripOpt(req *http.Request, opt RoundTripOpt) (*http.
 	}
 
 	if cl.dialErr != nil {
-		r.removeClient(hostname)
+		t.removeClient(hostname)
 		return nil, cl.dialErr
 	}
 	defer cl.useCount.Add(-1)
@@ -176,12 +220,12 @@ func (r *RoundTripper) RoundTripOpt(req *http.Request, opt RoundTripOpt) (*http.
 		// so we remove the client from the cache so that subsequent trips reconnect
 		// context cancelation is excluded as is does not signify a connection error
 		if !errors.Is(err, context.Canceled) {
-			r.removeClient(hostname)
+			t.removeClient(hostname)
 		}
 
 		if isReused {
 			if nerr, ok := err.(net.Error); ok && nerr.Timeout() {
-				return r.RoundTripOpt(req, opt)
+				return t.RoundTripOpt(req, opt)
 			}
 		}
 	}
@@ -189,51 +233,19 @@ func (r *RoundTripper) RoundTripOpt(req *http.Request, opt RoundTripOpt) (*http.
 }
 
 // RoundTrip does a round trip.
-func (r *RoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
-	return r.RoundTripOpt(req, RoundTripOpt{})
+func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
+	return t.RoundTripOpt(req, RoundTripOpt{})
 }
 
-func (r *RoundTripper) init() error {
-	if r.newClient == nil {
-		r.newClient = func(conn quic.EarlyConnection) singleRoundTripper {
-			return &SingleDestinationRoundTripper{
-				Connection:             conn,
-				EnableDatagrams:        r.EnableDatagrams,
-				DisableCompression:     r.DisableCompression,
-				AdditionalSettings:     r.AdditionalSettings,
-				MaxResponseHeaderBytes: r.MaxResponseHeaderBytes,
-			}
-		}
-	}
-	if r.QUICConfig == nil {
-		r.QUICConfig = defaultQuicConfig.Clone()
-		r.QUICConfig.EnableDatagrams = r.EnableDatagrams
-	}
-	if r.EnableDatagrams && !r.QUICConfig.EnableDatagrams {
-		return errors.New("HTTP Datagrams enabled, but QUIC Datagrams disabled")
-	}
-	if len(r.QUICConfig.Versions) == 0 {
-		r.QUICConfig = r.QUICConfig.Clone()
-		r.QUICConfig.Versions = []quic.Version{protocol.SupportedVersions[0]}
-	}
-	if len(r.QUICConfig.Versions) != 1 {
-		return errors.New("can only use a single QUIC version for dialing a HTTP/3 connection")
-	}
-	if r.QUICConfig.MaxIncomingStreams == 0 {
-		r.QUICConfig.MaxIncomingStreams = -1 // don't allow any bidirectional streams
-	}
-	return nil
-}
+func (t *Transport) getClient(ctx context.Context, hostname string, onlyCached bool) (rtc *roundTripperWithCount, isReused bool, err error) {
+	t.mutex.Lock()
+	defer t.mutex.Unlock()
 
-func (r *RoundTripper) getClient(ctx context.Context, hostname string, onlyCached bool) (rtc *roundTripperWithCount, isReused bool, err error) {
-	r.mutex.Lock()
-	defer r.mutex.Unlock()
-
-	if r.clients == nil {
-		r.clients = make(map[string]*roundTripperWithCount)
+	if t.clients == nil {
+		t.clients = make(map[string]*roundTripperWithCount)
 	}
 
-	cl, ok := r.clients[hostname]
+	cl, ok := t.clients[hostname]
 	if !ok {
 		if onlyCached {
 			return nil, false, ErrNoCachedConn
@@ -246,7 +258,7 @@ func (r *RoundTripper) getClient(ctx context.Context, hostname string, onlyCache
 		go func() {
 			defer close(cl.dialing)
 			defer cancel()
-			conn, rt, err := r.dial(ctx, hostname)
+			conn, rt, err := t.dial(ctx, hostname)
 			if err != nil {
 				cl.dialErr = err
 				return
@@ -254,12 +266,12 @@ func (r *RoundTripper) getClient(ctx context.Context, hostname string, onlyCache
 			cl.conn = conn
 			cl.rt = rt
 		}()
-		r.clients[hostname] = cl
+		t.clients[hostname] = cl
 	}
 	select {
 	case <-cl.dialing:
 		if cl.dialErr != nil {
-			delete(r.clients, hostname)
+			delete(t.clients, hostname)
 			return nil, false, cl.dialErr
 		}
 		select {
@@ -273,12 +285,12 @@ func (r *RoundTripper) getClient(ctx context.Context, hostname string, onlyCache
 	return cl, isReused, nil
 }
 
-func (r *RoundTripper) dial(ctx context.Context, hostname string) (quic.EarlyConnection, singleRoundTripper, error) {
+func (t *Transport) dial(ctx context.Context, hostname string) (quic.EarlyConnection, singleRoundTripper, error) {
 	var tlsConf *tls.Config
-	if r.TLSClientConfig == nil {
+	if t.TLSClientConfig == nil {
 		tlsConf = &tls.Config{}
 	} else {
-		tlsConf = r.TLSClientConfig.Clone()
+		tlsConf = t.TLSClientConfig.Clone()
 	}
 	if tlsConf.ServerName == "" {
 		sni, _, err := net.SplitHostPort(hostname)
@@ -289,61 +301,79 @@ func (r *RoundTripper) dial(ctx context.Context, hostname string) (quic.EarlyCon
 		tlsConf.ServerName = sni
 	}
 	// Replace existing ALPNs by H3
-	tlsConf.NextProtos = []string{versionToALPN(r.QUICConfig.Versions[0])}
+	tlsConf.NextProtos = []string{versionToALPN(t.QUICConfig.Versions[0])}
 
-	dial := r.Dial
+	dial := t.Dial
 	if dial == nil {
-		if r.transport == nil {
+		if t.transport == nil {
 			udpConn, err := net.ListenUDP("udp", nil)
 			if err != nil {
 				return nil, nil, err
 			}
-			r.transport = &quic.Transport{Conn: udpConn}
+			t.transport = &quic.Transport{Conn: udpConn}
 		}
 		dial = func(ctx context.Context, addr string, tlsCfg *tls.Config, cfg *quic.Config) (quic.EarlyConnection, error) {
 			udpAddr, err := net.ResolveUDPAddr("udp", addr)
 			if err != nil {
 				return nil, err
 			}
-			return r.transport.DialEarly(ctx, udpAddr, tlsCfg, cfg)
+			return t.transport.DialEarly(ctx, udpAddr, tlsCfg, cfg)
 		}
 	}
 
-	conn, err := dial(ctx, hostname, tlsConf, r.QUICConfig)
+	conn, err := dial(ctx, hostname, tlsConf, t.QUICConfig)
 	if err != nil {
 		return nil, nil, err
 	}
-	return conn, r.newClient(conn), nil
+	return conn, t.newClient(conn), nil
 }
 
-func (r *RoundTripper) removeClient(hostname string) {
-	r.mutex.Lock()
-	defer r.mutex.Unlock()
-	if r.clients == nil {
+func (t *Transport) removeClient(hostname string) {
+	t.mutex.Lock()
+	defer t.mutex.Unlock()
+	if t.clients == nil {
 		return
 	}
-	delete(r.clients, hostname)
+	delete(t.clients, hostname)
 }
 
-// Close closes the QUIC connections that this RoundTripper has used.
-// It also closes the underlying UDPConn if it is not nil.
-func (r *RoundTripper) Close() error {
-	r.mutex.Lock()
-	defer r.mutex.Unlock()
-	for _, cl := range r.clients {
+// NewClientConn creates a new HTTP/3 client connection on top of a QUIC connection.
+// Most users should use RoundTrip instead of creating a connection directly.
+// Specifically, it is not needed to perform GET, POST, HEAD and CONNECT requests.
+//
+// Obtaining a ClientConn is only needed for more advanced use cases, such as
+// using Extended CONNECT for WebTransport or the various MASQUE protocols.
+func (t *Transport) NewClientConn(conn quic.Connection) *ClientConn {
+	return newClientConn(
+		conn,
+		t.EnableDatagrams,
+		t.AdditionalSettings,
+		t.StreamHijacker,
+		t.UniStreamHijacker,
+		t.MaxResponseHeaderBytes,
+		t.DisableCompression,
+		t.Logger,
+	)
+}
+
+// Close closes the QUIC connections that this Transport has used.
+func (t *Transport) Close() error {
+	t.mutex.Lock()
+	defer t.mutex.Unlock()
+	for _, cl := range t.clients {
 		if err := cl.Close(); err != nil {
 			return err
 		}
 	}
-	r.clients = nil
-	if r.transport != nil {
-		if err := r.transport.Close(); err != nil {
+	t.clients = nil
+	if t.transport != nil {
+		if err := t.transport.Close(); err != nil {
 			return err
 		}
-		if err := r.transport.Conn.Close(); err != nil {
+		if err := t.transport.Conn.Close(); err != nil {
 			return err
 		}
-		r.transport = nil
+		t.transport = nil
 	}
 	return nil
 }
@@ -376,13 +406,17 @@ func isNotToken(r rune) bool {
 	return !httpguts.IsTokenRune(r)
 }
 
-func (r *RoundTripper) CloseIdleConnections() {
-	r.mutex.Lock()
-	defer r.mutex.Unlock()
-	for hostname, cl := range r.clients {
+// CloseIdleConnections closes any QUIC connections in the transport's pool that are currently idle.
+// An idle connection is one that was previously used for requests but is now sitting unused.
+// This method does not interrupt any connections currently in use.
+// It also does not affect connections obtained via NewClientConn.
+func (t *Transport) CloseIdleConnections() {
+	t.mutex.Lock()
+	defer t.mutex.Unlock()
+	for hostname, cl := range t.clients {
 		if cl.useCount.Load() == 0 {
 			cl.Close()
-			delete(r.clients, hostname)
+			delete(t.clients, hostname)
 		}
 	}
 }
