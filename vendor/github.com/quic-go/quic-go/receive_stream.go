@@ -253,6 +253,9 @@ func (s *receiveStream) cancelReadImpl(errorCode qerr.StreamErrorCode) (queuedNe
 	if s.cancelledLocally { // duplicate call to CancelRead
 		return false
 	}
+	if s.closeForShutdownErr != nil {
+		return false
+	}
 	s.cancelledLocally = true
 	if s.errorRead || s.cancelledRemotely {
 		return false

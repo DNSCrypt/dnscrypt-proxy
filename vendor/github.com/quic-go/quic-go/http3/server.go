@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/quic-go/quic-go"
@@ -44,6 +45,8 @@ const (
 	streamTypeQPACKEncoderStream = 2
 	streamTypeQPACKDecoderStream = 3
 )
+
+const goawayTimeout = 5 * time.Second
 
 // A QUICEarlyListener listens for incoming QUIC connections.
 type QUICEarlyListener interface {
@@ -213,7 +216,13 @@ type Server struct {
 	mutex     sync.RWMutex
 	listeners map[*QUICEarlyListener]listenerInfo
 
-	closed bool
+	closed           bool
+	closeCtx         context.Context    // canceled when the server is closed
+	closeCancel      context.CancelFunc // cancels the closeCtx
+	graceCtx         context.Context    // canceled when the server is closed or gracefully closed
+	graceCancel      context.CancelFunc // cancels the graceCtx
+	connCount        atomic.Int64
+	connHandlingDone chan struct{}
 
 	altSvcHeader string
 }
@@ -265,8 +274,31 @@ func (s *Server) Serve(conn net.PacketConn) error {
 	return s.serveListener(ln)
 }
 
+// init initializes the contexts used for shutting down the server.
+// It must be called with the mutex held.
+func (s *Server) init() {
+	if s.closeCtx == nil {
+		s.closeCtx, s.closeCancel = context.WithCancel(context.Background())
+		s.graceCtx, s.graceCancel = context.WithCancel(s.closeCtx)
+	}
+	s.connHandlingDone = make(chan struct{}, 1)
+}
+
+func (s *Server) decreaseConnCount() {
+	if s.connCount.Add(-1) == 0 && s.graceCtx.Err() != nil {
+		close(s.connHandlingDone)
+	}
+}
+
 // ServeQUICConn serves a single QUIC connection.
 func (s *Server) ServeQUICConn(conn quic.Connection) error {
+	s.mutex.Lock()
+	s.init()
+	s.mutex.Unlock()
+
+	s.connCount.Add(1)
+	defer s.decreaseConnCount()
+
 	return s.handleConn(conn)
 }
 
@@ -289,14 +321,17 @@ func (s *Server) ServeListener(ln QUICEarlyListener) error {
 
 func (s *Server) serveListener(ln QUICEarlyListener) error {
 	for {
-		conn, err := ln.Accept(context.Background())
-		if err == quic.ErrServerClosed {
+		conn, err := ln.Accept(s.graceCtx)
+		// server closed
+		if errors.Is(err, quic.ErrServerClosed) || s.graceCtx.Err() != nil {
 			return http.ErrServerClosed
 		}
 		if err != nil {
 			return err
 		}
+		s.connCount.Add(1)
 		go func() {
+			defer s.decreaseConnCount()
 			if err := s.handleConn(conn); err != nil {
 				if s.Logger != nil {
 					s.Logger.Debug("handling connection failed", "error", err)
@@ -430,6 +465,7 @@ func (s *Server) addListener(l *QUICEarlyListener) error {
 	if s.listeners == nil {
 		s.listeners = make(map[*QUICEarlyListener]listenerInfo)
 	}
+	s.init()
 
 	laddr := (*l).Addr()
 	if port, err := extractPort(laddr.String()); err == nil {
@@ -453,9 +489,12 @@ func (s *Server) removeListener(l *QUICEarlyListener) {
 	s.generateAltSvcHeader()
 }
 
+// handleConn handles the HTTP/3 exchange on a QUIC connection.
+// It blocks until all HTTP handlers for all streams have returned.
 func (s *Server) handleConn(conn quic.Connection) error {
-	// send a SETTINGS frame
-	str, err := conn.OpenUniStream()
+	// open the control stream and send a SETTINGS frame, it's also used to send a GOAWAY frame later
+	// when the server is gracefully closed
+	ctrlStr, err := conn.OpenUniStream()
 	if err != nil {
 		return fmt.Errorf("opening the control stream failed: %w", err)
 	}
@@ -466,7 +505,7 @@ func (s *Server) handleConn(conn quic.Connection) error {
 		ExtendedConnect: true,
 		Other:           s.AdditionalSettings,
 	}).Append(b)
-	str.Write(b)
+	ctrlStr.Write(b)
 
 	ctx := conn.Context()
 	ctx = context.WithValue(ctx, ServerContextKey, s)
@@ -487,21 +526,60 @@ func (s *Server) handleConn(conn quic.Connection) error {
 		s.Logger,
 		s.IdleTimeout,
 	)
-	go hconn.HandleUnidirectionalStreams(s.UniStreamHijacker)
+	go hconn.handleUnidirectionalStreams(s.UniStreamHijacker)
 
+	var nextStreamID quic.StreamID
+	var wg sync.WaitGroup
+	var handleErr error
 	// Process all requests immediately.
 	// It's the client's responsibility to decide which requests are eligible for 0-RTT.
 	for {
-		str, datagrams, err := hconn.acceptStream(context.Background())
+		str, datagrams, err := hconn.acceptStream(s.graceCtx)
 		if err != nil {
-			var appErr *quic.ApplicationError
-			if errors.As(err, &appErr) && appErr.ErrorCode == quic.ApplicationErrorCode(ErrCodeNoError) {
-				return nil
+			// server (not gracefully) closed, close the connection immediately
+			if s.closeCtx.Err() != nil {
+				conn.CloseWithError(quic.ApplicationErrorCode(ErrCodeNoError), "")
+				handleErr = http.ErrServerClosed
+				break
 			}
-			return fmt.Errorf("accepting stream failed: %w", err)
+
+			// gracefully closed, send GOAWAY frame and wait for requests to complete or grace period to end
+			// new requests will be rejected and shouldn't be sent
+			if s.graceCtx.Err() != nil {
+				b = (&goAwayFrame{StreamID: nextStreamID}).Append(b[:0])
+				// set a deadline to send the GOAWAY frame
+				ctrlStr.SetWriteDeadline(time.Now().Add(goawayTimeout))
+				ctrlStr.Write(b)
+
+				select {
+				case <-hconn.Context().Done():
+					// we expect the client to eventually close the connection after receiving the GOAWAY
+				case <-s.closeCtx.Done():
+					// close the connection after graceful period
+					conn.CloseWithError(quic.ApplicationErrorCode(ErrCodeNoError), "")
+				}
+				handleErr = http.ErrServerClosed
+				break
+			}
+
+			var appErr *quic.ApplicationError
+			if !errors.As(err, &appErr) || appErr.ErrorCode != quic.ApplicationErrorCode(ErrCodeNoError) {
+				handleErr = fmt.Errorf("accepting stream failed: %w", err)
+			}
+			break
 		}
-		go s.handleRequest(hconn, str, datagrams, hconn.decoder)
+
+		nextStreamID = str.StreamID() + 4
+		wg.Add(1)
+		go func() {
+			// handleRequest will return once the request has been handled,
+			// or the underlying connection is closed
+			defer wg.Done()
+			s.handleRequest(hconn, str, datagrams, hconn.decoder)
+		}()
 	}
+	wg.Wait()
+	return handleErr
 }
 
 func (s *Server) maxHeaderBytes() uint64 {
@@ -606,7 +684,7 @@ func (s *Server) handleRequest(conn *connection, str quic.Stream, datagrams *dat
 				if logger == nil {
 					logger = slog.Default()
 				}
-				logger.Error("http: panic serving", "arg", p, "trace", buf)
+				logger.Error("http: panic serving", "arg", p, "trace", string(buf))
 			}
 		}()
 		handler.ServeHTTP(r, req)
@@ -643,11 +721,17 @@ func (s *Server) handleRequest(conn *connection, str quic.Stream, datagrams *dat
 
 // Close the server immediately, aborting requests and sending CONNECTION_CLOSE frames to connected clients.
 // Close in combination with ListenAndServe() (instead of Serve()) may race if it is called before a UDP socket is established.
+// It is the caller's responsibility to close any connection passed to ServeQUICConn.
 func (s *Server) Close() error {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
 	s.closed = true
+	// server is never used
+	if s.closeCtx == nil {
+		return nil
+	}
+	s.closeCancel()
 
 	var err error
 	for ln := range s.listeners {
@@ -655,14 +739,44 @@ func (s *Server) Close() error {
 			err = cerr
 		}
 	}
+	if s.connCount.Load() == 0 {
+		return err
+	}
+	// wait for all connections to be closed
+	<-s.connHandlingDone
 	return err
 }
 
-// CloseGracefully shuts down the server gracefully. The server sends a GOAWAY frame first, then waits for either timeout to trigger, or for all running requests to complete.
-// CloseGracefully in combination with ListenAndServe() (instead of Serve()) may race if it is called before a UDP socket is established.
-func (s *Server) CloseGracefully(timeout time.Duration) error {
-	// TODO: implement
-	return nil
+// Shutdown shuts down the server gracefully.
+// The server sends a GOAWAY frame first, then or for all running requests to complete.
+// Shutdown in combination with ListenAndServe() (instead of Serve()) may race if it is called before a UDP socket is established.
+func (s *Server) Shutdown(ctx context.Context) error {
+	s.mutex.Lock()
+	s.closed = true
+	// server is never used
+	if s.closeCtx == nil {
+		s.mutex.Unlock()
+		return nil
+	}
+	s.graceCancel()
+	s.mutex.Unlock()
+
+	if s.connCount.Load() == 0 {
+		return s.Close()
+	}
+	select {
+	case <-s.connHandlingDone: // all connections were closed
+		// When receiving a GOAWAY frame, HTTP/3 clients are expected to close the connection
+		// once all requests were successfully handled...
+		return s.Close()
+	case <-ctx.Done():
+		// ... however, clients handling long-lived requests (and misbehaving clients),
+		// might not do so before the context is cancelled.
+		// In this case, we close the server, which closes all existing connections
+		// (expect those passed to ServeQUICConn).
+		_ = s.Close()
+		return ctx.Err()
+	}
 }
 
 // ErrNoAltSvcPort is the error returned by SetQUICHeaders when no port was found
@@ -690,11 +804,6 @@ func (s *Server) SetQUICHeaders(hdr http.Header) error {
 	return nil
 }
 
-// Deprecated: use SetQUICHeaders instead.
-func (s *Server) SetQuicHeaders(hdr http.Header) error {
-	return s.SetQUICHeaders(hdr)
-}
-
 // ListenAndServeQUIC listens on the UDP network address addr and calls the
 // handler for HTTP/3 requests on incoming connections. http.DefaultServeMux is
 // used when handler is nil.
@@ -704,11 +813,6 @@ func ListenAndServeQUIC(addr, certFile, keyFile string, handler http.Handler) er
 		Handler: handler,
 	}
 	return server.ListenAndServeTLS(certFile, keyFile)
-}
-
-// Deprecated: use ListenAndServeTLS instead.
-func ListenAndServe(addr, certFile, keyFile string, handler http.Handler) error {
-	return ListenAndServeTLS(addr, certFile, keyFile, handler)
 }
 
 // ListenAndServeTLS listens on the given network address for both TLS/TCP and QUIC

@@ -423,6 +423,10 @@ func (s *sendStream) CancelWrite(errorCode StreamErrorCode) {
 
 func (s *sendStream) cancelWriteImpl(errorCode qerr.StreamErrorCode, remote bool) {
 	s.mutex.Lock()
+	if s.closeForShutdownErr != nil {
+		s.mutex.Unlock()
+		return
+	}
 	if !remote {
 		s.cancellationFlagged = true
 		if s.cancelWriteErr != nil {

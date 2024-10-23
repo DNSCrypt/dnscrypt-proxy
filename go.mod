@@ -9,7 +9,7 @@ require (
 	github.com/dchest/safefile v0.0.0-20151022103144-855e8d98f185
 	github.com/hashicorp/go-immutable-radix v1.3.1
 	github.com/hectane/go-acl v0.0.0-20230122075934-ca0b05cb1adb
-	github.com/jedisct1/dlog v0.0.0-20230811132706-443b333ff1b3
+	github.com/jedisct1/dlog v0.0.0-20241011102921-a236bd13c4c1
 	github.com/jedisct1/go-clocksmith v0.0.0-20230211133011-392c1afea73e
 	github.com/jedisct1/go-dnsstamps v0.0.0-20240423203910-07a0735c7774
 	github.com/jedisct1/go-hpke-compact v0.0.0-20230811132953-4ee502b61f80
@@ -20,10 +20,10 @@ require (
 	github.com/miekg/dns v1.1.62
 	github.com/opencoff/go-sieve v0.2.1
 	github.com/powerman/check v1.7.0
-	github.com/quic-go/quic-go v0.47.0
-	golang.org/x/crypto v0.27.0
-	golang.org/x/net v0.29.0
-	golang.org/x/sys v0.25.0
+	github.com/quic-go/quic-go v0.48.1
+	golang.org/x/crypto v0.28.0
+	golang.org/x/net v0.30.0
+	golang.org/x/sys v0.26.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 )
 
@@ -44,7 +44,7 @@ require (
 	golang.org/x/exp v0.0.0-20240506185415-9bf2ced13842 // indirect
 	golang.org/x/mod v0.18.0 // indirect
 	golang.org/x/sync v0.8.0 // indirect
-	golang.org/x/text v0.18.0 // indirect
+	golang.org/x/text v0.19.0 // indirect
 	golang.org/x/tools v0.22.0 // indirect
 	google.golang.org/genproto v0.0.0-20230110181048-76db0878b65f // indirect
 	google.golang.org/grpc v1.53.0 // indirect
