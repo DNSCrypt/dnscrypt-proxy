@@ -66,7 +66,8 @@ func (p *frameParser) ParseNext() (frame, error) {
 			return parseSettingsFrame(p.r, l)
 		case 0x3: // CANCEL_PUSH
 		case 0x5: // PUSH_PROMISE
-		case 0x7: // GOAWAY
+		case 0x7:
+			return parseGoAwayFrame(qr, l)
 		case 0xd: // MAX_PUSH_ID
 		case 0x2, 0x6, 0x8, 0x9:
 			p.conn.CloseWithError(quic.ApplicationErrorCode(ErrCodeFrameUnexpected), "")
@@ -193,4 +194,28 @@ func (f *settingsFrame) Append(b []byte) []byte {
 		b = quicvarint.Append(b, val)
 	}
 	return b
+}
+
+type goAwayFrame struct {
+	StreamID quic.StreamID
+}
+
+func parseGoAwayFrame(r io.ByteReader, l uint64) (*goAwayFrame, error) {
+	frame := &goAwayFrame{}
+	cbr := countingByteReader{ByteReader: r}
+	id, err := quicvarint.Read(&cbr)
+	if err != nil {
+		return nil, err
+	}
+	if cbr.Read != int(l) {
+		return nil, errors.New("GOAWAY frame: inconsistent length")
+	}
+	frame.StreamID = quic.StreamID(id)
+	return frame, nil
+}
+
+func (f *goAwayFrame) Append(b []byte) []byte {
+	b = quicvarint.Append(b, 0x7)
+	b = quicvarint.Append(b, uint64(quicvarint.Len(uint64(f.StreamID))))
+	return quicvarint.Append(b, uint64(f.StreamID))
 }
