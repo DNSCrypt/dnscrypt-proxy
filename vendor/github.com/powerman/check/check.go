@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	pkgerrors "github.com/pkg/errors"
+	pkgerrors "github.com/pkg/errors" //nolint:depguard // By design.
 	"github.com/powerman/deepequal"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
@@ -171,8 +171,8 @@ func (t *C) report(ok bool, msg []any, checker string, name []string, args []any
 	}
 	failureLong := failure.String()
 
-	wantDiff := len(dump) == 2 && name[0] == nameActual && name[1] == nameExpected
-	if wantDiff { //nolint:nestif // No idea how to simplify.
+	wantDiff := len(dump) == 2 && name[0] == nameActual && name[1] == nameExpected //nolint:gosec // False positive.
+	if wantDiff {                                                                  //nolint:nestif // No idea how to simplify.
 		if reportToGoConvey(dump[0].String(), dump[1].String(), failureShort) == nil {
 			t.Fail()
 		} else {
@@ -731,8 +731,8 @@ func (t *C) Err(actual, expected error, msg ...any) bool {
 	t.Helper()
 	actual2 := unwrapErr(actual)
 	equal := fmt.Sprintf("%#v", actual2) == fmt.Sprintf("%#v", expected)
-	_, proto1 := actual2.(interface{ GRPCStatus() *status.Status })  //nolint:errorlint // False positive.
-	_, proto2 := expected.(interface{ GRPCStatus() *status.Status }) //nolint:errorlint // False positive.
+	_, proto1 := actual2.(interface{ GRPCStatus() *status.Status })
+	_, proto2 := expected.(interface{ GRPCStatus() *status.Status })
 	if proto1 || proto2 {
 		equal = proto.Equal(status.Convert(actual2).Proto(), status.Convert(expected).Proto())
 	}
@@ -782,8 +782,8 @@ func (t *C) NotErr(actual, expected error, msg ...any) bool {
 	t.Helper()
 	actual2 := unwrapErr(actual)
 	notEqual := fmt.Sprintf("%#v", actual2) != fmt.Sprintf("%#v", expected)
-	_, proto1 := actual2.(interface{ GRPCStatus() *status.Status })  //nolint:errorlint // False positive.
-	_, proto2 := expected.(interface{ GRPCStatus() *status.Status }) //nolint:errorlint // False positive.
+	_, proto1 := actual2.(interface{ GRPCStatus() *status.Status })
+	_, proto2 := expected.(interface{ GRPCStatus() *status.Status })
 	if proto1 || proto2 {
 		notEqual = !proto.Equal(status.Convert(actual2).Proto(), status.Convert(expected).Proto())
 	}
@@ -1007,14 +1007,14 @@ func (t *C) GE(actual, expected any, msg ...any) bool {
 //   - floats
 //   - strings
 //   - time.Time
-func (t *C) Between(actual, min, max any, msg ...any) bool {
+func (t *C) Between(actual, minimum, maximum any, msg ...any) bool {
 	t.Helper()
-	return t.report3(actual, min, max, msg,
-		isBetween(actual, min, max))
+	return t.report3(actual, minimum, maximum, msg,
+		isBetween(actual, minimum, maximum))
 }
 
-func isBetween(actual, min, max any) bool {
-	switch v, vmin, vmax := reflect.ValueOf(actual), reflect.ValueOf(min), reflect.ValueOf(max); v.Kind() { //nolint:exhaustive // Covered by default case.
+func isBetween(actual, minimum, maximum any) bool {
+	switch v, vmin, vmax := reflect.ValueOf(actual), reflect.ValueOf(minimum), reflect.ValueOf(maximum); v.Kind() { //nolint:exhaustive // Covered by default case.
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		return vmin.Int() < v.Int() && v.Int() < vmax.Int()
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
@@ -1025,8 +1025,8 @@ func isBetween(actual, min, max any) bool {
 		return vmin.String() < v.String() && v.String() < vmax.String()
 	default:
 		if actualTime, ok := actual.(time.Time); ok {
-			minTime := min.(time.Time) //nolint:forcetypeassert // Want panic.
-			maxTime := max.(time.Time) //nolint:forcetypeassert // Want panic.
+			minTime := minimum.(time.Time) //nolint:forcetypeassert // Want panic.
+			maxTime := maximum.(time.Time) //nolint:forcetypeassert // Want panic.
 			return minTime.Before(actualTime) && actualTime.Before(maxTime)
 		}
 	}
@@ -1041,10 +1041,10 @@ func isBetween(actual, min, max any) bool {
 //   - floats
 //   - strings
 //   - time.Time
-func (t *C) NotBetween(actual, min, max any, msg ...any) bool {
+func (t *C) NotBetween(actual, minimum, maximum any, msg ...any) bool {
 	t.Helper()
-	return t.report3(actual, min, max, msg,
-		!isBetween(actual, min, max))
+	return t.report3(actual, minimum, maximum, msg,
+		!isBetween(actual, minimum, maximum))
 }
 
 // BetweenOrEqual checks for min <= actual <= max.
@@ -1055,10 +1055,10 @@ func (t *C) NotBetween(actual, min, max any, msg ...any) bool {
 //   - floats
 //   - strings
 //   - time.Time
-func (t *C) BetweenOrEqual(actual, min, max any, msg ...any) bool {
+func (t *C) BetweenOrEqual(actual, minimum, maximum any, msg ...any) bool {
 	t.Helper()
-	return t.report3(actual, min, max, msg,
-		isBetween(actual, min, max) || isEqual(actual, min) || isEqual(actual, max))
+	return t.report3(actual, minimum, maximum, msg,
+		isBetween(actual, minimum, maximum) || isEqual(actual, minimum) || isEqual(actual, maximum))
 }
 
 // NotBetweenOrEqual checks for actual < min or max < actual.
@@ -1069,10 +1069,10 @@ func (t *C) BetweenOrEqual(actual, min, max any, msg ...any) bool {
 //   - floats
 //   - strings
 //   - time.Time
-func (t *C) NotBetweenOrEqual(actual, min, max any, msg ...any) bool {
+func (t *C) NotBetweenOrEqual(actual, minimum, maximum any, msg ...any) bool {
 	t.Helper()
-	return t.report3(actual, min, max, msg,
-		!(isBetween(actual, min, max) || isEqual(actual, min) || isEqual(actual, max)))
+	return t.report3(actual, minimum, maximum, msg,
+		!(isBetween(actual, minimum, maximum) || isEqual(actual, minimum) || isEqual(actual, maximum)))
 }
 
 // InDelta checks for expected-delta <= actual <= expected+delta.
@@ -1091,14 +1091,14 @@ func (t *C) InDelta(actual, expected, delta any, msg ...any) bool {
 func isInDelta(actual, expected, delta any) bool {
 	switch v, e, d := reflect.ValueOf(actual), reflect.ValueOf(expected), reflect.ValueOf(delta); v.Kind() { //nolint:exhaustive // Covered by default case.
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		min, max := e.Int()-d.Int(), e.Int()+d.Int()
-		return min <= v.Int() && v.Int() <= max
+		minimum, maximum := e.Int()-d.Int(), e.Int()+d.Int()
+		return minimum <= v.Int() && v.Int() <= maximum
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
-		min, max := e.Uint()-d.Uint(), e.Uint()+d.Uint()
-		return min <= v.Uint() && v.Uint() <= max
+		minimum, maximum := e.Uint()-d.Uint(), e.Uint()+d.Uint()
+		return minimum <= v.Uint() && v.Uint() <= maximum
 	case reflect.Float32, reflect.Float64:
-		min, max := e.Float()-d.Float(), e.Float()+d.Float()
-		return min <= v.Float() && v.Float() <= max
+		minimum, maximum := e.Float()-d.Float(), e.Float()+d.Float()
+		return minimum <= v.Float() && v.Float() <= maximum
 	default:
 		if actualTime, ok := actual.(time.Time); ok {
 			expectedTime := expected.(time.Time) //nolint:forcetypeassert // Want panic.
@@ -1344,7 +1344,7 @@ func (t *C) Implements(actual, expected any, msg ...any) bool {
 func isImplements(actual, expected any) bool {
 	typActual := reflect.TypeOf(actual)
 	if typActual.Kind() != reflect.Ptr {
-		typActual = reflect.PtrTo(typActual)
+		typActual = reflect.PointerTo(typActual)
 	}
 	return typActual.Implements(reflect.TypeOf(expected).Elem())
 }

@@ -53,7 +53,7 @@ func (c testStat) String() string {
 //nolint:gochecknoglobals // By design.
 var (
 	statsMu sync.Mutex
-	stats   = map[*testing.T]*testStat{}
+	stats   = make(map[*testing.T]*testStat)
 )
 
 // Report output statistics about passed/failed checks.
