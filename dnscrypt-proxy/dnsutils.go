@@ -16,10 +16,8 @@ func EmptyResponseFromMessage(srcMsg *dns.Msg) *dns.Msg {
 	dstMsg := dns.Msg{MsgHdr: srcMsg.MsgHdr, Compress: true}
 	dstMsg.Question = srcMsg.Question
 	dstMsg.Response = true
-	if srcMsg.RecursionDesired {
-		dstMsg.RecursionAvailable = true
-	}
-	dstMsg.RecursionDesired = false
+	dstMsg.RecursionAvailable = true
+	dstMsg.RecursionDesired = srcMsg.RecursionDesired
 	dstMsg.CheckingDisabled = false
 	dstMsg.AuthenticatedData = false
 	if edns0 := srcMsg.IsEdns0(); edns0 != nil {
