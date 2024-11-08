@@ -11,12 +11,12 @@ type Printer struct {
 	prefix string
 }
 
-func (self *Printer) Println(message string, values ...interface{}) {
+func (self *Printer) Println(message string, values ...any) {
 	formatted := self.format(message, values...) + newline
 	self.out.Write([]byte(formatted))
 }
 
-func (self *Printer) Print(message string, values ...interface{}) {
+func (self *Printer) Print(message string, values ...any) {
 	formatted := self.format(message, values...)
 	self.out.Write([]byte(formatted))
 }
@@ -25,7 +25,7 @@ func (self *Printer) Insert(text string) {
 	self.out.Write([]byte(text))
 }
 
-func (self *Printer) format(message string, values ...interface{}) string {
+func (self *Printer) format(message string, values ...any) string {
 	var formatted string
 	if len(values) == 0 {
 		formatted = self.prefix + message
