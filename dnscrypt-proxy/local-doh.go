@@ -98,16 +98,20 @@ func (handler localDoHHandler) ServeHTTP(writer http.ResponseWriter, request *ht
 
 func (proxy *Proxy) localDoHListener(acceptPc *net.TCPListener) {
 	defer acceptPc.Close()
-	if len(proxy.localDoHCertFile) == 0 || len(proxy.localDoHCertKeyFile) == 0 {
-		dlog.Fatal("A certificate and a key are required to start a local DoH service")
-	}
+	noTls := len(proxy.localDoHCertFile) == 0 && len(proxy.localDoHCertKeyFile) == 0
 	httpServer := &http.Server{
 		ReadTimeout:  proxy.timeout,
 		WriteTimeout: proxy.timeout,
 		Handler:      localDoHHandler{proxy: proxy},
 	}
 	httpServer.SetKeepAlivesEnabled(true)
-	if err := httpServer.ServeTLS(acceptPc, proxy.localDoHCertFile, proxy.localDoHCertKeyFile); err != nil {
+	var err error
+	if noTls {
+		err = httpServer.Serve(acceptPc)
+	} else {
+		err = httpServer.ServeTLS(acceptPc, proxy.localDoHCertFile, proxy.localDoHCertKeyFile)
+	}
+	if err != nil {
 		dlog.Fatal(err)
 	}
 }
