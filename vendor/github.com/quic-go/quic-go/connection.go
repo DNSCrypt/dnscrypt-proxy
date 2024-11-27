@@ -689,7 +689,7 @@ func (s *connection) nextIdleTimeoutTime() time.Time {
 // Time when the next keep-alive packet should be sent.
 // It returns a zero time if no keep-alive should be sent.
 func (s *connection) nextKeepAliveTime() time.Time {
-	if s.config.KeepAlivePeriod == 0 || s.keepAlivePingSent || !s.firstAckElicitingPacketAfterIdleSentTime.IsZero() {
+	if s.config.KeepAlivePeriod == 0 || s.keepAlivePingSent {
 		return time.Time{}
 	}
 	keepAliveInterval := max(s.keepAliveInterval, s.rttStats.PTO(true)*3/2)

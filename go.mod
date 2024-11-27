@@ -20,7 +20,7 @@ require (
 	github.com/miekg/dns v1.1.62
 	github.com/opencoff/go-sieve v0.2.1
 	github.com/powerman/check v1.8.0
-	github.com/quic-go/quic-go v0.48.1
+	github.com/quic-go/quic-go v0.48.2
 	golang.org/x/crypto v0.29.0
 	golang.org/x/net v0.30.0
 	golang.org/x/sys v0.27.0
