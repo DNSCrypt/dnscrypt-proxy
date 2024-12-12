@@ -9,12 +9,12 @@ require (
 	github.com/dchest/safefile v0.0.0-20151022103144-855e8d98f185
 	github.com/hashicorp/go-immutable-radix v1.3.1
 	github.com/hectane/go-acl v0.0.0-20230122075934-ca0b05cb1adb
-	github.com/jedisct1/dlog v0.0.0-20241011102921-a236bd13c4c1
+	github.com/jedisct1/dlog v0.0.0-20241212093805-3c5fd791b405
 	github.com/jedisct1/go-clocksmith v0.0.0-20230211133011-392c1afea73e
 	github.com/jedisct1/go-dnsstamps v0.0.0-20240423203910-07a0735c7774
-	github.com/jedisct1/go-hpke-compact v0.0.0-20230811132953-4ee502b61f80
-	github.com/jedisct1/go-minisign v0.0.0-20230811132847-661be99b8267
-	github.com/jedisct1/xsecretbox v0.0.0-20230811132812-b950633f9f1f
+	github.com/jedisct1/go-hpke-compact v0.0.0-20241212093903-5caa4621366f
+	github.com/jedisct1/go-minisign v0.0.0-20241212093149-d2f9f49435c7
+	github.com/jedisct1/xsecretbox v0.0.0-20241212092125-3afc4917ac41
 	github.com/k-sone/critbitgo v1.4.0
 	github.com/kardianos/service v1.2.2
 	github.com/miekg/dns v1.1.62
