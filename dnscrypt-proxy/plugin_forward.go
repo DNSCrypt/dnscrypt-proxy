@@ -122,6 +122,9 @@ func (plugin *PluginForward) Init(proxy *Proxy) error {
 			}
 		}
 		if requiresDHCP {
+			if len(proxy.userName) > 0 {
+				dlog.Warn("DHCP/DNS detection may not work when `user_name` is set or when starting as a non-root user")
+			}
 			if proxy.SourceIPv6 {
 				dlog.Info("Starting a DHCP/DNS detector for IPv6")
 				d6 := &dhcpdns.Detector{RemoteIPPort: "[2001:DB8::53]:80"}
