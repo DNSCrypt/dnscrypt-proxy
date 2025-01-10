@@ -1,3 +1,17 @@
+# Version 2.1.6
+ - Forwarding: in the list of servers for a zone, the `$BOOTSTRAP` keyword can be included as a shortcut to forward to the bootstrap servers. And the `$DHCP` keyword can be included to forward to the DNS resolvers provided by the local DHCP server. Based on work by YX Hao, thanks! DHCP forwarding should be considered experimental and my not work on all operating systems. A rule for a zone can mix and match multiple forwarder types, such as `10.0.0.1,10.0.0.254,$DHCP,192.168.1.1,$BOOTSTRAP`. Note that this is not implemented for captive portals yet.
+ - Lying resolvers are now skipped, instead of just printing an error. This doesn't apply to captive portal and forwarding entries, which are the only reasonable use case for lying resolvers.
+ - Support for XSalsa20 in DNSCrypt has been removed. This was not documented, and was supserseded by XChaCha20 in 2016.
+ - Source files are now fetched with compression.
+ - DNS64: compatibility has been improved.
+ - Forwarding: the root domain (`.`) can now be forwarded.
+ - The ARC caching algorithm has been replaced by the SIEVE algorithm.
+ - Properties of multiple servers are now updated simultaneously. The concurrency level can be adjusted with the new `cert_refresh_concurrency` setting. Contributed by YX Hao.
+ - MSI packages for DNSCrypt can now easily be built.
+ - New command-line flag: `-include-relays` to include relays in `-list` and `-list-all`.
+ - Support for DNS extended error codes has been added.
+ - Documentation updates, bug fixes, dependency updates.
+
 # Version 2.1.5
  - dnscrypt-proxy can be compiled with Go 1.21.0+
  - Responses to blocked queries now include extended error codes
