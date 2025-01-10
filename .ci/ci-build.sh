@@ -23,6 +23,15 @@ ln ../windows/* win64/
 zip -9 -r dnscrypt-proxy-win64-${PACKAGE_VERSION:-dev}.zip win64
 
 go clean
+env GOOS=windows GOARCH=arm64 go build -mod vendor -ldflags="-s -w"
+mkdir winarm
+ln dnscrypt-proxy.exe winarm/
+cp ../LICENSE example-dnscrypt-proxy.toml localhost.pem example-*.txt winarm/
+for i in winarm/LICENSE winarm/*.toml winarm/*.txt; do ex -bsc '%!awk "{sub(/$/,\"\r\")}1"' -cx "$i"; done
+ln ../windows/* winarm/
+zip -9 -r dnscrypt-proxy-winarm-${PACKAGE_VERSION:-dev}.zip winarm
+
+go clean
 env GO386=softfloat GOOS=openbsd GOARCH=386 go build -mod vendor -ldflags="-s -w"
 mkdir openbsd-i386
 ln dnscrypt-proxy openbsd-i386/
