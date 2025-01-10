@@ -1,5 +1,4 @@
 //go:build gofuzzbeta
-// +build gofuzzbeta
 
 package main
 

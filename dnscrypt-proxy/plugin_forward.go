@@ -172,7 +172,7 @@ func (plugin *PluginForward) Eval(pluginsState *PluginsState, msg *dns.Msg) erro
 	}
 	var err error
 	var respMsg *dns.Msg
-	var tries = 4
+	tries := 4
 	for _, item := range sequence {
 		var server string
 		switch item.typ {
