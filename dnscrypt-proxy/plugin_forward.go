@@ -128,12 +128,18 @@ func (plugin *PluginForward) Init(proxy *Proxy) error {
 			if proxy.SourceIPv6 {
 				dlog.Notice("Starting a DHCP/DNS detector for IPv6")
 				d6 := &dhcpdns.Detector{RemoteIPPort: "[2001:DB8::53]:80"}
+				if err := d6.Detect(); err != nil {
+					dlog.Criticalf("Failed to start the DHCP/DNS IPv6 server: %s", err)
+				}
 				go d6.Serve(9, 10)
 				plugin.dhcpdns = append(plugin.dhcpdns, d6)
 			}
 			if proxy.SourceIPv4 {
 				dlog.Notice("Starting a DHCP/DNS detector for IPv4")
 				d4 := &dhcpdns.Detector{RemoteIPPort: "192.0.2.53:80"}
+				if err := d4.Detect(); err != nil {
+					dlog.Criticalf("Failed to start the DHCP/DNS IPv4 server: %s", err)
+				}
 				go d4.Serve(9, 10)
 				plugin.dhcpdns = append(plugin.dhcpdns, d4)
 			}
