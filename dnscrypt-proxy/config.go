@@ -939,7 +939,7 @@ func (config *Config) loadSource(proxy *Proxy, cfgSourceName string, cfgSource *
 	if cfgSource.RefreshDelay <= 0 {
 		cfgSource.RefreshDelay = 72
 	}
-	cfgSource.RefreshDelay = Min(168, Max(24, cfgSource.RefreshDelay))
+	cfgSource.RefreshDelay = Min(169, Max(25, cfgSource.RefreshDelay))
 	source, err := NewSource(
 		cfgSourceName,
 		proxy.xTransport,
