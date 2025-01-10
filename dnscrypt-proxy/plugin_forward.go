@@ -178,10 +178,8 @@ func (plugin *PluginForward) Eval(pluginsState *PluginsState, msg *dns.Msg) erro
 		switch item.typ {
 		case Explicit:
 			server = item.servers[rand.Intn(len(item.servers))]
-			pluginsState.serverName = server
 		case Bootstrap:
 			server = plugin.bootstrapResolvers[rand.Intn(len(plugin.bootstrapResolvers))]
-			pluginsState.serverName = "[BOOTSTRAP]"
 		case DHCP:
 			const maxInconsistency = 9
 			for _, dhcpdns := range plugin.dhcpdns {
@@ -198,8 +196,8 @@ func (plugin *PluginForward) Eval(pluginsState *PluginsState, msg *dns.Msg) erro
 				dlog.Warn("DHCP didn't provide any DNS server")
 				continue
 			}
-			pluginsState.serverName = "[DHCP]"
 		}
+		pluginsState.serverName = server
 		if len(server) == 0 {
 			continue
 		}
