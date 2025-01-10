@@ -123,16 +123,16 @@ func (plugin *PluginForward) Init(proxy *Proxy) error {
 		}
 		if requiresDHCP {
 			if len(proxy.userName) > 0 {
-				dlog.Warn("DHCP/DNS detection may not work when `user_name` is set or when starting as a non-root user")
+				dlog.Warn("DHCP/DNS detection may not work when 'user_name' is set or when starting as a non-root user")
 			}
 			if proxy.SourceIPv6 {
-				dlog.Info("Starting a DHCP/DNS detector for IPv6")
+				dlog.Notice("Starting a DHCP/DNS detector for IPv6")
 				d6 := &dhcpdns.Detector{RemoteIPPort: "[2001:DB8::53]:80"}
 				go d6.Serve(9, 10)
 				plugin.dhcpdns = append(plugin.dhcpdns, d6)
 			}
 			if proxy.SourceIPv4 {
-				dlog.Info("Starting a DHCP/DNS detector for IPv4")
+				dlog.Notice("Starting a DHCP/DNS detector for IPv4")
 				d4 := &dhcpdns.Detector{RemoteIPPort: "192.0.2.53:80"}
 				go d4.Serve(9, 10)
 				plugin.dhcpdns = append(plugin.dhcpdns, d4)
@@ -188,15 +188,16 @@ func (plugin *PluginForward) Eval(pluginsState *PluginsState, msg *dns.Msg) erro
 			for _, dhcpdns := range plugin.dhcpdns {
 				inconsistency, ip, dhcpDNS, err := dhcpdns.Status()
 				if err != nil && ip != "" && inconsistency > maxInconsistency {
-					dhcpDNS = nil
+					dlog.Infof("No response from the DHCP server while resolving [%s]", qName)
+					continue
 				}
-				if len(dhcpDNS) > 0 {
+				if dhcpDNS != nil && len(dhcpDNS) > 0 {
 					server = net.JoinHostPort(dhcpDNS[rand.Intn(len(dhcpDNS))].String(), "53")
 					break
 				}
 			}
 			if len(server) == 0 {
-				dlog.Warn("DHCP didn't provide any DNS server")
+				dlog.Infof("DHCP didn't provide any DNS server to forward [%s]", qName)
 				continue
 			}
 		}
