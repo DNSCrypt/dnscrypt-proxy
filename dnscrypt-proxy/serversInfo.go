@@ -706,7 +706,7 @@ func fetchDoHServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, isN
 		return ServerInfo{}, err
 	}
 	if msg.Rcode != dns.RcodeNameError {
-		dlog.Criticalf("[%s] may be a lying resolver", name)
+		return ServerInfo{}, fmt.Errorf("[%s] may be a lying resolver -- skipping", name)
 	}
 	protocol := tls.NegotiatedProtocol
 	if len(protocol) == 0 {
@@ -869,7 +869,7 @@ func _fetchODoHTargetInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, i
 			return ServerInfo{}, err
 		}
 		if msg.Rcode != dns.RcodeNameError {
-			dlog.Criticalf("[%s] may be a lying resolver", name)
+			return ServerInfo{}, fmt.Errorf("[%s] may be a lying resolver -- skipping", name)
 		}
 		protocol := "http"
 		tlsVersion := uint16(0)
