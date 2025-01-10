@@ -18,7 +18,6 @@ type CryptoConstruction uint16
 
 const (
 	UndefinedConstruction CryptoConstruction = iota
-	XSalsa20Poly1305
 	XChacha20Poly1305
 )
 
