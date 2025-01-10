@@ -89,7 +89,7 @@ func (plugin *PluginForward) Init(proxy *Proxy) error {
 				if len(sequence) > 0 && sequence[len(sequence)-1].typ == DHCP {
 					// Ignore repetitions
 				} else {
-					sequence = append(sequence, SearchSequenceItem{typ: Bootstrap})
+					sequence = append(sequence, SearchSequenceItem{typ: DHCP})
 					dlog.Infof("Forwarding [%s] to the DHCP servers", domain)
 				}
 				requiresDHCP = true
