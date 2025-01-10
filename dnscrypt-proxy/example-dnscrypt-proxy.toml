@@ -774,10 +774,6 @@ format = 'tsv'
 
 [broken_implementations]
 
-## Cisco servers currently cannot handle queries larger than 1472 bytes, and don't
-## truncate responses larger than questions as expected by the DNSCrypt protocol.
-## This prevents large responses from being received over UDP and over relays.
-##
 ## Older versions of the `dnsdist` server software had a bug with queries larger
 ## than 1500 bytes. This is fixed since `dnsdist` version 1.5.0, but
 ## some server may still run an outdated version.
@@ -785,7 +781,7 @@ format = 'tsv'
 ## The list below enables workarounds to make non-relayed usage more reliable
 ## until the servers are fixed.
 
-fragments_blocked = ['cisco', 'cisco-ipv6', 'cisco-familyshield', 'cisco-familyshield-ipv6', 'cisco-sandbox', 'cleanbrowsing-adult', 'cleanbrowsing-adult-ipv6', 'cleanbrowsing-family', 'cleanbrowsing-family-ipv6', 'cleanbrowsing-security', 'cleanbrowsing-security-ipv6']
+fragments_blocked = ['cleanbrowsing-adult', 'cleanbrowsing-adult-ipv6', 'cleanbrowsing-family', 'cleanbrowsing-family-ipv6', 'cleanbrowsing-security', 'cleanbrowsing-security-ipv6']
 
 
 
