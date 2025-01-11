@@ -93,8 +93,7 @@ def parse_list(content, trusted=False):
 
 def print_restricted_name(output_fd, name, time_restrictions):
     if name in time_restrictions:
-        print("{}\t{}".format(
-            name, time_restrictions[name]), file=output_fd, end="\n")
+        print("{}\t{}".format(name, time_restrictions[name]), file=output_fd, end="\n")
     else:
         print(
             "# ignored: [{}] was in the time-restricted list, "
@@ -122,8 +121,7 @@ def load_from_url(url):
     except urllib.URLError as err:
         raise Exception("[{}] could not be loaded: {}\n".format(url, err))
     if trusted is False and response.getcode() != 200:
-        raise Exception("[{}] returned HTTP code {}\n".format(
-            url, response.getcode()))
+        raise Exception("[{}] returned HTTP code {}\n".format(url, response.getcode()))
     content = response.read()
     if URLLIB_NEW:
         content = content.decode("utf-8", errors="replace")
@@ -265,12 +263,10 @@ def blocklists_from_config_file(
 
         list_names.sort(key=name_cmp)
         if ignored:
-            print("# Ignored duplicates: {}".format(
-                ignored), file=output_fd, end="\n")
+            print("# Ignored duplicates: {}".format(ignored), file=output_fd, end="\n")
         if glob_ignored:
             print(
-                "# Ignored due to overlapping local patterns: {}".format(
-                    glob_ignored),
+                "# Ignored due to overlapping local patterns: {}".format(glob_ignored),
                 file=output_fd,
                 end="\n",
             )
