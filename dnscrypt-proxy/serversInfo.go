@@ -620,25 +620,29 @@ func fetchDNSCryptServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp
 			&name,
 			false,
 		)
-		if err == nil {
-			if msg.Id != 0xcafe {
-				dlog.Infof("[%s] handling of DNS message identifiers is broken", name)
-			}
-			for _, rr := range msg.Answer {
-				if rr.Header().Rrtype == dns.TypeA || rr.Header().Rrtype == dns.TypeAAAA {
-					dlog.Warnf("[%s] may be a lying resolver -- skipping", name)
-					return ServerInfo{}, fmt.Errorf("[%s] unexpected record: [%s]", name, rr.String())
+		if err == nil && len(msg.Question) > 0 {
+			question := msg.Question[0]
+			if question.Qtype == query.Question[0].Qtype && strings.EqualFold(question.Name, query.Question[0].Name) {
+				dlog.Debugf("[%s] also serves plaintext DNS", name)
+				if msg.Id != 0xcafe {
+					dlog.Infof("[%s] handling of DNS message identifiers is broken", name)
 				}
-			}
-			for _, rr := range msg.Extra {
-				if rr.Header().Rrtype == dns.TypeTXT {
-					dlog.Warnf("[%s] may be a dummy resolver -- skipping", name)
-					txts := rr.(*dns.TXT).Txt
-					cause := ""
-					if len(txts) > 0 {
-						cause = txts[0]
+				for _, rr := range msg.Answer {
+					if rr.Header().Rrtype == dns.TypeA || rr.Header().Rrtype == dns.TypeAAAA {
+						dlog.Warnf("[%s] may be a lying resolver -- skipping", name)
+						return ServerInfo{}, fmt.Errorf("[%s] unexpected record: [%s]", name, rr.String())
 					}
-					return ServerInfo{}, fmt.Errorf("[%s] unexpected record: [%s]", name, cause)
+				}
+				for _, rr := range msg.Extra {
+					if rr.Header().Rrtype == dns.TypeTXT {
+						dlog.Warnf("[%s] may be a dummy resolver -- skipping", name)
+						txts := rr.(*dns.TXT).Txt
+						cause := ""
+						if len(txts) > 0 {
+							cause = txts[0]
+						}
+						return ServerInfo{}, fmt.Errorf("[%s] unexpected record: [%s]", name, cause)
+					}
 				}
 			}
 		}
