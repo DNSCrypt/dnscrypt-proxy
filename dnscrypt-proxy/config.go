@@ -154,6 +154,7 @@ func newConfig() Config {
 		BlockedQueryResponse:     "hinfo",
 		BrokenImplementations: BrokenImplementationsConfig{
 			FragmentsBlocked: []string{
+				"cisco", "cisco-ipv6", "cisco-familyshield", "cisco-familyshield-ipv6",
 				"cleanbrowsing-adult", "cleanbrowsing-adult-ipv6", "cleanbrowsing-family", "cleanbrowsing-family-ipv6", "cleanbrowsing-security", "cleanbrowsing-security-ipv6",
 			},
 		},

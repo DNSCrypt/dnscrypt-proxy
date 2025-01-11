@@ -95,12 +95,12 @@ func FetchCurrentDNSCryptCert(
 		cryptoConstruction := CryptoConstruction(0)
 		switch esVersion := binary.BigEndian.Uint16(binCert[4:6]); esVersion {
 		case 0x0001:
-			dlog.Noticef("[%v] Deprecated, now unsupported encryption system", *serverName)
-			continue
+			cryptoConstruction = XSalsa20Poly1305
+			dlog.Noticef("[%v] should upgrade to XChaCha20 for encryption", *serverName)
 		case 0x0002:
 			cryptoConstruction = XChacha20Poly1305
 		default:
-			dlog.Noticef("[%v] Unsupported encryption system", *serverName)
+			dlog.Debugf("[%v] uses an unsupported encryption system", *serverName)
 			continue
 		}
 		signature := binCert[8:72]
@@ -164,7 +164,7 @@ func FetchCurrentDNSCryptCert(
 				dlog.Debugf("[%v] Upgrading the construction from %v to %v", *serverName, certInfo.CryptoConstruction, cryptoConstruction)
 			}
 		}
-		if cryptoConstruction != XChacha20Poly1305 {
+		if cryptoConstruction != XChacha20Poly1305 && cryptoConstruction != XSalsa20Poly1305 {
 			dlog.Noticef("[%v] Cryptographic construction %v not supported", *serverName, cryptoConstruction)
 			continue
 		}

@@ -608,6 +608,27 @@ func fetchDNSCryptServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp
 	if err != nil {
 		return ServerInfo{}, err
 	}
+
+	if certInfo.CryptoConstruction == XSalsa20Poly1305 {
+		query := plainNXTestPacket(0xcafe)
+		msg, _, _, err := DNSExchange(
+			proxy,
+			proxy.mainProto,
+			&query,
+			stamp.ServerAddrStr,
+			dnscryptRelay,
+			&name,
+			false,
+		)
+		if err == nil {
+			if msg.Rcode != dns.RcodeNameError && msg.Id == 0xcafe {
+				dlog.Warnf("[%s] may be a lying resolver -- skipping", name)
+				return ServerInfo{}, fmt.Errorf("[%s] unexpected catchall response", name)
+			}
+			dlog.Debugf("[%s] seems to be also accessible over plain DNS", name)
+		}
+	}
+
 	return ServerInfo{
 		Proto:              stamps.StampProtoTypeDNSCrypt,
 		MagicQuery:         certInfo.MagicQuery,
@@ -663,6 +684,19 @@ func dohNXTestPacket(msgID uint16) []byte {
 		dlog.Fatal(err)
 	}
 	return body
+}
+
+func plainNXTestPacket(msgID uint16) dns.Msg {
+	msg := dns.Msg{}
+	qName := make([]byte, 16)
+	charset := "abcdefghijklmnopqrstuvwxyz"
+	for i := range qName {
+		qName[i] = charset[rand.Intn(len(charset))]
+	}
+	msg.SetQuestion(string(qName)+".test.dnscrypt.", dns.TypeNS)
+	msg.Id = msgID
+	msg.MsgHdr.RecursionDesired = true
+	return msg
 }
 
 func fetchDoHServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, isNew bool) (ServerInfo, error) {

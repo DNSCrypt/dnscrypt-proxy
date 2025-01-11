@@ -9,6 +9,8 @@ import (
 	"github.com/jedisct1/dlog"
 	"github.com/jedisct1/xsecretbox"
 	"golang.org/x/crypto/curve25519"
+	"golang.org/x/crypto/nacl/box"
+	"golang.org/x/crypto/nacl/secretbox"
 )
 
 const (
@@ -55,9 +57,19 @@ func ComputeSharedKey(
 			dlog.Criticalf("[%v] Weak XChaCha20 public key", providerName)
 		}
 	} else {
-		dlog.Criticalf("[%v] Unsupported encryption system", providerName)
+		box.Precompute(&sharedKey, serverPk, secretKey)
+		c := byte(0)
+		for i := 0; i < 32; i++ {
+			c |= sharedKey[i]
+		}
+		if c == 0 {
+			dlog.Criticalf("[%v] Weak XSalsa20 public key", providerName)
+			if _, err := crypto_rand.Read(sharedKey[:]); err != nil {
+				dlog.Fatal(err)
+			}
+		}
 	}
-	return sharedKey
+	return
 }
 
 func (proxy *Proxy) Encrypt(
@@ -112,7 +124,9 @@ func (proxy *Proxy) Encrypt(
 	if serverInfo.CryptoConstruction == XChacha20Poly1305 {
 		encrypted = xsecretbox.Seal(encrypted, nonce, padded, sharedKey[:])
 	} else {
-		err = errors.New("Unsupported encryption system")
+		var xsalsaNonce [24]byte
+		copy(xsalsaNonce[:], nonce)
+		encrypted = secretbox.Seal(encrypted, padded, &xsalsaNonce, sharedKey)
 	}
 	return
 }
@@ -139,7 +153,13 @@ func (proxy *Proxy) Decrypt(
 	if serverInfo.CryptoConstruction == XChacha20Poly1305 {
 		packet, err = xsecretbox.Open(nil, serverNonce, encrypted[responseHeaderLen:], sharedKey[:])
 	} else {
-		err = errors.New("Unsupported encryption system")
+		var xsalsaServerNonce [24]byte
+		copy(xsalsaServerNonce[:], serverNonce)
+		var ok bool
+		packet, ok = secretbox.Open(nil, encrypted[responseHeaderLen:], &xsalsaServerNonce, sharedKey)
+		if !ok {
+			err = errors.New("Incorrect tag")
+		}
 	}
 	if err != nil {
 		return encrypted, err
