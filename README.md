@@ -68,6 +68,7 @@ Up-to-date, pre-built binaries are available for:
 * OpenBSD/x86_64
 * Windows
 * Windows 64 bit
+* Windows ARM
 
 How to use these files, as well as how to verify their signatures, are documented in the [installation instructions](https://github.com/dnscrypt/dnscrypt-proxy/wiki/installation).
 
