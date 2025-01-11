@@ -621,11 +621,26 @@ func fetchDNSCryptServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp
 			false,
 		)
 		if err == nil {
-			if msg.Rcode != dns.RcodeNameError && msg.Id == 0xcafe {
-				dlog.Warnf("[%s] may be a lying resolver -- skipping", name)
-				return ServerInfo{}, fmt.Errorf("[%s] unexpected catchall response", name)
+			if msg.Id != 0xcafe {
+				dlog.Infof("[%s] handling of DNS message identifiers is broken", name)
 			}
-			dlog.Debugf("[%s] seems to be also accessible over plain DNS", name)
+			for _, rr := range msg.Answer {
+				if rr.Header().Rrtype == dns.TypeA || rr.Header().Rrtype == dns.TypeAAAA {
+					dlog.Warnf("[%s] may be a lying resolver -- skipping", name)
+					return ServerInfo{}, fmt.Errorf("[%s] unexpected record: [%s]", name, rr.String())
+				}
+			}
+			for _, rr := range msg.Extra {
+				if rr.Header().Rrtype == dns.TypeTXT {
+					dlog.Warnf("[%s] may be a dummy resolver -- skipping", name)
+					txts := rr.(*dns.TXT).Txt
+					cause := ""
+					if len(txts) > 0 {
+						cause = txts[0]
+					}
+					return ServerInfo{}, fmt.Errorf("[%s] unexpected record: [%s]", name, cause)
+				}
+			}
 		}
 	}
 
