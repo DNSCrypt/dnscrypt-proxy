@@ -83,7 +83,7 @@ jobs:
           prerelease: false
 
       - name: Upload release assets
-        uses: softprops/action-gh-release@c43d7637b9b9ce3e953168c325d27253a5d48d8e
+        uses: softprops/action-gh-release@67b6c38432c171b8aa64dc6f3f152d12da2d99fa
         if: startsWith(github.ref, 'refs/tags/')
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
