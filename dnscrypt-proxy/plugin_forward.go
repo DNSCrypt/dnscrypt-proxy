@@ -60,6 +60,12 @@ func (plugin *PluginForward) Init(proxy *Proxy) error {
 			continue
 		}
 		domain, serversStr, ok := StringTwoFields(line)
+		if strings.HasPrefix(domain, "*.") {
+			domain = domain[2:]
+		}
+		if strings.Index(domain, "*") != -1 {
+			ok = false
+		}
 		if !ok {
 			return fmt.Errorf(
 				"Syntax error for a forwarding rule at line %d. Expected syntax: example.com 9.9.9.9,8.8.8.8",
