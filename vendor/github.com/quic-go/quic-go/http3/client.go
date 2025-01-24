@@ -294,10 +294,13 @@ func (c *ClientConn) sendRequestBody(str Stream, body io.ReadCloser, contentLeng
 }
 
 func (c *ClientConn) doRequest(req *http.Request, str *requestStream) (*http.Response, error) {
+	trace := httptrace.ContextClientTrace(req.Context())
 	if err := str.SendRequestHeader(req); err != nil {
+		traceWroteRequest(trace, err)
 		return nil, err
 	}
 	if req.Body == nil {
+		traceWroteRequest(trace, nil)
 		str.Close()
 	} else {
 		// send the request body asynchronously
@@ -308,7 +311,9 @@ func (c *ClientConn) doRequest(req *http.Request, str *requestStream) (*http.Res
 			if req.ContentLength > 0 {
 				contentLength = req.ContentLength
 			}
-			if err := c.sendRequestBody(str, req.Body, contentLength); err != nil {
+			err := c.sendRequestBody(str, req.Body, contentLength)
+			traceWroteRequest(trace, err)
+			if err != nil {
 				if c.logger != nil {
 					c.logger.Debug("error writing request", "error", err)
 				}
@@ -318,7 +323,6 @@ func (c *ClientConn) doRequest(req *http.Request, str *requestStream) (*http.Res
 	}
 
 	// copy from net/http: support 1xx responses
-	trace := httptrace.ContextClientTrace(req.Context())
 	num1xx := 0               // number of informational 1xx headers received
 	const max1xxResponses = 5 // arbitrary bound on number of informational responses
 
@@ -338,10 +342,9 @@ func (c *ClientConn) doRequest(req *http.Request, str *requestStream) (*http.Res
 			if num1xx > max1xxResponses {
 				return nil, errors.New("http: too many 1xx informational responses")
 			}
-			if trace != nil && trace.Got1xxResponse != nil {
-				if err := trace.Got1xxResponse(resCode, textproto.MIMEHeader(res.Header)); err != nil {
-					return nil, err
-				}
+			traceGot1xxResponse(trace, resCode, textproto.MIMEHeader(res.Header))
+			if resCode == 100 {
+				traceGot100Continue(trace)
 			}
 			continue
 		}

@@ -14,10 +14,9 @@ type SentPacketHandler interface {
 	// ReceivedAck processes an ACK frame.
 	// It does not store a copy of the frame.
 	ReceivedAck(f *wire.AckFrame, encLevel protocol.EncryptionLevel, rcvTime time.Time) (bool /* 1-RTT packet acked */, error)
-	ReceivedBytes(protocol.ByteCount)
-	DropPackets(protocol.EncryptionLevel)
-	ResetForRetry(rcvTime time.Time) error
-	SetHandshakeConfirmed()
+	ReceivedBytes(_ protocol.ByteCount, rcvTime time.Time)
+	DropPackets(_ protocol.EncryptionLevel, rcvTime time.Time)
+	ResetForRetry(rcvTime time.Time)
 
 	// The SendMode determines if and what kind of packets can be sent.
 	SendMode(now time.Time) SendMode
@@ -34,12 +33,12 @@ type SentPacketHandler interface {
 	PopPacketNumber(protocol.EncryptionLevel) protocol.PacketNumber
 
 	GetLossDetectionTimeout() time.Time
-	OnLossDetectionTimeout() error
+	OnLossDetectionTimeout(now time.Time) error
 }
 
 type sentPacketTracker interface {
 	GetLowestPacketNotConfirmedAcked() protocol.PacketNumber
-	ReceivedPacket(protocol.EncryptionLevel)
+	ReceivedPacket(_ protocol.EncryptionLevel, rcvTime time.Time)
 }
 
 // ReceivedPacketHandler handles ACKs needed to send for incoming packets
@@ -49,5 +48,5 @@ type ReceivedPacketHandler interface {
 	DropPackets(protocol.EncryptionLevel)
 
 	GetAlarmTimeout() time.Time
-	GetAckFrame(encLevel protocol.EncryptionLevel, onlyIfQueued bool) *wire.AckFrame
+	GetAckFrame(_ protocol.EncryptionLevel, now time.Time, onlyIfQueued bool) *wire.AckFrame
 }

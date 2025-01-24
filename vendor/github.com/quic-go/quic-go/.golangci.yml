@@ -16,9 +16,9 @@ linters:
   disable-all: true
   enable:
     - asciicheck
+    - copyloopvar
     - depguard
     - exhaustive
-    - exportloopref
     - goimports
     - gofmt # redundant, since gofmt *should* be a no-op after gofumpt
     - gofumpt
@@ -44,3 +44,8 @@ issues:
       linters:
         - exhaustive
         - prealloc
+        - unparam
+    - path: _test\.go
+      text: "SA1029:"
+      linters:
+        - staticcheck

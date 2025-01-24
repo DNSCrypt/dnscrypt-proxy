@@ -83,7 +83,7 @@ func newConn(c OOBCapablePacketConn, supportsDF bool) (*oobConn, error) {
 	if err != nil {
 		return nil, err
 	}
-	needsPacketInfo := false
+	var needsPacketInfo bool
 	if udpAddr, ok := c.LocalAddr().(*net.UDPAddr); ok && udpAddr.IP.IsUnspecified() {
 		needsPacketInfo = true
 	}

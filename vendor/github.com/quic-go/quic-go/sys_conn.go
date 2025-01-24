@@ -58,8 +58,8 @@ func wrapConn(pc net.PacketConn) (rawConn, error) {
 			return nil, err
 		}
 
+		// only set DF on UDP sockets
 		if _, ok := pc.LocalAddr().(*net.UDPAddr); ok {
-			// Only set DF on sockets that we expect to be able to handle that configuration.
 			var err error
 			supportsDF, err = setDF(rawConn)
 			if err != nil {

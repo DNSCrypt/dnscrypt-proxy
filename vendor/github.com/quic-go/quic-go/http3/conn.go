@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/http/httptrace"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -123,7 +124,8 @@ func (c *connection) openRequestStream(
 		rsp.Trailer = hdr
 		return nil
 	})
-	return newRequestStream(hstr, requestWriter, reqDone, c.decoder, disableCompression, maxHeaderBytes, rsp), nil
+	trace := httptrace.ContextClientTrace(ctx)
+	return newRequestStream(hstr, requestWriter, reqDone, c.decoder, disableCompression, maxHeaderBytes, rsp, trace), nil
 }
 
 func (c *connection) decodeTrailers(r io.Reader, l, maxHeaderBytes uint64) (http.Header, error) {

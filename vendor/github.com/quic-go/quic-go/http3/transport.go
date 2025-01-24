@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/http/httptrace"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -36,17 +37,17 @@ type RoundTripOpt struct {
 	OnlyCachedConn bool
 }
 
-type singleRoundTripper interface {
+type clientConn interface {
 	OpenRequestStream(context.Context) (RequestStream, error)
 	RoundTrip(*http.Request) (*http.Response, error)
 }
 
 type roundTripperWithCount struct {
-	cancel  context.CancelFunc
-	dialing chan struct{} // closed as soon as quic.Dial(Early) returned
-	dialErr error
-	conn    quic.EarlyConnection
-	rt      singleRoundTripper
+	cancel     context.CancelFunc
+	dialing    chan struct{} // closed as soon as quic.Dial(Early) returned
+	dialErr    error
+	conn       quic.EarlyConnection
+	clientConn clientConn
 
 	useCount atomic.Int64
 }
@@ -106,7 +107,7 @@ type Transport struct {
 	initOnce sync.Once
 	initErr  error
 
-	newClient func(quic.EarlyConnection) singleRoundTripper
+	newClientConn func(quic.EarlyConnection) clientConn
 
 	clients   map[string]*roundTripperWithCount
 	transport *quic.Transport
@@ -124,8 +125,8 @@ type RoundTripper = Transport
 var ErrNoCachedConn = errors.New("http3: no cached connection was available")
 
 func (t *Transport) init() error {
-	if t.newClient == nil {
-		t.newClient = func(conn quic.EarlyConnection) singleRoundTripper {
+	if t.newClientConn == nil {
+		t.newClientConn = func(conn quic.EarlyConnection) clientConn {
 			return newClientConn(
 				conn,
 				t.EnableDatagrams,
@@ -160,26 +161,36 @@ func (t *Transport) init() error {
 
 // RoundTripOpt is like RoundTrip, but takes options.
 func (t *Transport) RoundTripOpt(req *http.Request, opt RoundTripOpt) (*http.Response, error) {
+	rsp, err := t.roundTripOpt(req, opt)
+	if err != nil {
+		if req.Body != nil {
+			req.Body.Close()
+		}
+		return nil, err
+	}
+	return rsp, nil
+}
+
+func (t *Transport) roundTripOpt(req *http.Request, opt RoundTripOpt) (*http.Response, error) {
 	t.initOnce.Do(func() { t.initErr = t.init() })
 	if t.initErr != nil {
 		return nil, t.initErr
 	}
 
 	if req.URL == nil {
-		closeRequestBody(req)
 		return nil, errors.New("http3: nil Request.URL")
 	}
 	if req.URL.Scheme != "https" {
-		closeRequestBody(req)
 		return nil, fmt.Errorf("http3: unsupported protocol scheme: %s", req.URL.Scheme)
 	}
 	if req.URL.Host == "" {
-		closeRequestBody(req)
 		return nil, errors.New("http3: no Host in request URL")
 	}
 	if req.Header == nil {
-		closeRequestBody(req)
 		return nil, errors.New("http3: nil Request.Header")
+	}
+	if req.Method != "" && !validMethod(req.Method) {
+		return nil, fmt.Errorf("http3: invalid method %q", req.Method)
 	}
 	for k, vv := range req.Header {
 		if !httpguts.ValidHeaderFieldName(k) {
@@ -192,12 +203,9 @@ func (t *Transport) RoundTripOpt(req *http.Request, opt RoundTripOpt) (*http.Res
 		}
 	}
 
-	if req.Method != "" && !validMethod(req.Method) {
-		closeRequestBody(req)
-		return nil, fmt.Errorf("http3: invalid method %q", req.Method)
-	}
-
+	trace := httptrace.ContextClientTrace(req.Context())
 	hostname := authorityAddr(hostnameFromURL(req.URL))
+	traceGetConn(trace, hostname)
 	cl, isReused, err := t.getClient(req.Context(), hostname, opt.OnlyCachedConn)
 	if err != nil {
 		return nil, err
@@ -213,23 +221,36 @@ func (t *Transport) RoundTripOpt(req *http.Request, opt RoundTripOpt) (*http.Res
 		t.removeClient(hostname)
 		return nil, cl.dialErr
 	}
+	traceGotConn(trace, cl.conn, isReused)
 	defer cl.useCount.Add(-1)
-	rsp, err := cl.rt.RoundTrip(req)
+	rsp, err := cl.clientConn.RoundTrip(req)
 	if err != nil {
-		// non-nil errors on roundtrip are likely due to a problem with the connection
-		// so we remove the client from the cache so that subsequent trips reconnect
-		// context cancelation is excluded as is does not signify a connection error
-		if !errors.Is(err, context.Canceled) {
-			t.removeClient(hostname)
+		// request aborted due to context cancellation
+		select {
+		case <-req.Context().Done():
+			return nil, err
+		default:
 		}
 
-		if isReused {
-			if nerr, ok := err.(net.Error); ok && nerr.Timeout() {
-				return t.RoundTripOpt(req, opt)
+		// Retry the request on a new connection if:
+		// 1. it was sent on a reused connection,
+		// 2. this connection is now closed,
+		// 3. and the error is a timeout error.
+		select {
+		case <-cl.conn.Context().Done():
+			t.removeClient(hostname)
+			if isReused {
+				var nerr net.Error
+				if errors.As(err, &nerr) && nerr.Timeout() {
+					return t.RoundTripOpt(req, opt)
+				}
 			}
+			return nil, err
+		default:
+			return nil, err
 		}
 	}
-	return rsp, err
+	return rsp, nil
 }
 
 // RoundTrip does a round trip.
@@ -264,7 +285,7 @@ func (t *Transport) getClient(ctx context.Context, hostname string, onlyCached b
 				return
 			}
 			cl.conn = conn
-			cl.rt = rt
+			cl.clientConn = rt
 		}()
 		t.clients[hostname] = cl
 	}
@@ -285,7 +306,7 @@ func (t *Transport) getClient(ctx context.Context, hostname string, onlyCached b
 	return cl, isReused, nil
 }
 
-func (t *Transport) dial(ctx context.Context, hostname string) (quic.EarlyConnection, singleRoundTripper, error) {
+func (t *Transport) dial(ctx context.Context, hostname string) (quic.EarlyConnection, clientConn, error) {
 	var tlsConf *tls.Config
 	if t.TLSClientConfig == nil {
 		tlsConf = &tls.Config{}
@@ -313,19 +334,48 @@ func (t *Transport) dial(ctx context.Context, hostname string) (quic.EarlyConnec
 			t.transport = &quic.Transport{Conn: udpConn}
 		}
 		dial = func(ctx context.Context, addr string, tlsCfg *tls.Config, cfg *quic.Config) (quic.EarlyConnection, error) {
-			udpAddr, err := net.ResolveUDPAddr("udp", addr)
+			network := "udp"
+			udpAddr, err := t.resolveUDPAddr(ctx, network, addr)
 			if err != nil {
 				return nil, err
 			}
-			return t.transport.DialEarly(ctx, udpAddr, tlsCfg, cfg)
+			trace := httptrace.ContextClientTrace(ctx)
+			traceConnectStart(trace, network, udpAddr.String())
+			traceTLSHandshakeStart(trace)
+			conn, err := t.transport.DialEarly(ctx, udpAddr, tlsCfg, cfg)
+			var state tls.ConnectionState
+			if conn != nil {
+				state = conn.ConnectionState().TLS
+			}
+			traceTLSHandshakeDone(trace, state, err)
+			traceConnectDone(trace, network, udpAddr.String(), err)
+			return conn, err
 		}
 	}
-
 	conn, err := dial(ctx, hostname, tlsConf, t.QUICConfig)
 	if err != nil {
 		return nil, nil, err
 	}
-	return conn, t.newClient(conn), nil
+	return conn, t.newClientConn(conn), nil
+}
+
+func (t *Transport) resolveUDPAddr(ctx context.Context, network, addr string) (*net.UDPAddr, error) {
+	host, portStr, err := net.SplitHostPort(addr)
+	if err != nil {
+		return nil, err
+	}
+	port, err := net.LookupPort(network, portStr)
+	if err != nil {
+		return nil, err
+	}
+	resolver := net.DefaultResolver
+	ipAddrs, err := resolver.LookupIPAddr(ctx, host)
+	if err != nil {
+		return nil, err
+	}
+	addrs := addrList(ipAddrs)
+	ip := addrs.forResolve(network, addr)
+	return &net.UDPAddr{IP: ip.IP, Port: port, Zone: ip.Zone}, nil
 }
 
 func (t *Transport) removeClient(hostname string) {
@@ -376,12 +426,6 @@ func (t *Transport) Close() error {
 		t.transport = nil
 	}
 	return nil
-}
-
-func closeRequestBody(req *http.Request) {
-	if req.Body != nil {
-		req.Body.Close()
-	}
 }
 
 func validMethod(method string) bool {
