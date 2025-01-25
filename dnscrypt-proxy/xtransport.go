@@ -414,23 +414,22 @@ func (xTransport *XTransport) resolveAndUpdateCache(host string) error {
 	if xTransport.mainProto == "tcp" {
 		protos = []string{"tcp", "udp"}
 	}
-	if xTransport.ignoreSystemDNS {
-		if xTransport.internalResolverReady {
-			for _, proto := range protos {
-				foundIP, ttl, err = xTransport.resolveUsingResolvers(proto, host, xTransport.internalResolvers)
-				if err == nil {
-					break
-				}
+	if xTransport.internalResolverReady {
+		for _, proto := range protos {
+			foundIP, ttl, err = xTransport.resolveUsingResolvers(proto, host, xTransport.internalResolvers)
+			if err == nil {
+				break
 			}
-		} else {
-			err = errors.New("Service is not usable yet")
-			dlog.Notice(err)
 		}
 	} else {
-		foundIP, ttl, err = xTransport.resolveUsingSystem(host)
-		if err != nil {
-			err = errors.New("System DNS is not usable yet")
-			dlog.Notice(err)
+		err = errors.New("Service is not usable yet")
+		dlog.Notice(err)
+		if xTransport.ignoreSystemDNS == false {
+			foundIP, ttl, err = xTransport.resolveUsingSystem(host)
+			if err != nil {
+				err = errors.New("System DNS is not usable yet")
+				dlog.Notice(err)
+			}
 		}
 	}
 	if err != nil {
