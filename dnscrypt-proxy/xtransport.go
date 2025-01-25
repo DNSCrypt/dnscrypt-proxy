@@ -424,13 +424,6 @@ func (xTransport *XTransport) resolveAndUpdateCache(host string) error {
 	} else {
 		err = errors.New("Service is not usable yet")
 		dlog.Notice(err)
-		if xTransport.ignoreSystemDNS == false {
-			foundIP, ttl, err = xTransport.resolveUsingSystem(host)
-			if err != nil {
-				err = errors.New("System DNS is not usable yet")
-				dlog.Notice(err)
-			}
-		}
 	}
 	if err != nil {
 		for _, proto := range protos {
@@ -447,9 +440,15 @@ func (xTransport *XTransport) resolveAndUpdateCache(host string) error {
 			}
 		}
 	}
-	if err != nil && xTransport.ignoreSystemDNS {
+	if err != nil && xTransport.ignoreSystemDNS == false {
 		dlog.Noticef("Bootstrap resolvers didn't respond - Trying with the system resolver as a last resort")
 		foundIP, ttl, err = xTransport.resolveUsingSystem(host)
+		if err != nil {
+			err = errors.New("System DNS is not usable yet")
+			dlog.Notice(err)
+		}	
+	}else if err != nil && xTransport.ignoreSystemDNS == true {
+		dlog.Noticef("Bootstrap resolvers didn't respond and we are ignoring system dns")
 	}
 	if ttl < MinResolverIPTTL {
 		ttl = MinResolverIPTTL
@@ -471,9 +470,10 @@ func (xTransport *XTransport) resolveAndUpdateCache(host string) error {
 		} else {
 			dlog.Errorf("no IP address found for [%s]", host)
 		}
+	}else{
+		xTransport.saveCachedIP(host, foundIP, ttl)
+		dlog.Debugf("[%s] IP address [%s] added to the cache, valid for %v", host, foundIP, ttl)
 	}
-	xTransport.saveCachedIP(host, foundIP, ttl)
-	dlog.Debugf("[%s] IP address [%s] added to the cache, valid for %v", host, foundIP, ttl)
 	return nil
 }
 
