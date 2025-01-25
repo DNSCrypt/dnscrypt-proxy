@@ -548,6 +548,10 @@ func (xTransport *XTransport) Fetch(
 	start := time.Now()
 	resp, err := client.Do(req)
 	rtt := time.Since(start)
+	statusCode := 503
+	if resp != nil {
+		statusCode = resp.StatusCode
+	}
 	if err == nil {
 		if resp == nil {
 			err = errors.New("Webserver returned an error")
@@ -557,18 +561,12 @@ func (xTransport *XTransport) Fetch(
 	} else {
 		dlog.Debugf("HTTP client error: [%v] - closing idle connections", err)
 		xTransport.transport.CloseIdleConnections()
-	}
-	statusCode := 503
-	if resp != nil {
-		statusCode = resp.StatusCode
-	}
-	if err != nil {
 		dlog.Debugf("[%s]: [%s]", req.URL, err)
 		if xTransport.tlsCipherSuite != nil && strings.Contains(err.Error(), "handshake failure") {
 			dlog.Warnf(
 				"TLS handshake failure - Try changing or deleting the tls_cipher_suite value in the configuration file",
 			)
-			xTransport.tlsCipherSuite = nil
+			//xTransport.tlsCipherSuite = nil
 			xTransport.rebuildTransport()
 		}
 		return nil, statusCode, nil, rtt, err
