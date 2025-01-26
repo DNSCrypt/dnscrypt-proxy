@@ -226,8 +226,7 @@ func (xTransport *XTransport) rebuildTransport() {
 	}
 	if xTransport.tlsCipherSuite != nil {
 		tlsClientConfig.PreferServerCipherSuites = false
-		tlsClientConfig.CipherSuites = xTransport.tlsCipherSuite
-
+		tlsClientConfig.MaxVersion = tls.VersionTLS13
 		// Go doesn't allow changing the cipher suite with TLS 1.3
 		// So, check if the requested set of ciphers matches the TLS 1.3 suite.
 		// If it doesn't, downgrade to TLS 1.2
@@ -247,7 +246,8 @@ func (xTransport *XTransport) rebuildTransport() {
 				}
 			}
 		}
-		if compatibleSuitesCount != len(tls.CipherSuites()) {
+		if compatibleSuitesCount != len(tls.CipherSuites()) && xTransport.keepCipherSuite == true {
+			tlsClientConfig.CipherSuites = xTransport.tlsCipherSuite
 			dlog.Infof("Explicit cipher suite configured - downgrading to TLS 1.2 with cipher suite: %v", xTransport.tlsCipherSuite)
 			tlsClientConfig.MaxVersion = tls.VersionTLS12
 		}
