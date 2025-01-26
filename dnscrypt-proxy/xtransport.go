@@ -39,6 +39,8 @@ const (
 	ExpiredCachedIPGraceTTL  = 15 * time.Minute
 )
 
+var MinTry = 0
+
 type CachedIPItem struct {
 	ip         net.IP
 	expiration *time.Time
@@ -227,29 +229,11 @@ func (xTransport *XTransport) rebuildTransport() {
 	if xTransport.tlsCipherSuite != nil {
 		tlsClientConfig.PreferServerCipherSuites = false
 		tlsClientConfig.MaxVersion = tls.VersionTLS13
-		// Go doesn't allow changing the cipher suite with TLS 1.3
-		// So, check if the requested set of ciphers matches the TLS 1.3 suite.
-		// If it doesn't, downgrade to TLS 1.2
-		compatibleSuitesCount := 0
-		for _, suite := range tls.CipherSuites() {
-			if suite.Insecure {
-				continue
-			}
-			for _, supportedVersion := range suite.SupportedVersions {
-				if supportedVersion != tls.VersionTLS13 {
-					for _, expectedSuiteID := range xTransport.tlsCipherSuite {
-						if expectedSuiteID == suite.ID {
-							compatibleSuitesCount += 1
-							break
-						}
-					}
-				}
-			}
-		}
-		if compatibleSuitesCount != len(tls.CipherSuites()) && xTransport.keepCipherSuite == true {
+		if xTransport.keepCipherSuite == true {
 			tlsClientConfig.CipherSuites = xTransport.tlsCipherSuite
-			dlog.Infof("Explicit cipher suite configured - downgrading to TLS 1.2 with cipher suite: %v", xTransport.tlsCipherSuite)
+			dlog.Infof("Explicit cipher suite %v configured downgrading TLS 1.2", xTransport.tlsCipherSuite)
 			tlsClientConfig.MaxVersion = tls.VersionTLS12
+			MinTry += 1
 		}
 	}
 	transport.TLSClientConfig = &tlsClientConfig
@@ -560,10 +544,13 @@ func (xTransport *XTransport) Fetch(
 		dlog.Debugf("HTTP client error: [%v] - closing idle connections", err)
 		xTransport.transport.CloseIdleConnections()
 		dlog.Debugf("[%s]: [%s]", req.URL, err)
-		if xTransport.tlsCipherSuite != nil && strings.Contains(err.Error(), "handshake failure") {
+		if xTransport.tlsCipherSuite != nil && (strings.Contains(err.Error(), "handshake failure") || strings.Contains(err.Error(), "tls: error decoding message") {
 			dlog.Warnf(
 				"TLS handshake failure - Try changing or deleting the tls_cipher_suite value in the configuration file",
 			)
+			if MinTry == 1 {
+				xTransport.keepCipherSuite = false
+			}
 			xTransport.rebuildTransport()
 		}
 		return nil, statusCode, nil, rtt, err
