@@ -226,9 +226,7 @@ func (xTransport *XTransport) rebuildTransport() {
 	} else {
 		tlsClientConfig.ClientSessionCache = tls.NewLRUClientSessionCache(10)
 	}
-	if xTransport.tlsCipherSuite != nil {
-		tlsClientConfig.PreferServerCipherSuites = false
-		tlsClientConfig.MaxVersion = tls.VersionTLS13
+	if xTransport.tlsCipherSuite != nil && len(xTransport.tlsCipherSuite) > 0 && xTransport.keepCipherSuite == true {
 		var tls13 = "198 199 4865 4866 4867 4868 4869 49332 49333"
 		var only13 = 0
 		var SuitesCount = 0
@@ -239,12 +237,14 @@ func (xTransport *XTransport) rebuildTransport() {
 			}
 			only13 += 1 
 		}
-		if xTransport.keepCipherSuite == true && only13 != SuitesCount {
+		if only13 != SuitesCount {
 			tlsClientConfig.CipherSuites = xTransport.tlsCipherSuite
 			dlog.Info("Explicit cipher suite configured downgrading to TLS 1.2")
 			tlsClientConfig.MaxVersion = tls.VersionTLS12
 			MinTry += 1
 		}
+	} else {
+		tlsClientConfig.MaxVersion = tls.VersionTLS13
 	}
 	transport.TLSClientConfig = &tlsClientConfig
 	if http2Transport, err := http2.ConfigureTransports(transport); err != nil {
