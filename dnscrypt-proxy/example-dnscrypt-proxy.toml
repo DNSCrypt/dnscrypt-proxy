@@ -223,9 +223,9 @@ cert_refresh_delay = 240
 ## On non-Intel CPUs such as MIPS routers and ARM systems (Android, Raspberry Pi...),
 ## the following suite improves performance.
 ## This may also help on Intel CPUs running 32-bit operating systems.
+## However, this can cause issues fetching sources or connecting to some HTTP servers.
 ##
-## Keep tls_cipher_suite empty if you have issues fetching sources or
-## connecting to some DoH servers.
+## Keep tls_cipher_suite undefined to let the app automatically choose secure parameters
 
 # tls_cipher_suite = [52392, 49199]
 

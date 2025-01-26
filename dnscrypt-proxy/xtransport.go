@@ -217,12 +217,13 @@ func (xTransport *XTransport) rebuildTransport() {
 		tlsClientConfig.Certificates = []tls.Certificate{cert}
 	}
 
-	if xTransport.tlsDisableSessionTickets || xTransport.tlsCipherSuite != nil {
+	overrideCipherSuite := xTransport.tlsCipherSuite != nil && len(xTransport.tlsCipherSuite) > 0
+	if xTransport.tlsDisableSessionTickets || overrideCipherSuite {
 		tlsClientConfig.SessionTicketsDisabled = xTransport.tlsDisableSessionTickets
 		if !xTransport.tlsDisableSessionTickets {
 			tlsClientConfig.ClientSessionCache = tls.NewLRUClientSessionCache(10)
 		}
-		if xTransport.tlsCipherSuite != nil {
+		if overrideCipherSuite {
 			tlsClientConfig.PreferServerCipherSuites = false
 			tlsClientConfig.CipherSuites = xTransport.tlsCipherSuite
 
