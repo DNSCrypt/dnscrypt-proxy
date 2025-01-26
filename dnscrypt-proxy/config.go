@@ -959,6 +959,8 @@ func (config *Config) loadSource(proxy *Proxy, cfgSourceName string, cfgSource *
 		dlog.Infof("Downloading [%s] failed: %v, using cache file to startup", source.name, err)
 	}
 	proxy.sources = append(proxy.sources, source)
+	proxy.xTransport.keepCipherSuite = true
+	proxy.xTransport.rebuildTransport()
 	return nil
 }
 
