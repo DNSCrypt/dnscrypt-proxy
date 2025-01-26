@@ -236,7 +236,7 @@ func (xTransport *XTransport) rebuildTransport() {
 					continue
 				}
 				for _, supportedVersion := range suite.SupportedVersions {
-					if supportedVersion != tls.VersionTLS13 {
+					if supportedVersion == tls.VersionTLS12 {
 						for _, expectedSuiteID := range xTransport.tlsCipherSuite {
 							if expectedSuiteID == suite.ID {
 								compatibleSuitesCount += 1
