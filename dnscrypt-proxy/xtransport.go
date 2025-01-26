@@ -443,7 +443,7 @@ func (xTransport *XTransport) resolveAndUpdateCache(host string) error {
 		dlog.Noticef("Bootstrap resolvers didn't respond - Trying with the system resolver as a last resort")
 		foundIP, ttl, err = xTransport.resolveUsingSystem(host)
 		if err != nil {
-			err = errors.New("System DNS is not usable yet")
+			err = errors.New("System DNS error")
 			dlog.Notice(err)
 		}	
 	}else if err != nil && xTransport.ignoreSystemDNS == true {
