@@ -256,7 +256,6 @@ func (xTransport *XTransport) rebuildTransport() {
 	if http2Transport, err := http2.ConfigureTransports(transport); err != nil {
 		http2Transport.ReadIdleTimeout = timeout
 		http2Transport.AllowHTTP = false
-		xTransport.keepCipherSuite = true
 	}
 	xTransport.transport = transport
 	if xTransport.http3 {
@@ -567,9 +566,6 @@ func (xTransport *XTransport) Fetch(
 			dlog.Warnf(
 				"TLS handshake failure - Try changing or deleting the tls_cipher_suite value in the configuration file",
 			)
-			if xTransport.keepCipherSuite != true {
-				xTransport.tlsCipherSuite = nil
-			}
 			xTransport.rebuildTransport()
 		}
 		return nil, statusCode, nil, rtt, err
