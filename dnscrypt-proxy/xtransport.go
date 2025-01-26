@@ -229,9 +229,19 @@ func (xTransport *XTransport) rebuildTransport() {
 	if xTransport.tlsCipherSuite != nil {
 		tlsClientConfig.PreferServerCipherSuites = false
 		tlsClientConfig.MaxVersion = tls.VersionTLS13
-		if xTransport.keepCipherSuite == true {
+		var tls13 = "198 199 4865 4866 4867 4868 4869 49332 49333"
+		var only13 = 0
+		var SuitesCount = 0
+		for _, expectedSuiteID := range xTransport.tlsCipherSuite {
+			check := strconv.Itoa(int(expectedSuiteID))
+			if strings.Contains(tls13 , check) {
+				SuitesCount += 1
+			}
+			only13 += 1 
+		}
+		if xTransport.keepCipherSuite == true && only13 != SuitesCount {
 			tlsClientConfig.CipherSuites = xTransport.tlsCipherSuite
-			dlog.Infof("Explicit cipher suite %v configured downgrading TLS 1.2", xTransport.tlsCipherSuite)
+			dlog.Info("Explicit cipher suite configured downgrading to TLS 1.2")
 			tlsClientConfig.MaxVersion = tls.VersionTLS12
 			MinTry += 1
 		}
