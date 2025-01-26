@@ -226,7 +226,8 @@ func (xTransport *XTransport) rebuildTransport() {
 	} else {
 		tlsClientConfig.ClientSessionCache = tls.NewLRUClientSessionCache(10)
 	}
-	if xTransport.tlsCipherSuite != nil {
+	overrideCipherSuite := xTransport.tlsCipherSuite != nil && len(xTransport.tlsCipherSuite) > 0
+	if overrideCipherSuite != nil {
 		tlsClientConfig.PreferServerCipherSuites = false
 		tlsClientConfig.MaxVersion = tls.VersionTLS13
 		var tls13 = "198 199 4865 4866 4867 4868 4869 49332 49333"
