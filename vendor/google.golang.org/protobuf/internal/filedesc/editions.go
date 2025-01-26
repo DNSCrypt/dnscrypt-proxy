@@ -32,14 +32,6 @@ func unmarshalGoFeature(b []byte, parent EditionFeatures) EditionFeatures {
 			v, m := protowire.ConsumeVarint(b)
 			b = b[m:]
 			parent.GenerateLegacyUnmarshalJSON = protowire.DecodeBool(v)
-		case genid.GoFeatures_ApiLevel_field_number:
-			v, m := protowire.ConsumeVarint(b)
-			b = b[m:]
-			parent.APILevel = int(v)
-		case genid.GoFeatures_StripEnumPrefix_field_number:
-			v, m := protowire.ConsumeVarint(b)
-			b = b[m:]
-			parent.StripEnumPrefix = int(v)
 		default:
 			panic(fmt.Sprintf("unkown field number %d while unmarshalling GoFeatures", num))
 		}
@@ -76,7 +68,7 @@ func unmarshalFeatureSet(b []byte, parent EditionFeatures) EditionFeatures {
 			v, m := protowire.ConsumeBytes(b)
 			b = b[m:]
 			switch num {
-			case genid.FeatureSet_Go_ext_number:
+			case genid.GoFeatures_LegacyUnmarshalJsonEnum_field_number:
 				parent = unmarshalGoFeature(v, parent)
 			}
 		}

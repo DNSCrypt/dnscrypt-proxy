@@ -58,7 +58,7 @@ func (r *RTTStats) PTO(includeMaxAckDelay bool) time.Duration {
 }
 
 // UpdateRTT updates the RTT based on a new sample.
-func (r *RTTStats) UpdateRTT(sendDelta, ackDelay time.Duration, now time.Time) {
+func (r *RTTStats) UpdateRTT(sendDelta, ackDelay time.Duration) {
 	if sendDelta <= 0 {
 		return
 	}

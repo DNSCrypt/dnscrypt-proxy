@@ -12,6 +12,6 @@ func assert(b bool) {
 	}
 }
 
-func panicf(format string, args ...any) {
+func errorf(format string, args ...interface{}) {
 	panic(fmt.Errorf(format, args...))
 }

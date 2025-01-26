@@ -22,17 +22,11 @@ import (
 // GODEBUG=gotypesalias=... by invoking the type checker. The Enabled
 // function is expensive and should be called once per task (e.g.
 // package import), not once per call to NewAlias.
-//
-// Precondition: enabled || len(tparams)==0.
-// If materialized aliases are disabled, there must not be any type parameters.
-func NewAlias(enabled bool, pos token.Pos, pkg *types.Package, name string, rhs types.Type, tparams []*types.TypeParam) *types.TypeName {
+func NewAlias(enabled bool, pos token.Pos, pkg *types.Package, name string, rhs types.Type) *types.TypeName {
 	if enabled {
 		tname := types.NewTypeName(pos, pkg, name, nil)
-		SetTypeParams(types.NewAlias(tname, rhs), tparams)
+		newAlias(tname, rhs)
 		return tname
-	}
-	if len(tparams) > 0 {
-		panic("cannot create an alias with type parameters when gotypesalias is not enabled")
 	}
 	return types.NewTypeName(pos, pkg, name, rhs)
 }

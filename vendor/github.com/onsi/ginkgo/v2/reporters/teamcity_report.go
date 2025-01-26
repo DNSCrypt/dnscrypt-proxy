@@ -11,7 +11,6 @@ package reporters
 import (
 	"fmt"
 	"os"
-	"path"
 	"strings"
 
 	"github.com/onsi/ginkgo/v2/types"
@@ -28,9 +27,6 @@ func tcEscape(s string) string {
 }
 
 func GenerateTeamcityReport(report types.Report, dst string) error {
-	if err := os.MkdirAll(path.Dir(dst), 0770); err != nil {
-		return err
-	}
 	f, err := os.Create(dst)
 	if err != nil {
 		return err

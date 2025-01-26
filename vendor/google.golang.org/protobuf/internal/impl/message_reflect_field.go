@@ -256,7 +256,6 @@ func fieldInfoForScalar(fd protoreflect.FieldDescriptor, fs reflect.StructField,
 	ft := fs.Type
 	nullable := fd.HasPresence()
 	isBytes := ft.Kind() == reflect.Slice && ft.Elem().Kind() == reflect.Uint8
-	var getter func(p pointer) protoreflect.Value
 	if nullable {
 		if ft.Kind() != reflect.Ptr && ft.Kind() != reflect.Slice {
 			// This never occurs for generated message types.
@@ -269,25 +268,19 @@ func fieldInfoForScalar(fd protoreflect.FieldDescriptor, fs reflect.StructField,
 		}
 	}
 	conv := NewConverter(ft, fd)
+
+	// TODO: Implement unsafe fast path?
 	fieldOffset := offsetOf(fs, x)
-
-	// Generate specialized getter functions to avoid going through reflect.Value
-	if nullable {
-		getter = getterForNullableScalar(fd, fs, conv, fieldOffset)
-	} else {
-		getter = getterForDirectScalar(fd, fs, conv, fieldOffset)
-	}
-
 	return fieldInfo{
 		fieldDesc: fd,
 		has: func(p pointer) bool {
 			if p.IsNil() {
 				return false
 			}
-			if nullable {
-				return !p.Apply(fieldOffset).Elem().IsNil()
-			}
 			rv := p.Apply(fieldOffset).AsValueOf(fs.Type).Elem()
+			if nullable {
+				return !rv.IsNil()
+			}
 			switch rv.Kind() {
 			case reflect.Bool:
 				return rv.Bool()
@@ -307,8 +300,21 @@ func fieldInfoForScalar(fd protoreflect.FieldDescriptor, fs reflect.StructField,
 			rv := p.Apply(fieldOffset).AsValueOf(fs.Type).Elem()
 			rv.Set(reflect.Zero(rv.Type()))
 		},
-		get: getter,
-		// TODO: Implement unsafe fast path for set?
+		get: func(p pointer) protoreflect.Value {
+			if p.IsNil() {
+				return conv.Zero()
+			}
+			rv := p.Apply(fieldOffset).AsValueOf(fs.Type).Elem()
+			if nullable {
+				if rv.IsNil() {
+					return conv.Zero()
+				}
+				if rv.Kind() == reflect.Ptr {
+					rv = rv.Elem()
+				}
+			}
+			return conv.PBValueOf(rv)
+		},
 		set: func(p pointer, v protoreflect.Value) {
 			rv := p.Apply(fieldOffset).AsValueOf(fs.Type).Elem()
 			if nullable && rv.Kind() == reflect.Ptr {

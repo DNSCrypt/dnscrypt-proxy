@@ -125,12 +125,7 @@ func (s *connection) logShortHeaderPacket(
 			ack = toLoggingAckFrame(ackFrame)
 		}
 		s.tracer.SentShortHeaderPacket(
-			&logging.ShortHeader{
-				DestConnectionID: destConnID,
-				PacketNumber:     pn,
-				PacketNumberLen:  pnLen,
-				KeyPhase:         kp,
-			},
+			&logging.ShortHeader{DestConnectionID: destConnID, PacketNumber: pn, PacketNumberLen: pnLen, KeyPhase: kp},
 			size,
 			ecn,
 			ack,

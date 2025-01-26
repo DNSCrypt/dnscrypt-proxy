@@ -12,15 +12,18 @@ import (
 	"io"
 	"math/big"
 	"runtime"
-	"strings"
 )
+
+// currentVersion is the current version number.
+//
+//   - v0: initial prototype
+//
+//   - v1: adds the flags uint32 word
+const currentVersion uint32 = 1
 
 // A PkgEncoder provides methods for encoding a package's Unified IR
 // export data.
 type PkgEncoder struct {
-	// version of the bitstream.
-	version Version
-
 	// elems holds the bitstream for previously encoded elements.
 	elems [numRelocs][]string
 
@@ -44,9 +47,8 @@ func (pw *PkgEncoder) SyncMarkers() bool { return pw.syncFrames >= 0 }
 // export data files, but can help diagnosing desync errors in
 // higher-level Unified IR reader/writer code. If syncFrames is
 // negative, then sync markers are omitted entirely.
-func NewPkgEncoder(version Version, syncFrames int) PkgEncoder {
+func NewPkgEncoder(syncFrames int) PkgEncoder {
 	return PkgEncoder{
-		version:    version,
 		stringsIdx: make(map[string]Index),
 		syncFrames: syncFrames,
 	}
@@ -62,15 +64,13 @@ func (pw *PkgEncoder) DumpTo(out0 io.Writer) (fingerprint [8]byte) {
 		assert(binary.Write(out, binary.LittleEndian, x) == nil)
 	}
 
-	writeUint32(uint32(pw.version))
+	writeUint32(currentVersion)
 
-	if pw.version.Has(Flags) {
-		var flags uint32
-		if pw.SyncMarkers() {
-			flags |= flagSyncMarkers
-		}
-		writeUint32(flags)
+	var flags uint32
+	if pw.SyncMarkers() {
+		flags |= flagSyncMarkers
 	}
+	writeUint32(flags)
 
 	// Write elemEndsEnds.
 	var sum uint32
@@ -159,7 +159,7 @@ type Encoder struct {
 
 // Flush finalizes the element's bitstream and returns its Index.
 func (w *Encoder) Flush() Index {
-	var sb strings.Builder
+	var sb bytes.Buffer // TODO(mdempsky): strings.Builder after #44505 is resolved
 
 	// Backup the data so we write the relocations at the front.
 	var tmp bytes.Buffer
@@ -189,7 +189,7 @@ func (w *Encoder) Flush() Index {
 
 func (w *Encoder) checkErr(err error) {
 	if err != nil {
-		panicf("unexpected encoding error: %v", err)
+		errorf("unexpected encoding error: %v", err)
 	}
 }
 
@@ -320,14 +320,8 @@ func (w *Encoder) Code(c Code) {
 // section (if not already present), and then writing a relocation
 // into the element bitstream.
 func (w *Encoder) String(s string) {
-	w.StringRef(w.p.StringIdx(s))
-}
-
-// StringRef writes a reference to the given index, which must be a
-// previously encoded string value.
-func (w *Encoder) StringRef(idx Index) {
 	w.Sync(SyncString)
-	w.Reloc(RelocString, idx)
+	w.Reloc(RelocString, w.p.StringIdx(s))
 }
 
 // Strings encodes and writes a variable-length slice of strings into
@@ -354,7 +348,7 @@ func (w *Encoder) Value(val constant.Value) {
 func (w *Encoder) scalar(val constant.Value) {
 	switch v := constant.Val(val).(type) {
 	default:
-		panicf("unhandled %v (%v)", val, val.Kind())
+		errorf("unhandled %v (%v)", val, val.Kind())
 	case bool:
 		w.Code(ValBool)
 		w.Bool(v)
@@ -387,6 +381,3 @@ func (w *Encoder) bigFloat(v *big.Float) {
 	b := v.Append(nil, 'p', -1)
 	w.String(string(b)) // TODO: More efficient encoding.
 }
-
-// Version reports the version of the bitstream.
-func (w *Encoder) Version() Version { return w.p.version }

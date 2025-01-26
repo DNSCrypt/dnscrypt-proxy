@@ -1,11 +1,10 @@
 package outline
 
 import (
+	"github.com/onsi/ginkgo/v2/types"
 	"go/ast"
 	"go/token"
 	"strconv"
-
-	"github.com/onsi/ginkgo/v2/types"
 )
 
 const (
@@ -245,7 +244,9 @@ func labelFromCallExpr(ce *ast.CallExpr) []string {
 			}
 			if id.Name == "Label" {
 				ls := extractLabels(expr)
-				labels = append(labels, ls...)
+				for _, label := range ls {
+					labels = append(labels, label)
+				}
 			}
 		}
 	}

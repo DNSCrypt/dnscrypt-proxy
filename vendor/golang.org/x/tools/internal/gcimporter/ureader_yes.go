@@ -11,6 +11,7 @@ import (
 	"go/token"
 	"go/types"
 	"sort"
+	"strings"
 
 	"golang.org/x/tools/internal/aliases"
 	"golang.org/x/tools/internal/pkgbits"
@@ -51,7 +52,8 @@ func (pr *pkgReader) later(fn func()) {
 
 // See cmd/compile/internal/noder.derivedInfo.
 type derivedInfo struct {
-	idx pkgbits.Index
+	idx    pkgbits.Index
+	needed bool
 }
 
 // See cmd/compile/internal/noder.typeInfo.
@@ -70,6 +72,7 @@ func UImportData(fset *token.FileSet, imports map[string]*types.Package, data []
 	}
 
 	s := string(data)
+	s = s[:strings.LastIndex(s, "\n$$\n")]
 	input := pkgbits.NewPkgDecoder(path, s)
 	pkg = readUnifiedPackage(fset, nil, imports, input)
 	return
@@ -107,17 +110,13 @@ func readUnifiedPackage(fset *token.FileSet, ctxt *types.Context, imports map[st
 
 	r := pr.newReader(pkgbits.RelocMeta, pkgbits.PublicRootIdx, pkgbits.SyncPublic)
 	pkg := r.pkg()
-	if r.Version().Has(pkgbits.HasInit) {
-		r.Bool()
-	}
+	r.Bool() // has init
 
 	for i, n := 0, r.Len(); i < n; i++ {
 		// As if r.obj(), but avoiding the Scope.Lookup call,
 		// to avoid eager loading of imports.
 		r.Sync(pkgbits.SyncObject)
-		if r.Version().Has(pkgbits.DerivedFuncInstance) {
-			assert(!r.Bool())
-		}
+		assert(!r.Bool())
 		r.p.objIdx(r.Reloc(pkgbits.RelocObj))
 		assert(r.Len() == 0)
 	}
@@ -166,7 +165,7 @@ type readerDict struct {
 	// tparams is a slice of the constructed TypeParams for the element.
 	tparams []*types.TypeParam
 
-	// derived is a slice of types derived from tparams, which may be
+	// devived is a slice of types derived from tparams, which may be
 	// instantiated while reading the current element.
 	derived      []derivedInfo
 	derivedTypes []types.Type // lazily instantiated from derived
@@ -264,12 +263,7 @@ func (pr *pkgReader) pkgIdx(idx pkgbits.Index) *types.Package {
 func (r *reader) doPkg() *types.Package {
 	path := r.String()
 	switch path {
-	// cmd/compile emits path="main" for main packages because
-	// that's the linker symbol prefix it used; but we need
-	// the package's path as it would be reported by go list,
-	// hence "main" below.
-	// See test at go/packages.TestMainPackagePathInModeTypes.
-	case "", "main":
+	case "":
 		path = r.p.PkgPath()
 	case "builtin":
 		return nil // universe
@@ -477,9 +471,7 @@ func (r *reader) param() *types.Var {
 func (r *reader) obj() (types.Object, []types.Type) {
 	r.Sync(pkgbits.SyncObject)
 
-	if r.Version().Has(pkgbits.DerivedFuncInstance) {
-		assert(!r.Bool())
-	}
+	assert(!r.Bool())
 
 	pkg, name := r.p.objIdx(r.Reloc(pkgbits.RelocObj))
 	obj := pkgScope(pkg).Lookup(name)
@@ -533,12 +525,8 @@ func (pr *pkgReader) objIdx(idx pkgbits.Index) (*types.Package, string) {
 
 		case pkgbits.ObjAlias:
 			pos := r.pos()
-			var tparams []*types.TypeParam
-			if r.Version().Has(pkgbits.AliasTypeParamNames) {
-				tparams = r.typeParamNames()
-			}
 			typ := r.typ()
-			declare(aliases.NewAlias(r.p.aliases, pos, objPkg, objName, typ, tparams))
+			declare(aliases.NewAlias(r.p.aliases, pos, objPkg, objName, typ))
 
 		case pkgbits.ObjConst:
 			pos := r.pos()
@@ -565,7 +553,7 @@ func (pr *pkgReader) objIdx(idx pkgbits.Index) (*types.Package, string) {
 				// If the underlying type is an interface, we need to
 				// duplicate its methods so we can replace the receiver
 				// parameter's type (#49906).
-				if iface, ok := types.Unalias(underlying).(*types.Interface); ok && iface.NumExplicitMethods() != 0 {
+				if iface, ok := aliases.Unalias(underlying).(*types.Interface); ok && iface.NumExplicitMethods() != 0 {
 					methods := make([]*types.Func, iface.NumExplicitMethods())
 					for i := range methods {
 						fn := iface.ExplicitMethod(i)
@@ -644,10 +632,7 @@ func (pr *pkgReader) objDictIdx(idx pkgbits.Index) *readerDict {
 		dict.derived = make([]derivedInfo, r.Len())
 		dict.derivedTypes = make([]types.Type, len(dict.derived))
 		for i := range dict.derived {
-			dict.derived[i] = derivedInfo{idx: r.Reloc(pkgbits.RelocType)}
-			if r.Version().Has(pkgbits.DerivedInfoNeeded) {
-				assert(!r.Bool())
-			}
+			dict.derived[i] = derivedInfo{r.Reloc(pkgbits.RelocType), r.Bool()}
 		}
 
 		pr.retireReader(r)
@@ -740,18 +725,4 @@ func pkgScope(pkg *types.Package) *types.Scope {
 		return pkg.Scope()
 	}
 	return types.Universe
-}
-
-// See cmd/compile/internal/types.SplitVargenSuffix.
-func splitVargenSuffix(name string) (base, suffix string) {
-	i := len(name)
-	for i > 0 && name[i-1] >= '0' && name[i-1] <= '9' {
-		i--
-	}
-	const dot = "·"
-	if i >= len(dot) && name[i-len(dot):i] == dot {
-		i -= len(dot)
-		return name[:i], name[i:]
-	}
-	return name, ""
 }

@@ -47,14 +47,7 @@ type Options struct {
 // Process implements golang.org/x/tools/imports.Process with explicit context in opt.Env.
 func Process(filename string, src []byte, opt *Options) (formatted []byte, err error) {
 	fileSet := token.NewFileSet()
-	var parserMode parser.Mode
-	if opt.Comments {
-		parserMode |= parser.ParseComments
-	}
-	if opt.AllErrors {
-		parserMode |= parser.AllErrors
-	}
-	file, adjust, err := parse(fileSet, filename, src, parserMode, opt.Fragment)
+	file, adjust, err := parse(fileSet, filename, src, opt)
 	if err != nil {
 		return nil, err
 	}
@@ -73,19 +66,17 @@ func Process(filename string, src []byte, opt *Options) (formatted []byte, err e
 //
 // Note that filename's directory influences which imports can be chosen,
 // so it is important that filename be accurate.
-func FixImports(ctx context.Context, filename string, src []byte, goroot string, logf func(string, ...any), source Source) (fixes []*ImportFix, err error) {
+func FixImports(ctx context.Context, filename string, src []byte, opt *Options) (fixes []*ImportFix, err error) {
 	ctx, done := event.Start(ctx, "imports.FixImports")
 	defer done()
 
 	fileSet := token.NewFileSet()
-	// TODO(rfindley): these default values for ParseComments and AllErrors were
-	// extracted from gopls, but are they even needed?
-	file, _, err := parse(fileSet, filename, src, parser.ParseComments|parser.AllErrors, true)
+	file, _, err := parse(fileSet, filename, src, opt)
 	if err != nil {
 		return nil, err
 	}
 
-	return getFixesWithSource(ctx, fileSet, file, filename, goroot, logf, source)
+	return getFixes(ctx, fileSet, file, filename, opt.Env)
 }
 
 // ApplyFixes applies all of the fixes to the file and formats it. extraMode
@@ -95,7 +86,7 @@ func ApplyFixes(fixes []*ImportFix, filename string, src []byte, opt *Options, e
 	// Don't use parse() -- we don't care about fragments or statement lists
 	// here, and we need to work with unparseable files.
 	fileSet := token.NewFileSet()
-	parserMode := parser.SkipObjectResolution
+	parserMode := parser.Mode(0)
 	if opt.Comments {
 		parserMode |= parser.ParseComments
 	}
@@ -123,7 +114,7 @@ func ApplyFixes(fixes []*ImportFix, filename string, src []byte, opt *Options, e
 // formatted file, and returns the postpocessed result.
 func formatFile(fset *token.FileSet, file *ast.File, src []byte, adjust func(orig []byte, src []byte) []byte, opt *Options) ([]byte, error) {
 	mergeImports(file)
-	sortImports(opt.LocalPrefix, fset.File(file.FileStart), file)
+	sortImports(opt.LocalPrefix, fset.File(file.Pos()), file)
 	var spacesBefore []string // import paths we need spaces before
 	for _, impSection := range astutil.Imports(fset, file) {
 		// Within each block of contiguous imports, see if any
@@ -173,9 +164,13 @@ func formatFile(fset *token.FileSet, file *ast.File, src []byte, adjust func(ori
 
 // parse parses src, which was read from filename,
 // as a Go source file or statement list.
-func parse(fset *token.FileSet, filename string, src []byte, parserMode parser.Mode, fragment bool) (*ast.File, func(orig, src []byte) []byte, error) {
-	if parserMode&parser.SkipObjectResolution != 0 {
-		panic("legacy ast.Object resolution is required")
+func parse(fset *token.FileSet, filename string, src []byte, opt *Options) (*ast.File, func(orig, src []byte) []byte, error) {
+	parserMode := parser.Mode(0)
+	if opt.Comments {
+		parserMode |= parser.ParseComments
+	}
+	if opt.AllErrors {
+		parserMode |= parser.AllErrors
 	}
 
 	// Try as whole source file.
@@ -186,7 +181,7 @@ func parse(fset *token.FileSet, filename string, src []byte, parserMode parser.M
 	// If the error is that the source file didn't begin with a
 	// package line and we accept fragmented input, fall through to
 	// try as a source fragment.  Stop and return on any other error.
-	if !fragment || !strings.Contains(err.Error(), "expected 'package'") {
+	if !opt.Fragment || !strings.Contains(err.Error(), "expected 'package'") {
 		return nil, nil, err
 	}
 

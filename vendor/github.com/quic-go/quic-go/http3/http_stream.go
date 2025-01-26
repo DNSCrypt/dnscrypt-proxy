@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptrace"
 
 	"github.com/quic-go/quic-go"
 	"github.com/quic-go/quic-go/internal/protocol"
@@ -147,10 +148,12 @@ type requestStream struct {
 	reqDone            chan<- struct{}
 	disableCompression bool
 	response           *http.Response
+	trace              *httptrace.ClientTrace
 
 	sentRequest   bool
 	requestedGzip bool
 	isConnect     bool
+	firstByte     bool
 }
 
 var _ RequestStream = &requestStream{}
@@ -163,6 +166,7 @@ func newRequestStream(
 	disableCompression bool,
 	maxHeaderBytes uint64,
 	rsp *http.Response,
+	trace *httptrace.ClientTrace,
 ) *requestStream {
 	return &requestStream{
 		stream:             str,
@@ -172,6 +176,7 @@ func newRequestStream(
 		disableCompression: disableCompression,
 		maxHeaderBytes:     maxHeaderBytes,
 		response:           rsp,
+		trace:              trace,
 	}
 }
 
@@ -197,8 +202,12 @@ func (s *requestStream) SendRequestHeader(req *http.Request) error {
 
 func (s *requestStream) ReadResponse() (*http.Response, error) {
 	fp := &frameParser{
-		r:    s.Stream,
 		conn: s.conn,
+		r: &tracingReader{
+			Reader: s.Stream,
+			first:  &s.firstByte,
+			trace:  s.trace,
+		},
 	}
 	frame, err := fp.ParseNext()
 	if err != nil {
@@ -267,4 +276,19 @@ func (s *stream) SendDatagram(b []byte) error {
 func (s *stream) ReceiveDatagram(ctx context.Context) ([]byte, error) {
 	// TODO: reject if datagrams are not negotiated (yet)
 	return s.datagrams.Receive(ctx)
+}
+
+type tracingReader struct {
+	io.Reader
+	first *bool
+	trace *httptrace.ClientTrace
+}
+
+func (r *tracingReader) Read(b []byte) (int, error) {
+	n, err := r.Reader.Read(b)
+	if n > 0 && r.first != nil && !*r.first {
+		traceGotFirstResponseByte(r.trace)
+		*r.first = true
+	}
+	return n, err
 }

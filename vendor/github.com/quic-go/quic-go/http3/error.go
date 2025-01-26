@@ -33,6 +33,11 @@ func (e *Error) Error() string {
 	return s
 }
 
+func (e *Error) Is(target error) bool {
+	t, ok := target.(*Error)
+	return ok && e.ErrorCode == t.ErrorCode && e.Remote == t.Remote
+}
+
 func maybeReplaceError(err error) error {
 	if err == nil {
 		return nil

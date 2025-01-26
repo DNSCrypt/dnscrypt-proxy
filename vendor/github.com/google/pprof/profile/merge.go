@@ -15,7 +15,6 @@
 package profile
 
 import (
-	"encoding/binary"
 	"fmt"
 	"sort"
 	"strconv"
@@ -59,7 +58,7 @@ func Merge(srcs []*Profile) (*Profile, error) {
 
 	for _, src := range srcs {
 		// Clear the profile-specific hash tables
-		pm.locationsByID = makeLocationIDMap(len(src.Location))
+		pm.locationsByID = make(map[uint64]*Location, len(src.Location))
 		pm.functionsByID = make(map[uint64]*Function, len(src.Function))
 		pm.mappingsByID = make(map[uint64]mapInfo, len(src.Mapping))
 
@@ -137,7 +136,7 @@ type profileMerger struct {
 	p *Profile
 
 	// Memoization tables within a profile.
-	locationsByID locationIDMap
+	locationsByID map[uint64]*Location
 	functionsByID map[uint64]*Function
 	mappingsByID  map[uint64]mapInfo
 
@@ -154,16 +153,6 @@ type mapInfo struct {
 }
 
 func (pm *profileMerger) mapSample(src *Sample) *Sample {
-	// Check memoization table
-	k := pm.sampleKey(src)
-	if ss, ok := pm.samples[k]; ok {
-		for i, v := range src.Value {
-			ss.Value[i] += v
-		}
-		return ss
-	}
-
-	// Make new sample.
 	s := &Sample{
 		Location: make([]*Location, len(src.Location)),
 		Value:    make([]int64, len(src.Value)),
@@ -188,98 +177,52 @@ func (pm *profileMerger) mapSample(src *Sample) *Sample {
 		s.NumLabel[k] = vv
 		s.NumUnit[k] = uu
 	}
+	// Check memoization table. Must be done on the remapped location to
+	// account for the remapped mapping. Add current values to the
+	// existing sample.
+	k := s.key()
+	if ss, ok := pm.samples[k]; ok {
+		for i, v := range src.Value {
+			ss.Value[i] += v
+		}
+		return ss
+	}
 	copy(s.Value, src.Value)
 	pm.samples[k] = s
 	pm.p.Sample = append(pm.p.Sample, s)
 	return s
 }
 
-func (pm *profileMerger) sampleKey(sample *Sample) sampleKey {
-	// Accumulate contents into a string.
-	var buf strings.Builder
-	buf.Grow(64) // Heuristic to avoid extra allocs
-
-	// encode a number
-	putNumber := func(v uint64) {
-		var num [binary.MaxVarintLen64]byte
-		n := binary.PutUvarint(num[:], v)
-		buf.Write(num[:n])
+// key generates sampleKey to be used as a key for maps.
+func (sample *Sample) key() sampleKey {
+	ids := make([]string, len(sample.Location))
+	for i, l := range sample.Location {
+		ids[i] = strconv.FormatUint(l.ID, 16)
 	}
 
-	// encode a string prefixed with its length.
-	putDelimitedString := func(s string) {
-		putNumber(uint64(len(s)))
-		buf.WriteString(s)
+	labels := make([]string, 0, len(sample.Label))
+	for k, v := range sample.Label {
+		labels = append(labels, fmt.Sprintf("%q%q", k, v))
 	}
+	sort.Strings(labels)
 
-	for _, l := range sample.Location {
-		// Get the location in the merged profile, which may have a different ID.
-		if loc := pm.mapLocation(l); loc != nil {
-			putNumber(loc.ID)
-		}
+	numlabels := make([]string, 0, len(sample.NumLabel))
+	for k, v := range sample.NumLabel {
+		numlabels = append(numlabels, fmt.Sprintf("%q%x%x", k, v, sample.NumUnit[k]))
 	}
-	putNumber(0) // Delimiter
+	sort.Strings(numlabels)
 
-	for _, l := range sortedKeys1(sample.Label) {
-		putDelimitedString(l)
-		values := sample.Label[l]
-		putNumber(uint64(len(values)))
-		for _, v := range values {
-			putDelimitedString(v)
-		}
+	return sampleKey{
+		strings.Join(ids, "|"),
+		strings.Join(labels, ""),
+		strings.Join(numlabels, ""),
 	}
-
-	for _, l := range sortedKeys2(sample.NumLabel) {
-		putDelimitedString(l)
-		values := sample.NumLabel[l]
-		putNumber(uint64(len(values)))
-		for _, v := range values {
-			putNumber(uint64(v))
-		}
-		units := sample.NumUnit[l]
-		putNumber(uint64(len(units)))
-		for _, v := range units {
-			putDelimitedString(v)
-		}
-	}
-
-	return sampleKey(buf.String())
 }
 
-type sampleKey string
-
-// sortedKeys1 returns the sorted keys found in a string->[]string map.
-//
-// Note: this is currently non-generic since github pprof runs golint,
-// which does not support generics. When that issue is fixed, it can
-// be merged with sortedKeys2 and made into a generic function.
-func sortedKeys1(m map[string][]string) []string {
-	if len(m) == 0 {
-		return nil
-	}
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	return keys
-}
-
-// sortedKeys2 returns the sorted keys found in a string->[]int64 map.
-//
-// Note: this is currently non-generic since github pprof runs golint,
-// which does not support generics. When that issue is fixed, it can
-// be merged with sortedKeys1 and made into a generic function.
-func sortedKeys2(m map[string][]int64) []string {
-	if len(m) == 0 {
-		return nil
-	}
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	return keys
+type sampleKey struct {
+	locations string
+	labels    string
+	numlabels string
 }
 
 func (pm *profileMerger) mapLocation(src *Location) *Location {
@@ -287,7 +230,7 @@ func (pm *profileMerger) mapLocation(src *Location) *Location {
 		return nil
 	}
 
-	if l := pm.locationsByID.get(src.ID); l != nil {
+	if l, ok := pm.locationsByID[src.ID]; ok {
 		return l
 	}
 
@@ -306,10 +249,10 @@ func (pm *profileMerger) mapLocation(src *Location) *Location {
 	// account for the remapped mapping ID.
 	k := l.key()
 	if ll, ok := pm.locations[k]; ok {
-		pm.locationsByID.set(src.ID, ll)
+		pm.locationsByID[src.ID] = ll
 		return ll
 	}
-	pm.locationsByID.set(src.ID, l)
+	pm.locationsByID[src.ID] = l
 	pm.locations[k] = l
 	pm.p.Location = append(pm.p.Location, l)
 	return l
@@ -326,13 +269,12 @@ func (l *Location) key() locationKey {
 		key.addr -= l.Mapping.Start
 		key.mappingID = l.Mapping.ID
 	}
-	lines := make([]string, len(l.Line)*3)
+	lines := make([]string, len(l.Line)*2)
 	for i, line := range l.Line {
 		if line.Function != nil {
 			lines[i*2] = strconv.FormatUint(line.Function.ID, 16)
 		}
 		lines[i*2+1] = strconv.FormatInt(line.Line, 16)
-		lines[i*2+2] = strconv.FormatInt(line.Column, 16)
 	}
 	key.lines = strings.Join(lines, "|")
 	return key
@@ -361,17 +303,16 @@ func (pm *profileMerger) mapMapping(src *Mapping) mapInfo {
 		return mi
 	}
 	m := &Mapping{
-		ID:                     uint64(len(pm.p.Mapping) + 1),
-		Start:                  src.Start,
-		Limit:                  src.Limit,
-		Offset:                 src.Offset,
-		File:                   src.File,
-		KernelRelocationSymbol: src.KernelRelocationSymbol,
-		BuildID:                src.BuildID,
-		HasFunctions:           src.HasFunctions,
-		HasFilenames:           src.HasFilenames,
-		HasLineNumbers:         src.HasLineNumbers,
-		HasInlineFrames:        src.HasInlineFrames,
+		ID:              uint64(len(pm.p.Mapping) + 1),
+		Start:           src.Start,
+		Limit:           src.Limit,
+		Offset:          src.Offset,
+		File:            src.File,
+		BuildID:         src.BuildID,
+		HasFunctions:    src.HasFunctions,
+		HasFilenames:    src.HasFilenames,
+		HasLineNumbers:  src.HasLineNumbers,
+		HasInlineFrames: src.HasInlineFrames,
 	}
 	pm.p.Mapping = append(pm.p.Mapping, m)
 
@@ -419,7 +360,6 @@ func (pm *profileMerger) mapLine(src Line) Line {
 	ln := Line{
 		Function: pm.mapFunction(src.Function),
 		Line:     src.Line,
-		Column:   src.Column,
 	}
 	return ln
 }
@@ -476,7 +416,6 @@ func combineHeaders(srcs []*Profile) (*Profile, error) {
 	var timeNanos, durationNanos, period int64
 	var comments []string
 	seenComments := map[string]bool{}
-	var docURL string
 	var defaultSampleType string
 	for _, s := range srcs {
 		if timeNanos == 0 || s.TimeNanos < timeNanos {
@@ -495,9 +434,6 @@ func combineHeaders(srcs []*Profile) (*Profile, error) {
 		if defaultSampleType == "" {
 			defaultSampleType = s.DefaultSampleType
 		}
-		if docURL == "" {
-			docURL = s.DocURL
-		}
 	}
 
 	p := &Profile{
@@ -513,7 +449,6 @@ func combineHeaders(srcs []*Profile) (*Profile, error) {
 
 		Comments:          comments,
 		DefaultSampleType: defaultSampleType,
-		DocURL:            docURL,
 	}
 	copy(p.SampleType, srcs[0].SampleType)
 	return p, nil
@@ -543,132 +478,4 @@ func (p *Profile) compatible(pb *Profile) error {
 // equal. It ignores the internal fields used during encode/decode.
 func equalValueType(st1, st2 *ValueType) bool {
 	return st1.Type == st2.Type && st1.Unit == st2.Unit
-}
-
-// locationIDMap is like a map[uint64]*Location, but provides efficiency for
-// ids that are densely numbered, which is often the case.
-type locationIDMap struct {
-	dense  []*Location          // indexed by id for id < len(dense)
-	sparse map[uint64]*Location // indexed by id for id >= len(dense)
-}
-
-func makeLocationIDMap(n int) locationIDMap {
-	return locationIDMap{
-		dense:  make([]*Location, n),
-		sparse: map[uint64]*Location{},
-	}
-}
-
-func (lm locationIDMap) get(id uint64) *Location {
-	if id < uint64(len(lm.dense)) {
-		return lm.dense[int(id)]
-	}
-	return lm.sparse[id]
-}
-
-func (lm locationIDMap) set(id uint64, loc *Location) {
-	if id < uint64(len(lm.dense)) {
-		lm.dense[id] = loc
-		return
-	}
-	lm.sparse[id] = loc
-}
-
-// CompatibilizeSampleTypes makes profiles compatible to be compared/merged. It
-// keeps sample types that appear in all profiles only and drops/reorders the
-// sample types as necessary.
-//
-// In the case of sample types order is not the same for given profiles the
-// order is derived from the first profile.
-//
-// Profiles are modified in-place.
-//
-// It returns an error if the sample type's intersection is empty.
-func CompatibilizeSampleTypes(ps []*Profile) error {
-	sTypes := commonSampleTypes(ps)
-	if len(sTypes) == 0 {
-		return fmt.Errorf("profiles have empty common sample type list")
-	}
-	for _, p := range ps {
-		if err := compatibilizeSampleTypes(p, sTypes); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// commonSampleTypes returns sample types that appear in all profiles in the
-// order how they ordered in the first profile.
-func commonSampleTypes(ps []*Profile) []string {
-	if len(ps) == 0 {
-		return nil
-	}
-	sTypes := map[string]int{}
-	for _, p := range ps {
-		for _, st := range p.SampleType {
-			sTypes[st.Type]++
-		}
-	}
-	var res []string
-	for _, st := range ps[0].SampleType {
-		if sTypes[st.Type] == len(ps) {
-			res = append(res, st.Type)
-		}
-	}
-	return res
-}
-
-// compatibilizeSampleTypes drops sample types that are not present in sTypes
-// list and reorder them if needed.
-//
-// It sets DefaultSampleType to sType[0] if it is not in sType list.
-//
-// It assumes that all sample types from the sTypes list are present in the
-// given profile otherwise it returns an error.
-func compatibilizeSampleTypes(p *Profile, sTypes []string) error {
-	if len(sTypes) == 0 {
-		return fmt.Errorf("sample type list is empty")
-	}
-	defaultSampleType := sTypes[0]
-	reMap, needToModify := make([]int, len(sTypes)), false
-	for i, st := range sTypes {
-		if st == p.DefaultSampleType {
-			defaultSampleType = p.DefaultSampleType
-		}
-		idx := searchValueType(p.SampleType, st)
-		if idx < 0 {
-			return fmt.Errorf("%q sample type is not found in profile", st)
-		}
-		reMap[i] = idx
-		if idx != i {
-			needToModify = true
-		}
-	}
-	if !needToModify && len(sTypes) == len(p.SampleType) {
-		return nil
-	}
-	p.DefaultSampleType = defaultSampleType
-	oldSampleTypes := p.SampleType
-	p.SampleType = make([]*ValueType, len(sTypes))
-	for i, idx := range reMap {
-		p.SampleType[i] = oldSampleTypes[idx]
-	}
-	values := make([]int64, len(sTypes))
-	for _, s := range p.Sample {
-		for i, idx := range reMap {
-			values[i] = s.Value[idx]
-		}
-		s.Value = s.Value[:len(values)]
-		copy(s.Value, values)
-	}
-	return nil
-}
-
-func searchValueType(vts []*ValueType, s string) int {
-	for i, vt := range vts {
-		if vt.Type == s {
-			return i
-		}
-	}
-	return -1
 }

@@ -10,7 +10,7 @@ import (
 	"strings"
 	"text/template"
 
-	sprig "github.com/go-task/slim-sprig/v3"
+	sprig "github.com/go-task/slim-sprig"
 	"github.com/onsi/ginkgo/v2/ginkgo/command"
 	"github.com/onsi/ginkgo/v2/ginkgo/internal"
 	"github.com/onsi/ginkgo/v2/types"
@@ -32,9 +32,6 @@ func BuildGenerateCommand() command.Command {
 			{Name: "template-data", KeyPath: "CustomTemplateData",
 				UsageArgument: "template-data-file",
 				Usage:         "If specified, generate will use the contents of the file passed as data to be rendered in the test file template"},
-			{Name: "tags", KeyPath: "Tags",
-				UsageArgument: "build-tags",
-				Usage:         "If specified, generate will create a test file that uses the given build tags (i.e. `--tags e2e,!unit` will add `//go:build e2e,!unit`)"},
 		},
 		&conf,
 		types.GinkgoFlagSections{},
@@ -62,7 +59,6 @@ You can also pass a <filename> of the form "file.go" and generate will emit "fil
 }
 
 type specData struct {
-	BuildTags         string
 	Package           string
 	Subject           string
 	PackageImportPath string
@@ -97,7 +93,6 @@ func generateTestFileForSubject(subject string, conf GeneratorsConfig) {
 	}
 
 	data := specData{
-		BuildTags:         getBuildTags(conf.Tags),
 		Package:           determinePackageName(packageName, conf.Internal),
 		Subject:           formattedName,
 		PackageImportPath: getPackageImportPath(),
@@ -174,7 +169,6 @@ func moduleName(modRoot string) string {
 	if err != nil {
 		return ""
 	}
-	defer modFile.Close()
 
 	mod := make([]byte, 128)
 	_, err = modFile.Read(mod)

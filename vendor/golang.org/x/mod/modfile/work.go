@@ -331,5 +331,5 @@ func (f *WorkFile) SortBlocks() {
 // retract directives are not de-duplicated since comments are
 // meaningful, and versions may be retracted multiple times.
 func (f *WorkFile) removeDups() {
-	removeDups(f.Syntax, nil, &f.Replace, nil)
+	removeDups(f.Syntax, nil, &f.Replace)
 }

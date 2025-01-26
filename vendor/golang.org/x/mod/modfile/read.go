@@ -226,9 +226,8 @@ func (x *FileSyntax) Cleanup() {
 				continue
 			}
 			if ww == 1 && len(stmt.RParen.Comments.Before) == 0 {
-				// Collapse block into single line but keep the Line reference used by the
-				// parsed File structure.
-				*stmt.Line[0] = Line{
+				// Collapse block into single line.
+				line := &Line{
 					Comments: Comments{
 						Before: commentsAdd(stmt.Before, stmt.Line[0].Before),
 						Suffix: commentsAdd(stmt.Line[0].Suffix, stmt.Suffix),
@@ -236,7 +235,7 @@ func (x *FileSyntax) Cleanup() {
 					},
 					Token: stringsAdd(stmt.Token, stmt.Line[0].Token),
 				}
-				x.Stmt[w] = stmt.Line[0]
+				x.Stmt[w] = line
 				w++
 				continue
 			}

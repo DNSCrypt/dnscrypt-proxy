@@ -1,7 +1,6 @@
 package generators
 
 import (
-	"fmt"
 	"go/build"
 	"os"
 	"path/filepath"
@@ -15,7 +14,6 @@ type GeneratorsConfig struct {
 	Agouti, NoDot, Internal bool
 	CustomTemplate          string
 	CustomTemplateData      string
-	Tags                    string
 }
 
 func getPackageAndFormattedName() (string, string, string) {
@@ -63,14 +61,4 @@ func determinePackageName(name string, internal bool) string {
 	}
 
 	return name + "_test"
-}
-
-// getBuildTags returns the resultant string to be added.
-// If the input string is not empty, then returns a `//go:build {}` string,
-// otherwise returns an empty string.
-func getBuildTags(tags string) string {
-	if tags != "" {
-		return fmt.Sprintf("//go:build %s\n", tags)
-	}
-	return ""
 }

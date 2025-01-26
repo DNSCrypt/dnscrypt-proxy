@@ -15,7 +15,6 @@ import (
 	"google.golang.org/protobuf/internal/filedesc"
 	"google.golang.org/protobuf/internal/filetype"
 	"google.golang.org/protobuf/internal/impl"
-	"google.golang.org/protobuf/internal/protolazy"
 )
 
 // UnsafeEnabled specifies whether package unsafe can be used.
@@ -40,9 +39,6 @@ type (
 	ExtensionFieldV1 = impl.ExtensionField
 
 	Pointer = impl.Pointer
-
-	LazyUnmarshalInfo  = *protolazy.XXX_lazyUnmarshalInfo
-	RaceDetectHookData = impl.RaceDetectHookData
 )
 
 var X impl.Export

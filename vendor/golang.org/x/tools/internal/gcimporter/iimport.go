@@ -3,7 +3,9 @@
 // license that can be found in the LICENSE file.
 
 // Indexed package import.
-// See iexport.go for the export data format.
+// See cmd/compile/internal/gc/iexport.go for the export data format.
+
+// This file is a copy of $GOROOT/src/go/internal/gcimporter/iimport.go.
 
 package gcimporter
 
@@ -51,7 +53,6 @@ const (
 	iexportVersionPosCol   = 1
 	iexportVersionGo1_18   = 2
 	iexportVersionGenerics = 2
-	iexportVersion         = iexportVersionGenerics
 
 	iexportVersionCurrent = 2
 )
@@ -539,7 +540,7 @@ func canReuse(def *types.Named, rhs types.Type) bool {
 	if def == nil {
 		return true
 	}
-	iface, _ := types.Unalias(rhs).(*types.Interface)
+	iface, _ := aliases.Unalias(rhs).(*types.Interface)
 	if iface == nil {
 		return true
 	}
@@ -556,28 +557,19 @@ type importReader struct {
 	prevColumn int64
 }
 
-// markBlack is redefined in iimport_go123.go, to work around golang/go#69912.
-//
-// If TypeNames are not marked black (in the sense of go/types cycle
-// detection), they may be mutated when dot-imported. Fix this by punching a
-// hole through the type, when compiling with Go 1.23. (The bug has been fixed
-// for 1.24, but the fix was not worth back-porting).
-var markBlack = func(name *types.TypeName) {}
-
 func (r *importReader) obj(name string) {
 	tag := r.byte()
 	pos := r.pos()
 
 	switch tag {
-	case aliasTag, genericAliasTag:
-		var tparams []*types.TypeParam
-		if tag == genericAliasTag {
-			tparams = r.tparamList()
-		}
+	case aliasTag:
 		typ := r.typ()
-		obj := aliases.NewAlias(r.p.aliases, pos, r.currPkg, name, typ, tparams)
-		markBlack(obj) // workaround for golang/go#69912
-		r.declare(obj)
+		// TODO(adonovan): support generic aliases:
+		// if tag == genericAliasTag {
+		// 	tparams := r.tparamList()
+		// 	alias.SetTypeParams(tparams)
+		// }
+		r.declare(aliases.NewAlias(r.p.aliases, pos, r.currPkg, name, typ))
 
 	case constTag:
 		typ, val := r.value()
@@ -597,9 +589,6 @@ func (r *importReader) obj(name string) {
 		// declaration before recursing.
 		obj := types.NewTypeName(pos, r.currPkg, name, nil)
 		named := types.NewNamed(obj, nil, nil)
-
-		markBlack(obj) // workaround for golang/go#69912
-
 		// Declare obj before calling r.tparamList, so the new type name is recognized
 		// if used in the constraint of one of its own typeparams (see #48280).
 		r.declare(obj)
@@ -626,7 +615,7 @@ func (r *importReader) obj(name string) {
 				if targs.Len() > 0 {
 					rparams = make([]*types.TypeParam, targs.Len())
 					for i := range rparams {
-						rparams[i] = types.Unalias(targs.At(i)).(*types.TypeParam)
+						rparams[i] = aliases.Unalias(targs.At(i)).(*types.TypeParam)
 					}
 				}
 				msig := r.signature(recv, rparams, nil)
@@ -656,7 +645,7 @@ func (r *importReader) obj(name string) {
 		}
 		constraint := r.typ()
 		if implicit {
-			iface, _ := types.Unalias(constraint).(*types.Interface)
+			iface, _ := aliases.Unalias(constraint).(*types.Interface)
 			if iface == nil {
 				errorf("non-interface constraint marked implicit")
 			}
@@ -863,7 +852,7 @@ func (r *importReader) typ() types.Type {
 }
 
 func isInterface(t types.Type) bool {
-	_, ok := types.Unalias(t).(*types.Interface)
+	_, ok := aliases.Unalias(t).(*types.Interface)
 	return ok
 }
 
@@ -873,7 +862,7 @@ func (r *importReader) string() string      { return r.p.stringAt(r.uint64()) }
 func (r *importReader) doType(base *types.Named) (res types.Type) {
 	k := r.kind()
 	if debug {
-		r.p.trace("importing type %d (base: %v)", k, base)
+		r.p.trace("importing type %d (base: %s)", k, base)
 		r.p.indent++
 		defer func() {
 			r.p.indent--
@@ -970,7 +959,7 @@ func (r *importReader) doType(base *types.Named) (res types.Type) {
 			methods[i] = method
 		}
 
-		typ := types.NewInterfaceType(methods, embeddeds)
+		typ := newInterface(methods, embeddeds)
 		r.p.interfaceList = append(r.p.interfaceList, typ)
 		return typ
 
@@ -1062,7 +1051,7 @@ func (r *importReader) tparamList() []*types.TypeParam {
 	for i := range xs {
 		// Note: the standard library importer is tolerant of nil types here,
 		// though would panic in SetTypeParams.
-		xs[i] = types.Unalias(r.typ()).(*types.TypeParam)
+		xs[i] = aliases.Unalias(r.typ()).(*types.TypeParam)
 	}
 	return xs
 }
@@ -1109,9 +1098,3 @@ func (r *importReader) byte() byte {
 	}
 	return x
 }
-
-type byPath []*types.Package
-
-func (a byPath) Len() int           { return len(a) }
-func (a byPath) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func (a byPath) Less(i, j int) bool { return a[i].Path() < a[j].Path() }

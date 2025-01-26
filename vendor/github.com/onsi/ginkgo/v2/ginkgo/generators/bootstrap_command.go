@@ -7,7 +7,7 @@ import (
 	"os"
 	"text/template"
 
-	sprig "github.com/go-task/slim-sprig/v3"
+	sprig "github.com/go-task/slim-sprig"
 	"github.com/onsi/ginkgo/v2/ginkgo/command"
 	"github.com/onsi/ginkgo/v2/ginkgo/internal"
 	"github.com/onsi/ginkgo/v2/types"

@@ -17,7 +17,6 @@ package profile
 import (
 	"errors"
 	"sort"
-	"strings"
 )
 
 func (p *Profile) decoder() []decoder {
@@ -122,7 +121,6 @@ func (p *Profile) preEncode() {
 	}
 
 	p.defaultSampleTypeX = addString(strings, p.DefaultSampleType)
-	p.docURLX = addString(strings, p.DocURL)
 
 	p.stringTable = make([]string, len(strings))
 	for s, i := range strings {
@@ -157,7 +155,6 @@ func (p *Profile) encode(b *buffer) {
 	encodeInt64Opt(b, 12, p.Period)
 	encodeInt64s(b, 13, p.commentX)
 	encodeInt64(b, 14, p.defaultSampleTypeX)
-	encodeInt64Opt(b, 15, p.docURLX)
 }
 
 var profileDecoder = []decoder{
@@ -186,13 +183,12 @@ var profileDecoder = []decoder{
 	// repeated Location location = 4
 	func(b *buffer, m message) error {
 		x := new(Location)
-		x.Line = b.tmpLines[:0] // Use shared space temporarily
+		x.Line = make([]Line, 0, 8) // Pre-allocate Line buffer
 		pp := m.(*Profile)
 		pp.Location = append(pp.Location, x)
 		err := decodeMessage(b, x)
-		b.tmpLines = x.Line[:0]
-		// Copy to shrink size and detach from shared space.
-		x.Line = append([]Line(nil), x.Line...)
+		var tmp []Line
+		x.Line = append(tmp, x.Line...) // Shrink to allocated size
 		return err
 	},
 	// repeated Function function = 5
@@ -239,8 +235,6 @@ var profileDecoder = []decoder{
 	func(b *buffer, m message) error { return decodeInt64s(b, &m.(*Profile).commentX) },
 	// int64 defaultSampleType = 14
 	func(b *buffer, m message) error { return decodeInt64(b, &m.(*Profile).defaultSampleTypeX) },
-	// string doc_link = 15;
-	func(b *buffer, m message) error { return decodeInt64(b, &m.(*Profile).docURLX) },
 }
 
 // postDecode takes the unexported fields populated by decode (with
@@ -257,14 +251,6 @@ func (p *Profile) postDecode() error {
 			mappingIds[m.ID] = m
 		} else {
 			mappings[m.ID] = m
-		}
-
-		// If this a main linux kernel mapping with a relocation symbol suffix
-		// ("[kernel.kallsyms]_text"), extract said suffix.
-		// It is fairly hacky to handle at this level, but the alternatives appear even worse.
-		const prefix = "[kernel.kallsyms]"
-		if strings.HasPrefix(m.File, prefix) {
-			m.KernelRelocationSymbol = m.File[len(prefix):]
 		}
 	}
 
@@ -312,52 +298,41 @@ func (p *Profile) postDecode() error {
 		st.Unit, err = getString(p.stringTable, &st.unitX, err)
 	}
 
-	// Pre-allocate space for all locations.
-	numLocations := 0
 	for _, s := range p.Sample {
-		numLocations += len(s.locationIDX)
-	}
-	locBuffer := make([]*Location, numLocations)
-
-	for _, s := range p.Sample {
-		if len(s.labelX) > 0 {
-			labels := make(map[string][]string, len(s.labelX))
-			numLabels := make(map[string][]int64, len(s.labelX))
-			numUnits := make(map[string][]string, len(s.labelX))
-			for _, l := range s.labelX {
-				var key, value string
-				key, err = getString(p.stringTable, &l.keyX, err)
-				if l.strX != 0 {
-					value, err = getString(p.stringTable, &l.strX, err)
-					labels[key] = append(labels[key], value)
-				} else if l.numX != 0 || l.unitX != 0 {
-					numValues := numLabels[key]
-					units := numUnits[key]
-					if l.unitX != 0 {
-						var unit string
-						unit, err = getString(p.stringTable, &l.unitX, err)
-						units = padStringArray(units, len(numValues))
-						numUnits[key] = append(units, unit)
-					}
-					numLabels[key] = append(numLabels[key], l.numX)
+		labels := make(map[string][]string, len(s.labelX))
+		numLabels := make(map[string][]int64, len(s.labelX))
+		numUnits := make(map[string][]string, len(s.labelX))
+		for _, l := range s.labelX {
+			var key, value string
+			key, err = getString(p.stringTable, &l.keyX, err)
+			if l.strX != 0 {
+				value, err = getString(p.stringTable, &l.strX, err)
+				labels[key] = append(labels[key], value)
+			} else if l.numX != 0 || l.unitX != 0 {
+				numValues := numLabels[key]
+				units := numUnits[key]
+				if l.unitX != 0 {
+					var unit string
+					unit, err = getString(p.stringTable, &l.unitX, err)
+					units = padStringArray(units, len(numValues))
+					numUnits[key] = append(units, unit)
 				}
-			}
-			if len(labels) > 0 {
-				s.Label = labels
-			}
-			if len(numLabels) > 0 {
-				s.NumLabel = numLabels
-				for key, units := range numUnits {
-					if len(units) > 0 {
-						numUnits[key] = padStringArray(units, len(numLabels[key]))
-					}
-				}
-				s.NumUnit = numUnits
+				numLabels[key] = append(numLabels[key], l.numX)
 			}
 		}
-
-		s.Location = locBuffer[:len(s.locationIDX)]
-		locBuffer = locBuffer[len(s.locationIDX):]
+		if len(labels) > 0 {
+			s.Label = labels
+		}
+		if len(numLabels) > 0 {
+			s.NumLabel = numLabels
+			for key, units := range numUnits {
+				if len(units) > 0 {
+					numUnits[key] = padStringArray(units, len(numLabels[key]))
+				}
+			}
+			s.NumUnit = numUnits
+		}
+		s.Location = make([]*Location, len(s.locationIDX))
 		for i, lid := range s.locationIDX {
 			if lid < uint64(len(locationIds)) {
 				s.Location[i] = locationIds[lid]
@@ -388,7 +363,6 @@ func (p *Profile) postDecode() error {
 
 	p.commentX = nil
 	p.DefaultSampleType, err = getString(p.stringTable, &p.defaultSampleTypeX, err)
-	p.DocURL, err = getString(p.stringTable, &p.docURLX, err)
 	p.stringTable = nil
 	return err
 }
@@ -535,7 +509,6 @@ func (p *Line) decoder() []decoder {
 func (p *Line) encode(b *buffer) {
 	encodeUint64Opt(b, 1, p.functionIDX)
 	encodeInt64Opt(b, 2, p.Line)
-	encodeInt64Opt(b, 3, p.Column)
 }
 
 var lineDecoder = []decoder{
@@ -544,8 +517,6 @@ var lineDecoder = []decoder{
 	func(b *buffer, m message) error { return decodeUint64(b, &m.(*Line).functionIDX) },
 	// optional int64 line = 2
 	func(b *buffer, m message) error { return decodeInt64(b, &m.(*Line).Line) },
-	// optional int64 column = 3
-	func(b *buffer, m message) error { return decodeInt64(b, &m.(*Line).Column) },
 }
 
 func (p *Function) decoder() []decoder {

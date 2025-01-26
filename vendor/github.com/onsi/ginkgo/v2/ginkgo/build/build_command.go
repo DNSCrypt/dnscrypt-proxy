@@ -2,8 +2,6 @@ package build
 
 import (
 	"fmt"
-	"os"
-	"path"
 
 	"github.com/onsi/ginkgo/v2/ginkgo/command"
 	"github.com/onsi/ginkgo/v2/ginkgo/internal"
@@ -55,18 +53,7 @@ func buildSpecs(args []string, cliConfig types.CLIConfig, goFlagsConfig types.Go
 		if suite.State.Is(internal.TestSuiteStateFailedToCompile) {
 			fmt.Println(suite.CompilationError.Error())
 		} else {
-			if len(goFlagsConfig.O) == 0 {
-				goFlagsConfig.O = path.Join(suite.Path, suite.PackageName+".test")
-			} else {
-				stat, err := os.Stat(goFlagsConfig.O)
-				if err != nil {
-					panic(err)
-				}
-				if stat.IsDir() {
-					goFlagsConfig.O += "/" + suite.PackageName + ".test"
-				}
-			}
-			fmt.Printf("Compiled %s\n", goFlagsConfig.O)
+			fmt.Printf("Compiled %s.test\n", suite.PackageName)
 		}
 	}
 

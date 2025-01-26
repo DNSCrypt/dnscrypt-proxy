@@ -1,7 +1,6 @@
 package generators
 
-var specText = `{{.BuildTags}}
-package {{.Package}}
+var specText = `package {{.Package}}
 
 import (
 	{{.GinkgoImport}}
@@ -15,8 +14,7 @@ var _ = {{.GinkgoPackage}}Describe("{{.Subject}}", func() {
 })
 `
 
-var agoutiSpecText = `{{.BuildTags}}
-package {{.Package}}
+var agoutiSpecText = `package {{.Package}}
 
 import (
 	{{.GinkgoImport}}

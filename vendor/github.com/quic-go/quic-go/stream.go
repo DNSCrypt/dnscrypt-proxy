@@ -24,6 +24,7 @@ var errDeadline net.Error = &deadlineError{}
 
 // The streamSender is notified by the stream about various events.
 type streamSender interface {
+	onHasConnectionData()
 	onHasStreamData(protocol.StreamID, sendStreamI)
 	onHasStreamControlFrame(protocol.StreamID, streamControlFrameGetter)
 	// must be called without holding the mutex that is acquired by closeForShutdown
@@ -52,12 +53,12 @@ type streamI interface {
 	Stream
 	closeForShutdown(error)
 	// for receiving
-	handleStreamFrame(*wire.StreamFrame) error
-	handleResetStreamFrame(*wire.ResetStreamFrame) error
+	handleStreamFrame(*wire.StreamFrame, time.Time) error
+	handleResetStreamFrame(*wire.ResetStreamFrame, time.Time) error
 	// for sending
 	hasData() bool
 	handleStopSendingFrame(*wire.StopSendingFrame)
-	popStreamFrame(maxBytes protocol.ByteCount, v protocol.Version) (ackhandler.StreamFrame, bool, bool)
+	popStreamFrame(protocol.ByteCount, protocol.Version) (_ ackhandler.StreamFrame, _ *wire.StreamDataBlockedFrame, hasMore bool)
 	updateSendWindow(protocol.ByteCount)
 }
 
@@ -131,12 +132,12 @@ func (s *stream) Close() error {
 	return s.sendStream.Close()
 }
 
-func (s *stream) getControlFrame() (_ ackhandler.Frame, ok, hasMore bool) {
-	f, ok, _ := s.sendStream.getControlFrame()
+func (s *stream) getControlFrame(now time.Time) (_ ackhandler.Frame, ok, hasMore bool) {
+	f, ok, _ := s.sendStream.getControlFrame(now)
 	if ok {
 		return f, true, true
 	}
-	return s.receiveStream.getControlFrame()
+	return s.receiveStream.getControlFrame(now)
 }
 
 func (s *stream) SetDeadline(t time.Time) error {
