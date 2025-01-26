@@ -383,10 +383,8 @@ func (xTransport *XTransport) resolveUsingResolvers(
 	for i, resolver := range resolvers {
 		ip, ttl, err = xTransport.resolveUsingResolver(proto, host, resolver)
 		if err == nil {
-			if i > 0 {
-				dlog.Infof("Resolution succeeded with resolver %s[%s]", proto, resolver)
-				resolvers[0], resolvers[i] = resolvers[i], resolvers[0]
-			}
+			dlog.Infof("Resolution succeeded with resolver %s[%s]", proto, resolver)
+			resolvers[0], resolvers[i] = resolvers[i], resolvers[0]
 			break
 		}
 		dlog.Infof("Unable to resolve [%s] using resolver [%s] (%s): %v", host, resolver, proto, err)
