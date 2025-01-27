@@ -39,8 +39,6 @@ const (
 	ExpiredCachedIPGraceTTL  = 15 * time.Minute
 )
 
-var MinTry = 0
-
 type CachedIPItem struct {
 	ip         net.IP
 	expiration *time.Time
@@ -74,6 +72,7 @@ type XTransport struct {
 	tlsDisableSessionTickets bool
 	tlsCipherSuite           []uint16
 	keepCipherSuite          bool
+	CSHandleError            int
 	proxyDialer              *netproxy.Dialer
 	httpProxyFunction        func(*http.Request) (*url.URL, error)
 	tlsClientCreds           DOHClientCreds
@@ -97,6 +96,7 @@ func NewXTransport() *XTransport {
 		tlsDisableSessionTickets: false,
 		tlsCipherSuite:           nil,
 		keepCipherSuite:          false,
+		CSHandleError:            0,
 		keyLogWriter:             nil,
 	}
 	return &xTransport
@@ -241,7 +241,9 @@ func (xTransport *XTransport) rebuildTransport() {
 			tlsClientConfig.CipherSuites = xTransport.tlsCipherSuite
 			dlog.Info("Explicit cipher suite configured downgrading to TLS 1.2")
 			tlsClientConfig.MaxVersion = tls.VersionTLS12
-			MinTry += 1
+			if xTransport.CSHandleError < 2 {
+				xTransport.CSHandleError += 1
+			}
 		}
 	} else {
 		tlsClientConfig.MaxVersion = tls.VersionTLS13
@@ -540,7 +542,7 @@ func (xTransport *XTransport) Fetch(
 	start := time.Now()
 	resp, err := client.Do(req)
 	rtt := time.Since(start)
-	statusCode := 503
+	var statusCode int
 	if resp != nil {
 		statusCode = resp.StatusCode
 	}
@@ -551,15 +553,18 @@ func (xTransport *XTransport) Fetch(
 			err = errors.New(resp.Status)
 		}
 	} else {
-		dlog.Debugf("HTTP client error: [%v] - closing idle connections", err)
-		xTransport.transport.CloseIdleConnections()
+		dlog.Debugf("HTTP client error: [%v]", err)
 		dlog.Debugf("[%s]: [%s]", req.URL, err)
-		if xTransport.tlsCipherSuite != nil && (strings.Contains(err.Error(), "handshake failure") || strings.Contains(err.Error(), "tls: error decoding message") {
+		if xTransport.tlsCipherSuite != nil && xTransport.keepCipherSuite == true {
 			dlog.Warnf(
-				"TLS handshake failure - Try changing or deleting the tls_cipher_suite value in the configuration file",
+				"TLS handshake failure with cipher suite: %v - Try changing or deleting the tls_cipher_suite value in the configuration file",
+				xTransport.tlsCipherSuite,
 			)
-			if MinTry == 1 {
-				xTransport.keepCipherSuite = false
+			if strings.Contains(err.Error(), "handshake failure") || strings.Contains(err.Error(), "tls: error decoding message") {
+				if xTransport.CSHandleError == 1 {
+					xTransport.CSHandleError += 1
+					xTransport.keepCipherSuite = false
+				}
 			}
 			xTransport.rebuildTransport()
 		}
