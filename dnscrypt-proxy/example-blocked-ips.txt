@@ -2,7 +2,8 @@
 #        IP blocklist        #
 ##############################
 
-## Rules for IP-based response blocking
+## Rules for blocking DNS resposnes if they contain
+## IP addresses matching patterns.
 ##
 ## Sample feeds of suspect IP addresses:
 ## - https://github.com/stamparm/ipsum
