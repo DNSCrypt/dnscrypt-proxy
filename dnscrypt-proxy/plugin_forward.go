@@ -54,6 +54,7 @@ func (plugin *PluginForward) Init(proxy *Proxy) error {
 	if err != nil {
 		return err
 	}
+	requiresDHCP := false
 	for lineNo, line := range strings.Split(lines, "\n") {
 		line = TrimAndStripInlineComments(line)
 		if len(line) == 0 {
@@ -71,7 +72,6 @@ func (plugin *PluginForward) Init(proxy *Proxy) error {
 			)
 		}
 		domain = strings.ToLower(domain)
-		requiresDHCP := false
 		var sequence []SearchSequenceItem
 		for _, server := range strings.Split(serversStr, ",") {
 			server = strings.TrimSpace(server)
@@ -120,35 +120,27 @@ func (plugin *PluginForward) Init(proxy *Proxy) error {
 				dlog.Infof("Forwarding [%s] to [%s]", domain, server)
 			}
 		}
-		if requiresDHCP {
-			if len(proxy.userName) > 0 {
-				dlog.Warn("DHCP/DNS detection may not work when 'user_name' is set or when starting as a non-root user")
-			}
-			if proxy.SourceIPv6 {
-				dlog.Notice("Starting a DHCP/DNS detector for IPv6")
-				d6 := &dhcpdns.Detector{RemoteIPPort: "[2001:DB8::53]:80"}
-				if err := d6.Detect(); err != nil {
-					dlog.Criticalf("Failed to start the DHCP/DNS IPv6 server: %s", err)
-					continue
-				}
-				go d6.Serve(9, 10)
-				plugin.dhcpdns = append(plugin.dhcpdns, d6)
-			}
-			if proxy.SourceIPv4 {
-				dlog.Notice("Starting a DHCP/DNS detector for IPv4")
-				d4 := &dhcpdns.Detector{RemoteIPPort: "192.0.2.53:80"}
-				if err := d4.Detect(); err != nil {
-					dlog.Criticalf("Failed to start the DHCP/DNS IPv4 server: %s", err)
-					continue
-				}
-				go d4.Serve(9, 10)
-				plugin.dhcpdns = append(plugin.dhcpdns, d4)
-			}
-		}
 		plugin.forwardMap = append(plugin.forwardMap, PluginForwardEntry{
 			domain:   domain,
 			sequence: sequence,
 		})
+	}
+	if requiresDHCP {
+		if len(proxy.userName) > 0 {
+			dlog.Warn("DHCP/DNS detection may not work when 'user_name' is set or when starting as a non-root user")
+		}
+		if proxy.SourceIPv6 {
+			dlog.Notice("Starting a DHCP/DNS detector for IPv6")
+			d6 := &dhcpdns.Detector{RemoteIPPort: "[2001:DB8::53]:80"}
+			go d6.Serve(9, 10)
+			plugin.dhcpdns = append(plugin.dhcpdns, d6)
+		}
+		if proxy.SourceIPv4 {
+			dlog.Notice("Starting a DHCP/DNS detector for IPv4")
+			d4 := &dhcpdns.Detector{RemoteIPPort: "192.0.2.53:80"}
+			go d4.Serve(9, 10)
+			plugin.dhcpdns = append(plugin.dhcpdns, d4)
+		}
 	}
 	return nil
 }
