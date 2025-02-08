@@ -2,7 +2,7 @@
 #        IP blocklist        #
 ##############################
 
-## Rules for blocking DNS resposnes if they contain
+## Rules for blocking DNS responses if they contain
 ## IP addresses matching patterns.
 ##
 ## Sample feeds of suspect IP addresses:
