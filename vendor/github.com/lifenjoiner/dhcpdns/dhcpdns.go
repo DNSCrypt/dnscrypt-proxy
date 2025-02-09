@@ -241,7 +241,11 @@ func getOutboundParams(ip string) (*net.IPAddr, *net.Interface, error) {
 		var ipUnicast net.IP
 		var got bool
 		for _, addr := range addrs {
-			ipi := addr.(*net.IPNet).IP
+			ipa, ok := addr.(*net.IPNet)
+			if !ok {
+				continue
+			}
+			ipi := ipa.IP
 			if ipi.Equal(ipAddr.IP) {
 				got = true
 			}
@@ -398,6 +402,7 @@ type Detector struct {
 	sync.RWMutex
 	got bool
 	// RemoteIPPort is the remote IPPort to detect within UDP.
+	// Won't send any data to it. `Dial` in UDP only detects if the network is available.
 	RemoteIPPort string
 	lastActiveIP string
 	dns          []net.IP
