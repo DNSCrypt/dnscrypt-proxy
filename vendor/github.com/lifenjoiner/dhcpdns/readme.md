@@ -12,6 +12,8 @@ go build
 cli
 ```
 
+It will need root privileges on operating systems other than Windows.
+
 ## Homepage
 
 https://github.com/lifenjoiner/dhcpdns
