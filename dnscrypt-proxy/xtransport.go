@@ -35,7 +35,7 @@ const (
 	DefaultKeepAlive         = 5 * time.Second
 	DefaultTimeout           = 30 * time.Second
 	SystemResolverIPTTL      = 24 * time.Hour
-	MinResolverIPTTL         = 12 * time.Hour
+	MinResolverIPTTL         = 4 * time.Hour
 	ExpiredCachedIPGraceTTL  = 15 * time.Minute
 )
 
