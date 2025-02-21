@@ -107,8 +107,8 @@ github.com/powerman/deepequal
 # github.com/quic-go/qpack v0.5.1
 ## explicit; go 1.22
 github.com/quic-go/qpack
-# github.com/quic-go/quic-go v0.49.0
-## explicit; go 1.22
+# github.com/quic-go/quic-go v0.50.0
+## explicit; go 1.23
 github.com/quic-go/quic-go
 github.com/quic-go/quic-go/http3
 github.com/quic-go/quic-go/internal/ackhandler
@@ -117,7 +117,6 @@ github.com/quic-go/quic-go/internal/flowcontrol
 github.com/quic-go/quic-go/internal/handshake
 github.com/quic-go/quic-go/internal/protocol
 github.com/quic-go/quic-go/internal/qerr
-github.com/quic-go/quic-go/internal/qtls
 github.com/quic-go/quic-go/internal/utils
 github.com/quic-go/quic-go/internal/utils/linkedlist
 github.com/quic-go/quic-go/internal/utils/ringbuffer

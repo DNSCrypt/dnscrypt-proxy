@@ -1,4 +1,4 @@
-package qtls
+package handshake
 
 import (
 	"net"
