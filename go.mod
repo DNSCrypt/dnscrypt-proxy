@@ -21,7 +21,7 @@ require (
 	github.com/miekg/dns v1.1.63
 	github.com/opencoff/go-sieve v0.2.1
 	github.com/powerman/check v1.8.0
-	github.com/quic-go/quic-go v0.49.0
+	github.com/quic-go/quic-go v0.50.0
 	golang.org/x/crypto v0.33.0
 	golang.org/x/net v0.35.0
 	golang.org/x/sys v0.30.0

@@ -684,7 +684,7 @@ func (s *Server) handleRequest(conn *connection, str quic.Stream, datagrams *dat
 				if logger == nil {
 					logger = slog.Default()
 				}
-				logger.Error("http: panic serving", "arg", p, "trace", string(buf))
+				logger.Error("http3: panic serving", "arg", p, "trace", string(buf))
 			}
 		}()
 		handler.ServeHTTP(r, req)
@@ -694,18 +694,6 @@ func (s *Server) handleRequest(conn *connection, str quic.Stream, datagrams *dat
 		return
 	}
 
-	// only write response when there is no panic
-	if !panicked {
-		// response not written to the client yet, set Content-Length
-		if !r.headerWritten {
-			if _, haveCL := r.header["Content-Length"]; !haveCL {
-				r.header.Set("Content-Length", strconv.FormatInt(r.numWritten, 10))
-			}
-		}
-		r.Flush()
-		r.flushTrailers()
-	}
-
 	// abort the stream when there is a panic
 	if panicked {
 		str.CancelRead(quic.StreamErrorCode(ErrCodeInternalError))
@@ -713,9 +701,17 @@ func (s *Server) handleRequest(conn *connection, str quic.Stream, datagrams *dat
 		return
 	}
 
+	// response not written to the client yet, set Content-Length
+	if !r.headerWritten {
+		if _, haveCL := r.header["Content-Length"]; !haveCL {
+			r.header.Set("Content-Length", strconv.FormatInt(r.numWritten, 10))
+		}
+	}
+	r.Flush()
+	r.flushTrailers()
+
 	// If the EOF was read by the handler, CancelRead() is a no-op.
 	str.CancelRead(quic.StreamErrorCode(ErrCodeNoError))
-
 	str.Close()
 }
 

@@ -108,3 +108,12 @@ func (r *RTTStats) SetInitialRTT(t time.Duration) {
 	r.smoothedRTT = t
 	r.latestRTT = t
 }
+
+func (r *RTTStats) ResetForPathMigration() {
+	r.hasMeasurement = false
+	r.minRTT = 0
+	r.latestRTT = 0
+	r.smoothedRTT = 0
+	r.meanDeviation = 0
+	// max_ack_delay remains valid
+}

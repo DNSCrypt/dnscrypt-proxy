@@ -10,7 +10,7 @@ import (
 // SentPacketHandler handles ACKs received for outgoing packets
 type SentPacketHandler interface {
 	// SentPacket may modify the packet
-	SentPacket(t time.Time, pn, largestAcked protocol.PacketNumber, streamFrames []StreamFrame, frames []Frame, encLevel protocol.EncryptionLevel, ecn protocol.ECN, size protocol.ByteCount, isPathMTUProbePacket bool)
+	SentPacket(t time.Time, pn, largestAcked protocol.PacketNumber, streamFrames []StreamFrame, frames []Frame, encLevel protocol.EncryptionLevel, ecn protocol.ECN, size protocol.ByteCount, isPathMTUProbePacket, isPathProbePacket bool)
 	// ReceivedAck processes an ACK frame.
 	// It does not store a copy of the frame.
 	ReceivedAck(f *wire.AckFrame, encLevel protocol.EncryptionLevel, rcvTime time.Time) (bool /* 1-RTT packet acked */, error)
@@ -34,6 +34,8 @@ type SentPacketHandler interface {
 
 	GetLossDetectionTimeout() time.Time
 	OnLossDetectionTimeout(now time.Time) error
+
+	MigratedPath(now time.Time, initialMaxPacketSize protocol.ByteCount)
 }
 
 type sentPacketTracker interface {
