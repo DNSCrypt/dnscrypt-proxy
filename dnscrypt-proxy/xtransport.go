@@ -40,9 +40,9 @@ const (
 )
 
 type CachedIPItem struct {
-	ip             net.IP
-	expiration     *time.Time
-	updating_until *time.Time
+	ip            net.IP
+	expiration    *time.Time
+	updatingUntil *time.Time
 }
 
 type CachedIPs struct {
@@ -106,7 +106,7 @@ func ParseIP(ipStr string) net.IP {
 // If ttl < 0, never expire
 // Otherwise, ttl is set to max(ttl, MinResolverIPTTL)
 func (xTransport *XTransport) saveCachedIP(host string, ip net.IP, ttl time.Duration) {
-	item := &CachedIPItem{ip: ip, expiration: nil, updating_until: nil}
+	item := &CachedIPItem{ip: ip, expiration: nil, updatingUntil: nil}
 	if ttl >= 0 {
 		if ttl < MinResolverIPTTL {
 			ttl = MinResolverIPTTL
@@ -126,7 +126,7 @@ func (xTransport *XTransport) markUpdatingCachedIP(host string) {
 	if ok {
 		now := time.Now()
 		until := now.Add(xTransport.timeout)
-		item.updating_until = &until
+		item.updatingUntil = &until
 		xTransport.cachedIPs.cache[host] = item
 	}
 	xTransport.cachedIPs.Unlock()
@@ -144,7 +144,7 @@ func (xTransport *XTransport) loadCachedIP(host string) (ip net.IP, expired bool
 	expiration := item.expiration
 	if expiration != nil && time.Until(*expiration) < 0 {
 		expired = true
-		if item.updating_until != nil && time.Until(*item.updating_until) > 0 {
+		if item.updatingUntil != nil && time.Until(*item.updatingUntil) > 0 {
 			updating = true
 		}
 	}
