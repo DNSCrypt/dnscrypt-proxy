@@ -234,7 +234,7 @@ func (xTransport *XTransport) rebuildTransport() {
 		tlsClientConfig.Certificates = []tls.Certificate{cert}
 	}
 
-	overrideCipherSuite := xTransport.tlsCipherSuite != nil && len(xTransport.tlsCipherSuite) > 0
+	overrideCipherSuite := len(xTransport.tlsCipherSuite) > 0
 	if xTransport.tlsDisableSessionTickets || overrideCipherSuite {
 		tlsClientConfig.SessionTicketsDisabled = xTransport.tlsDisableSessionTickets
 		if !xTransport.tlsDisableSessionTickets {

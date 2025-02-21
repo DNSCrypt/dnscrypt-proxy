@@ -60,10 +60,8 @@ func (plugin *PluginForward) Init(proxy *Proxy) error {
 			continue
 		}
 		domain, serversStr, ok := StringTwoFields(line)
-		if strings.HasPrefix(domain, "*.") {
-			domain = domain[2:]
-		}
-		if strings.Index(domain, "*") != -1 {
+		domain = strings.TrimPrefix(domain, "*.")
+		if strings.Contains(domain, "*") {
 			ok = false
 		}
 		if !ok {
@@ -205,7 +203,7 @@ func (plugin *PluginForward) Eval(pluginsState *PluginsState, msg *dns.Msg) erro
 					dlog.Infof("No response from the DHCP server while resolving [%s]", qName)
 					continue
 				}
-				if dhcpDNS != nil && len(dhcpDNS) > 0 {
+				if len(dhcpDNS) > 0 {
 					server = net.JoinHostPort(dhcpDNS[rand.Intn(len(dhcpDNS))].String(), "53")
 					break
 				}

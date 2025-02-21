@@ -170,7 +170,7 @@ func ColdStart(proxy *Proxy) (*CaptivePortalHandler, error) {
 		if err != nil {
 			continue
 		}
-		if strings.Index(ipsStr, "*") != -1 {
+		if strings.Contains(ipsStr, "*") {
 			return nil, fmt.Errorf(
 				"A captive portal rule must use an exact host name at line %d",
 				1+lineNo,
