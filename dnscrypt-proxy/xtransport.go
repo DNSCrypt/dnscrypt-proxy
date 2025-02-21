@@ -117,6 +117,7 @@ func (xTransport *XTransport) saveCachedIP(host string, ip net.IP, ttl time.Dura
 	xTransport.cachedIPs.Lock()
 	xTransport.cachedIPs.cache[host] = item
 	xTransport.cachedIPs.Unlock()
+	dlog.Debugf("[%s] IP address [%s] stored to the cache, valid for %v", host, ip, ttl)
 }
 
 // Mark an entry as being updated
@@ -128,6 +129,7 @@ func (xTransport *XTransport) markUpdatingCachedIP(host string) {
 		until := now.Add(xTransport.timeout)
 		item.updatingUntil = &until
 		xTransport.cachedIPs.cache[host] = item
+		dlog.Debugf("[%s] IP addresss marked as updating", host)
 	}
 	xTransport.cachedIPs.Unlock()
 }
@@ -138,6 +140,7 @@ func (xTransport *XTransport) loadCachedIP(host string) (ip net.IP, expired bool
 	item, ok := xTransport.cachedIPs.cache[host]
 	xTransport.cachedIPs.RUnlock()
 	if !ok {
+		dlog.Debugf("[%s] IP address not found in the cache", host)
 		return
 	}
 	ip = item.ip
@@ -146,6 +149,9 @@ func (xTransport *XTransport) loadCachedIP(host string) (ip net.IP, expired bool
 		expired = true
 		if item.updatingUntil != nil && time.Until(*item.updatingUntil) > 0 {
 			updating = true
+			dlog.Debugf("[%s] IP address is being updated", host)
+		} else {
+			dlog.Debugf("[%s] IP address expired, not being updated yet", host)
 		}
 	}
 	return
