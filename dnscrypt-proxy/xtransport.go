@@ -498,7 +498,6 @@ func (xTransport *XTransport) resolveAndUpdateCache(host string) error {
 		}
 	}
 	xTransport.saveCachedIP(host, foundIP, ttl)
-	dlog.Debugf("[%s] IP address [%s] added to the cache, valid for %v", host, foundIP, ttl)
 	return nil
 }
 
