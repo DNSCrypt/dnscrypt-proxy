@@ -44,7 +44,7 @@ github.com/hectane/go-acl/api
 # github.com/jedisct1/dlog v0.0.0-20241212093805-3c5fd791b405
 ## explicit; go 1.23
 github.com/jedisct1/dlog
-# github.com/jedisct1/go-clocksmith v0.0.0-20230211133011-392c1afea73e
+# github.com/jedisct1/go-clocksmith v0.0.0-20250224222044-e151f21a353a
 ## explicit
 github.com/jedisct1/go-clocksmith
 # github.com/jedisct1/go-dnsstamps v0.0.0-20240423203910-07a0735c7774
@@ -131,8 +131,8 @@ github.com/smartystreets/goconvey/convey/reporting
 ## explicit; go 1.22
 go.uber.org/mock/mockgen
 go.uber.org/mock/mockgen/model
-# golang.org/x/crypto v0.33.0
-## explicit; go 1.20
+# golang.org/x/crypto v0.35.0
+## explicit; go 1.23.0
 golang.org/x/crypto/blake2b
 golang.org/x/crypto/chacha20
 golang.org/x/crypto/chacha20poly1305
@@ -154,8 +154,8 @@ golang.org/x/mod/internal/lazyregexp
 golang.org/x/mod/modfile
 golang.org/x/mod/module
 golang.org/x/mod/semver
-# golang.org/x/net v0.35.0
-## explicit; go 1.18
+# golang.org/x/net v0.36.0
+## explicit; go 1.23.0
 golang.org/x/net/bpf
 golang.org/x/net/http/httpguts
 golang.org/x/net/http2
@@ -171,8 +171,8 @@ golang.org/x/net/proxy
 # golang.org/x/sync v0.11.0
 ## explicit; go 1.18
 golang.org/x/sync/errgroup
-# golang.org/x/sys v0.30.0
-## explicit; go 1.18
+# golang.org/x/sys v0.31.0
+## explicit; go 1.23.0
 golang.org/x/sys/cpu
 golang.org/x/sys/unix
 golang.org/x/sys/windows

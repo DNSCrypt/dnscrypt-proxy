@@ -10,7 +10,7 @@ require (
 	github.com/hashicorp/go-immutable-radix v1.3.1
 	github.com/hectane/go-acl v0.0.0-20230122075934-ca0b05cb1adb
 	github.com/jedisct1/dlog v0.0.0-20241212093805-3c5fd791b405
-	github.com/jedisct1/go-clocksmith v0.0.0-20230211133011-392c1afea73e
+	github.com/jedisct1/go-clocksmith v0.0.0-20250224222044-e151f21a353a
 	github.com/jedisct1/go-dnsstamps v0.0.0-20240423203910-07a0735c7774
 	github.com/jedisct1/go-hpke-compact v0.0.0-20241212093903-5caa4621366f
 	github.com/jedisct1/go-minisign v0.0.0-20241212093149-d2f9f49435c7
@@ -22,9 +22,9 @@ require (
 	github.com/opencoff/go-sieve v0.2.1
 	github.com/powerman/check v1.8.0
 	github.com/quic-go/quic-go v0.50.0
-	golang.org/x/crypto v0.33.0
-	golang.org/x/net v0.35.0
-	golang.org/x/sys v0.30.0
+	golang.org/x/crypto v0.35.0
+	golang.org/x/net v0.36.0
+	golang.org/x/sys v0.31.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 )
 
