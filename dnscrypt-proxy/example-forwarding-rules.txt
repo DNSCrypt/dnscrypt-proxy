@@ -38,6 +38,10 @@
 ## Forward queries to a resolver using IPv6
 # ipv6.example.com [2001:DB8::42]
 
+## Forward to a non-standard port number
+# x.example.com    192.168.0.1:1053
+# y.example.com    [2001:DB8::42]:1053
+
 ## Forward queries for .onion names to a local Tor client
 ## Tor must be configured with the following in the torrc file:
 ## DNSPort 9053

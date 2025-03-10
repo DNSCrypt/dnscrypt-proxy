@@ -102,14 +102,9 @@ func (plugin *PluginForward) Init(proxy *Proxy) error {
 					dlog.Criticalf("Unknown keyword [%s] at line %d", server, 1+lineNo)
 					continue
 				}
-				server = strings.TrimPrefix(server, "[")
-				server = strings.TrimSuffix(server, "]")
-				if ip := net.ParseIP(server); ip != nil {
-					if ip.To4() != nil {
-						server = fmt.Sprintf("%s:%d", server, 53)
-					} else {
-						server = fmt.Sprintf("[%s]:%d", server, 53)
-					}
+				if server, err = normalizeIPAndOptionalPort(server, "53"); err != nil {
+					dlog.Criticalf("Syntax error for a forwarding rule at line %d: %s", 1+lineNo, err)
+					continue
 				}
 				idxServers := -1
 				for i, item := range sequence {
@@ -251,4 +246,38 @@ func (plugin *PluginForward) Eval(pluginsState *PluginsState, msg *dns.Msg) erro
 		return nil
 	}
 	return err
+}
+
+func normalizeIPAndOptionalPort(addr string, defaultPort string) (string, error) {
+	var host, port string
+	var err error
+
+	if strings.HasPrefix(addr, "[") {
+		if !strings.Contains(addr, "]:") {
+			if addr[len(addr)-1] != ']' {
+				return "", fmt.Errorf("invalid IPv6 format: missing closing ']'")
+			}
+			host = addr[1 : len(addr)-1]
+			port = defaultPort
+		} else {
+			host, port, err = net.SplitHostPort(addr)
+			if err != nil {
+				return "", err
+			}
+		}
+	} else {
+		host, port, err = net.SplitHostPort(addr)
+		if err != nil {
+			host = addr
+			port = defaultPort
+		}
+	}
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return "", fmt.Errorf("invalid IP address: [%s]", host)
+	}
+	if ip.To4() != nil {
+		return fmt.Sprintf("%s:%s", ip.String(), port), nil
+	}
+	return fmt.Sprintf("[%s]:%s", ip.String(), port), nil
 }
