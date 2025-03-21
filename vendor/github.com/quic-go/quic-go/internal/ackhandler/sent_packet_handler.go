@@ -460,10 +460,10 @@ func (h *sentPacketHandler) detectAndRemoveAckedPackets(ack *wire.AckFrame, encL
 		}
 		if p.isPathProbePacket {
 			probePacket := pnSpace.history.RemovePathProbe(p.PacketNumber)
-			if probePacket == nil {
-				panic(fmt.Sprintf("path probe doesn't exist: %d", p.PacketNumber))
+			// the probe packet might already have been declared lost
+			if probePacket != nil {
+				h.ackedPackets = append(h.ackedPackets, probePacket)
 			}
-			h.ackedPackets = append(h.ackedPackets, probePacket)
 			continue
 		}
 		h.ackedPackets = append(h.ackedPackets, p)
@@ -658,7 +658,6 @@ func (h *sentPacketHandler) detectLostPathProbes(now time.Time) {
 		for _, f := range p.Frames {
 			f.Handler.OnLost(f.Frame)
 		}
-		h.appDataPackets.history.Remove(p.PacketNumber)
 		h.appDataPackets.history.RemovePathProbe(p.PacketNumber)
 	}
 }
