@@ -36,6 +36,7 @@ const (
 	DefaultTimeout           = 30 * time.Second
 	SystemResolverIPTTL      = 12 * time.Hour
 	MinResolverIPTTL         = 4 * time.Hour
+	ResolverIPTTLMaxJitter   = 15 * time.Minute
 	ExpiredCachedIPGraceTTL  = 15 * time.Minute
 )
 
@@ -111,6 +112,7 @@ func (xTransport *XTransport) saveCachedIP(host string, ip net.IP, ttl time.Dura
 		if ttl < MinResolverIPTTL {
 			ttl = MinResolverIPTTL
 		}
+		ttl += time.Duration(rand.Int63n(int64(ResolverIPTTLMaxJitter)))
 		expiration := time.Now().Add(ttl)
 		item.expiration = &expiration
 	}
