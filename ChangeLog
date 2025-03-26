@@ -1,3 +1,21 @@
+# Version 2.1.8
+ - Dependencies have been updated, notably the QUIC implementation,
+which could be vulnerable to denial-of-service attacks.
+ - In forwarding rules, the target can now optionally include a
+non-standard DNS port number. The port number is also now optional when
+using IPv6.
+ - An annoying log message related to permissions on Windows has been
+suppressed.
+ - Resolver IP addresses can now be refreshed more frequently.
+Additionally, jitter has been introduced to prevent all resolvers from
+being refreshed simultaneously. Further changes have been implemented
+to mitigate issues arising from multiple concurrent attempts to resolve
+a resolver's IP address.
+ - An empty value for "tls_cipher_suite" is now equivalent to leaving
+the property undefined. Previously, it disabled all TLS cipher suites,
+which had little practical justification.
+ - In forwarding rules, an optional `*.` prefix is now accepted.
+
 # Version 2.1.7
  - This version reintroduces support for XSalsa20 enryption in DNSCrypt,
 which was removed in 2.1.6. Unfortunately, a bunch of servers still
