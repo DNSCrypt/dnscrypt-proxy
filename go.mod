@@ -1,7 +1,6 @@
 module github.com/dnscrypt/dnscrypt-proxy
 
 go 1.24.1
-
 require (
 	github.com/BurntSushi/toml v1.5.0
 	github.com/VividCortex/ewma v1.2.0
@@ -23,7 +22,7 @@ require (
 	github.com/powerman/check v1.8.0
 	github.com/quic-go/quic-go v0.50.1
 	golang.org/x/crypto v0.36.0
-	golang.org/x/net v0.37.0
+	golang.org/x/net v0.38.0
 	golang.org/x/sys v0.31.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 )
