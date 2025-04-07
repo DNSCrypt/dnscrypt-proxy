@@ -68,7 +68,7 @@ github.com/kardianos/service
 # github.com/lifenjoiner/dhcpdns v0.0.7
 ## explicit; go 1.20
 github.com/lifenjoiner/dhcpdns
-# github.com/miekg/dns v1.1.64
+# github.com/miekg/dns v1.1.65
 ## explicit; go 1.22.0
 github.com/miekg/dns
 # github.com/onsi/ginkgo/v2 v2.9.5

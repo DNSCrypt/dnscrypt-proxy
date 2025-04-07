@@ -18,7 +18,7 @@ require (
 	github.com/k-sone/critbitgo v1.4.0
 	github.com/kardianos/service v1.2.2
 	github.com/lifenjoiner/dhcpdns v0.0.7
-	github.com/miekg/dns v1.1.64
+	github.com/miekg/dns v1.1.65
 	github.com/opencoff/go-sieve v0.2.1
 	github.com/powerman/check v1.8.0
 	github.com/quic-go/quic-go v0.50.1
