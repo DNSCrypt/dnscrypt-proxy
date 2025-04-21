@@ -211,8 +211,8 @@ func (s *requestStream) ReadResponse() (*http.Response, error) {
 	}
 	frame, err := fp.ParseNext()
 	if err != nil {
-		s.Stream.CancelRead(quic.StreamErrorCode(ErrCodeFrameError))
-		s.Stream.CancelWrite(quic.StreamErrorCode(ErrCodeFrameError))
+		s.CancelRead(quic.StreamErrorCode(ErrCodeFrameError))
+		s.CancelWrite(quic.StreamErrorCode(ErrCodeFrameError))
 		return nil, fmt.Errorf("http3: parsing frame failed: %w", err)
 	}
 	hf, ok := frame.(*headersFrame)
@@ -221,14 +221,14 @@ func (s *requestStream) ReadResponse() (*http.Response, error) {
 		return nil, errors.New("http3: expected first frame to be a HEADERS frame")
 	}
 	if hf.Length > s.maxHeaderBytes {
-		s.Stream.CancelRead(quic.StreamErrorCode(ErrCodeFrameError))
-		s.Stream.CancelWrite(quic.StreamErrorCode(ErrCodeFrameError))
+		s.CancelRead(quic.StreamErrorCode(ErrCodeFrameError))
+		s.CancelWrite(quic.StreamErrorCode(ErrCodeFrameError))
 		return nil, fmt.Errorf("http3: HEADERS frame too large: %d bytes (max: %d)", hf.Length, s.maxHeaderBytes)
 	}
 	headerBlock := make([]byte, hf.Length)
 	if _, err := io.ReadFull(s.Stream, headerBlock); err != nil {
-		s.Stream.CancelRead(quic.StreamErrorCode(ErrCodeRequestIncomplete))
-		s.Stream.CancelWrite(quic.StreamErrorCode(ErrCodeRequestIncomplete))
+		s.CancelRead(quic.StreamErrorCode(ErrCodeRequestIncomplete))
+		s.CancelWrite(quic.StreamErrorCode(ErrCodeRequestIncomplete))
 		return nil, fmt.Errorf("http3: failed to read response headers: %w", err)
 	}
 	hfs, err := s.decoder.DecodeFull(headerBlock)
@@ -239,8 +239,8 @@ func (s *requestStream) ReadResponse() (*http.Response, error) {
 	}
 	res := s.response
 	if err := updateResponseFromHeaders(res, hfs); err != nil {
-		s.Stream.CancelRead(quic.StreamErrorCode(ErrCodeMessageError))
-		s.Stream.CancelWrite(quic.StreamErrorCode(ErrCodeMessageError))
+		s.CancelRead(quic.StreamErrorCode(ErrCodeMessageError))
+		s.CancelWrite(quic.StreamErrorCode(ErrCodeMessageError))
 		return nil, fmt.Errorf("http3: invalid response: %w", err)
 	}
 

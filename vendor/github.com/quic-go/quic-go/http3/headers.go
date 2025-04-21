@@ -55,23 +55,33 @@ func parseHeaders(headers []qpack.HeaderField, isRequest bool) (header, error) {
 				// all pseudo headers must appear before regular header fields, see section 4.3 of RFC 9114
 				return header{}, fmt.Errorf("received pseudo header %s after a regular header field", h.Name)
 			}
-			var isResponsePseudoHeader bool // pseudo headers are either valid for requests or for responses
+			var isResponsePseudoHeader bool  // pseudo headers are either valid for requests or for responses
+			var isDuplicatePseudoHeader bool // pseudo headers are allowed to appear exactly once
 			switch h.Name {
 			case ":path":
+				isDuplicatePseudoHeader = hdr.Path != ""
 				hdr.Path = h.Value
 			case ":method":
+				isDuplicatePseudoHeader = hdr.Method != ""
 				hdr.Method = h.Value
 			case ":authority":
+				isDuplicatePseudoHeader = hdr.Authority != ""
 				hdr.Authority = h.Value
 			case ":protocol":
+				isDuplicatePseudoHeader = hdr.Protocol != ""
 				hdr.Protocol = h.Value
 			case ":scheme":
+				isDuplicatePseudoHeader = hdr.Scheme != ""
 				hdr.Scheme = h.Value
 			case ":status":
+				isDuplicatePseudoHeader = hdr.Status != ""
 				hdr.Status = h.Value
 				isResponsePseudoHeader = true
 			default:
 				return header{}, fmt.Errorf("unknown pseudo header: %s", h.Name)
+			}
+			if isDuplicatePseudoHeader {
+				return header{}, fmt.Errorf("duplicate pseudo header: %s", h.Name)
 			}
 			if isRequest && isResponsePseudoHeader {
 				return header{}, fmt.Errorf("invalid request pseudo header: %s", h.Name)

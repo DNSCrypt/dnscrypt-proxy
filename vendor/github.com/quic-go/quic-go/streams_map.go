@@ -2,9 +2,7 @@ package quic
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"net"
 	"sync"
 
 	"github.com/quic-go/quic-go/internal/flowcontrol"
@@ -32,19 +30,6 @@ func convertStreamError(err error, stype protocol.StreamType, pers protocol.Pers
 		ids[i] = num.StreamID(stype, pers)
 	}
 	return fmt.Errorf(strError.Error(), ids...)
-}
-
-type streamOpenErr struct{ error }
-
-var _ net.Error = &streamOpenErr{}
-
-func (streamOpenErr) Timeout() bool   { return false }
-func (e streamOpenErr) Unwrap() error { return e.error }
-
-func (e streamOpenErr) Temporary() bool {
-	// In older versions of quic-go, the stream limit error was documented to be a net.Error.Temporary.
-	// This function was since deprecated, but we keep the existing behavior.
-	return errors.Is(e, &StreamLimitReachedError{})
 }
 
 // StreamLimitReachedError is returned from Connection.OpenStream and Connection.OpenUniStream

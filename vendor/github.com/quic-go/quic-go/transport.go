@@ -17,7 +17,7 @@ import (
 	"github.com/quic-go/quic-go/logging"
 )
 
-// ErrTransportClosed is returned by the Transport's Listen or Dial method after it was closed.
+// ErrTransportClosed is returned by the [Transport]'s Listen or Dial method after it was closed.
 var ErrTransportClosed = &errTransportClosed{}
 
 type errTransportClosed struct {
@@ -38,6 +38,10 @@ func (e *errTransportClosed) Is(target error) bool {
 	return ok
 }
 
+type transportID uint64
+
+var transportIDCounter atomic.Uint64
+
 var errListenerAlreadySet = errors.New("listener already set")
 
 // The Transport is the central point to manage incoming and outgoing QUIC connections.
@@ -45,7 +49,7 @@ var errListenerAlreadySet = errors.New("listener already set")
 // This means that a single UDP socket can be used for listening for incoming connections, as well as
 // for dialing an arbitrary number of outgoing connections.
 // A Transport handles a single net.PacketConn, and offers a range of configuration options
-// compared to the simple helper functions like Listen and Dial that this package provides.
+// compared to the simple helper functions like [Listen] and [Dial] that this package provides.
 type Transport struct {
 	// A single net.PacketConn can only be handled by one Transport.
 	// Bad things will happen if passed to multiple Transports.
@@ -133,6 +137,7 @@ type Transport struct {
 	initErr  error
 
 	// Set in init.
+	transportID transportID
 	// If no ConnectionIDGenerator is set, this is the ConnectionIDLength.
 	connIDLen int
 	// Set in init.
@@ -160,7 +165,7 @@ type Transport struct {
 
 // Listen starts listening for incoming QUIC connections.
 // There can only be a single listener on any net.PacketConn.
-// Listen may only be called again after the current Listener was closed.
+// Listen may only be called again after the current listener was closed.
 func (t *Transport) Listen(tlsConf *tls.Config, conf *Config) (*Listener, error) {
 	s, err := t.createServer(tlsConf, conf, false)
 	if err != nil {
@@ -171,7 +176,7 @@ func (t *Transport) Listen(tlsConf *tls.Config, conf *Config) (*Listener, error)
 
 // ListenEarly starts listening for incoming QUIC connections.
 // There can only be a single listener on any net.PacketConn.
-// Listen may only be called again after the current Listener was closed.
+// ListenEarly may only be called again after the current listener was closed.
 func (t *Transport) ListenEarly(tlsConf *tls.Config, conf *Config) (*EarlyListener, error) {
 	s, err := t.createServer(tlsConf, conf, true)
 	if err != nil {
@@ -207,7 +212,7 @@ func (t *Transport) createServer(tlsConf *tls.Config, conf *Config, allow0RTT bo
 	}
 	s := newServer(
 		t.conn,
-		t.handlerMap,
+		t,
 		t.connIDGenerator,
 		t.statelessResetter,
 		t.ConnContext,
@@ -298,7 +303,7 @@ func (t *Transport) doDial(
 	conn := newClientConnection(
 		context.WithoutCancel(ctx),
 		sendConn,
-		t.handlerMap,
+		t,
 		destConnID,
 		srcConnID,
 		t.connIDGenerator,
@@ -371,6 +376,7 @@ func (t *Transport) doDial(
 
 func (t *Transport) init(allowZeroLengthConnIDs bool) error {
 	t.initOnce.Do(func() {
+		t.transportID = transportID(transportIDCounter.Add(1))
 		var conn rawConn
 		if c, ok := t.Conn.(rawConn); ok {
 			conn = c
@@ -419,6 +425,12 @@ func (t *Transport) init(allowZeroLengthConnIDs bool) error {
 	})
 	return t.initErr
 }
+
+func (t *Transport) connRunner() packetHandlerManager {
+	return t.handlerMap
+}
+
+func (t *Transport) id() transportID { return t.transportID }
 
 // WriteTo sends a packet on the underlying connection.
 func (t *Transport) WriteTo(b []byte, addr net.Addr) (int, error) {
