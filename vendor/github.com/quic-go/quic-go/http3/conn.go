@@ -106,7 +106,7 @@ func (c *connection) openRequestStream(
 	disableCompression bool,
 	maxHeaderBytes uint64,
 ) (*requestStream, error) {
-	str, err := c.Connection.OpenStreamSync(ctx)
+	str, err := c.OpenStreamSync(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -180,7 +180,7 @@ func (c *connection) handleUnidirectionalStreams(hijack func(StreamType, quic.Co
 	)
 
 	for {
-		str, err := c.Connection.AcceptUniStream(context.Background())
+		str, err := c.AcceptUniStream(context.Background())
 		if err != nil {
 			if c.logger != nil {
 				c.logger.Debug("accepting unidirectional stream failed", "error", err)
@@ -191,7 +191,7 @@ func (c *connection) handleUnidirectionalStreams(hijack func(StreamType, quic.Co
 		go func(str quic.ReceiveStream) {
 			streamType, err := quicvarint.Read(quicvarint.NewReader(str))
 			if err != nil {
-				id := c.Connection.Context().Value(quic.ConnectionTracingKey).(quic.ConnectionTracingID)
+				id := c.Context().Value(quic.ConnectionTracingKey).(quic.ConnectionTracingID)
 				if hijack != nil && hijack(StreamType(streamType), id, str, err) {
 					return
 				}
@@ -205,13 +205,13 @@ func (c *connection) handleUnidirectionalStreams(hijack func(StreamType, quic.Co
 			case streamTypeControlStream:
 			case streamTypeQPACKEncoderStream:
 				if isFirst := rcvdQPACKEncoderStr.CompareAndSwap(false, true); !isFirst {
-					c.Connection.CloseWithError(quic.ApplicationErrorCode(ErrCodeStreamCreationError), "duplicate QPACK encoder stream")
+					c.CloseWithError(quic.ApplicationErrorCode(ErrCodeStreamCreationError), "duplicate QPACK encoder stream")
 				}
 				// Our QPACK implementation doesn't use the dynamic table yet.
 				return
 			case streamTypeQPACKDecoderStream:
 				if isFirst := rcvdQPACKDecoderStr.CompareAndSwap(false, true); !isFirst {
-					c.Connection.CloseWithError(quic.ApplicationErrorCode(ErrCodeStreamCreationError), "duplicate QPACK decoder stream")
+					c.CloseWithError(quic.ApplicationErrorCode(ErrCodeStreamCreationError), "duplicate QPACK decoder stream")
 				}
 				// Our QPACK implementation doesn't use the dynamic table yet.
 				return
@@ -219,17 +219,17 @@ func (c *connection) handleUnidirectionalStreams(hijack func(StreamType, quic.Co
 				switch c.perspective {
 				case protocol.PerspectiveClient:
 					// we never increased the Push ID, so we don't expect any push streams
-					c.Connection.CloseWithError(quic.ApplicationErrorCode(ErrCodeIDError), "")
+					c.CloseWithError(quic.ApplicationErrorCode(ErrCodeIDError), "")
 				case protocol.PerspectiveServer:
 					// only the server can push
-					c.Connection.CloseWithError(quic.ApplicationErrorCode(ErrCodeStreamCreationError), "")
+					c.CloseWithError(quic.ApplicationErrorCode(ErrCodeStreamCreationError), "")
 				}
 				return
 			default:
 				if hijack != nil {
 					if hijack(
 						StreamType(streamType),
-						c.Connection.Context().Value(quic.ConnectionTracingKey).(quic.ConnectionTracingID),
+						c.Context().Value(quic.ConnectionTracingKey).(quic.ConnectionTracingID),
 						str,
 						nil,
 					) {
@@ -267,8 +267,8 @@ func (c *connection) handleUnidirectionalStreams(hijack func(StreamType, quic.Co
 			// If datagram support was enabled on our side as well as on the server side,
 			// we can expect it to have been negotiated both on the transport and on the HTTP/3 layer.
 			// Note: ConnectionState() will block until the handshake is complete (relevant when using 0-RTT).
-			if c.enableDatagrams && !c.Connection.ConnectionState().SupportsDatagrams {
-				c.Connection.CloseWithError(quic.ApplicationErrorCode(ErrCodeSettingsError), "missing QUIC Datagram support")
+			if c.enableDatagrams && !c.ConnectionState().SupportsDatagrams {
+				c.CloseWithError(quic.ApplicationErrorCode(ErrCodeSettingsError), "missing QUIC Datagram support")
 				return
 			}
 			go func() {
@@ -287,22 +287,22 @@ func (c *connection) sendDatagram(streamID protocol.StreamID, b []byte) error {
 	data := make([]byte, 0, len(b)+8)
 	data = quicvarint.Append(data, uint64(streamID/4))
 	data = append(data, b...)
-	return c.Connection.SendDatagram(data)
+	return c.SendDatagram(data)
 }
 
 func (c *connection) receiveDatagrams() error {
 	for {
-		b, err := c.Connection.ReceiveDatagram(context.Background())
+		b, err := c.ReceiveDatagram(context.Background())
 		if err != nil {
 			return err
 		}
 		quarterStreamID, n, err := quicvarint.Parse(b)
 		if err != nil {
-			c.Connection.CloseWithError(quic.ApplicationErrorCode(ErrCodeDatagramError), "")
+			c.CloseWithError(quic.ApplicationErrorCode(ErrCodeDatagramError), "")
 			return fmt.Errorf("could not read quarter stream id: %w", err)
 		}
 		if quarterStreamID > maxQuarterStreamID {
-			c.Connection.CloseWithError(quic.ApplicationErrorCode(ErrCodeDatagramError), "")
+			c.CloseWithError(quic.ApplicationErrorCode(ErrCodeDatagramError), "")
 			return fmt.Errorf("invalid quarter stream id: %w", err)
 		}
 		streamID := protocol.StreamID(4 * quarterStreamID)

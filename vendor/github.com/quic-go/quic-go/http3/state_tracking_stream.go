@@ -90,7 +90,7 @@ func (s *stateTrackingStream) Close() error {
 }
 
 func (s *stateTrackingStream) CancelWrite(e quic.StreamErrorCode) {
-	s.closeSend(&quic.StreamError{StreamID: s.Stream.StreamID(), ErrorCode: e})
+	s.closeSend(&quic.StreamError{StreamID: s.StreamID(), ErrorCode: e})
 	s.Stream.CancelWrite(e)
 }
 
@@ -103,7 +103,7 @@ func (s *stateTrackingStream) Write(b []byte) (int, error) {
 }
 
 func (s *stateTrackingStream) CancelRead(e quic.StreamErrorCode) {
-	s.closeReceive(&quic.StreamError{StreamID: s.Stream.StreamID(), ErrorCode: e})
+	s.closeReceive(&quic.StreamError{StreamID: s.StreamID(), ErrorCode: e})
 	s.Stream.CancelRead(e)
 }
 

@@ -44,31 +44,34 @@ type TokenStore interface {
 }
 
 // Err0RTTRejected is the returned from:
-// * Open{Uni}Stream{Sync}
-// * Accept{Uni}Stream
-// * Stream.Read and Stream.Write
+//   - Open{Uni}Stream{Sync}
+//   - Accept{Uni}Stream
+//   - Stream.Read and Stream.Write
+//
 // when the server rejects a 0-RTT connection attempt.
 var Err0RTTRejected = errors.New("0-RTT rejected")
 
-// ConnectionTracingKey can be used to associate a ConnectionTracer with a Connection.
+// ConnectionTracingKey can be used to associate a [logging.ConnectionTracer] with a [Connection].
 // It is set on the Connection.Context() context,
 // as well as on the context passed to logging.Tracer.NewConnectionTracer.
+//
 // Deprecated: Applications can set their own tracing key using Transport.ConnContext.
 var ConnectionTracingKey = connTracingCtxKey{}
 
 // ConnectionTracingID is the type of the context value saved under the ConnectionTracingKey.
+//
 // Deprecated: Applications can set their own tracing key using Transport.ConnContext.
 type ConnectionTracingID uint64
 
 type connTracingCtxKey struct{}
 
 // QUICVersionContextKey can be used to find out the QUIC version of a TLS handshake from the
-// context returned by tls.Config.ClientHelloInfo.Context.
+// context returned by tls.Config.ClientInfo.Context.
 var QUICVersionContextKey = handshake.QUICVersionContextKey
 
-// Stream is the interface implemented by QUIC streams
-// In addition to the errors listed on the Connection,
-// calls to stream functions can return a StreamError if the stream is canceled.
+// Stream is the interface implemented by QUIC streams.
+// In addition to the errors listed on the [Connection],
+// calls to stream functions can return a [StreamError] if the stream is canceled.
 type Stream interface {
 	ReceiveStream
 	SendStream
@@ -83,12 +86,8 @@ type ReceiveStream interface {
 	// StreamID returns the stream ID.
 	StreamID() StreamID
 	// Read reads data from the stream.
-	// Read can be made to time out and return a net.Error with Timeout() == true
-	// after a fixed time limit; see SetDeadline and SetReadDeadline.
-	// If the stream was canceled by the peer, the error is a StreamError and
-	// Remote == true.
-	// If the connection was closed due to a timeout, the error satisfies
-	// the net.Error interface, and Timeout() will be true.
+	// Read can be made to time out using SetDeadline and SetReadDeadline.
+	// If the stream was canceled, the error is a StreamError.
 	io.Reader
 	// CancelRead aborts receiving on this stream.
 	// It will ask the peer to stop transmitting stream data.
@@ -106,12 +105,8 @@ type SendStream interface {
 	// StreamID returns the stream ID.
 	StreamID() StreamID
 	// Write writes data to the stream.
-	// Write can be made to time out and return a net.Error with Timeout() == true
-	// after a fixed time limit; see SetDeadline and SetWriteDeadline.
-	// If the stream was canceled by the peer, the error is a StreamError and
-	// Remote == true.
-	// If the connection was closed due to a timeout, the error satisfies
-	// the net.Error interface, and Timeout() will be true.
+	// Write can be made to time out using SetDeadline and SetWriteDeadline.
+	// If the stream was canceled, the error is a StreamError.
 	io.Writer
 	// Close closes the write-direction of the stream.
 	// Future calls to Write are not permitted after calling Close.
@@ -141,20 +136,16 @@ type SendStream interface {
 
 // A Connection is a QUIC connection between two peers.
 // Calls to the connection (and to streams) can return the following types of errors:
-// * ApplicationError: for errors triggered by the application running on top of QUIC
-// * TransportError: for errors triggered by the QUIC transport (in many cases a misbehaving peer)
-// * IdleTimeoutError: when the peer goes away unexpectedly (this is a net.Error timeout error)
-// * HandshakeTimeoutError: when the cryptographic handshake takes too long (this is a net.Error timeout error)
-// * StatelessResetError: when we receive a stateless reset
-// * VersionNegotiationError: returned by the client, when there's no version overlap between the peers
+//   - [ApplicationError]: for errors triggered by the application running on top of QUIC
+//   - [TransportError]: for errors triggered by the QUIC transport (in many cases a misbehaving peer)
+//   - [IdleTimeoutError]: when the peer goes away unexpectedly (this is a [net.Error] timeout error)
+//   - [HandshakeTimeoutError]: when the cryptographic handshake takes too long (this is a [net.Error] timeout error)
+//   - [StatelessResetError]: when we receive a stateless reset
+//   - [VersionNegotiationError]: returned by the client, when there's no version overlap between the peers
 type Connection interface {
 	// AcceptStream returns the next stream opened by the peer, blocking until one is available.
-	// If the connection was closed due to a timeout, the error satisfies
-	// the net.Error interface, and Timeout() will be true.
 	AcceptStream(context.Context) (Stream, error)
 	// AcceptUniStream returns the next unidirectional stream opened by the peer, blocking until one is available.
-	// If the connection was closed due to a timeout, the error satisfies
-	// the net.Error interface, and Timeout() will be true.
 	AcceptUniStream(context.Context) (ReceiveStream, error)
 	// OpenStream opens a new bidirectional QUIC stream.
 	// There is no signaling to the peer about new streams:
@@ -205,6 +196,8 @@ type Connection interface {
 	SendDatagram(payload []byte) error
 	// ReceiveDatagram gets a message received in a datagram, as specified in RFC 9221.
 	ReceiveDatagram(context.Context) ([]byte, error)
+
+	AddPath(*Transport) (*Path, error)
 }
 
 // An EarlyConnection is a connection that is handshaking.
@@ -234,27 +227,22 @@ type TokenGeneratorKey = handshake.TokenProtectorKey
 // as they are allowed by RFC 8999.
 type ConnectionID = protocol.ConnectionID
 
-// ConnectionIDFromBytes interprets b as a Connection ID. It panics if b is
+// ConnectionIDFromBytes interprets b as a [ConnectionID]. It panics if b is
 // longer than 20 bytes.
 func ConnectionIDFromBytes(b []byte) ConnectionID {
 	return protocol.ParseConnectionID(b)
 }
 
-// A ConnectionIDGenerator is an interface that allows clients to implement their own format
-// for the Connection IDs that servers/clients use as SrcConnectionID in QUIC packets.
-//
-// Connection IDs generated by an implementation should always produce IDs of constant size.
+// A ConnectionIDGenerator allows the application to take control over the generation of Connection IDs.
+// Connection IDs generated by an implementation must be of constant length.
 type ConnectionIDGenerator interface {
-	// GenerateConnectionID generates a new ConnectionID.
-	// Generated ConnectionIDs should be unique and observers should not be able to correlate two ConnectionIDs.
+	// GenerateConnectionID generates a new Connection ID.
+	// Generated Connection IDs must be unique and observers should not be able to correlate two Connection IDs.
 	GenerateConnectionID() (ConnectionID, error)
 
-	// ConnectionIDLen tells what is the length of the ConnectionIDs generated by the implementation of
-	// this interface.
-	// Effectively, this means that implementations of ConnectionIDGenerator must always return constant-size
-	// connection IDs. Valid lengths are between 0 and 20 and calls to GenerateConnectionID.
-	// 0-length ConnectionsIDs can be used when an endpoint (server or client) does not require multiplexing connections
-	// in the presence of a connection migration environment.
+	// ConnectionIDLen returns the length of Connection IDs generated by this implementation.
+	// Implementations must return constant-length Connection IDs with lengths between 0 and 20 bytes.
+	// A length of 0 can only be used when an endpoint doesn't need to multiplex connections during migration.
 	ConnectionIDLen() int
 }
 
@@ -262,7 +250,7 @@ type ConnectionIDGenerator interface {
 type Config struct {
 	// GetConfigForClient is called for incoming connections.
 	// If the error is not nil, the connection attempt is refused.
-	GetConfigForClient func(info *ClientHelloInfo) (*Config, error)
+	GetConfigForClient func(info *ClientInfo) (*Config, error)
 	// The QUIC versions that can be negotiated.
 	// If not set, it uses all versions available.
 	Versions []Version
@@ -323,10 +311,10 @@ type Config struct {
 	// If set to 0, then no keep alive is sent. Otherwise, the keep alive is sent on that period (or at most
 	// every half of MaxIdleTimeout, whichever is smaller).
 	KeepAlivePeriod time.Duration
-	// InitialPacketSize is the initial size of packets sent.
-	// It is usually not necessary to manually set this value,
-	// since Path MTU discovery very quickly finds the path's MTU.
-	// If set too high, the path might not support packets that large, leading to a timeout of the QUIC handshake.
+	// InitialPacketSize is the initial size (and the lower limit) for packets sent.
+	// Under most circumstances, it is not necessary to manually set this value,
+	// since path MTU discovery quickly finds the path's MTU.
+	// If set too high, the path might not support packets of that size, leading to a timeout of the QUIC handshake.
 	// Values below 1200 are invalid.
 	InitialPacketSize uint16
 	// DisablePathMTUDiscovery disables Path MTU Discovery (RFC 8899).
@@ -342,7 +330,12 @@ type Config struct {
 }
 
 // ClientHelloInfo contains information about an incoming connection attempt.
-type ClientHelloInfo struct {
+//
+// Deprecated: Use ClientInfo instead.
+type ClientHelloInfo = ClientInfo
+
+// ClientInfo contains information about an incoming connection attempt.
+type ClientInfo struct {
 	// RemoteAddr is the remote address on the Initial packet.
 	// Unless AddrVerified is set, the address is not yet verified, and could be a spoofed IP address.
 	RemoteAddr net.Addr
@@ -352,7 +345,7 @@ type ClientHelloInfo struct {
 	AddrVerified bool
 }
 
-// ConnectionState records basic details about a QUIC connection
+// ConnectionState records basic details about a QUIC connection.
 type ConnectionState struct {
 	// TLS contains information about the TLS connection state, incl. the tls.ConnectionState.
 	TLS tls.ConnectionState
@@ -365,6 +358,6 @@ type ConnectionState struct {
 	Used0RTT bool
 	// Version is the QUIC version of the QUIC connection.
 	Version Version
-	// GSO says if generic segmentation offload is used
+	// GSO says if generic segmentation offload is used.
 	GSO bool
 }

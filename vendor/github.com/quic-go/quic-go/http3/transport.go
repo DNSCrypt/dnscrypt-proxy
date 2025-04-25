@@ -322,7 +322,7 @@ func (t *Transport) dial(ctx context.Context, hostname string) (quic.EarlyConnec
 		tlsConf.ServerName = sni
 	}
 	// Replace existing ALPNs by H3
-	tlsConf.NextProtos = []string{versionToALPN(t.QUICConfig.Versions[0])}
+	tlsConf.NextProtos = []string{NextProtoH3}
 
 	dial := t.Dial
 	if dial == nil {

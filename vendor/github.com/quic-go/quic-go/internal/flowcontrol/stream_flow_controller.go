@@ -100,7 +100,7 @@ func (c *streamFlowController) UpdateHighestReceived(offset protocol.ByteCount, 
 
 func (c *streamFlowController) AddBytesRead(n protocol.ByteCount) (hasStreamWindowUpdate, hasConnWindowUpdate bool) {
 	c.mutex.Lock()
-	c.baseFlowController.addBytesRead(n)
+	c.addBytesRead(n)
 	hasStreamWindowUpdate = c.shouldQueueWindowUpdate()
 	c.mutex.Unlock()
 	hasConnWindowUpdate = c.connection.AddBytesRead(n)
@@ -145,7 +145,7 @@ func (c *streamFlowController) GetWindowUpdate(now time.Time) protocol.ByteCount
 	defer c.mutex.Unlock()
 
 	oldWindowSize := c.receiveWindowSize
-	offset := c.baseFlowController.getWindowUpdate(now)
+	offset := c.getWindowUpdate(now)
 	if c.receiveWindowSize > oldWindowSize { // auto-tuning enlarged the window size
 		c.logger.Debugf("Increasing receive flow control window for stream %d to %d", c.streamID, c.receiveWindowSize)
 		c.connection.EnsureMinimumWindowSize(protocol.ByteCount(float64(c.receiveWindowSize)*protocol.ConnectionFlowControlMultiplier), now)
