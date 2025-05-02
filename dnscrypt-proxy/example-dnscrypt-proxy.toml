@@ -106,9 +106,13 @@ http3 = false
 
 ## SOCKS proxy
 ## Uncomment the following line to route all TCP connections to a local Tor node
-## Tor doesn't support UDP, so set `force_tcp` to `true` as well.
+## Tor doesn't support UDP, so set `force_tcp` to `true` as well. When passing
+## a random username and password to Tor's socks5 connection, dnscrypt-proxy gets
+## an isolated circuit so it will not share an exit node with other applications.
+## Note: the random username and password used by dnscrypt-proxy should not
+## actually be defined in Tor's configuration.
 
-# proxy = 'socks5://127.0.0.1:9050'
+# proxy = 'socks5://dnscrypt:dnscrypt@127.0.0.1:9050'
 
 
 ## HTTP/HTTPS proxy
