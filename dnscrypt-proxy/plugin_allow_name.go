@@ -87,11 +87,12 @@ func (plugin *PluginAllowName) Eval(pluginsState *PluginsState, msg *dns.Msg) er
 	if xweeklyRanges != nil {
 		weeklyRanges = xweeklyRanges.(*WeeklyRanges)
 	}
-	if allowList {
-		if weeklyRanges != nil && !weeklyRanges.Match() {
-			allowList = false
-		}
+
+	// If time-based restrictions exist and don't match current time, don't allow
+	if allowList && weeklyRanges != nil && !weeklyRanges.Match() {
+		allowList = false
 	}
+
 	if allowList {
 		pluginsState.sessionData["whitelisted"] = true
 		if plugin.logger != nil {

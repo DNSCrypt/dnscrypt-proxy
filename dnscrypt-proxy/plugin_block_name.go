@@ -100,6 +100,8 @@ func (plugin *PluginBlockName) Init(proxy *Proxy) error {
 		if len(line) == 0 {
 			continue
 		}
+
+		// Handle time-based restrictions with @timerange format
 		parts := strings.Split(line, "@")
 		timeRangeName := ""
 		if len(parts) == 2 {
@@ -109,6 +111,8 @@ func (plugin *PluginBlockName) Init(proxy *Proxy) error {
 			dlog.Errorf("Syntax error in block rules at line %d -- Unexpected @ character", 1+lineNo)
 			continue
 		}
+
+		// Look up the time range if specified
 		var weeklyRanges *WeeklyRanges
 		if len(timeRangeName) > 0 {
 			weeklyRangesX, ok := (*xBlockedNames.allWeeklyRanges)[timeRangeName]

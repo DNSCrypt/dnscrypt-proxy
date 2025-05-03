@@ -52,40 +52,47 @@ func isGlobCandidate(str string) bool {
 }
 
 func (patternMatcher *PatternMatcher) Add(pattern string, val interface{}, position int) error {
+	// Determine pattern type based on wildcards and special characters
 	leadingStar := strings.HasPrefix(pattern, "*")
 	trailingStar := strings.HasSuffix(pattern, "*")
 	exact := strings.HasPrefix(pattern, "=")
 	patternType := PatternTypeNone
+
+	// Check for glob pattern with wildcard characters
 	if isGlobCandidate(pattern) {
 		patternType = PatternTypePattern
-		_, err := filepath.Match(pattern, "example.com")
+		_, err := filepath.Match(pattern, "example.com") // Validate pattern syntax
 		if len(pattern) < 2 || err != nil {
 			return fmt.Errorf("Syntax error in block rules at pattern %d", position)
 		}
 	} else if leadingStar && trailingStar {
+		// Substring match (*contains*)
 		patternType = PatternTypeSubstring
 		if len(pattern) < 3 {
 			return fmt.Errorf("Syntax error in block rules at pattern %d", position)
 		}
-		pattern = pattern[1 : len(pattern)-1]
+		pattern = pattern[1 : len(pattern)-1] // Remove stars
 	} else if trailingStar {
+		// Prefix match (starts*)
 		patternType = PatternTypePrefix
 		if len(pattern) < 2 {
 			return fmt.Errorf("Syntax error in block rules at pattern %d", position)
 		}
-		pattern = pattern[:len(pattern)-1]
+		pattern = pattern[:len(pattern)-1] // Remove trailing star
 	} else if exact {
+		// Exact match (=example.com)
 		patternType = PatternTypeExact
 		if len(pattern) < 2 {
 			return fmt.Errorf("Syntax error in block rules at pattern %d", position)
 		}
-		pattern = pattern[1:]
+		pattern = pattern[1:] // Remove = prefix
 	} else {
+		// Default: suffix match (*ends or .ends)
 		patternType = PatternTypeSuffix
 		if leadingStar {
-			pattern = pattern[1:]
+			pattern = pattern[1:] // Remove leading star
 		}
-		pattern = strings.TrimPrefix(pattern, ".")
+		pattern = strings.TrimPrefix(pattern, ".") // Remove leading dot if present
 	}
 	if len(pattern) == 0 {
 		dlog.Errorf("Syntax error in block rule at line %d", position)

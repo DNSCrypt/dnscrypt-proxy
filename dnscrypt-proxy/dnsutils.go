@@ -37,15 +37,22 @@ func TruncatedResponse(packet []byte) ([]byte, error) {
 }
 
 func RefusedResponseFromMessage(srcMsg *dns.Msg, refusedCode bool, ipv4 net.IP, ipv6 net.IP, ttl uint32) *dns.Msg {
+	// Create an empty response based on the source message
 	dstMsg := EmptyResponseFromMessage(srcMsg)
+
+	// Add Extended DNS Error (EDE) field
 	ede := new(dns.EDNS0_EDE)
 	if edns0 := dstMsg.IsEdns0(); edns0 != nil {
 		edns0.Option = append(edns0.Option, ede)
 	}
 	ede.InfoCode = dns.ExtendedErrorCodeFiltered
+
+	// Either return with refused code or a synthetic response
 	if refusedCode {
+		// Return a simple refused response
 		dstMsg.Rcode = dns.RcodeRefused
 	} else {
+		// Return a synthetic response
 		dstMsg.Rcode = dns.RcodeSuccess
 		questions := srcMsg.Question
 		if len(questions) == 0 {
@@ -54,6 +61,7 @@ func RefusedResponseFromMessage(srcMsg *dns.Msg, refusedCode bool, ipv4 net.IP, 
 		question := questions[0]
 		sendHInfoResponse := true
 
+		// For A records, provide synthetic IPv4 if available
 		if ipv4 != nil && question.Qtype == dns.TypeA {
 			rr := new(dns.A)
 			rr.Hdr = dns.RR_Header{Name: question.Name, Rrtype: dns.TypeA, Class: dns.ClassINET, Ttl: ttl}
@@ -64,6 +72,7 @@ func RefusedResponseFromMessage(srcMsg *dns.Msg, refusedCode bool, ipv4 net.IP, 
 				ede.InfoCode = dns.ExtendedErrorCodeForgedAnswer
 			}
 		} else if ipv6 != nil && question.Qtype == dns.TypeAAAA {
+			// For AAAA records, provide synthetic IPv6 if available
 			rr := new(dns.AAAA)
 			rr.Hdr = dns.RR_Header{Name: question.Name, Rrtype: dns.TypeAAAA, Class: dns.ClassINET, Ttl: ttl}
 			rr.AAAA = ipv6.To16()
