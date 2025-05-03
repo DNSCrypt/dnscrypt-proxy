@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/jedisct1/dlog"
@@ -21,7 +22,11 @@ type BlockedNames struct {
 
 const aliasesLimit = 8
 
-var blockedNames *BlockedNames
+var (
+	// protects access to the blockedNames global variable
+	blockedNamesLock sync.RWMutex
+	blockedNames     *BlockedNames
+)
 
 func (blockedNames *BlockedNames) check(pluginsState *PluginsState, qName string, aliasFor *string) (bool, error) {
 	reject, reason, xweeklyRanges := blockedNames.patternMatcher.Eval(qName)
@@ -127,12 +132,14 @@ func (plugin *PluginBlockName) Init(proxy *Proxy) error {
 			continue
 		}
 	}
-	blockedNames = &xBlockedNames
-	if len(proxy.blockNameLogFile) == 0 {
-		return nil
+	if len(proxy.blockNameLogFile) > 0 {
+		xBlockedNames.logger = Logger(proxy.logMaxSize, proxy.logMaxAge, proxy.logMaxBackups, proxy.blockNameLogFile)
+		xBlockedNames.format = proxy.blockNameFormat
 	}
-	blockedNames.logger = Logger(proxy.logMaxSize, proxy.logMaxAge, proxy.logMaxBackups, proxy.blockNameLogFile)
-	blockedNames.format = proxy.blockNameFormat
+
+	blockedNamesLock.Lock()
+	blockedNames = &xBlockedNames
+	blockedNamesLock.Unlock()
 
 	return nil
 }
@@ -146,10 +153,19 @@ func (plugin *PluginBlockName) Reload() error {
 }
 
 func (plugin *PluginBlockName) Eval(pluginsState *PluginsState, msg *dns.Msg) error {
-	if blockedNames == nil || pluginsState.sessionData["whitelisted"] != nil {
+	if pluginsState.sessionData["whitelisted"] != nil {
 		return nil
 	}
-	_, err := blockedNames.check(pluginsState, pluginsState.qName, nil)
+
+	blockedNamesLock.RLock()
+	localBlockedNames := blockedNames
+	blockedNamesLock.RUnlock()
+
+	if localBlockedNames == nil {
+		return nil
+	}
+
+	_, err := localBlockedNames.check(pluginsState, pluginsState.qName, nil)
 	return err
 }
 
@@ -178,9 +194,18 @@ func (plugin *PluginBlockNameResponse) Reload() error {
 }
 
 func (plugin *PluginBlockNameResponse) Eval(pluginsState *PluginsState, msg *dns.Msg) error {
-	if blockedNames == nil || pluginsState.sessionData["whitelisted"] != nil {
+	if pluginsState.sessionData["whitelisted"] != nil {
 		return nil
 	}
+
+	blockedNamesLock.RLock()
+	localBlockedNames := blockedNames
+	blockedNamesLock.RUnlock()
+
+	if localBlockedNames == nil {
+		return nil
+	}
+
 	aliasFor := pluginsState.qName
 	aliasesLeft := aliasesLimit
 	answers := msg.Answer
@@ -203,7 +228,7 @@ func (plugin *PluginBlockNameResponse) Eval(pluginsState *PluginsState, msg *dns
 		if err != nil {
 			return err
 		}
-		if blocked, err := blockedNames.check(pluginsState, target, &aliasFor); blocked || err != nil {
+		if blocked, err := localBlockedNames.check(pluginsState, target, &aliasFor); blocked || err != nil {
 			return err
 		}
 		aliasesLeft--

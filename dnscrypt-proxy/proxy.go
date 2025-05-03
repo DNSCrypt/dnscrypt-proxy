@@ -634,10 +634,16 @@ func (proxy *Proxy) clientsCountInc() bool {
 
 func (proxy *Proxy) clientsCountDec() {
 	for {
-		if count := atomic.LoadUint32(&proxy.clientsCount); count == 0 ||
-			atomic.CompareAndSwapUint32(&proxy.clientsCount, count, count-1) {
+		count := atomic.LoadUint32(&proxy.clientsCount)
+		if count == 0 {
+			// Already at zero, nothing to do
 			break
 		}
+		if atomic.CompareAndSwapUint32(&proxy.clientsCount, count, count-1) {
+			dlog.Debugf("clients count: %d", count-1)
+			break
+		}
+		// CAS failed, retry with updated count
 	}
 }
 

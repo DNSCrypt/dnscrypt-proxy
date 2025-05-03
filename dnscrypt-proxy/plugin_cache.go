@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/sha512"
 	"encoding/binary"
+	"fmt"
 	"sync"
 	"time"
 
@@ -149,11 +150,10 @@ func (plugin *PluginCacheResponse) Eval(pluginsState *PluginsState, msg *dns.Msg
 	}
 	cachedResponses.Lock()
 	if cachedResponses.cache == nil {
-		var err error
 		cachedResponses.cache = sieve.New[[32]byte, CachedResponse](pluginsState.cacheSize)
 		if cachedResponses.cache == nil {
 			cachedResponses.Unlock()
-			return err
+			return fmt.Errorf("failed to initialize the cache")
 		}
 	}
 	cachedResponses.cache.Add(cacheKey, cachedResponse)
