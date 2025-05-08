@@ -1,11 +1,8 @@
 package main
 
 import (
-	crypto_rand "crypto/rand"
-	"encoding/binary"
 	"flag"
 	"fmt"
-	"math/rand"
 	"os"
 	"runtime"
 	"sync"
@@ -33,12 +30,6 @@ func main() {
 		dlog.Warnf("Timezone setup failed: [%v]", tzErr)
 	}
 	runtime.MemProfileRate = 0
-
-	seed := make([]byte, 8)
-	if _, err := crypto_rand.Read(seed); err != nil {
-		dlog.Fatal(err)
-	}
-	rand.Seed(int64(binary.LittleEndian.Uint64(seed)))
 
 	pwd, err := os.Getwd()
 	if err != nil {
