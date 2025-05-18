@@ -71,7 +71,7 @@ type XTransport struct {
 	useIPv4                  bool
 	useIPv6                  bool
 	http3                    bool
-	http3SupportedHosts      map[string]bool
+	http3SupportedHosts      map[string]uint16
 	tlsDisableSessionTickets bool
 	tlsCipherSuite           []uint16
 	proxyDialer              *netproxy.Dialer
@@ -526,7 +526,7 @@ func (xTransport *XTransport) Fetch(
 		dlog.Debugf("Has domain [%s] in hardcoded supported hosts", host)
 		hasAltSupport = true
 		xTransport.altSupport.Lock()
-		xTransport.altSupport.cache[url.Host] = uint16(port)
+		xTransport.altSupport.cache[url.Host] = xTransport.http3SupportedHosts[host]
 		dlog.Debugf("Caching altPort for [%v]", url.Host)
 		xTransport.altSupport.Unlock()
 	}

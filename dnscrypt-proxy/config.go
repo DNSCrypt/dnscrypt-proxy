@@ -388,11 +388,12 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	proxy.xTransport.tlsCipherSuite = config.TLSCipherSuite
 	proxy.xTransport.mainProto = proxy.mainProto
 	proxy.xTransport.http3 = config.HTTP3
-	proxy.xTransport.http3SupportedHosts = make(map[string]bool)
+	proxy.xTransport.http3SupportedHosts = make(map[string]uint16)
 	if len(config.ForceHTTP3Hosts) > 0 {
 		for _, val := range config.ForceHTTP3Hosts {
 			if _, ok := proxy.xTransport.http3SupportedHosts[val]; !ok {
-				proxy.xTransport.http3SupportedHosts[val] = true
+				host, port := ExtractHostAndPort(val, 443)
+				proxy.xTransport.http3SupportedHosts[host] = uint16(port)
 			}
 		}
 	}
