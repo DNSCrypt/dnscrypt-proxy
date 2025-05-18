@@ -39,6 +39,7 @@ type Config struct {
 	UserName                 string         `toml:"user_name"`
 	ForceTCP                 bool           `toml:"force_tcp"`
 	HTTP3                    bool           `toml:"http3"`
+	ForceHTTP3Hosts          []string       `toml:"force_http3_hosts"`
 	Timeout                  int            `toml:"timeout"`
 	KeepAlive                int            `toml:"keepalive"`
 	Proxy                    string         `toml:"proxy"`
@@ -120,6 +121,7 @@ func newConfig() Config {
 		CertRefreshConcurrency:   10,
 		CertRefreshDelay:         240,
 		HTTP3:                    false,
+		ForceHTTP3Hosts:          []string{},
 		CertIgnoreTimestamp:      false,
 		EphemeralKeys:            false,
 		Cache:                    true,
@@ -386,6 +388,14 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	proxy.xTransport.tlsCipherSuite = config.TLSCipherSuite
 	proxy.xTransport.mainProto = proxy.mainProto
 	proxy.xTransport.http3 = config.HTTP3
+	proxy.xTransport.http3SupportedHosts = make(map[string]bool)
+	if len(config.ForceHTTP3Hosts) > 0 {
+		for _, val := range config.ForceHTTP3Hosts {
+			if _, ok := proxy.xTransport.http3SupportedHosts[val]; !ok {
+				proxy.xTransport.http3SupportedHosts[val] = true
+			}
+		}
+	}
 	if len(config.BootstrapResolvers) == 0 && len(config.BootstrapResolversLegacy) > 0 {
 		dlog.Warnf("fallback_resolvers was renamed to bootstrap_resolvers - Please update your configuration")
 		config.BootstrapResolvers = config.BootstrapResolversLegacy
