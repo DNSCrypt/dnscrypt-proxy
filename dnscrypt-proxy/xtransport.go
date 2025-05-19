@@ -622,7 +622,7 @@ func (xTransport *XTransport) Fetch(
 
 			success := true
 			if _, err := http3TestClient.Do(req); err != nil {
-				dlog.Noticef("Probe using HTTP/3 failed for [%s] with err: %v", url.Host, err)
+				dlog.Noticef("Probe using HTTP/3 failed for [%s]", url.Host)
 				success = false
 				http3TestClient.CloseIdleConnections()
 			}
