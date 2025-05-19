@@ -56,27 +56,33 @@ type AltSupport struct {
 	cache map[string]uint16
 }
 
+type Http3ProbeSuccessfulHosts struct {
+	sync.RWMutex
+	cache map[string]bool
+}
+
 type XTransport struct {
-	transport                *http.Transport
-	h3Transport              *http3.Transport
-	keepAlive                time.Duration
-	timeout                  time.Duration
-	cachedIPs                CachedIPs
-	altSupport               AltSupport
-	internalResolvers        []string
-	bootstrapResolvers       []string
-	mainProto                string
-	ignoreSystemDNS          bool
-	internalResolverReady    bool
-	useIPv4                  bool
-	useIPv6                  bool
-	http3                    bool
-	tlsDisableSessionTickets bool
-	tlsCipherSuite           []uint16
-	proxyDialer              *netproxy.Dialer
-	httpProxyFunction        func(*http.Request) (*url.URL, error)
-	tlsClientCreds           DOHClientCreds
-	keyLogWriter             io.Writer
+	transport                 *http.Transport
+	h3Transport               *http3.Transport
+	keepAlive                 time.Duration
+	timeout                   time.Duration
+	cachedIPs                 CachedIPs
+	altSupport                AltSupport
+	internalResolvers         []string
+	bootstrapResolvers        []string
+	mainProto                 string
+	ignoreSystemDNS           bool
+	internalResolverReady     bool
+	useIPv4                   bool
+	useIPv6                   bool
+	http3                     bool
+	http3ProbeSuccessfulHosts Http3ProbeSuccessfulHosts
+	tlsDisableSessionTickets  bool
+	tlsCipherSuite            []uint16
+	proxyDialer               *netproxy.Dialer
+	httpProxyFunction         func(*http.Request) (*url.URL, error)
+	tlsClientCreds            DOHClientCreds
+	keyLogWriter              io.Writer
 }
 
 func NewXTransport() *XTransport {
@@ -84,18 +90,19 @@ func NewXTransport() *XTransport {
 		panic("DefaultBootstrapResolver does not parse")
 	}
 	xTransport := XTransport{
-		cachedIPs:                CachedIPs{cache: make(map[string]*CachedIPItem)},
-		altSupport:               AltSupport{cache: make(map[string]uint16)},
-		keepAlive:                DefaultKeepAlive,
-		timeout:                  DefaultTimeout,
-		bootstrapResolvers:       []string{DefaultBootstrapResolver},
-		mainProto:                "",
-		ignoreSystemDNS:          true,
-		useIPv4:                  true,
-		useIPv6:                  false,
-		tlsDisableSessionTickets: false,
-		tlsCipherSuite:           nil,
-		keyLogWriter:             nil,
+		cachedIPs:                 CachedIPs{cache: make(map[string]*CachedIPItem)},
+		altSupport:                AltSupport{cache: make(map[string]uint16)},
+		http3ProbeSuccessfulHosts: Http3ProbeSuccessfulHosts{cache: make(map[string]bool)},
+		keepAlive:                 DefaultKeepAlive,
+		timeout:                   DefaultTimeout,
+		bootstrapResolvers:        []string{DefaultBootstrapResolver},
+		mainProto:                 "",
+		ignoreSystemDNS:           true,
+		useIPv4:                   true,
+		useIPv6:                   false,
+		tlsDisableSessionTickets:  false,
+		tlsCipherSuite:            nil,
+		keyLogWriter:              nil,
 	}
 	return &xTransport
 }
@@ -526,7 +533,10 @@ func (xTransport *XTransport) Fetch(
 		var altPort uint16
 		altPort, hasAltSupport = xTransport.altSupport.cache[url.Host]
 		xTransport.altSupport.RUnlock()
-		if hasAltSupport {
+		xTransport.http3ProbeSuccessfulHosts.RLock()
+		probeSuccess, ok := xTransport.http3ProbeSuccessfulHosts.cache[host]
+		xTransport.http3ProbeSuccessfulHosts.RUnlock()
+		if hasAltSupport || (ok && probeSuccess) {
 			if int(altPort) == port {
 				client.Transport = xTransport.h3Transport
 				dlog.Debugf("Using HTTP/3 transport for [%s]", url.Host)
@@ -600,33 +610,57 @@ func (xTransport *XTransport) Fetch(
 		}
 		return nil, statusCode, nil, rtt, err
 	}
-	if xTransport.h3Transport != nil && !hasAltSupport {
-		if alt, found := resp.Header["Alt-Svc"]; found {
-			dlog.Debugf("Alt-Svc [%s]: [%s]", url.Host, alt)
-			altPort := uint16(port & 0xffff)
-			for i, xalt := range alt {
-				for j, v := range strings.Split(xalt, ";") {
-					if i >= 8 || j >= 16 {
-						break
-					}
-					v = strings.TrimSpace(v)
-					if strings.HasPrefix(v, "h3=\":") {
-						v = strings.TrimPrefix(v, "h3=\":")
-						v = strings.TrimSuffix(v, "\"")
-						if xAltPort, err := strconv.ParseUint(v, 10, 16); err == nil && xAltPort <= 65535 {
-							altPort = uint16(xAltPort)
-							dlog.Debugf("Using HTTP/3 for [%s]", url.Host)
+
+	if xTransport.h3Transport != nil {
+		xTransport.http3ProbeSuccessfulHosts.RLock()
+		_, ok := xTransport.http3ProbeSuccessfulHosts.cache[host]
+		xTransport.http3ProbeSuccessfulHosts.RUnlock()
+		if !ok {
+			dlog.Infof("Probe using HTTP/3 for [%s]", url.Host)
+			http3TestClient := http.Client{
+				Transport: xTransport.h3Transport,
+				Timeout:   timeout,
+			}
+
+			success := true
+			if _, err := http3TestClient.Do(req); err != nil {
+				dlog.Infof("Probe using HTTP/3 failed for [%s]", url.Host)
+				success = false
+			}
+			xTransport.http3ProbeSuccessfulHosts.Lock()
+			xTransport.http3ProbeSuccessfulHosts.cache[host] = success
+			xTransport.http3ProbeSuccessfulHosts.Unlock()
+		}
+
+		if !hasAltSupport {
+			if alt, found := resp.Header["Alt-Svc"]; found {
+				dlog.Debugf("Alt-Svc [%s]: [%s]", url.Host, alt)
+				altPort := uint16(port & 0xffff)
+				for i, xalt := range alt {
+					for j, v := range strings.Split(xalt, ";") {
+						if i >= 8 || j >= 16 {
 							break
+						}
+						v = strings.TrimSpace(v)
+						if strings.HasPrefix(v, "h3=\":") {
+							v = strings.TrimPrefix(v, "h3=\":")
+							v = strings.TrimSuffix(v, "\"")
+							if xAltPort, err := strconv.ParseUint(v, 10, 16); err == nil && xAltPort <= 65535 {
+								altPort = uint16(xAltPort)
+								dlog.Debugf("Using HTTP/3 for [%s]", url.Host)
+								break
+							}
 						}
 					}
 				}
+				xTransport.altSupport.Lock()
+				xTransport.altSupport.cache[url.Host] = altPort
+				dlog.Debugf("Caching altPort for [%v]", url.Host)
+				xTransport.altSupport.Unlock()
 			}
-			xTransport.altSupport.Lock()
-			xTransport.altSupport.cache[url.Host] = altPort
-			dlog.Debugf("Caching altPort for [%v]", url.Host)
-			xTransport.altSupport.Unlock()
 		}
 	}
+
 	tls := resp.TLS
 
 	var bodyReader io.ReadCloser = resp.Body
