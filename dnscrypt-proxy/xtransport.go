@@ -534,13 +534,11 @@ func (xTransport *XTransport) Fetch(
 		altPort, hasAltSupport = xTransport.altSupport.cache[url.Host]
 		xTransport.altSupport.RUnlock()
 		xTransport.http3ProbeSuccessfulHosts.RLock()
-		probeSuccess, ok := xTransport.http3ProbeSuccessfulHosts.cache[host]
+		probeSuccess, hasProbed := xTransport.http3ProbeSuccessfulHosts.cache[host]
 		xTransport.http3ProbeSuccessfulHosts.RUnlock()
-		if hasAltSupport || (ok && probeSuccess) {
-			if int(altPort) == port {
-				client.Transport = xTransport.h3Transport
-				dlog.Noticef("Using HTTP/3 transport for [%s]", url.Host)
-			}
+		if (hasAltSupport && int(altPort) == port) || (hasProbed && probeSuccess) {
+			client.Transport = xTransport.h3Transport
+			dlog.Debugf("Using HTTP/3 transport for [%s]", url.Host)
 		}
 	}
 	header := map[string][]string{"User-Agent": {"dnscrypt-proxy"}}
