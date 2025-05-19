@@ -624,7 +624,7 @@ func (xTransport *XTransport) Fetch(
 
 			success := true
 			if _, err := http3TestClient.Do(req); err != nil {
-				dlog.Noticef("Probe using HTTP/3 failed for [%s]", url.Host)
+				dlog.Noticef("Probe using HTTP/3 failed for [%s] with err: %v", url.Host, err)
 				success = false
 			}
 			xTransport.http3ProbeSuccessfulHosts.Lock()
@@ -632,7 +632,7 @@ func (xTransport *XTransport) Fetch(
 			xTransport.http3ProbeSuccessfulHosts.Unlock()
 		}
 
-		if !hasAltSupport {
+		if !xTransport.http3ProbeSuccessfulHosts.cache[host] && !hasAltSupport {
 			if alt, found := resp.Header["Alt-Svc"]; found {
 				dlog.Debugf("Alt-Svc [%s]: [%s]", url.Host, alt)
 				altPort := uint16(port & 0xffff)
