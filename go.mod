@@ -1,6 +1,6 @@
 module github.com/dnscrypt/dnscrypt-proxy
 
-go 1.24
+go 1.24.3
 
 require (
 	github.com/BurntSushi/toml v1.5.0
@@ -19,7 +19,7 @@ require (
 	github.com/kardianos/service v1.2.2
 	github.com/lifenjoiner/dhcpdns v0.0.7
 	github.com/miekg/dns v1.1.65
-	github.com/opencoff/go-sieve v0.2.1
+	github.com/opencoff/go-sieve v0.3.0
 	github.com/powerman/check v1.8.0
 	github.com/quic-go/quic-go v0.51.0
 	golang.org/x/crypto v0.37.0

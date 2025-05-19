@@ -89,8 +89,8 @@ github.com/onsi/ginkgo/v2/internal/interrupt_handler
 github.com/onsi/ginkgo/v2/internal/parallel_support
 github.com/onsi/ginkgo/v2/reporters
 github.com/onsi/ginkgo/v2/types
-# github.com/opencoff/go-sieve v0.2.1
-## explicit; go 1.21.1
+# github.com/opencoff/go-sieve v0.3.0
+## explicit; go 1.24.3
 github.com/opencoff/go-sieve
 # github.com/pkg/errors v0.9.1
 ## explicit
