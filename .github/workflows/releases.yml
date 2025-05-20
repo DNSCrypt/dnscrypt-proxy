@@ -70,10 +70,28 @@ jobs:
           echo | /tmp/bin/minisign -s /tmp/minisign.key -Sm *.tar.gz *.zip
           ls -l dnscrypt-proxy*
 
+      - name: Check if release exists
+        id: check_release
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          HTTP_CODE=$(curl -s -o response.json -w "%{http_code}" \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            https://api.github.com/repos/${{ github.repository }}/releases/tags/$TAG)
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "release_exists=true" >> $GITHUB_ENV
+          else
+            echo "release_exists=false" >> $GITHUB_ENV
+          fi
+
+      - name: Debug Release Existence
+        if: startsWith(github.ref, 'refs/tags/')
+        run: echo "Release exists? ${{ env.release_exists }}"
+
       - name: Create release
         id: create_release
         uses: actions/create-release@v1
-        if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/') && env.release_exists == 'false'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
