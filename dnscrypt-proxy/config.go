@@ -48,6 +48,7 @@ type Config struct {
 	BlockIPv6                bool               `toml:"block_ipv6"`
 	BlockUnqualified         bool               `toml:"block_unqualified"`
 	BlockUndelegated         bool               `toml:"block_undelegated"`
+	EnableHotReload          bool               `toml:"enable_hot_reload"`
 	Cache                    bool
 	CacheSize                int                         `toml:"cache_size"`
 	CacheNegTTL              uint32                      `toml:"cache_neg_ttl"`
@@ -365,6 +366,7 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	proxy.logMaxBackups = config.LogMaxBackups
 	proxy.userName = config.UserName
 	proxy.child = *flags.Child
+	proxy.enableHotReload = config.EnableHotReload
 	proxy.xTransport = NewXTransport()
 
 	// Configure logging

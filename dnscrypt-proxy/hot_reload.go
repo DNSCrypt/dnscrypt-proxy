@@ -10,6 +10,14 @@ import (
 
 // InitHotReload sets up hot-reloading for configuration files
 func (proxy *Proxy) InitHotReload() error {
+	// Check if hot reload is enabled
+	if !proxy.enableHotReload {
+		dlog.Notice("Hot reload is disabled")
+		return nil
+	}
+
+	dlog.Notice("Hot reload is enabled")
+
 	// Create a new configuration watcher
 	configWatcher := NewConfigWatcher(1000) // Check every second
 

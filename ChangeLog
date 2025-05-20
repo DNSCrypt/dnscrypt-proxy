@@ -1,3 +1,7 @@
+# Version 2.1.10
+ - Hot-reloading of configuration files is now optional and disabled by default.
+It can be enabled by setting `enable_hot_reload = true` in the configuration file.
+
 # Version 2.1.9
  - A live web-based monitoring UI has been added, allowing you to monitor DNS
 query activity and performance metrics through an interactive dashboard.

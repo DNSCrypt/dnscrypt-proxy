@@ -187,6 +187,12 @@ keepalive = 30
 
 # lb_estimator = true
 
+## Set to `true` to enable hot reloading of configuration files (like allowed-names.txt,
+## blocked-names.txt, etc.) when they are modified. This can increase CPU and memory usage.
+## Default is `false` (hot reloading is disabled).
+
+# enable_hot_reload = false
+
 
 ###############################################################################
 #                                Logging                                       #
