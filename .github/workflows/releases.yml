@@ -25,7 +25,10 @@ jobs:
     steps:
       - name: Get the version
         id: get_version
-        run: echo "VERSION=${GITHUB_REF/refs\/tags\//}" >> $GITHUB_OUTPUT
+        run: |
+          VERSION=${GITHUB_REF/refs\/tags\//}
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "Tag version: $VERSION"
 
       - name: Check out code
         uses: actions/checkout@v4
@@ -91,7 +94,7 @@ jobs:
       - name: Create release and upload assets
         id: create_release
         uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/') && env.release_exists == 'false'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -99,6 +102,21 @@ jobs:
           draft: false
           prerelease: false
           make_latest: true
+          fail_on_unmatched_files: false
+          files: |
+            dnscrypt-proxy/*.zip
+            dnscrypt-proxy/*.tar.gz
+            dnscrypt-proxy/*.minisig
+            dnscrypt-proxy/*.msi
+            
+      - name: Upload assets to existing release
+        id: upload_to_existing_release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/') && env.release_exists == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.get_version.outputs.VERSION }}
           fail_on_unmatched_files: false
           files: |
             dnscrypt-proxy/*.zip
