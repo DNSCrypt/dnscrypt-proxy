@@ -16,25 +16,6 @@ import (
 	netproxy "golang.org/x/net/proxy"
 )
 
-// loadAndParseConfig - Loads the configuration file and parses it
-func loadAndParseConfig(proxy *Proxy, configFile string) (Config, error) {
-	foundConfigFile, err := findConfigFile(&configFile)
-	if err != nil {
-		return Config{}, fmt.Errorf(
-			"Unable to load the configuration file [%s] -- Maybe use the -config command-line switch?",
-			configFile,
-		)
-	}
-	WarnIfMaybeWritableByOtherUsers(foundConfigFile)
-	config := newConfig()
-
-	if err := cdFileDir(foundConfigFile); err != nil {
-		return config, err
-	}
-
-	return config, nil
-}
-
 // configureLogging - Configure logging based on the configuration
 func configureLogging(proxy *Proxy, flags *ConfigFlags, config *Config) {
 	if config.LogLevel >= 0 && config.LogLevel < int(dlog.SeverityLast) {
