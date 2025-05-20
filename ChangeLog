@@ -3,8 +3,8 @@
 query activity and performance metrics through an interactive dashboard.
  - Hot-reloading of configuration files has been implemented, allowing you to
 modify filtering rules and other configurations without restarting the proxy.
-Simply edit a configuration file (like blocked-names.txt) and changes are applied
-instantaneously.
+Simply edit a configuration file (like blocked-names.txt) and changes are
+applied instantaneously.
  - HTTP/3 probing is now supported via the `http3_probe` option, which will
 try HTTP/3 first for DoH servers, even if they don't advertise support via
 Alt-Svc.
