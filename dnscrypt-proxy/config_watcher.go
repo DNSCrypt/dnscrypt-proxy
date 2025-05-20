@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/fsnotify/fsnotify"
 	"github.com/jedisct1/dlog"
 )
 
@@ -16,8 +17,8 @@ import (
 type ConfigWatcher struct {
 	watchedFiles map[string]*WatchedFile
 	mu           sync.RWMutex
+	watcher      *fsnotify.Watcher
 	shutdownCh   chan struct{}
-	interval     time.Duration
 }
 
 // WatchedFile stores information about a file being monitored for changes
@@ -32,45 +33,66 @@ type WatchedFile struct {
 
 // NewConfigWatcher creates a new configuration file watcher
 func NewConfigWatcher(interval time.Duration) *ConfigWatcher {
-	if interval <= 0 {
-		interval = 1 * time.Second
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		dlog.Errorf("Failed to create file system watcher: %v", err)
+		dlog.Notice("Falling back to polling-based file monitoring")
+		return newPollingConfigWatcher(interval)
 	}
+
 	cw := &ConfigWatcher{
 		watchedFiles: make(map[string]*WatchedFile),
+		watcher:      watcher,
 		shutdownCh:   make(chan struct{}),
-		interval:     interval,
 	}
+
 	go cw.watchLoop()
 	return cw
 }
 
-// watchLoop periodically checks for file changes
+// watchLoop processes file system events
 func (cw *ConfigWatcher) watchLoop() {
-	ticker := time.NewTicker(cw.interval)
-	defer ticker.Stop()
-
 	for {
 		select {
-		case <-ticker.C:
-			cw.checkFiles()
+		case event, ok := <-cw.watcher.Events:
+			if !ok {
+				return
+			}
+			if event.Has(fsnotify.Write) || event.Has(fsnotify.Create) {
+				cw.handleModifyEvent(event.Name)
+			}
+		case err, ok := <-cw.watcher.Errors:
+			if !ok {
+				return
+			}
+			dlog.Errorf("File watcher error: %v", err)
 		case <-cw.shutdownCh:
+			cw.watcher.Close()
 			return
 		}
 	}
 }
 
-// checkFiles examines all watched files for changes
-func (cw *ConfigWatcher) checkFiles() {
-	cw.mu.RLock()
-	files := make([]*WatchedFile, 0, len(cw.watchedFiles))
-	for _, wf := range cw.watchedFiles {
-		files = append(files, wf)
+// handleModifyEvent handles a file modification event
+func (cw *ConfigWatcher) handleModifyEvent(path string) {
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		dlog.Debugf("Could not get absolute path for %s: %v", path, err)
+		return
 	}
+
+	cw.mu.RLock()
+	wf, exists := cw.watchedFiles[absPath]
 	cw.mu.RUnlock()
 
-	for _, wf := range files {
-		cw.checkFile(wf)
+	if !exists {
+		return
 	}
+
+	// Debounce rapid changes with a small delay
+	time.Sleep(100 * time.Millisecond)
+
+	cw.checkFile(wf)
 }
 
 // checkFile checks if a specific file has changed and is stable
@@ -83,12 +105,6 @@ func (cw *ConfigWatcher) checkFile(wf *WatchedFile) {
 	if err != nil {
 		// File might be temporarily unavailable during writes
 		dlog.Debugf("Cannot stat file [%s]: %v", wf.path, err)
-		return
-	}
-
-	// Check if modification time has changed
-	if !fileInfo.ModTime().After(wf.lastMod) {
-		// File hasn't been modified
 		return
 	}
 
@@ -182,7 +198,15 @@ func (cw *ConfigWatcher) AddFile(path string, reloadFunc func() error) error {
 	cw.mu.Lock()
 	defer cw.mu.Unlock()
 
+	// Add to tracked files
 	cw.watchedFiles[absPath] = wf
+
+	// Watch directory containing the file to catch moves/renames
+	dirPath := filepath.Dir(absPath)
+	if err := cw.watcher.Add(dirPath); err != nil {
+		return err
+	}
+
 	dlog.Noticef("Now watching [%s] for changes", absPath)
 	return nil
 }
@@ -199,6 +223,10 @@ func (cw *ConfigWatcher) RemoveFile(path string) {
 
 	if _, exists := cw.watchedFiles[absPath]; exists {
 		delete(cw.watchedFiles, absPath)
+
+		// We don't remove the watch on the directory since other files might still be watched
+		// This is fine as watching directories has minimal overhead
+
 		dlog.Noticef("Stopped watching [%s]", absPath)
 	}
 }
@@ -206,6 +234,49 @@ func (cw *ConfigWatcher) RemoveFile(path string) {
 // Shutdown stops the watcher
 func (cw *ConfigWatcher) Shutdown() {
 	close(cw.shutdownCh)
+}
+
+// newPollingConfigWatcher creates a fallback polling-based watcher if fsnotify fails
+func newPollingConfigWatcher(interval time.Duration) *ConfigWatcher {
+	if interval <= 0 {
+		interval = 1 * time.Second
+	}
+
+	cw := &ConfigWatcher{
+		watchedFiles: make(map[string]*WatchedFile),
+		shutdownCh:   make(chan struct{}),
+	}
+
+	// Start a goroutine for polling
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+				cw.checkAllFiles()
+			case <-cw.shutdownCh:
+				return
+			}
+		}
+	}()
+
+	return cw
+}
+
+// checkAllFiles examines all watched files for changes (used in polling mode)
+func (cw *ConfigWatcher) checkAllFiles() {
+	cw.mu.RLock()
+	files := make([]*WatchedFile, 0, len(cw.watchedFiles))
+	for _, wf := range cw.watchedFiles {
+		files = append(files, wf)
+	}
+	cw.mu.RUnlock()
+
+	for _, wf := range files {
+		cw.checkFile(wf)
+	}
 }
 
 // getFileHash calculates a SHA-256 hash of a file's contents

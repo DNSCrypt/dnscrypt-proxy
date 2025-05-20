@@ -1,6 +1,8 @@
 # Version 2.1.10
  - Hot-reloading of configuration files is now optional and disabled by default.
 It can be enabled by setting `enable_hot_reload = true` in the configuration file.
+ - The file system monitoring for hot-reloading now uses efficient OS-native 
+file notifications instead of polling, reducing CPU usage and improving responsiveness.
 
 # Version 2.1.9
  - A live web-based monitoring UI has been added, allowing you to monitor DNS

@@ -1,6 +1,8 @@
 module github.com/dnscrypt/dnscrypt-proxy
 
-go 1.20
+go 1.23.4
+
+toolchain go1.24.2
 
 require (
 	github.com/BurntSushi/toml v1.5.0
@@ -27,6 +29,8 @@ require (
 	golang.org/x/sys v0.33.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 )
+
+require github.com/fsnotify/fsnotify v1.9.0
 
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
