@@ -97,11 +97,25 @@ disabled_server_names = []
 force_tcp = false
 
 
-## Enable *experimental* support for HTTP/3 (DoH3, HTTP over QUIC)
+## Enable *experimental* support for HTTP/3 (HTTP over QUIC)
 ## Note that, like DNSCrypt but unlike other HTTP versions, this uses
 ## UDP and (usually) port 443 instead of TCP.
 
 http3 = false
+
+## When http3 is true, always try HTTP/3 first for DoH servers.
+## If the HTTP/3 connection fails, fallback to HTTP/2 and don't try
+## HTTP/3 again for that server. By default, HTTP/3 is only used for
+## servers that advertise support via the Alt-Svc header.
+##
+## WARNING: This setting is disabled by default because it will make
+## connections significantly slower for servers that don't support HTTP/3.
+## This is primarily a workaround for server operators who haven't
+## configured their servers to send proper Alt-Svc headers. The better
+## solution is to reach out to these operators and encourage them to
+## fix their servers to correctly advertise HTTP/3 support.
+
+http3_probe = false
 
 
 ## SOCKS proxy

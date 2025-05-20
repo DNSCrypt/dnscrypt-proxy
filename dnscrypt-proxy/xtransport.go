@@ -71,6 +71,7 @@ type XTransport struct {
 	useIPv4                  bool
 	useIPv6                  bool
 	http3                    bool
+	http3Probe               bool
 	tlsDisableSessionTickets bool
 	tlsCipherSuite           []uint16
 	proxyDialer              *netproxy.Dialer
@@ -93,6 +94,7 @@ func NewXTransport() *XTransport {
 		ignoreSystemDNS:          true,
 		useIPv4:                  true,
 		useIPv6:                  false,
+		http3Probe:               false,
 		tlsDisableSessionTickets: false,
 		tlsCipherSuite:           nil,
 		keyLogWriter:             nil,
@@ -521,15 +523,24 @@ func (xTransport *XTransport) Fetch(
 	}
 	host, port := ExtractHostAndPort(url.Host, 443)
 	hasAltSupport := false
+
 	if xTransport.h3Transport != nil {
-		xTransport.altSupport.RLock()
-		var altPort uint16
-		altPort, hasAltSupport = xTransport.altSupport.cache[url.Host]
-		xTransport.altSupport.RUnlock()
-		if hasAltSupport {
-			if int(altPort) == port {
-				client.Transport = xTransport.h3Transport
-				dlog.Debugf("Using HTTP/3 transport for [%s]", url.Host)
+		if xTransport.http3Probe {
+			// Always try HTTP/3 first when http3_probe is enabled,
+			// without checking for Alt-Svc
+			client.Transport = xTransport.h3Transport
+			dlog.Debugf("Probing HTTP/3 transport for [%s]", url.Host)
+		} else {
+			// Otherwise use traditional Alt-Svc detection
+			xTransport.altSupport.RLock()
+			var altPort uint16
+			altPort, hasAltSupport = xTransport.altSupport.cache[url.Host]
+			xTransport.altSupport.RUnlock()
+			if hasAltSupport && altPort > 0 { // altPort > 0 ensures we're not in the negative cache
+				if int(altPort) == port {
+					client.Transport = xTransport.h3Transport
+					dlog.Debugf("Using HTTP/3 transport for [%s]", url.Host)
+				}
 			}
 		}
 	}
@@ -575,6 +586,27 @@ func (xTransport *XTransport) Fetch(
 	start := time.Now()
 	resp, err := client.Do(req)
 	rtt := time.Since(start)
+
+	// Handle HTTP/3 error case - fallback to HTTP/2 when HTTP/3 fails
+	if err != nil && client.Transport == xTransport.h3Transport {
+		if xTransport.http3Probe {
+			dlog.Debugf("HTTP/3 probe failed for [%s]: [%s] - falling back to HTTP/2", url.Host, err)
+		} else {
+			dlog.Debugf("HTTP/3 connection failed for [%s]: [%s] - falling back to HTTP/2", url.Host, err)
+		}
+
+		// Add server to negative cache when HTTP/3 fails
+		xTransport.altSupport.Lock()
+		xTransport.altSupport.cache[url.Host] = 0 // 0 port means HTTP/3 failed and should not be tried again
+		xTransport.altSupport.Unlock()
+
+		// Retry with HTTP/2
+		client.Transport = xTransport.transport
+		start = time.Now()
+		resp, err = client.Do(req)
+		rtt = time.Since(start)
+	}
+
 	if err == nil {
 		if resp == nil {
 			err = errors.New("Webserver returned an error")
@@ -601,30 +633,45 @@ func (xTransport *XTransport) Fetch(
 		return nil, statusCode, nil, rtt, err
 	}
 	if xTransport.h3Transport != nil && !hasAltSupport {
-		if alt, found := resp.Header["Alt-Svc"]; found {
-			dlog.Debugf("Alt-Svc [%s]: [%s]", url.Host, alt)
-			altPort := uint16(port & 0xffff)
-			for i, xalt := range alt {
-				for j, v := range strings.Split(xalt, ";") {
-					if i >= 8 || j >= 16 {
-						break
-					}
-					v = strings.TrimSpace(v)
-					if strings.HasPrefix(v, "h3=\":") {
-						v = strings.TrimPrefix(v, "h3=\":")
-						v = strings.TrimSuffix(v, "\"")
-						if xAltPort, err := strconv.ParseUint(v, 10, 16); err == nil && xAltPort <= 65535 {
-							altPort = uint16(xAltPort)
-							dlog.Debugf("Using HTTP/3 for [%s]", url.Host)
+		// Check if there's entry in negative cache when using http3_probe
+		skipAltSvcParsing := false
+		if xTransport.http3Probe {
+			xTransport.altSupport.RLock()
+			altPort, inCache := xTransport.altSupport.cache[url.Host]
+			xTransport.altSupport.RUnlock()
+			// If server is in negative cache (altPort == 0), don't attempt to parse Alt-Svc header
+			if inCache && altPort == 0 {
+				dlog.Debugf("Skipping Alt-Svc parsing for [%s] - previously failed HTTP/3 probe", url.Host)
+				skipAltSvcParsing = true
+			}
+		}
+
+		if !skipAltSvcParsing {
+			if alt, found := resp.Header["Alt-Svc"]; found {
+				dlog.Debugf("Alt-Svc [%s]: [%s]", url.Host, alt)
+				altPort := uint16(port & 0xffff)
+				for i, xalt := range alt {
+					for j, v := range strings.Split(xalt, ";") {
+						if i >= 8 || j >= 16 {
 							break
+						}
+						v = strings.TrimSpace(v)
+						if strings.HasPrefix(v, "h3=\":") {
+							v = strings.TrimPrefix(v, "h3=\":")
+							v = strings.TrimSuffix(v, "\"")
+							if xAltPort, err := strconv.ParseUint(v, 10, 16); err == nil && xAltPort <= 65535 {
+								altPort = uint16(xAltPort)
+								dlog.Debugf("Using HTTP/3 for [%s]", url.Host)
+								break
+							}
 						}
 					}
 				}
+				xTransport.altSupport.Lock()
+				xTransport.altSupport.cache[url.Host] = altPort
+				dlog.Debugf("Caching altPort for [%v]", url.Host)
+				xTransport.altSupport.Unlock()
 			}
-			xTransport.altSupport.Lock()
-			xTransport.altSupport.cache[url.Host] = altPort
-			dlog.Debugf("Caching altPort for [%v]", url.Host)
-			xTransport.altSupport.Unlock()
 		}
 	}
 	tls := resp.TLS
