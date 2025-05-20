@@ -1,9 +1,13 @@
 # Version 2.1.9
- - A live web-based monitoring UI has been added, allowing you to monitor DNS 
+ - A live web-based monitoring UI has been added, allowing you to monitor DNS
 query activity and performance metrics through an interactive dashboard.
- - HTTP/3 probing is now supported via the `http3_probe` option, which will 
+ - Hot-reloading of configuration files has been implemented, allowing you to
+modify filtering rules and other configurations without restarting the proxy.
+Simply edit a configuration file (like blocked-names.txt) and changes are applied
+instantaneously.
+ - HTTP/3 probing is now supported via the `http3_probe` option, which will
 try HTTP/3 first for DoH servers, even if they don't advertise support via Alt-Svc.
- - Authentication for the monitoring UI can be disabled by setting the username 
+ - Authentication for the monitoring UI can be disabled by setting the username
 to an empty string in the configuration.
  - Several race conditions have been fixed.
  - Dependencies have been updated.
