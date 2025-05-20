@@ -6,14 +6,18 @@ modify filtering rules and other configurations without restarting the proxy.
 Simply edit a configuration file (like blocked-names.txt) and changes are applied
 instantaneously.
  - HTTP/3 probing is now supported via the `http3_probe` option, which will
-try HTTP/3 first for DoH servers, even if they don't advertise support via Alt-Svc.
- - Authentication for the monitoring UI can be disabled by setting the username
-to an empty string in the configuration.
+try HTTP/3 first for DoH servers, even if they don't advertise support via
+Alt-Svc.
+ - Authentication for the monitoring UI can be disabled by setting the
+username to an empty string in the configuration.
  - Several race conditions have been fixed.
  - Dependencies have been updated.
  - DHCP DNS detector instances have been reduced to improve performance.
  - Tor isolation for dnscrypt-proxy has been documented to enhance privacy.
- - The default example configuration file has been improved for clarity and usability.
+ - The default example configuration file has been improved for clarity and
+usability.
+ - generate-domains-blocklist: added parallel downloading of block lists for
+significantly improved performance.
 
 # Version 2.1.8
  - Dependencies have been updated, notably the QUIC implementation,
