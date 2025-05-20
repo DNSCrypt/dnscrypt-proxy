@@ -11,7 +11,6 @@
 ## Online documentation is available here: https://dnscrypt.info/doc
 
 
-
 ##################################
 #         Global settings        #
 ##################################
@@ -355,7 +354,6 @@ log_files_max_age = 7
 log_files_max_backups = 1
 
 
-
 #########################
 #        Filters        #
 #########################
@@ -391,7 +389,6 @@ block_undelegated = true
 reject_ttl = 10
 
 
-
 ##################################################################################
 #        Route queries for specific domains to a dedicated set of servers        #
 ##################################################################################
@@ -399,7 +396,6 @@ reject_ttl = 10
 ## See the `example-forwarding-rules.txt` file for an example
 
 # forwarding_rules = 'forwarding-rules.txt'
-
 
 
 ###############################
@@ -420,7 +416,6 @@ reject_ttl = 10
 
 # cloak_ttl = 600
 # cloak_ptr = false
-
 
 
 ###########################
@@ -457,7 +452,6 @@ cache_neg_min_ttl = 60
 cache_neg_max_ttl = 600
 
 
-
 ########################################
 #        Captive portal handling       #
 ########################################
@@ -469,7 +463,6 @@ cache_neg_max_ttl = 600
 ## IP addresses to return.
 
 # map_file = 'example-captive-portals.txt'
-
 
 
 ##################################
@@ -504,7 +497,6 @@ cache_neg_max_ttl = 600
 # cert_key_file = 'localhost.pem'
 
 
-
 ###############################
 #        Query logging        #
 ###############################
@@ -529,7 +521,6 @@ format = 'tsv'
 # ignored_qtypes = ['DNSKEY', 'NS']
 
 
-
 ############################################
 #        Suspicious queries logging        #
 ############################################
@@ -548,7 +539,6 @@ format = 'tsv'
 ## Query log format (currently supported: tsv and ltsv)
 
 format = 'tsv'
-
 
 
 ######################################################
@@ -585,7 +575,6 @@ format = 'tsv'
 # log_format = 'tsv'
 
 
-
 ###########################################################
 #        Pattern-based IP blocking (IP blocklists)        #
 ###########################################################
@@ -611,7 +600,6 @@ format = 'tsv'
 ## Optional log format: tsv or ltsv (default: tsv)
 
 # log_format = 'tsv'
-
 
 
 ######################################################
@@ -641,7 +629,6 @@ format = 'tsv'
 # log_format = 'tsv'
 
 
-
 #########################################################
 #   Pattern-based allowed IPs lists (blocklists bypass) #
 #########################################################
@@ -668,7 +655,6 @@ format = 'tsv'
 # log_format = 'tsv'
 
 
-
 ##########################################
 #        Time access restrictions        #
 ##########################################
@@ -686,22 +672,21 @@ format = 'tsv'
 
 [schedules]
 
-  # [schedules.time-to-sleep]
-  #   mon = [{after='21:00', before='7:00'}]
-  #   tue = [{after='21:00', before='7:00'}]
-  #   wed = [{after='21:00', before='7:00'}]
-  #   thu = [{after='21:00', before='7:00'}]
-  #   fri = [{after='23:00', before='7:00'}]
-  #   sat = [{after='23:00', before='7:00'}]
-  #   sun = [{after='21:00', before='7:00'}]
+# [schedules.time-to-sleep]
+#   mon = [{after='21:00', before='7:00'}]
+#   tue = [{after='21:00', before='7:00'}]
+#   wed = [{after='21:00', before='7:00'}]
+#   thu = [{after='21:00', before='7:00'}]
+#   fri = [{after='23:00', before='7:00'}]
+#   sat = [{after='23:00', before='7:00'}]
+#   sun = [{after='21:00', before='7:00'}]
 
-  # [schedules.work]
-  #   mon = [{after='9:00', before='18:00'}]
-  #   tue = [{after='9:00', before='18:00'}]
-  #   wed = [{after='9:00', before='18:00'}]
-  #   thu = [{after='9:00', before='18:00'}]
-  #   fri = [{after='9:00', before='17:00'}]
-
+# [schedules.work]
+#   mon = [{after='9:00', before='18:00'}]
+#   tue = [{after='9:00', before='18:00'}]
+#   wed = [{after='9:00', before='18:00'}]
+#   thu = [{after='9:00', before='18:00'}]
+#   fri = [{after='9:00', before='17:00'}]
 
 
 #########################
@@ -728,63 +713,69 @@ format = 'tsv'
 
 [sources]
 
-  ### An example of a remote source from https://github.com/DNSCrypt/dnscrypt-resolvers
+### An example of a remote source from https://github.com/DNSCrypt/dnscrypt-resolvers
 
-  [sources.public-resolvers]
-    urls = ['https://raw.githubusercontent.com/DNSCrypt/dnscrypt-resolvers/master/v3/public-resolvers.md', 'https://download.dnscrypt.info/resolvers-list/v3/public-resolvers.md']
-    cache_file = 'public-resolvers.md'
-    minisign_key = 'RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3'
-    refresh_delay = 73
-    prefix = ''
+[sources.public-resolvers]
+urls = [
+  'https://raw.githubusercontent.com/DNSCrypt/dnscrypt-resolvers/master/v3/public-resolvers.md',
+  'https://download.dnscrypt.info/resolvers-list/v3/public-resolvers.md',
+]
+cache_file = 'public-resolvers.md'
+minisign_key = 'RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3'
+refresh_delay = 73
+prefix = ''
 
-  ### Anonymized DNS relays
+### Anonymized DNS relays
 
-  [sources.relays]
-    urls = ['https://raw.githubusercontent.com/DNSCrypt/dnscrypt-resolvers/master/v3/relays.md', 'https://download.dnscrypt.info/resolvers-list/v3/relays.md']
-    cache_file = 'relays.md'
-    minisign_key = 'RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3'
-    refresh_delay = 73
-    prefix = ''
+[sources.relays]
+urls = [
+  'https://raw.githubusercontent.com/DNSCrypt/dnscrypt-resolvers/master/v3/relays.md',
+  'https://download.dnscrypt.info/resolvers-list/v3/relays.md',
+]
+cache_file = 'relays.md'
+minisign_key = 'RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3'
+refresh_delay = 73
+prefix = ''
 
-  ### ODoH (Oblivious DoH) servers and relays
+### ODoH (Oblivious DoH) servers and relays
 
-  # [sources.odoh-servers]
-  #   urls = ['https://raw.githubusercontent.com/DNSCrypt/dnscrypt-resolvers/master/v3/odoh-servers.md', 'https://download.dnscrypt.info/resolvers-list/v3/odoh-servers.md']
-  #   cache_file = 'odoh-servers.md'
-  #   minisign_key = 'RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3'
-  #   refresh_delay = 73
-  #   prefix = ''
-  # [sources.odoh-relays]
-  #   urls = ['https://raw.githubusercontent.com/DNSCrypt/dnscrypt-resolvers/master/v3/odoh-relays.md', 'https://download.dnscrypt.info/resolvers-list/v3/odoh-relays.md']
-  #   cache_file = 'odoh-relays.md'
-  #   minisign_key = 'RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3'
-  #   refresh_delay = 73
-  #   prefix = ''
+# [sources.odoh-servers]
+#   urls = ['https://raw.githubusercontent.com/DNSCrypt/dnscrypt-resolvers/master/v3/odoh-servers.md', 'https://download.dnscrypt.info/resolvers-list/v3/odoh-servers.md']
+#   cache_file = 'odoh-servers.md'
+#   minisign_key = 'RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3'
+#   refresh_delay = 73
+#   prefix = ''
+# [sources.odoh-relays]
+#   urls = ['https://raw.githubusercontent.com/DNSCrypt/dnscrypt-resolvers/master/v3/odoh-relays.md', 'https://download.dnscrypt.info/resolvers-list/v3/odoh-relays.md']
+#   cache_file = 'odoh-relays.md'
+#   minisign_key = 'RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3'
+#   refresh_delay = 73
+#   prefix = ''
 
-  ### Quad9
+### Quad9
 
-  # [sources.quad9-resolvers]
-  #   urls = ['https://www.quad9.net/quad9-resolvers.md']
-  #   minisign_key = 'RWQBphd2+f6eiAqBsvDZEBXBGHQBJfeG6G+wJPPKxCZMoEQYpmoysKUN'
-  #   cache_file = 'quad9-resolvers.md'
-  #   prefix = 'quad9-'
+# [sources.quad9-resolvers]
+#   urls = ['https://www.quad9.net/quad9-resolvers.md']
+#   minisign_key = 'RWQBphd2+f6eiAqBsvDZEBXBGHQBJfeG6G+wJPPKxCZMoEQYpmoysKUN'
+#   cache_file = 'quad9-resolvers.md'
+#   prefix = 'quad9-'
 
-  ### Another example source, with resolvers censoring some websites not appropriate for children
-  ### This is a subset of the `public-resolvers` list, so enabling both is useless.
+### Another example source, with resolvers censoring some websites not appropriate for children
+### This is a subset of the `public-resolvers` list, so enabling both is useless.
 
-  # [sources.parental-control]
-  #   urls = ['https://raw.githubusercontent.com/DNSCrypt/dnscrypt-resolvers/master/v3/parental-control.md', 'https://download.dnscrypt.info/resolvers-list/v3/parental-control.md']
-  #   cache_file = 'parental-control.md'
-  #   minisign_key = 'RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3'
+# [sources.parental-control]
+#   urls = ['https://raw.githubusercontent.com/DNSCrypt/dnscrypt-resolvers/master/v3/parental-control.md', 'https://download.dnscrypt.info/resolvers-list/v3/parental-control.md']
+#   cache_file = 'parental-control.md'
+#   minisign_key = 'RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3'
 
-  ### dnscry.pt servers - See https://www.dnscry.pt
+### dnscry.pt servers - See https://www.dnscry.pt
 
-  #  [sources.dnscry-pt-resolvers]
-  #    urls = ["https://www.dnscry.pt/resolvers.md"]
-  #    minisign_key = "RWQM31Nwkqh01x88SvrBL8djp1NH56Rb4mKLHz16K7qsXgEomnDv6ziQ"
-  #    cache_file = "dnscry.pt-resolvers.md"
-  #    refresh_delay = 73
-  #    prefix = "dnscry.pt-"
+#  [sources.dnscry-pt-resolvers]
+#    urls = ["https://www.dnscry.pt/resolvers.md"]
+#    minisign_key = "RWQM31Nwkqh01x88SvrBL8djp1NH56Rb4mKLHz16K7qsXgEomnDv6ziQ"
+#    cache_file = "dnscry.pt-resolvers.md"
+#    refresh_delay = 73
+#    prefix = "dnscry.pt-"
 
 
 #########################################
@@ -804,8 +795,19 @@ format = 'tsv'
 ## The list below enables workarounds to make non-relayed usage more reliable
 ## until the servers are fixed.
 
-fragments_blocked = ['cisco', 'cisco-ipv6', 'cisco-familyshield', 'cisco-familyshield-ipv6', 'cisco-sandbox', 'cleanbrowsing-adult', 'cleanbrowsing-adult-ipv6', 'cleanbrowsing-family', 'cleanbrowsing-family-ipv6', 'cleanbrowsing-security', 'cleanbrowsing-security-ipv6']
-
+fragments_blocked = [
+  'cisco',
+  'cisco-ipv6',
+  'cisco-familyshield',
+  'cisco-familyshield-ipv6',
+  'cisco-sandbox',
+  'cleanbrowsing-adult',
+  'cleanbrowsing-adult-ipv6',
+  'cleanbrowsing-family',
+  'cleanbrowsing-family-ipv6',
+  'cleanbrowsing-security',
+  'cleanbrowsing-security-ipv6',
+]
 
 
 #################################################################
@@ -823,7 +825,6 @@ fragments_blocked = ['cisco', 'cisco-ipv6', 'cisco-familyshield', 'cisco-familys
 # creds = [
 #    { server_name='*', client_cert='client.crt', client_key='client.key' }
 # ]
-
 
 
 ################################
@@ -879,7 +880,6 @@ skip_incompatible = false
 # direct_cert_fallback = false
 
 
-
 ###############################
 #            DNS64            #
 ###############################
@@ -914,6 +914,38 @@ skip_incompatible = false
 # resolver = ['[2606:4700:4700::64]:53', '[2001:4860:4860::64]:53']
 
 
+##################################
+#        Monitoring UI           #
+##################################
+
+[monitoring_ui]
+
+## Enable the monitoring UI
+enabled = false
+
+## Listen address for the monitoring UI
+listen_address = "127.0.0.1:8080"
+
+## Optional username and password for basic authentication
+## If both are empty, no authentication is required
+username = "admin"
+password = "changeme"
+
+## Optional TLS certificate and key for HTTPS
+## If both are empty, HTTP will be used
+tls_certificate = ""
+tls_key = ""
+
+## Enable query logging in the monitoring UI
+## This will show recent queries in the UI
+enable_query_log = true
+
+## Privacy level for the monitoring UI
+## 0: show all details including client IPs
+## 1: anonymize client IPs (default)
+## 2: aggregate data only, no individual queries shown
+privacy_level = 1
+
 
 ########################################
 #            Static entries            #
@@ -924,5 +956,5 @@ skip_incompatible = false
 
 [static]
 
-  # [static.myserver]
-  #   stamp = 'sdns://AQcAAAAAAAAAAAAQMi5kbnNjcnlwdC1jZXJ0Lg'
+# [static.myserver]
+#   stamp = 'sdns://AQcAAAAAAAAAAAAQMi5kbnNjcnlwdC1jZXJ0Lg'

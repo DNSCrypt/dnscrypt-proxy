@@ -37,6 +37,8 @@ type Proxy struct {
 	registeredRelays              []RegisteredServer
 	listenAddresses               []string
 	localDoHListenAddresses       []string
+	monitoringUI                  MonitoringUIConfig
+	monitoringInstance            *MonitoringUI
 	xTransport                    *XTransport
 	allWeeklyRanges               *map[string]WeeklyRanges
 	routes                        *map[string][]string
@@ -245,6 +247,23 @@ func (proxy *Proxy) StartProxy() {
 		dlog.Fatal(err)
 	}
 	curve25519.ScalarBaseMult(&proxy.proxyPublicKey, &proxy.proxySecretKey)
+
+	// Initialize and start the monitoring UI if enabled
+	if proxy.monitoringUI.Enabled {
+		dlog.Noticef("Initializing monitoring UI")
+		proxy.monitoringInstance = NewMonitoringUI(proxy)
+		if proxy.monitoringInstance == nil {
+			dlog.Errorf("Failed to create monitoring UI instance")
+		} else {
+			dlog.Noticef("Starting monitoring UI")
+			if err := proxy.monitoringInstance.Start(); err != nil {
+				dlog.Errorf("Failed to start monitoring UI: %v", err)
+			} else {
+				dlog.Noticef("Monitoring UI started successfully")
+			}
+		}
+	}
+
 	proxy.startAcceptingClients()
 	if !proxy.child {
 		// Notify the service manager that dnscrypt-proxy is ready. dnscrypt-proxy manages itself in case
@@ -656,6 +675,9 @@ func (proxy *Proxy) processIncomingQuery(
 	start time.Time,
 	onlyCached bool,
 ) []byte {
+	// Initialize metrics for this query
+	dlog.Debugf("Processing incoming query from %s", (*clientAddr).String())
+
 	var response []byte
 	if len(query) < MinDNSPacketSize {
 		return response
@@ -905,6 +927,22 @@ func (proxy *Proxy) processIncomingQuery(
 		}
 	}
 	pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
+
+	// Update monitoring metrics if enabled
+	if proxy.monitoringUI.Enabled && proxy.monitoringInstance != nil && pluginsState.questionMsg != nil {
+		dlog.Debugf("Calling UpdateMetrics for query: %s", pluginsState.qName)
+		proxy.monitoringInstance.UpdateMetrics(pluginsState, pluginsState.questionMsg, start)
+	} else {
+		if !proxy.monitoringUI.Enabled {
+			dlog.Debugf("Monitoring UI not enabled")
+		}
+		if proxy.monitoringInstance == nil {
+			dlog.Debugf("Monitoring instance is nil")
+		}
+		if pluginsState.questionMsg == nil {
+			dlog.Debugf("Question message is nil")
+		}
+	}
 
 	return response
 }

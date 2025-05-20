@@ -7,6 +7,7 @@ require (
 	github.com/VividCortex/ewma v1.2.0
 	github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf
 	github.com/dchest/safefile v0.0.0-20151022103144-855e8d98f185
+	github.com/gorilla/websocket v1.5.3
 	github.com/hashicorp/go-immutable-radix v1.3.1
 	github.com/hectane/go-acl v0.0.0-20230122075934-ca0b05cb1adb
 	github.com/jedisct1/dlog v0.0.0-20241212093805-3c5fd791b405
