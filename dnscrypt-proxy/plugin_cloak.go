@@ -1,6 +1,8 @@
 package main
 
 import (
+	"errors"
+	"fmt"
 	"math/rand"
 	"net"
 	"strings"
@@ -27,6 +29,11 @@ type PluginCloak struct {
 	patternMatcher *PatternMatcher
 	ttl            uint32
 	createPTR      bool
+
+	// Hot-reloading support
+	configFile     string
+	configWatcher  *ConfigWatcher
+	stagingMatcher *PatternMatcher
 }
 
 func (plugin *PluginCloak) Name() string {
@@ -38,20 +45,35 @@ func (plugin *PluginCloak) Description() string {
 }
 
 func (plugin *PluginCloak) Init(proxy *Proxy) error {
-	dlog.Noticef("Loading the set of cloaking rules from [%s]", proxy.cloakFile)
-	lines, err := ReadTextFile(proxy.cloakFile)
+	plugin.configFile = proxy.cloakFile
+	dlog.Noticef("Loading the set of cloaking rules from [%s]", plugin.configFile)
+
+	lines, err := ReadTextFile(plugin.configFile)
 	if err != nil {
 		return err
 	}
+
 	plugin.ttl = proxy.cloakTTL
 	plugin.createPTR = proxy.cloakedPTR
 	plugin.patternMatcher = NewPatternMatcher()
+
+	if err := plugin.loadRules(lines, plugin.patternMatcher); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// loadRules parses cloaking rules from text and adds them to a pattern matcher
+func (plugin *PluginCloak) loadRules(lines string, patternMatcher *PatternMatcher) error {
 	cloakedNames := make(map[string]*CloakedName)
+
 	for lineNo, line := range strings.Split(lines, "\n") {
 		line = TrimAndStripInlineComments(line)
 		if len(line) == 0 {
 			continue
 		}
+
 		var target string
 		parts := strings.FieldsFunc(line, unicode.IsSpace)
 		if len(parts) == 2 {
@@ -65,11 +87,13 @@ func (plugin *PluginCloak) Init(proxy *Proxy) error {
 			dlog.Errorf("Syntax error in cloaking rules at line %d -- Missing name or target", 1+lineNo)
 			continue
 		}
+
 		line = strings.ToLower(line)
 		cloakedName, found := cloakedNames[line]
 		if !found {
 			cloakedName = &CloakedName{}
 		}
+
 		ip := net.ParseIP(target)
 		if ip != nil {
 			if ipv4 := ip.To4(); ipv4 != nil {
@@ -109,11 +133,13 @@ func (plugin *PluginCloak) Init(proxy *Proxy) error {
 		ptrCloakedName.lineNo = lineNo + 1
 		cloakedNames[ptrQueryLine] = ptrCloakedName
 	}
+
 	for line, cloakedName := range cloakedNames {
-		if err := plugin.patternMatcher.Add(line, cloakedName, cloakedName.lineNo); err != nil {
+		if err := patternMatcher.Add(line, cloakedName, cloakedName.lineNo); err != nil {
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -127,11 +153,74 @@ func ptrNameToFQDN(ptrLine string) string {
 }
 
 func (plugin *PluginCloak) Drop() error {
+	if plugin.configWatcher != nil {
+		plugin.configWatcher.RemoveFile(plugin.configFile)
+	}
 	return nil
 }
 
-func (plugin *PluginCloak) Reload() error {
+// PrepareReload loads new cloaking rules into staging matcher but doesn't apply them yet
+func (plugin *PluginCloak) PrepareReload() error {
+	// Read the configuration file
+	lines, err := SafeReadTextFile(plugin.configFile)
+	if err != nil {
+		return fmt.Errorf("error reading config file during reload preparation: %w", err)
+	}
+
+	// Create new staging pattern matcher
+	plugin.stagingMatcher = NewPatternMatcher()
+
+	// Load rules into staging matcher
+	if err := plugin.loadRules(lines, plugin.stagingMatcher); err != nil {
+		return fmt.Errorf("error parsing config during reload preparation: %w", err)
+	}
+
 	return nil
+}
+
+// ApplyReload atomically replaces the active pattern matcher with the staging one
+func (plugin *PluginCloak) ApplyReload() error {
+	if plugin.stagingMatcher == nil {
+		return errors.New("no staged configuration to apply")
+	}
+
+	// Use write lock to swap pattern matchers
+	plugin.Lock()
+	plugin.patternMatcher = plugin.stagingMatcher
+	plugin.stagingMatcher = nil
+	plugin.Unlock()
+
+	dlog.Noticef("Applied new configuration for plugin [%s]", plugin.Name())
+	return nil
+}
+
+// CancelReload cleans up any staging resources
+func (plugin *PluginCloak) CancelReload() {
+	plugin.stagingMatcher = nil
+}
+
+// Reload implements hot-reloading for the plugin
+func (plugin *PluginCloak) Reload() error {
+	dlog.Noticef("Reloading configuration for plugin [%s]", plugin.Name())
+
+	// Prepare the new configuration
+	if err := plugin.PrepareReload(); err != nil {
+		plugin.CancelReload()
+		return err
+	}
+
+	// Apply the new configuration
+	return plugin.ApplyReload()
+}
+
+// GetConfigPath returns the path to the plugin's configuration file
+func (plugin *PluginCloak) GetConfigPath() string {
+	return plugin.configFile
+}
+
+// SetConfigWatcher sets the config watcher for this plugin
+func (plugin *PluginCloak) SetConfigWatcher(watcher *ConfigWatcher) {
+	plugin.configWatcher = watcher
 }
 
 func (plugin *PluginCloak) Eval(pluginsState *PluginsState, msg *dns.Msg) error {
@@ -140,6 +229,8 @@ func (plugin *PluginCloak) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 		return nil
 	}
 	now := time.Now()
+
+	// Use read lock for thread-safe access to patternMatcher
 	plugin.RLock()
 	_, _, xcloakedName := plugin.patternMatcher.Eval(pluginsState.qName)
 	if xcloakedName == nil {
@@ -168,6 +259,8 @@ func (plugin *PluginCloak) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 		if err != nil {
 			return nil
 		}
+
+		// Use write lock to update cloakedName
 		plugin.Lock()
 		cloakedName.lastUpdate = &now
 		cloakedName.ipv4 = nil
@@ -186,9 +279,12 @@ func (plugin *PluginCloak) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 			}
 		}
 		plugin.Unlock()
+
+		// Reacquire read lock
 		plugin.RLock()
 	}
 	plugin.RUnlock()
+
 	synth := EmptyResponseFromMessage(msg)
 	synth.Answer = []dns.RR{}
 	if question.Qtype == dns.TypeA {

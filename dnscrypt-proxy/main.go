@@ -139,6 +139,10 @@ func (app *App) AppMain() {
 	if err := app.proxy.InitPluginsGlobals(); err != nil {
 		dlog.Fatal(err)
 	}
+	// Initialize hot-reloading support
+	if err := app.proxy.InitHotReload(); err != nil {
+		dlog.Warnf("Failed to initialize hot-reloading: %v", err)
+	}
 	app.quit = make(chan struct{})
 	app.wg.Add(1)
 	app.proxy.StartProxy()

@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"strings"
+	"sync"
 	"time"
 
 	iradix "github.com/hashicorp/go-immutable-radix"
@@ -18,6 +19,13 @@ type PluginAllowedIP struct {
 	allowedIPs      map[string]interface{}
 	logger          io.Writer
 	format          string
+
+	// Hot-reloading support
+	rwLock          sync.RWMutex
+	configFile      string
+	configWatcher   *ConfigWatcher
+	stagingPrefixes *iradix.Tree
+	stagingIPs      map[string]interface{}
 }
 
 func (plugin *PluginAllowedIP) Name() string {
@@ -29,24 +37,44 @@ func (plugin *PluginAllowedIP) Description() string {
 }
 
 func (plugin *PluginAllowedIP) Init(proxy *Proxy) error {
-	dlog.Noticef("Loading the set of allowed IP rules from [%s]", proxy.allowedIPFile)
-	lines, err := ReadTextFile(proxy.allowedIPFile)
+	plugin.configFile = proxy.allowedIPFile
+	dlog.Noticef("Loading the set of allowed IP rules from [%s]", plugin.configFile)
+
+	lines, err := ReadTextFile(plugin.configFile)
 	if err != nil {
 		return err
 	}
+
 	plugin.allowedPrefixes = iradix.New()
 	plugin.allowedIPs = make(map[string]interface{})
+
+	if err := plugin.loadRules(lines, plugin.allowedPrefixes, plugin.allowedIPs); err != nil {
+		return err
+	}
+
+	if len(proxy.allowedIPLogFile) > 0 {
+		plugin.logger = Logger(proxy.logMaxSize, proxy.logMaxAge, proxy.logMaxBackups, proxy.allowedIPLogFile)
+		plugin.format = proxy.allowedIPFormat
+	}
+
+	return nil
+}
+
+// loadRules parses and loads IP rules into the provided tree and map
+func (plugin *PluginAllowedIP) loadRules(lines string, prefixes *iradix.Tree, ips map[string]interface{}) error {
 	for lineNo, line := range strings.Split(lines, "\n") {
 		line = TrimAndStripInlineComments(line)
 		if len(line) == 0 {
 			continue
 		}
+
 		ip := net.ParseIP(line)
 		trailingStar := strings.HasSuffix(line, "*")
 		if len(line) < 2 || (ip != nil && trailingStar) {
 			dlog.Errorf("Suspicious allowed IP rule [%s] at line %d", line, lineNo)
 			continue
 		}
+
 		if trailingStar {
 			line = line[:len(line)-1]
 		}
@@ -61,28 +89,93 @@ func (plugin *PluginAllowedIP) Init(proxy *Proxy) error {
 			dlog.Errorf("Invalid rule: [%s] - wildcards can only be used as a suffix at line %d", line, lineNo)
 			continue
 		}
+
 		line = strings.ToLower(line)
 		if trailingStar {
-			plugin.allowedPrefixes, _, _ = plugin.allowedPrefixes.Insert([]byte(line), 0)
+			var updated *iradix.Tree
+			updated, _, _ = prefixes.Insert([]byte(line), 0)
+			prefixes = updated
 		} else {
-			plugin.allowedIPs[line] = true
+			ips[line] = true
 		}
 	}
-	if len(proxy.allowedIPLogFile) == 0 {
-		return nil
-	}
-	plugin.logger = Logger(proxy.logMaxSize, proxy.logMaxAge, proxy.logMaxBackups, proxy.allowedIPLogFile)
-	plugin.format = proxy.allowedIPFormat
 
 	return nil
 }
 
 func (plugin *PluginAllowedIP) Drop() error {
+	if plugin.configWatcher != nil {
+		plugin.configWatcher.RemoveFile(plugin.configFile)
+	}
 	return nil
 }
 
-func (plugin *PluginAllowedIP) Reload() error {
+// PrepareReload loads new rules into staging structures but doesn't apply them yet
+func (plugin *PluginAllowedIP) PrepareReload() error {
+	// Read the configuration file
+	lines, err := SafeReadTextFile(plugin.configFile)
+	if err != nil {
+		return fmt.Errorf("error reading config file during reload preparation: %w", err)
+	}
+
+	// Create staging structures
+	plugin.stagingPrefixes = iradix.New()
+	plugin.stagingIPs = make(map[string]interface{})
+
+	// Load rules into staging structures
+	if err := plugin.loadRules(lines, plugin.stagingPrefixes, plugin.stagingIPs); err != nil {
+		return fmt.Errorf("error parsing config during reload preparation: %w", err)
+	}
+
 	return nil
+}
+
+// ApplyReload atomically replaces the active rules with the staging ones
+func (plugin *PluginAllowedIP) ApplyReload() error {
+	if plugin.stagingPrefixes == nil || plugin.stagingIPs == nil {
+		return errors.New("no staged configuration to apply")
+	}
+
+	// Use write lock to swap rule structures
+	plugin.rwLock.Lock()
+	plugin.allowedPrefixes = plugin.stagingPrefixes
+	plugin.allowedIPs = plugin.stagingIPs
+	plugin.stagingPrefixes = nil
+	plugin.stagingIPs = nil
+	plugin.rwLock.Unlock()
+
+	dlog.Noticef("Applied new configuration for plugin [%s]", plugin.Name())
+	return nil
+}
+
+// CancelReload cleans up any staging resources
+func (plugin *PluginAllowedIP) CancelReload() {
+	plugin.stagingPrefixes = nil
+	plugin.stagingIPs = nil
+}
+
+// Reload implements hot-reloading for the plugin
+func (plugin *PluginAllowedIP) Reload() error {
+	dlog.Noticef("Reloading configuration for plugin [%s]", plugin.Name())
+
+	// Prepare the new configuration
+	if err := plugin.PrepareReload(); err != nil {
+		plugin.CancelReload()
+		return err
+	}
+
+	// Apply the new configuration
+	return plugin.ApplyReload()
+}
+
+// GetConfigPath returns the path to the plugin's configuration file
+func (plugin *PluginAllowedIP) GetConfigPath() string {
+	return plugin.configFile
+}
+
+// SetConfigWatcher sets the config watcher for this plugin
+func (plugin *PluginAllowedIP) SetConfigWatcher(watcher *ConfigWatcher) {
+	plugin.configWatcher = watcher
 }
 
 func (plugin *PluginAllowedIP) Eval(pluginsState *PluginsState, msg *dns.Msg) error {
@@ -90,7 +183,13 @@ func (plugin *PluginAllowedIP) Eval(pluginsState *PluginsState, msg *dns.Msg) er
 	if len(answers) == 0 {
 		return nil
 	}
+
 	allowed, reason, ipStr := false, "", ""
+
+	// Use read lock for thread-safe access to configuration
+	plugin.rwLock.RLock()
+	defer plugin.rwLock.RUnlock()
+
 	for _, answer := range answers {
 		header := answer.Header()
 		Rrtype := header.Rrtype
@@ -114,6 +213,7 @@ func (plugin *PluginAllowedIP) Eval(pluginsState *PluginsState, msg *dns.Msg) er
 			}
 		}
 	}
+
 	if allowed {
 		pluginsState.sessionData["whitelisted"] = true
 		if plugin.logger != nil {

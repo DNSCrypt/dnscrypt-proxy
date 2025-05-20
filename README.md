@@ -28,6 +28,7 @@ Available as source code and pre-built binaries for most operating systems and a
 * Filtering: block ads, malware, and other unwanted content. Compatible with all DNS services
 * Time-based filtering, with a flexible weekly schedule
 * Transparent redirection of specific domains to specific resolvers
+* Hot-reloading of configuration files without service restart
 * DNS caching, to reduce latency and improve privacy
 * Local IPv6 blocking to reduce latency on IPv4-only networks
 * Load balancing: pick a set of resolvers, dnscrypt-proxy will automatically measure and keep track of their speed, and balance the traffic across the fastest available ones.
