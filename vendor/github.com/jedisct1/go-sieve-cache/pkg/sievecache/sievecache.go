@@ -11,9 +11,11 @@ type SieveCache[K comparable, V any] struct {
 	// Map of keys to indices in the nodes slice
 	indices map[K]int
 	// Slice of all cache nodes
-	nodes []*Node[K, V]
+	nodes []Node[K, V]
 	// Index to the "hand" pointer used by the SIEVE algorithm for eviction
-	hand *int
+	hand int
+	// Flag indicating if the hand pointer is initialized
+	handInitialized bool
 	// Maximum number of entries the cache can hold
 	capacity int
 }
@@ -26,10 +28,11 @@ func New[K comparable, V any](capacity int) (*SieveCache[K, V], error) {
 	}
 
 	return &SieveCache[K, V]{
-		indices:  make(map[K]int, capacity),
-		nodes:    make([]*Node[K, V], 0, capacity),
-		hand:     nil,
-		capacity: capacity,
+		indices:         make(map[K]int, capacity),
+		nodes:           make([]Node[K, V], 0, capacity),
+		hand:            0,
+		handInitialized: false,
+		capacity:        capacity,
 	}, nil
 }
 
@@ -130,20 +133,17 @@ func (c *SieveCache[K, V]) Remove(key K) (V, bool) {
 	}
 
 	// Update hand if needed
-	if c.hand != nil {
-		handIdx := *c.hand
-		if handIdx == idx {
+	if c.handInitialized {
+		if c.hand == idx {
 			// Move hand to the previous node or wrap to end
 			if idx > 0 {
-				newHand := idx - 1
-				c.hand = &newHand
+				c.hand = idx - 1
 			} else {
-				newHand := len(c.nodes) - 2
-				c.hand = &newHand
+				c.hand = len(c.nodes) - 2
 			}
-		} else if handIdx == len(c.nodes)-1 {
+		} else if c.hand == len(c.nodes)-1 {
 			// If hand points to the last element (which will be moved to idx)
-			c.hand = &idx
+			c.hand = idx
 		}
 	}
 
@@ -171,24 +171,24 @@ func (c *SieveCache[K, V]) Evict() (V, bool) {
 		return zero, false
 	}
 
-	// Start from the hand pointer or the end if no hand
+	// Start from the hand pointer or the end if hand is not initialized
 	var currentIdx int
-	if c.hand != nil {
-		currentIdx = *c.hand
+	if c.handInitialized {
+		currentIdx = c.hand
 	} else {
 		currentIdx = len(c.nodes) - 1
 	}
 	startIdx := currentIdx
 
-	// Track whether we've wrapped around and whether we found a node to evict
+	// Track whether we've wrapped around
 	wrapped := false
-	var foundIdx *int
+	foundIdx := -1
 
 	// Scan for a non-visited entry
 	for {
 		// If current node is not visited, mark it for eviction
 		if !c.nodes[currentIdx].Visited {
-			foundIdx = &currentIdx
+			foundIdx = currentIdx
 			break
 		}
 
@@ -215,19 +215,19 @@ func (c *SieveCache[K, V]) Evict() (V, bool) {
 	}
 
 	// If we found a node to evict
-	if foundIdx != nil {
-		evictIdx := *foundIdx
+	if foundIdx >= 0 {
+		evictIdx := foundIdx
 
 		// Update the hand pointer to the previous node or wrap to end
 		if evictIdx > 0 {
-			newHand := evictIdx - 1
-			c.hand = &newHand
+			c.hand = evictIdx - 1
 		} else if len(c.nodes) > 1 {
-			newHand := len(c.nodes) - 2
-			c.hand = &newHand
+			c.hand = len(c.nodes) - 2
 		} else {
-			c.hand = nil
+			// Keep hand at 0 but mark as not initialized
+			c.handInitialized = false
 		}
+		c.handInitialized = true
 
 		// Remove the key from the map
 		delete(c.indices, c.nodes[evictIdx].Key)
@@ -258,12 +258,14 @@ func (c *SieveCache[K, V]) Evict() (V, bool) {
 // Clear removes all entries from the cache.
 func (c *SieveCache[K, V]) Clear() {
 	c.indices = make(map[K]int, c.capacity)
-	c.nodes = make([]*Node[K, V], 0, c.capacity)
-	c.hand = nil
+	c.nodes = make([]Node[K, V], 0, c.capacity)
+	c.hand = 0
+	c.handInitialized = false
 }
 
 // Keys returns a slice of all keys in the cache.
 func (c *SieveCache[K, V]) Keys() []K {
+	// Pre-allocate with exact capacity
 	keys := make([]K, len(c.nodes))
 	for i, node := range c.nodes {
 		keys[i] = node.Key
@@ -273,6 +275,7 @@ func (c *SieveCache[K, V]) Keys() []K {
 
 // Values returns a slice of all values in the cache.
 func (c *SieveCache[K, V]) Values() []V {
+	// Pre-allocate with exact capacity
 	values := make([]V, len(c.nodes))
 	for i, node := range c.nodes {
 		values[i] = node.Value
@@ -285,6 +288,7 @@ func (c *SieveCache[K, V]) Items() []struct {
 	Key   K
 	Value V
 } {
+	// Pre-allocate with exact capacity
 	items := make([]struct {
 		Key   K
 		Value V
@@ -309,8 +313,17 @@ func (c *SieveCache[K, V]) ForEach(f func(k K, v V)) {
 // Retain only keeps elements specified by the predicate.
 // Removes all entries for which f returns false.
 func (c *SieveCache[K, V]) Retain(f func(k K, v V) bool) {
+	// Estimate number of elements to remove - pre-allocate with a reasonable capacity
+	estimatedRemoveCount := len(c.nodes) / 4 // Assume about 25% will be removed
+	if estimatedRemoveCount < 8 {
+		estimatedRemoveCount = 8 // Minimum size for small caches
+	}
+	if estimatedRemoveCount > 1024 {
+		estimatedRemoveCount = 1024 // Cap at reasonable maximum
+	}
+
 	// Collect indices to remove
-	var toRemove []int
+	toRemove := make([]int, 0, estimatedRemoveCount)
 
 	for i, node := range c.nodes {
 		if !f(node.Key, node.Value) {
@@ -343,22 +356,19 @@ func (c *SieveCache[K, V]) Retain(f func(k K, v V) bool) {
 			}
 
 			// Update hand if needed
-			if c.hand != nil {
-				handIdx := *c.hand
-				if handIdx == idx {
+			if c.handInitialized {
+				if c.hand == idx {
 					// Hand was pointing to the removed node, move it to previous
 					if idx > 0 {
-						newHand := idx - 1
-						c.hand = &newHand
+						c.hand = idx - 1
 					} else if len(c.nodes) > 0 {
-						newHand := len(c.nodes) - 1
-						c.hand = &newHand
+						c.hand = len(c.nodes) - 1
 					} else {
-						c.hand = nil
+						c.handInitialized = false
 					}
-				} else if handIdx == lastIdx {
+				} else if c.hand == lastIdx {
 					// Hand was pointing to the last node that was moved
-					c.hand = &idx
+					c.hand = idx
 				}
 			}
 		}

@@ -222,7 +222,14 @@ func (c *ShardedSieveCache[K, V]) Clear() {
 
 // Keys returns a slice of all keys in the cache.
 func (c *ShardedSieveCache[K, V]) Keys() []K {
-	var allKeys []K
+	// First count total keys to allocate proper size
+	totalKeys := 0
+	for _, shard := range c.shards {
+		totalKeys += shard.Len()
+	}
+
+	// Pre-allocate slice with exact capacity
+	allKeys := make([]K, 0, totalKeys)
 
 	// Collect keys from all shards
 	for _, shard := range c.shards {
@@ -234,7 +241,14 @@ func (c *ShardedSieveCache[K, V]) Keys() []K {
 
 // Values returns a slice of all values in the cache.
 func (c *ShardedSieveCache[K, V]) Values() []V {
-	var allValues []V
+	// First count total values to allocate proper size
+	totalValues := 0
+	for _, shard := range c.shards {
+		totalValues += shard.Len()
+	}
+
+	// Pre-allocate slice with exact capacity
+	allValues := make([]V, 0, totalValues)
 
 	// Collect values from all shards
 	for _, shard := range c.shards {
@@ -249,10 +263,17 @@ func (c *ShardedSieveCache[K, V]) Items() []struct {
 	Key   K
 	Value V
 } {
-	var allItems []struct {
+	// First count total items to allocate proper size
+	totalItems := 0
+	for _, shard := range c.shards {
+		totalItems += shard.Len()
+	}
+
+	// Pre-allocate slice with exact capacity
+	allItems := make([]struct {
 		Key   K
 		Value V
-	}
+	}, 0, totalItems)
 
 	// Collect items from all shards
 	for _, shard := range c.shards {

@@ -175,7 +175,8 @@ func (c *SyncSieveCache[K, V]) ForEachValue(f func(*V)) {
 	c.mutex.RUnlock()
 
 	// Process each value without holding the lock
-	updatedItems := make(map[K]V)
+	// Pre-allocate map with the expected size to prevent resizing
+	updatedItems := make(map[K]V, len(items))
 	for _, item := range items {
 		valueCopy := item.Value
 		f(&valueCopy)
@@ -201,7 +202,8 @@ func (c *SyncSieveCache[K, V]) ForEachEntry(f func(K, *V)) {
 	c.mutex.RUnlock()
 
 	// Process each entry without holding the lock
-	updatedItems := make(map[K]V)
+	// Pre-allocate map with the expected size to prevent resizing
+	updatedItems := make(map[K]V, len(items))
 	for _, item := range items {
 		valueCopy := item.Value
 		f(item.Key, &valueCopy)
@@ -234,8 +236,17 @@ func (c *SyncSieveCache[K, V]) Retain(f func(K, V) bool) {
 	items := c.cache.Items()
 	c.mutex.RUnlock()
 
+	// Estimate number of elements to remove - pre-allocate with a reasonable capacity
+	estimatedRemoveCount := len(items) / 4 // Assume about 25% will be removed
+	if estimatedRemoveCount < 8 {
+		estimatedRemoveCount = 8 // Minimum size for small caches
+	}
+	if estimatedRemoveCount > 1024 {
+		estimatedRemoveCount = 1024 // Cap at reasonable maximum
+	}
+
 	// Check each entry against the predicate without holding the lock
-	var keysToRemove []K
+	keysToRemove := make([]K, 0, estimatedRemoveCount)
 	for _, item := range items {
 		if !f(item.Key, item.Value) {
 			keysToRemove = append(keysToRemove, item.Key)
@@ -258,8 +269,17 @@ func (c *SyncSieveCache[K, V]) RetainBatch(f func(K, V) bool) {
 	items := c.cache.Items()
 	c.mutex.RUnlock()
 
+	// Estimate number of elements to remove - pre-allocate with a reasonable capacity
+	estimatedRemoveCount := len(items) / 4 // Assume about 25% will be removed
+	if estimatedRemoveCount < 8 {
+		estimatedRemoveCount = 8 // Minimum size for small caches
+	}
+	if estimatedRemoveCount > 1024 {
+		estimatedRemoveCount = 1024 // Cap at reasonable maximum
+	}
+
 	// Collect keys to remove without holding the lock
-	var keysToRemove []K
+	keysToRemove := make([]K, 0, estimatedRemoveCount)
 	for _, item := range items {
 		if !f(item.Key, item.Value) {
 			keysToRemove = append(keysToRemove, item.Key)
