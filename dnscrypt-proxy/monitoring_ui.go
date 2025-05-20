@@ -24,7 +24,7 @@ type MonitoringUIConfig struct {
 	TLSCertificate string `toml:"tls_certificate"`
 	TLSKey         string `toml:"tls_key"`
 	EnableQueryLog bool   `toml:"enable_query_log"`
-	PrivacyLevel   int    `toml:"privacy_level"` // 0: show all, 1: anonymize clients, 2: aggregate only
+	PrivacyLevel   int    `toml:"privacy_level"` // 0: show all details, 1: anonymize client IPs, 2: aggregate only (no individual queries or domains)
 }
 
 // MetricsCollector - Collects and stores metrics for the monitoring UI
@@ -237,8 +237,8 @@ func (ui *MonitoringUI) UpdateMetrics(pluginsState PluginsState, msg *dns.Msg, s
 		dlog.Debugf("Domain %s, count: %d", pluginsState.qName, mc.topDomains[pluginsState.qName])
 	}
 
-	// Update recent queries if enabled
-	if ui.config.EnableQueryLog {
+	// Update recent queries if enabled, but only if privacy level < 2
+	if ui.config.EnableQueryLog && mc.privacyLevel < 2 {
 		var clientIP string
 		if mc.privacyLevel >= 1 {
 			clientIP = "anonymized"
