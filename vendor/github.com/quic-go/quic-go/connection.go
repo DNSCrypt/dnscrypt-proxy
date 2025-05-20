@@ -9,6 +9,7 @@ import (
 	"io"
 	"net"
 	"reflect"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -86,9 +87,8 @@ func (p *receivedPacket) Clone() *receivedPacket {
 
 type connRunner interface {
 	Add(protocol.ConnectionID, packetHandler) bool
-	Retire(protocol.ConnectionID)
 	Remove(protocol.ConnectionID)
-	ReplaceWithClosed([]protocol.ConnectionID, []byte)
+	ReplaceWithClosed([]protocol.ConnectionID, []byte, time.Duration)
 	AddResetToken(protocol.StatelessResetToken, packetHandler)
 	RemoveResetToken(protocol.StatelessResetToken)
 }
@@ -112,8 +112,6 @@ func nextConnTracingID() ConnectionTracingID { return ConnectionTracingID(connTr
 
 // A Connection is a QUIC connection
 type connection struct {
-	tr *Transport
-
 	// Destination connection ID used during the handshake.
 	// Used to check source connection ID on incoming packets.
 	handshakeDestConnID protocol.ConnectionID
@@ -157,7 +155,7 @@ type connection struct {
 
 	currentMTUEstimate atomic.Uint32
 
-	initialStream       *cryptoStream
+	initialStream       *initialCryptoStream
 	handshakeStream     *cryptoStream
 	oneRTTStream        *cryptoStream // only set for the server
 	cryptoStreamHandler cryptoStreamHandler
@@ -226,7 +224,7 @@ var newConnection = func(
 	ctx context.Context,
 	ctxCancel context.CancelCauseFunc,
 	conn sendConn,
-	tr *Transport,
+	runner connRunner,
 	origDestConnID protocol.ConnectionID,
 	retrySrcConnID *protocol.ConnectionID,
 	clientDestConnID protocol.ConnectionID,
@@ -238,6 +236,7 @@ var newConnection = func(
 	tlsConf *tls.Config,
 	tokenGenerator *handshake.TokenGenerator,
 	clientAddressValidated bool,
+	rtt time.Duration,
 	tracer *logging.ConnectionTracer,
 	logger utils.Logger,
 	v protocol.Version,
@@ -245,7 +244,6 @@ var newConnection = func(
 	s := &connection{
 		ctx:                 ctx,
 		ctxCancel:           ctxCancel,
-		tr:                  tr,
 		conn:                conn,
 		config:              conf,
 		handshakeDestConnID: destConnID,
@@ -262,7 +260,6 @@ var newConnection = func(
 	} else {
 		s.logID = destConnID.String()
 	}
-	runner := tr.connRunner()
 	s.connIDManager = newConnIDManager(
 		destConnID,
 		func(token protocol.StatelessResetToken) { runner.AddResetToken(token, s) },
@@ -270,20 +267,20 @@ var newConnection = func(
 		s.queueControlFrame,
 	)
 	s.connIDGenerator = newConnIDGenerator(
-		tr.id(),
+		runner,
 		srcConnID,
 		&clientDestConnID,
 		statelessResetter,
 		connRunnerCallbacks{
 			AddConnectionID:    func(connID protocol.ConnectionID) { runner.Add(connID, s) },
 			RemoveConnectionID: runner.Remove,
-			RetireConnectionID: runner.Retire,
 			ReplaceWithClosed:  runner.ReplaceWithClosed,
 		},
 		s.queueControlFrame,
 		connIDGenerator,
 	)
 	s.preSetup()
+	s.rttStats.SetInitialRTT(rtt)
 	s.sentPacketHandler, s.receivedPacketHandler = ackhandler.NewAckHandler(
 		0,
 		protocol.ByteCount(s.config.InitialPacketSize),
@@ -349,7 +346,7 @@ var newConnection = func(
 var newClientConnection = func(
 	ctx context.Context,
 	conn sendConn,
-	tr *Transport,
+	runner connRunner,
 	destConnID protocol.ConnectionID,
 	srcConnID protocol.ConnectionID,
 	connIDGenerator ConnectionIDGenerator,
@@ -364,7 +361,6 @@ var newClientConnection = func(
 	v protocol.Version,
 ) quicConn {
 	s := &connection{
-		tr:                  tr,
 		conn:                conn,
 		config:              conf,
 		origDestConnID:      destConnID,
@@ -377,7 +373,6 @@ var newClientConnection = func(
 		versionNegotiated:   hasNegotiatedVersion,
 		version:             v,
 	}
-	runner := tr.connRunner()
 	s.connIDManager = newConnIDManager(
 		destConnID,
 		func(token protocol.StatelessResetToken) { runner.AddResetToken(token, s) },
@@ -385,14 +380,13 @@ var newClientConnection = func(
 		s.queueControlFrame,
 	)
 	s.connIDGenerator = newConnIDGenerator(
-		tr.id(),
+		runner,
 		srcConnID,
 		nil,
 		statelessResetter,
 		connRunnerCallbacks{
 			AddConnectionID:    func(connID protocol.ConnectionID) { runner.Add(connID, s) },
 			RemoveConnectionID: runner.Remove,
-			RetireConnectionID: runner.Retire,
 			ReplaceWithClosed:  runner.ReplaceWithClosed,
 		},
 		s.queueControlFrame,
@@ -461,6 +455,7 @@ var newClientConnection = func(
 	if s.config.TokenStore != nil {
 		if token := s.config.TokenStore.Pop(s.tokenStoreKey); token != nil {
 			s.packer.SetToken(token.data)
+			s.rttStats.SetInitialRTT(token.rtt)
 		}
 	}
 	return s
@@ -468,7 +463,7 @@ var newClientConnection = func(
 
 func (s *connection) preSetup() {
 	s.largestRcvdAppData = protocol.InvalidPacketNumber
-	s.initialStream = newCryptoStream()
+	s.initialStream = newInitialCryptoStream(s.perspective == protocol.PerspectiveClient)
 	s.handshakeStream = newCryptoStream()
 	s.sendQueue = newSendQueue(s.conn)
 	s.retransmissionQueue = newRetransmissionQueue()
@@ -652,6 +647,8 @@ runLoop:
 			}
 		}
 
+		s.connIDGenerator.RemoveRetiredConnIDs(now)
+
 		if s.perspective == protocol.PerspectiveClient {
 			pm := s.pathManagerOutgoing.Load()
 			if pm != nil {
@@ -762,6 +759,7 @@ func (s *connection) maybeResetTimer() {
 
 	s.timer.SetTimer(
 		deadline,
+		s.connIDGenerator.NextRetireTime(),
 		s.receivedPacketHandler.GetAlarmTimeout(),
 		s.sentPacketHandler.GetLossDetectionTimeout(),
 		s.pacingDeadline,
@@ -801,7 +799,7 @@ func (s *connection) handleHandshakeComplete(now time.Time) error {
 	s.undecryptablePackets = nil
 
 	s.connIDManager.SetHandshakeComplete()
-	s.connIDGenerator.SetHandshakeComplete()
+	s.connIDGenerator.SetHandshakeComplete(now.Add(3 * s.rttStats.PTO(false)))
 
 	if s.tracer != nil && s.tracer.ChoseALPN != nil {
 		s.tracer.ChoseALPN(s.cryptoStreamHandler.ConnectionState().NegotiatedProtocol)
@@ -826,10 +824,12 @@ func (s *connection) handleHandshakeComplete(now time.Time) error {
 	if ticket != nil { // may be nil if session tickets are disabled via tls.Config.SessionTicketsDisabled
 		s.oneRTTStream.Write(ticket)
 		for s.oneRTTStream.HasData() {
-			s.queueControlFrame(s.oneRTTStream.PopCryptoFrame(protocol.MaxPostHandshakeCryptoFrameSize))
+			if cf := s.oneRTTStream.PopCryptoFrame(protocol.MaxPostHandshakeCryptoFrameSize); cf != nil {
+				s.queueControlFrame(cf)
+			}
 		}
 	}
-	token, err := s.tokenGenerator.NewToken(s.conn.RemoteAddr())
+	token, err := s.tokenGenerator.NewToken(s.conn.RemoteAddr(), s.rttStats.SmoothedRTT())
 	if err != nil {
 		return err
 	}
@@ -1282,15 +1282,13 @@ func (s *connection) handleVersionNegotiationPacket(p receivedPacket) {
 		return
 	}
 
-	for _, v := range supportedVersions {
-		if v == s.version {
-			if s.tracer != nil && s.tracer.DroppedPacket != nil {
-				s.tracer.DroppedPacket(logging.PacketTypeVersionNegotiation, protocol.InvalidPacketNumber, p.Size(), logging.PacketDropUnexpectedVersion)
-			}
-			// The Version Negotiation packet contains the version that we offered.
-			// This might be a packet sent by an attacker, or it was corrupted.
-			return
+	if slices.Contains(supportedVersions, s.version) {
+		if s.tracer != nil && s.tracer.DroppedPacket != nil {
+			s.tracer.DroppedPacket(logging.PacketTypeVersionNegotiation, protocol.InvalidPacketNumber, p.Size(), logging.PacketDropUnexpectedVersion)
 		}
+		// The Version Negotiation packet contains the version that we offered.
+		// This might be a packet sent by an attacker, or it was corrupted.
+		return
 	}
 
 	s.logger.Infof("Received a Version Negotiation packet. Supported Versions: %s", supportedVersions)
@@ -1530,7 +1528,7 @@ func (s *connection) handleFrame(
 	case *wire.NewConnectionIDFrame:
 		err = s.handleNewConnectionIDFrame(frame)
 	case *wire.RetireConnectionIDFrame:
-		err = s.handleRetireConnectionIDFrame(frame, destConnID)
+		err = s.handleRetireConnectionIDFrame(rcvTime, frame, destConnID)
 	case *wire.HandshakeDoneFrame:
 		err = s.handleHandshakeDoneFrame(rcvTime)
 	case *wire.DatagramFrame:
@@ -1740,7 +1738,7 @@ func (s *connection) handleNewTokenFrame(frame *wire.NewTokenFrame) error {
 		}
 	}
 	if s.config.TokenStore != nil {
-		s.config.TokenStore.Put(s.tokenStoreKey, &ClientToken{data: frame.Token})
+		s.config.TokenStore.Put(s.tokenStoreKey, &ClientToken{data: frame.Token, rtt: s.rttStats.SmoothedRTT()})
 	}
 	return nil
 }
@@ -1749,8 +1747,8 @@ func (s *connection) handleNewConnectionIDFrame(f *wire.NewConnectionIDFrame) er
 	return s.connIDManager.Add(f)
 }
 
-func (s *connection) handleRetireConnectionIDFrame(f *wire.RetireConnectionIDFrame, destConnID protocol.ConnectionID) error {
-	return s.connIDGenerator.Retire(f.SequenceNumber, destConnID)
+func (s *connection) handleRetireConnectionIDFrame(now time.Time, f *wire.RetireConnectionIDFrame, destConnID protocol.ConnectionID) error {
+	return s.connIDGenerator.Retire(f.SequenceNumber, destConnID, now.Add(3*s.rttStats.PTO(false)))
 }
 
 func (s *connection) handleHandshakeDoneFrame(rcvTime time.Time) error {
@@ -1906,7 +1904,7 @@ func (s *connection) handleCloseError(closeErr *closeError) {
 
 	// If this is a remote close we're done here
 	if isRemoteClose {
-		s.connIDGenerator.ReplaceWithClosed(nil)
+		s.connIDGenerator.ReplaceWithClosed(nil, 3*s.rttStats.PTO(false))
 		return
 	}
 	if closeErr.immediate {
@@ -1923,7 +1921,7 @@ func (s *connection) handleCloseError(closeErr *closeError) {
 	if err != nil {
 		s.logger.Debugf("Error sending CONNECTION_CLOSE: %s", err)
 	}
-	s.connIDGenerator.ReplaceWithClosed(connClosePacket)
+	s.connIDGenerator.ReplaceWithClosed(connClosePacket, 3*s.rttStats.PTO(false))
 }
 
 func (s *connection) dropEncryptionLevel(encLevel protocol.EncryptionLevel, now time.Time) error {
@@ -2648,13 +2646,12 @@ func (s *connection) AddPath(t *Transport) (*Path, error) {
 		t,
 		200*time.Millisecond, // initial RTT estimate
 		func() {
-			runner := t.connRunner()
+			runner := (*packetHandlerMap)(t)
 			s.connIDGenerator.AddConnRunner(
-				t.id(),
+				runner,
 				connRunnerCallbacks{
 					AddConnectionID:    func(connID protocol.ConnectionID) { runner.Add(connID, s) },
 					RemoveConnectionID: runner.Remove,
-					RetireConnectionID: runner.Retire,
 					ReplaceWithClosed:  runner.ReplaceWithClosed,
 				},
 			)

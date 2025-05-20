@@ -211,13 +211,6 @@ func requestFromHeaders(headerFields []qpack.HeaderField) (*http.Request, error)
 	}, nil
 }
 
-func hostnameFromURL(url *url.URL) string {
-	if url != nil {
-		return url.Host
-	}
-	return ""
-}
-
 // updateResponseFromHeaders sets up http.Response as an HTTP/3 response,
 // using the decoded qpack header filed.
 // It is only called for the HTTP header (and not the HTTP trailer).
@@ -228,7 +221,7 @@ func updateResponseFromHeaders(rsp *http.Response, headerFields []qpack.HeaderFi
 		return err
 	}
 	if hdr.Status == "" {
-		return errors.New("missing status field")
+		return errors.New("missing :status field")
 	}
 	rsp.Proto = "HTTP/3.0"
 	rsp.ProtoMajor = 3

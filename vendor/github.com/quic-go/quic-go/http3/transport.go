@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptrace"
+	"net/url"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -203,8 +204,12 @@ func (t *Transport) roundTripOpt(req *http.Request, opt RoundTripOpt) (*http.Res
 		}
 	}
 
-	trace := httptrace.ContextClientTrace(req.Context())
+	return t.doRoundTripOpt(req, opt, false)
+}
+
+func (t *Transport) doRoundTripOpt(req *http.Request, opt RoundTripOpt, isRetried bool) (*http.Response, error) {
 	hostname := authorityAddr(hostnameFromURL(req.URL))
+	trace := httptrace.ContextClientTrace(req.Context())
 	traceGetConn(trace, hostname)
 	cl, isReused, err := t.getClient(req.Context(), hostname, opt.OnlyCachedConn)
 	if err != nil {
@@ -221,8 +226,8 @@ func (t *Transport) roundTripOpt(req *http.Request, opt RoundTripOpt) (*http.Res
 		t.removeClient(hostname)
 		return nil, cl.dialErr
 	}
-	traceGotConn(trace, cl.conn, isReused)
 	defer cl.useCount.Add(-1)
+	traceGotConn(trace, cl.conn, isReused)
 	rsp, err := cl.clientConn.RoundTrip(req)
 	if err != nil {
 		// request aborted due to context cancellation
@@ -231,26 +236,49 @@ func (t *Transport) roundTripOpt(req *http.Request, opt RoundTripOpt) (*http.Res
 			return nil, err
 		default:
 		}
-
-		// Retry the request on a new connection if:
-		// 1. it was sent on a reused connection,
-		// 2. this connection is now closed,
-		// 3. and the error is a timeout error.
-		select {
-		case <-cl.conn.Context().Done():
-			t.removeClient(hostname)
-			if isReused {
-				var nerr net.Error
-				if errors.As(err, &nerr) && nerr.Timeout() {
-					return t.RoundTripOpt(req, opt)
-				}
-			}
-			return nil, err
-		default:
+		if isRetried {
 			return nil, err
 		}
+
+		t.removeClient(hostname)
+		req, err = canRetryRequest(err, req)
+		if err != nil {
+			return nil, err
+		}
+		return t.doRoundTripOpt(req, opt, true)
 	}
 	return rsp, nil
+}
+
+func canRetryRequest(err error, req *http.Request) (*http.Request, error) {
+	// error occurred while opening the stream, we can be sure that the request wasn't sent out
+	var connErr *errConnUnusable
+	if errors.As(err, &connErr) {
+		return req, nil
+	}
+
+	// If the request stream is reset, we can only be sure that the request wasn't processed
+	// if the error code is H3_REQUEST_REJECTED.
+	var e *Error
+	if !errors.As(err, &e) || e.ErrorCode != ErrCodeRequestRejected {
+		return nil, err
+	}
+	// if the body is nil (or http.NoBody), it's safe to reuse this request and its body
+	if req.Body == nil || req.Body == http.NoBody {
+		return req, nil
+	}
+	// if the request body can be reset back to its original state via req.GetBody, do that
+	if req.GetBody != nil {
+		newBody, err := req.GetBody()
+		if err != nil {
+			return nil, err
+		}
+		reqCopy := *req
+		reqCopy.Body = newBody
+		req = &reqCopy
+		return &reqCopy, nil
+	}
+	return nil, fmt.Errorf("http3: Transport: cannot retry err [%w] after Request.Body was written; define Request.GetBody to avoid this error", err)
 }
 
 // RoundTrip does a round trip.
@@ -426,6 +454,13 @@ func (t *Transport) Close() error {
 		t.transport = nil
 	}
 	return nil
+}
+
+func hostnameFromURL(url *url.URL) string {
+	if url != nil {
+		return url.Host
+	}
+	return ""
 }
 
 func validMethod(method string) bool {

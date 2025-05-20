@@ -46,29 +46,83 @@ type node[K comparable, V any] struct {
 	prev    *node[K, V]
 }
 
+// allocator manages a fixed pool of pre-allocated nodes and a freelist
+type allocator[K comparable, V any] struct {
+	nodes    []node[K, V] // Pre-allocated array of all nodes
+	freelist *node[K, V]  // Head of freelist of available nodes
+	backing  []node[K, V] // backing array - to help with reset/purge
+}
+
+// newAllocator creates a new allocator with capacity nodes
+func newAllocator[K comparable, V any](capacity int) *allocator[K, V] {
+	a := make([]node[K, V], capacity)
+	return &allocator[K, V]{
+		nodes:    a,
+		freelist: nil,
+		backing:  a,
+	}
+}
+
+// alloc retrieves a node from the allocator
+// It first tries the freelist, then falls back to the pre-allocated array
+func (a *allocator[K, V]) alloc() *node[K, V] {
+	// If freelist is not empty, use a node from there
+	if a.freelist != nil {
+		n := a.freelist
+		a.freelist = n.next
+		return n
+	}
+
+	// If we've used all pre-allocated nodes, return nil
+	if len(a.nodes) == 0 {
+		return nil
+	}
+
+	// Take a node from the pre-allocated array and shrink it
+	n := &a.nodes[0]
+	a.nodes = a.nodes[1:]
+	return n
+}
+
+// free returns a node to the freelist
+func (a *allocator[K, V]) free(n *node[K, V]) {
+	// Add the node to the head of the freelist
+	n.next = a.freelist
+	a.freelist = n
+}
+
+// reset resets the allocator as if newAllocator() is called
+func (a *allocator[K, V]) reset() {
+	a.freelist = nil
+	a.nodes = a.backing
+}
+
+// capacity returns the capacity of the cache
+func (a *allocator[K, V]) capacity() int {
+	return cap(a.backing)
+}
+
 // Sieve represents a cache mapping the key of type 'K' with
 // a value of type 'V'. The type 'K' must implement the
 // comparable trait. An instance of Sieve has a fixed max capacity;
 // new additions to the cache beyond the capacity will cause cache
 // eviction of other entries - as determined by the SIEVE algorithm.
 type Sieve[K comparable, V any] struct {
-	mu       sync.Mutex
-	cache    *syncMap[K, *node[K, V]]
-	head     *node[K, V]
-	tail     *node[K, V]
-	hand     *node[K, V]
-	size     int
-	capacity int
+	mu    sync.Mutex
+	cache *syncMap[K, *node[K, V]]
+	head  *node[K, V]
+	tail  *node[K, V]
+	hand  *node[K, V]
+	size  int
 
-	pool *syncPool[node[K, V]]
+	allocator *allocator[K, V]
 }
 
 // New creates a new cache of size 'capacity' mapping key 'K' to value 'V'
 func New[K comparable, V any](capacity int) *Sieve[K, V] {
 	s := &Sieve[K, V]{
-		cache:    newSyncMap[K, *node[K, V]](),
-		capacity: capacity,
-		pool:     newSyncPool[node[K, V]](),
+		cache:     newSyncMap[K, *node[K, V]](),
+		allocator: newAllocator[K, V](capacity),
 	}
 	return s
 }
@@ -92,8 +146,8 @@ func (s *Sieve[K, V]) Get(key K) (V, bool) {
 func (s *Sieve[K, V]) Add(key K, val V) bool {
 
 	if v, ok := s.cache.Get(key); ok {
-		v.visited.Store(true)
 		v.Lock()
+		v.visited.Store(true)
 		v.val = val
 		v.Unlock()
 		return true
@@ -143,6 +197,11 @@ func (s *Sieve[K, V]) Purge() {
 	s.cache = newSyncMap[K, *node[K, V]]()
 	s.head = nil
 	s.tail = nil
+	s.hand = nil
+
+	// Reset the allocator
+	s.allocator.reset()
+	s.size = 0
 	s.mu.Unlock()
 }
 
@@ -153,7 +212,7 @@ func (s *Sieve[K, V]) Len() int {
 
 // Cap returns the max cache capacity
 func (s *Sieve[K, V]) Cap() int {
-	return s.capacity
+	return s.allocator.capacity()
 }
 
 // String returns a string description of the sieve cache
@@ -189,7 +248,7 @@ func (s *Sieve[K, V]) Dump() string {
 // caller must hold lock.
 func (s *Sieve[K, V]) add(key K, val V) {
 	// cache miss; we evict and fnd a new node
-	if s.size == s.capacity {
+	if s.size == s.allocator.capacity() {
 		s.evict()
 	}
 
@@ -257,11 +316,17 @@ func (s *Sieve[K, V]) remove(n *node[K, V]) {
 		s.tail = n.prev
 	}
 
-	s.pool.Put(n)
+	// Return the node to the allocator's freelist
+	s.allocator.free(n)
 }
 
 func (s *Sieve[K, V]) newNode(key K, val V) *node[K, V] {
-	n := s.pool.Get()
+	// Get a node from the allocator
+	n := s.allocator.alloc()
+	if n == nil {
+		return nil
+	}
+
 	n.key, n.val = key, val
 	n.next, n.prev = nil, nil
 	n.visited.Store(false)
@@ -272,31 +337,8 @@ func (s *Sieve[K, V]) newNode(key K, val V) *node[K, V] {
 // desc describes the properties of the sieve
 func (s *Sieve[K, V]) desc() string {
 	m := fmt.Sprintf("cache<%T>: size %d, cap %d, head=%p, tail=%p, hand=%p",
-		s, s.size, s.capacity, s.head, s.tail, s.hand)
+		s, s.size, s.allocator.capacity(), s.head, s.tail, s.hand)
 	return m
-}
-
-// Generic sync.Pool
-type syncPool[T any] struct {
-	pool sync.Pool
-}
-
-func newSyncPool[T any]() *syncPool[T] {
-	p := &syncPool[T]{
-		pool: sync.Pool{
-			New: func() any { return new(T) },
-		},
-	}
-	return p
-}
-
-func (s *syncPool[T]) Get() *T {
-	p := s.pool.Get()
-	return p.(*T)
-}
-
-func (s *syncPool[T]) Put(n *T) {
-	s.pool.Put(n)
 }
 
 // generic sync.Map

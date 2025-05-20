@@ -14,8 +14,7 @@ import (
 	"golang.org/x/net/http/httpguts"
 )
 
-// The HTTPStreamer allows taking over a HTTP/3 stream. The interface is implemented the http.Response.Body.
-// On the client side, the stream will be closed for writing, unless the DontCloseRequestStream RoundTripOpt was set.
+// The HTTPStreamer allows taking over a HTTP/3 stream. The interface is implemented by the http.ResponseWriter.
 // When a stream is taken over, it's the caller's responsibility to close the stream.
 type HTTPStreamer interface {
 	HTTPStream() Stream
@@ -57,6 +56,13 @@ var (
 	_ http.Flusher        = &responseWriter{}
 	_ Hijacker            = &responseWriter{}
 	_ HTTPStreamer        = &responseWriter{}
+	// make sure that we implement (some of the) methods used by the http.ResponseController
+	_ interface {
+		SetReadDeadline(time.Time) error
+		SetWriteDeadline(time.Time) error
+		Flush()
+		FlushError() error
+	} = &responseWriter{}
 )
 
 func newResponseWriter(str *stream, conn Connection, isHead bool, logger *slog.Logger) *responseWriter {
