@@ -4,7 +4,6 @@ import (
 	"crypto/sha512"
 	"encoding/binary"
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/jedisct1/go-sieve-cache/pkg/sievecache"
@@ -19,8 +18,7 @@ type CachedResponse struct {
 }
 
 type CachedResponses struct {
-	sync.RWMutex
-	cache *sievecache.SyncSieveCache[[32]byte, CachedResponse]
+	cache *sievecache.ShardedSieveCache[[32]byte, CachedResponse]
 }
 
 var cachedResponses CachedResponses
@@ -71,19 +69,15 @@ func (plugin *PluginCache) Reload() error {
 func (plugin *PluginCache) Eval(pluginsState *PluginsState, msg *dns.Msg) error {
 	cacheKey := computeCacheKey(pluginsState, msg)
 
-	cachedResponses.RLock()
 	if cachedResponses.cache == nil {
-		cachedResponses.RUnlock()
 		return nil
 	}
 	cached, ok := cachedResponses.cache.Get(cacheKey)
 	if !ok {
-		cachedResponses.RUnlock()
 		return nil
 	}
 	expiration := cached.expiration
 	synth := cached.msg.Copy()
-	cachedResponses.RUnlock()
 
 	synth.Id = msg.Id
 	synth.Response = true
@@ -148,17 +142,14 @@ func (plugin *PluginCacheResponse) Eval(pluginsState *PluginsState, msg *dns.Msg
 		expiration: time.Now().Add(ttl),
 		msg:        *msg,
 	}
-	cachedResponses.Lock()
 	if cachedResponses.cache == nil {
-		cache, err := sievecache.NewSync[[32]byte, CachedResponse](pluginsState.cacheSize)
+		cache, err := sievecache.NewSharded[[32]byte, CachedResponse](pluginsState.cacheSize)
 		if err != nil {
-			cachedResponses.Unlock()
 			return fmt.Errorf("failed to initialize the cache: %w", err)
 		}
 		cachedResponses.cache = cache
 	}
 	cachedResponses.cache.Insert(cacheKey, cachedResponse)
-	cachedResponses.Unlock()
 	updateTTL(msg, cachedResponse.expiration)
 
 	return nil
