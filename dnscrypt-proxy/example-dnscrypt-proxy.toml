@@ -950,7 +950,8 @@ enabled = false
 listen_address = "127.0.0.1:8080"
 
 ## Optional username and password for basic authentication
-## If both are empty, no authentication is required
+## To disable authentication, set username to an empty string: username = ""
+## If both username and password are empty, no authentication is required
 username = "admin"
 password = "changeme"
 

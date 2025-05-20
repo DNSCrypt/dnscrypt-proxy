@@ -120,7 +120,7 @@ func newConfig() Config {
 		MonitoringUI: MonitoringUIConfig{
 			Enabled:        false,
 			ListenAddress:  "127.0.0.1:8080",
-			Username:       "admin",
+			Username:       "admin",      // Set to empty string to disable authentication
 			Password:       "changeme",
 			EnableQueryLog: false,
 			PrivacyLevel:   2,
