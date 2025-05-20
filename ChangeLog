@@ -16,6 +16,8 @@ username to an empty string in the configuration.
  - Tor isolation for dnscrypt-proxy has been documented to enhance privacy.
  - The default example configuration file has been improved for clarity and
 usability.
+ - The cache lock contention has been reduced to improve performance under
+high load.
  - generate-domains-blocklist: added parallel downloading of block lists for
 significantly improved performance.
 
