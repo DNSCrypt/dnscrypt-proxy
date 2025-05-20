@@ -26,7 +26,11 @@ jobs:
       - name: Get the version
         id: get_version
         run: |
-          VERSION=${GITHUB_REF/refs\/tags\//}
+          if [[ $GITHUB_REF == refs/tags/* ]]; then
+            VERSION=${GITHUB_REF/refs\/tags\//}
+          else
+            VERSION="dev-$(date +'%Y%m%d-%H%M%S')-${GITHUB_SHA::8}"
+          fi
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
           echo "Tag version: $VERSION"
 
@@ -48,12 +52,10 @@ jobs:
           cd -
 
       - name: Build all
-        if: startsWith(github.ref, 'refs/tags/')
         run: |
           .ci/ci-build.sh "${{ steps.get_version.outputs.VERSION }}"
 
       - name: Package
-        if: startsWith(github.ref, 'refs/tags/')
         run: |
           .ci/ci-package.sh "${{ steps.get_version.outputs.VERSION }}"
 
@@ -72,6 +74,16 @@ jobs:
           cd dnscrypt-proxy
           echo | /tmp/bin/minisign -s /tmp/minisign.key -Sm *.tar.gz *.zip
           ls -l dnscrypt-proxy*
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dnscrypt-proxy-${{ steps.get_version.outputs.VERSION }}
+          path: |
+            dnscrypt-proxy/*.zip
+            dnscrypt-proxy/*.tar.gz
+          retention-days: 30
+          if-no-files-found: error
 
       - name: Check if release exists
         id: check_release
