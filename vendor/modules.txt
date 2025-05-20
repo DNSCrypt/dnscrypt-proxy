@@ -59,6 +59,9 @@ github.com/jedisct1/go-hpke-compact
 # github.com/jedisct1/go-minisign v0.0.0-20241212093149-d2f9f49435c7
 ## explicit; go 1.23.4
 github.com/jedisct1/go-minisign
+# github.com/jedisct1/go-sieve-cache v0.0.0 => ./tmp/go-sieve
+## explicit; go 1.21
+github.com/jedisct1/go-sieve-cache/pkg/sievecache
 # github.com/jedisct1/xsecretbox v0.0.0-20241212092125-3afc4917ac41
 ## explicit; go 1.23.4
 github.com/jedisct1/xsecretbox
@@ -92,9 +95,6 @@ github.com/onsi/ginkgo/v2/internal/interrupt_handler
 github.com/onsi/ginkgo/v2/internal/parallel_support
 github.com/onsi/ginkgo/v2/reporters
 github.com/onsi/ginkgo/v2/types
-# github.com/opencoff/go-sieve v0.3.0
-## explicit; go 1.24.3
-github.com/opencoff/go-sieve
 # github.com/pkg/errors v0.9.1
 ## explicit
 github.com/pkg/errors
@@ -267,3 +267,4 @@ google.golang.org/protobuf/types/known/timestamppb
 # gopkg.in/natefinch/lumberjack.v2 v2.2.1
 ## explicit; go 1.13
 gopkg.in/natefinch/lumberjack.v2
+# github.com/jedisct1/go-sieve-cache => ./tmp/go-sieve

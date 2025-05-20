@@ -20,7 +20,6 @@ require (
 	github.com/kardianos/service v1.2.2
 	github.com/lifenjoiner/dhcpdns v0.0.7
 	github.com/miekg/dns v1.1.66
-	github.com/opencoff/go-sieve v0.3.0
 	github.com/powerman/check v1.8.0
 	github.com/quic-go/quic-go v0.52.0
 	golang.org/x/crypto v0.38.0
@@ -36,6 +35,7 @@ require (
 	github.com/google/pprof v0.0.0-20210407192527-94a9f03dee38 // indirect
 	github.com/hashicorp/go-syslog v1.0.0 // indirect
 	github.com/hashicorp/golang-lru v0.5.0 // indirect
+	github.com/jedisct1/go-sieve-cache v0.0.0
 	github.com/onsi/ginkgo/v2 v2.9.5 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
@@ -51,3 +51,5 @@ require (
 	google.golang.org/grpc v1.56.3 // indirect
 	google.golang.org/protobuf v1.34.2 // indirect
 )
+
+replace github.com/jedisct1/go-sieve-cache => ./tmp/go-sieve

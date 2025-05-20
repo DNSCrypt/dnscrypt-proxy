@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/jedisct1/go-sieve-cache/pkg/sievecache"
 	"github.com/miekg/dns"
-	sieve "github.com/opencoff/go-sieve"
 )
 
 const StaleResponseTTL = 30 * time.Second
@@ -20,7 +20,7 @@ type CachedResponse struct {
 
 type CachedResponses struct {
 	sync.RWMutex
-	cache *sieve.Sieve[[32]byte, CachedResponse]
+	cache *sievecache.SyncSieveCache[[32]byte, CachedResponse]
 }
 
 var cachedResponses CachedResponses
@@ -150,13 +150,14 @@ func (plugin *PluginCacheResponse) Eval(pluginsState *PluginsState, msg *dns.Msg
 	}
 	cachedResponses.Lock()
 	if cachedResponses.cache == nil {
-		cachedResponses.cache = sieve.New[[32]byte, CachedResponse](pluginsState.cacheSize)
-		if cachedResponses.cache == nil {
+		cache, err := sievecache.NewSync[[32]byte, CachedResponse](pluginsState.cacheSize)
+		if err != nil {
 			cachedResponses.Unlock()
-			return fmt.Errorf("failed to initialize the cache")
+			return fmt.Errorf("failed to initialize the cache: %w", err)
 		}
+		cachedResponses.cache = cache
 	}
-	cachedResponses.cache.Add(cacheKey, cachedResponse)
+	cachedResponses.cache.Insert(cacheKey, cachedResponse)
 	cachedResponses.Unlock()
 	updateTTL(msg, cachedResponse.expiration)
 
