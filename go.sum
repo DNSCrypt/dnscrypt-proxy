@@ -51,8 +51,8 @@ github.com/jedisct1/go-hpke-compact v0.0.0-20241212093903-5caa4621366f h1:h5/HKr
 github.com/jedisct1/go-hpke-compact v0.0.0-20241212093903-5caa4621366f/go.mod h1:IjVYCPbDciyDZpJpUIYodX+FvctxGmnHVZ/ZwGBCjNA=
 github.com/jedisct1/go-minisign v0.0.0-20241212093149-d2f9f49435c7 h1:FWpSWRD8FbVkKQu8M1DM9jF5oXFLyE+XpisIYfdzbic=
 github.com/jedisct1/go-minisign v0.0.0-20241212093149-d2f9f49435c7/go.mod h1:BMxO138bOokdgt4UaxZiEfypcSHX0t6SIFimVP1oRfk=
-github.com/jedisct1/go-sieve-cache v0.1.5 h1:ZmkjZc7xvx5CHUw/ePJbRu61KZa6KRyzJlN45x5HBS8=
-github.com/jedisct1/go-sieve-cache v0.1.5/go.mod h1:EN88bnjKpiyS9TfZZNbUkCwgpWueZSaUi4vgVtw2988=
+github.com/jedisct1/go-sieve-cache v0.1.6 h1:cbAUZpdAX2iuX8+eb/nb4G/VlGyFXcKGLAbY9Zaz4XA=
+github.com/jedisct1/go-sieve-cache v0.1.6/go.mod h1:EN88bnjKpiyS9TfZZNbUkCwgpWueZSaUi4vgVtw2988=
 github.com/jedisct1/xsecretbox v0.0.0-20241212092125-3afc4917ac41 h1:TPF+VETyhqUOY51j3KF0uk5cgHQ2Bzi6XCorcGNGfTs=
 github.com/jedisct1/xsecretbox v0.0.0-20241212092125-3afc4917ac41/go.mod h1:eh2PYNEklsNDqUxnbnN9Duvpw1b+ZectZAtDUDRj2tA=
 github.com/jtolds/gls v4.20.0+incompatible h1:xdiiI2gbIgH/gLH7ADydsJ1uDOEzR8yvV7C0MuV77Wo=

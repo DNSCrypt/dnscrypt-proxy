@@ -3,7 +3,7 @@ package sievecache
 import (
 	"errors"
 	"fmt"
-	"hash/fnv"
+	"hash/maphash"
 )
 
 // Default number of shards to use if not specified explicitly.
@@ -90,13 +90,17 @@ func FromSync[K comparable, V any](syncCache *SyncSieveCache[K, V]) *ShardedSiev
 	return shardedCache
 }
 
+var hashSeed = maphash.MakeSeed()
+
 // getShard returns the shard index for a given key.
 func (c *ShardedSieveCache[K, V]) getShardIndex(key K) int {
-	h := fnv.New32a()
+	var h maphash.Hash
+	h.SetSeed(hashSeed)
+
 	// Use type switch to handle different key types efficiently
 	switch k := any(key).(type) {
 	case string:
-		h.Write([]byte(k))
+		h.WriteString(k)
 	case []byte:
 		h.Write(k)
 	case int:
@@ -119,9 +123,11 @@ func (c *ShardedSieveCache[K, V]) getShardIndex(key K) int {
 		h.Write(buf[:])
 	default:
 		// For other types, convert to string
-		h.Write([]byte(ToString(k)))
+		h.WriteString(ToString(k))
 	}
-	return int(h.Sum32()) % c.numShards
+
+	hashValue := h.Sum64()
+	return int(hashValue % uint64(c.numShards))
 }
 
 // ToString converts a value to string for hashing.
@@ -347,5 +353,3 @@ func (c *ShardedSieveCache[K, V]) RecommendedCapacity(minFactor, maxFactor, lowT
 
 	return max(c.numShards, totalRecommended)
 }
-
-// Using fmt.Sprintf instead of a custom implementation for better reliability

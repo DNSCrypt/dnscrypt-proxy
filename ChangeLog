@@ -1,3 +1,6 @@
+# Version 2.1.11
+ - The sievecache dependency was updated to fix a bug causing the cache to crash.
+
 # Version 2.1.10
  - Hot-reloading of configuration files is now optional and disabled by default.
 It can be enabled by setting `enable_hot_reload = true` in the configuration file.
