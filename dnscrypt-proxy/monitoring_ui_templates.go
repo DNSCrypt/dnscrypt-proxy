@@ -318,6 +318,12 @@ function safeUpdateDashboard(data) {
 
         console.log('Updating dashboard with data');
 
+        // Store the current scroll position before updates
+        const scrollPos = {
+            x: window.scrollX || window.pageXOffset,
+            y: window.scrollY || window.pageYOffset
+        };
+
         // Hide loading indicator when data is loaded
         var loadingIndicator = document.getElementById('loading-indicator');
         if (loadingIndicator) {
@@ -393,6 +399,9 @@ function safeUpdateDashboard(data) {
                 row.insertCell(6).textContent = (query.response_time || 0) + ' ms';
             });
         }
+
+        // Restore scroll position after DOM updates
+        window.scrollTo(scrollPos.x, scrollPos.y);
     } catch (error) {
         console.error('Error updating dashboard:', error);
     }
