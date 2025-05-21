@@ -390,13 +390,35 @@ func (mc *MetricsCollector) GetMetrics() map[string]interface{} {
 		}
 	}
 
-	// Get query type distribution
+	// Get query type distribution sorted by decreasing count and limited to 10
 	queryTypesList := make([]map[string]interface{}, 0)
+
+	// Create a slice of query type-count pairs
+	type queryTypeCount struct {
+		qtype string
+		count uint64
+	}
+	queryTypeCounts := make([]queryTypeCount, 0, len(mc.queryTypes))
 	for qtype, count := range mc.queryTypes {
+		queryTypeCounts = append(queryTypeCounts, queryTypeCount{qtype, count})
+	}
+
+	// Sort by decreasing count
+	sort.Slice(queryTypeCounts, func(i, j int) bool {
+		return queryTypeCounts[i].count > queryTypeCounts[j].count
+	})
+
+	// Take top 10
+	count := 0
+	for _, qtc := range queryTypeCounts {
 		queryTypesList = append(queryTypesList, map[string]interface{}{
-			"type":  qtype,
-			"count": count,
+			"type":  qtc.qtype,
+			"count": qtc.count,
 		})
+		count++
+		if count >= 10 {
+			break
+		}
 	}
 
 	// Return all metrics
