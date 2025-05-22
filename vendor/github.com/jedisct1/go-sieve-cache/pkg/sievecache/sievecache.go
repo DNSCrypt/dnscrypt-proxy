@@ -8,16 +8,17 @@ import (
 // SieveCache provides an efficient in-memory cache with the SIEVE eviction algorithm.
 // This is the single-threaded implementation.
 type SieveCache[K comparable, V any] struct {
-	// Map of keys to indices in the nodes slice
+	// Map of keys to indices in the nodes slice (pointer, 8 bytes)
 	indices map[K]int
-	// Slice of all cache nodes
+	// Slice of all cache nodes (pointer + len + cap, 24 bytes)
 	nodes []Node[K, V]
-	// Index to the "hand" pointer used by the SIEVE algorithm for eviction
-	hand int
-	// Flag indicating if the hand pointer is initialized
-	handInitialized bool
-	// Maximum number of entries the cache can hold
+	// Bit array for visited flags using 1 bit per entry (pointer, 8 bytes)
+	visited *BitSet
+	// Grouping integer fields together for better memory alignment (each 8 bytes)
 	capacity int
+	hand     int
+	// Place smaller fields last to minimize padding (bool is 1 byte)
+	handInitialized bool
 }
 
 // New creates a new cache with the given capacity.
@@ -30,6 +31,7 @@ func New[K comparable, V any](capacity int) (*SieveCache[K, V], error) {
 	return &SieveCache[K, V]{
 		indices:         make(map[K]int, capacity),
 		nodes:           make([]Node[K, V], 0, capacity),
+		visited:         NewBitSet(capacity),
 		hand:            0,
 		handInitialized: false,
 		capacity:        capacity,
@@ -69,7 +71,7 @@ func (c *SieveCache[K, V]) Get(key K) (V, bool) {
 	}
 
 	// Mark as visited for the SIEVE algorithm
-	c.nodes[idx].Visited = true
+	c.visited.Set(idx, true)
 	return c.nodes[idx].Value, true
 }
 
@@ -84,7 +86,7 @@ func (c *SieveCache[K, V]) GetPointer(key K) *V {
 	}
 
 	// Mark as visited for the SIEVE algorithm
-	c.nodes[idx].Visited = true
+	c.visited.Set(idx, true)
 	return &c.nodes[idx].Value
 }
 
@@ -95,7 +97,7 @@ func (c *SieveCache[K, V]) Insert(key K, value V) bool {
 	// Check if key already exists
 	if idx, exists := c.indices[key]; exists {
 		// Update existing entry
-		c.nodes[idx].Visited = true
+		c.visited.Set(idx, true)
 		c.nodes[idx].Value = value
 		return false
 	}
@@ -109,6 +111,7 @@ func (c *SieveCache[K, V]) Insert(key K, value V) bool {
 	node := NewNode(key, value)
 	c.nodes = append(c.nodes, node)
 	idx := len(c.nodes) - 1
+	c.visited.Append(false) // Initialize as not visited
 	c.indices[key] = idx
 	return true
 }
@@ -129,6 +132,7 @@ func (c *SieveCache[K, V]) Remove(key K) (V, bool) {
 	if idx == len(c.nodes)-1 {
 		node := c.nodes[len(c.nodes)-1]
 		c.nodes = c.nodes[:len(c.nodes)-1]
+		c.visited.Truncate(len(c.nodes))
 		return node.Value, true
 	}
 
@@ -149,9 +153,16 @@ func (c *SieveCache[K, V]) Remove(key K) (V, bool) {
 
 	// Remove the node by replacing it with the last one and updating the map
 	removedNode := c.nodes[idx]
-	lastNode := c.nodes[len(c.nodes)-1]
+	lastIdx := len(c.nodes) - 1
+	lastNode := c.nodes[lastIdx]
+
+	// Move the last node to the removed position
 	c.nodes[idx] = lastNode
-	c.nodes = c.nodes[:len(c.nodes)-1]
+	c.visited.Set(idx, c.visited.Get(lastIdx))
+
+	// Truncate slices
+	c.nodes = c.nodes[:lastIdx]
+	c.visited.Truncate(lastIdx)
 
 	// Update the indices map for the moved node
 	if idx < len(c.nodes) {
@@ -187,13 +198,13 @@ func (c *SieveCache[K, V]) Evict() (V, bool) {
 	// Scan for a non-visited entry
 	for {
 		// If current node is not visited, mark it for eviction
-		if !c.nodes[currentIdx].Visited {
+		if !c.visited.Get(currentIdx) {
 			foundIdx = currentIdx
 			break
 		}
 
 		// Mark as non-visited for next scan
-		c.nodes[currentIdx].Visited = false
+		c.visited.Set(currentIdx, false)
 
 		// Move to previous node or wrap to end
 		if currentIdx > 0 {
@@ -238,13 +249,17 @@ func (c *SieveCache[K, V]) Evict() (V, bool) {
 		if evictIdx == len(c.nodes)-1 {
 			// If last node, just remove it
 			c.nodes = c.nodes[:len(c.nodes)-1]
+			c.visited.Truncate(len(c.nodes))
 			return nodeToEvict.Value, true
 		}
 
 		// Otherwise swap with the last node
-		lastNode := c.nodes[len(c.nodes)-1]
+		lastIdx := len(c.nodes) - 1
+		lastNode := c.nodes[lastIdx]
 		c.nodes[evictIdx] = lastNode
-		c.nodes = c.nodes[:len(c.nodes)-1]
+		c.visited.Set(evictIdx, c.visited.Get(lastIdx))
+		c.nodes = c.nodes[:lastIdx]
+		c.visited.Truncate(lastIdx)
 
 		// Update the indices map for the moved node
 		c.indices[lastNode.Key] = evictIdx
@@ -257,8 +272,12 @@ func (c *SieveCache[K, V]) Evict() (V, bool) {
 
 // Clear removes all entries from the cache.
 func (c *SieveCache[K, V]) Clear() {
+	// Pre-allocate map with capacity hint to avoid rehashing during growth
 	c.indices = make(map[K]int, c.capacity)
+	// Pre-allocate slice with capacity hint to minimize reallocations
 	c.nodes = make([]Node[K, V], 0, c.capacity)
+	// Initialize bit set
+	c.visited = NewBitSet(c.capacity)
 	c.hand = 0
 	c.handInitialized = false
 }
@@ -310,20 +329,32 @@ func (c *SieveCache[K, V]) ForEach(f func(k K, v V)) {
 	}
 }
 
+// ForEachValue iterates over all values in the cache and applies the function f to each.
+// This allows modifying the values in-place.
+func (c *SieveCache[K, V]) ForEachValue(f func(v *V)) {
+	for i := range c.nodes {
+		f(&c.nodes[i].Value)
+	}
+}
+
 // Retain only keeps elements specified by the predicate.
 // Removes all entries for which f returns false.
 func (c *SieveCache[K, V]) Retain(f func(k K, v V) bool) {
-	// Estimate number of elements to remove - pre-allocate with a reasonable capacity
-	estimatedRemoveCount := len(c.nodes) / 4 // Assume about 25% will be removed
-	if estimatedRemoveCount < 8 {
-		estimatedRemoveCount = 8 // Minimum size for small caches
+	// Use a more efficient allocation strategy for the removal list
+	nodeCount := len(c.nodes)
+	if nodeCount == 0 {
+		return
 	}
-	if estimatedRemoveCount > 1024 {
-		estimatedRemoveCount = 1024 // Cap at reasonable maximum
+
+	// Start with a small capacity and grow as needed
+	// This avoids over-allocation for large caches with few removals
+	initialCap := min(32, nodeCount/4)
+	if initialCap < 8 {
+		initialCap = 8
 	}
 
 	// Collect indices to remove
-	toRemove := make([]int, 0, estimatedRemoveCount)
+	toRemove := make([]int, 0, initialCap)
 
 	for i, node := range c.nodes {
 		if !f(node.Key, node.Value) {
@@ -341,6 +372,7 @@ func (c *SieveCache[K, V]) Retain(f func(k K, v V) bool) {
 		// If it's the last element, just remove it
 		if idx == len(c.nodes)-1 {
 			c.nodes = c.nodes[:len(c.nodes)-1]
+			c.visited.Truncate(len(c.nodes))
 		} else {
 			// Replace with the last element
 			lastIdx := len(c.nodes) - 1
@@ -348,7 +380,9 @@ func (c *SieveCache[K, V]) Retain(f func(k K, v V) bool) {
 
 			// Move the last node to the removed position
 			c.nodes[idx] = lastNode
+			c.visited.Set(idx, c.visited.Get(lastIdx))
 			c.nodes = c.nodes[:lastIdx]
+			c.visited.Truncate(lastIdx)
 
 			// Update indices map if not removed
 			if idx < len(c.nodes) {
@@ -388,12 +422,7 @@ func (c *SieveCache[K, V]) RecommendedCapacity(minFactor, maxFactor, lowThreshol
 	}
 
 	// Count entries with visited flag set
-	visitedCount := 0
-	for _, node := range c.nodes {
-		if node.Visited {
-			visitedCount++
-		}
-	}
+	visitedCount := c.visited.CountSetBits()
 
 	// Calculate the utilization ratio (visited entries / total entries)
 	utilizationRatio := float64(visitedCount) / float64(len(c.nodes))
