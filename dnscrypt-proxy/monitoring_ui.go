@@ -78,6 +78,12 @@ type MetricsCollector struct {
 	maxMemoryBytes     int64
 	currentMemoryBytes int64
 	privacyLevel       int
+
+	// Caching for expensive calculations
+	cacheMutex      sync.RWMutex
+	cachedMetrics   map[string]interface{}
+	cacheLastUpdate time.Time
+	cacheTTL        time.Duration
 }
 
 // QueryLogEntry - Entry for the query log
@@ -112,6 +118,12 @@ type MonitoringUI struct {
 	clients          map[*websocket.Conn]bool
 	clientsMutex     sync.Mutex
 	proxy            *Proxy
+
+	// WebSocket broadcast rate limiting
+	broadcastMutex    sync.Mutex
+	lastBroadcast     time.Time
+	broadcastMinDelay time.Duration
+	pendingBroadcast  bool
 }
 
 // NewMonitoringUI - Creates a new monitoring UI
@@ -145,6 +157,9 @@ func NewMonitoringUI(proxy *Proxy) *MonitoringUI {
 		maxMemoryBytes:     int64(maxMemoryMB * 1024 * 1024),
 		currentMemoryBytes: 0,
 		privacyLevel:       proxy.monitoringUI.PrivacyLevel,
+		// Initialize caching with 1 second TTL
+		cacheTTL:      time.Second,
+		cachedMetrics: make(map[string]interface{}),
 	}
 
 	dlog.Debugf("Metrics collector initialized with privacy level: %d", metricsCollector.privacyLevel)
@@ -173,6 +188,8 @@ func NewMonitoringUI(proxy *Proxy) *MonitoringUI {
 		},
 		clients: make(map[*websocket.Conn]bool),
 		proxy:   proxy,
+		// Initialize broadcast rate limiting with 100ms minimum delay
+		broadcastMinDelay: 100 * time.Millisecond,
 	}
 }
 
@@ -264,6 +281,9 @@ func (ui *MonitoringUI) UpdateMetrics(pluginsState PluginsState, msg *dns.Msg, s
 		dlog.Debugf("Cache miss, total misses: %d", mc.cacheMisses)
 	}
 	mc.countersMutex.Unlock()
+
+	// Invalidate cache since counters changed
+	mc.invalidateCache()
 
 	// Update query types - separate lock
 	if msg != nil && len(msg.Question) > 0 {
@@ -392,13 +412,30 @@ func (ui *MonitoringUI) UpdateMetrics(pluginsState PluginsState, msg *dns.Msg, s
 		mc.queryLogMutex.Unlock()
 	}
 
-	// Broadcast updates to WebSocket clients
-	go ui.broadcastMetrics()
+	// Broadcast updates to WebSocket clients (rate limited)
+	ui.scheduleBroadcast()
+}
+
+// invalidateCache - Marks the cache as stale (call when data changes)
+func (mc *MetricsCollector) invalidateCache() {
+	mc.cacheMutex.Lock()
+	mc.cacheLastUpdate = time.Time{} // Zero time to force refresh
+	mc.cacheMutex.Unlock()
 }
 
 // GetMetrics - Returns the current metrics
 func (mc *MetricsCollector) GetMetrics() map[string]interface{} {
 	dlog.Debugf("GetMetrics called")
+
+	// Check cache first
+	mc.cacheMutex.RLock()
+	if time.Since(mc.cacheLastUpdate) < mc.cacheTTL && mc.cachedMetrics != nil {
+		cached := mc.cachedMetrics
+		mc.cacheMutex.RUnlock()
+		dlog.Debugf("Returning cached metrics")
+		return cached
+	}
+	mc.cacheMutex.RUnlock()
 
 	// Read basic counters first
 	mc.countersMutex.RLock()
@@ -551,8 +588,8 @@ func (mc *MetricsCollector) GetMetrics() map[string]interface{} {
 	copy(recentQueries, mc.recentQueries)
 	mc.queryLogMutex.RUnlock()
 
-	// Return all metrics
-	return map[string]interface{}{
+	// Return all metrics and cache the result
+	metrics := map[string]interface{}{
 		"total_queries":      totalQueries,
 		"queries_per_second": queriesPerSecond,
 		"uptime_seconds":     time.Since(startTime).Seconds(),
@@ -566,6 +603,15 @@ func (mc *MetricsCollector) GetMetrics() map[string]interface{} {
 		"query_types":        queryTypesList,
 		"recent_queries":     recentQueries,
 	}
+
+	// Cache the computed metrics
+	mc.cacheMutex.Lock()
+	mc.cachedMetrics = metrics
+	mc.cacheLastUpdate = time.Now()
+	mc.cacheMutex.Unlock()
+
+	dlog.Debugf("Computed and cached new metrics")
+	return metrics
 }
 
 // setCORSHeaders - Sets standard CORS headers for all responses
@@ -573,14 +619,27 @@ func setCORSHeaders(w http.ResponseWriter) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+}
+
+// setDynamicCacheHeaders - Sets cache headers for dynamic content (metrics, API)
+func setDynamicCacheHeaders(w http.ResponseWriter) {
 	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 	w.Header().Set("Pragma", "no-cache")
 	w.Header().Set("Expires", "0")
 }
 
+// setStaticCacheHeaders - Sets cache headers for static content
+func setStaticCacheHeaders(w http.ResponseWriter, maxAge int) {
+	w.Header().Set("Cache-Control", fmt.Sprintf("public, max-age=%d", maxAge))
+	w.Header().Set("Expires", time.Now().Add(time.Duration(maxAge)*time.Second).Format(http.TimeFormat))
+}
+
 // handleTestQuery - Handles test query requests for debugging
 func (ui *MonitoringUI) handleTestQuery(w http.ResponseWriter, r *http.Request) {
 	dlog.Debugf("Adding test query")
+
+	// Test queries modify state - no cache
+	setDynamicCacheHeaders(w)
 
 	// Create a fake DNS message
 	msg := &dns.Msg{}
@@ -629,6 +688,9 @@ func (ui *MonitoringUI) handleRoot(w http.ResponseWriter, r *http.Request) {
 
 	// If this is a simple version request, return a simple page
 	if r.URL.Query().Get("simple") == "1" {
+		// Simple page has dynamic content - no cache
+		setDynamicCacheHeaders(w)
+
 		metrics := ui.metricsCollector.GetMetrics()
 
 		// Create a simple HTML page with the metrics
@@ -647,7 +709,8 @@ func (ui *MonitoringUI) handleRoot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Serve the main dashboard page
+	// Serve the main dashboard page - cache for 5 minutes since template is static
+	setStaticCacheHeaders(w, 300)
 	w.Header().Set("Content-Type", "text/html")
 	w.Write([]byte(MainHTMLTemplate))
 }
@@ -656,8 +719,9 @@ func (ui *MonitoringUI) handleRoot(w http.ResponseWriter, r *http.Request) {
 func (ui *MonitoringUI) handleMetrics(w http.ResponseWriter, r *http.Request) {
 	dlog.Debugf("Received metrics request from %s", r.RemoteAddr)
 
-	// Set CORS headers
+	// Set CORS headers and dynamic cache headers for API
 	setCORSHeaders(w)
+	setDynamicCacheHeaders(w)
 
 	// Handle preflight OPTIONS request
 	if r.Method == "OPTIONS" {
@@ -837,6 +901,8 @@ func (ui *MonitoringUI) handleStatic(w http.ResponseWriter, r *http.Request) {
 // handleStaticJS - Serves the JavaScript for the monitoring UI
 func (ui *MonitoringUI) handleStaticJS(w http.ResponseWriter, r *http.Request) {
 	setCORSHeaders(w)
+	// JavaScript is static - cache for 1 hour
+	setStaticCacheHeaders(w, 3600)
 	w.Header().Set("Content-Type", "application/javascript")
 	w.Write([]byte(MonitoringJSContent))
 }
@@ -861,6 +927,40 @@ func (ui *MonitoringUI) basicAuthMiddleware(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+// scheduleBroadcast - Rate-limited scheduling of WebSocket broadcasts
+func (ui *MonitoringUI) scheduleBroadcast() {
+	ui.broadcastMutex.Lock()
+	defer ui.broadcastMutex.Unlock()
+
+	now := time.Now()
+	timeSinceLastBroadcast := now.Sub(ui.lastBroadcast)
+
+	if timeSinceLastBroadcast >= ui.broadcastMinDelay {
+		// Enough time has passed, broadcast immediately
+		ui.lastBroadcast = now
+		ui.pendingBroadcast = false
+		go ui.broadcastMetrics()
+	} else {
+		// Too soon, schedule a delayed broadcast if not already pending
+		if !ui.pendingBroadcast {
+			ui.pendingBroadcast = true
+			delay := ui.broadcastMinDelay - timeSinceLastBroadcast
+			go func() {
+				time.Sleep(delay)
+				ui.broadcastMutex.Lock()
+				if ui.pendingBroadcast {
+					ui.lastBroadcast = time.Now()
+					ui.pendingBroadcast = false
+					ui.broadcastMutex.Unlock()
+					ui.broadcastMetrics()
+				} else {
+					ui.broadcastMutex.Unlock()
+				}
+			}()
+		}
+	}
 }
 
 // broadcastMetrics - Broadcasts metrics to all connected WebSocket clients
