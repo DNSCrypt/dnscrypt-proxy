@@ -346,7 +346,10 @@ func (mc *MetricsCollector) GetMetrics() map[string]interface{} {
 
 	// Sort by increasing average response time (faster servers first)
 	sort.Slice(serverPerfs, func(i, j int) bool {
-		return serverPerfs[i].avgTime < serverPerfs[j].avgTime
+		if serverPerfs[i].avgTime != serverPerfs[j].avgTime {
+			return serverPerfs[i].avgTime < serverPerfs[j].avgTime
+		}
+		return serverPerfs[i].name < serverPerfs[j].name
 	})
 
 	// Convert to map for JSON output
@@ -373,7 +376,10 @@ func (mc *MetricsCollector) GetMetrics() map[string]interface{} {
 
 		// Sort by decreasing count
 		sort.Slice(domainCounts, func(i, j int) bool {
-			return domainCounts[i].count > domainCounts[j].count
+			if domainCounts[i].count != domainCounts[j].count {
+				return domainCounts[i].count > domainCounts[j].count
+			}
+			return domainCounts[i].domain < domainCounts[j].domain
 		})
 
 		// Take top 20
@@ -405,7 +411,10 @@ func (mc *MetricsCollector) GetMetrics() map[string]interface{} {
 
 	// Sort by decreasing count
 	sort.Slice(queryTypeCounts, func(i, j int) bool {
-		return queryTypeCounts[i].count > queryTypeCounts[j].count
+		if queryTypeCounts[i].count != queryTypeCounts[j].count {
+			return queryTypeCounts[i].count > queryTypeCounts[j].count
+		}
+		return queryTypeCounts[i].qtype < queryTypeCounts[j].qtype
 	})
 
 	// Take top 10
