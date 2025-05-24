@@ -976,6 +976,16 @@ enable_query_log = true
 ## 2: aggregate data only (no individual queries or domains shown)
 privacy_level = 1
 
+## Maximum number of recent query log entries to keep in memory
+## Helps control memory usage on high-traffic servers
+## Default: 100
+# max_query_log_entries = 100
+
+## Maximum memory usage in MB for recent query logs
+## Automatic cleanup when limit is exceeded
+## Default: 1
+# max_memory_mb = 1
+
 
 ###############################################################################
 #                            Static entries                                    #
