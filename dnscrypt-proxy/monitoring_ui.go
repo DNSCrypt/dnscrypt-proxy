@@ -47,7 +47,7 @@ type MonitoringUIConfig struct {
 	EnableQueryLog     bool   `toml:"enable_query_log"`
 	PrivacyLevel       int    `toml:"privacy_level"`         // 0: show all details, 1: anonymize client IPs, 2: aggregate only (no individual queries or domains)
 	MaxQueryLogEntries int    `toml:"max_query_log_entries"` // Maximum number of recent queries to keep in memory (default: 100)
-	MaxMemoryMB        int    `toml:"max_memory_mb"`         // Maximum memory usage in MB for recent queries (default: 10MB)
+	MaxMemoryMB        int    `toml:"max_memory_mb"`         // Maximum memory usage in MB for recent queries (default: 1MB)
 }
 
 // MetricsCollector - Collects and stores metrics for the monitoring UI
@@ -130,7 +130,7 @@ func NewMonitoringUI(proxy *Proxy) *MonitoringUI {
 	}
 	maxMemoryMB := proxy.monitoringUI.MaxMemoryMB
 	if maxMemoryMB <= 0 {
-		maxMemoryMB = 10
+		maxMemoryMB = 1
 	}
 
 	// Initialize metrics collector
