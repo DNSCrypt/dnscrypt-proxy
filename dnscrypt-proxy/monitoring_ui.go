@@ -373,7 +373,9 @@ func (mc *MetricsCollector) GetMetrics() map[string]interface{} {
 
 		// Sort by decreasing count
 		sort.Slice(domainCounts, func(i, j int) bool {
-			return domainCounts[i].count > domainCounts[j].count
+			return  domainCounts[i].count  >  domainCounts[j].count ||
+                               (domainCounts[i].count  == domainCounts[j].count &&
+                                domainCounts[i].domain <  domainCounts[j].domain)
 		})
 
 		// Take top 20
