@@ -48,6 +48,8 @@ type MonitoringUIConfig struct {
 	PrivacyLevel       int    `toml:"privacy_level"`         // 0: show all details, 1: anonymize client IPs, 2: aggregate only (no individual queries or domains)
 	MaxQueryLogEntries int    `toml:"max_query_log_entries"` // Maximum number of recent queries to keep in memory (default: 100)
 	MaxMemoryMB        int    `toml:"max_memory_mb"`         // Maximum memory usage in MB for recent queries (default: 1MB)
+	PrometheusEnabled  bool   `toml:"prometheus_enabled"`    // Enable Prometheus metrics endpoint
+	PrometheusPath     string `toml:"prometheus_path"`       // Path for Prometheus metrics endpoint (default: /metrics)
 }
 
 // MetricsCollector - Collects and stores metrics for the monitoring UI
@@ -84,6 +86,9 @@ type MetricsCollector struct {
 	cachedMetrics   map[string]interface{}
 	cacheLastUpdate time.Time
 	cacheTTL        time.Duration
+
+	// Prometheus metrics (optional)
+	prometheusEnabled bool
 }
 
 // QueryLogEntry - Entry for the query log
@@ -124,6 +129,9 @@ type MonitoringUI struct {
 	lastBroadcast     time.Time
 	broadcastMinDelay time.Duration
 	pendingBroadcast  bool
+
+	// Prometheus metrics
+	prometheusPath string
 }
 
 // NewMonitoringUI - Creates a new monitoring UI
@@ -160,6 +168,8 @@ func NewMonitoringUI(proxy *Proxy) *MonitoringUI {
 		// Initialize caching with 1 second TTL
 		cacheTTL:      time.Second,
 		cachedMetrics: make(map[string]interface{}),
+		// Initialize Prometheus
+		prometheusEnabled: proxy.monitoringUI.PrometheusEnabled,
 	}
 
 	dlog.Debugf("Metrics collector initialized with privacy level: %d", metricsCollector.privacyLevel)
@@ -190,6 +200,13 @@ func NewMonitoringUI(proxy *Proxy) *MonitoringUI {
 		proxy:   proxy,
 		// Initialize broadcast rate limiting with 100ms minimum delay
 		broadcastMinDelay: 100 * time.Millisecond,
+		// Initialize Prometheus path
+		prometheusPath: func() string {
+			if proxy.monitoringUI.PrometheusPath != "" {
+				return proxy.monitoringUI.PrometheusPath
+			}
+			return "/metrics"
+		}(),
 	}
 }
 
@@ -206,6 +223,12 @@ func (ui *MonitoringUI) Start() error {
 	mux.HandleFunc("/api/ws", ui.handleWebSocket)
 	mux.HandleFunc("/static/monitoring.js", ui.handleStaticJS)
 	mux.HandleFunc("/static/", ui.handleStatic)
+
+	// Add Prometheus endpoint if enabled
+	if ui.metricsCollector.prometheusEnabled {
+		mux.HandleFunc(ui.prometheusPath, ui.handlePrometheus)
+		dlog.Debugf("Prometheus metrics endpoint enabled at %s", ui.prometheusPath)
+	}
 
 	ui.httpServer = &http.Server{
 		Addr:         ui.config.ListenAddress,
@@ -414,6 +437,119 @@ func (ui *MonitoringUI) UpdateMetrics(pluginsState PluginsState, msg *dns.Msg, s
 
 	// Broadcast updates to WebSocket clients (rate limited)
 	ui.scheduleBroadcast()
+}
+
+// generatePrometheusMetrics - Generates Prometheus-formatted metrics
+func (mc *MetricsCollector) generatePrometheusMetrics() string {
+	if !mc.prometheusEnabled {
+		return ""
+	}
+
+	mc.countersMutex.RLock()
+	totalQueries := mc.totalQueries
+	queriesPerSecond := mc.queriesPerSecond
+	cacheHits := mc.cacheHits
+	cacheMisses := mc.cacheMisses
+	blockCount := mc.blockCount
+	responseTimeSum := mc.responseTimeSum
+	responseTimeCount := mc.responseTimeCount
+	startTime := mc.startTime
+	mc.countersMutex.RUnlock()
+
+	// Calculate derived metrics
+	var avgResponseTime float64
+	if responseTimeCount > 0 {
+		avgResponseTime = float64(responseTimeSum) / float64(responseTimeCount)
+	}
+
+	var cacheHitRatio float64
+	totalCacheQueries := cacheHits + cacheMisses
+	if totalCacheQueries > 0 {
+		cacheHitRatio = float64(cacheHits) / float64(totalCacheQueries)
+	}
+
+	uptime := time.Since(startTime).Seconds()
+
+	var result strings.Builder
+
+	// Write help and type information for each metric
+	result.WriteString("# HELP dnscrypt_proxy_queries_total Total number of DNS queries processed\n")
+	result.WriteString("# TYPE dnscrypt_proxy_queries_total counter\n")
+	result.WriteString(fmt.Sprintf("dnscrypt_proxy_queries_total %d\n", totalQueries))
+
+	result.WriteString("# HELP dnscrypt_proxy_queries_per_second Current queries per second rate\n")
+	result.WriteString("# TYPE dnscrypt_proxy_queries_per_second gauge\n")
+	result.WriteString(fmt.Sprintf("dnscrypt_proxy_queries_per_second %.2f\n", queriesPerSecond))
+
+	result.WriteString("# HELP dnscrypt_proxy_uptime_seconds Uptime in seconds\n")
+	result.WriteString("# TYPE dnscrypt_proxy_uptime_seconds counter\n")
+	result.WriteString(fmt.Sprintf("dnscrypt_proxy_uptime_seconds %.0f\n", uptime))
+
+	result.WriteString("# HELP dnscrypt_proxy_cache_hits_total Total number of cache hits\n")
+	result.WriteString("# TYPE dnscrypt_proxy_cache_hits_total counter\n")
+	result.WriteString(fmt.Sprintf("dnscrypt_proxy_cache_hits_total %d\n", cacheHits))
+
+	result.WriteString("# HELP dnscrypt_proxy_cache_misses_total Total number of cache misses\n")
+	result.WriteString("# TYPE dnscrypt_proxy_cache_misses_total counter\n")
+	result.WriteString(fmt.Sprintf("dnscrypt_proxy_cache_misses_total %d\n", cacheMisses))
+
+	result.WriteString("# HELP dnscrypt_proxy_cache_hit_ratio Current cache hit ratio\n")
+	result.WriteString("# TYPE dnscrypt_proxy_cache_hit_ratio gauge\n")
+	result.WriteString(fmt.Sprintf("dnscrypt_proxy_cache_hit_ratio %.4f\n", cacheHitRatio))
+
+	result.WriteString("# HELP dnscrypt_proxy_blocked_queries_total Total number of blocked queries\n")
+	result.WriteString("# TYPE dnscrypt_proxy_blocked_queries_total counter\n")
+	result.WriteString(fmt.Sprintf("dnscrypt_proxy_blocked_queries_total %d\n", blockCount))
+
+	result.WriteString("# HELP dnscrypt_proxy_response_time_average_ms Average response time in milliseconds\n")
+	result.WriteString("# TYPE dnscrypt_proxy_response_time_average_ms gauge\n")
+	result.WriteString(fmt.Sprintf("dnscrypt_proxy_response_time_average_ms %.2f\n", avgResponseTime))
+
+	// Add server-specific metrics
+	mc.serverMutex.RLock()
+	result.WriteString("# HELP dnscrypt_proxy_server_queries_total Total queries per server\n")
+	result.WriteString("# TYPE dnscrypt_proxy_server_queries_total counter\n")
+	for server, count := range mc.serverQueryCount {
+		sanitizedServer := sanitizeString(server)
+		result.WriteString(fmt.Sprintf("dnscrypt_proxy_server_queries_total{server=\"%s\"} %d\n", sanitizedServer, count))
+	}
+
+	result.WriteString("# HELP dnscrypt_proxy_server_response_time_average_ms Average response time per server in milliseconds\n")
+	result.WriteString("# TYPE dnscrypt_proxy_server_response_time_average_ms gauge\n")
+	for server, count := range mc.serverQueryCount {
+		if count > 0 {
+			avgTime := float64(mc.serverResponseTime[server]) / float64(count)
+			sanitizedServer := sanitizeString(server)
+			result.WriteString(fmt.Sprintf("dnscrypt_proxy_server_response_time_average_ms{server=\"%s\"} %.2f\n", sanitizedServer, avgTime))
+		}
+	}
+	mc.serverMutex.RUnlock()
+
+	// Add query type metrics
+	mc.queryTypesMutex.RLock()
+	result.WriteString("# HELP dnscrypt_proxy_query_type_total Total queries per DNS record type\n")
+	result.WriteString("# TYPE dnscrypt_proxy_query_type_total counter\n")
+	for qtype, count := range mc.queryTypes {
+		sanitizedQtype := sanitizeString(qtype)
+		result.WriteString(fmt.Sprintf("dnscrypt_proxy_query_type_total{type=\"%s\"} %d\n", sanitizedQtype, count))
+	}
+	mc.queryTypesMutex.RUnlock()
+
+	// Add memory usage metrics if available
+	mc.queryLogMutex.RLock()
+	queryLogEntries := len(mc.recentQueries)
+	memoryUsage := mc.currentMemoryBytes
+	mc.queryLogMutex.RUnlock()
+
+	result.WriteString("# HELP dnscrypt_proxy_query_log_entries Current number of query log entries in memory\n")
+	result.WriteString("# TYPE dnscrypt_proxy_query_log_entries gauge\n")
+	result.WriteString(fmt.Sprintf("dnscrypt_proxy_query_log_entries %d\n", queryLogEntries))
+
+	result.WriteString("# HELP dnscrypt_proxy_memory_usage_bytes Current memory usage in bytes for query logs\n")
+	result.WriteString("# TYPE dnscrypt_proxy_memory_usage_bytes gauge\n")
+	result.WriteString(fmt.Sprintf("dnscrypt_proxy_memory_usage_bytes %d\n", memoryUsage))
+
+	return result.String()
 }
 
 // invalidateCache - Marks the cache as stale (call when data changes)
@@ -905,6 +1041,29 @@ func (ui *MonitoringUI) handleStaticJS(w http.ResponseWriter, r *http.Request) {
 	setStaticCacheHeaders(w, 3600)
 	w.Header().Set("Content-Type", "application/javascript")
 	w.Write([]byte(MonitoringJSContent))
+}
+
+// handlePrometheus - Serves Prometheus metrics
+func (ui *MonitoringUI) handlePrometheus(w http.ResponseWriter, r *http.Request) {
+	dlog.Debugf("Received Prometheus metrics request from %s", r.RemoteAddr)
+
+	if !ui.metricsCollector.prometheusEnabled {
+		http.NotFound(w, r)
+		return
+	}
+
+	// Generate Prometheus metrics
+	metrics := ui.metricsCollector.generatePrometheusMetrics()
+
+	// Set appropriate headers for Prometheus
+	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+	setDynamicCacheHeaders(w) // Always fresh for metrics
+
+	// Write metrics
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(metrics))
+
+	dlog.Debugf("Served Prometheus metrics (%d bytes)", len(metrics))
 }
 
 // basicAuthMiddleware - Adds basic authentication to the HTTP server

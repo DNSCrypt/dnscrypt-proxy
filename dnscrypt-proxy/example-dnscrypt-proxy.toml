@@ -986,6 +986,14 @@ privacy_level = 1
 ## Default: 1
 # max_memory_mb = 1
 
+## Enable Prometheus metrics endpoint
+## Default: false
+# prometheus_enabled = false
+
+## Path for Prometheus metrics endpoint
+## Default: /metrics
+# prometheus_path = "/metrics"
+
 
 ###############################################################################
 #                            Static entries                                    #
