@@ -17,3 +17,4 @@ dnscrypt-proxy/dnscrypt-proxy
 contrib/msi/*.msi
 contrib/msi/*.wixpdb
 contrib/msi/*.wixobj
+TODO.md
