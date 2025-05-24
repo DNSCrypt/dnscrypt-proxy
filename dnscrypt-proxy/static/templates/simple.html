@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>DNSCrypt Proxy Monitoring (Simple)</title>
+    <meta http-equiv="refresh" content="5">
+    <style>
+        body { font-family: sans-serif; margin: 20px; }
+        h1 { color: #2c3e50; }
+        table { border-collapse: collapse; width: 100%; }
+        th, td { text-align: left; padding: 8px; border-bottom: 1px solid #ddd; }
+        th { background-color: #f2f2f2; }
+    </style>
+</head>
+<body>
+    <h1>DNSCrypt Proxy Monitoring (Simple View)</h1>
+    <p>Auto-refreshes every 5 seconds. <a href="/">Switch to full dashboard</a></p>
+
+    <h2>Overview</h2>
+    <table>
+        <tr><th>Total Queries</th><td>%d</td></tr>
+        <tr><th>Queries Per Second</th><td>%.2f</td></tr>
+        <tr><th>Uptime</th><td>%.0f seconds</td></tr>
+        <tr><th>Cache Hit Ratio</th><td>%.2f%%</td></tr>
+        <tr><th>Cache Hits</th><td>%d</td></tr>
+        <tr><th>Cache Misses</th><td>%d</td></tr>
+    </table>
+
+    <p><small>Generated at %s</small></p>
+</body>
+</html>
