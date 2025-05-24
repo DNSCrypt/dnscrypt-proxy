@@ -4,9 +4,11 @@ import (
 	"crypto/subtle"
 	"encoding/json"
 	"fmt"
+	"html"
 	"net"
 	"net/http"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -15,21 +17,48 @@ import (
 	"github.com/miekg/dns"
 )
 
+// sanitizeString - Sanitizes user input to prevent XSS attacks
+func sanitizeString(input string) string {
+	// HTML escape to prevent XSS
+	escaped := html.EscapeString(input)
+	// Additional validation for domain names - only allow valid domain characters
+	if strings.Contains(input, ".") { // Likely a domain name
+		// Remove any non-domain characters
+		var result strings.Builder
+		for _, r := range escaped {
+			if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') ||
+				(r >= '0' && r <= '9') || r == '.' || r == '-' || r == '_' {
+				result.WriteRune(r)
+			}
+		}
+		return result.String()
+	}
+	return escaped
+}
+
 // MonitoringUIConfig - Configuration for the monitoring UI
 type MonitoringUIConfig struct {
-	Enabled        bool   `toml:"enabled"`
-	ListenAddress  string `toml:"listen_address"`
-	Username       string `toml:"username"`
-	Password       string `toml:"password"`
-	TLSCertificate string `toml:"tls_certificate"`
-	TLSKey         string `toml:"tls_key"`
-	EnableQueryLog bool   `toml:"enable_query_log"`
-	PrivacyLevel   int    `toml:"privacy_level"` // 0: show all details, 1: anonymize client IPs, 2: aggregate only (no individual queries or domains)
+	Enabled            bool   `toml:"enabled"`
+	ListenAddress      string `toml:"listen_address"`
+	Username           string `toml:"username"`
+	Password           string `toml:"password"`
+	TLSCertificate     string `toml:"tls_certificate"`
+	TLSKey             string `toml:"tls_key"`
+	EnableQueryLog     bool   `toml:"enable_query_log"`
+	PrivacyLevel       int    `toml:"privacy_level"`         // 0: show all details, 1: anonymize client IPs, 2: aggregate only (no individual queries or domains)
+	MaxQueryLogEntries int    `toml:"max_query_log_entries"` // Maximum number of recent queries to keep in memory (default: 100)
+	MaxMemoryMB        int    `toml:"max_memory_mb"`         // Maximum memory usage in MB for recent queries (default: 10MB)
 }
 
 // MetricsCollector - Collects and stores metrics for the monitoring UI
 type MetricsCollector struct {
-	sync.RWMutex
+	// Split locks for better concurrency
+	countersMutex   sync.RWMutex // For totalQueries, cacheHits, cacheMisses, blockCount, QPS
+	serverMutex     sync.RWMutex // For serverResponseTime, serverQueryCount
+	domainMutex     sync.RWMutex // For topDomains
+	queryLogMutex   sync.RWMutex // For recentQueries
+	queryTypesMutex sync.RWMutex // For queryTypes
+
 	startTime          time.Time
 	totalQueries       uint64
 	queriesPerSecond   float64
@@ -46,6 +75,8 @@ type MetricsCollector struct {
 	topDomains         map[string]uint64
 	recentQueries      []QueryLogEntry
 	maxRecentQueries   int
+	maxMemoryBytes     int64
+	currentMemoryBytes int64
 	privacyLevel       int
 }
 
@@ -59,6 +90,17 @@ type QueryLogEntry struct {
 	ResponseTime int64     `json:"response_time"`
 	Server       string    `json:"server"`
 	CacheHit     bool      `json:"cache_hit"`
+}
+
+// EstimateMemoryUsage estimates the memory usage of a QueryLogEntry in bytes
+func (q *QueryLogEntry) EstimateMemoryUsage() int64 {
+	// Base struct size + string content lengths
+	return int64(88 + // approximate struct overhead
+		len(q.ClientIP) +
+		len(q.Domain) +
+		len(q.Type) +
+		len(q.ResponseCode) +
+		len(q.Server))
 }
 
 // MonitoringUI - Handles the monitoring UI
@@ -81,6 +123,16 @@ func NewMonitoringUI(proxy *Proxy) *MonitoringUI {
 		return nil
 	}
 
+	// Set defaults for memory limits if not configured
+	maxEntries := proxy.monitoringUI.MaxQueryLogEntries
+	if maxEntries <= 0 {
+		maxEntries = 100
+	}
+	maxMemoryMB := proxy.monitoringUI.MaxMemoryMB
+	if maxMemoryMB <= 0 {
+		maxMemoryMB = 10
+	}
+
 	// Initialize metrics collector
 	metricsCollector := &MetricsCollector{
 		startTime:          time.Now(),
@@ -88,8 +140,10 @@ func NewMonitoringUI(proxy *Proxy) *MonitoringUI {
 		serverResponseTime: make(map[string]uint64),
 		serverQueryCount:   make(map[string]uint64),
 		topDomains:         make(map[string]uint64),
-		recentQueries:      make([]QueryLogEntry, 0, 100),
-		maxRecentQueries:   100,
+		recentQueries:      make([]QueryLogEntry, 0, maxEntries),
+		maxRecentQueries:   maxEntries,
+		maxMemoryBytes:     int64(maxMemoryMB * 1024 * 1024),
+		currentMemoryBytes: 0,
 		privacyLevel:       proxy.monitoringUI.PrivacyLevel,
 	}
 
@@ -103,7 +157,18 @@ func NewMonitoringUI(proxy *Proxy) *MonitoringUI {
 			ReadBufferSize:  1024,
 			WriteBufferSize: 1024,
 			CheckOrigin: func(r *http.Request) bool {
-				return true
+				origin := r.Header.Get("Origin")
+				if origin == "" {
+					return true // Allow requests without Origin header (direct connections)
+				}
+				host := r.Host
+				if host == "" {
+					return false
+				}
+				// Allow same-origin requests and localhost variations
+				return origin == "http://"+host || origin == "https://"+host ||
+					origin == "http://localhost:8080" || origin == "https://localhost:8080" ||
+					origin == "http://127.0.0.1:8080" || origin == "https://127.0.0.1:8080"
 			},
 		},
 		clients: make(map[*websocket.Conn]bool),
@@ -167,15 +232,14 @@ func (ui *MonitoringUI) UpdateMetrics(pluginsState PluginsState, msg *dns.Msg, s
 	dlog.Debugf("Updating metrics for query: %s", pluginsState.qName)
 
 	mc := ui.metricsCollector
-	mc.Lock()
-	defer mc.Unlock()
+	now := time.Now()
 
-	// Update total queries
+	// Update counters (total queries, cache, QPS) - separate lock
+	mc.countersMutex.Lock()
 	mc.totalQueries++
 	dlog.Debugf("Total queries now: %d", mc.totalQueries)
 
 	// Update queries per second
-	now := time.Now()
 	elapsed := now.Sub(mc.lastQueriesTime).Seconds()
 	if elapsed >= 1.0 || mc.lastQueriesTime.IsZero() {
 		if mc.lastQueriesTime.IsZero() {
@@ -199,42 +263,52 @@ func (ui *MonitoringUI) UpdateMetrics(pluginsState PluginsState, msg *dns.Msg, s
 		mc.cacheMisses++
 		dlog.Debugf("Cache miss, total misses: %d", mc.cacheMisses)
 	}
+	mc.countersMutex.Unlock()
 
-	// Update query types
+	// Update query types - separate lock
 	if msg != nil && len(msg.Question) > 0 {
 		question := msg.Question[0]
 		qType, ok := dns.TypeToString[question.Qtype]
 		if !ok {
 			qType = fmt.Sprintf("%d", question.Qtype)
 		}
+		mc.queryTypesMutex.Lock()
 		mc.queryTypes[qType]++
 		dlog.Debugf("Query type %s, count: %d", qType, mc.queryTypes[qType])
+		mc.queryTypesMutex.Unlock()
 	} else {
 		dlog.Debugf("No question in message or message is nil")
 	}
 
-	// Update response time
+	// Update response time - back to counters lock
 	responseTime := time.Since(start).Milliseconds()
+	mc.countersMutex.Lock()
 	mc.responseTimeSum += uint64(responseTime)
 	mc.responseTimeCount++
 	dlog.Debugf("Response time: %dms, avg: %.2fms", responseTime, float64(mc.responseTimeSum)/float64(mc.responseTimeCount))
+	mc.countersMutex.Unlock()
 
-	// Update server stats
+	// Update server stats - separate lock
 	if pluginsState.serverName != "" && pluginsState.serverName != "-" {
+		mc.serverMutex.Lock()
 		mc.serverQueryCount[pluginsState.serverName]++
 		mc.serverResponseTime[pluginsState.serverName] += uint64(responseTime)
 		dlog.Debugf("Server %s, queries: %d, avg response: %.2fms",
 			pluginsState.serverName,
 			mc.serverQueryCount[pluginsState.serverName],
 			float64(mc.serverResponseTime[pluginsState.serverName])/float64(mc.serverQueryCount[pluginsState.serverName]))
+		mc.serverMutex.Unlock()
 	} else {
 		dlog.Debugf("No server name or server is '-'")
 	}
 
-	// Update top domains
+	// Update top domains - separate lock
 	if mc.privacyLevel < 2 {
-		mc.topDomains[pluginsState.qName]++
-		dlog.Debugf("Domain %s, count: %d", pluginsState.qName, mc.topDomains[pluginsState.qName])
+		sanitizedDomain := sanitizeString(pluginsState.qName)
+		mc.domainMutex.Lock()
+		mc.topDomains[sanitizedDomain]++
+		dlog.Debugf("Domain %s, count: %d", sanitizedDomain, mc.topDomains[sanitizedDomain])
+		mc.domainMutex.Unlock()
 	}
 
 	// Update recent queries if enabled, but only if privacy level < 2
@@ -282,19 +356,40 @@ func (ui *MonitoringUI) UpdateMetrics(pluginsState PluginsState, msg *dns.Msg, s
 		entry := QueryLogEntry{
 			Timestamp:    now,
 			ClientIP:     clientIP,
-			Domain:       pluginsState.qName,
-			Type:         qType,
-			ResponseCode: returnCode,
+			Domain:       sanitizeString(pluginsState.qName),
+			Type:         sanitizeString(qType),
+			ResponseCode: sanitizeString(returnCode),
 			ResponseTime: responseTime,
-			Server:       pluginsState.serverName,
+			Server:       sanitizeString(pluginsState.serverName),
 			CacheHit:     pluginsState.cacheHit,
 		}
 
-		mc.recentQueries = append(mc.recentQueries, entry)
-		if len(mc.recentQueries) > mc.maxRecentQueries {
-			mc.recentQueries = mc.recentQueries[1:]
+		mc.queryLogMutex.Lock()
+		entrySize := entry.EstimateMemoryUsage()
+
+		// Check if adding this entry would exceed memory limit
+		if mc.currentMemoryBytes+entrySize > mc.maxMemoryBytes {
+			// Remove oldest entries until we have enough space
+			for len(mc.recentQueries) > 0 && mc.currentMemoryBytes+entrySize > mc.maxMemoryBytes {
+				oldEntry := mc.recentQueries[0]
+				mc.recentQueries = mc.recentQueries[1:]
+				mc.currentMemoryBytes -= oldEntry.EstimateMemoryUsage()
+			}
 		}
-		dlog.Debugf("Added query log entry, total entries: %d", len(mc.recentQueries))
+
+		mc.recentQueries = append(mc.recentQueries, entry)
+		mc.currentMemoryBytes += entrySize
+
+		// Also enforce the max entries limit
+		if len(mc.recentQueries) > mc.maxRecentQueries {
+			oldEntry := mc.recentQueries[0]
+			mc.recentQueries = mc.recentQueries[1:]
+			mc.currentMemoryBytes -= oldEntry.EstimateMemoryUsage()
+		}
+
+		dlog.Debugf("Added query log entry, total entries: %d, memory usage: %d bytes",
+			len(mc.recentQueries), mc.currentMemoryBytes)
+		mc.queryLogMutex.Unlock()
 	}
 
 	// Broadcast updates to WebSocket clients
@@ -303,22 +398,33 @@ func (ui *MonitoringUI) UpdateMetrics(pluginsState PluginsState, msg *dns.Msg, s
 
 // GetMetrics - Returns the current metrics
 func (mc *MetricsCollector) GetMetrics() map[string]interface{} {
-	mc.RLock()
-	defer mc.RUnlock()
+	dlog.Debugf("GetMetrics called")
 
-	dlog.Debugf("GetMetrics called - total queries: %d", mc.totalQueries)
+	// Read basic counters first
+	mc.countersMutex.RLock()
+	totalQueries := mc.totalQueries
+	queriesPerSecond := mc.queriesPerSecond
+	cacheHits := mc.cacheHits
+	cacheMisses := mc.cacheMisses
+	blockCount := mc.blockCount
+	responseTimeSum := mc.responseTimeSum
+	responseTimeCount := mc.responseTimeCount
+	startTime := mc.startTime
+	mc.countersMutex.RUnlock()
+
+	dlog.Debugf("GetMetrics - total queries: %d", totalQueries)
 
 	// Calculate average response time
 	var avgResponseTime float64
-	if mc.responseTimeCount > 0 {
-		avgResponseTime = float64(mc.responseTimeSum) / float64(mc.responseTimeCount)
+	if responseTimeCount > 0 {
+		avgResponseTime = float64(responseTimeSum) / float64(responseTimeCount)
 	}
 
 	// Calculate cache hit ratio
 	var cacheHitRatio float64
-	totalCacheQueries := mc.cacheHits + mc.cacheMisses
+	totalCacheQueries := cacheHits + cacheMisses
 	if totalCacheQueries > 0 {
-		cacheHitRatio = float64(mc.cacheHits) / float64(totalCacheQueries)
+		cacheHitRatio = float64(cacheHits) / float64(totalCacheQueries) * 100
 	}
 
 	// Calculate per-server metrics sorted by increasing average response time
@@ -330,8 +436,10 @@ func (mc *MetricsCollector) GetMetrics() map[string]interface{} {
 		queries uint64
 		avgTime float64
 	}
-	serverPerfs := make([]serverPerf, 0, len(mc.serverQueryCount))
 
+	// Read server data with its own lock
+	mc.serverMutex.RLock()
+	serverPerfs := make([]serverPerf, 0, len(mc.serverQueryCount))
 	for server, count := range mc.serverQueryCount {
 		avgTime := float64(0)
 		if count > 0 {
@@ -343,6 +451,7 @@ func (mc *MetricsCollector) GetMetrics() map[string]interface{} {
 			avgTime: avgTime,
 		})
 	}
+	mc.serverMutex.RUnlock()
 
 	// Sort by increasing average response time (faster servers first)
 	sort.Slice(serverPerfs, func(i, j int) bool {
@@ -369,10 +478,13 @@ func (mc *MetricsCollector) GetMetrics() map[string]interface{} {
 			domain string
 			count  uint64
 		}
+		// Read domain data with its own lock
+		mc.domainMutex.RLock()
 		domainCounts := make([]domainCount, 0, len(mc.topDomains))
 		for domain, hits := range mc.topDomains {
 			domainCounts = append(domainCounts, domainCount{domain, hits})
 		}
+		mc.domainMutex.RUnlock()
 
 		// Sort by decreasing count
 		sort.Slice(domainCounts, func(i, j int) bool {
@@ -386,7 +498,7 @@ func (mc *MetricsCollector) GetMetrics() map[string]interface{} {
 		count := 0
 		for _, dc := range domainCounts {
 			topDomainsList = append(topDomainsList, map[string]interface{}{
-				"domain": dc.domain,
+				"domain": sanitizeString(dc.domain),
 				"count":  dc.count,
 			})
 			count++
@@ -404,10 +516,13 @@ func (mc *MetricsCollector) GetMetrics() map[string]interface{} {
 		qtype string
 		count uint64
 	}
+	// Read query types with its own lock
+	mc.queryTypesMutex.RLock()
 	queryTypeCounts := make([]queryTypeCount, 0, len(mc.queryTypes))
 	for qtype, count := range mc.queryTypes {
 		queryTypeCounts = append(queryTypeCounts, queryTypeCount{qtype, count})
 	}
+	mc.queryTypesMutex.RUnlock()
 
 	// Sort by decreasing count
 	sort.Slice(queryTypeCounts, func(i, j int) bool {
@@ -430,20 +545,26 @@ func (mc *MetricsCollector) GetMetrics() map[string]interface{} {
 		}
 	}
 
+	// Read recent queries with its own lock
+	mc.queryLogMutex.RLock()
+	recentQueries := make([]QueryLogEntry, len(mc.recentQueries))
+	copy(recentQueries, mc.recentQueries)
+	mc.queryLogMutex.RUnlock()
+
 	// Return all metrics
 	return map[string]interface{}{
-		"total_queries":      mc.totalQueries,
-		"queries_per_second": mc.queriesPerSecond,
-		"uptime_seconds":     time.Since(mc.startTime).Seconds(),
+		"total_queries":      totalQueries,
+		"queries_per_second": queriesPerSecond,
+		"uptime_seconds":     time.Since(startTime).Seconds(),
 		"cache_hit_ratio":    cacheHitRatio,
-		"cache_hits":         mc.cacheHits,
-		"cache_misses":       mc.cacheMisses,
+		"cache_hits":         cacheHits,
+		"cache_misses":       cacheMisses,
 		"avg_response_time":  avgResponseTime,
-		"blocked_queries":    mc.blockCount,
+		"blocked_queries":    blockCount,
 		"servers":            serverMetrics,
 		"top_domains":        topDomainsList,
 		"query_types":        queryTypesList,
-		"recent_queries":     mc.recentQueries,
+		"recent_queries":     recentQueries,
 	}
 }
 
