@@ -128,23 +128,12 @@ func (LBStrategyRandom) getActiveCount(serversCount int) int {
 type LBStrategyWP2 struct{}
 
 func (LBStrategyWP2) getCandidate(serversCount int) int {
+	// This function is not used for WP2 - getWeightedCandidate is used instead
+	// But we need to implement it to satisfy the LBStrategy interface
 	if serversCount <= 1 {
 		return 0
 	}
-	if serversCount == 2 {
-		return rand.Intn(2)
-	}
-
-	// Select two random servers
-	first := rand.Intn(serversCount)
-	second := rand.Intn(serversCount)
-
-	// Ensure we have two different servers
-	for second == first {
-		second = rand.Intn(serversCount)
-	}
-
-	return first // Will be refined in getWeightedCandidate
+	return rand.Intn(serversCount)
 }
 
 func (LBStrategyWP2) getActiveCount(serversCount int) int {
