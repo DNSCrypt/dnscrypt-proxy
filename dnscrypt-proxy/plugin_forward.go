@@ -306,13 +306,18 @@ func (plugin *PluginForward) Eval(pluginsState *PluginsState, msg *dns.Msg) erro
 		tries--
 		dlog.Debugf("Forwarding [%s] to [%s]", qName, server)
 		client := dns.Client{Net: pluginsState.serverProto, Timeout: pluginsState.timeout}
-		respMsg, _, err = client.Exchange(msg, server)
+
+		// Create a clean copy of the message without Extra section for forwarding
+		forwardMsg := msg.Copy()
+		forwardMsg.Extra = nil
+
+		respMsg, _, err = client.Exchange(forwardMsg, server)
 		if err != nil {
 			continue
 		}
 		if respMsg.Truncated {
 			client.Net = "tcp"
-			respMsg, _, err = client.Exchange(msg, server)
+			respMsg, _, err = client.Exchange(forwardMsg, server)
 			if err != nil {
 				continue
 			}
