@@ -175,11 +175,17 @@ keepalive = 30
 #                        Load Balancing & Performance                          #
 ###############################################################################
 
-## Load-balancing strategy: 'p2' (default), 'ph', 'p<n>', 'first' or 'random'
-## Randomly choose 1 of the fastest 2, half, n, 1 or all live servers by latency.
+## Load-balancing strategy: 'wp2' (default), 'p2', 'ph', 'p<n>', 'first', or 'random'
+## 'wp2' (default): Weighted Power of Two - selects the better performing server from two 
+## random candidates based on real-time RTT and success rates.
+## 'p2': Randomly choose 1 of the fastest 2 servers by latency.
+## 'ph': Randomly choose from fastest half of servers.
+## 'p<n>': Randomly choose from fastest n servers (e.g., 'p3' for fastest 3).
+## 'first': Always use the fastest server.
+## 'random': Randomly choose from all servers.
 ## The response quality still depends on the server itself.
 
-# lb_strategy = 'p2'
+# lb_strategy = 'wp2'
 
 ## Set to `true` to constantly try to estimate the latency of all the resolvers
 ## and adjust the load-balancing parameters accordingly, or to `false` to disable.

@@ -63,6 +63,11 @@ type ServerInfo struct {
 	Proto              stamps.StampProtoType
 	useGet             bool
 	odohTargetConfigs  []ODoHTargetConfig
+
+	// WP2 strategy fields
+	totalQueries   uint64    // Total queries sent to this server
+	failedQueries  uint64    // Failed queries count
+	lastUpdateTime time.Time // Last time metrics were updated
 }
 
 type LBStrategy interface {
@@ -120,7 +125,33 @@ func (LBStrategyRandom) getActiveCount(serversCount int) int {
 	return serversCount
 }
 
-var DefaultLBStrategy = LBStrategyP2{}
+type LBStrategyWP2 struct{}
+
+func (LBStrategyWP2) getCandidate(serversCount int) int {
+	if serversCount <= 1 {
+		return 0
+	}
+	if serversCount == 2 {
+		return rand.Intn(2)
+	}
+
+	// Select two random servers
+	first := rand.Intn(serversCount)
+	second := rand.Intn(serversCount)
+
+	// Ensure we have two different servers
+	for second == first {
+		second = rand.Intn(serversCount)
+	}
+
+	return first // Will be refined in getWeightedCandidate
+}
+
+func (LBStrategyWP2) getActiveCount(serversCount int) int {
+	return serversCount // All servers are considered active for WP2
+}
+
+var DefaultLBStrategy = LBStrategyWP2{}
 
 type DNSCryptRelay struct {
 	RelayUDPAddr *net.UDPAddr
@@ -324,15 +355,134 @@ func (serversInfo *ServersInfo) getOne() *ServerInfo {
 		serversInfo.Unlock()
 		return nil
 	}
-	candidate := serversInfo.lbStrategy.getCandidate(serversCount)
-	if serversInfo.lbEstimator {
-		serversInfo.estimatorUpdate(candidate)
+
+	var candidate int
+
+	// Check if using WP2 strategy
+	if _, isWP2 := serversInfo.lbStrategy.(LBStrategyWP2); isWP2 {
+		candidate = serversInfo.getWeightedCandidate(serversCount)
+	} else {
+		candidate = serversInfo.lbStrategy.getCandidate(serversCount)
+		if serversInfo.lbEstimator {
+			serversInfo.estimatorUpdate(candidate)
+		}
 	}
+
 	serverInfo := serversInfo.inner[candidate]
-	dlog.Debugf("Using candidate [%s] RTT: %d", serverInfo.Name, int(serverInfo.rtt.Value()))
+	dlog.Debugf("Using candidate [%s] RTT: %d Score: %.3f",
+		serverInfo.Name,
+		int(serverInfo.rtt.Value()),
+		serversInfo.calculateServerScore(serverInfo))
 	serversInfo.Unlock()
 
 	return serverInfo
+}
+
+// getWeightedCandidate implements the WP2 algorithm
+func (serversInfo *ServersInfo) getWeightedCandidate(serversCount int) int {
+	if serversCount <= 1 {
+		return 0
+	}
+
+	// Select two random servers
+	first := rand.Intn(serversCount)
+	second := rand.Intn(serversCount)
+
+	// Ensure we have two different servers
+	for second == first {
+		second = rand.Intn(serversCount)
+	}
+
+	server1 := serversInfo.inner[first]
+	server2 := serversInfo.inner[second]
+
+	// Calculate weighted scores
+	score1 := serversInfo.calculateServerScore(server1)
+	score2 := serversInfo.calculateServerScore(server2)
+
+	// Select the better performing server with small randomization
+	if score1 > score2 {
+		return first
+	} else if score2 > score1 {
+		return second
+	} else {
+		// Tie-breaker: random selection
+		if rand.Float64() < 0.5 {
+			return first
+		}
+		return second
+	}
+}
+
+// calculateServerScore computes a performance score for server selection
+func (serversInfo *ServersInfo) calculateServerScore(server *ServerInfo) float64 {
+	// Base score from RTT (lower RTT = higher score)
+	rtt := server.rtt.Value()
+	if rtt <= 0 {
+		rtt = 1000 // Default high RTT for servers without data
+	}
+
+	// Normalize RTT to a 0-1 scale (1000ms max)
+	rttScore := 1.0 - (rtt / 1000.0)
+	if rttScore < 0.0 {
+		rttScore = 0.0
+	}
+
+	// Success rate score
+	successRate := 1.0 // Default to perfect success rate
+	if server.totalQueries > 0 {
+		successRate = float64(server.totalQueries-server.failedQueries) / float64(server.totalQueries)
+	}
+
+	// Combine scores (RTT weighted 70%, success rate 30%)
+	finalScore := (rttScore * 0.7) + (successRate * 0.3)
+
+	return finalScore
+}
+
+// updateServerStats updates server statistics after each query
+func (serversInfo *ServersInfo) updateServerStats(serverName string, success bool) {
+	serversInfo.Lock()
+	defer serversInfo.Unlock()
+
+	for _, server := range serversInfo.inner {
+		if server.Name == serverName {
+			server.totalQueries++
+			if !success {
+				server.failedQueries++
+			}
+			server.lastUpdateTime = time.Now()
+
+			// Reset counters periodically to prevent overflow and adapt to changes
+			if server.totalQueries > 10000 {
+				server.totalQueries = server.totalQueries / 2
+				server.failedQueries = server.failedQueries / 2
+			}
+			break
+		}
+	}
+}
+
+// logWP2Stats logs WP2 performance statistics for debugging
+func (serversInfo *ServersInfo) logWP2Stats() {
+	if _, isWP2 := serversInfo.lbStrategy.(LBStrategyWP2); !isWP2 {
+		return
+	}
+
+	serversInfo.RLock()
+	defer serversInfo.RUnlock()
+
+	dlog.Debug("WP2 Strategy Server Statistics:")
+	for i, server := range serversInfo.inner {
+		score := serversInfo.calculateServerScore(server)
+		successRate := 1.0
+		if server.totalQueries > 0 {
+			successRate = float64(server.totalQueries-server.failedQueries) / float64(server.totalQueries)
+		}
+
+		dlog.Debugf("[%d] %s: RTT=%dms, Score=%.3f, Success=%.2f%%, Queries=%d",
+			i, server.Name, int(server.rtt.Value()), score, successRate*100, server.totalQueries)
+	}
 }
 
 func fetchServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, isNew bool) (ServerInfo, error) {

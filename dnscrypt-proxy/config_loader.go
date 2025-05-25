@@ -178,7 +178,8 @@ func configureLoadBalancing(proxy *Proxy, config *Config) {
 	lbStrategy := LBStrategy(DefaultLBStrategy)
 	switch lbStrategyStr := strings.ToLower(config.LBStrategy); lbStrategyStr {
 	case "":
-		// default
+		// default - WP2 is now the default strategy
+		dlog.Noticef("Using default Weighted Power of Two (WP2) load balancing strategy")
 	case "p2":
 		lbStrategy = LBStrategyP2{}
 	case "ph":
@@ -188,6 +189,9 @@ func configureLoadBalancing(proxy *Proxy, config *Config) {
 		lbStrategy = LBStrategyFirst{}
 	case "random":
 		lbStrategy = LBStrategyRandom{}
+	case "wp2":
+		lbStrategy = LBStrategyWP2{}
+		dlog.Noticef("Using Weighted Power of Two (WP2) load balancing strategy")
 	default:
 		if strings.HasPrefix(lbStrategyStr, "p") {
 			n, err := strconv.ParseInt(strings.TrimPrefix(lbStrategyStr, "p"), 10, 32)

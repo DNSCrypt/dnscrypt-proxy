@@ -289,9 +289,17 @@ func (proxy *Proxy) StartProxy() {
 		dlog.Notice("dnscrypt-proxy is waiting for at least one server to be reachable")
 	}
 	go func() {
+		lastLogTime := time.Now()
 		for {
 			clocksmith.Sleep(PrefetchSources(proxy.xTransport, proxy.sources))
 			proxy.updateRegisteredServers()
+
+			// Log WP2 statistics every 5 minutes if debug logging is enabled
+			if time.Since(lastLogTime) > 5*time.Minute {
+				proxy.serversInfo.logWP2Stats()
+				lastLogTime = time.Now()
+			}
+
 			runtime.GC()
 		}
 	}()
@@ -731,6 +739,11 @@ func (proxy *Proxy) processIncomingQuery(
 
 		// Exchange DNS request with the server
 		exchangeResponse, err := handleDNSExchange(proxy, serverInfo, &pluginsState, query, serverProto)
+
+		// Update server statistics for WP2 strategy
+		success := (err == nil && exchangeResponse != nil)
+		proxy.serversInfo.updateServerStats(serverName, success)
+
 		if err != nil || exchangeResponse == nil {
 			return response
 		}
