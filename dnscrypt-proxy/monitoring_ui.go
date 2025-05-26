@@ -822,29 +822,6 @@ func (ui *MonitoringUI) handleRoot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// If this is a simple version request, return a simple page
-	if r.URL.Query().Get("simple") == "1" {
-		// Simple page has dynamic content - no cache
-		setDynamicCacheHeaders(w)
-
-		metrics := ui.metricsCollector.GetMetrics()
-
-		// Create a simple HTML page with the metrics
-		simpleHTML := fmt.Sprintf(SimpleHTMLTemplate,
-			metrics["total_queries"],
-			metrics["queries_per_second"],
-			metrics["uptime_seconds"],
-			metrics["cache_hit_ratio"].(float64)*100,
-			metrics["cache_hits"],
-			metrics["cache_misses"],
-			time.Now().Format(time.RFC1123))
-
-		w.Header().Set("Content-Type", "text/html")
-		w.Write([]byte(simpleHTML))
-		dlog.Debugf("Sent simple HTML page")
-		return
-	}
-
 	// Serve the main dashboard page - cache for 5 minutes since template is static
 	setStaticCacheHeaders(w, 300)
 	w.Header().Set("Content-Type", "text/html")
