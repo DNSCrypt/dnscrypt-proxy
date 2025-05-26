@@ -3,6 +3,7 @@
 implemented as the default, providing improved distribution across resolvers.
  - An optional Prometheus metrics endpoint has been added for monitoring and
 observability.
+ - Memory usage for the cache has been reduced.
  - The monitoring dashboard has received significant improvements including
 better security, performance optimizations, WebSocket rate limiting, and HTTP
 caching headers.
