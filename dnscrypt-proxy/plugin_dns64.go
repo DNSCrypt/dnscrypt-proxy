@@ -103,6 +103,11 @@ func (plugin *PluginDNS64) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 		false,
 	)
 	plugin.proxy.clientsCountDec()
+
+	if len(respPacket) == 0 {
+		return errors.New("Empty response from DNS64 trampoline query")
+	}
+
 	resp := dns.Msg{}
 	if err := resp.Unpack(respPacket); err != nil {
 		return err
