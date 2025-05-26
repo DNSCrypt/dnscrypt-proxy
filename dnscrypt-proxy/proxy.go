@@ -683,7 +683,11 @@ func (proxy *Proxy) processIncomingQuery(
 	onlyCached bool,
 ) []byte {
 	// Initialize metrics for this query
-	dlog.Debugf("Processing incoming query from %s", (*clientAddr).String())
+	clientAddrStr := "unknown"
+	if clientAddr != nil {
+		clientAddrStr = (*clientAddr).String()
+	}
+	dlog.Debugf("Processing incoming query from %s", clientAddrStr)
 
 	// Validate the query
 	var response []byte
