@@ -4,7 +4,7 @@ import (
 	_ "embed"
 )
 
-// Embedded templates and static files using go:embed
+// MainHTMLTemplate - templates and static files using go:embed
 //
 //go:embed static/templates/dashboard.html
 var MainHTMLTemplate string
