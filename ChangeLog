@@ -1,3 +1,16 @@
+# Version 2.1.12
+ - A new Weighted Power of Two (WP2) load balancing strategy has been
+implemented as the default, providing improved distribution across resolvers.
+ - An optional Prometheus metrics endpoint has been added for monitoring and
+observability.
+ - The monitoring dashboard has received significant improvements including
+better security, performance optimizations, WebSocket rate limiting, and HTTP
+caching headers.
+ - The monitoring UI has been refined with stable sorting to prevent
+flickering, query type limitations, and improved scrolling behavior.
+ - Additional records in queries are now properly removed before forwarding.
+ - The simple view UI has been removed as it provided limited utility.
+
 # Version 2.1.11
  - The sievecache dependency was updated to fix a bug causing the cache to crash.
 
