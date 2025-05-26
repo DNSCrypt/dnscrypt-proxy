@@ -8,6 +8,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"unicode"
 )
 
@@ -40,6 +41,7 @@ var (
 var (
 	FileDescriptors   = make([]*os.File, 0)
 	FileDescriptorNum = uintptr(0)
+	FileDescriptorsMu sync.Mutex
 )
 
 const (

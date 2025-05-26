@@ -8,6 +8,7 @@ import (
 	"os"
 	"runtime"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -104,18 +105,25 @@ type Proxy struct {
 	SourceDNSCrypt                bool
 	SourceDoH                     bool
 	SourceODoH                    bool
+	listenersMu                   sync.Mutex
 }
 
 func (proxy *Proxy) registerUDPListener(conn *net.UDPConn) {
+	proxy.listenersMu.Lock()
 	proxy.udpListeners = append(proxy.udpListeners, conn)
+	proxy.listenersMu.Unlock()
 }
 
 func (proxy *Proxy) registerTCPListener(listener *net.TCPListener) {
+	proxy.listenersMu.Lock()
 	proxy.tcpListeners = append(proxy.tcpListeners, listener)
+	proxy.listenersMu.Unlock()
 }
 
 func (proxy *Proxy) registerLocalDoHListener(listener *net.TCPListener) {
+	proxy.listenersMu.Lock()
 	proxy.localDoHListeners = append(proxy.localDoHListeners, listener)
+	proxy.listenersMu.Unlock()
 }
 
 func (proxy *Proxy) addDNSListener(listenAddrStr string) {
@@ -168,23 +176,29 @@ func (proxy *Proxy) addDNSListener(listenAddrStr string) {
 		}
 		defer listenerUDP.Close()
 		defer listenerTCP.Close()
+		FileDescriptorsMu.Lock()
 		FileDescriptors = append(FileDescriptors, fdUDP)
 		FileDescriptors = append(FileDescriptors, fdTCP)
+		FileDescriptorsMu.Unlock()
 		return
 	}
 
 	// child
+	FileDescriptorsMu.Lock()
 	listenerUDP, err := net.FilePacketConn(os.NewFile(InheritedDescriptorsBase+FileDescriptorNum, "listenerUDP"))
 	if err != nil {
+		FileDescriptorsMu.Unlock()
 		dlog.Fatalf("Unable to switch to a different user: %v", err)
 	}
 	FileDescriptorNum++
 
 	listenerTCP, err := net.FileListener(os.NewFile(InheritedDescriptorsBase+FileDescriptorNum, "listenerTCP"))
 	if err != nil {
+		FileDescriptorsMu.Unlock()
 		dlog.Fatalf("Unable to switch to a different user: %v", err)
 	}
 	FileDescriptorNum++
+	FileDescriptorsMu.Unlock()
 
 	dlog.Noticef("Now listening to %v [UDP]", listenUDPAddr)
 	proxy.registerUDPListener(listenerUDP.(*net.UDPConn))
