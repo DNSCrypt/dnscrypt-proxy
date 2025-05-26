@@ -593,11 +593,11 @@ func (mc *MetricsCollector) GetMetrics() map[string]interface{} {
 		avgResponseTime = float64(responseTimeSum) / float64(responseTimeCount)
 	}
 
-	// Calculate cache hit ratio
+	// Calculate cache hit ratio (as decimal 0-1, not percentage)
 	var cacheHitRatio float64
 	totalCacheQueries := cacheHits + cacheMisses
 	if totalCacheQueries > 0 {
-		cacheHitRatio = float64(cacheHits) / float64(totalCacheQueries) * 100
+		cacheHitRatio = float64(cacheHits) / float64(totalCacheQueries)
 	}
 
 	// Calculate per-server metrics sorted by increasing average response time
