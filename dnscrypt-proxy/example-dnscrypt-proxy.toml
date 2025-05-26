@@ -176,8 +176,8 @@ keepalive = 30
 ###############################################################################
 
 ## Load-balancing strategy: 'wp2' (default), 'p2', 'ph', 'p<n>', 'first', or 'random'
-## 'wp2' (default): Weighted Power of Two - selects the better performing server from two 
-## random candidates based on real-time RTT and success rates.
+## 'wp2' (default): Weighted Power of Two - selects the better performing server
+## from two random candidates based on real-time RTT and success rates.
 ## 'p2': Randomly choose 1 of the fastest 2 servers by latency.
 ## 'ph': Randomly choose from fastest half of servers.
 ## 'p<n>': Randomly choose from fastest n servers (e.g., 'p3' for fastest 3).
