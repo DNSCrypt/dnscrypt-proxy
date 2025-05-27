@@ -48,7 +48,8 @@ func (plugin *PluginBlockIP) Init(proxy *Proxy) error {
 	plugin.blockedPrefixes = iradix.New()
 	plugin.blockedIPs = make(map[string]interface{})
 
-	if err := plugin.loadRules(lines, plugin.blockedPrefixes, plugin.blockedIPs); err != nil {
+	plugin.blockedPrefixes, err = plugin.loadRules(lines, plugin.blockedPrefixes, plugin.blockedIPs)
+	if err != nil {
 		return err
 	}
 
@@ -61,7 +62,7 @@ func (plugin *PluginBlockIP) Init(proxy *Proxy) error {
 }
 
 // loadRules parses and loads IP rules into the provided tree and map
-func (plugin *PluginBlockIP) loadRules(lines string, prefixes *iradix.Tree, ips map[string]interface{}) error {
+func (plugin *PluginBlockIP) loadRules(lines string, prefixes *iradix.Tree, ips map[string]interface{}) (*iradix.Tree, error) {
 	for lineNo, line := range strings.Split(lines, "\n") {
 		line = TrimAndStripInlineComments(line)
 		if len(line) == 0 {
@@ -92,15 +93,13 @@ func (plugin *PluginBlockIP) loadRules(lines string, prefixes *iradix.Tree, ips 
 
 		line = strings.ToLower(line)
 		if trailingStar {
-			var updated *iradix.Tree
-			updated, _, _ = prefixes.Insert([]byte(line), 0)
-			prefixes = updated
+			prefixes, _, _ = prefixes.Insert([]byte(line), 0)
 		} else {
 			ips[line] = true
 		}
 	}
 
-	return nil
+	return prefixes, nil
 }
 
 func (plugin *PluginBlockIP) Drop() error {
@@ -123,7 +122,8 @@ func (plugin *PluginBlockIP) PrepareReload() error {
 	plugin.stagingIPs = make(map[string]interface{})
 
 	// Load rules into staging structures
-	if err := plugin.loadRules(lines, plugin.stagingPrefixes, plugin.stagingIPs); err != nil {
+	plugin.stagingPrefixes, err = plugin.loadRules(lines, plugin.stagingPrefixes, plugin.stagingIPs)
+	if err != nil {
 		return fmt.Errorf("error parsing config during reload preparation: %w", err)
 	}
 
