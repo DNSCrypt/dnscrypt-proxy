@@ -64,6 +64,9 @@ function handleError(error) {
     }
 }
 
+// Cache for the last non-empty recent queries
+let lastRecentQueries = [];
+
 // Safe update function that handles missing data
 function safeUpdateDashboard(data) {
     try {
@@ -142,9 +145,14 @@ function safeUpdateDashboard(data) {
 
         // Update recent queries table
         const queriesTable = document.getElementById('queries-table').getElementsByTagName('tbody')[0];
+        let queriesToShow = lastRecentQueries;
+        if (data.recent_queries && Array.isArray(data.recent_queries) && data.recent_queries.length > 0) {
+            lastRecentQueries = data.recent_queries;
+            queriesToShow = lastRecentQueries;
+        }
         queriesTable.innerHTML = '';
-        if (data.recent_queries && Array.isArray(data.recent_queries)) {
-            data.recent_queries.slice().reverse().forEach(query => {
+        if (queriesToShow && Array.isArray(queriesToShow)) {
+            queriesToShow.slice().reverse().forEach(query => {
                 const row = queriesTable.insertRow();
                 row.insertCell(0).textContent = query.timestamp ? new Date(query.timestamp).toLocaleTimeString() : '-';
                 row.insertCell(1).textContent = query.domain || '-';
