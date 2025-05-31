@@ -281,23 +281,23 @@ function connectWebSocket() {
         console.log('WebSocket URL:', wsUrl);
 
         // Create WebSocket connection
-        var ws = new WebSocket(wsUrl);
+        var newWs = new WebSocket(wsUrl);
 
         // Connection opened
-        ws.onopen = function() {
+        newWs.onopen = function() {
             console.log('WebSocket connected successfully');
             wsReconnectAttempts = 0; // Reset reconnect attempts on successful connection
 
             // Send a ping to verify connection
             try {
-                ws.send(JSON.stringify({type: 'ping'}));
+                newWs.send(JSON.stringify({type: 'ping'}));
             } catch (e) {
                 console.error('Error sending ping:', e);
             }
         };
 
         // Listen for messages
-        ws.onmessage = function(event) {
+        newWs.onmessage = function(event) {
             try {
                 if (!event) {
                     console.warn('Received invalid WebSocket event');
@@ -318,12 +318,12 @@ function connectWebSocket() {
         };
 
         // Handle errors
-        ws.onerror = function(error) {
+        newWs.onerror = function(error) {
             console.error('WebSocket error occurred:', error);
         };
 
         // Connection closed
-        ws.onclose = function(event) {
+        newWs.onclose = function(event) {
             console.log('WebSocket disconnected, code:', event.code, 'reason:', event.reason || 'No reason provided');
 
             // Try to reconnect with exponential backoff
@@ -333,10 +333,8 @@ function connectWebSocket() {
                 console.log('Attempting to reconnect in ' + delay + 'ms (attempt ' + wsReconnectAttempts + '/' + maxReconnectAttempts + ')');
 
                 setTimeout(function() {
-                    var newWs = connectWebSocket();
-                    if (newWs) {
-                        // We can't update the global ws variable from here
-                        // Instead, we'll rely on the polling fallback
+                    ws = connectWebSocket();
+                    if (ws) {
                         console.log('New WebSocket connection established');
                     }
                 }, delay);
@@ -345,7 +343,7 @@ function connectWebSocket() {
             }
         };
 
-        return ws;
+        return newWs;
     } catch (error) {
         console.error('Failed to create WebSocket connection:', error);
         return null;
