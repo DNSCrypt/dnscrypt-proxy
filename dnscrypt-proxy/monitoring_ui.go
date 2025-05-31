@@ -1107,6 +1107,7 @@ func (ui *MonitoringUI) broadcastMetrics() {
 	defer ui.clientsMutex.Unlock()
 
 	for client := range ui.clients {
+		client.SetWriteDeadline(time.Now().Add(5 * time.Second))
 		err := client.WriteJSON(metrics)
 		if err != nil {
 			dlog.Debugf("WebSocket write error: %v", err)
