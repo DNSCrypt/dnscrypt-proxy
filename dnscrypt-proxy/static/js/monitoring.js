@@ -165,7 +165,8 @@ function safeUpdateDashboard(data) {
         }
 
         // Restore scroll position after DOM updates
-        window.scrollTo(scrollPos.x, scrollPos.y);
+        // window.scrollTo does not work correctly, when the content size changes.
+        document.body.scrollTo(scrollPos.x, scrollPos.y);
     } catch (error) {
         console.error('Error updating dashboard:', error);
     }
