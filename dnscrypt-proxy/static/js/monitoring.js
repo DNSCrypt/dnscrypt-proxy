@@ -75,6 +75,11 @@ function safeUpdateDashboard(data) {
             return;
         }
 
+        if (data.type === 'pong') {
+            console.log('Received pong message');
+            return;
+        }
+
         console.log('Updating dashboard with data');
 
         // Store the current scroll position before updates
