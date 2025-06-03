@@ -482,10 +482,6 @@ func (mc *MetricsCollector) generatePrometheusMetrics() string {
 	result.WriteString("# TYPE dnscrypt_proxy_queries_total counter\n")
 	result.WriteString(fmt.Sprintf("dnscrypt_proxy_queries_total %d\n", totalQueries))
 
-	result.WriteString("# HELP dnscrypt_proxy_queries_total Total number of DNS queries processed\n")
-	result.WriteString("# TYPE dnscrypt_proxy_queries_total counter\n")
-	result.WriteString(fmt.Sprintf("dnscrypt_proxy_queries_total %d\n", totalQueries))
-
 	result.WriteString("# HELP dnscrypt_proxy_queries_per_second Current queries per second rate\n")
 	result.WriteString("# TYPE dnscrypt_proxy_queries_per_second gauge\n")
 	result.WriteString(fmt.Sprintf("dnscrypt_proxy_queries_per_second %.2f\n", queriesPerSecond))
