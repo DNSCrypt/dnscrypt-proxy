@@ -10,17 +10,6 @@ import (
 
 // InitHotReload sets up hot-reloading for configuration files
 func (proxy *Proxy) InitHotReload() error {
-	// Check if hot reload is enabled
-	if !proxy.enableHotReload {
-		dlog.Notice("Hot reload is disabled")
-		return nil
-	}
-
-	dlog.Notice("Hot reload is enabled")
-
-	// Create a new configuration watcher
-	configWatcher := NewConfigWatcher(1000) // Check every second
-
 	// Find plugins that support hot-reloading
 	plugins := []Plugin{}
 
@@ -39,6 +28,20 @@ func (proxy *Proxy) InitHotReload() error {
 		}
 	}
 	proxy.pluginsGlobals.RUnlock()
+
+	// Setup SIGHUP handler for manual reload
+	setupSignalHandler(proxy, plugins)
+
+	// Check if hot reload is enabled
+	if !proxy.enableHotReload {
+		dlog.Notice("Hot reload is disabled")
+		return nil
+	}
+
+	dlog.Notice("Hot reload is enabled")
+
+	// Create a new configuration watcher
+	configWatcher := NewConfigWatcher(1000) // Check every second
 
 	// Register plugins for config watching
 	for _, plugin := range plugins {
@@ -99,9 +102,6 @@ func (proxy *Proxy) InitHotReload() error {
 			}
 		}
 	}
-
-	// Setup SIGHUP handler for manual reload
-	setupSignalHandler(proxy, plugins)
 
 	return nil
 }
