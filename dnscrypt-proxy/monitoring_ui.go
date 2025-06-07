@@ -4,7 +4,6 @@ import (
 	"crypto/subtle"
 	"encoding/json"
 	"fmt"
-	"html"
 	"net"
 	"net/http"
 	"runtime"
@@ -17,25 +16,6 @@ import (
 	"github.com/jedisct1/dlog"
 	"github.com/miekg/dns"
 )
-
-// sanitizeString - Sanitizes user input to prevent XSS attacks
-func sanitizeString(input string) string {
-	// HTML escape to prevent XSS
-	escaped := html.EscapeString(input)
-	// Additional validation for domain names - only allow valid domain characters
-	if strings.Contains(input, ".") { // Likely a domain name
-		// Remove any non-domain characters
-		var result strings.Builder
-		for _, r := range escaped {
-			if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') ||
-				(r >= '0' && r <= '9') || r == '.' || r == '-' || r == '_' {
-				result.WriteRune(r)
-			}
-		}
-		return result.String()
-	}
-	return escaped
-}
 
 // MonitoringUIConfig - Configuration for the monitoring UI
 type MonitoringUIConfig struct {
@@ -348,10 +328,9 @@ func (ui *MonitoringUI) UpdateMetrics(pluginsState PluginsState, msg *dns.Msg, s
 
 	// Update top domains - separate lock
 	if mc.privacyLevel < 2 {
-		sanitizedDomain := sanitizeString(pluginsState.qName)
 		mc.domainMutex.Lock()
-		mc.topDomains[sanitizedDomain]++
-		dlog.Debugf("Domain %s, count: %d", sanitizedDomain, mc.topDomains[sanitizedDomain])
+		mc.topDomains[pluginsState.qName]++
+		dlog.Debugf("Domain %s, count: %d", pluginsState.qName, mc.topDomains[pluginsState.qName])
 		mc.domainMutex.Unlock()
 	}
 
@@ -400,11 +379,11 @@ func (ui *MonitoringUI) UpdateMetrics(pluginsState PluginsState, msg *dns.Msg, s
 		entry := QueryLogEntry{
 			Timestamp:    now,
 			ClientIP:     clientIP,
-			Domain:       sanitizeString(pluginsState.qName),
-			Type:         sanitizeString(qType),
-			ResponseCode: sanitizeString(returnCode),
+			Domain:       pluginsState.qName,
+			Type:         qType,
+			ResponseCode: returnCode,
 			ResponseTime: responseTime,
-			Server:       sanitizeString(pluginsState.serverName),
+			Server:       pluginsState.serverName,
 			CacheHit:     pluginsState.cacheHit,
 		}
 
@@ -515,8 +494,7 @@ func (mc *MetricsCollector) generatePrometheusMetrics() string {
 	result.WriteString("# HELP dnscrypt_proxy_server_queries_total Total queries per server\n")
 	result.WriteString("# TYPE dnscrypt_proxy_server_queries_total counter\n")
 	for server, count := range mc.serverQueryCount {
-		sanitizedServer := sanitizeString(server)
-		result.WriteString(fmt.Sprintf("dnscrypt_proxy_server_queries_total{server=\"%s\"} %d\n", sanitizedServer, count))
+		result.WriteString(fmt.Sprintf("dnscrypt_proxy_server_queries_total{server=\"%s\"} %d\n", server, count))
 	}
 
 	result.WriteString("# HELP dnscrypt_proxy_server_response_time_average_ms Average response time per server in milliseconds\n")
@@ -524,8 +502,7 @@ func (mc *MetricsCollector) generatePrometheusMetrics() string {
 	for server, count := range mc.serverQueryCount {
 		if count > 0 {
 			avgTime := float64(mc.serverResponseTime[server]) / float64(count)
-			sanitizedServer := sanitizeString(server)
-			result.WriteString(fmt.Sprintf("dnscrypt_proxy_server_response_time_average_ms{server=\"%s\"} %.2f\n", sanitizedServer, avgTime))
+			result.WriteString(fmt.Sprintf("dnscrypt_proxy_server_response_time_average_ms{server=\"%s\"} %.2f\n", server, avgTime))
 		}
 	}
 	mc.serverMutex.RUnlock()
@@ -535,8 +512,7 @@ func (mc *MetricsCollector) generatePrometheusMetrics() string {
 	result.WriteString("# HELP dnscrypt_proxy_query_type_total Total queries per DNS record type\n")
 	result.WriteString("# TYPE dnscrypt_proxy_query_type_total counter\n")
 	for qtype, count := range mc.queryTypes {
-		sanitizedQtype := sanitizeString(qtype)
-		result.WriteString(fmt.Sprintf("dnscrypt_proxy_query_type_total{type=\"%s\"} %d\n", sanitizedQtype, count))
+		result.WriteString(fmt.Sprintf("dnscrypt_proxy_query_type_total{type=\"%s\"} %d\n", qtype, count))
 	}
 	mc.queryTypesMutex.RUnlock()
 
@@ -676,7 +652,7 @@ func (mc *MetricsCollector) GetMetrics() map[string]interface{} {
 		count := 0
 		for _, dc := range domainCounts {
 			topDomainsList = append(topDomainsList, map[string]interface{}{
-				"domain": sanitizeString(dc.domain),
+				"domain": dc.domain,
 				"count":  dc.count,
 			})
 			count++
