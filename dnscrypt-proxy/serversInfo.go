@@ -24,7 +24,7 @@ import (
 )
 
 const (
-	RTTEwmaDecay = 10.0
+	RTTEwmaDecay = 20.0
 )
 
 type RegisteredServer struct {
@@ -1169,9 +1169,20 @@ func (serverInfo *ServerInfo) noticeSuccess(proxy *Proxy) {
 	now := time.Now()
 	proxy.serversInfo.Lock()
 	elapsed := now.Sub(serverInfo.lastActionTS)
-	elapsedMs := elapsed.Nanoseconds() / 1000000
-	if elapsedMs > 0 && elapsed < proxy.timeout {
-		serverInfo.rtt.Add(float64(elapsedMs))
+	elapsedMs := float64(elapsed.Nanoseconds() / 1000000)
+	if elapsedMs > 0.0 && elapsed < proxy.timeout {
+
+                // clip extreme elapsedMs value
+                avg := serverInfo.rtt.Value()
+                if avg <= 0.0 {
+                        // do nothing
+                } else if elapsedMs > 10.0 * avg {
+                        elapsedMs = 10.0 * avg
+                } else if elapsedMs < 0.1 * avg {
+                        elapsedMs = 0.1 * avg
+                }
+
+		serverInfo.rtt.Add(elapsedMs)
 	}
 	proxy.serversInfo.Unlock()
 }
