@@ -108,9 +108,6 @@ def print_restricted_name(output_fd, name, time_restrictions):
 
 
 def load_from_url(url, timeout):
-    log_info, log_err = setup_logging()
-    log_info.write("Loading data from [{}]\n".format(url))
-
     req = urllib.Request(url=url, headers={"User-Agent": "dnscrypt-proxy"})
     trusted = False
 
@@ -124,11 +121,11 @@ def load_from_url(url, timeout):
     response = None
     try:
         response = urllib.urlopen(req, timeout=int(timeout))
-    except urllib.URLError as err:
-        raise Exception("[{}] could not be loaded: {}\n".format(url, err))
+        content = response.read() # "The read operation timed out"
+    except Exception as err:
+        raise Exception("[{}] could not be loaded: {}".format(url, err))
     if trusted is False and response.getcode() != 200:
-        raise Exception("[{}] returned HTTP code {}\n".format(url, response.getcode()))
-    content = response.read()
+        raise Exception("[{}] returned HTTP code {}".format(url, response.getcode()))
     if URLLIB_NEW:
         content = content.decode("utf-8", errors="replace")
 
@@ -188,13 +185,22 @@ def allowlist_from_url(url, timeout):
     names, _time_restrictions, _globs = parse_list(content, trusted)
     return names
 
+STOP_RETRY = False
 
-def load_url_with_retry(url, timeout, retries=3, retry_delay=2):
-    for attempt in range(retries):
+def load_url_with_retry(url, timeout, tries=3, retry_delay=2):
+    log_info, log_err = setup_logging()
+    for attempt in range(tries):
+        try_msg = f"try: {attempt + 1}/{tries}"
         try:
-            return load_from_url(url, timeout)
+            log_info.write(f"[{try_msg}] Loading data from [{url}]\n")
+            content, trusted = load_from_url(url, timeout)
+            log_err.write(f"[{try_msg}] [{url}] OK\n")
+            return content, trusted
         except Exception as e:
-            if attempt < retries - 1:
+            log_err.write(f"[{try_msg}] {e}\n")
+            if STOP_RETRY:
+                break
+            if attempt < tries - 1:
                 time.sleep(retry_delay)
             else:
                 raise e
@@ -210,10 +216,27 @@ def load_blocklists_parallel(urls, timeout, ignore_retrieval_failure):
         future_to_url = {
             executor.submit(load_url_with_retry, url, timeout): url
             for url in urls
-            if url.strip() and not url.strip().startswith("#")
         }
 
-        for future in concurrent.futures.as_completed(future_to_url):
+        # Useful for bad network situations
+        return_when = concurrent.futures.FIRST_EXCEPTION
+        if ignore_retrieval_failure:
+            return_when = concurrent.futures.ALL_COMPLETED
+        finished, unfinished = concurrent.futures.wait(future_to_url, None, return_when)
+        # Return early
+        if len(unfinished) > 0:
+            # Cancel unstarted tasks
+            for f in unfinished:
+                if not f.done():
+                    f.cancel()
+            # Stop retries
+            global STOP_RETRY
+            STOP_RETRY = True
+            # Threads won't be terminated forcibly
+            if not ignore_retrieval_failure:
+                sys.exit(1)
+
+        for future in finished:
             url = future_to_url[future]
             try:
                 content, trusted = future.result()
@@ -222,7 +245,7 @@ def load_blocklists_parallel(urls, timeout, ignore_retrieval_failure):
                 all_names |= names
                 all_globs |= globs
             except Exception as e:
-                log_err.write(str(e))
+                log_err.write(f"{e}\n")
                 if not ignore_retrieval_failure:
                     sys.exit(1)
 

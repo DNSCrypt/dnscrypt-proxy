@@ -322,12 +322,6 @@ func (plugin *PluginForward) Eval(pluginsState *PluginsState, msg *dns.Msg) erro
 				continue
 			}
 		}
-		if len(sequence) > 0 {
-			switch respMsg.Rcode {
-			case dns.RcodeNameError, dns.RcodeRefused, dns.RcodeNotAuth:
-				continue
-			}
-		}
 		if edns0 := respMsg.IsEdns0(); edns0 == nil || !edns0.Do() {
 			respMsg.AuthenticatedData = false
 		}
@@ -335,6 +329,12 @@ func (plugin *PluginForward) Eval(pluginsState *PluginsState, msg *dns.Msg) erro
 		pluginsState.synthResponse = respMsg
 		pluginsState.action = PluginsActionSynth
 		pluginsState.returnCode = PluginsReturnCodeForward
+		if len(sequence) > 0 {
+			switch respMsg.Rcode {
+			case dns.RcodeNameError, dns.RcodeRefused, dns.RcodeNotAuth:
+				continue
+			}
+		}
 		return nil
 	}
 	return err

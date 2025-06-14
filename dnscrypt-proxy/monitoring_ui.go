@@ -7,6 +7,7 @@ import (
 	"html"
 	"net"
 	"net/http"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -485,6 +486,10 @@ func (mc *MetricsCollector) generatePrometheusMetrics() string {
 	var result strings.Builder
 
 	// Write help and type information for each metric
+	result.WriteString("# HELP dnscrypt_proxy_build_info A metric with a constant '1' value labeled by version, goversion from which dnscrypt_proxy was built, and the goos and goarch for the build.\n")
+	result.WriteString("# TYPE dnscrypt_proxy_build_info gauge\n")
+	result.WriteString(fmt.Sprintf("dnscrypt_proxy_build_info{goarch=\"%s\" goos=\"%s\" goversion=\"%s\" version=\"%s\"} 1\n", runtime.GOARCH, runtime.GOOS, runtime.Version(), AppVersion))
+
 	result.WriteString("# HELP dnscrypt_proxy_queries_total Total number of DNS queries processed\n")
 	result.WriteString("# TYPE dnscrypt_proxy_queries_total counter\n")
 	result.WriteString(fmt.Sprintf("dnscrypt_proxy_queries_total %d\n", totalQueries))
@@ -1119,6 +1124,7 @@ func (ui *MonitoringUI) broadcastMetrics() {
 	defer ui.clientsMutex.Unlock()
 
 	for client := range ui.clients {
+		client.SetWriteDeadline(time.Now().Add(5 * time.Second))
 		err := client.WriteJSON(metrics)
 		if err != nil {
 			dlog.Debugf("WebSocket write error: %v", err)
