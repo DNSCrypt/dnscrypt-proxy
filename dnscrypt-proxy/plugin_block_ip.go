@@ -2,12 +2,9 @@ package main
 
 import (
 	"errors"
-	"fmt"
 	"io"
-	"net"
 	"strings"
 	"sync"
-	"time"
 
 	iradix "github.com/hashicorp/go-immutable-radix"
 	"github.com/jedisct1/dlog"
@@ -69,33 +66,16 @@ func (plugin *PluginBlockIP) loadRules(lines string, prefixes *iradix.Tree, ips 
 			continue
 		}
 
-		ip := net.ParseIP(line)
-		trailingStar := strings.HasSuffix(line, "*")
-		if len(line) < 2 || (ip != nil && trailingStar) {
-			dlog.Errorf("Suspicious IP blocking rule [%s] at line %d", line, lineNo)
+		cleanLine, trailingStar, err := ParseIPRule(line, lineNo)
+		if err != nil {
+			dlog.Error(err)
 			continue
 		}
 
 		if trailingStar {
-			line = line[:len(line)-1]
-		}
-		if strings.HasSuffix(line, ":") || strings.HasSuffix(line, ".") {
-			line = line[:len(line)-1]
-		}
-		if len(line) == 0 {
-			dlog.Errorf("Empty IP blocking rule at line %d", lineNo)
-			continue
-		}
-		if strings.Contains(line, "*") {
-			dlog.Errorf("Invalid rule: [%s] - wildcards can only be used as a suffix at line %d", line, lineNo)
-			continue
-		}
-
-		line = strings.ToLower(line)
-		if trailingStar {
-			prefixes, _, _ = prefixes.Insert([]byte(line), 0)
+			prefixes, _, _ = prefixes.Insert([]byte(cleanLine), 0)
 		} else {
-			ips[line] = true
+			ips[cleanLine] = true
 		}
 	}
 
@@ -111,41 +91,35 @@ func (plugin *PluginBlockIP) Drop() error {
 
 // PrepareReload loads new rules into staging structures but doesn't apply them yet
 func (plugin *PluginBlockIP) PrepareReload() error {
-	// Read the configuration file
-	lines, err := SafeReadTextFile(plugin.configFile)
-	if err != nil {
-		return fmt.Errorf("error reading config file during reload preparation: %w", err)
-	}
+	return StandardPrepareReloadPattern(plugin.Name(), plugin.configFile, func(lines string) error {
+		// Create staging structures
+		plugin.stagingPrefixes = iradix.New()
+		plugin.stagingIPs = make(map[string]interface{})
 
-	// Create staging structures
-	plugin.stagingPrefixes = iradix.New()
-	plugin.stagingIPs = make(map[string]interface{})
-
-	// Load rules into staging structures
-	plugin.stagingPrefixes, err = plugin.loadRules(lines, plugin.stagingPrefixes, plugin.stagingIPs)
-	if err != nil {
-		return fmt.Errorf("error parsing config during reload preparation: %w", err)
-	}
-
-	return nil
+		// Load rules into staging structures
+		var err error
+		plugin.stagingPrefixes, err = plugin.loadRules(lines, plugin.stagingPrefixes, plugin.stagingIPs)
+		return err
+	})
 }
 
 // ApplyReload atomically replaces the active rules with the staging ones
 func (plugin *PluginBlockIP) ApplyReload() error {
-	if plugin.stagingPrefixes == nil || plugin.stagingIPs == nil {
-		return errors.New("no staged configuration to apply")
-	}
+	return StandardApplyReloadPattern(plugin.Name(), func() error {
+		if plugin.stagingPrefixes == nil || plugin.stagingIPs == nil {
+			return errors.New("no staged configuration to apply")
+		}
 
-	// Use write lock to swap rule structures
-	plugin.rwLock.Lock()
-	plugin.blockedPrefixes = plugin.stagingPrefixes
-	plugin.blockedIPs = plugin.stagingIPs
-	plugin.stagingPrefixes = nil
-	plugin.stagingIPs = nil
-	plugin.rwLock.Unlock()
+		// Use write lock to swap rule structures
+		plugin.rwLock.Lock()
+		plugin.blockedPrefixes = plugin.stagingPrefixes
+		plugin.blockedIPs = plugin.stagingIPs
+		plugin.stagingPrefixes = nil
+		plugin.stagingIPs = nil
+		plugin.rwLock.Unlock()
 
-	dlog.Noticef("Applied new configuration for plugin [%s]", plugin.Name())
-	return nil
+		return nil
+	})
 }
 
 // CancelReload cleans up any staging resources
@@ -156,16 +130,16 @@ func (plugin *PluginBlockIP) CancelReload() {
 
 // Reload implements hot-reloading for the plugin
 func (plugin *PluginBlockIP) Reload() error {
-	dlog.Noticef("Reloading configuration for plugin [%s]", plugin.Name())
+	return StandardReloadPattern(plugin.Name(), func() error {
+		// Prepare the new configuration
+		if err := plugin.PrepareReload(); err != nil {
+			plugin.CancelReload()
+			return err
+		}
 
-	// Prepare the new configuration
-	if err := plugin.PrepareReload(); err != nil {
-		plugin.CancelReload()
-		return err
-	}
-
-	// Apply the new configuration
-	return plugin.ApplyReload()
+		// Apply the new configuration
+		return plugin.ApplyReload()
+	})
 }
 
 // GetConfigPath returns the path to the plugin's configuration file
@@ -223,39 +197,15 @@ func (plugin *PluginBlockIP) Eval(pluginsState *PluginsState, msg *dns.Msg) erro
 		pluginsState.returnCode = PluginsReturnCodeReject
 		if plugin.logger != nil {
 			qName := pluginsState.qName
-			var clientIPStr string
-			switch pluginsState.clientProto {
-			case "udp":
-				clientIPStr = (*pluginsState.clientAddr).(*net.UDPAddr).IP.String()
-			case "tcp", "local_doh":
-				clientIPStr = (*pluginsState.clientAddr).(*net.TCPAddr).IP.String()
-			default:
+			clientIPStr, ok := ExtractClientIPStr(pluginsState)
+			if !ok {
 				// Ignore internal flow.
 				return nil
 			}
-			var line string
-			if plugin.format == "tsv" {
-				now := time.Now()
-				year, month, day := now.Date()
-				hour, minute, second := now.Clock()
-				tsStr := fmt.Sprintf("[%d-%02d-%02d %02d:%02d:%02d]", year, int(month), day, hour, minute, second)
-				line = fmt.Sprintf(
-					"%s\t%s\t%s\t%s\t%s\n",
-					tsStr,
-					clientIPStr,
-					StringQuote(qName),
-					StringQuote(ipStr),
-					StringQuote(reason),
-				)
-			} else if plugin.format == "ltsv" {
-				line = fmt.Sprintf("time:%d\thost:%s\tqname:%s\tip:%s\tmessage:%s\n", time.Now().Unix(), clientIPStr, StringQuote(qName), StringQuote(ipStr), StringQuote(reason))
-			} else {
-				dlog.Fatalf("Unexpected log format: [%s]", plugin.format)
+
+			if err := WritePluginLog(plugin.logger, plugin.format, clientIPStr, qName, reason, ipStr); err != nil {
+				return err
 			}
-			if plugin.logger == nil {
-				return errors.New("Log file not initialized")
-			}
-			_, _ = plugin.logger.Write([]byte(line))
 		}
 	}
 	return nil

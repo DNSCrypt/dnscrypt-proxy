@@ -2,12 +2,9 @@ package main
 
 import (
 	"errors"
-	"fmt"
 	"io"
-	"net"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/jedisct1/dlog"
 	"github.com/miekg/dns"
@@ -66,27 +63,13 @@ func (plugin *PluginAllowName) loadPatterns(lines string, patternMatcher *Patter
 			continue
 		}
 
-		parts := strings.Split(line, "@")
-		timeRangeName := ""
-		if len(parts) == 2 {
-			line = strings.TrimSpace(parts[0])
-			timeRangeName = strings.TrimSpace(parts[1])
-		} else if len(parts) > 2 {
-			dlog.Errorf("Syntax error in allowed names at line %d -- Unexpected @ character", 1+lineNo)
+		rulePart, weeklyRanges, err := ParseTimeBasedRule(line, lineNo, plugin.allWeeklyRanges)
+		if err != nil {
+			dlog.Error(err)
 			continue
 		}
 
-		var weeklyRanges *WeeklyRanges
-		if len(timeRangeName) > 0 {
-			weeklyRangesX, ok := (*plugin.allWeeklyRanges)[timeRangeName]
-			if !ok {
-				dlog.Errorf("Time range [%s] not found at line %d", timeRangeName, 1+lineNo)
-			} else {
-				weeklyRanges = &weeklyRangesX
-			}
-		}
-
-		if err := patternMatcher.Add(line, weeklyRanges, lineNo+1); err != nil {
+		if err := patternMatcher.Add(rulePart, weeklyRanges, lineNo+1); err != nil {
 			dlog.Error(err)
 			continue
 		}
@@ -104,37 +87,30 @@ func (plugin *PluginAllowName) Drop() error {
 
 // PrepareReload loads new patterns into the staging matcher but doesn't apply them yet
 func (plugin *PluginAllowName) PrepareReload() error {
-	// Read the configuration file
-	lines, err := SafeReadTextFile(plugin.configFile)
-	if err != nil {
-		return fmt.Errorf("error reading config file during reload preparation: %w", err)
-	}
+	return StandardPrepareReloadPattern(plugin.Name(), plugin.configFile, func(lines string) error {
+		// Create a new pattern matcher for staged changes
+		plugin.stagingMatcher = NewPatternMatcher()
 
-	// Create a new pattern matcher for staged changes
-	plugin.stagingMatcher = NewPatternMatcher()
-
-	// Load patterns into the staging matcher
-	if err := plugin.loadPatterns(lines, plugin.stagingMatcher); err != nil {
-		return fmt.Errorf("error parsing config during reload preparation: %w", err)
-	}
-
-	return nil
+		// Load patterns into the staging matcher
+		return plugin.loadPatterns(lines, plugin.stagingMatcher)
+	})
 }
 
 // ApplyReload atomically replaces the active pattern matcher with the staging one
 func (plugin *PluginAllowName) ApplyReload() error {
-	if plugin.stagingMatcher == nil {
-		return errors.New("no staged configuration to apply")
-	}
+	return StandardApplyReloadPattern(plugin.Name(), func() error {
+		if plugin.stagingMatcher == nil {
+			return errors.New("no staged configuration to apply")
+		}
 
-	// Use write lock to swap pattern matchers
-	plugin.rwLock.Lock()
-	plugin.patternMatcher = plugin.stagingMatcher
-	plugin.stagingMatcher = nil
-	plugin.rwLock.Unlock()
+		// Use write lock to swap pattern matchers
+		plugin.rwLock.Lock()
+		plugin.patternMatcher = plugin.stagingMatcher
+		plugin.stagingMatcher = nil
+		plugin.rwLock.Unlock()
 
-	dlog.Noticef("Applied new configuration for plugin [%s]", plugin.Name())
-	return nil
+		return nil
+	})
 }
 
 // CancelReload cleans up any staging resources
@@ -144,16 +120,16 @@ func (plugin *PluginAllowName) CancelReload() {
 
 // Reload implements hot-reloading for the plugin
 func (plugin *PluginAllowName) Reload() error {
-	dlog.Noticef("Reloading configuration for plugin [%s]", plugin.Name())
+	return StandardReloadPattern(plugin.Name(), func() error {
+		// Prepare the new configuration
+		if err := plugin.PrepareReload(); err != nil {
+			plugin.CancelReload()
+			return err
+		}
 
-	// Prepare the new configuration
-	if err := plugin.PrepareReload(); err != nil {
-		plugin.CancelReload()
-		return err
-	}
-
-	// Apply the new configuration
-	return plugin.ApplyReload()
+		// Apply the new configuration
+		return plugin.ApplyReload()
+	})
 }
 
 // GetConfigPath returns the path to the plugin's configuration file
@@ -187,32 +163,15 @@ func (plugin *PluginAllowName) Eval(pluginsState *PluginsState, msg *dns.Msg) er
 	if allowList {
 		pluginsState.sessionData["whitelisted"] = true
 		if plugin.logger != nil {
-			var clientIPStr string
-			switch pluginsState.clientProto {
-			case "udp":
-				clientIPStr = (*pluginsState.clientAddr).(*net.UDPAddr).IP.String()
-			case "tcp", "local_doh":
-				clientIPStr = (*pluginsState.clientAddr).(*net.TCPAddr).IP.String()
-			default:
+			clientIPStr, ok := ExtractClientIPStr(pluginsState)
+			if !ok {
 				// Ignore internal flow.
 				return nil
 			}
-			var line string
-			if plugin.format == "tsv" {
-				now := time.Now()
-				year, month, day := now.Date()
-				hour, minute, second := now.Clock()
-				tsStr := fmt.Sprintf("[%d-%02d-%02d %02d:%02d:%02d]", year, int(month), day, hour, minute, second)
-				line = fmt.Sprintf("%s\t%s\t%s\t%s\n", tsStr, clientIPStr, StringQuote(qName), StringQuote(reason))
-			} else if plugin.format == "ltsv" {
-				line = fmt.Sprintf("time:%d\thost:%s\tqname:%s\tmessage:%s\n", time.Now().Unix(), clientIPStr, StringQuote(qName), StringQuote(reason))
-			} else {
-				dlog.Fatalf("Unexpected log format: [%s]", plugin.format)
+
+			if err := WritePluginLog(plugin.logger, plugin.format, clientIPStr, qName, reason); err != nil {
+				return err
 			}
-			if plugin.logger == nil {
-				return errors.New("Log file not initialized")
-			}
-			_, _ = plugin.logger.Write([]byte(line))
 		}
 	}
 	return nil

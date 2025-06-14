@@ -4,11 +4,14 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"fmt"
+	"io"
 	"net"
 	"os"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 	"unicode"
 )
 
@@ -171,3 +174,110 @@ func ReadTextFile(filename string) (string, error) {
 }
 
 func isDigit(b byte) bool { return b >= '0' && b <= '9' }
+
+// ExtractClientIPStr extracts client IP string from pluginsState based on protocol
+func ExtractClientIPStr(pluginsState *PluginsState) (string, bool) {
+	switch pluginsState.clientProto {
+	case "udp":
+		return (*pluginsState.clientAddr).(*net.UDPAddr).IP.String(), true
+	case "tcp", "local_doh":
+		return (*pluginsState.clientAddr).(*net.TCPAddr).IP.String(), true
+	default:
+		return "", false
+	}
+}
+
+// FormatLogLine formats a log line based on the specified format (tsv or ltsv)
+func FormatLogLine(format, clientIP, qName, reason string, additionalFields ...string) (string, error) {
+	if format == "tsv" {
+		now := time.Now()
+		year, month, day := now.Date()
+		hour, minute, second := now.Clock()
+		tsStr := fmt.Sprintf("[%d-%02d-%02d %02d:%02d:%02d]", year, int(month), day, hour, minute, second)
+
+		line := fmt.Sprintf("%s\t%s\t%s\t%s", tsStr, clientIP, StringQuote(qName), StringQuote(reason))
+		for _, field := range additionalFields {
+			line += fmt.Sprintf("\t%s", StringQuote(field))
+		}
+		return line + "\n", nil
+	} else if format == "ltsv" {
+		line := fmt.Sprintf("time:%d\thost:%s\tqname:%s\tmessage:%s", time.Now().Unix(), clientIP, StringQuote(qName), StringQuote(reason))
+
+		// For LTSV format, additional fields are added with specific labels
+		for i, field := range additionalFields {
+			if i == 0 {
+				line += fmt.Sprintf("\tip:%s", StringQuote(field))
+			} else {
+				line += fmt.Sprintf("\tfield%d:%s", i, StringQuote(field))
+			}
+		}
+		return line + "\n", nil
+	}
+	return "", fmt.Errorf("unexpected log format: [%s]", format)
+}
+
+// WritePluginLog writes a log entry for plugin actions
+func WritePluginLog(logger io.Writer, format, clientIP, qName, reason string, additionalFields ...string) error {
+	if logger == nil {
+		return errors.New("Log file not initialized")
+	}
+
+	line, err := FormatLogLine(format, clientIP, qName, reason, additionalFields...)
+	if err != nil {
+		return err
+	}
+
+	_, err = logger.Write([]byte(line))
+	return err
+}
+
+// ParseTimeBasedRule parses a rule line that may contain time-based restrictions (@timerange)
+func ParseTimeBasedRule(line string, lineNo int, allWeeklyRanges *map[string]WeeklyRanges) (rulePart string, weeklyRanges *WeeklyRanges, err error) {
+	parts := strings.Split(line, "@")
+	timeRangeName := ""
+
+	if len(parts) == 2 {
+		rulePart = strings.TrimSpace(parts[0])
+		timeRangeName = strings.TrimSpace(parts[1])
+	} else if len(parts) > 2 {
+		return "", nil, fmt.Errorf("syntax error at line %d -- Unexpected @ character", 1+lineNo)
+	} else {
+		rulePart = line
+	}
+
+	if len(timeRangeName) > 0 {
+		if weeklyRangesX, ok := (*allWeeklyRanges)[timeRangeName]; ok {
+			weeklyRanges = &weeklyRangesX
+		} else {
+			return "", nil, fmt.Errorf("time range [%s] not found at line %d", timeRangeName, 1+lineNo)
+		}
+	}
+
+	return rulePart, weeklyRanges, nil
+}
+
+// ParseIPRule parses and validates an IP rule line
+func ParseIPRule(line string, lineNo int) (cleanLine string, trailingStar bool, err error) {
+	ip := net.ParseIP(line)
+	trailingStar = strings.HasSuffix(line, "*")
+
+	if len(line) < 2 || (ip != nil && trailingStar) {
+		return "", false, fmt.Errorf("suspicious IP rule [%s] at line %d", line, lineNo)
+	}
+
+	cleanLine = line
+	if trailingStar {
+		cleanLine = cleanLine[:len(cleanLine)-1]
+	}
+	if strings.HasSuffix(cleanLine, ":") || strings.HasSuffix(cleanLine, ".") {
+		cleanLine = cleanLine[:len(cleanLine)-1]
+	}
+	if len(cleanLine) == 0 {
+		return "", false, fmt.Errorf("empty IP rule at line %d", lineNo)
+	}
+	if strings.Contains(cleanLine, "*") {
+		return "", false, fmt.Errorf("invalid rule: [%s] - wildcards can only be used as a suffix at line %d", line, lineNo)
+	}
+
+	return strings.ToLower(cleanLine), trailingStar, nil
+}

@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -161,4 +162,42 @@ func SafeReadTextFile(filePath string) (string, error) {
 	}
 
 	return content, nil
+}
+
+// StandardReloadPattern implements the common reload pattern used by most plugins
+func StandardReloadPattern(pluginName string, reloadFunc func() error) error {
+	dlog.Noticef("Reloading configuration for plugin [%s]", pluginName)
+
+	// Execute the reload function
+	if err := reloadFunc(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// StandardPrepareReloadPattern implements the common prepare-reload pattern
+func StandardPrepareReloadPattern(pluginName, configFile string, prepareFunc func(string) error) error {
+	// Read the configuration file
+	lines, err := SafeReadTextFile(configFile)
+	if err != nil {
+		return fmt.Errorf("error reading config file during reload preparation: %w", err)
+	}
+
+	// Execute the prepare function with the file contents
+	if err := prepareFunc(lines); err != nil {
+		return fmt.Errorf("error parsing config during reload preparation: %w", err)
+	}
+
+	return nil
+}
+
+// StandardApplyReloadPattern implements the common apply-reload pattern
+func StandardApplyReloadPattern(pluginName string, applyFunc func() error) error {
+	if err := applyFunc(); err != nil {
+		return err
+	}
+
+	dlog.Noticef("Applied new configuration for plugin [%s]", pluginName)
+	return nil
 }
