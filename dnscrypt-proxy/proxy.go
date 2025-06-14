@@ -798,7 +798,7 @@ func (proxy *Proxy) processIncomingQuery(
 	pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
 
 	// Update monitoring metrics
-	updateMonitoringMetrics(proxy, &pluginsState, start)
+	updateMonitoringMetrics(proxy, &pluginsState)
 
 	return response
 }

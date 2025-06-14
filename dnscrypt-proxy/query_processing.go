@@ -347,11 +347,10 @@ func sendResponse(
 func updateMonitoringMetrics(
 	proxy *Proxy,
 	pluginsState *PluginsState,
-	start time.Time,
 ) {
 	if proxy.monitoringUI.Enabled && proxy.monitoringInstance != nil && pluginsState.questionMsg != nil {
 		dlog.Debugf("Calling UpdateMetrics for query: %s", pluginsState.qName)
-		proxy.monitoringInstance.UpdateMetrics(*pluginsState, pluginsState.questionMsg, start)
+		proxy.monitoringInstance.UpdateMetrics(*pluginsState, pluginsState.questionMsg)
 	} else {
 		if !proxy.monitoringUI.Enabled {
 			dlog.Debugf("Monitoring UI not enabled")

@@ -246,7 +246,7 @@ func (ui *MonitoringUI) Stop() error {
 }
 
 // UpdateMetrics - Updates metrics with a new query
-func (ui *MonitoringUI) UpdateMetrics(pluginsState PluginsState, msg *dns.Msg, start time.Time) {
+func (ui *MonitoringUI) UpdateMetrics(pluginsState PluginsState, msg *dns.Msg) {
 	if !ui.config.Enabled {
 		return
 	}
@@ -306,7 +306,7 @@ func (ui *MonitoringUI) UpdateMetrics(pluginsState PluginsState, msg *dns.Msg, s
 	}
 
 	// Update response time - back to counters lock
-	responseTime := time.Since(start).Milliseconds()
+	responseTime := time.Since(pluginsState.requestStart).Milliseconds()
 
 	// Cap at timeout to handle system sleep/suspend
 	maxResponseTime := pluginsState.timeout.Milliseconds()
@@ -778,16 +778,18 @@ func (ui *MonitoringUI) handleTestQuery(w http.ResponseWriter, r *http.Request) 
 	msg.SetQuestion("test.example.com.", dns.TypeA)
 
 	// Create a fake plugin state
+	testStart := time.Now().Add(-10 * time.Millisecond)
 	pluginsState := PluginsState{
-		qName:       "test.example.com",
-		serverName:  "cloudflare",
-		clientProto: "udp",
-		questionMsg: msg,
-		cacheHit:    false,
+		qName:        "test.example.com",
+		serverName:   "cloudflare",
+		clientProto:  "udp",
+		questionMsg:  msg,
+		cacheHit:     false,
+		requestStart: testStart,
 	}
 
 	// Update metrics
-	ui.UpdateMetrics(pluginsState, msg, time.Now().Add(-10*time.Millisecond))
+	ui.UpdateMetrics(pluginsState, msg)
 
 	// Return success
 	w.Header().Set("Content-Type", "text/plain")
