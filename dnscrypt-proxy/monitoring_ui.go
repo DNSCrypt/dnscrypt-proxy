@@ -324,7 +324,19 @@ func (ui *MonitoringUI) UpdateMetrics(pluginsState PluginsState, msg *dns.Msg, s
 	}
 
 	// Update response time - back to counters lock
-	responseTime := time.Since(start).Milliseconds()
+	var responseTime int64
+	if !pluginsState.requestStart.IsZero() && !pluginsState.requestEnd.IsZero() {
+		responseTime = pluginsState.requestEnd.Sub(pluginsState.requestStart).Milliseconds()
+	} else {
+		// For incomplete queries, use timeout duration
+		responseTime = pluginsState.timeout.Milliseconds()
+	}
+
+	// Cap at timeout to handle system sleep/suspend
+	maxResponseTime := pluginsState.timeout.Milliseconds()
+	if responseTime > maxResponseTime {
+		responseTime = maxResponseTime
+	}
 	mc.countersMutex.Lock()
 	mc.responseTimeSum += uint64(responseTime)
 	mc.responseTimeCount++

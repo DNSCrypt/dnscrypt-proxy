@@ -83,6 +83,14 @@ func (plugin *PluginQueryLog) Eval(pluginsState *PluginsState, msg *dns.Msg) err
 	var requestDuration time.Duration
 	if !pluginsState.requestStart.IsZero() && !pluginsState.requestEnd.IsZero() {
 		requestDuration = pluginsState.requestEnd.Sub(pluginsState.requestStart)
+	} else {
+		// For incomplete queries, use timeout duration
+		requestDuration = pluginsState.timeout
+	}
+
+	// Cap at timeout to handle system sleep/suspend
+	if requestDuration > pluginsState.timeout {
+		requestDuration = pluginsState.timeout
 	}
 	var line string
 	if plugin.format == "tsv" {
