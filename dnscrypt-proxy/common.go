@@ -13,6 +13,9 @@ import (
 	"sync"
 	"time"
 	"unicode"
+
+	iradix "github.com/hashicorp/go-immutable-radix"
+	"github.com/jedisct1/dlog"
 )
 
 type CryptoConstruction uint16
@@ -280,4 +283,45 @@ func ParseIPRule(line string, lineNo int) (cleanLine string, trailingStar bool, 
 	}
 
 	return strings.ToLower(cleanLine), trailingStar, nil
+}
+
+// ProcessConfigLines processes configuration file lines, calling the processor function for each non-empty line
+func ProcessConfigLines(lines string, processor func(line string, lineNo int) error) error {
+	for lineNo, line := range strings.Split(lines, "\n") {
+		line = TrimAndStripInlineComments(line)
+		if len(line) == 0 {
+			continue
+		}
+		if err := processor(line, lineNo); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// LoadIPRules loads IP rules from text lines into radix tree and map structures
+func LoadIPRules(lines string, prefixes *iradix.Tree, ips map[string]interface{}) (*iradix.Tree, error) {
+	err := ProcessConfigLines(lines, func(line string, lineNo int) error {
+		cleanLine, trailingStar, lineErr := ParseIPRule(line, lineNo)
+		if lineErr != nil {
+			dlog.Error(lineErr)
+			return nil // Continue processing (matching existing behavior)
+		}
+
+		if trailingStar {
+			prefixes, _, _ = prefixes.Insert([]byte(cleanLine), 0)
+		} else {
+			ips[cleanLine] = true
+		}
+		return nil
+	})
+	return prefixes, err
+}
+
+// InitializePluginLogger initializes a logger for a plugin if the log file is configured
+func InitializePluginLogger(logFile, format string, maxSize, maxAge, maxBackups int) (io.Writer, string) {
+	if len(logFile) > 0 {
+		return Logger(maxSize, maxAge, maxBackups, logFile), format
+	}
+	return nil, ""
 }

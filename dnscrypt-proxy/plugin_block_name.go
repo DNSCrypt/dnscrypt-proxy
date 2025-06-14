@@ -3,7 +3,6 @@ package main
 import (
 	"errors"
 	"io"
-	"strings"
 	"sync"
 
 	"github.com/jedisct1/dlog"
@@ -93,10 +92,7 @@ func (plugin *PluginBlockName) Init(proxy *Proxy) error {
 		return err
 	}
 
-	if len(proxy.blockNameLogFile) > 0 {
-		xBlockedNames.logger = Logger(proxy.logMaxSize, proxy.logMaxAge, proxy.logMaxBackups, proxy.blockNameLogFile)
-		xBlockedNames.format = proxy.blockNameFormat
-	}
+	xBlockedNames.logger, xBlockedNames.format = InitializePluginLogger(proxy.blockNameLogFile, proxy.blockNameFormat, proxy.logMaxSize, proxy.logMaxAge, proxy.logMaxBackups)
 
 	blockedNamesLock.Lock()
 	blockedNames = &xBlockedNames
@@ -107,25 +103,19 @@ func (plugin *PluginBlockName) Init(proxy *Proxy) error {
 
 // loadRules parses and loads name patterns into the BlockedNames
 func (plugin *PluginBlockName) loadRules(lines string, blockedNamesObj *BlockedNames) error {
-	for lineNo, line := range strings.Split(lines, "\n") {
-		line = TrimAndStripInlineComments(line)
-		if len(line) == 0 {
-			continue
-		}
-
+	return ProcessConfigLines(lines, func(line string, lineNo int) error {
 		rulePart, weeklyRanges, err := ParseTimeBasedRule(line, lineNo, blockedNamesObj.allWeeklyRanges)
 		if err != nil {
 			dlog.Error(err)
-			continue
+			return nil
 		}
 
 		if err := blockedNamesObj.patternMatcher.Add(rulePart, weeklyRanges, lineNo+1); err != nil {
 			dlog.Error(err)
-			continue
+			return nil
 		}
-	}
-
-	return nil
+		return nil
+	})
 }
 
 func (plugin *PluginBlockName) Drop() error {

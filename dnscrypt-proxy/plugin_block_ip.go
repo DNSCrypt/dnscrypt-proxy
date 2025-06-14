@@ -3,7 +3,6 @@ package main
 import (
 	"errors"
 	"io"
-	"strings"
 	"sync"
 
 	iradix "github.com/hashicorp/go-immutable-radix"
@@ -50,36 +49,14 @@ func (plugin *PluginBlockIP) Init(proxy *Proxy) error {
 		return err
 	}
 
-	if len(proxy.blockIPLogFile) > 0 {
-		plugin.logger = Logger(proxy.logMaxSize, proxy.logMaxAge, proxy.logMaxBackups, proxy.blockIPLogFile)
-		plugin.format = proxy.blockIPFormat
-	}
+	plugin.logger, plugin.format = InitializePluginLogger(proxy.blockIPLogFile, proxy.blockIPFormat, proxy.logMaxSize, proxy.logMaxAge, proxy.logMaxBackups)
 
 	return nil
 }
 
 // loadRules parses and loads IP rules into the provided tree and map
 func (plugin *PluginBlockIP) loadRules(lines string, prefixes *iradix.Tree, ips map[string]interface{}) (*iradix.Tree, error) {
-	for lineNo, line := range strings.Split(lines, "\n") {
-		line = TrimAndStripInlineComments(line)
-		if len(line) == 0 {
-			continue
-		}
-
-		cleanLine, trailingStar, err := ParseIPRule(line, lineNo)
-		if err != nil {
-			dlog.Error(err)
-			continue
-		}
-
-		if trailingStar {
-			prefixes, _, _ = prefixes.Insert([]byte(cleanLine), 0)
-		} else {
-			ips[cleanLine] = true
-		}
-	}
-
-	return prefixes, nil
+	return LoadIPRules(lines, prefixes, ips)
 }
 
 func (plugin *PluginBlockIP) Drop() error {

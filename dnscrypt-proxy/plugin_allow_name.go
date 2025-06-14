@@ -3,7 +3,6 @@ package main
 import (
 	"errors"
 	"io"
-	"strings"
 	"sync"
 
 	"github.com/jedisct1/dlog"
@@ -47,35 +46,26 @@ func (plugin *PluginAllowName) Init(proxy *Proxy) error {
 		return err
 	}
 
-	if len(proxy.allowNameLogFile) > 0 {
-		plugin.logger = Logger(proxy.logMaxSize, proxy.logMaxAge, proxy.logMaxBackups, proxy.allowNameLogFile)
-		plugin.format = proxy.allowNameFormat
-	}
+	plugin.logger, plugin.format = InitializePluginLogger(proxy.allowNameLogFile, proxy.allowNameFormat, proxy.logMaxSize, proxy.logMaxAge, proxy.logMaxBackups)
 
 	return nil
 }
 
 // loadPatterns parses and loads patterns into the provided pattern matcher
 func (plugin *PluginAllowName) loadPatterns(lines string, patternMatcher *PatternMatcher) error {
-	for lineNo, line := range strings.Split(lines, "\n") {
-		line = TrimAndStripInlineComments(line)
-		if len(line) == 0 {
-			continue
-		}
-
+	return ProcessConfigLines(lines, func(line string, lineNo int) error {
 		rulePart, weeklyRanges, err := ParseTimeBasedRule(line, lineNo, plugin.allWeeklyRanges)
 		if err != nil {
 			dlog.Error(err)
-			continue
+			return nil
 		}
 
 		if err := patternMatcher.Add(rulePart, weeklyRanges, lineNo+1); err != nil {
 			dlog.Error(err)
-			continue
+			return nil
 		}
-	}
-
-	return nil
+		return nil
+	})
 }
 
 func (plugin *PluginAllowName) Drop() error {
