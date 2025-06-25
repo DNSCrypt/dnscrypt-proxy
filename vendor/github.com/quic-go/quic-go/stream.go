@@ -25,7 +25,7 @@ var errDeadline net.Error = &deadlineError{}
 // The streamSender is notified by the stream about various events.
 type streamSender interface {
 	onHasConnectionData()
-	onHasStreamData(protocol.StreamID, sendStreamI)
+	onHasStreamData(protocol.StreamID, *SendStream)
 	onHasStreamControlFrame(protocol.StreamID, streamControlFrameGetter)
 	// must be called without holding the mutex that is acquired by closeForShutdown
 	onStreamCompleted(protocol.StreamID)
@@ -39,7 +39,7 @@ type uniStreamSender struct {
 	onHasStreamControlFrameImpl func(protocol.StreamID, streamControlFrameGetter)
 }
 
-func (s *uniStreamSender) onHasStreamData(id protocol.StreamID, str sendStreamI) {
+func (s *uniStreamSender) onHasStreamData(id protocol.StreamID, str *SendStream) {
 	s.streamSender.onHasStreamData(id, str)
 }
 func (s *uniStreamSender) onStreamCompleted(protocol.StreamID) { s.onStreamCompletedImpl() }
@@ -49,30 +49,9 @@ func (s *uniStreamSender) onHasStreamControlFrame(id protocol.StreamID, str stre
 
 var _ streamSender = &uniStreamSender{}
 
-type streamI interface {
-	Stream
-	closeForShutdown(error)
-	// for receiving
-	handleStreamFrame(*wire.StreamFrame, time.Time) error
-	handleResetStreamFrame(*wire.ResetStreamFrame, time.Time) error
-	// for sending
-	hasData() bool
-	handleStopSendingFrame(*wire.StopSendingFrame)
-	popStreamFrame(protocol.ByteCount, protocol.Version) (_ ackhandler.StreamFrame, _ *wire.StreamDataBlockedFrame, hasMore bool)
-	updateSendWindow(protocol.ByteCount)
-}
-
-var (
-	_ receiveStreamI = (streamI)(nil)
-	_ sendStreamI    = (streamI)(nil)
-)
-
-// A Stream assembles the data from StreamFrames and provides a super-convenient Read-Interface
-//
-// Read() and Write() may be called concurrently, but multiple calls to Read() or Write() individually must be synchronized manually.
-type stream struct {
-	receiveStream
-	sendStream
+type Stream struct {
+	receiveStr *ReceiveStream
+	sendStr    *SendStream
 
 	completedMutex         sync.Mutex
 	sender                 streamSender
@@ -81,8 +60,9 @@ type stream struct {
 }
 
 var (
-	_ Stream                   = &stream{}
-	_ streamControlFrameGetter = &receiveStream{}
+	_ outgoingStream            = &Stream{}
+	_ sendStreamFrameHandler    = &Stream{}
+	_ receiveStreamFrameHandler = &Stream{}
 )
 
 // newStream creates a new Stream
@@ -91,8 +71,8 @@ func newStream(
 	streamID protocol.StreamID,
 	sender streamSender,
 	flowController flowcontrol.StreamFlowController,
-) *stream {
-	s := &stream{sender: sender}
+) *Stream {
+	s := &Stream{sender: sender}
 	senderForSendStream := &uniStreamSender{
 		streamSender: sender,
 		onStreamCompletedImpl: func() {
@@ -105,7 +85,7 @@ func newStream(
 			sender.onHasStreamControlFrame(streamID, s)
 		},
 	}
-	s.sendStream = *newSendStream(ctx, streamID, senderForSendStream, flowController)
+	s.sendStr = newSendStream(ctx, streamID, senderForSendStream, flowController)
 	senderForReceiveStream := &uniStreamSender{
 		streamSender: sender,
 		onStreamCompletedImpl: func() {
@@ -118,45 +98,113 @@ func newStream(
 			sender.onHasStreamControlFrame(streamID, s)
 		},
 	}
-	s.receiveStream = *newReceiveStream(streamID, senderForReceiveStream, flowController)
+	s.receiveStr = newReceiveStream(streamID, senderForReceiveStream, flowController)
 	return s
 }
 
-// need to define StreamID() here, since both receiveStream and readStream have a StreamID()
-func (s *stream) StreamID() protocol.StreamID {
+// StreamID returns the stream ID.
+func (s *Stream) StreamID() protocol.StreamID {
 	// the result is same for receiveStream and sendStream
-	return s.sendStream.StreamID()
+	return s.sendStr.StreamID()
 }
 
-func (s *stream) Close() error {
-	return s.sendStream.Close()
+// Read reads data from the stream.
+// Read can be made to time out using [Stream.SetReadDeadline] and [Stream.SetDeadline].
+// If the stream was canceled, the error is a [StreamError].
+func (s *Stream) Read(p []byte) (int, error) {
+	return s.receiveStr.Read(p)
 }
 
-func (s *stream) getControlFrame(now time.Time) (_ ackhandler.Frame, ok, hasMore bool) {
-	f, ok, _ := s.sendStream.getControlFrame(now)
+// Write writes data to the stream.
+// Write can be made to time out using [Stream.SetWriteDeadline] or [Stream.SetDeadline].
+// If the stream was canceled, the error is a [StreamError].
+func (s *Stream) Write(p []byte) (int, error) {
+	return s.sendStr.Write(p)
+}
+
+// CancelWrite aborts sending on this stream.
+// See [SendStream.CancelWrite] for more details.
+func (s *Stream) CancelWrite(errorCode StreamErrorCode) {
+	s.sendStr.CancelWrite(errorCode)
+}
+
+// CancelRead aborts receiving on this stream.
+// See [ReceiveStream.CancelRead] for more details.
+func (s *Stream) CancelRead(errorCode StreamErrorCode) {
+	s.receiveStr.CancelRead(errorCode)
+}
+
+// The Context is canceled as soon as the write-side of the stream is closed.
+// See [SendStream.Context] for more details.
+func (s *Stream) Context() context.Context {
+	return s.sendStr.Context()
+}
+
+// Close closes the send-direction of the stream.
+// It does not close the receive-direction of the stream.
+func (s *Stream) Close() error {
+	return s.sendStr.Close()
+}
+
+func (s *Stream) handleResetStreamFrame(frame *wire.ResetStreamFrame, rcvTime time.Time) error {
+	return s.receiveStr.handleResetStreamFrame(frame, rcvTime)
+}
+
+func (s *Stream) handleStreamFrame(frame *wire.StreamFrame, rcvTime time.Time) error {
+	return s.receiveStr.handleStreamFrame(frame, rcvTime)
+}
+
+func (s *Stream) handleStopSendingFrame(frame *wire.StopSendingFrame) {
+	s.sendStr.handleStopSendingFrame(frame)
+}
+
+func (s *Stream) updateSendWindow(limit protocol.ByteCount) {
+	s.sendStr.updateSendWindow(limit)
+}
+
+func (s *Stream) popStreamFrame(maxBytes protocol.ByteCount, v protocol.Version) (_ ackhandler.StreamFrame, _ *wire.StreamDataBlockedFrame, hasMore bool) {
+	return s.sendStr.popStreamFrame(maxBytes, v)
+}
+
+func (s *Stream) getControlFrame(now time.Time) (_ ackhandler.Frame, ok, hasMore bool) {
+	f, ok, _ := s.sendStr.getControlFrame(now)
 	if ok {
 		return f, true, true
 	}
-	return s.receiveStream.getControlFrame(now)
+	return s.receiveStr.getControlFrame(now)
 }
 
-func (s *stream) SetDeadline(t time.Time) error {
-	_ = s.SetReadDeadline(t)  // SetReadDeadline never errors
-	_ = s.SetWriteDeadline(t) // SetWriteDeadline never errors
+// SetReadDeadline sets the deadline for future Read calls.
+// See [ReceiveStream.SetReadDeadline] for more details.
+func (s *Stream) SetReadDeadline(t time.Time) error {
+	return s.receiveStr.SetReadDeadline(t)
+}
+
+// SetWriteDeadline sets the deadline for future Write calls.
+// See [SendStream.SetWriteDeadline] for more details.
+func (s *Stream) SetWriteDeadline(t time.Time) error {
+	return s.sendStr.SetWriteDeadline(t)
+}
+
+// SetDeadline sets the read and write deadlines associated with the stream.
+// It is equivalent to calling both SetReadDeadline and SetWriteDeadline.
+func (s *Stream) SetDeadline(t time.Time) error {
+	_ = s.receiveStr.SetReadDeadline(t) // SetReadDeadline never errors
+	_ = s.sendStr.SetWriteDeadline(t)   // SetWriteDeadline never errors
 	return nil
 }
 
 // CloseForShutdown closes a stream abruptly.
 // It makes Read and Write unblock (and return the error) immediately.
 // The peer will NOT be informed about this: the stream is closed without sending a FIN or RST.
-func (s *stream) closeForShutdown(err error) {
-	s.sendStream.closeForShutdown(err)
-	s.receiveStream.closeForShutdown(err)
+func (s *Stream) closeForShutdown(err error) {
+	s.sendStr.closeForShutdown(err)
+	s.receiveStr.closeForShutdown(err)
 }
 
 // checkIfCompleted is called from the uniStreamSender, when one of the stream halves is completed.
 // It makes sure that the onStreamCompleted callback is only called if both receive and send side have completed.
-func (s *stream) checkIfCompleted() {
+func (s *Stream) checkIfCompleted() {
 	if s.sendStreamCompleted && s.receiveStreamCompleted {
 		s.sender.onStreamCompleted(s.StreamID())
 	}

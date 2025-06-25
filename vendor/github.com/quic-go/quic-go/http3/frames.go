@@ -21,7 +21,7 @@ var errHijacked = errors.New("hijacked")
 
 type frameParser struct {
 	r                   io.Reader
-	conn                quic.Connection
+	closeConn           func(quic.ApplicationErrorCode, string) error
 	unknownFrameHandler unknownFrameHandlerFunc
 }
 
@@ -70,7 +70,7 @@ func (p *frameParser) ParseNext() (frame, error) {
 			return parseGoAwayFrame(qr, l)
 		case 0xd: // MAX_PUSH_ID
 		case 0x2, 0x6, 0x8, 0x9:
-			p.conn.CloseWithError(quic.ApplicationErrorCode(ErrCodeFrameUnexpected), "")
+			p.closeConn(quic.ApplicationErrorCode(ErrCodeFrameUnexpected), "")
 			return nil, fmt.Errorf("http3: reserved frame type: %d", t)
 		}
 		// skip over unknown frames

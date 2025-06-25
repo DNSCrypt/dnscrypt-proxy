@@ -20,30 +20,16 @@ import (
 	"github.com/quic-go/qpack"
 )
 
+const maxQuarterStreamID = 1<<60 - 1
+
 var errGoAway = errors.New("connection in graceful shutdown")
 
-// Connection is an HTTP/3 connection.
-// It has all methods from the quic.Connection expect for AcceptStream, AcceptUniStream,
+// Conn is an HTTP/3 connection.
+// It has all methods from the quic.Conn expect for AcceptStream, AcceptUniStream,
 // SendDatagram and ReceiveDatagram.
-type Connection interface {
-	OpenStream() (quic.Stream, error)
-	OpenStreamSync(context.Context) (quic.Stream, error)
-	OpenUniStream() (quic.SendStream, error)
-	OpenUniStreamSync(context.Context) (quic.SendStream, error)
-	LocalAddr() net.Addr
-	RemoteAddr() net.Addr
-	CloseWithError(quic.ApplicationErrorCode, string) error
-	Context() context.Context
-	ConnectionState() quic.ConnectionState
+type Conn struct {
+	conn *quic.Conn
 
-	// ReceivedSettings returns a channel that is closed once the client's SETTINGS frame was received.
-	ReceivedSettings() <-chan struct{}
-	// Settings returns the settings received on this connection.
-	Settings() *Settings
-}
-
-type connection struct {
-	quic.Connection
 	ctx context.Context
 
 	perspective protocol.Perspective
@@ -54,7 +40,7 @@ type connection struct {
 	decoder *qpack.Decoder
 
 	streamMx     sync.Mutex
-	streams      map[protocol.StreamID]*datagrammer
+	streams      map[protocol.StreamID]*stateTrackingStream
 	lastStreamID protocol.StreamID
 	maxStreamID  protocol.StreamID
 
@@ -67,22 +53,22 @@ type connection struct {
 
 func newConnection(
 	ctx context.Context,
-	quicConn quic.Connection,
+	quicConn *quic.Conn,
 	enableDatagrams bool,
 	perspective protocol.Perspective,
 	logger *slog.Logger,
 	idleTimeout time.Duration,
-) *connection {
-	c := &connection{
+) *Conn {
+	c := &Conn{
 		ctx:              ctx,
-		Connection:       quicConn,
+		conn:             quicConn,
 		perspective:      perspective,
 		logger:           logger,
 		idleTimeout:      idleTimeout,
 		enableDatagrams:  enableDatagrams,
 		decoder:          qpack.NewDecoder(func(hf qpack.HeaderField) {}),
 		receivedSettings: make(chan struct{}),
-		streams:          make(map[protocol.StreamID]*datagrammer),
+		streams:          make(map[protocol.StreamID]*stateTrackingStream),
 		maxStreamID:      protocol.InvalidStreamID,
 		lastStreamID:     protocol.InvalidStreamID,
 	}
@@ -92,11 +78,43 @@ func newConnection(
 	return c
 }
 
-func (c *connection) onIdleTimer() {
+func (c *Conn) OpenStream() (*quic.Stream, error) {
+	return c.conn.OpenStream()
+}
+
+func (c *Conn) OpenStreamSync(ctx context.Context) (*quic.Stream, error) {
+	return c.conn.OpenStreamSync(ctx)
+}
+
+func (c *Conn) OpenUniStream() (*quic.SendStream, error) {
+	return c.conn.OpenUniStream()
+}
+
+func (c *Conn) OpenUniStreamSync(ctx context.Context) (*quic.SendStream, error) {
+	return c.conn.OpenUniStreamSync(ctx)
+}
+
+func (c *Conn) LocalAddr() net.Addr {
+	return c.conn.LocalAddr()
+}
+
+func (c *Conn) RemoteAddr() net.Addr {
+	return c.conn.RemoteAddr()
+}
+
+func (c *Conn) HandshakeComplete() <-chan struct{} {
+	return c.conn.HandshakeComplete()
+}
+
+func (c *Conn) ConnectionState() quic.ConnectionState {
+	return c.conn.ConnectionState()
+}
+
+func (c *Conn) onIdleTimer() {
 	c.CloseWithError(quic.ApplicationErrorCode(ErrCodeNoError), "idle timeout")
 }
 
-func (c *connection) clearStream(id quic.StreamID) {
+func (c *Conn) clearStream(id quic.StreamID) {
 	c.streamMx.Lock()
 	defer c.streamMx.Unlock()
 
@@ -113,54 +131,58 @@ func (c *connection) clearStream(id quic.StreamID) {
 	}
 }
 
-func (c *connection) openRequestStream(
+func (c *Conn) openRequestStream(
 	ctx context.Context,
 	requestWriter *requestWriter,
 	reqDone chan<- struct{},
 	disableCompression bool,
 	maxHeaderBytes uint64,
-) (*requestStream, error) {
-	if c.perspective == protocol.PerspectiveClient {
-		c.streamMx.Lock()
-		maxStreamID := c.maxStreamID
-		var nextStreamID quic.StreamID
-		if c.lastStreamID == protocol.InvalidStreamID {
-			nextStreamID = 0
-		} else {
-			nextStreamID = c.lastStreamID + 4
-		}
-		c.streamMx.Unlock()
-		// Streams with stream ID equal to or greater than the stream ID carried in the GOAWAY frame
-		// will be rejected, see section 5.2 of RFC 9114.
-		if maxStreamID != protocol.InvalidStreamID && nextStreamID >= maxStreamID {
-			return nil, errGoAway
-		}
+) (*RequestStream, error) {
+	c.streamMx.Lock()
+	maxStreamID := c.maxStreamID
+	var nextStreamID quic.StreamID
+	if c.lastStreamID == protocol.InvalidStreamID {
+		nextStreamID = 0
+	} else {
+		nextStreamID = c.lastStreamID + 4
+	}
+	c.streamMx.Unlock()
+	// Streams with stream ID equal to or greater than the stream ID carried in the GOAWAY frame
+	// will be rejected, see section 5.2 of RFC 9114.
+	if maxStreamID != protocol.InvalidStreamID && nextStreamID >= maxStreamID {
+		return nil, errGoAway
 	}
 
 	str, err := c.OpenStreamSync(ctx)
 	if err != nil {
 		return nil, err
 	}
-	datagrams := newDatagrammer(func(b []byte) error { return c.sendDatagram(str.StreamID(), b) })
+	hstr := newStateTrackingStream(str, c, func(b []byte) error { return c.sendDatagram(str.StreamID(), b) })
 	c.streamMx.Lock()
-	c.streams[str.StreamID()] = datagrams
+	c.streams[str.StreamID()] = hstr
 	c.lastStreamID = str.StreamID()
 	c.streamMx.Unlock()
-	qstr := newStateTrackingStream(str, c, datagrams)
 	rsp := &http.Response{}
-	hstr := newStream(qstr, c, datagrams, func(r io.Reader, l uint64) error {
-		hdr, err := c.decodeTrailers(r, l, maxHeaderBytes)
-		if err != nil {
-			return err
-		}
-		rsp.Trailer = hdr
-		return nil
-	})
 	trace := httptrace.ContextClientTrace(ctx)
-	return newRequestStream(hstr, requestWriter, reqDone, c.decoder, disableCompression, maxHeaderBytes, rsp, trace), nil
+	return newRequestStream(
+		newStream(hstr, c, trace, func(r io.Reader, l uint64) error {
+			hdr, err := c.decodeTrailers(r, l, maxHeaderBytes)
+			if err != nil {
+				return err
+			}
+			rsp.Trailer = hdr
+			return nil
+		}),
+		requestWriter,
+		reqDone,
+		c.decoder,
+		disableCompression,
+		maxHeaderBytes,
+		rsp,
+	), nil
 }
 
-func (c *connection) decodeTrailers(r io.Reader, l, maxHeaderBytes uint64) (http.Header, error) {
+func (c *Conn) decodeTrailers(r io.Reader, l, maxHeaderBytes uint64) (http.Header, error) {
 	if l > maxHeaderBytes {
 		return nil, fmt.Errorf("HEADERS frame too large: %d bytes (max: %d)", l, maxHeaderBytes)
 	}
@@ -176,35 +198,33 @@ func (c *connection) decodeTrailers(r io.Reader, l, maxHeaderBytes uint64) (http
 	return parseTrailers(fields)
 }
 
-func (c *connection) acceptStream(ctx context.Context) (quic.Stream, *datagrammer, error) {
-	str, err := c.AcceptStream(ctx)
+// only used by the server
+func (c *Conn) acceptStream(ctx context.Context) (*stateTrackingStream, error) {
+	str, err := c.conn.AcceptStream(ctx)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	datagrams := newDatagrammer(func(b []byte) error { return c.sendDatagram(str.StreamID(), b) })
-	if c.perspective == protocol.PerspectiveServer {
-		strID := str.StreamID()
-		c.streamMx.Lock()
-		c.streams[strID] = datagrams
-		if c.idleTimeout > 0 {
-			if len(c.streams) == 1 {
-				c.idleTimer.Stop()
-			}
+	strID := str.StreamID()
+	hstr := newStateTrackingStream(str, c, func(b []byte) error { return c.sendDatagram(strID, b) })
+	c.streamMx.Lock()
+	c.streams[strID] = hstr
+	if c.idleTimeout > 0 {
+		if len(c.streams) == 1 {
+			c.idleTimer.Stop()
 		}
-		c.streamMx.Unlock()
-		str = newStateTrackingStream(str, c, datagrams)
 	}
-	return str, datagrams, nil
+	c.streamMx.Unlock()
+	return hstr, nil
 }
 
-func (c *connection) CloseWithError(code quic.ApplicationErrorCode, msg string) error {
+func (c *Conn) CloseWithError(code quic.ApplicationErrorCode, msg string) error {
 	if c.idleTimer != nil {
 		c.idleTimer.Stop()
 	}
-	return c.Connection.CloseWithError(code, msg)
+	return c.conn.CloseWithError(code, msg)
 }
 
-func (c *connection) handleUnidirectionalStreams(hijack func(StreamType, quic.ConnectionTracingID, quic.ReceiveStream, error) (hijacked bool)) {
+func (c *Conn) handleUnidirectionalStreams(hijack func(StreamType, quic.ConnectionTracingID, *quic.ReceiveStream, error) (hijacked bool)) {
 	var (
 		rcvdControlStr      atomic.Bool
 		rcvdQPACKEncoderStr atomic.Bool
@@ -212,7 +232,7 @@ func (c *connection) handleUnidirectionalStreams(hijack func(StreamType, quic.Co
 	)
 
 	for {
-		str, err := c.AcceptUniStream(context.Background())
+		str, err := c.conn.AcceptUniStream(context.Background())
 		if err != nil {
 			if c.logger != nil {
 				c.logger.Debug("accepting unidirectional stream failed", "error", err)
@@ -220,7 +240,7 @@ func (c *connection) handleUnidirectionalStreams(hijack func(StreamType, quic.Co
 			return
 		}
 
-		go func(str quic.ReceiveStream) {
+		go func(str *quic.ReceiveStream) {
 			streamType, err := quicvarint.Read(quicvarint.NewReader(str))
 			if err != nil {
 				id := c.Context().Value(quic.ConnectionTracingKey).(quic.ConnectionTracingID)
@@ -273,7 +293,7 @@ func (c *connection) handleUnidirectionalStreams(hijack func(StreamType, quic.Co
 			}
 			// Only a single control stream is allowed.
 			if isFirstControlStr := rcvdControlStr.CompareAndSwap(false, true); !isFirstControlStr {
-				c.Connection.CloseWithError(quic.ApplicationErrorCode(ErrCodeStreamCreationError), "duplicate control stream")
+				c.conn.CloseWithError(quic.ApplicationErrorCode(ErrCodeStreamCreationError), "duplicate control stream")
 				return
 			}
 			c.handleControlStream(str)
@@ -281,21 +301,21 @@ func (c *connection) handleUnidirectionalStreams(hijack func(StreamType, quic.Co
 	}
 }
 
-func (c *connection) handleControlStream(str quic.ReceiveStream) {
-	fp := &frameParser{conn: c.Connection, r: str}
+func (c *Conn) handleControlStream(str *quic.ReceiveStream) {
+	fp := &frameParser{closeConn: c.conn.CloseWithError, r: str}
 	f, err := fp.ParseNext()
 	if err != nil {
 		var serr *quic.StreamError
 		if err == io.EOF || errors.As(err, &serr) {
-			c.Connection.CloseWithError(quic.ApplicationErrorCode(ErrCodeClosedCriticalStream), "")
+			c.conn.CloseWithError(quic.ApplicationErrorCode(ErrCodeClosedCriticalStream), "")
 			return
 		}
-		c.Connection.CloseWithError(quic.ApplicationErrorCode(ErrCodeFrameError), "")
+		c.conn.CloseWithError(quic.ApplicationErrorCode(ErrCodeFrameError), "")
 		return
 	}
 	sf, ok := f.(*settingsFrame)
 	if !ok {
-		c.Connection.CloseWithError(quic.ApplicationErrorCode(ErrCodeMissingSettings), "")
+		c.conn.CloseWithError(quic.ApplicationErrorCode(ErrCodeMissingSettings), "")
 		return
 	}
 	c.settings = &Settings{
@@ -331,10 +351,10 @@ func (c *connection) handleControlStream(str quic.ReceiveStream) {
 		if err != nil {
 			var serr *quic.StreamError
 			if err == io.EOF || errors.As(err, &serr) {
-				c.Connection.CloseWithError(quic.ApplicationErrorCode(ErrCodeClosedCriticalStream), "")
+				c.conn.CloseWithError(quic.ApplicationErrorCode(ErrCodeClosedCriticalStream), "")
 				return
 			}
-			c.Connection.CloseWithError(quic.ApplicationErrorCode(ErrCodeFrameError), "")
+			c.conn.CloseWithError(quic.ApplicationErrorCode(ErrCodeFrameError), "")
 			return
 		}
 		// GOAWAY is the only frame allowed at this point:
@@ -342,17 +362,17 @@ func (c *connection) handleControlStream(str quic.ReceiveStream) {
 		// * we don't support any extension that might add support for more frames
 		goaway, ok := f.(*goAwayFrame)
 		if !ok {
-			c.Connection.CloseWithError(quic.ApplicationErrorCode(ErrCodeFrameUnexpected), "")
+			c.conn.CloseWithError(quic.ApplicationErrorCode(ErrCodeFrameUnexpected), "")
 			return
 		}
 		if goaway.StreamID%4 != 0 { // client-initiated, bidirectional streams
-			c.Connection.CloseWithError(quic.ApplicationErrorCode(ErrCodeIDError), "")
+			c.conn.CloseWithError(quic.ApplicationErrorCode(ErrCodeIDError), "")
 			return
 		}
 		c.streamMx.Lock()
 		if c.maxStreamID != protocol.InvalidStreamID && goaway.StreamID > c.maxStreamID {
 			c.streamMx.Unlock()
-			c.Connection.CloseWithError(quic.ApplicationErrorCode(ErrCodeIDError), "")
+			c.conn.CloseWithError(quic.ApplicationErrorCode(ErrCodeIDError), "")
 			return
 		}
 		c.maxStreamID = goaway.StreamID
@@ -367,17 +387,17 @@ func (c *connection) handleControlStream(str quic.ReceiveStream) {
 	}
 }
 
-func (c *connection) sendDatagram(streamID protocol.StreamID, b []byte) error {
+func (c *Conn) sendDatagram(streamID protocol.StreamID, b []byte) error {
 	// TODO: this creates a lot of garbage and an additional copy
 	data := make([]byte, 0, len(b)+8)
 	data = quicvarint.Append(data, uint64(streamID/4))
 	data = append(data, b...)
-	return c.SendDatagram(data)
+	return c.conn.SendDatagram(data)
 }
 
-func (c *connection) receiveDatagrams() error {
+func (c *Conn) receiveDatagrams() error {
 	for {
-		b, err := c.ReceiveDatagram(context.Background())
+		b, err := c.conn.ReceiveDatagram(context.Background())
 		if err != nil {
 			return err
 		}
@@ -397,17 +417,17 @@ func (c *connection) receiveDatagrams() error {
 		if !ok {
 			continue
 		}
-		dg.enqueue(b[n:])
+		dg.enqueueDatagram(b[n:])
 	}
 }
 
 // ReceivedSettings returns a channel that is closed once the peer's SETTINGS frame was received.
 // Settings can be optained from the Settings method after the channel was closed.
-func (c *connection) ReceivedSettings() <-chan struct{} { return c.receivedSettings }
+func (c *Conn) ReceivedSettings() <-chan struct{} { return c.receivedSettings }
 
 // Settings returns the settings received on this connection.
 // It is only valid to call this function after the channel returned by ReceivedSettings was closed.
-func (c *connection) Settings() *Settings { return c.settings }
+func (c *Conn) Settings() *Settings { return c.settings }
 
 // Context returns the context of the underlying QUIC connection.
-func (c *connection) Context() context.Context { return c.ctx }
+func (c *Conn) Context() context.Context { return c.ctx }

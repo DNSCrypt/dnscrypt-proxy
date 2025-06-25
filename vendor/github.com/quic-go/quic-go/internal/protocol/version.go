@@ -37,7 +37,6 @@ func IsValidVersion(v Version) bool {
 }
 
 func (vn Version) String() string {
-	//nolint:exhaustive
 	switch vn {
 	case VersionUnknown:
 		return "unknown"
