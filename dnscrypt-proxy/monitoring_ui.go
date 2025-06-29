@@ -287,9 +287,13 @@ func (ui *MonitoringUI) UpdateMetrics(pluginsState PluginsState, msg *dns.Msg) {
 	}
 
 	// Update blocked queries count
-	if pluginsState.returnCode == PluginsReturnCodeReject {
+	// Count all types of blocked queries: REJECT (blocked by name/IP), DROP (dropped), and CLOAK (cloaked)
+	if pluginsState.returnCode == PluginsReturnCodeReject ||
+		pluginsState.returnCode == PluginsReturnCodeDrop ||
+		pluginsState.returnCode == PluginsReturnCodeCloak {
 		mc.blockCount++
-		dlog.Debugf("Blocked query, total blocks: %d", mc.blockCount)
+		dlog.Debugf("Blocked query (return code: %s), total blocks: %d",
+			PluginsReturnCodeToString[pluginsState.returnCode], mc.blockCount)
 	}
 	mc.countersMutex.Unlock()
 
