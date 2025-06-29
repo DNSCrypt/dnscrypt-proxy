@@ -285,6 +285,12 @@ func (ui *MonitoringUI) UpdateMetrics(pluginsState PluginsState, msg *dns.Msg) {
 		mc.cacheMisses++
 		dlog.Debugf("Cache miss, total misses: %d", mc.cacheMisses)
 	}
+
+	// Update blocked queries count
+	if pluginsState.returnCode == PluginsReturnCodeReject {
+		mc.blockCount++
+		dlog.Debugf("Blocked query, total blocks: %d", mc.blockCount)
+	}
 	mc.countersMutex.Unlock()
 
 	// Invalidate cache since counters changed
