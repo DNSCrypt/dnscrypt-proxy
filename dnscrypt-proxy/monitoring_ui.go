@@ -287,10 +287,10 @@ func (ui *MonitoringUI) UpdateMetrics(pluginsState PluginsState, msg *dns.Msg) {
 	}
 
 	// Update blocked queries count
-	// Count all types of blocked queries: REJECT (blocked by name/IP), DROP (dropped), and CLOAK (cloaked)
+	// Only count truly blocked queries: REJECT (blocked by name/IP) and DROP (dropped)
+	// CLOAK is not counted as it redirects queries rather than blocking them
 	if pluginsState.returnCode == PluginsReturnCodeReject ||
-		pluginsState.returnCode == PluginsReturnCodeDrop ||
-		pluginsState.returnCode == PluginsReturnCodeCloak {
+		pluginsState.returnCode == PluginsReturnCodeDrop {
 		mc.blockCount++
 		dlog.Debugf("Blocked query (return code: %s), total blocks: %d",
 			PluginsReturnCodeToString[pluginsState.returnCode], mc.blockCount)
