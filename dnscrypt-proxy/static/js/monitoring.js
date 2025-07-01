@@ -96,11 +96,13 @@ function safeUpdateDashboard(data) {
 
         // Update overview stats with null checks
         const totalQueries = data.total_queries !== undefined ? data.total_queries : 0;
+        const blockedQueries = data.blocked_queries !== undefined ? data.blocked_queries : 0;
         const qps = data.queries_per_second !== undefined ? data.queries_per_second : 0;
         const uptime = data.uptime_seconds !== undefined ? data.uptime_seconds : 0;
         const avgResponseTime = data.avg_response_time !== undefined ? data.avg_response_time : 0;
 
         document.getElementById('total-queries').textContent = totalQueries.toLocaleString();
+        document.getElementById('blocked-queries').textContent = blockedQueries.toLocaleString();
         document.getElementById('qps').textContent = qps.toFixed(2);
         document.getElementById('uptime').textContent = formatUptime(uptime);
         document.getElementById('avg-response-time').textContent = avgResponseTime.toFixed(2) + ' ms';
@@ -397,6 +399,7 @@ window.handlePollData = function(data) {
 // Initialize dashboard with default values
 function initializeDashboard() {
     document.getElementById('total-queries').textContent = '0';
+    document.getElementById('blocked-queries').textContent = '0';
     document.getElementById('qps').textContent = '0.00';
     document.getElementById('uptime').textContent = '0s';
     document.getElementById('avg-response-time').textContent = '0.00 ms';
