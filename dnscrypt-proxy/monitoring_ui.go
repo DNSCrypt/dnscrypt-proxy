@@ -106,6 +106,9 @@ type MonitoringUI struct {
 	clientsMutex     sync.Mutex
 	proxy            *Proxy
 
+	// Mutex for all WebSocket write operations to prevent races
+	writesMutex sync.Mutex
+
 	// WebSocket broadcast rate limiting
 	broadcastMutex    sync.Mutex
 	lastBroadcast     time.Time
@@ -891,32 +894,24 @@ func (ui *MonitoringUI) handleWebSocket(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Configure upgrader with more permissive settings
-	upgrader := websocket.Upgrader{
-		ReadBufferSize:  1024,
-		WriteBufferSize: 1024,
-		CheckOrigin: func(r *http.Request) bool {
-			return true // Allow all origins
-		},
-	}
-
-	conn, err := upgrader.Upgrade(w, r, nil)
+	conn, err := ui.upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		dlog.Warnf("WebSocket upgrade error: %v", err)
 		return
 	}
 
-	// Set read/write deadlines
-	conn.SetReadDeadline(time.Now().Add(120 * time.Second))
-	conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
-
+	// Register the client
 	ui.clientsMutex.Lock()
 	ui.clients[conn] = true
 	ui.clientsMutex.Unlock()
 
 	// Send initial metrics
-	metrics := ui.metricsCollector.GetMetrics()
-	if err := conn.WriteJSON(metrics); err != nil {
+	ui.writesMutex.Lock()
+	conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+	err = conn.WriteJSON(ui.metricsCollector.GetMetrics())
+	ui.writesMutex.Unlock()
+
+	if err != nil {
 		dlog.Warnf("WebSocket initial write error: %v", err)
 		conn.Close()
 		ui.clientsMutex.Lock()
@@ -935,78 +930,43 @@ func (ui *MonitoringUI) handleWebSocket(w http.ResponseWriter, r *http.Request) 
 			dlog.Debugf("WebSocket connection closed and cleaned up")
 		}()
 
-		// Create a ping handler to keep the connection alive
-		conn.SetPingHandler(func(data string) error {
-			dlog.Debugf("Received ping from client")
-			return conn.WriteControl(websocket.PongMessage, []byte{}, time.Now().Add(5*time.Second))
-		})
-
-		// Create a pong handler to respond to server pings
-		conn.SetPongHandler(func(data string) error {
+		// Set up ping/pong handlers for keep-alive (using WebSocket protocol level)
+		conn.SetReadDeadline(time.Now().Add(120 * time.Second))
+		conn.SetPongHandler(func(string) error {
 			dlog.Debugf("Received pong from client")
 			conn.SetReadDeadline(time.Now().Add(120 * time.Second))
 			return nil
 		})
 
 		for {
-			// Reset read deadline for each message
-			conn.SetReadDeadline(time.Now().Add(120 * time.Second))
-
-			// Read message
-			messageType, message, err := conn.ReadMessage()
+			// Read message from client
+			var msg map[string]interface{}
+			err := conn.ReadJSON(&msg)
 			if err != nil {
 				if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
 					dlog.Warnf("WebSocket unexpected close error: %v", err)
-				} else {
-					dlog.Debugf("WebSocket read error (normal): %v", err)
 				}
 				break
 			}
 
-			// Handle ping message from client
-			if messageType == websocket.TextMessage {
-				var msg map[string]interface{}
-				if err := json.Unmarshal(message, &msg); err == nil {
-					if msgType, ok := msg["type"].(string); ok && msgType == "ping" {
-						dlog.Debugf("Received ping message from client")
-						// Send a pong response
-						conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
-						if err := conn.WriteJSON(map[string]string{"type": "pong"}); err != nil {
-							dlog.Warnf("Error sending pong: %v", err)
-						}
+			// Handle ping message from client (application level)
+			if msgType, ok := msg["type"].(string); ok && msgType == "ping" {
+				dlog.Debugf("Received ping message from client")
 
-						// Also send updated metrics
-						conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
-						if err := conn.WriteJSON(ui.metricsCollector.GetMetrics()); err != nil {
-							dlog.Warnf("Error sending metrics after ping: %v", err)
-						}
-					}
-				}
-			}
-		}
-	}()
-
-	// Send periodic pings to keep the connection alive
-	go func() {
-		ticker := time.NewTicker(30 * time.Second)
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-ticker.C:
-				ui.clientsMutex.Lock()
-				if _, exists := ui.clients[conn]; !exists {
-					ui.clientsMutex.Unlock()
-					return // Connection is closed, stop the goroutine
-				}
-				ui.clientsMutex.Unlock()
-
-				// Send ping
+				// Send pong response and updated metrics
+				ui.writesMutex.Lock()
 				conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
-				if err := conn.WriteControl(websocket.PingMessage, []byte{}, time.Now().Add(5*time.Second)); err != nil {
-					dlog.Debugf("Error sending ping: %v", err)
-					return
+				if err := conn.WriteJSON(map[string]string{"type": "pong"}); err != nil {
+					ui.writesMutex.Unlock()
+					dlog.Warnf("Error sending pong: %v", err)
+					break
 				}
+
+				conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
+				if err := conn.WriteJSON(ui.metricsCollector.GetMetrics()); err != nil {
+					dlog.Warnf("Error sending metrics after ping: %v", err)
+				}
+				ui.writesMutex.Unlock()
 			}
 		}
 	}()
@@ -1110,6 +1070,9 @@ func (ui *MonitoringUI) scheduleBroadcast() {
 // broadcastMetrics - Broadcasts metrics to all connected WebSocket clients
 func (ui *MonitoringUI) broadcastMetrics() {
 	metrics := ui.metricsCollector.GetMetrics()
+
+	ui.writesMutex.Lock()
+	defer ui.writesMutex.Unlock()
 
 	ui.clientsMutex.Lock()
 	defer ui.clientsMutex.Unlock()
