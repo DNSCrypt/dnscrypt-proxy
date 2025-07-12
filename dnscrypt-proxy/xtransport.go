@@ -451,7 +451,7 @@ func (xTransport *XTransport) resolveAndUpdateCache(host string) error {
 				}
 			}
 		} else {
-			err = errors.New("Service is not usable yet")
+			err = errors.New("dnscrypt-proxy service is not usable yet")
 			dlog.Notice(err)
 		}
 	} else {
