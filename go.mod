@@ -19,7 +19,7 @@ require (
 	github.com/jedisct1/go-sieve-cache v0.1.7
 	github.com/jedisct1/xsecretbox v0.0.0-20241212092125-3afc4917ac41
 	github.com/k-sone/critbitgo v1.4.0
-	github.com/kardianos/service v1.2.2
+	github.com/kardianos/service v1.2.4
 	github.com/lifenjoiner/dhcpdns v0.0.7
 	github.com/miekg/dns v1.1.67
 	github.com/powerman/check v1.8.0

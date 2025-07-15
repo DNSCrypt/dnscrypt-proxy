@@ -1,4 +1,5 @@
-//+build aix
+//go:build aix
+// +build aix
 
 // Copyright 2015 Daniel Theophanes.
 // Use of this source code is governed by a zlib-style
@@ -8,6 +9,7 @@ package service
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -20,30 +22,33 @@ import (
 	"time"
 )
 
-const maxPathSize = 32 * 1024
-
-const version = "aix-ssrc"
+const (
+	maxPathSize = 32 * 1024
+	version     = "aix-ssrc"
+)
 
 type aixSystem struct{}
 
 func (aixSystem) String() string {
 	return version
 }
+
 func (aixSystem) Detect() bool {
 	return true
 }
+
 func (aixSystem) Interactive() bool {
 	return interactive
 }
+
 func (aixSystem) New(i Interface, c *Config) (Service, error) {
-	s := &aixService{
+	return &aixService{
 		i:      i,
 		Config: c,
-	}
-
-	return s, nil
+	}, nil
 }
 
+// Retrieve process arguments from a PID.
 func getArgsFromPid(pid int) string {
 	cmd := exec.Command("ps", "-o", "args", "-p", strconv.Itoa(pid))
 	var out bytes.Buffer
@@ -57,23 +62,22 @@ func getArgsFromPid(pid int) string {
 	return ""
 }
 
-func init() {
-	ChooseSystem(aixSystem{})
-}
-
 var interactive = false
 
 func init() {
+	ChooseSystem(aixSystem{})
+
 	var err error
 	interactive, err = isInteractive()
 	if err != nil {
-		panic(err)
+		panic(fmt.Sprintf("Failed to determine if interactive: %v", err))
 	}
 }
 
+// Check if the process is running interactively.
 func isInteractive() (bool, error) {
-	// The parent process of a service process should be srcmstr.
-	return getArgsFromPid(os.Getppid()) != "/usr/sbin/srcmstr", nil
+	parentArgs := getArgsFromPid(os.Getppid())
+	return parentArgs != "/usr/sbin/srcmstr", nil
 }
 
 type aixService struct {
@@ -103,37 +107,37 @@ func (s *aixService) template() *template.Template {
 	}
 
 	customConfig := s.Option.string(optionSysvScript, "")
-
 	if customConfig != "" {
 		return template.Must(template.New("").Funcs(functions).Parse(customConfig))
-	} else {
-		return template.Must(template.New("").Funcs(functions).Parse(svcConfig))
 	}
+	return template.Must(template.New("").Funcs(functions).Parse(svcConfig))
 }
 
-func (s *aixService) configPath() (cp string, err error) {
-	cp = "/etc/rc.d/init.d/" + s.Config.Name
-	return
+func (s *aixService) configPath() (string, error) {
+	return "/etc/rc.d/init.d/" + s.Config.Name, nil
 }
 
 func (s *aixService) Install() error {
-	// install service
+	// Install service
 	path, err := s.execPath()
 	if err != nil {
 		return err
 	}
-	err = run("mkssys", "-s", s.Name, "-p", path, "-u", "0", "-R", "-Q", "-S", "-n", "15", "-f", "9", "-d", "-w", "30")
+	if len(s.Config.Arguments) > 0 {
+		err = run("mkssys", "-s", s.Name, "-p", path, "-a", strings.Join(s.Config.Arguments, " "), "-u", "0", "-R", "-Q", "-S", "-n", "15", "-f", "9", "-d", "-w", "30")
+	} else {
+		err = run("mkssys", "-s", s.Name, "-p", path, "-u", "0", "-R", "-Q", "-S", "-n", "15", "-f", "9", "-d", "-w", "30")
+	}
 	if err != nil {
 		return err
 	}
 
-	// write start script
+	// Write start script
 	confPath, err := s.configPath()
 	if err != nil {
 		return err
 	}
-	_, err = os.Stat(confPath)
-	if err == nil {
+	if _, err = os.Stat(confPath); err == nil {
 		return fmt.Errorf("Init already exists: %s", confPath)
 	}
 
@@ -143,31 +147,32 @@ func (s *aixService) Install() error {
 	}
 	defer f.Close()
 
-	var to = &struct {
+	to := struct {
 		*Config
 		Path string
 	}{
-		s.Config,
-		path,
+		Config: s.Config,
+		Path:   path,
 	}
 
-	err = s.template().Execute(f, to)
-	if err != nil {
+	if err = s.template().Execute(f, &to); err != nil {
 		return err
 	}
 
 	if err = os.Chmod(confPath, 0755); err != nil {
 		return err
 	}
+
 	rcd := "/etc/rc"
 	if _, err = os.Stat("/etc/rc.d/rc2.d"); err == nil {
 		rcd = "/etc/rc.d/rc"
 	}
+
 	for _, i := range [...]string{"2", "3"} {
-		if err = os.Symlink(confPath, rcd+i+".d/S50"+s.Name); err != nil {
+		if err = os.Symlink(confPath, fmt.Sprintf("%s%s.d/S50%s", rcd, i, s.Name)); err != nil {
 			continue
 		}
-		if err = os.Symlink(confPath, rcd+i+".d/K02"+s.Name); err != nil {
+		if err = os.Symlink(confPath, fmt.Sprintf("%s%s.d/K02%s", rcd, i, s.Name)); err != nil {
 			continue
 		}
 	}
@@ -176,10 +181,11 @@ func (s *aixService) Install() error {
 }
 
 func (s *aixService) Uninstall() error {
-	s.Stop()
+	if err := s.Stop(); err != nil {
+		return err
+	}
 
-	err := run("rmssys", "-s", s.Name)
-	if err != nil {
+	if err := run("rmssys", "-s", s.Name); err != nil {
 		return err
 	}
 
@@ -198,17 +204,17 @@ func (s *aixService) Status() (Status, error) {
 		}
 	}
 
-	re := regexp.MustCompile(`\s+` + s.Name + `\s+(\w+\s+)?(\d+\s+)?(\w+)`)
+	re := regexp.MustCompile(`\s+` + regexp.QuoteMeta(s.Name) + `\s+(\w+\s+)?(\d+\s+)?(\w+)`)
 	matches := re.FindStringSubmatch(out)
 	if len(matches) == 4 {
-		status := string(matches[3])
-		if status == "inoperative" {
+		switch matches[3] {
+		case "inoperative":
 			return StatusStopped, nil
-		} else if status == "active" {
+		case "active":
 			return StatusRunning, nil
-		} else {
-			fmt.Printf("Got unknown service status %s\n", status)
-			return StatusUnknown, err
+		default:
+			fmt.Printf("Got unknown service status %s\n", matches[3])
+			return StatusUnknown, errors.New("unknown status")
 		}
 	}
 
@@ -227,12 +233,13 @@ func (s *aixService) Status() (Status, error) {
 func (s *aixService) Start() error {
 	return run("startsrc", "-s", s.Name)
 }
+
 func (s *aixService) Stop() error {
 	return run("stopsrc", "-s", s.Name)
 }
+
 func (s *aixService) Restart() error {
-	err := s.Stop()
-	if err != nil {
+	if err := s.Stop(); err != nil {
 		return err
 	}
 	time.Sleep(50 * time.Millisecond)
@@ -240,15 +247,12 @@ func (s *aixService) Restart() error {
 }
 
 func (s *aixService) Run() error {
-	var err error
-
-	err = s.i.Start(s)
-	if err != nil {
+	if err := s.i.Start(s); err != nil {
 		return err
 	}
 
 	s.Option.funcSingle(optionRunWait, func() {
-		var sigChan = make(chan os.Signal, 3)
+		sigChan := make(chan os.Signal, 3)
 		signal.Notify(sigChan, syscall.SIGTERM, os.Interrupt)
 		<-sigChan
 	})()
@@ -262,20 +266,22 @@ func (s *aixService) Logger(errs chan<- error) (Logger, error) {
 	}
 	return s.SystemLogger(errs)
 }
+
 func (s *aixService) SystemLogger(errs chan<- error) (Logger, error) {
 	return newSysLogger(s.Name, errs)
 }
 
 var svcConfig = `#!/bin/ksh
 case "$1" in
-start )
+start)
         startsrc -s {{.Name}}
         ;;
-stop )
+stop)
         stopsrc -s {{.Name}}
         ;;
-* )
-        echo "Usage: $0 (start | stop)"
+*)
+        echo "Usage: $0 {start|stop}"
         exit 1
+        ;;
 esac
 `

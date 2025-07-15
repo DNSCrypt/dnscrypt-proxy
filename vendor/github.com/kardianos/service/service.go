@@ -91,6 +91,7 @@ const (
 
 	optionSystemdScript = "SystemdScript"
 	optionSysvScript    = "SysvScript"
+	optionRCSScript     = "RCSScript"
 	optionUpstartScript = "UpstartScript"
 	optionLaunchdConfig = "LaunchdConfig"
 	optionOpenRCScript  = "OpenRCScript"
@@ -166,42 +167,70 @@ func New(i Interface, c *Config) (Service, error) {
 }
 
 // KeyValue provides a list of system specific options.
-//  * OS X
-//    - LaunchdConfig string ()                 - Use custom launchd config.
-//    - KeepAlive     bool   (true)             - Prevent the system from stopping the service automatically.
-//    - RunAtLoad     bool   (false)            - Run the service after its job has been loaded.
-//    - SessionCreate bool   (false)            - Create a full user session.
 //
-//  * Solaris
-//    - Prefix        string ("application")    - Service FMRI prefix.
+//   - OS X
 //
-//  * POSIX
-//    - UserService   bool   (false)            - Install as a current user service.
-//    - SystemdScript string ()                 - Use custom systemd script.
-//    - UpstartScript string ()                 - Use custom upstart script.
-//    - SysvScript    string ()                 - Use custom sysv script.
-//    - OpenRCScript  string ()                 - Use custom OpenRC script.
-//    - RunWait       func() (wait for SIGNAL)  - Do not install signal but wait for this function to return.
-//    - ReloadSignal  string () [USR1, ...]     - Signal to send on reload.
-//    - PIDFile       string () [/run/prog.pid] - Location of the PID file.
-//    - LogOutput     bool   (false)            - Redirect StdErr & StandardOutPath to files.
-//    - Restart       string (always)           - How shall service be restarted.
-//    - SuccessExitStatus string ()             - The list of exit status that shall be considered as successful,
-//                                                in addition to the default ones.
-//    - LogDirectory string(/var/log)           - The path to the log files directory
+//   - LaunchdConfig string ()                 - Use custom launchd config.
 //
-//  * Linux (systemd)
-//    - LimitNOFILE   int    (-1)               - Maximum open files (ulimit -n)
-//                                                (https://serverfault.com/questions/628610/increasing-nproc-for-processes-launched-by-systemd-on-centos-7)
-//  * Windows
-//    - DelayedAutoStart  bool (false)                - After booting, start this service after some delay.
-//    - Password  string ()                           - Password to use when interfacing with the system service manager.
-//    - Interactive       bool (false)                - The service can interact with the desktop. (more information https://docs.microsoft.com/en-us/windows/win32/services/interactive-services)
-//    - DelayedAutoStart        bool (false)          - after booting start this service after some delay.
-//    - StartType               string ("automatic")  - Start service type. (automatic | manual | disabled)
-//    - OnFailure               string ("restart" )   - Action to perform on service failure. (restart | reboot | noaction)
-//    - OnFailureDelayDuration  string ( "1s" )       - Delay before restarting the service, time.Duration string.
-//    - OnFailureResetPeriod    int ( 10 )            - Reset period for errors, seconds.
+//   - KeepAlive     bool   (true)             - Prevent the system from stopping the service automatically.
+//
+//   - RunAtLoad     bool   (false)            - Run the service after its job has been loaded.
+//
+//   - SessionCreate bool   (false)            - Create a full user session.
+//
+//   - Solaris
+//
+//   - Prefix        string ("application")    - Service FMRI prefix.
+//
+//   - POSIX
+//
+//   - UserService   bool   (false)            - Install as a current user service.
+//
+//   - SystemdScript string ()                 - Use custom systemd script.
+//
+//   - UpstartScript string ()                 - Use custom upstart script.
+//
+//   - SysvScript    string ()                 - Use custom sysv script.
+//
+//   - OpenRCScript  string ()                 - Use custom OpenRC script.
+//
+//   - RunWait       func() (wait for SIGNAL)  - Do not install signal but wait for this function to return.
+//
+//   - ReloadSignal  string () [USR1, ...]     - Signal to send on reload.
+//
+//   - PIDFile       string () [/run/prog.pid] - Location of the PID file.
+//
+//   - LogOutput     bool   (false)            - Redirect StdErr & StandardOutPath to files.
+//
+//   - Restart       string (always)           - How shall service be restarted.
+//
+//   - SuccessExitStatus string ()             - The list of exit status that shall be considered as successful,
+//     in addition to the default ones.
+//
+//   - LogDirectory string(/var/log)           - The path to the log files directory
+//
+//   - Linux (systemd)
+//
+//   - LimitNOFILE   int    (-1)               - Maximum open files (ulimit -n)
+//     (https://serverfault.com/questions/628610/increasing-nproc-for-processes-launched-by-systemd-on-centos-7)
+//
+//   - Windows
+//
+//   - DelayedAutoStart  bool (false)                - After booting, start this service after some delay.
+//
+//   - Password  string ()                           - Password to use when interfacing with the system service manager.
+//
+//   - Interactive       bool (false)                - The service can interact with the desktop. (more information https://docs.microsoft.com/en-us/windows/win32/services/interactive-services)
+//
+//   - DelayedAutoStart        bool (false)          - after booting start this service after some delay.
+//
+//   - StartType               string ("automatic")  - Start service type. (automatic | manual | disabled)
+//
+//   - OnFailure               string ("restart" )   - Action to perform on service failure. (restart | reboot | noaction)
+//
+//   - OnFailureDelayDuration  string ( "1s" )       - Delay before restarting the service, time.Duration string.
+//
+//   - OnFailureResetPeriod    int ( 10 )            - Reset period for errors, seconds.
 type KeyValue map[string]interface{}
 
 // bool returns the value of the given name, assuming the value is a boolean.
@@ -324,16 +353,16 @@ type System interface {
 // Interface represents the service interface for a program. Start runs before
 // the hosting process is granted control and Stop runs when control is returned.
 //
-//   1. OS service manager executes user program.
-//   2. User program sees it is executed from a service manager (IsInteractive is false).
-//   3. User program calls Service.Run() which blocks.
-//   4. Interface.Start() is called and quickly returns.
-//   5. User program runs.
-//   6. OS service manager signals the user program to stop.
-//   7. Interface.Stop() is called and quickly returns.
-//      - For a successful exit, os.Exit should not be called in Interface.Stop().
-//   8. Service.Run returns.
-//   9. User program should quickly exit.
+//  1. OS service manager executes user program.
+//  2. User program sees it is executed from a service manager (IsInteractive is false).
+//  3. User program calls Service.Run() which blocks.
+//  4. Interface.Start() is called and quickly returns.
+//  5. User program runs.
+//  6. OS service manager signals the user program to stop.
+//  7. Interface.Stop() is called and quickly returns.
+//     - For a successful exit, os.Exit should not be called in Interface.Stop().
+//  8. Service.Run returns.
+//  9. User program should quickly exit.
 type Interface interface {
 	// Start provides a place to initiate the service. The service doesn't
 	// signal a completed start until after this function returns, so the
