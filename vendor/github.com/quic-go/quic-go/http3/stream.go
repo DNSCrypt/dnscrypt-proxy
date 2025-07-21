@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/quic-go/quic-go"
-	"github.com/quic-go/quic-go/internal/protocol"
 
 	"github.com/quic-go/qpack"
 )
@@ -79,7 +78,7 @@ func (s *Stream) Read(b []byte) (int, error) {
 				s.bytesRemainingInFrame = f.Length
 				break parseLoop
 			case *headersFrame:
-				if s.conn.perspective == protocol.PerspectiveServer {
+				if s.conn.isServer {
 					continue
 				}
 				if s.parsedTrailer {
@@ -124,7 +123,7 @@ func (s *Stream) writeUnframed(b []byte) (int, error) {
 	return s.datagramStream.Write(b)
 }
 
-func (s *Stream) StreamID() protocol.StreamID {
+func (s *Stream) StreamID() quic.StreamID {
 	return s.datagramStream.StreamID()
 }
 
@@ -194,7 +193,7 @@ func (s *RequestStream) Read(b []byte) (int, error) {
 }
 
 // StreamID returns the QUIC stream ID of the underlying QUIC stream.
-func (s *RequestStream) StreamID() protocol.StreamID {
+func (s *RequestStream) StreamID() quic.StreamID {
 	return s.str.StreamID()
 }
 

@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/quic-go/quic-go"
-	"github.com/quic-go/quic-go/internal/protocol"
 	"github.com/quic-go/quic-go/quicvarint"
 
 	"github.com/quic-go/qpack"
@@ -24,6 +23,9 @@ const maxQuarterStreamID = 1<<60 - 1
 
 var errGoAway = errors.New("connection in graceful shutdown")
 
+// invalidStreamID is a stream ID that is invalid. The first valid stream ID in QUIC is 0.
+const invalidStreamID = quic.StreamID(-1)
+
 // Conn is an HTTP/3 connection.
 // It has all methods from the quic.Conn expect for AcceptStream, AcceptUniStream,
 // SendDatagram and ReceiveDatagram.
@@ -32,17 +34,17 @@ type Conn struct {
 
 	ctx context.Context
 
-	perspective protocol.Perspective
-	logger      *slog.Logger
+	isServer bool
+	logger   *slog.Logger
 
 	enableDatagrams bool
 
 	decoder *qpack.Decoder
 
 	streamMx     sync.Mutex
-	streams      map[protocol.StreamID]*stateTrackingStream
-	lastStreamID protocol.StreamID
-	maxStreamID  protocol.StreamID
+	streams      map[quic.StreamID]*stateTrackingStream
+	lastStreamID quic.StreamID
+	maxStreamID  quic.StreamID
 
 	settings         *Settings
 	receivedSettings chan struct{}
@@ -55,22 +57,22 @@ func newConnection(
 	ctx context.Context,
 	quicConn *quic.Conn,
 	enableDatagrams bool,
-	perspective protocol.Perspective,
+	isServer bool,
 	logger *slog.Logger,
 	idleTimeout time.Duration,
 ) *Conn {
 	c := &Conn{
 		ctx:              ctx,
 		conn:             quicConn,
-		perspective:      perspective,
+		isServer:         isServer,
 		logger:           logger,
 		idleTimeout:      idleTimeout,
 		enableDatagrams:  enableDatagrams,
 		decoder:          qpack.NewDecoder(func(hf qpack.HeaderField) {}),
 		receivedSettings: make(chan struct{}),
-		streams:          make(map[protocol.StreamID]*stateTrackingStream),
-		maxStreamID:      protocol.InvalidStreamID,
-		lastStreamID:     protocol.InvalidStreamID,
+		streams:          make(map[quic.StreamID]*stateTrackingStream),
+		maxStreamID:      invalidStreamID,
+		lastStreamID:     invalidStreamID,
 	}
 	if idleTimeout > 0 {
 		c.idleTimer = time.AfterFunc(idleTimeout, c.onIdleTimer)
@@ -124,7 +126,7 @@ func (c *Conn) clearStream(id quic.StreamID) {
 	}
 	// The server is performing a graceful shutdown.
 	// If no more streams are remaining, close the connection.
-	if c.maxStreamID != protocol.InvalidStreamID {
+	if c.maxStreamID != invalidStreamID {
 		if len(c.streams) == 0 {
 			c.CloseWithError(quic.ApplicationErrorCode(ErrCodeNoError), "")
 		}
@@ -141,7 +143,7 @@ func (c *Conn) openRequestStream(
 	c.streamMx.Lock()
 	maxStreamID := c.maxStreamID
 	var nextStreamID quic.StreamID
-	if c.lastStreamID == protocol.InvalidStreamID {
+	if c.lastStreamID == invalidStreamID {
 		nextStreamID = 0
 	} else {
 		nextStreamID = c.lastStreamID + 4
@@ -149,7 +151,7 @@ func (c *Conn) openRequestStream(
 	c.streamMx.Unlock()
 	// Streams with stream ID equal to or greater than the stream ID carried in the GOAWAY frame
 	// will be rejected, see section 5.2 of RFC 9114.
-	if maxStreamID != protocol.InvalidStreamID && nextStreamID >= maxStreamID {
+	if maxStreamID != invalidStreamID && nextStreamID >= maxStreamID {
 		return nil, errGoAway
 	}
 
@@ -268,13 +270,12 @@ func (c *Conn) handleUnidirectionalStreams(hijack func(StreamType, quic.Connecti
 				// Our QPACK implementation doesn't use the dynamic table yet.
 				return
 			case streamTypePushStream:
-				switch c.perspective {
-				case protocol.PerspectiveClient:
-					// we never increased the Push ID, so we don't expect any push streams
-					c.CloseWithError(quic.ApplicationErrorCode(ErrCodeIDError), "")
-				case protocol.PerspectiveServer:
+				if c.isServer {
 					// only the server can push
 					c.CloseWithError(quic.ApplicationErrorCode(ErrCodeStreamCreationError), "")
+				} else {
+					// we never increased the Push ID, so we don't expect any push streams
+					c.CloseWithError(quic.ApplicationErrorCode(ErrCodeIDError), "")
 				}
 				return
 			default:
@@ -342,7 +343,7 @@ func (c *Conn) handleControlStream(str *quic.ReceiveStream) {
 	}
 
 	// we don't support server push, hence we don't expect any GOAWAY frames from the client
-	if c.perspective == protocol.PerspectiveServer {
+	if c.isServer {
 		return
 	}
 
@@ -370,7 +371,7 @@ func (c *Conn) handleControlStream(str *quic.ReceiveStream) {
 			return
 		}
 		c.streamMx.Lock()
-		if c.maxStreamID != protocol.InvalidStreamID && goaway.StreamID > c.maxStreamID {
+		if c.maxStreamID != invalidStreamID && goaway.StreamID > c.maxStreamID {
 			c.streamMx.Unlock()
 			c.conn.CloseWithError(quic.ApplicationErrorCode(ErrCodeIDError), "")
 			return
@@ -387,7 +388,7 @@ func (c *Conn) handleControlStream(str *quic.ReceiveStream) {
 	}
 }
 
-func (c *Conn) sendDatagram(streamID protocol.StreamID, b []byte) error {
+func (c *Conn) sendDatagram(streamID quic.StreamID, b []byte) error {
 	// TODO: this creates a lot of garbage and an additional copy
 	data := make([]byte, 0, len(b)+8)
 	data = quicvarint.Append(data, uint64(streamID/4))
@@ -410,7 +411,7 @@ func (c *Conn) receiveDatagrams() error {
 			c.CloseWithError(quic.ApplicationErrorCode(ErrCodeDatagramError), "")
 			return fmt.Errorf("invalid quarter stream id: %w", err)
 		}
-		streamID := protocol.StreamID(4 * quarterStreamID)
+		streamID := quic.StreamID(4 * quarterStreamID)
 		c.streamMx.Lock()
 		dg, ok := c.streams[streamID]
 		c.streamMx.Unlock()

@@ -42,6 +42,9 @@ type ReceiveStream struct {
 	cancelErr           *StreamError
 	closeForShutdownErr error
 
+	readPos      protocol.ByteCount
+	reliableSize protocol.ByteCount
+
 	readChan chan struct{}
 	readOnce chan struct{} // cap: 1, to protect against concurrent use of Read
 	deadline time.Time
@@ -128,7 +131,7 @@ func (s *ReceiveStream) readImpl(p []byte) (hasStreamWindowUpdate bool, hasConnW
 		s.errorRead = true
 		return false, false, 0, io.EOF
 	}
-	if s.cancelledRemotely || s.cancelledLocally {
+	if s.cancelledLocally || (s.cancelledRemotely && s.readPos >= s.reliableSize) {
 		s.errorRead = true
 		return false, false, 0, s.cancelErr
 	}
@@ -151,9 +154,9 @@ func (s *ReceiveStream) readImpl(p []byte) (hasStreamWindowUpdate bool, hasConnW
 			if s.closeForShutdownErr != nil {
 				return hasStreamWindowUpdate, hasConnWindowUpdate, bytesRead, s.closeForShutdownErr
 			}
-			if s.cancelledRemotely || s.cancelledLocally {
+			if s.cancelledLocally || (s.cancelledRemotely && s.readPos >= s.reliableSize) {
 				s.errorRead = true
-				return hasStreamWindowUpdate, hasConnWindowUpdate, 0, s.cancelErr
+				return hasStreamWindowUpdate, hasConnWindowUpdate, bytesRead, s.cancelErr
 			}
 
 			deadline := s.deadline
@@ -194,14 +197,11 @@ func (s *ReceiveStream) readImpl(p []byte) (hasStreamWindowUpdate bool, hasConnW
 		if s.readPosInFrame > len(s.currentFrame) {
 			return hasStreamWindowUpdate, hasConnWindowUpdate, bytesRead, fmt.Errorf("BUG: readPosInFrame (%d) > frame.DataLen (%d) in stream.Read", s.readPosInFrame, len(s.currentFrame))
 		}
-
 		m := copy(p[bytesRead:], s.currentFrame[s.readPosInFrame:])
-		s.readPosInFrame += m
-		bytesRead += m
 
 		// when a RESET_STREAM was received, the flow controller was already
-		// informed about the final byteOffset for this stream
-		if !s.cancelledRemotely {
+		// informed about the final offset for this stream
+		if !s.cancelledRemotely || s.readPos < s.reliableSize {
 			hasStream, hasConn := s.flowController.AddBytesRead(protocol.ByteCount(m))
 			if hasStream {
 				s.queuedMaxStreamData = true
@@ -210,6 +210,14 @@ func (s *ReceiveStream) readImpl(p []byte) (hasStreamWindowUpdate bool, hasConnW
 			if hasConn {
 				hasConnWindowUpdate = true
 			}
+		}
+
+		s.readPosInFrame += m
+		s.readPos += protocol.ByteCount(m)
+		bytesRead += m
+
+		if s.cancelledRemotely && s.readPos >= s.reliableSize {
+			s.flowController.Abandon()
 		}
 
 		if s.readPosInFrame >= len(s.currentFrame) && s.currentFrameIsLast {
@@ -221,6 +229,10 @@ func (s *ReceiveStream) readImpl(p []byte) (hasStreamWindowUpdate bool, hasConnW
 			return hasStreamWindowUpdate, hasConnWindowUpdate, bytesRead, io.EOF
 		}
 	}
+	if s.cancelledRemotely && s.readPos >= s.reliableSize {
+		s.errorRead = true
+		return hasStreamWindowUpdate, hasConnWindowUpdate, bytesRead, s.cancelErr
+	}
 	return hasStreamWindowUpdate, hasConnWindowUpdate, bytesRead, nil
 }
 
@@ -231,7 +243,7 @@ func (s *ReceiveStream) dequeueNextFrame() {
 		s.currentFrameDone()
 	}
 	offset, s.currentFrame, s.currentFrameDone = s.frameQueue.Pop()
-	s.currentFrameIsLast = offset+protocol.ByteCount(len(s.currentFrame)) >= s.finalOffset
+	s.currentFrameIsLast = offset+protocol.ByteCount(len(s.currentFrame)) >= s.finalOffset && !s.cancelledRemotely
 	s.readPosInFrame = 0
 }
 
@@ -323,11 +335,19 @@ func (s *ReceiveStream) handleResetStreamFrameImpl(frame *wire.ResetStreamFrame,
 	}
 	s.finalOffset = frame.FinalSize
 
+	// senders are allowed to reduce the reliable size, but frames might have been reordered
+	if (!s.cancelledRemotely && s.reliableSize == 0) || frame.ReliableSize < s.reliableSize {
+		s.reliableSize = frame.ReliableSize
+	}
+	if s.readPos >= s.reliableSize {
+		// calling Abandon multiple times is a no-op
+		s.flowController.Abandon()
+	}
 	// ignore duplicate RESET_STREAM frames for this stream (after checking their final offset)
 	if s.cancelledRemotely {
 		return nil
 	}
-	s.flowController.Abandon()
+
 	// don't save the error if the RESET_STREAM frames was received after CancelRead was called
 	if s.cancelledLocally {
 		return nil

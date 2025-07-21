@@ -315,6 +315,7 @@ var newConnection = func(
 		ActiveConnectionIDLimit:   protocol.MaxActiveConnectionIDs,
 		InitialSourceConnectionID: srcConnID,
 		RetrySourceConnectionID:   retrySrcConnID,
+		EnableResetStreamAt:       conf.EnableStreamResetPartialDelivery,
 	}
 	if s.config.EnableDatagrams {
 		params.MaxDatagramFrameSize = wire.MaxDatagramSize
@@ -425,6 +426,7 @@ var newClientConnection = func(
 		// See https://github.com/quic-go/quic-go/pull/3806.
 		ActiveConnectionIDLimit:   protocol.MaxActiveConnectionIDs,
 		InitialSourceConnectionID: srcConnID,
+		EnableResetStreamAt:       conf.EnableStreamResetPartialDelivery,
 	}
 	if s.config.EnableDatagrams {
 		params.MaxDatagramFrameSize = wire.MaxDatagramSize
@@ -468,7 +470,10 @@ func (c *Conn) preSetup() {
 	c.handshakeStream = newCryptoStream()
 	c.sendQueue = newSendQueue(c.conn)
 	c.retransmissionQueue = newRetransmissionQueue()
-	c.frameParser = *wire.NewFrameParser(c.config.EnableDatagrams, false)
+	c.frameParser = *wire.NewFrameParser(
+		c.config.EnableDatagrams,
+		c.config.EnableStreamResetPartialDelivery,
+	)
 	c.rttStats = &utils.RTTStats{}
 	c.connFlowController = flowcontrol.NewConnectionFlowController(
 		protocol.ByteCount(c.config.InitialConnectionReceiveWindow),
@@ -722,6 +727,7 @@ func (c *Conn) ConnectionState() ConnectionState {
 	cs := c.cryptoStreamHandler.ConnectionState()
 	c.connState.TLS = cs.ConnectionState
 	c.connState.Used0RTT = cs.Used0RTT
+	c.connState.SupportsStreamResetPartialDelivery = c.peerParams.EnableResetStreamAt
 	c.connState.GSO = c.conn.capabilities().GSO
 	return c.connState
 }
@@ -1431,39 +1437,100 @@ func (c *Conn) handleFrames(
 	}
 	handshakeWasComplete := c.handshakeComplete
 	var handleErr error
+	var skipHandling bool
+
 	for len(data) > 0 {
-		l, frame, err := c.frameParser.ParseNext(data, encLevel, c.version)
+		frameType, l, err := c.frameParser.ParseType(data, encLevel)
 		if err != nil {
+			// The frame parser skips over PADDING frames, and returns an io.EOF if the PADDING
+			// frames were the last frames in this packet.
+			if err == io.EOF {
+				break
+			}
 			return false, false, nil, err
 		}
 		data = data[l:]
-		if frame == nil {
-			break
-		}
-		if ackhandler.IsFrameAckEliciting(frame) {
+
+		if ackhandler.IsFrameTypeAckEliciting(frameType) {
 			isAckEliciting = true
 		}
-		if !wire.IsProbingFrame(frame) {
+		if !wire.IsProbingFrameType(frameType) {
 			isNonProbing = true
 		}
-		if log != nil {
-			frames = append(frames, toLoggingFrame(frame))
-		}
-		// An error occurred handling a previous frame.
-		// Don't handle the current frame.
-		if handleErr != nil {
-			continue
-		}
-		pc, err := c.handleFrame(frame, encLevel, destConnID, rcvTime)
-		if err != nil {
-			if log == nil {
+
+		// We're inlining common cases, to avoid using interfaces
+		// Fast path: STREAM, DATAGRAM and ACK
+		if frameType.IsStreamFrameType() {
+			streamFrame, l, err := c.frameParser.ParseStreamFrame(frameType, data, c.version)
+			if err != nil {
 				return false, false, nil, err
 			}
-			// If we're logging, we need to keep parsing (but not handling) all frames.
+			data = data[l:]
+
+			if log != nil {
+				frames = append(frames, toLoggingFrame(streamFrame))
+			}
+			// an error occurred handling a previous frame, don't handle the current frame
+			if skipHandling {
+				continue
+			}
+			handleErr = c.streamsMap.HandleStreamFrame(streamFrame, rcvTime)
+		} else if frameType.IsAckFrameType() {
+			ackFrame, l, err := c.frameParser.ParseAckFrame(frameType, data, encLevel, c.version)
+			if err != nil {
+				return false, false, nil, err
+			}
+			data = data[l:]
+			if log != nil {
+				frames = append(frames, toLoggingFrame(ackFrame))
+			}
+			// an error occurred handling a previous frame, don't handle the current frame
+			if skipHandling {
+				continue
+			}
+			handleErr = c.handleAckFrame(ackFrame, encLevel, rcvTime)
+		} else if frameType.IsDatagramFrameType() {
+			datagramFrame, l, err := c.frameParser.ParseDatagramFrame(frameType, data, c.version)
+			if err != nil {
+				return false, false, nil, err
+			}
+			data = data[l:]
+
+			if log != nil {
+				frames = append(frames, toLoggingFrame(datagramFrame))
+			}
+			// an error occurred handling a previous frame, don't handle the current frame
+			if skipHandling {
+				continue
+			}
+			handleErr = c.handleDatagramFrame(datagramFrame)
+		} else {
+			frame, l, err := c.frameParser.ParseLessCommonFrame(frameType, data, c.version)
+			if err != nil {
+				return false, false, nil, err
+			}
+			data = data[l:]
+
+			if log != nil {
+				frames = append(frames, toLoggingFrame(frame))
+			}
+			// an error occurred handling a previous frame, don't handle the current frame
+			if skipHandling {
+				continue
+			}
+			pc, err := c.handleFrame(frame, encLevel, destConnID, rcvTime)
+			if pc != nil {
+				pathChallenge = pc
+			}
 			handleErr = err
 		}
-		if pc != nil {
-			pathChallenge = pc
+
+		if handleErr != nil {
+			// if we're logging, we need to keep parsing (but not handling) all frames
+			skipHandling = true
+			if log == nil {
+				return false, false, nil, handleErr
+			}
 		}
 	}
 
@@ -1497,10 +1564,6 @@ func (c *Conn) handleFrame(
 	switch frame := f.(type) {
 	case *wire.CryptoFrame:
 		err = c.handleCryptoFrame(frame, encLevel, rcvTime)
-	case *wire.StreamFrame:
-		err = c.streamsMap.HandleStreamFrame(frame, rcvTime)
-	case *wire.AckFrame:
-		err = c.handleAckFrame(frame, encLevel, rcvTime)
 	case *wire.ConnectionCloseFrame:
 		err = c.handleConnectionCloseFrame(frame)
 	case *wire.ResetStreamFrame:
@@ -1531,8 +1594,6 @@ func (c *Conn) handleFrame(
 		err = c.connIDGenerator.Retire(frame.SequenceNumber, destConnID, rcvTime.Add(3*c.rttStats.PTO(false)))
 	case *wire.HandshakeDoneFrame:
 		err = c.handleHandshakeDoneFrame(rcvTime)
-	case *wire.DatagramFrame:
-		err = c.handleDatagramFrame(frame)
 	default:
 		err = fmt.Errorf("unexpected frame type: %s", reflect.ValueOf(&frame).Elem().Type().Name())
 	}
@@ -1882,7 +1943,7 @@ func (c *Conn) restoreTransportParameters(params *wire.TransportParameters) {
 	c.peerParams = params
 	c.connIDGenerator.SetMaxActiveConnIDs(params.ActiveConnectionIDLimit)
 	c.connFlowController.UpdateSendWindow(params.InitialMaxData)
-	c.streamsMap.UpdateLimits(params)
+	c.streamsMap.HandleTransportParameters(params)
 	c.connStateMutex.Lock()
 	c.connState.SupportsDatagrams = c.supportsDatagrams()
 	c.connStateMutex.Unlock()
@@ -1961,7 +2022,7 @@ func (c *Conn) applyTransportParameters() {
 		c.idleTimeout = min(c.idleTimeout, params.MaxIdleTimeout)
 	}
 	c.keepAliveInterval = min(c.config.KeepAlivePeriod, c.idleTimeout/2)
-	c.streamsMap.UpdateLimits(params)
+	c.streamsMap.HandleTransportParameters(params)
 	c.frameParser.SetAckDelayExponent(params.AckDelayExponent)
 	c.connFlowController.UpdateSendWindow(params.InitialMaxData)
 	c.rttStats.SetMaxAckDelay(params.MaxAckDelay)
