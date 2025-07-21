@@ -13,6 +13,7 @@ import (
 
 type outgoingStream interface {
 	updateSendWindow(protocol.ByteCount)
+	enableResetStreamAt()
 	closeForShutdown(error)
 }
 
@@ -200,6 +201,14 @@ func (m *outgoingStreamsMap[T]) UpdateSendWindow(limit protocol.ByteCount) {
 	m.mutex.Lock()
 	for _, str := range m.streams {
 		str.updateSendWindow(limit)
+	}
+	m.mutex.Unlock()
+}
+
+func (m *outgoingStreamsMap[T]) EnableResetStreamAt() {
+	m.mutex.Lock()
+	for _, str := range m.streams {
+		str.enableResetStreamAt()
 	}
 	m.mutex.Unlock()
 }

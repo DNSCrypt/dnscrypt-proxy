@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"net"
+	"slices"
 	"time"
 
 	"github.com/quic-go/quic-go/internal/handshake"
@@ -24,6 +25,12 @@ const (
 	// Version2 is RFC 9369
 	Version2 = protocol.Version2
 )
+
+// SupportedVersions returns the support versions, sorted in descending order of preference.
+func SupportedVersions() []Version {
+	// clone the slice to prevent the caller from modifying the slice
+	return slices.Clone(protocol.SupportedVersions)
+}
 
 // A ClientToken is a token received by the client.
 // It can be used to skip address validation on future connection attempts.
@@ -179,7 +186,10 @@ type Config struct {
 	Allow0RTT bool
 	// Enable QUIC datagram support (RFC 9221).
 	EnableDatagrams bool
-	Tracer          func(context.Context, logging.Perspective, ConnectionID) *logging.ConnectionTracer
+	// Enable QUIC Stream Resets with Partial Delivery.
+	// See https://datatracker.ietf.org/doc/html/draft-ietf-quic-reliable-stream-reset-07.
+	EnableStreamResetPartialDelivery bool
+	Tracer                           func(context.Context, logging.Perspective, ConnectionID) *logging.ConnectionTracer
 }
 
 // ClientHelloInfo contains information about an incoming connection attempt.
@@ -207,6 +217,8 @@ type ConnectionState struct {
 	// This is a unilateral declaration by the peer - receiving datagrams is only possible if
 	// datagram support was enabled locally via Config.EnableDatagrams.
 	SupportsDatagrams bool
+	// SupportsStreamResetPartialDelivery indicates whether the peer advertised support for QUIC Stream Resets with Partial Delivery.
+	SupportsStreamResetPartialDelivery bool
 	// Used0RTT says if 0-RTT resumption was used.
 	Used0RTT bool
 	// Version is the QUIC version of the QUIC connection.

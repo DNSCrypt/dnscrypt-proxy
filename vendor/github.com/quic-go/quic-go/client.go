@@ -31,6 +31,7 @@ func DialAddr(ctx context.Context, addr string, tlsConf *tls.Config, conf *Confi
 	}
 	conn, err := tr.dial(ctx, udpAddr, addr, tlsConf, conf, false)
 	if err != nil {
+		tr.Close()
 		return nil, err
 	}
 	return conn, nil

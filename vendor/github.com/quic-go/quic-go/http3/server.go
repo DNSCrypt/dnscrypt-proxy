@@ -18,7 +18,6 @@ import (
 	"time"
 
 	"github.com/quic-go/quic-go"
-	"github.com/quic-go/quic-go/internal/protocol"
 	"github.com/quic-go/quic-go/quicvarint"
 
 	"github.com/quic-go/qpack"
@@ -468,7 +467,7 @@ func (s *Server) handleConn(conn *quic.Conn) error {
 		connCtx,
 		conn,
 		s.EnableDatagrams,
-		protocol.PerspectiveServer,
+		true, // server
 		s.Logger,
 		s.IdleTimeout,
 	)
