@@ -26,7 +26,7 @@ require (
 	github.com/quic-go/quic-go v0.53.0
 	golang.org/x/crypto v0.40.0
 	golang.org/x/net v0.42.0
-	golang.org/x/sys v0.34.0
+	golang.org/x/sys v0.35.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 )
 
