@@ -465,7 +465,7 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 			return err
 		}
 		if len(proxy.registeredServers) == 0 {
-			return errors.New("None of the servers listed in the server_names list was found in the configured sources.")
+			return errors.New("None of the servers listed in the server_names list were found in the configured sources.")
 		}
 	}
 

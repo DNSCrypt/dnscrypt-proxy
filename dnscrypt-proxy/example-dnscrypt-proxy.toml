@@ -851,7 +851,7 @@ fragments_blocked = [
 
 [doh_client_x509_auth]
 
-## Use a X509 certificate to authenticate yourself when connecting to DoH servers.
+## Use an X509 certificate to authenticate yourself when connecting to DoH servers.
 ## This is only useful if you are operating your own, private DoH server(s).
 ## 'creds' maps servers to certificates, and supports multiple entries.
 ## If you are not using the standard root CA, an optional "root_ca"

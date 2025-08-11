@@ -33,7 +33,7 @@ func NetProbe(proxy *Proxy, address string, timeout int) error {
 		if err == nil {
 			// Write at least 1 byte. This ensures that sockets are ready to use for writing.
 			// Windows specific: during the system startup, sockets can be created but the underlying buffers may not be
-			// setup yet. If this is the case Write fails with WSAENOBUFS: "An operation on a socket could not be
+			// set up yet. If this is the case Write fails with WSAENOBUFS: "An operation on a socket could not be
 			// performed because the system lacked sufficient buffer space or because a queue was full"
 			_, err = pc.Write([]byte{0})
 		}
