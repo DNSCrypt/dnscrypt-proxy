@@ -1,3 +1,5 @@
+# Version 2.1.14 (not released yet)
+
 # Version 2.1.13
  - Fixed race conditions in WebSocket handling for the monitoring dashboard,
 improving stability and preventing potential crashes.
