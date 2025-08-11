@@ -346,7 +346,7 @@ bootstrap_resolvers = ['9.9.9.11:53', '8.8.8.8:53']
 ##   to the system DNS
 ##
 ## (*) this is incompatible with systemd sockets.
-## `listen_addrs` must not be empty.
+## `listen_addresses` must not be empty.
 
 ignore_system_dns = true
 

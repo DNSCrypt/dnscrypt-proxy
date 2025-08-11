@@ -455,7 +455,7 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	if len(proxy.userName) > 0 && !proxy.child {
 		proxy.dropPrivilege(proxy.userName, FileDescriptors)
 		return errors.New(
-			"Dropping privileges is not supporting on this operating system. Unset `user_name` in the configuration file",
+			"Dropping privileges is not supported on this operating system. Unset `user_name` in the configuration file",
 		)
 	}
 
