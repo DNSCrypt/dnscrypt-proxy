@@ -129,7 +129,7 @@ func (proxy *Proxy) registerLocalDoHListener(listener *net.TCPListener) {
 func (proxy *Proxy) addDNSListener(listenAddrStr string) {
 	udp := "udp"
 	tcp := "tcp"
-	isIPv4 := isDigit(listenAddrStr[0])
+	isIPv4 := len(listenAddrStr) > 0 && isDigit(listenAddrStr[0])
 	if isIPv4 {
 		udp = "udp4"
 		tcp = "tcp4"
@@ -209,7 +209,7 @@ func (proxy *Proxy) addDNSListener(listenAddrStr string) {
 
 func (proxy *Proxy) addLocalDoHListener(listenAddrStr string) {
 	network := "tcp"
-	isIPv4 := isDigit(listenAddrStr[0])
+	isIPv4 := len(listenAddrStr) > 0 && isDigit(listenAddrStr[0])
 	if isIPv4 {
 		network = "tcp4"
 	}
