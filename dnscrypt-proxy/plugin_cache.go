@@ -20,7 +20,6 @@ type CachedResponse struct {
 
 type CachedResponses struct {
 	cache     *sievecache.ShardedSieveCache[[32]byte, CachedResponse]
-	cacheMu   sync.Mutex
 	cacheOnce sync.Once
 }
 

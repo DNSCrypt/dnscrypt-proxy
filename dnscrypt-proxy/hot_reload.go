@@ -18,16 +18,12 @@ func (proxy *Proxy) InitHotReload() error {
 	// Add query plugins
 	proxy.pluginsGlobals.RLock()
 	if proxy.pluginsGlobals.queryPlugins != nil {
-		for _, plugin := range *proxy.pluginsGlobals.queryPlugins {
-			plugins = append(plugins, plugin)
-		}
+		plugins = append(plugins, *proxy.pluginsGlobals.queryPlugins...)
 	}
 
 	// Add response plugins
 	if proxy.pluginsGlobals.responsePlugins != nil {
-		for _, plugin := range *proxy.pluginsGlobals.responsePlugins {
-			plugins = append(plugins, plugin)
-		}
+		plugins = append(plugins, *proxy.pluginsGlobals.responsePlugins...)
 	}
 	proxy.pluginsGlobals.RUnlock()
 
