@@ -71,6 +71,7 @@ func newStream(
 	streamID protocol.StreamID,
 	sender streamSender,
 	flowController flowcontrol.StreamFlowController,
+	supportsResetStreamAt bool,
 ) *Stream {
 	s := &Stream{sender: sender}
 	senderForSendStream := &uniStreamSender{
@@ -85,7 +86,7 @@ func newStream(
 			sender.onHasStreamControlFrame(streamID, s)
 		},
 	}
-	s.sendStr = newSendStream(ctx, streamID, senderForSendStream, flowController)
+	s.sendStr = newSendStream(ctx, streamID, senderForSendStream, flowController, supportsResetStreamAt)
 	senderForReceiveStream := &uniStreamSender{
 		streamSender: sender,
 		onStreamCompletedImpl: func() {
@@ -160,6 +161,10 @@ func (s *Stream) handleStopSendingFrame(frame *wire.StopSendingFrame) {
 
 func (s *Stream) updateSendWindow(limit protocol.ByteCount) {
 	s.sendStr.updateSendWindow(limit)
+}
+
+func (s *Stream) enableResetStreamAt() {
+	s.sendStr.enableResetStreamAt()
 }
 
 func (s *Stream) popStreamFrame(maxBytes protocol.ByteCount, v protocol.Version) (_ ackhandler.StreamFrame, _ *wire.StreamDataBlockedFrame, hasMore bool) {
