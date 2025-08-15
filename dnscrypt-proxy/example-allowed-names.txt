@@ -7,13 +7,14 @@
 ##
 ## Example of valid patterns:
 ##
-## ads.*         | matches anything with an "ads." prefix
-## *.example.com | matches example.com and all names within that zone such as www.example.com
-## example.com   | identical to the above
-## =example.com  | allows example.com but not *.example.com
-## *sex*         | matches any name containing that substring
-## ads[0-9]*     | matches "ads" followed by one or more digits
-## ads*.example* | *, ? and [] can be used anywhere, but prefixes/suffixes are faster
+## ads.*                    | matches anything with an "ads." prefix
+## *.example.com            | matches example.com and all names within that zone such as www.example.com
+## example.com              | identical to the above
+## =example.com             | allows example.com but not *.example.com
+## [a-z0-9\-_]*.example.com | allows *.example.com but not example.com
+## *sex*                    | matches any name containing that substring
+## ads[0-9]*                | matches "ads" followed by one or more digits
+## ads*.example*            | *, ? and [] can be used anywhere, but prefixes/suffixes are faster
 
 
 # That one may be blocked due to 'tracker' being in the name.
