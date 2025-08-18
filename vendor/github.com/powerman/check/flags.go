@@ -7,6 +7,7 @@ import (
 
 type peekFlags struct {
 	sync.Once
+
 	conveyJSON bool
 }
 

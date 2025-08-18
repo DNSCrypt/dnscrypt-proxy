@@ -1,0 +1,105 @@
+[settings]
+experimental = true # Required to use lockfile.
+lockfile = true     # DO NOT FORGET TO `touch mise.lock` if mise.lock does not exist!
+
+
+[tools]
+go = 'latest'
+
+#--- Format
+# Command goimports updates your Go import lines, adding missing ones and removing unreferenced ones.
+"go:golang.org/x/tools/cmd/goimports" = "latest"
+# GCI, a tool that control golang package import order and make it always deterministic.
+"go:github.com/daixiang0/gci" = "latest"
+# A stricter gofmt.
+gofumpt = "latest"
+
+#--- Lint
+# Static checker for GitHub Actions workflow files.
+actionlint = 'latest'
+# Fast linters runner for Go.
+golangci-lint = 'latest'
+
+#--- Test
+# 'go test' runner with output optimized for humans.
+gotestsum = 'latest'
+
+#--- Release
+# A highly customizable Changelog Generator that follows Conventional Commit specifications.
+git-cliff = 'latest'
+# GitHub's official command line tool.
+gh = 'latest'
+
+
+[vars]
+cover = '.cache/cover.out'
+
+
+[tasks.'changelog:skip-commit']
+description = 'Add commit hash to .cliffignore to exclude from CHANGELOG'
+usage = 'arg "<commit>" help="Git revision (e.g. HEAD or a1b2c4d)"'
+run = 'git rev-parse --verify "${usage_commit}" >> .cliffignore'
+
+[tasks.fmt]
+description = 'Format all files'
+depends = ['fmt:*']
+
+[tasks.lint]
+description = 'Run all linters'
+depends = ['lint:*']
+
+[tasks.test]
+description = 'Run all tests'
+depends = ['test:*']
+
+[tasks.default]
+description = 'Run all linters and tests'
+depends = ['lint', 'test']
+
+[tasks.ci]
+description = 'Run all CI tasks'
+depends = ['fmt', 'lint', 'test']
+run = '! git status --porcelain | tee /dev/stderr | grep -q .' # Is working tree clean after fmt?
+
+[tasks.'fmt:go']
+description = 'Format Go code'
+run = 'goimports -w . && gci write -s standard -s default -s localmodule . && gofumpt -w .'
+
+[tasks.'lint:workflows']
+description = 'Lint GitHub Action workflows'
+run = 'actionlint'
+
+[tasks.'lint:go']
+description = 'Lint Go files'
+run = 'golangci-lint run'
+
+[tasks.'test:go']
+description = 'Run Go tests for a whole project'
+wait_for = ['lint:*']                            # Avoid interleaved output with linters.
+run = 'gotestsum -- -race -timeout=60s ./...'
+
+[tasks.'cover:go:total']
+description = 'Show Go test coverage total'
+depends = 'cover:go:generate'
+run = 'go tool cover -func={{vars.cover}} | tail -n 1 | xargs echo'
+
+[tasks.'cover:go:browse']
+description = 'Show Go test coverage in a browser'
+depends = 'cover:go:generate'
+run = 'go tool cover -html={{vars.cover}}'
+
+[tasks.'cover:go:generate']
+hide = true
+depends = 'cachedir'
+sources = ['**/*.go']
+outputs = ['{{vars.cover}}']
+run = '''
+gotestsum -- \
+    -coverpkg="$(go list ./... | paste -s -d,)" \
+    -coverprofile {{vars.cover}} \
+    ./...
+'''
+
+[tasks.cachedir]
+hide = true
+run = 'mkdir -p .cache'

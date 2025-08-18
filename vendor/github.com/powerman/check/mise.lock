@@ -1,0 +1,35 @@
+[tools.actionlint]
+version = "1.7.7"
+backend = "aqua:rhysd/actionlint"
+
+[tools.gh]
+version = "2.76.2"
+backend = "aqua:cli/cli"
+
+[tools.git-cliff]
+version = "2.10.0"
+backend = "aqua:orhun/git-cliff"
+
+[tools.go]
+version = "1.25.0"
+backend = "core:go"
+
+[tools."go:github.com/daixiang0/gci"]
+version = "0.13.7"
+backend = "go:github.com/daixiang0/gci"
+
+[tools."go:golang.org/x/tools/cmd/goimports"]
+version = "0.36.0"
+backend = "go:golang.org/x/tools/cmd/goimports"
+
+[tools.gofumpt]
+version = "0.8.0"
+backend = "aqua:mvdan/gofumpt"
+
+[tools.golangci-lint]
+version = "2.3.0"
+backend = "aqua:golangci/golangci-lint"
+
+[tools.gotestsum]
+version = "1.12.3"
+backend = "aqua:gotestyourself/gotestsum"
