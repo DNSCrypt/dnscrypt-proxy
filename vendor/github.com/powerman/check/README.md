@@ -1,10 +1,12 @@
 # check
 
-[![Go Reference](https://pkg.go.dev/badge/github.com/powerman/check.svg)](https://pkg.go.dev/github.com/powerman/check)
-[![CI/CD](https://github.com/powerman/check/actions/workflows/CI&CD.yml/badge.svg)](https://github.com/powerman/check/actions/workflows/CI&CD.yml)
-[![Coverage Status](https://coveralls.io/repos/github/powerman/check/badge.svg?branch=master)](https://coveralls.io/github/powerman/check?branch=master)
+[![License MIT](https://img.shields.io/badge/license-MIT-royalblue.svg)](LICENSE)
+[![Go version](https://img.shields.io/github/go-mod/go-version/powerman/check?color=blue)](https://go.dev/)
+[![Test](https://img.shields.io/github/actions/workflow/status/powerman/check/test.yml?label=test)](https://github.com/powerman/check/actions/workflows/test.yml)
+[![Coverage Status](https://raw.githubusercontent.com/powerman/check/gh-badges/coverage.svg)](https://github.com/powerman/check/actions/workflows/test.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/powerman/check)](https://goreportcard.com/report/github.com/powerman/check)
-[![Release](https://img.shields.io/github/v/release/powerman/check)](https://github.com/powerman/check/releases/latest)
+[![Release](https://img.shields.io/github/v/release/powerman/check?color=blue)](https://github.com/powerman/check/releases/latest)
+[![Go Reference](https://pkg.go.dev/badge/github.com/powerman/check.svg)](https://pkg.go.dev/github.com/powerman/check)
 
 Helpers to complement Go [testing](https://golang.org/pkg/testing/)
 package.

@@ -32,11 +32,12 @@ func reportToGoConvey(actual, expected, failure string) error {
 
 	var buf bytes.Buffer
 	fmt.Fprintln(&buf, reporting.OpenJson)
-	if err := json.NewEncoder(&buf).Encode(report); err != nil {
+	err := json.NewEncoder(&buf).Encode(report)
+	if err != nil {
 		return err
 	}
 	fmt.Fprintln(&buf, ",")
 	fmt.Fprintln(&buf, reporting.CloseJson)
-	_, err := buf.WriteTo(os.Stdout)
+	_, err = buf.WriteTo(os.Stdout)
 	return err
 }
