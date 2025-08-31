@@ -74,7 +74,7 @@ func FetchCurrentDNSCryptCert(
 	now := uint32(time.Now().Unix())
 	certInfo := CertInfo{CryptoConstruction: UndefinedConstruction}
 	highestSerial := uint32(0)
-	var certCountStr string
+	certCountStr := ""
 	for _, answerRr := range in.Answer {
 		var txt string
 		if t, ok := answerRr.(*dns.TXT); !ok {
