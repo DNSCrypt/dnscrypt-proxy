@@ -974,9 +974,9 @@ algorithm = "none"
 ## - ipcrypt-ndx: 64 hex chars (32 bytes) - Generate with: openssl rand -hex 32
 ## Example for deterministic/nd: key = "1234567890abcdef1234567890abcdef"
 ## Example for ndx: key = "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
-## IMPORTANT: Keep this key secret and store it securely
+## IMPORTANT: Keep this key secret
 
-# key = ""
+key = ""
 
 
 ###############################################################################
