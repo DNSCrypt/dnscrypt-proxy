@@ -105,6 +105,7 @@ type Config struct {
 	DoHClientX509AuthLegacy  DoHClientX509AuthConfig     `toml:"tls_client_auth"`
 	DNS64                    DNS64Config                 `toml:"dns64"`
 	EDNSClientSubnet         []string                    `toml:"edns_client_subnet"`
+	IPEncryption             IPEncryptionConfig          `toml:"ip_encryption"`
 }
 
 func newConfig() Config {
@@ -291,6 +292,11 @@ type DNS64Config struct {
 	Resolvers []string `toml:"resolver"`
 }
 
+type IPEncryptionConfig struct {
+	Key       string `toml:"key"`
+	Algorithm string `toml:"algorithm"`
+}
+
 type CaptivePortalsConfig struct {
 	MapFile string `toml:"map_file"`
 }
@@ -443,6 +449,11 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	// Configure DNS64
 	configureDNS64(proxy, &config)
 
+	// Configure IP encryption
+	if err := configureIPEncryption(proxy, &config); err != nil {
+		return err
+	}
+
 	// Configure source restrictions
 	configureSourceRestrictions(proxy, flags, &config)
 
@@ -536,6 +547,19 @@ func configureBrokenImplementations(proxy *Proxy, config *Config) {
 func configureDNS64(proxy *Proxy, config *Config) {
 	proxy.dns64Prefixes = config.DNS64.Prefixes
 	proxy.dns64Resolvers = config.DNS64.Resolvers
+}
+
+// configureIPEncryption - Helper function for IP encryption
+func configureIPEncryption(proxy *Proxy, config *Config) error {
+	ipCryptConfig, err := NewIPCryptConfig(
+		config.IPEncryption.Key,
+		config.IPEncryption.Algorithm,
+	)
+	if err != nil {
+		return fmt.Errorf("IP encryption configuration error: %w", err)
+	}
+	proxy.ipCryptConfig = ipCryptConfig
+	return nil
 }
 
 func (config *Config) printRegisteredServers(proxy *Proxy, jsonOutput bool, includeRelays bool) error {

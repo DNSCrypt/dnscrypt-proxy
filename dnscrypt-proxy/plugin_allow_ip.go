@@ -15,6 +15,7 @@ type PluginAllowedIP struct {
 	allowedIPs      map[string]interface{}
 	logger          io.Writer
 	format          string
+	ipCryptConfig   *IPCryptConfig
 
 	// Hot-reloading support
 	rwLock          sync.RWMutex
@@ -50,6 +51,7 @@ func (plugin *PluginAllowedIP) Init(proxy *Proxy) error {
 	}
 
 	plugin.logger, plugin.format = InitializePluginLogger(proxy.allowedIPLogFile, proxy.allowedIPFormat, proxy.logMaxSize, proxy.logMaxAge, proxy.logMaxBackups)
+	plugin.ipCryptConfig = proxy.ipCryptConfig
 
 	return nil
 }
@@ -169,7 +171,7 @@ func (plugin *PluginAllowedIP) Eval(pluginsState *PluginsState, msg *dns.Msg) er
 		pluginsState.sessionData["whitelisted"] = true
 		if plugin.logger != nil {
 			qName := pluginsState.qName
-			clientIPStr, ok := ExtractClientIPStr(pluginsState)
+			clientIPStr, ok := ExtractClientIPStrEncrypted(pluginsState, plugin.ipCryptConfig)
 			if !ok {
 				// Ignore internal flow.
 				return nil

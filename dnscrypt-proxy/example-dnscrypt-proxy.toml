@@ -950,6 +950,36 @@ skip_incompatible = false
 
 
 ###############################################################################
+#                           IP Encryption                                      #
+###############################################################################
+
+[ip_encryption]
+
+## Encrypt client IP addresses in plugin logs using IPCrypt
+## This provides privacy for client IP addresses while maintaining
+## the ability to distinguish between different clients in logs
+
+## Encryption algorithm (default: "none")
+## - "none": No encryption (default)
+## - "ipcrypt-deterministic": Deterministic encryption (same IP always encrypts to same value) - requires 16-byte key
+## - "ipcrypt-nd": Non-deterministic encryption with 8-byte tweak - requires 16-byte key
+## - "ipcrypt-ndx": Non-deterministic encryption with 16-byte tweak (extended) - requires 32-byte key
+
+algorithm = "none"
+
+## Encryption key in hexadecimal format (required if algorithm is not "none")
+## Key size depends on algorithm:
+## - ipcrypt-deterministic: 32 hex chars (16 bytes) - Generate with: openssl rand -hex 16
+## - ipcrypt-nd: 32 hex chars (16 bytes) - Generate with: openssl rand -hex 16
+## - ipcrypt-ndx: 64 hex chars (32 bytes) - Generate with: openssl rand -hex 32
+## Example for deterministic/nd: key = "1234567890abcdef1234567890abcdef"
+## Example for ndx: key = "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+## IMPORTANT: Keep this key secret and store it securely
+
+# key = ""
+
+
+###############################################################################
 #                            Monitoring UI                                     #
 ###############################################################################
 

@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"strings"
 	"time"
 
@@ -16,6 +15,7 @@ type PluginQueryLog struct {
 	logger        io.Writer
 	format        string
 	ignoredQtypes []string
+	ipCryptConfig *IPCryptConfig
 }
 
 func (plugin *PluginQueryLog) Name() string {
@@ -30,6 +30,7 @@ func (plugin *PluginQueryLog) Init(proxy *Proxy) error {
 	plugin.logger = Logger(proxy.logMaxSize, proxy.logMaxAge, proxy.logMaxBackups, proxy.queryLogFile)
 	plugin.format = proxy.queryLogFormat
 	plugin.ignoredQtypes = proxy.queryLogIgnoredQtypes
+	plugin.ipCryptConfig = proxy.ipCryptConfig
 
 	return nil
 }
@@ -43,13 +44,8 @@ func (plugin *PluginQueryLog) Reload() error {
 }
 
 func (plugin *PluginQueryLog) Eval(pluginsState *PluginsState, msg *dns.Msg) error {
-	var clientIPStr string
-	switch pluginsState.clientProto {
-	case "udp":
-		clientIPStr = (*pluginsState.clientAddr).(*net.UDPAddr).IP.String()
-	case "tcp", "local_doh":
-		clientIPStr = (*pluginsState.clientAddr).(*net.TCPAddr).IP.String()
-	default:
+	clientIPStr, ok := ExtractClientIPStrEncrypted(pluginsState, plugin.ipCryptConfig)
+	if !ok {
 		// Ignore internal flow.
 		return nil
 	}

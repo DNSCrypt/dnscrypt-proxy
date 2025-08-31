@@ -14,6 +14,7 @@ type PluginAllowName struct {
 	patternMatcher  *PatternMatcher
 	logger          io.Writer
 	format          string
+	ipCryptConfig   *IPCryptConfig
 
 	// Hot-reloading support
 	rwLock         sync.RWMutex
@@ -47,6 +48,7 @@ func (plugin *PluginAllowName) Init(proxy *Proxy) error {
 	}
 
 	plugin.logger, plugin.format = InitializePluginLogger(proxy.allowNameLogFile, proxy.allowNameFormat, proxy.logMaxSize, proxy.logMaxAge, proxy.logMaxBackups)
+	plugin.ipCryptConfig = proxy.ipCryptConfig
 
 	return nil
 }
@@ -153,7 +155,7 @@ func (plugin *PluginAllowName) Eval(pluginsState *PluginsState, msg *dns.Msg) er
 	if allowList {
 		pluginsState.sessionData["whitelisted"] = true
 		if plugin.logger != nil {
-			clientIPStr, ok := ExtractClientIPStr(pluginsState)
+			clientIPStr, ok := ExtractClientIPStrEncrypted(pluginsState, plugin.ipCryptConfig)
 			if !ok {
 				// Ignore internal flow.
 				return nil

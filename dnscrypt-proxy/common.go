@@ -190,6 +190,15 @@ func ExtractClientIPStr(pluginsState *PluginsState) (string, bool) {
 	}
 }
 
+// ExtractClientIPStrEncrypted extracts and optionally encrypts client IP string
+func ExtractClientIPStrEncrypted(pluginsState *PluginsState, ipCryptConfig *IPCryptConfig) (string, bool) {
+	ipStr, ok := ExtractClientIPStr(pluginsState)
+	if !ok || ipCryptConfig == nil {
+		return ipStr, ok
+	}
+	return ipCryptConfig.EncryptIPString(ipStr), ok
+}
+
 // FormatLogLine formats a log line based on the specified format (tsv or ltsv)
 func FormatLogLine(format, clientIP, qName, reason string, additionalFields ...string) (string, error) {
 	if format == "tsv" {

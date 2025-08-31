@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"time"
 
 	"github.com/jedisct1/dlog"
@@ -12,8 +11,9 @@ import (
 )
 
 type PluginNxLog struct {
-	logger io.Writer
-	format string
+	logger        io.Writer
+	format        string
+	ipCryptConfig *IPCryptConfig
 }
 
 func (plugin *PluginNxLog) Name() string {
@@ -27,6 +27,7 @@ func (plugin *PluginNxLog) Description() string {
 func (plugin *PluginNxLog) Init(proxy *Proxy) error {
 	plugin.logger = Logger(proxy.logMaxSize, proxy.logMaxAge, proxy.logMaxBackups, proxy.nxLogFile)
 	plugin.format = proxy.nxLogFormat
+	plugin.ipCryptConfig = proxy.ipCryptConfig
 
 	return nil
 }
@@ -43,13 +44,8 @@ func (plugin *PluginNxLog) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 	if msg.Rcode != dns.RcodeNameError {
 		return nil
 	}
-	var clientIPStr string
-	switch pluginsState.clientProto {
-	case "udp":
-		clientIPStr = (*pluginsState.clientAddr).(*net.UDPAddr).IP.String()
-	case "tcp", "local_doh":
-		clientIPStr = (*pluginsState.clientAddr).(*net.TCPAddr).IP.String()
-	default:
+	clientIPStr, ok := ExtractClientIPStrEncrypted(pluginsState, plugin.ipCryptConfig)
+	if !ok {
 		// Ignore internal flow.
 		return nil
 	}

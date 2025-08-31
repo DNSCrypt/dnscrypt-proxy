@@ -106,6 +106,7 @@ type Proxy struct {
 	SourceDoH                     bool
 	SourceODoH                    bool
 	listenersMu                   sync.Mutex
+	ipCryptConfig                 *IPCryptConfig
 }
 
 func (proxy *Proxy) registerUDPListener(conn *net.UDPConn) {

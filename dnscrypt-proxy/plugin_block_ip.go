@@ -15,6 +15,7 @@ type PluginBlockIP struct {
 	blockedIPs      map[string]interface{}
 	logger          io.Writer
 	format          string
+	ipCryptConfig   *IPCryptConfig
 
 	// Hot-reloading support
 	rwLock          sync.RWMutex
@@ -50,6 +51,7 @@ func (plugin *PluginBlockIP) Init(proxy *Proxy) error {
 	}
 
 	plugin.logger, plugin.format = InitializePluginLogger(proxy.blockIPLogFile, proxy.blockIPFormat, proxy.logMaxSize, proxy.logMaxAge, proxy.logMaxBackups)
+	plugin.ipCryptConfig = proxy.ipCryptConfig
 
 	return nil
 }
@@ -174,7 +176,7 @@ func (plugin *PluginBlockIP) Eval(pluginsState *PluginsState, msg *dns.Msg) erro
 		pluginsState.returnCode = PluginsReturnCodeReject
 		if plugin.logger != nil {
 			qName := pluginsState.qName
-			clientIPStr, ok := ExtractClientIPStr(pluginsState)
+			clientIPStr, ok := ExtractClientIPStrEncrypted(pluginsState, plugin.ipCryptConfig)
 			if !ok {
 				// Ignore internal flow.
 				return nil

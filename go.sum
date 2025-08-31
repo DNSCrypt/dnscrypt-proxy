@@ -38,6 +38,8 @@ github.com/jedisct1/go-dnsstamps v0.0.0-20240423203910-07a0735c7774 h1:DobL5d8Ux
 github.com/jedisct1/go-dnsstamps v0.0.0-20240423203910-07a0735c7774/go.mod h1:mEGEFZsGe4sG5Mb3Xi89pmsy+TZ0946ArbYMGKAM5uA=
 github.com/jedisct1/go-hpke-compact v0.0.0-20241212093903-5caa4621366f h1:h5/HKrLaDfrb/Zi1y8eCsPGQpcOnKIslT/OpFc81i4c=
 github.com/jedisct1/go-hpke-compact v0.0.0-20241212093903-5caa4621366f/go.mod h1:IjVYCPbDciyDZpJpUIYodX+FvctxGmnHVZ/ZwGBCjNA=
+github.com/jedisct1/go-ipcrypt v0.1.0 h1:6ry64RkUyW8PhvgtTU90zFcgz0tQEHQ04thhKo0K7yg=
+github.com/jedisct1/go-ipcrypt v0.1.0/go.mod h1:BPhUD7cIvrp3yyTTOtakhSLxo02ToIdYdcRdjPgvVs4=
 github.com/jedisct1/go-minisign v0.0.0-20241212093149-d2f9f49435c7 h1:FWpSWRD8FbVkKQu8M1DM9jF5oXFLyE+XpisIYfdzbic=
 github.com/jedisct1/go-minisign v0.0.0-20241212093149-d2f9f49435c7/go.mod h1:BMxO138bOokdgt4UaxZiEfypcSHX0t6SIFimVP1oRfk=
 github.com/jedisct1/go-sieve-cache v0.1.7 h1:mdc4gTMZI6pUvMTze5K5CHxLxkk5iJcug85g2hERBVk=

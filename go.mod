@@ -15,6 +15,7 @@ require (
 	github.com/jedisct1/go-clocksmith v0.0.0-20250224222044-e151f21a353a
 	github.com/jedisct1/go-dnsstamps v0.0.0-20240423203910-07a0735c7774
 	github.com/jedisct1/go-hpke-compact v0.0.0-20241212093903-5caa4621366f
+	github.com/jedisct1/go-ipcrypt v0.1.0
 	github.com/jedisct1/go-minisign v0.0.0-20241212093149-d2f9f49435c7
 	github.com/jedisct1/go-sieve-cache v0.1.7
 	github.com/jedisct1/xsecretbox v0.0.0-20241212092125-3afc4917ac41

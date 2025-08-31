@@ -54,6 +54,9 @@ github.com/jedisct1/go-dnsstamps
 # github.com/jedisct1/go-hpke-compact v0.0.0-20241212093903-5caa4621366f
 ## explicit; go 1.23.4
 github.com/jedisct1/go-hpke-compact
+# github.com/jedisct1/go-ipcrypt v0.1.0
+## explicit; go 1.21
+github.com/jedisct1/go-ipcrypt
 # github.com/jedisct1/go-minisign v0.0.0-20241212093149-d2f9f49435c7
 ## explicit; go 1.23.4
 github.com/jedisct1/go-minisign

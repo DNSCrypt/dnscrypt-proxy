@@ -14,6 +14,7 @@ type BlockedNames struct {
 	patternMatcher  *PatternMatcher
 	logger          io.Writer
 	format          string
+	ipCryptConfig   *IPCryptConfig
 }
 
 const aliasesLimit = 8
@@ -44,7 +45,7 @@ func (blockedNames *BlockedNames) check(pluginsState *PluginsState, qName string
 	pluginsState.action = PluginsActionReject
 	pluginsState.returnCode = PluginsReturnCodeReject
 	if blockedNames.logger != nil {
-		clientIPStr, ok := ExtractClientIPStr(pluginsState)
+		clientIPStr, ok := ExtractClientIPStrEncrypted(pluginsState, blockedNames.ipCryptConfig)
 		if !ok {
 			// Ignore internal flow.
 			return false, nil
@@ -86,6 +87,7 @@ func (plugin *PluginBlockName) Init(proxy *Proxy) error {
 	xBlockedNames := BlockedNames{
 		allWeeklyRanges: proxy.allWeeklyRanges,
 		patternMatcher:  NewPatternMatcher(),
+		ipCryptConfig:   proxy.ipCryptConfig,
 	}
 
 	if err := plugin.loadRules(lines, &xBlockedNames); err != nil {
