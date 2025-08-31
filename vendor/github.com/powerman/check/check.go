@@ -29,6 +29,7 @@ var (
 // C wraps *testing.T to make it convenient to call checkers in test.
 type C struct {
 	*testing.T
+
 	todo bool
 	must bool
 }
@@ -531,7 +532,7 @@ func (t *C) Match(actual, regex any, msg ...any) bool {
 
 // isMatch updates actual to be a real string used for matching, to make
 // dump easier to understand, but this result in losing type information.
-func isMatch(actual *any, regex any) bool { //nolint:gocritic // False positive.
+func isMatch(actual *any, regex any) bool {
 	if *actual == nil {
 		return false
 	}
@@ -549,7 +550,7 @@ func isMatch(actual *any, regex any) bool { //nolint:gocritic // False positive.
 	panic("regex is not a *regexp.Regexp or string")
 }
 
-func stringify(arg *any) bool { //nolint:gocritic // False positive.
+func stringify(arg *any) bool {
 	switch v := (*arg).(type) {
 	case nil:
 		return false
@@ -1072,7 +1073,7 @@ func (t *C) BetweenOrEqual(actual, minimum, maximum any, msg ...any) bool {
 func (t *C) NotBetweenOrEqual(actual, minimum, maximum any, msg ...any) bool {
 	t.Helper()
 	return t.report3(actual, minimum, maximum, msg,
-		!(isBetween(actual, minimum, maximum) || isEqual(actual, minimum) || isEqual(actual, maximum)))
+		!isBetween(actual, minimum, maximum) && !isEqual(actual, minimum) && !isEqual(actual, maximum))
 }
 
 // InDelta checks for expected-delta <= actual <= expected+delta.
@@ -1193,7 +1194,7 @@ func (t *C) HasPrefix(actual, expected any, msg ...any) bool {
 
 // isHasPrefix updates actual and expected to be a real string used for check,
 // to make dump easier to understand, but this result in losing type information.
-func isHasPrefix(actual, expected *any) bool { //nolint:gocritic // False positive.
+func isHasPrefix(actual, expected *any) bool {
 	if *actual == nil || *expected == nil {
 		return false
 	}
@@ -1234,7 +1235,7 @@ func (t *C) HasSuffix(actual, expected any, msg ...any) bool {
 
 // isHasSuffix updates actual and expected to be a real string used for check,
 // to make dump easier to understand, but this result in losing type information.
-func isHasSuffix(actual, expected *any) bool { //nolint:gocritic // False positive.
+func isHasSuffix(actual, expected *any) bool {
 	if *actual == nil || *expected == nil {
 		return false
 	}
