@@ -180,6 +180,9 @@ func isDigit(b byte) bool { return b >= '0' && b <= '9' }
 
 // ExtractClientIPStr extracts client IP string from pluginsState based on protocol
 func ExtractClientIPStr(pluginsState *PluginsState) (string, bool) {
+	if pluginsState.clientAddr == nil {
+		return "", false
+	}
 	switch pluginsState.clientProto {
 	case "udp":
 		return (*pluginsState.clientAddr).(*net.UDPAddr).IP.String(), true
