@@ -34,6 +34,9 @@ func main() {
 	}
 	runtime.MemProfileRate = 0
 
+	// Initialize random number generator
+	// Note: As of Go 1.20, the global RNG is automatically seeded
+	// This explicit seeding is kept for compatibility with older Go versions
 	seed := make([]byte, 8)
 	if _, err := crypto_rand.Read(seed); err != nil {
 		dlog.Fatal(err)
