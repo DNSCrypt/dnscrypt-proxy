@@ -1,4 +1,4 @@
-# Version 2.1.14 (not released yet)
+# Version 2.1.14
  - Added support for client IP address encryption in logs using IPCrypt.
 This feature helps protect user privacy by encrypting IP addresses before
 they are logged. Three algorithms are supported: deterministic,
