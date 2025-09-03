@@ -61,7 +61,7 @@ func NewIPCryptConfig(keyHex string, algorithm string) (*IPCryptConfig, error) {
 		config.Tweak = make([]byte, 8)
 
 	case "ipcrypt-ndx":
-		// Extended non-deterministic with 16-byte tweak  
+		// Extended non-deterministic with 16-byte tweak
 		if len(key) != 32 {
 			return nil, fmt.Errorf("ipcrypt-ndx requires a 32-byte (64 hex chars) key, got %d bytes", len(key))
 		}
