@@ -713,17 +713,9 @@ func (proxy *Proxy) processIncomingQuery(
 	// Initialize plugin state
 	pluginsState := NewPluginsState(proxy, clientProto, clientAddr, serverProto, start)
 
-	// Get server info and initialize parameters
-	serverName := "-"
-	needsEDNS0Padding := false
-	serverInfo := proxy.serversInfo.getOne()
-	if serverInfo != nil {
-		serverName = serverInfo.Name
-		needsEDNS0Padding = (serverInfo.Proto == stamps.StampProtoTypeDoH || serverInfo.Proto == stamps.StampProtoTypeTLS)
-	}
+	// Apply query plugins and get server info
+	query, serverInfo, _ := pluginsState.ApplyQueryPlugins(&proxy.pluginsGlobals, query, proxy)
 
-	// Apply query plugins
-	query, _ = pluginsState.ApplyQueryPlugins(&proxy.pluginsGlobals, query, needsEDNS0Padding)
 	if !validateQuery(query) {
 		return response
 	}
@@ -754,6 +746,7 @@ func (proxy *Proxy) processIncomingQuery(
 
 	// Process query with a DNS server if there's no cached response
 	if len(response) == 0 && serverInfo != nil {
+		serverName := serverInfo.Name
 		pluginsState.serverName = serverName
 
 		// Exchange DNS request with the server
