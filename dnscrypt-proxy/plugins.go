@@ -296,6 +296,7 @@ func (pluginsState *PluginsState) ApplyQueryPlugins(
 	defer pluginsGlobals.RUnlock()
 	for _, plugin := range *pluginsGlobals.queryPlugins {
 		if err := plugin.Eval(pluginsState, &msg); err != nil {
+			dlog.Debugf("Drops query: %v", err)
 			pluginsState.action = PluginsActionDrop
 			return packet, err
 		}
@@ -360,6 +361,7 @@ func (pluginsState *PluginsState) ApplyResponsePlugins(
 	defer pluginsGlobals.RUnlock()
 	for _, plugin := range *pluginsGlobals.responsePlugins {
 		if err := plugin.Eval(pluginsState, &msg); err != nil {
+			dlog.Debugf("Drops response: %v", err)
 			pluginsState.action = PluginsActionDrop
 			return packet, err
 		}
