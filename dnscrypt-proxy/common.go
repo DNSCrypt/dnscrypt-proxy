@@ -161,7 +161,7 @@ func ExtractHostAndPort(str string, defaultPort int) (host string, port int) {
 			host, port = host[:idx], portX
 		}
 	}
-	return
+	return host, port
 }
 
 // ReadTextFile reads a file and returns its contents as a string.

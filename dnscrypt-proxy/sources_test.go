@@ -378,7 +378,7 @@ func setupSourceTestCase(t *testing.T, d *SourceTestData, i int,
 		i = (i + 1) % len(d.sources) // make the cached and downloaded fixtures different
 	}
 	prepSourceTestDownload(t, d, e, d.sources[i], downloadTest)
-	return
+	return id, e
 }
 
 func TestNewSource(t *testing.T) {

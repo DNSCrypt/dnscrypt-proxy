@@ -145,7 +145,7 @@ func (xTransport *XTransport) loadCachedIP(host string) (ip net.IP, expired bool
 	xTransport.cachedIPs.RUnlock()
 	if !ok {
 		dlog.Debugf("[%s] IP address not found in the cache", host)
-		return
+		return ip, expired, updating
 	}
 	ip = item.ip
 	expiration := item.expiration
@@ -158,7 +158,7 @@ func (xTransport *XTransport) loadCachedIP(host string) (ip net.IP, expired bool
 			dlog.Debugf("[%s] IP address expired, not being updated yet", host)
 		}
 	}
-	return
+	return ip, expired, updating
 }
 
 func (xTransport *XTransport) rebuildTransport() {
@@ -331,7 +331,7 @@ func (xTransport *XTransport) resolveUsingSystem(host string) (ip net.IP, ttl ti
 	var foundIPs []string
 	foundIPs, err = net.LookupHost(host)
 	if err != nil {
-		return
+		return ip, ttl, err
 	}
 	ips := make([]net.IP, 0)
 	for _, ip := range foundIPs {
@@ -351,7 +351,7 @@ func (xTransport *XTransport) resolveUsingSystem(host string) (ip net.IP, ttl ti
 	if len(ips) > 0 {
 		ip = ips[rand.Intn(len(ips))]
 	}
-	return
+	return ip, ttl, err
 }
 
 func (xTransport *XTransport) resolveUsingResolver(
@@ -375,7 +375,7 @@ func (xTransport *XTransport) resolveUsingResolver(
 				answer := answers[rand.Intn(len(answers))]
 				ip = answer.(*dns.A).A
 				ttl = time.Duration(answer.Header().Ttl) * time.Second
-				return
+				return ip, ttl, err
 			}
 		}
 	}
@@ -395,11 +395,11 @@ func (xTransport *XTransport) resolveUsingResolver(
 				answer := answers[rand.Intn(len(answers))]
 				ip = answer.(*dns.AAAA).AAAA
 				ttl = time.Duration(answer.Header().Ttl) * time.Second
-				return
+				return ip, ttl, err
 			}
 		}
 	}
-	return
+	return ip, ttl, err
 }
 
 func (xTransport *XTransport) resolveUsingResolvers(
@@ -418,7 +418,7 @@ func (xTransport *XTransport) resolveUsingResolvers(
 		}
 		dlog.Infof("Unable to resolve [%s] using resolver [%s] (%s): %v", host, resolver, proto, err)
 	}
-	return
+	return ip, ttl, err
 }
 
 // If a name is not present in the cache, resolve the name and update the cache

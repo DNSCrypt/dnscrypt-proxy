@@ -69,7 +69,7 @@ func ComputeSharedKey(
 			}
 		}
 	}
-	return
+	return sharedKey
 }
 
 func (proxy *Proxy) Encrypt(
@@ -116,7 +116,7 @@ func (proxy *Proxy) Encrypt(
 	}
 	if QueryOverhead+len(packet)+1 > paddedLength {
 		err = errors.New("Question too large; cannot be padded")
-		return
+		return sharedKey, encrypted, clientNonce, err
 	}
 	encrypted = append(serverInfo.MagicQuery[:], publicKey[:]...)
 	encrypted = append(encrypted, nonce[:HalfNonceSize]...)
@@ -128,7 +128,7 @@ func (proxy *Proxy) Encrypt(
 		copy(xsalsaNonce[:], nonce)
 		encrypted = secretbox.Seal(encrypted, padded, &xsalsaNonce, sharedKey)
 	}
-	return
+	return sharedKey, encrypted, clientNonce, err
 }
 
 func (proxy *Proxy) Decrypt(
