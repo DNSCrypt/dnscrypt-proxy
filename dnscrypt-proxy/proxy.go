@@ -714,7 +714,9 @@ func (proxy *Proxy) processIncomingQuery(
 	pluginsState := NewPluginsState(proxy, clientProto, clientAddr, serverProto, start)
 
 	// Apply query plugins and get server info
-	query, serverInfo, _ := pluginsState.ApplyQueryPlugins(&proxy.pluginsGlobals, query, proxy)
+	query, serverInfo, _ := pluginsState.ApplyQueryPlugins(&proxy.pluginsGlobals, query, func() *ServerInfo {
+		return proxy.serversInfo.getOne()
+	})
 
 	if !validateQuery(query) {
 		return response

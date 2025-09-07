@@ -274,7 +274,7 @@ func NewPluginsState(
 func (pluginsState *PluginsState) ApplyQueryPlugins(
 	pluginsGlobals *PluginsGlobals,
 	packet []byte,
-	proxy *Proxy,
+	getServerInfo func() *ServerInfo,
 ) ([]byte, *ServerInfo, error) {
 	msg := dns.Msg{}
 	if err := msg.Unpack(packet); err != nil {
@@ -316,7 +316,7 @@ func (pluginsState *PluginsState) ApplyQueryPlugins(
 	needsEDNS0Padding := false
 	var serverInfo *ServerInfo
 	if pluginsState.action == PluginsActionContinue {
-		serverInfo = proxy.serversInfo.getOne()
+		serverInfo = getServerInfo()
 	}
 	if serverInfo != nil {
 		needsEDNS0Padding = (serverInfo.Proto == stamps.StampProtoTypeDoH || serverInfo.Proto == stamps.StampProtoTypeTLS)
