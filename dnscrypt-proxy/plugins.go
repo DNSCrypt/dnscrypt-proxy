@@ -273,7 +273,7 @@ func NewPluginsState(
 func (pluginsState *PluginsState) ApplyQueryPlugins(
 	pluginsGlobals *PluginsGlobals,
 	packet []byte,
-	needsEDNS0Padding bool,
+	getServerInfo func() (*ServerInfo, bool),
 ) ([]byte, error) {
 	msg := dns.Msg{}
 	if err := msg.Unpack(packet); err != nil {
@@ -318,12 +318,18 @@ func (pluginsState *PluginsState) ApplyQueryPlugins(
 	if err != nil {
 		return packet, err
 	}
-	if needsEDNS0Padding && pluginsState.action == PluginsActionContinue {
-		padLen := 63 - ((len(packet2) + 63) & 63)
-		if paddedPacket2, _ := addEDNS0PaddingIfNoneFound(&msg, packet2, padLen); paddedPacket2 != nil {
-			return paddedPacket2, nil
+
+	// Only get server info if we're continuing and need padding
+	if pluginsState.action == PluginsActionContinue && getServerInfo != nil {
+		_, needsEDNS0Padding := getServerInfo()
+		if needsEDNS0Padding {
+			padLen := 63 - ((len(packet2) + 63) & 63)
+			if paddedPacket2, _ := addEDNS0PaddingIfNoneFound(&msg, packet2, padLen); paddedPacket2 != nil {
+				return paddedPacket2, nil
+			}
 		}
 	}
+
 	return packet2, nil
 }
 
