@@ -1,4 +1,24 @@
-// Work around Mozilla's evil plan - https://sk.tl/3Ek6tzhq
+// Firefox DoH Canary Domain Plugin
+//
+// This plugin prevents Firefox from bypassing dnscrypt-proxy and using external DoH servers.
+// Firefox queries "use-application-dns.net" (the canary domain) to determine if it should
+// enable its built-in DoH. When this domain returns NXDOMAIN, Firefox respects the local
+// DNS configuration and doesn't override it with external DoH servers.
+//
+// Why this is important:
+// - Without this plugin, Firefox may bypass dnscrypt-proxy entirely and send DNS queries
+//   directly to external DoH servers (like Cloudflare), defeating the purpose of running
+//   a local DNS proxy for privacy, filtering, or security.
+// - This is especially critical when NOT using local DoH, as Firefox would otherwise
+//   route around the proxy.
+// - Even when using local DoH, this plugin ensures Firefox respects the user's DNS choice.
+//
+// Technical details:
+// - Firefox performs a lookup for "use-application-dns.net" and its subdomains
+// - If the query returns NXDOMAIN (name error), Firefox disables its automatic DoH
+// - This allows dnscrypt-proxy to handle all DNS queries as configured
+//
+// Reference: https://sk.tl/3Ek6tzhq (Mozilla's canary domain documentation)
 
 package main
 
