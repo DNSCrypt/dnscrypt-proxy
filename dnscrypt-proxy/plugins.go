@@ -336,7 +336,6 @@ func (pluginsState *PluginsState) ApplyQueryPlugins(
 func (pluginsState *PluginsState) ApplyResponsePlugins(
 	pluginsGlobals *PluginsGlobals,
 	packet []byte,
-	ttl *uint32,
 ) ([]byte, error) {
 	msg := dns.Msg{Compress: true}
 	if err := msg.Unpack(packet); err != nil {
@@ -376,9 +375,6 @@ func (pluginsState *PluginsState) ApplyResponsePlugins(
 		if pluginsState.action != PluginsActionContinue {
 			break
 		}
-	}
-	if ttl != nil {
-		setMaxTTL(&msg, *ttl)
 	}
 	packet2, err := msg.PackBuffer(packet)
 	if err != nil {

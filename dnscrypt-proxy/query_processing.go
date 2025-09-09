@@ -254,10 +254,9 @@ func processPlugins(
 	serverInfo *ServerInfo,
 	response []byte,
 ) ([]byte, error) {
-	var ttl *uint32
 	var err error
 
-	response, err = pluginsState.ApplyResponsePlugins(&proxy.pluginsGlobals, response, ttl)
+	response, err = pluginsState.ApplyResponsePlugins(&proxy.pluginsGlobals, response)
 	if err != nil {
 		pluginsState.returnCode = PluginsReturnCodeParseError
 		pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
