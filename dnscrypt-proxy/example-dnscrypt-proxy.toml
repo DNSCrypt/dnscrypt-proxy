@@ -964,6 +964,7 @@ skip_incompatible = false
 ## - "ipcrypt-deterministic": Deterministic encryption (same IP always encrypts to same value) - requires 16-byte key
 ## - "ipcrypt-nd": Non-deterministic encryption with 8-byte tweak - requires 16-byte key
 ## - "ipcrypt-ndx": Non-deterministic encryption with 16-byte tweak (extended) - requires 32-byte key
+## - "ipcrypt-pfx": Prefix-preserving encryption (preserves network prefix relationships) - requires 32-byte key
 
 algorithm = "none"
 

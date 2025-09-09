@@ -67,8 +67,14 @@ func NewIPCryptConfig(keyHex string, algorithm string) (*IPCryptConfig, error) {
 		}
 		config.Tweak = make([]byte, 16)
 
+	case "ipcrypt-pfx":
+		// Prefix-preserving encryption
+		if len(key) != 32 {
+			return nil, fmt.Errorf("ipcrypt-pfx requires a 32-byte (64 hex chars) key, got %d bytes", len(key))
+		}
+
 	default:
-		return nil, fmt.Errorf("unsupported IP encryption algorithm: %s (must be 'ipcrypt-deterministic', 'ipcrypt-nd', 'ipcrypt-ndx', or 'none')", algorithm)
+		return nil, fmt.Errorf("unsupported IP encryption algorithm: %s (must be 'ipcrypt-deterministic', 'ipcrypt-nd', 'ipcrypt-ndx', 'ipcrypt-pfx', or 'none')", algorithm)
 	}
 
 	return config, nil
@@ -112,6 +118,14 @@ func (config *IPCryptConfig) EncryptIP(ip net.IP) (string, error) {
 		}
 		// Return as hex string for non-deterministic modes
 		return hex.EncodeToString(encrypted), nil
+
+	case "ipcrypt-pfx":
+		// Prefix-preserving encryption
+		encrypted, err := ipcrypt.EncryptIPPfx(ip, config.Key)
+		if err != nil {
+			return "", fmt.Errorf("failed to encrypt IP (pfx): %w", err)
+		}
+		return encrypted.String(), nil
 
 	default:
 		return "", fmt.Errorf("unsupported algorithm: %s", config.Algorithm)
@@ -181,6 +195,18 @@ func (config *IPCryptConfig) DecryptIP(encryptedStr string) (string, error) {
 			return "", fmt.Errorf("failed to decrypt IP (ndx): %w", err)
 		}
 		return decrypted, nil
+
+	case "ipcrypt-pfx":
+		// Decrypt prefix-preserving encrypted IP
+		ip := net.ParseIP(encryptedStr)
+		if ip == nil {
+			return "", fmt.Errorf("invalid encrypted IP address: %s", encryptedStr)
+		}
+		decrypted, err := ipcrypt.DecryptIPPfx(ip, config.Key)
+		if err != nil {
+			return "", fmt.Errorf("failed to decrypt IP (pfx): %w", err)
+		}
+		return decrypted.String(), nil
 
 	default:
 		return "", fmt.Errorf("unsupported algorithm: %s", config.Algorithm)
