@@ -253,10 +253,11 @@ func (plugin *PluginCloak) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 		}
 	}
 	synth := EmptyResponseFromMessage(msg)
-	if !cloakedName.isIP && ((cloakedName.ipv4 == nil && cloakedName.ipv6 == nil) || expired) {
+	if !cloakedName.isIP && ((question.Qtype == dns.TypeA && cloakedName.ipv4 == nil) ||
+		(question.Qtype == dns.TypeAAAA && cloakedName.ipv6 == nil) || expired) {
 		target := cloakedName.target
 		plugin.RUnlock()
-		foundIPs, err := net.LookupIP(target)
+		foundIPs, _, err := pluginsState.xTransport.resolveEncrypted(target, question.Qtype)
 		if err != nil {
 			synth.Rcode = dns.RcodeServerFailure
 			pluginsState.synthResponse = synth
