@@ -10,6 +10,7 @@ package ipcrypt
 import (
 	"crypto/aes"
 	"crypto/rand"
+	"crypto/subtle"
 	"errors"
 	"fmt"
 	"net"
@@ -71,9 +72,7 @@ func xorBytes(a, b []byte) []byte {
 		return nil
 	}
 	c := make([]byte, len(a))
-	for i := range a {
-		c[i] = a[i] ^ b[i]
-	}
+	subtle.XORBytes(c, a, b)
 	return c
 }
 
@@ -188,6 +187,253 @@ func DecryptIPNonDeterministic(ciphertext []byte, key []byte) (string, error) {
 	}
 
 	return net.IP(decrypted).String(), nil
+}
+
+// Prefix-preserving mode functions
+
+// EncryptIPPfx encrypts an IP address using ipcrypt-pfx mode.
+// The key must be exactly 32 bytes long (split into two AES-128 keys).
+// Returns the encrypted IP address maintaining the original format (IPv4 or IPv6).
+func EncryptIPPfx(ip net.IP, key []byte) (net.IP, error) {
+	if len(key) != 32 {
+		return nil, fmt.Errorf("%w: got %d bytes, want 32 bytes", ErrInvalidKeySize, len(key))
+	}
+
+	// Split the key into two AES-128 keys
+	k1 := key[:16]
+	k2 := key[16:32]
+
+	// Check that K1 and K2 are different
+	if subtle.ConstantTimeCompare(k1, k2) == 1 {
+		return nil, errors.New("the two halves of the key must be different")
+	}
+
+	// Convert IP to 16-byte representation
+	ipBytes, err := validateIP(ip)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create AES cipher objects
+	cipher1, err := aes.NewCipher(k1)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create first cipher: %w", err)
+	}
+
+	cipher2, err := aes.NewCipher(k2)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create second cipher: %w", err)
+	}
+
+	// Determine if this is IPv4
+	isIPv4 := ip.To4() != nil
+
+	// Initialize encrypted result
+	encrypted := make([]byte, 16)
+
+	// Determine starting point
+	prefixStart := 0
+	if isIPv4 {
+		prefixStart = 96
+		// Copy the IPv4-mapped prefix
+		copy(encrypted[:12], ipBytes[:12])
+	}
+
+	// Initialize padded prefix for the starting prefix length
+	paddedPrefix := make([]byte, 16)
+	if isIPv4 {
+		// For IPv4: pad_prefix_96
+		paddedPrefix[3] = 0x01 // Set bit at position 96
+		paddedPrefix[14] = 0xFF
+		paddedPrefix[15] = 0xFF
+	} else {
+		// For IPv6: pad_prefix_0
+		paddedPrefix[15] = 0x01 // Set bit at position 0
+	}
+
+	// Process each bit position
+	for prefixLenBits := prefixStart; prefixLenBits < 128; prefixLenBits++ {
+		// Compute pseudorandom function with dual AES encryption
+		e1 := make([]byte, 16)
+		cipher1.Encrypt(e1, paddedPrefix)
+
+		e2 := make([]byte, 16)
+		cipher2.Encrypt(e2, paddedPrefix)
+
+		// XOR the two encryptions
+		e := xorBytes(e1, e2)
+		// We only need the least significant bit
+		cipherBit := e[15] & 1
+
+		// Extract the current bit from the original IP
+		currentBitPos := 127 - prefixLenBits
+		originalBit := getBit(ipBytes, currentBitPos)
+
+		// Set the bit in the encrypted result
+		setBit(encrypted, currentBitPos, cipherBit^originalBit)
+
+		// Prepare padded_prefix for next iteration
+		// Shift left by 1 bit and insert the next bit from ipBytes
+		paddedPrefix = shiftLeftOneBit(paddedPrefix)
+		bitToInsert := getBit(ipBytes, 127-prefixLenBits)
+		setBit(paddedPrefix, 0, bitToInsert)
+	}
+
+	// Return the appropriate format
+	if isIPv4 {
+		// Return just the IPv4 part
+		return net.IP(encrypted[12:16]), nil
+	}
+	return net.IP(encrypted), nil
+}
+
+// DecryptIPPfx decrypts an IP address that was encrypted using ipcrypt-pfx mode.
+// The key must be exactly 32 bytes long (split into two AES-128 keys).
+// Returns the decrypted IP address.
+func DecryptIPPfx(encryptedIP net.IP, key []byte) (net.IP, error) {
+	if len(key) != 32 {
+		return nil, fmt.Errorf("%w: got %d bytes, want 32 bytes", ErrInvalidKeySize, len(key))
+	}
+
+	// Split the key into two AES-128 keys
+	k1 := key[:16]
+	k2 := key[16:32]
+
+	// Check that K1 and K2 are different
+	if subtle.ConstantTimeCompare(k1, k2) == 1 {
+		return nil, errors.New("the two halves of the key must be different")
+	}
+
+	// Determine if this is IPv4
+	isIPv4 := encryptedIP.To4() != nil
+
+	// Convert to 16-byte representation
+	var encryptedBytes []byte
+	if isIPv4 {
+		// Convert IPv4 to IPv4-mapped IPv6 format
+		encryptedBytes = make([]byte, 16)
+		copy(encryptedBytes[:10], []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0})
+		copy(encryptedBytes[10:12], []byte{0xff, 0xff})
+		copy(encryptedBytes[12:], encryptedIP.To4())
+	} else {
+		var err error
+		encryptedBytes, err = validateIP(encryptedIP)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Create AES cipher objects
+	cipher1, err := aes.NewCipher(k1)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create first cipher: %w", err)
+	}
+
+	cipher2, err := aes.NewCipher(k2)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create second cipher: %w", err)
+	}
+
+	// Initialize decrypted result
+	decrypted := make([]byte, 16)
+
+	// Determine starting point
+	prefixStart := 0
+	if isIPv4 {
+		prefixStart = 96
+		// Copy the IPv4-mapped prefix
+		copy(decrypted[:12], encryptedBytes[:12])
+	}
+
+	// Initialize padded prefix for the starting prefix length
+	paddedPrefix := make([]byte, 16)
+	if isIPv4 {
+		// For IPv4: pad_prefix_96
+		paddedPrefix[3] = 0x01 // Set bit at position 96
+		paddedPrefix[14] = 0xFF
+		paddedPrefix[15] = 0xFF
+	} else {
+		// For IPv6: pad_prefix_0
+		paddedPrefix[15] = 0x01 // Set bit at position 0
+	}
+
+	// Process each bit position
+	for prefixLenBits := prefixStart; prefixLenBits < 128; prefixLenBits++ {
+		// Compute pseudorandom function with dual AES encryption
+		e1 := make([]byte, 16)
+		cipher1.Encrypt(e1, paddedPrefix)
+
+		e2 := make([]byte, 16)
+		cipher2.Encrypt(e2, paddedPrefix)
+
+		// XOR the two encryptions
+		e := xorBytes(e1, e2)
+		// We only need the least significant bit
+		cipherBit := e[15] & 1
+
+		// Extract the current bit from the encrypted IP
+		currentBitPos := 127 - prefixLenBits
+		encryptedBit := getBit(encryptedBytes, currentBitPos)
+
+		// Set the bit in the decrypted result
+		setBit(decrypted, currentBitPos, cipherBit^encryptedBit)
+
+		// Prepare padded_prefix for next iteration
+		// Shift left by 1 bit and insert the next bit from decrypted
+		paddedPrefix = shiftLeftOneBit(paddedPrefix)
+		bitToInsert := getBit(decrypted, 127-prefixLenBits)
+		setBit(paddedPrefix, 0, bitToInsert)
+	}
+
+	// Return the appropriate format
+	if isIPv4 {
+		// Return just the IPv4 part
+		return net.IP(decrypted[12:16]), nil
+	}
+	return net.IP(decrypted), nil
+}
+
+// Helper functions for bit manipulation
+
+// getBit extracts bit at position from 16-byte array
+// position: 0 = LSB of byte 15, 127 = MSB of byte 0
+func getBit(data []byte, position int) byte {
+	byteIndex := 15 - (position / 8)
+	bitIndex := position % 8
+	return (data[byteIndex] >> bitIndex) & 1
+}
+
+// setBit sets bit at position in 16-byte array
+// position: 0 = LSB of byte 15, 127 = MSB of byte 0
+func setBit(data []byte, position int, value byte) {
+	byteIndex := 15 - (position / 8)
+	bitIndex := position % 8
+	if value != 0 {
+		data[byteIndex] |= 1 << bitIndex
+	} else {
+		data[byteIndex] &^= 1 << bitIndex
+	}
+}
+
+// shiftLeftOneBit shifts a 16-byte array one bit to the left
+// The most significant bit is lost, and a zero bit is shifted in from the right
+func shiftLeftOneBit(data []byte) []byte {
+	if len(data) != 16 {
+		return nil
+	}
+
+	result := make([]byte, 16)
+	carry := byte(0)
+
+	// Process from least significant byte (byte 15) to most significant (byte 0)
+	for i := 15; i >= 0; i-- {
+		// Current byte shifted left by 1, with carry from previous byte
+		result[i] = ((data[i] << 1) | carry) & 0xFF
+		// Extract the bit that will be carried to the next byte
+		carry = (data[i] >> 7) & 1
+	}
+
+	return result
 }
 
 // Extended non-deterministic mode functions

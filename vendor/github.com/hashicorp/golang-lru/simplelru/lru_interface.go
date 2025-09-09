@@ -1,4 +1,3 @@
-// Package simplelru provides simple LRU implementation based on build-in container/list.
 package simplelru
 
 // LRUCache is the interface for simple LRU cache.
@@ -11,7 +10,7 @@ type LRUCache interface {
 	// updates the "recently used"-ness of the key. #value, isFound
 	Get(key interface{}) (value interface{}, ok bool)
 
-	// Checks if a key exists in cache without updating the recent-ness.
+	// Check if a key exsists in cache without updating the recent-ness.
 	Contains(key interface{}) (ok bool)
 
 	// Returns key's value without updating the "recently used"-ness of the key.
@@ -32,9 +31,6 @@ type LRUCache interface {
 	// Returns the number of items in the cache.
 	Len() int
 
-	// Clears all cache entries.
+	// Clear all cache entries
 	Purge()
-
-	// Resizes cache, returning number evicted
-	Resize(int) int
 }

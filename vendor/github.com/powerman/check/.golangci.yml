@@ -1,316 +1,15 @@
-# Origin: https://github.com/powerman/golangci-lint-strict version 1.61.0
-run:
-  modules-download-mode: readonly
-output:
-  sort-results: true
-  sort-order:
-    - linter
-    - severity
-    - file # Filepath, line, and column.
-linters-settings:
-  decorder:
-    disable-init-func-first-check: false # `init` funcs have to be declared before all other functions.
-  depguard:
-    rules:
-      main:
-        deny:
-          - pkg: github.com/prometheus/common/log
-            desc: Should be replaced by standard lib log/slog package
-          - pkg: github.com/sirupsen/logrus
-            desc: Should be replaced by standard lib log/slog package
-          - pkg: github.com/go-errors/errors
-            desc: Should be replaced by standard lib errors package
-          - pkg: github.com/pkg/errors
-            desc: Should be replaced by standard lib errors package
-          - pkg: github.com/prometheus/client_golang/prometheus/promauto
-            desc: Not allowed because it uses global variables
-          - pkg: github.com/golang/protobuf
-            desc: Should be replaced by google.golang.org/protobuf package
-  dupl:
-    threshold: 100 # Tokens.
-  errcheck:
-    exclude-functions:
-      - encoding/json.Marshal # Required because of errchkjson.check-error-free-encoding.
-      - encoding/json.MarshalIndent # Required because of errchkjson.check-error-free-encoding.
-  errchkjson:
-    check-error-free-encoding: true
-    report-no-exported: true # Encoded struct must have exported fields.
-  exhaustive:
-    check:
-      - switch
-      - map
-    explicit-exhaustive-map: true # Only check maps with "//exhaustive:enforce" comment.
-  exhaustruct:
-    include:
-      - ^$ # Only check structs which domain.tld/package/name.structname match this regexp.
-  forbidigo:
-    forbid:
-      - ^print(ln)?$
-    exclude-godoc-examples: false
-    analyze-types: true
-  funlen:
-    ignore-comments: true
-  gci:
-    sections:
-      - standard # Standard section: captures all standard packages.
-      - default # Default section: contains all imports that could not be matched to another section type.
-      - localmodule # Local module section: contains all local packages. This section is not present unless explicitly enabled.
-  gocognit:
-    min-complexity: 20
-  goconst:
-    ignore-tests: true
-  gocritic:
-    enable-all: true
-    disabled-checks:
-      - exposedSyncMutex # Questionable.
-      - hugeParam # Premature optimization.
-      - paramTypeCombine # Questionable.
-      - switchTrue # Questionable.
-      - todoCommentWithoutDetail # Questionable.
-      - yodaStyleExpr # Questionable.
-    settings:
-      captLocal:
-        paramsOnly: false # Do not restrict checker to params only.
-      ruleguard:
-        failOn: all
-      truncateCmp:
-        skipArchDependent: false # Do not skip int/uint/uintptr types.
-      underef:
-        skipRecvDeref: false
-      unnamedResult:
-        checkExported: true
-  godot:
-    exclude:
-      - :$ # Allow line followed by details in next line(s).
-      - '^\s*- ' # Allow line with a list item.
-  godox:
-    keywords:
-      - BUG # Marks issues that should be moved to issue tracker before merging.
-      - FIXME # Marks issues that should be resolved before merging.
-      - DEBUG # Marks temporary code that should be removed before merging.
-  gofmt:
-    rewrite-rules:
-      - pattern: interface{}
-        replacement: any
-      - pattern: a[b:len(a)]
-        replacement: a[b:]
-  gomodguard:
-    blocked:
-      versions:
-        - github.com/cenkalti/backoff:
-            version: < 4.0.0
-            reason: use actual version
-  gosec:
-    excludes:
-      - G104 # Audit errors not checked
-    exclude-generated: true
-    config:
-      global:
-        audit: true
-  govet:
-    enable-all: true
-    disable:
-      - fieldalignment
-    settings:
-      shadow:
-        strict: true
-  grouper:
-    import-require-single-import: true # Use a single 'import' declaration.
-  importas:
-    alias:
-      - pkg: net/url
-        alias: urlpkg
-  loggercheck:
-    require-string-key: true # Logging keys must be inlined constant strings.
-    no-printf-like: true
-  misspell:
-    mode: restricted # Check only comments.
-  nestif:
-    min-complexity: 4
-  nolintlint:
-    require-explanation: true # Disable linters this way: //nolint:first,second // Reason here.
-    require-specific: true # Do not allow //nolint without specific linter name(s).
-  paralleltest:
-    ignore-missing: true # Do not require `t.Parallel()` everywhere.
-    ignore-missing-subtests: true # Do not require `t.Parallel()` in all subtests.
-  reassign:
-    patterns:
-      - .* # Check all global variables.
-  revive:
-    rules:
-      - name: add-constant
-        disabled: true # Duplicates goconst and mnd linters.
-      - name: argument-limit
-        disabled: true # Questionable.
-      - name: atomic
-      - name: banned-characters
-        arguments: [] # [ "Ω","Σ","σ", "7" ]
-      - name: bare-return
-        disabled: true # Questionable (in some cases bare return improves readability).
-      - name: blank-imports
-      - name: bool-literal-in-expr
-      - name: call-to-gc
-      - name: cognitive-complexity
-        disabled: true # Duplicates gocognit linter.
-      - name: comment-spacings
-        arguments:
-          - nolint # Allow //nolint without a space.
-      - name: comments-density
-        disabled: true # Questionable.
-      - name: confusing-naming
-        disabled: true # Questionable (valid use case: Method() as a thin wrapper for method()).
-      - name: confusing-results
-      - name: constant-logical-expr
-      - name: context-as-argument
-      - name: context-keys-type
-      - name: cyclomatic
-        disabled: true # Duplicates cyclop and gocyclo linters.
-      - name: datarace
-      - name: deep-exit
-      - name: defer
-      - name: dot-imports
-      - name: duplicated-imports
-      - name: early-return
-      - name: empty-block
-        disabled: true # https://github.com/mgechev/revive/issues/386
-      - name: empty-lines
-      - name: enforce-map-style
-        arguments:
-          - make # Use `make(map[A]B)` instead of literal `map[A]B{}`.
-      - name: enforce-repeated-arg-type-style
-        disabled: true # Questionable (short form for similar args and full otherwise may improve readability).
-      - name: enforce-slice-style
-        disabled: true # Questionable (sometimes we need a nil slice, sometimes not nil).
-      - name: error-naming
-      - name: error-return
-      - name: error-strings
-      - name: errorf
-      - name: exported
-      - name: file-header
-      - name: flag-parameter
-      - name: function-length
-        disabled: true # Duplicates funlen linter.
-      - name: function-result-limit
-        disabled: true # Questionable.
-      - name: get-return
-      - name: identical-branches
-      - name: if-return
-      - name: import-alias-naming
-      - name: import-shadowing
-      - name: imports-blocklist
-      - name: increment-decrement
-      - name: indent-error-flow
-      - name: line-length-limit
-        disabled: true # Duplicates lll linter.
-      - name: max-control-nesting
-      - name: max-public-structs
-        disabled: true # Questionable.
-      - name: modifies-parameter
-      - name: modifies-value-receiver
-      - name: nested-structs
-        disabled: true # Questionable (useful in tests, may worth enabling for non-tests).
-      - name: optimize-operands-order
-      - name: package-comments
-      - name: range
-      - name: range-val-address
-      - name: range-val-in-closure
-      - name: receiver-naming
-      - name: redefines-builtin-id
-      - name: redundant-import-alias
-      - name: string-format
-        arguments:
-          - - fmt.Errorf[0]
-            - /(^|[^\.!?])$/
-            - must not end in punctuation
-          - - panic
-            - /^[^\n]*$/
-            - must not contain line breaks
-      - name: string-of-int
-      - name: struct-tag
-      - name: superfluous-else
-      - name: time-equal
-      - name: time-naming
-      - name: unchecked-type-assertion
-        disabled: true # Duplicates errcheck and forcetypeassert linters.
-      - name: unconditional-recursion
-      - name: unexported-naming
-      - name: unexported-return
-      - name: unhandled-error
-        disabled: true # Duplicates errcheck linter.
-      - name: unnecessary-stmt
-      - name: unreachable-code
-      - name: unused-parameter
-      - name: unused-receiver
-      - name: use-any
-      - name: useless-break
-      - name: var-declaration
-      - name: var-naming
-      - name: waitgroup-by-value
-  rowserrcheck:
-    packages:
-      - github.com/jmoiron/sqlx
-      - github.com/powerman/sqlxx
-  sloglint:
-    context: scope
-    static-msg: true
-    key-naming-case: snake
-    forbidden-keys:
-      - time # Used by standard slog.JSONHandler or slog.TextHandler.
-      - level # Used by standard slog.JSONHandler or slog.TextHandler.
-      - msg # Used by standard slog.JSONHandler or slog.TextHandler.
-      - source # Used by standard slog.JSONHandler or slog.TextHandler.
-  tagalign:
-    order:
-      - json
-      - yaml
-      - yml
-      - toml
-      - env
-      - mod
-      - mapstructure
-      - binding
-      - validate
-    strict: true
-  tagliatelle:
-    case:
-      use-field-name: true
-      rules:
-        json: snake
-        yaml: kebab
-        xml: camel
-        toml: camel
-        bson: camel
-        avro: snake
-        mapstructure: kebab
-        envconfig: upperSnake
-  testifylint:
-    enable-all: true
-  testpackage:
-    skip-regexp: .*_internal_test\.go
-  thelper:
-    test:
-      name: false # Allow *testing.T param to have any name, not only `t`.
-  usestdlibvars:
-    time-weekday: true
-    time-month: true
-    time-layout: true
-    crypto-hash: true
-    default-rpc-path: true
-    sql-isolation-level: true
-    tls-signature-scheme: true
+# Origin: https://github.com/powerman/golangci-lint-strict version 2.4.0
+version: "2"
 linters:
-  enable-all: true
+  default: all
   disable:
     - containedctx # Questionable.
     - contextcheck # Questionable.
     - cyclop # Prefer gocognit.
     - dogsled # Questionable (assignment to how many blank identifiers is not okay?).
     - dupl
-    - execinquery # Deprecated.
-    - exportloopref # Deprecated.
     - forcetypeassert # Questionable (often we actually want panic).
     - gocyclo # Prefer gocognit.
-    - gomnd # Deprecated.
     - interfacebloat # Questionable.
     - ireturn # Questionable (is returning unexported types better?).
     - lll # Questionable (sometimes long lines improve readability).
@@ -320,43 +19,396 @@ linters:
     - varnamelen
     - wrapcheck # Questionable (see https://github.com/tomarrell/wrapcheck/issues/1).
     - wsl # Questionable (too much style differences, hard to consider).
+    - wsl_v5 # Questionable (too much style differences, hard to consider).
+  settings:
+    decorder:
+      disable-init-func-first-check: false # `init` funcs have to be declared before all other functions.
+    depguard:
+      rules:
+        main:
+          deny:
+            - pkg: math/rand$
+              desc: use math/rand/v2
+            - pkg: github.com/prometheus/common/log
+              desc: Should be replaced by standard lib log/slog package
+            - pkg: github.com/sirupsen/logrus
+              desc: Should be replaced by standard lib log/slog package
+            - pkg: github.com/go-errors/errors
+              desc: Should be replaced by standard lib errors package
+            - pkg: github.com/pkg/errors
+              desc: Should be replaced by standard lib errors package
+            - pkg: github.com/prometheus/client_golang/prometheus/promauto
+              desc: Not allowed because it uses global variables
+            - pkg: github.com/golang/protobuf
+              desc: Should be replaced by google.golang.org/protobuf package
+    dupl:
+      threshold: 100
+    embeddedstructfieldcheck:
+      forbid-mutex: true
+    errcheck:
+      exclude-functions:
+        - encoding/json.Marshal # Required because of errchkjson.check-error-free-encoding.
+        - encoding/json.MarshalIndent # Required because of errchkjson.check-error-free-encoding.
+    errchkjson:
+      check-error-free-encoding: true
+      report-no-exported: true # Encoded struct must have exported fields.
+    exhaustive:
+      check:
+        - switch
+        - map
+      explicit-exhaustive-map: true # Only check maps with "//exhaustive:enforce" comment.
+    exhaustruct:
+      include:
+        - ^$ # Only check structs which domain.tld/package/name.structname match this regexp.
+    fatcontext:
+      check-struct-pointers: true
+    forbidigo:
+      forbid:
+        - pattern: ^print(ln)?$
+      exclude-godoc-examples: false
+      analyze-types: true
+    funcorder:
+      struct-method: false
+    gochecksumtype:
+      default-signifies-exhaustive: false
+      include-shared-interfaces: true
+    gocognit:
+      min-complexity: 20
+    gocritic:
+      enable-all: true
+      disabled-checks:
+        - exposedSyncMutex # Questionable.
+        - hugeParam # Premature optimization.
+        - paramTypeCombine # Questionable.
+        - switchTrue # Questionable.
+        - todoCommentWithoutDetail # Questionable.
+        - yodaStyleExpr # Questionable.
+      settings:
+        captLocal:
+          paramsOnly: false # Do not restrict checker to params only.
+        ruleguard:
+          failOn: all
+        truncateCmp:
+          skipArchDependent: false # Do not skip int/uint/uintptr types.
+        underef:
+          skipRecvDeref: false
+        unnamedResult:
+          checkExported: true
+    godot:
+      exclude:
+        - :$ # Allow line followed by details in next line(s).
+        - '^\s*- ' # Allow line with a list item.
+    godox:
+      keywords:
+        - BUG # Marks issues that should be moved to issue tracker before merging.
+        - FIXME # Marks issues that should be resolved before merging.
+        - DEBUG # Marks temporary code that should be removed before merging.
+    gomodguard:
+      blocked:
+        versions:
+          - github.com/cenkalti/backoff:
+              version: < 4.0.0
+              reason: use actual version
+    gosec:
+      excludes:
+        - G104 # Audit errors not checked
+      config:
+        global:
+          audit: true
+    govet:
+      enable-all: true
+      disable:
+        - fieldalignment
+      settings:
+        shadow:
+          strict: true
+    grouper:
+      import-require-single-import: true # Use a single 'import' declaration.
+    iface:
+      enable:
+        - identical # Identifies interfaces in the same package that have identical method sets.
+        - unused # Identifies interfaces that are not used anywhere in the same package where the interface is defined.
+        - opaque # Identifies functions that return interfaces, but the actual returned value is always a single concrete implementation.
+        - unexported # Identifies interfaces that are not exported but are used in exported functions or methods.
+    importas:
+      alias:
+        - pkg: errors
+          alias: ""
+        - pkg: net/url
+          alias: urlpkg
+    loggercheck:
+      require-string-key: true # Logging keys must be inlined constant strings.
+      no-printf-like: true
+    misspell:
+      mode: restricted # Check only comments.
+    nestif:
+      min-complexity: 4
+    nilnil:
+      detect-opposite: true
+    nolintlint:
+      require-explanation: true # Disable linters this way: //nolint:first,second // Reason here.
+      require-specific: true # Do not allow //nolint without specific linter name(s).
+    paralleltest:
+      ignore-missing: true # Do not require `t.Parallel()` everywhere.
+      ignore-missing-subtests: true # Do not require `t.Parallel()` in all subtests.
+    reassign:
+      patterns:
+        - .* # Check all global variables.
+    revive:
+      rules:
+        - name: add-constant
+          disabled: true # Duplicates goconst and mnd linters.
+        - name: argument-limit
+          disabled: true # Questionable.
+        - name: atomic
+        - name: banned-characters
+          arguments: [] # [ "Ω","Σ","σ", "7" ]
+        - name: bare-return
+          disabled: true # Questionable (in some cases bare return improves readability).
+        - name: blank-imports
+        - name: bool-literal-in-expr
+        - name: call-to-gc
+        - name: cognitive-complexity
+          disabled: true # Duplicates gocognit linter.
+        - name: comment-spacings
+          arguments:
+            - nolint # Allow //nolint without a space.
+        - name: comments-density
+          disabled: true # Questionable.
+        - name: confusing-naming
+          disabled: true # Questionable (valid use case: Method() as a thin wrapper for method()).
+        - name: confusing-results
+        - name: constant-logical-expr
+        - name: context-as-argument
+        - name: context-keys-type
+        - name: cyclomatic
+          disabled: true # Duplicates cyclop and gocyclo linters.
+        - name: datarace
+        - name: deep-exit
+        - name: defer
+        - name: dot-imports
+        - name: duplicated-imports
+        - name: early-return
+        - name: empty-block
+          disabled: true # https://github.com/mgechev/revive/issues/386
+        - name: empty-lines
+        - name: enforce-map-style
+          arguments:
+            - make # Use `make(map[A]B)` instead of literal `map[A]B{}`.
+        - name: enforce-repeated-arg-type-style
+          disabled: true # Questionable (short form for similar args and full otherwise may improve readability).
+        - name: enforce-slice-style
+          disabled: true # Questionable (sometimes we need a nil slice, sometimes not nil).
+        - name: enforce-switch-style
+          arguments:
+            - allowNoDefault
+        - name: error-naming
+        - name: error-return
+        - name: error-strings
+        - name: errorf
+        - name: exported
+        - name: file-header
+        - name: file-length-limit
+        - name: filename-format
+        - name: flag-parameter
+        - name: function-length
+          disabled: true # Duplicates funlen linter.
+        - name: function-result-limit
+          disabled: true # Questionable.
+        - name: get-return
+        - name: identical-branches
+        - name: if-return
+        - name: import-alias-naming
+        - name: import-shadowing
+        - name: imports-blocklist
+        - name: increment-decrement
+        - name: indent-error-flow
+        - name: line-length-limit
+          disabled: true # Duplicates lll linter.
+        - name: max-control-nesting
+        - name: max-public-structs
+          disabled: true # Questionable.
+        - name: modifies-parameter
+        - name: modifies-value-receiver
+        - name: nested-structs
+          disabled: true # Questionable (useful in tests, may worth enabling for non-tests).
+        - name: optimize-operands-order
+        - name: package-comments
+        - name: range
+        - name: range-val-address
+        - name: range-val-in-closure
+        - name: receiver-naming
+        - name: redefines-builtin-id
+        - name: redundant-build-tag
+        - name: redundant-import-alias
+        - name: redundant-test-main-exit
+        - name: string-format
+          arguments:
+            - - fmt.Errorf[0]
+              - /(^|[^\.!?])$/
+              - must not end in punctuation
+            - - panic
+              - /^[^\n]*$/
+              - must not contain line breaks
+        - name: string-of-int
+        - name: struct-tag
+        - name: superfluous-else
+        - name: time-date
+        - name: time-equal
+        - name: time-naming
+        - name: unchecked-type-assertion
+          disabled: true # Duplicates errcheck and forcetypeassert linters.
+        - name: unconditional-recursion
+        - name: unexported-naming
+        - name: unexported-return
+        - name: unhandled-error
+          disabled: true # Duplicates errcheck linter.
+        - name: unnecessary-format
+        - name: unnecessary-stmt
+        - name: unreachable-code
+        - name: unused-parameter
+        - name: unused-receiver
+        - name: use-any
+        - name: use-errors-new
+        - name: use-fmt-print
+        - name: useless-break
+        - name: var-declaration
+        - name: var-naming
+        - name: waitgroup-by-value
+    rowserrcheck:
+      packages:
+        - github.com/jmoiron/sqlx
+        - github.com/powerman/sqlxx
+    sloglint:
+      context: scope
+      static-msg: true
+      msg-style: capitalized
+      key-naming-case: snake
+      forbidden-keys:
+        - time # Used by standard slog.JSONHandler or slog.TextHandler.
+        - level # Used by standard slog.JSONHandler or slog.TextHandler.
+        - msg # Used by standard slog.JSONHandler or slog.TextHandler.
+        - source # Used by standard slog.JSONHandler or slog.TextHandler.
+    tagalign:
+      order:
+        - json
+        - yaml
+        - yml
+        - toml
+        - env
+        - mod
+        - mapstructure
+        - binding
+        - validate
+      strict: true
+    tagliatelle:
+      case:
+        rules:
+          json: snake
+          yaml: kebab
+          xml: camel
+          toml: camel
+          bson: camel
+          avro: snake
+          mapstructure: kebab
+          envconfig: upperSnake
+          whatever: snake
+    testifylint:
+      enable-all: true
+    testpackage:
+      skip-regexp: .*_internal_test\.go
+    thelper:
+      test:
+        name: false # Allow *testing.T param to have any name, not only `t`.
+    usestdlibvars:
+      time-date-month: true
+      time-month: true
+      time-layout: true
+      crypto-hash: true
+      default-rpc-path: true
+      sql-isolation-level: true
+      tls-signature-scheme: true
+    wrapcheck:
+      report-internal-errors: true
+  exclusions:
+    rules:
+      - path: (.+)\.go$
+        text: declaration of "(log|err|ctx)" shadows
+      - path: (.+)\.go$
+        text: 'missing cases in switch of type \S+: \S+_UNSPECIFIED$'
+      - path: _test\.go|testing(_.*)?\.go
+        linters:
+          - bodyclose
+          - dupl
+          - errcheck
+          - forcetypeassert
+          - funlen
+          - gochecknoglobals
+          - gochecknoinits
+          - gocognit
+          - goconst
+          - gosec
+          - maintidx
+          - reassign
+      - source: '[Cc]onst' # Define global const-vars like: var SomeGlobal = []int{42} // Const.
+        linters:
+          - gochecknoglobals
+      - path: _test\.go|testing(_.*)?\.go
+        text: (unnamedResult|exitAfterDefer|rangeValCopy|unnecessaryBlock)
+        linters:
+          - gocritic
+      - path: _test\.go
+        text: '"t" shadows'
+        linters:
+          - govet
+      - path: ^(.*/)?embed.go$
+        linters:
+          - gochecknoglobals
+      - linters:
+          - lll
+        source: '^//go:generate '
+    paths:
+      - \.[\w-]+\.go$ # Use this pattern to name auto-generated files.
+formatters:
+  enable:
+    - gci
+    - gofmt
+    - gofumpt
+    - goimports
+    - golines
+    - swaggo
+  settings:
+    gci:
+      sections:
+        - standard # Standard section: captures all standard packages.
+        - default # Default section: contains all imports that could not be matched to another section type.
+        - localmodule # Local module section: contains all local packages. This section is not present unless explicitly enabled.
+      no-inline-comments: true
+      no-prefix-comments: true
+    gofmt:
+      rewrite-rules:
+        - pattern: interface{}
+          replacement: any
+        - pattern: a[b:len(a)]
+          replacement: a[b:]
+    golines:
+      max-len: 200
+      tab-len: 8
+  exclusions:
+    generated: strict
+    paths:
+      - \.[\w-]+\.go$ # Use this pattern to name auto-generated files.
 issues:
-  exclude:
-    - declaration of "(log|err|ctx)" shadows
-    - 'missing cases in switch of type \S+: \S+_UNSPECIFIED$'
-  exclude-rules:
-    - path: _test\.go|testing(_.*)?\.go
-      linters:
-        - bodyclose
-        - dupl
-        - errcheck
-        - forcetypeassert
-        - funlen
-        - gochecknoglobals
-        - gochecknoinits
-        - gocognit
-        - goconst
-        - gosec
-        - maintidx
-        - reassign
-    - source: const # Define global const-vars like: var SomeGlobal = []int{42} // Const.
-      linters:
-        - gochecknoglobals
-    - path: _test\.go|testing(_.*)?\.go
-      text: (unnamedResult|exitAfterDefer|rangeValCopy|unnecessaryBlock)
-      linters:
-        - gocritic
-    - path: _test\.go
-      text: '"t" shadows'
-      linters:
-        - govet
-    - path: ^(.*/)?embed.go$
-      linters:
-        - gochecknoglobals
-  exclude-use-default: false # Disable default exclude patterns.
-  exclude-files:
-    - \.[\w-]+\.go$ # Use this pattern to name auto-generated files.
   max-issues-per-linter: 0
   max-same-issues: 0
+output:
+  sort-order:
+    - linter
+    - severity
+    - file # filepath, line, and column.
+  show-stats: false
+run:
+  timeout: 1m
+  modules-download-mode: readonly
 severity:
-  default-severity: error
+  default: error

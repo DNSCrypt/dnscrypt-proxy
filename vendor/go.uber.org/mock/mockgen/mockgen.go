@@ -54,7 +54,6 @@ var (
 )
 
 var (
-	archive                = flag.String("archive", "", "(archive mode) Input Go archive file; enables archive mode.")
 	source                 = flag.String("source", "", "(source mode) Input Go source file; enables source mode.")
 	destination            = flag.String("destination", "", "Output file; defaults to stdout.")
 	mockNames              = flag.String("mock_names", "", "Comma-separated interfaceName=mockName pairs of explicit mock names to use. Mock names default to 'Mock'+ interfaceName suffix.")
@@ -69,10 +68,11 @@ var (
 	typed                  = flag.Bool("typed", false, "Generate Type-safe 'Return', 'Do', 'DoAndReturn' function")
 	imports                = flag.String("imports", "", "(source mode) Comma-separated name=path pairs of explicit imports to use.")
 	auxFiles               = flag.String("aux_files", "", "(source mode) Comma-separated pkg=path pairs of auxiliary Go source files.")
+	excludeInterfaces      = flag.String("exclude_interfaces", "", "(source mode) Comma-separated names of interfaces to be excluded")
 	modelGob               = flag.String("model_gob", "", "Skip package/source loading entirely and use the gob encoded model.Package at the given path")
-	excludeInterfaces      = flag.String("exclude_interfaces", "", "Comma-separated names of interfaces to be excluded")
-	debugParser            = flag.Bool("debug_parser", false, "Print out parser results only.")
-	showVersion            = flag.Bool("version", false, "Print version.")
+
+	debugParser = flag.Bool("debug_parser", false, "Print out parser results only.")
+	showVersion = flag.Bool("version", false, "Print version.")
 )
 
 func main() {
@@ -89,24 +89,17 @@ func main() {
 	var pkg *model.Package
 	var err error
 	var packageName string
-
-	// Switch between modes
-	switch {
-	case *modelGob != "": // gob mode
+	if *modelGob != "" {
 		pkg, err = gobMode(*modelGob)
-	case *source != "": // source mode
+	} else if *source != "" {
 		pkg, err = sourceMode(*source)
-	case *archive != "": // archive mode
-		checkArgs()
+	} else {
+		if flag.NArg() != 2 {
+			usage()
+			log.Fatal("Expected exactly two arguments")
+		}
 		packageName = flag.Arg(0)
 		interfaces := strings.Split(flag.Arg(1), ",")
-		pkg, err = archiveMode(packageName, interfaces, *archive)
-
-	default: // package mode
-		checkArgs()
-		packageName = flag.Arg(0)
-		interfaces := strings.Split(flag.Arg(1), ",")
-
 		if packageName == "." {
 			dir, err := os.Getwd()
 			if err != nil {
@@ -116,12 +109,10 @@ func main() {
 			if err != nil {
 				log.Fatalf("Parse package name failed: %v", err)
 			}
-
 		}
 		parser := packageModeParser{}
 		pkg, err = parser.parsePackage(packageName, interfaces)
 	}
-
 	if err != nil {
 		log.Fatalf("Loading input failed: %v", err)
 	}
@@ -164,8 +155,6 @@ func main() {
 	}
 	if *source != "" {
 		g.filename = *source
-	} else if *archive != "" {
-		g.filename = *archive
 	} else {
 		g.srcPackage = packageName
 		g.srcInterfaces = flag.Arg(1)
@@ -241,19 +230,12 @@ func parseExcludeInterfaces(names string) map[string]struct{} {
 	return namesSet
 }
 
-func checkArgs() {
-	if flag.NArg() != 2 {
-		usage()
-		log.Fatal("Expected exactly two arguments")
-	}
-}
-
 func usage() {
 	_, _ = io.WriteString(os.Stderr, usageText)
 	flag.PrintDefaults()
 }
 
-const usageText = `mockgen has three modes of operation: archive, source and package.
+const usageText = `mockgen has two modes of operation: source and package.
 
 Source mode generates mock interfaces from a source file.
 It is enabled by using the -source flag. Other flags that
@@ -263,18 +245,11 @@ Example:
 
 Package mode works by specifying the package and interface names.
 It is enabled by passing two non-flag arguments: an import path, and a
-comma-separated list of symbols.
+comma-separated list of symbols. 
 You can use "." to refer to the current path's package.
 Example:
 	mockgen database/sql/driver Conn,Driver
 	mockgen . SomeInterface
-
-Archive mode generates mock interfaces from a package archive
-file (.a). It is enabled by using the -archive flag and two
-non-flag arguments: an import path, and a comma-separated
-list of symbols.
-Example:
-	mockgen -archive=pkg.a database/sql/driver Conn,Driver
 
 `
 
@@ -418,8 +393,8 @@ func (g *generator) Generate(pkg *model.Package, outputPkgName string, outputPac
 		// try base0, base1, ...
 		pkgName := base
 
-		if _, ok := definedImports[pth]; ok {
-			pkgName = definedImports[pth]
+		if _, ok := definedImports[base]; ok {
+			pkgName = definedImports[base]
 		}
 
 		i := 0
@@ -783,17 +758,6 @@ func (g *generator) GenerateMockReturnCallMethod(intf *model.Interface, m *model
 	return nil
 }
 
-// nameExistsAsPackage returns true if the name exists as a package name.
-// This is used to avoid name collisions when generating mock method arguments.
-func (g *generator) nameExistsAsPackage(name string) bool {
-	for _, symbolName := range g.packageMap {
-		if symbolName == name {
-			return true
-		}
-	}
-	return false
-}
-
 func (g *generator) getArgNames(m *model.Method, in bool) []string {
 	var params []*model.Parameter
 	if in {
@@ -802,19 +766,16 @@ func (g *generator) getArgNames(m *model.Method, in bool) []string {
 		params = m.Out
 	}
 	argNames := make([]string, len(params))
-
 	for i, p := range params {
 		name := p.Name
-
-		if name == "" || name == "_" || g.nameExistsAsPackage(name) {
+		if name == "" || name == "_" {
 			name = fmt.Sprintf("arg%d", i)
 		}
 		argNames[i] = name
 	}
 	if m.Variadic != nil && in {
 		name := m.Variadic.Name
-
-		if name == "" || g.nameExistsAsPackage(name) {
+		if name == "" {
 			name = fmt.Sprintf("arg%d", len(params))
 		}
 		argNames = append(argNames, name)

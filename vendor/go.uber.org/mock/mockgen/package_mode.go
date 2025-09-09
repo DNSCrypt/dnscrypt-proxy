@@ -46,7 +46,7 @@ func (p *packageModeParser) loadPackage(packageName string) (*packages.Package, 
 	}
 
 	cfg := &packages.Config{
-		Mode:       packages.NeedDeps | packages.NeedImports | packages.NeedTypes | packages.NeedTypesInfo | packages.NeedEmbedFiles | packages.LoadSyntax,
+		Mode:       packages.NeedDeps | packages.NeedImports | packages.NeedTypes | packages.NeedTypesInfo | packages.NeedEmbedFiles,
 		BuildFlags: buildFlagsSet,
 	}
 	pkgs, err := packages.Load(cfg, packageName)
@@ -193,7 +193,6 @@ func (p *packageModeParser) parseType(t types.Type) (model.Type, error) {
 		return sig, nil
 	case *types.Named, *types.Alias:
 		object := t.(interface{ Obj() *types.TypeName })
-		name := object.Obj().Name()
 		var pkg string
 		if object.Obj().Pkg() != nil {
 			pkg = object.Obj().Pkg().Path()
@@ -204,7 +203,7 @@ func (p *packageModeParser) parseType(t types.Type) (model.Type, error) {
 		if !ok || genericType.TypeArgs() == nil {
 			return &model.NamedType{
 				Package: pkg,
-				Type:    name,
+				Type:    object.Obj().Name(),
 			}, nil
 		}
 
@@ -221,7 +220,7 @@ func (p *packageModeParser) parseType(t types.Type) (model.Type, error) {
 
 		return &model.NamedType{
 			Package:    pkg,
-			Type:       name,
+			Type:       object.Obj().Name(),
 			TypeParams: typeParams,
 		}, nil
 	case *types.Interface:
