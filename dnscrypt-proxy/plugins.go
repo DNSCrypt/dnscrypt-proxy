@@ -376,8 +376,8 @@ func (pluginsState *PluginsState) ApplyResponsePlugins(
 				break
 			}
 		}
+		pluginsGlobals.RUnlock()
 	}
-	pluginsGlobals.RUnlock()
 	packet2, err := msg.PackBuffer(packet)
 	if err != nil {
 		return packet, err
