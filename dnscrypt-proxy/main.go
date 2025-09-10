@@ -77,12 +77,15 @@ func main() {
 		flags: &flags,
 	}
 
+	svcOptions := make(service.KeyValue)
+	svcOptions["ReloadSignal"] = "HUP"
 	svcConfig := &service.Config{
 		Name:             "dnscrypt-proxy",
 		DisplayName:      "DNSCrypt client proxy",
 		Description:      "Encrypted/authenticated DNS proxy",
 		WorkingDirectory: pwd,
 		Arguments:        []string{"-config", *flags.ConfigFile},
+		Option:           svcOptions,
 	}
 	svc, err := service.New(app, svcConfig)
 	if err != nil {
