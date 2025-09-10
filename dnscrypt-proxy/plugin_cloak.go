@@ -15,13 +15,14 @@ import (
 )
 
 type CloakedName struct {
-	target     string
-	ipv4       []net.IP
-	ipv6       []net.IP
-	lastUpdate *time.Time
-	lineNo     int
-	isIP       bool
-	PTR        []string
+	target      string
+	ipv4        []net.IP
+	ipv6        []net.IP
+	lastUpdate4 *time.Time
+	lastUpdate6 *time.Time
+	lineNo      int
+	isIP        bool
+	PTR         []string
 }
 
 type PluginCloak struct {
@@ -245,8 +246,15 @@ func (plugin *PluginCloak) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 	}
 	cloakedName := xcloakedName.(*CloakedName)
 	ttl, expired := plugin.ttl, false
-	if cloakedName.lastUpdate != nil {
-		if elapsed := uint32(now.Sub(*cloakedName.lastUpdate).Seconds()); elapsed < ttl {
+	var lastUpdate *time.Time
+	switch question.Qtype {
+	case dns.TypeA:
+		lastUpdate = cloakedName.lastUpdate4
+	case dns.TypeAAAA:
+		lastUpdate = cloakedName.lastUpdate6
+	}
+	if lastUpdate != nil {
+		if elapsed := uint32(now.Sub(*lastUpdate).Seconds()); elapsed < ttl {
 			ttl -= elapsed
 		} else {
 			expired = true
@@ -268,21 +276,14 @@ func (plugin *PluginCloak) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 
 		// Use write lock to update cloakedName
 		plugin.Lock()
-		cloakedName.lastUpdate = &now
-		cloakedName.ipv4 = nil
-		cloakedName.ipv6 = nil
-		for _, foundIP := range foundIPs {
-			if ipv4 := foundIP.To4(); ipv4 != nil {
-				cloakedName.ipv4 = append(cloakedName.ipv4, foundIP)
-				if len(cloakedName.ipv4) >= 16 {
-					break
-				}
-			} else {
-				cloakedName.ipv6 = append(cloakedName.ipv6, foundIP)
-				if len(cloakedName.ipv6) >= 16 {
-					break
-				}
-			}
+		n := Min(16, len(foundIPs))
+		switch question.Qtype {
+		case dns.TypeA:
+			cloakedName.lastUpdate4 = &now
+			cloakedName.ipv4 = foundIPs[:n]
+		case dns.TypeAAAA:
+			cloakedName.lastUpdate6 = &now
+			cloakedName.ipv6 = foundIPs[:n]
 		}
 		plugin.Unlock()
 
