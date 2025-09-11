@@ -34,6 +34,7 @@ const (
 	DefaultBootstrapResolver = "9.9.9.9:53"
 	DefaultKeepAlive         = 5 * time.Second
 	DefaultTimeout           = 30 * time.Second
+	ResolverReadTimeout      = 5 * time.Second
 	SystemResolverIPTTL      = 12 * time.Hour
 	MinResolverIPTTL         = 4 * time.Hour
 	ResolverIPTTLMaxJitter   = 15 * time.Minute
@@ -361,7 +362,7 @@ func (xTransport *XTransport) resolveUsingResolver(
 	resolver string,
 	forceType uint16,
 ) (ips []net.IP, ttl time.Duration, err error) {
-	dnsClient := dns.Client{Net: proto}
+	dnsClient := dns.Client{Net: proto, ReadTimeout: ResolverReadTimeout}
 	queryType := make([]uint16, 0, 2)
 	switch forceType {
 	case dns.TypeA:
