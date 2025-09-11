@@ -362,50 +362,42 @@ func (xTransport *XTransport) resolveUsingResolver(
 	forceType uint16,
 ) (ips []net.IP, ttl time.Duration, err error) {
 	dnsClient := dns.Client{Net: proto}
-	queryIPv4 := xTransport.useIPv4
-	queryIPv6 := xTransport.useIPv6
+	queryType := make([]uint16, 0, 2)
 	switch forceType {
 	case dns.TypeA:
-		queryIPv4 = true
-		queryIPv6 = false
+		queryType = append(queryType, dns.TypeA)
 	case dns.TypeAAAA:
-		queryIPv4 = false
-		queryIPv6 = true
+		queryType = append(queryType, dns.TypeAAAA)
+	default:
+		if xTransport.useIPv4 {
+			queryType = append(queryType, dns.TypeA)
+		}
+		if xTransport.useIPv6 {
+			queryType = append(queryType, dns.TypeAAAA)
+		}
 	}
-	if queryIPv4 {
+	var rrTTL uint32
+	for _, rrType := range queryType {
 		msg := dns.Msg{}
-		msg.SetQuestion(dns.Fqdn(host), dns.TypeA)
+		msg.SetQuestion(dns.Fqdn(host), rrType)
 		msg.SetEdns0(uint16(MaxDNSPacketSize), true)
 		var in *dns.Msg
 		if in, _, err = dnsClient.Exchange(&msg, resolver); err == nil {
-			var answer dns.RR
-			for _, answer = range in.Answer {
-				if answer.Header().Rrtype == dns.TypeA {
-					ips = append(ips, answer.(*dns.A).A)
+			for _, answer := range in.Answer {
+				if answer.Header().Rrtype == rrType {
+					switch rrType {
+					case dns.TypeA:
+						ips = append(ips, answer.(*dns.A).A)
+					case dns.TypeAAAA:
+						ips = append(ips, answer.(*dns.AAAA).AAAA)
+					}
+					rrTTL = answer.Header().Ttl
 				}
-			}
-			if len(ips) > 0 {
-				ttl = time.Duration(answer.Header().Ttl) * time.Second
-				return ips, ttl, err
 			}
 		}
 	}
-	if queryIPv6 {
-		msg := dns.Msg{}
-		msg.SetQuestion(dns.Fqdn(host), dns.TypeAAAA)
-		msg.SetEdns0(uint16(MaxDNSPacketSize), true)
-		var in *dns.Msg
-		if in, _, err = dnsClient.Exchange(&msg, resolver); err == nil {
-			var answer dns.RR
-			for _, answer = range in.Answer {
-				if answer.Header().Rrtype == dns.TypeAAAA {
-					ips = append(ips, answer.(*dns.AAAA).AAAA)
-				}
-			}
-			if len(ips) > 0 {
-				ttl = time.Duration(answer.Header().Ttl) * time.Second
-			}
-		}
+	if len(ips) > 0 {
+		ttl = time.Duration(rrTTL) * time.Second
 	}
 	return ips, ttl, err
 }
