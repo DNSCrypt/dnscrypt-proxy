@@ -290,8 +290,6 @@ func (plugin *PluginCloak) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 		// Reacquire read lock
 		plugin.RLock()
 	}
-	plugin.RUnlock()
-
 	synth.Answer = []dns.RR{}
 	if question.Qtype == dns.TypeA {
 		for _, ip := range cloakedName.ipv4 {
@@ -315,6 +313,8 @@ func (plugin *PluginCloak) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 			synth.Answer = append(synth.Answer, rr)
 		}
 	}
+	plugin.RUnlock()
+
 	rand.Shuffle(
 		len(synth.Answer),
 		func(i, j int) { synth.Answer[i], synth.Answer[j] = synth.Answer[j], synth.Answer[i] },
