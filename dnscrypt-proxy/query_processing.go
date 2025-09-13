@@ -351,12 +351,6 @@ func updateMonitoringMetrics(
 		dlog.Debugf("Calling UpdateMetrics for query: %s", pluginsState.qName)
 		proxy.monitoringInstance.UpdateMetrics(*pluginsState, pluginsState.questionMsg)
 	} else {
-		if !proxy.monitoringUI.Enabled {
-			dlog.Debugf("Monitoring UI not enabled")
-		}
-		if proxy.monitoringInstance == nil {
-			dlog.Debugf("Monitoring instance is nil")
-		}
 		if pluginsState.questionMsg == nil {
 			dlog.Debugf("Question message is nil")
 		}
