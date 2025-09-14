@@ -85,8 +85,10 @@ func (plugin *PluginQueryLog) Eval(pluginsState *PluginsState, msg *dns.Msg) err
 	}
 
 	// Cap at timeout to handle system sleep/suspend
-	if requestDuration > pluginsState.timeout {
-		requestDuration = pluginsState.timeout
+	// Max: UDP + TCP, Dial + (write + read)
+	triedUDPTCPTimeout := 4 * pluginsState.timeout
+	if requestDuration > triedUDPTCPTimeout {
+		requestDuration = triedUDPTCPTimeout
 	}
 	var line string
 	if plugin.format == "tsv" {
