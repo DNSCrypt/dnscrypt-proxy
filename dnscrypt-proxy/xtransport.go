@@ -423,18 +423,8 @@ func (xTransport *XTransport) resolveUsingResolvers(
 	return ips, ttl, err
 }
 
-func (xTransport *XTransport) resolveEncrypted(host string, forceType uint16) (ips []net.IP, ttl time.Duration, err error) {
-	protos := []string{"udp", "tcp"}
-	if xTransport.mainProto == "tcp" {
-		protos = []string{"tcp", "udp"}
-	}
-	for _, proto := range protos {
-		ips, ttl, err = xTransport.resolveUsingResolvers(proto, host, xTransport.internalResolvers, forceType)
-		if err == nil {
-			break
-		}
-	}
-	return ips, ttl, err
+func (xTransport *XTransport) resolveEncrypted(host string, forceType uint16) ([]net.IP, time.Duration, error) {
+	return xTransport.resolveUsingResolvers(xTransport.mainProto, host, xTransport.internalResolvers, forceType)
 }
 
 func (xTransport *XTransport) resolve(host string, forceType uint16) (ips []net.IP, ttl time.Duration, err error) {
