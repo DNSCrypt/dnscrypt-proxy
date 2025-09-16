@@ -4,19 +4,11 @@ package main
 
 import (
 	"net"
+	"slices"
 
 	"github.com/coreos/go-systemd/activation"
 	"github.com/jedisct1/dlog"
 )
-
-func hasStringElement(array []string, s string) bool {
-	for _, ele := range array {
-		if ele == s {
-			return true
-		}
-	}
-	return false
-}
 
 func (proxy *Proxy) addSystemDListeners() error {
 	files := activation.Files(true)
@@ -42,7 +34,7 @@ func (proxy *Proxy) addSystemDListeners() error {
 			listenAddress = pc.LocalAddr().String()
 			dlog.Noticef("Wiring systemd UDP socket #%d, %s, %s", i, file.Name(), listenAddress)
 		}
-		if len(listenAddress) > 0 && !hasStringElement(proxy.listenAddresses, listenAddress) {
+		if len(listenAddress) > 0 && !slices.Contains(proxy.listenAddresses, listenAddress) {
 			proxy.listenAddresses = append(proxy.listenAddresses, listenAddress)
 		}
 	}
