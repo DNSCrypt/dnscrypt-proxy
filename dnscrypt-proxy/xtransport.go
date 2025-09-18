@@ -344,12 +344,13 @@ func (xTransport *XTransport) resolveUsingSystem(host string, forceType uint16) 
 	}
 	ips := make([]net.IP, 0)
 	for _, ip := range ipa {
+		ipv4 := ip.To4()
 		if queryIPv4 {
-			if ipv4 := ip.To4(); ipv4 != nil {
-				ips = append(ips, ip)
+			if ipv4 != nil {
+				ips = append(ips, ipv4)
 			}
 		} else if queryIPv6 {
-			if ipv6 := ip.To16(); ipv6 != nil {
+			if ipv4 == nil {
 				ips = append(ips, ip)
 			}
 		}
