@@ -34,6 +34,7 @@ const (
 	DefaultBootstrapResolver = "9.9.9.9:53"
 	DefaultKeepAlive         = 5 * time.Second
 	DefaultTimeout           = 30 * time.Second
+	ResolverReadTimeout      = 5 * time.Second
 	SystemResolverIPTTL      = 12 * time.Hour
 	MinResolverIPTTL         = 4 * time.Hour
 	ResolverIPTTLMaxJitter   = 15 * time.Minute
@@ -331,83 +332,88 @@ func (xTransport *XTransport) rebuildTransport() {
 	}
 }
 
-func (xTransport *XTransport) resolveUsingSystem(host string) (ip net.IP, ttl time.Duration, err error) {
-	ttl = SystemResolverIPTTL
-	var foundIPs []string
-	foundIPs, err = net.LookupHost(host)
-	if err != nil {
-		return ip, ttl, err
+func (xTransport *XTransport) resolveUsingSystem(host string, forceType uint16) ([]net.IP, time.Duration, error) {
+	ipa, err := net.LookupIP(host)
+	queryIPv4 := xTransport.useIPv4
+	queryIPv6 := xTransport.useIPv6
+	if forceType == dns.TypeNone && queryIPv4 && queryIPv6 {
+		return ipa, SystemResolverIPTTL, err
+	}
+	switch forceType {
+	case dns.TypeA:
+		queryIPv4 = true
+		queryIPv6 = false
+	case dns.TypeAAAA:
+		queryIPv4 = false
+		queryIPv6 = true
 	}
 	ips := make([]net.IP, 0)
-	for _, ip := range foundIPs {
-		if foundIP := net.ParseIP(ip); foundIP != nil {
-			isIPv4 := foundIP.To4() != nil
-			if (isIPv4 && xTransport.useIPv4) || (!isIPv4 && xTransport.useIPv6) {
-				ips = append(ips, foundIP)
-			}
+	for _, ip := range ipa {
+		ipv4 := ip.To4()
+		if queryIPv4 && ipv4 != nil {
+			ips = append(ips, ipv4)
+		}
+		if queryIPv6 && ipv4 == nil {
+			ips = append(ips, ip)
 		}
 	}
-	if len(ips) > 0 {
-		ip = ips[rand.Intn(len(ips))]
-	}
-	return ip, ttl, err
+	return ips, SystemResolverIPTTL, err
 }
 
 func (xTransport *XTransport) resolveUsingResolver(
 	proto, host string,
 	resolver string,
-) (ip net.IP, ttl time.Duration, err error) {
-	dnsClient := dns.Client{Net: proto}
-	if xTransport.useIPv4 {
+	forceType uint16,
+) (ips []net.IP, ttl time.Duration, err error) {
+	dnsClient := dns.Client{Net: proto, ReadTimeout: ResolverReadTimeout}
+	queryType := make([]uint16, 0, 2)
+	switch forceType {
+	case dns.TypeA:
+		queryType = append(queryType, dns.TypeA)
+	case dns.TypeAAAA:
+		queryType = append(queryType, dns.TypeAAAA)
+	default:
+		if xTransport.useIPv4 {
+			queryType = append(queryType, dns.TypeA)
+		}
+		if xTransport.useIPv6 {
+			queryType = append(queryType, dns.TypeAAAA)
+		}
+	}
+	var rrTTL uint32
+	for _, rrType := range queryType {
 		msg := dns.Msg{}
-		msg.SetQuestion(dns.Fqdn(host), dns.TypeA)
+		msg.SetQuestion(dns.Fqdn(host), rrType)
 		msg.SetEdns0(uint16(MaxDNSPacketSize), true)
 		var in *dns.Msg
 		if in, _, err = dnsClient.Exchange(&msg, resolver); err == nil {
-			answers := make([]dns.RR, 0)
 			for _, answer := range in.Answer {
-				if answer.Header().Rrtype == dns.TypeA {
-					answers = append(answers, answer)
+				if answer.Header().Rrtype == rrType {
+					switch rrType {
+					case dns.TypeA:
+						ips = append(ips, answer.(*dns.A).A)
+					case dns.TypeAAAA:
+						ips = append(ips, answer.(*dns.AAAA).AAAA)
+					}
+					rrTTL = answer.Header().Ttl
 				}
-			}
-			if len(answers) > 0 {
-				answer := answers[rand.Intn(len(answers))]
-				ip = answer.(*dns.A).A
-				ttl = time.Duration(answer.Header().Ttl) * time.Second
-				return ip, ttl, err
 			}
 		}
 	}
-	if xTransport.useIPv6 {
-		msg := dns.Msg{}
-		msg.SetQuestion(dns.Fqdn(host), dns.TypeAAAA)
-		msg.SetEdns0(uint16(MaxDNSPacketSize), true)
-		var in *dns.Msg
-		if in, _, err = dnsClient.Exchange(&msg, resolver); err == nil {
-			answers := make([]dns.RR, 0)
-			for _, answer := range in.Answer {
-				if answer.Header().Rrtype == dns.TypeAAAA {
-					answers = append(answers, answer)
-				}
-			}
-			if len(answers) > 0 {
-				answer := answers[rand.Intn(len(answers))]
-				ip = answer.(*dns.AAAA).AAAA
-				ttl = time.Duration(answer.Header().Ttl) * time.Second
-				return ip, ttl, err
-			}
-		}
+	if len(ips) > 0 {
+		ttl = time.Duration(rrTTL) * time.Second
 	}
-	return ip, ttl, err
+	return ips, ttl, err
 }
 
 func (xTransport *XTransport) resolveUsingResolvers(
 	proto, host string,
 	resolvers []string,
-) (ip net.IP, ttl time.Duration, err error) {
+	forceType uint16,
+) (ips []net.IP, ttl time.Duration, err error) {
 	err = errors.New("Empty resolvers")
 	for i, resolver := range resolvers {
-		ip, ttl, err = xTransport.resolveUsingResolver(proto, host, resolver)
+		ips, ttl, err = xTransport.resolveUsingResolver(proto, host, resolver, forceType)
 		if err == nil {
 			if i > 0 {
 				dlog.Infof("Resolution succeeded with resolver %s[%s]", proto, resolver)
@@ -417,7 +423,57 @@ func (xTransport *XTransport) resolveUsingResolvers(
 		}
 		dlog.Infof("Unable to resolve [%s] using resolver [%s] (%s): %v", host, resolver, proto, err)
 	}
-	return ip, ttl, err
+	return ips, ttl, err
+}
+
+func (xTransport *XTransport) resolveEncrypted(host string, forceType uint16) ([]net.IP, time.Duration, error) {
+	return xTransport.resolveUsingResolvers(xTransport.mainProto, host, xTransport.internalResolvers, forceType)
+}
+
+func (xTransport *XTransport) resolve(host string, forceType uint16) (ips []net.IP, ttl time.Duration, err error) {
+	protos := []string{"udp", "tcp"}
+	if xTransport.mainProto == "tcp" {
+		protos = []string{"tcp", "udp"}
+	}
+	if xTransport.ignoreSystemDNS {
+		if xTransport.internalResolverReady {
+			for _, proto := range protos {
+				ips, ttl, err = xTransport.resolveUsingResolvers(proto, host, xTransport.internalResolvers, forceType)
+				if err == nil {
+					break
+				}
+			}
+		} else {
+			err = errors.New("dnscrypt-proxy service is not usable yet")
+			dlog.Notice(err)
+		}
+	} else {
+		ips, ttl, err = xTransport.resolveUsingSystem(host, forceType)
+		if err != nil {
+			err = errors.New("System DNS is not usable yet")
+			dlog.Notice(err)
+		}
+	}
+	if err != nil {
+		for _, proto := range protos {
+			if err != nil {
+				dlog.Noticef(
+					"Resolving server host [%s] using bootstrap resolvers over %s",
+					host,
+					proto,
+				)
+			}
+			ips, ttl, err = xTransport.resolveUsingResolvers(proto, host, xTransport.bootstrapResolvers, forceType)
+			if err == nil {
+				break
+			}
+		}
+	}
+	if err != nil && xTransport.ignoreSystemDNS {
+		dlog.Noticef("Bootstrap resolvers didn't respond - Trying with the system resolver as a last resort")
+		ips, ttl, err = xTransport.resolveUsingSystem(host, forceType)
+	}
+	return ips, ttl, err
 }
 
 // If a name is not present in the cache, resolve the name and update the cache
@@ -435,49 +491,9 @@ func (xTransport *XTransport) resolveAndUpdateCache(host string) error {
 	xTransport.markUpdatingCachedIP(host)
 
 	var foundIP net.IP
-	var ttl time.Duration
-	var err error
-	protos := []string{"udp", "tcp"}
-	if xTransport.mainProto == "tcp" {
-		protos = []string{"tcp", "udp"}
-	}
-	if xTransport.ignoreSystemDNS {
-		if xTransport.internalResolverReady {
-			for _, proto := range protos {
-				foundIP, ttl, err = xTransport.resolveUsingResolvers(proto, host, xTransport.internalResolvers)
-				if err == nil {
-					break
-				}
-			}
-		} else {
-			err = errors.New("dnscrypt-proxy service is not usable yet")
-			dlog.Notice(err)
-		}
-	} else {
-		foundIP, ttl, err = xTransport.resolveUsingSystem(host)
-		if err != nil {
-			err = errors.New("System DNS is not usable yet")
-			dlog.Notice(err)
-		}
-	}
-	if err != nil {
-		for _, proto := range protos {
-			if err != nil {
-				dlog.Noticef(
-					"Resolving server host [%s] using bootstrap resolvers over %s",
-					host,
-					proto,
-				)
-			}
-			foundIP, ttl, err = xTransport.resolveUsingResolvers(proto, host, xTransport.bootstrapResolvers)
-			if err == nil {
-				break
-			}
-		}
-	}
-	if err != nil && xTransport.ignoreSystemDNS {
-		dlog.Noticef("Bootstrap resolvers didn't respond - Trying with the system resolver as a last resort")
-		foundIP, ttl, err = xTransport.resolveUsingSystem(host)
+	ips, ttl, err := xTransport.resolve(host, dns.TypeNone)
+	if len(ips) > 0 {
+		foundIP = ips[rand.Intn(len(ips))]
 	}
 	if ttl < MinResolverIPTTL {
 		ttl = MinResolverIPTTL

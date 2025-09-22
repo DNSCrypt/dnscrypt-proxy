@@ -75,6 +75,7 @@ type PluginsState struct {
 	clientAddr                       *net.Addr
 	synthResponse                    *dns.Msg
 	questionMsg                      *dns.Msg
+	xTransport                       *XTransport
 	sessionData                      map[string]interface{}
 	action                           PluginsAction
 	timeout                          time.Duration
@@ -267,6 +268,7 @@ func NewPluginsState(
 		requestStart:                     start,
 		maxUnencryptedUDPSafePayloadSize: MaxDNSUDPSafePacketSize,
 		sessionData:                      make(map[string]interface{}),
+		xTransport:                       proxy.xTransport,
 	}
 }
 
