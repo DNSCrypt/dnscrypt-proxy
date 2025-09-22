@@ -54,8 +54,8 @@ func resolveQuery(server string, qName string, qType uint16, sendClientSubnet bo
 	options.SetUDPSize(uint16(MaxDNSPacketSize))
 
 	msg.Question[0] = dns.Question{Name: qName, Qtype: qType, Qclass: dns.ClassINET}
-	msg.Id = dns.Id()
 	for i := 0; i < 3; i++ {
+		msg.Id = dns.Id()
 		response, rtt, err := client.Exchange(msg, server)
 		if neterr, ok := err.(net.Error); ok && neterr.Timeout() {
 			client.ReadTimeout *= 2
