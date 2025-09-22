@@ -94,6 +94,18 @@ func configureXTransport(proxy *Proxy, config *Config) error {
 		if err != nil {
 			return fmt.Errorf("Unable to parse the HTTP proxy URL [%v]", config.HTTPProxyURL)
 		}
+
+		// Pre-resolve proxy hostname using bootstrap resolvers if it's a domain
+		if httpProxyURL.Hostname() != "" && ParseIP(httpProxyURL.Hostname()) == nil {
+			ips, ttl, err := proxy.xTransport.resolve(httpProxyURL.Hostname(), proxy.xTransport.useIPv4, proxy.xTransport.useIPv6)
+			if err != nil {
+				dlog.Warnf("Unable to resolve HTTP proxy hostname [%s] using bootstrap resolvers: %v", httpProxyURL.Hostname(), err)
+			} else if len(ips) > 0 {
+				proxy.xTransport.saveCachedIP(httpProxyURL.Hostname(), ips[0], ttl)
+				dlog.Infof("Resolved HTTP proxy hostname [%s] to [%s] using bootstrap resolvers", httpProxyURL.Hostname(), ips[0])
+			}
+		}
+
 		proxy.xTransport.httpProxyFunction = http.ProxyURL(httpProxyURL)
 	}
 
