@@ -197,6 +197,8 @@ func configureLoadBalancing(proxy *Proxy, config *Config) {
 	case "ph":
 		lbStrategy = LBStrategyPH{}
 	case "fastest":
+		// "fastest" kept for backward compatibility with older configs
+		fallthrough
 	case "first":
 		lbStrategy = LBStrategyFirst{}
 	case "random":
