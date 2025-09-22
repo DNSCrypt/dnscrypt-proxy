@@ -224,6 +224,9 @@ func (plugin *PluginCloak) SetConfigWatcher(watcher *ConfigWatcher) {
 }
 
 func (plugin *PluginCloak) Eval(pluginsState *PluginsState, msg *dns.Msg) error {
+	if len(msg.Question) == 0 {
+		return nil
+	}
 	question := msg.Question[0]
 	if question.Qclass != dns.ClassINET || question.Qtype == dns.TypeNS || question.Qtype == dns.TypeSOA {
 		return nil
