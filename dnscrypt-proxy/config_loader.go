@@ -101,7 +101,7 @@ func configureXTransport(proxy *Proxy, config *Config) error {
 			if err != nil {
 				dlog.Warnf("Unable to resolve HTTP proxy hostname [%s] using bootstrap resolvers: %v", httpProxyURL.Hostname(), err)
 			} else if len(ips) > 0 {
-				proxy.xTransport.saveCachedIP(httpProxyURL.Hostname(), ips[0], ttl)
+				proxy.xTransport.saveCachedIPs(httpProxyURL.Hostname(), ips, ttl)
 				dlog.Infof("Resolved HTTP proxy hostname [%s] to [%s] using bootstrap resolvers", httpProxyURL.Hostname(), ips[0])
 			}
 		}
