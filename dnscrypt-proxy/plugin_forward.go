@@ -274,9 +274,13 @@ func (plugin *PluginForward) Eval(pluginsState *PluginsState, msg *dns.Msg) erro
 		var server string
 		switch item.typ {
 		case Explicit:
-			server = item.servers[rand.Intn(len(item.servers))]
+			if serverLen := len(item.servers); serverLen != 0 {
+				server = item.servers[rand.Intn(serverLen)]
+			}
 		case Bootstrap:
-			server = plugin.bootstrapResolvers[rand.Intn(len(plugin.bootstrapResolvers))]
+			if resolverLen := len(plugin.bootstrapResolvers); resolverLen != 0 {
+				server = plugin.bootstrapResolvers[rand.Intn(resolverLen)]
+			}
 		case DHCP:
 			const maxInconsistency = 9
 			for _, dhcpdns := range plugin.dhcpdns {
