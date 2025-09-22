@@ -342,7 +342,7 @@ func (xTransport *XTransport) resolveUsingSystem(host string) (ip net.IP, ttl ti
 				}
 			}
 			if xTransport.useIPv6 {
-				if ipv6 := foundIP.To16(); ipv6 != nil {
+				if foundIP.To4() == nil {
 					ips = append(ips, foundIP)
 				}
 			}
