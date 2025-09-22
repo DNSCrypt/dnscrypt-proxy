@@ -101,31 +101,78 @@ function safeUpdateDashboard(data) {
         const uptime = data.uptime_seconds !== undefined ? data.uptime_seconds : 0;
         const avgResponseTime = data.avg_response_time !== undefined ? data.avg_response_time : 0;
 
-        document.getElementById('total-queries').textContent = totalQueries.toLocaleString();
-        document.getElementById('blocked-queries').textContent = blockedQueries.toLocaleString();
-        document.getElementById('qps').textContent = qps.toFixed(2);
-        document.getElementById('uptime').textContent = formatUptime(uptime);
-        document.getElementById('avg-response-time').textContent = avgResponseTime.toFixed(2) + ' ms';
+        updateElementText('total-queries', formatNumber(totalQueries));
+        updateElementText('blocked-queries', formatNumber(blockedQueries));
+        updateElementText('qps', qps.toFixed(2));
+        updateElementText('uptime', formatUptime(uptime));
+        updateElementText('avg-response-time', formatMilliseconds(avgResponseTime));
+
+        const generatedAt = data.generated_at ? new Date(data.generated_at) : null;
+        const lastUpdatedEl = document.getElementById('last-updated');
+        if (lastUpdatedEl) {
+            if (generatedAt && !isNaN(generatedAt.getTime())) {
+                lastUpdatedEl.textContent = generatedAt.toLocaleString();
+            } else {
+                lastUpdatedEl.textContent = '-';
+            }
+        }
 
         // Update cache stats with null checks
         const cacheHitRatio = data.cache_hit_ratio !== undefined ? data.cache_hit_ratio : 0;
         const cacheHits = data.cache_hits !== undefined ? data.cache_hits : 0;
         const cacheMisses = data.cache_misses !== undefined ? data.cache_misses : 0;
+        const cacheStats = data.cache_stats || {};
 
-        document.getElementById('cache-hit-ratio').textContent = (cacheHitRatio * 100).toFixed(2) + '%';
-        document.getElementById('cache-hits').textContent = cacheHits.toLocaleString();
-        document.getElementById('cache-misses').textContent = cacheMisses.toLocaleString();
+        updateElementText('cache-hit-ratio', formatPercent(cacheHitRatio));
+        updateElementText('cache-hits', formatNumber(cacheHits));
+        updateElementText('cache-misses', formatNumber(cacheMisses));
+        updateElementText('cache-enabled', formatBoolean(cacheStats.enabled));
+        updateElementText('cache-configured-size', formatNumber(cacheStats.configured_size));
+        updateElementText('cache-entries', formatNumber(cacheStats.entries));
+        updateElementText('cache-capacity', formatNumber(cacheStats.capacity));
+        updateElementText('cache-ttl-range', formatTTLRange(cacheStats));
 
-        // Update server table
+        // Update resolver health table
+        const resolverTable = document.getElementById('resolver-table').getElementsByTagName('tbody')[0];
+        resolverTable.innerHTML = '';
+        const resolverRows = Array.isArray(data.resolver_health) && data.resolver_health.length > 0
+            ? data.resolver_health
+            : (Array.isArray(data.servers) ? data.servers : []);
+
+        if (resolverRows.length > 0) {
+            resolverRows.forEach(resolver => {
+                const row = resolverTable.insertRow();
+                row.insertCell(0).textContent = resolver.name || 'Unknown';
+                row.insertCell(1).textContent = formatStatus(resolver.status);
+                row.insertCell(2).textContent = formatPercent(resolver.success_rate);
+                row.insertCell(3).textContent = formatNumber(resolver.total_queries !== undefined ? resolver.total_queries : resolver.queries);
+                row.insertCell(4).textContent = formatNumber(resolver.failed_queries);
+                row.insertCell(5).textContent = formatMilliseconds(resolver.avg_response_ms);
+                row.insertCell(6).textContent = formatMilliseconds(resolver.avg_rtt_ms);
+                row.insertCell(7).textContent = formatTimestamp(resolver.last_update);
+            });
+        } else {
+            const row = resolverTable.insertRow();
+            const cell = row.insertCell(0);
+            cell.colSpan = 8;
+            cell.textContent = 'No resolver data yet';
+        }
+
+        // Update server performance table
         const serverTable = document.getElementById('server-table').getElementsByTagName('tbody')[0];
         serverTable.innerHTML = '';
-        if (data.servers && Array.isArray(data.servers)) {
+        if (data.servers && Array.isArray(data.servers) && data.servers.length > 0) {
             data.servers.forEach(server => {
                 const row = serverTable.insertRow();
                 row.insertCell(0).textContent = server.name || 'Unknown';
-                row.insertCell(1).textContent = (server.queries || 0).toLocaleString();
-                row.insertCell(2).textContent = (server.avg_response_ms || 0).toFixed(2) + ' ms';
+                row.insertCell(1).textContent = formatNumber(server.queries);
+                row.insertCell(2).textContent = formatMilliseconds(server.avg_response_ms);
             });
+        } else {
+            const row = serverTable.insertRow();
+            const cell = row.insertCell(0);
+            cell.colSpan = 3;
+            cell.textContent = 'No server samples yet';
         }
 
         // Update query types table
@@ -150,6 +197,25 @@ function safeUpdateDashboard(data) {
             });
         }
 
+        // Update sources table
+        const sourcesTable = document.getElementById('sources-table').getElementsByTagName('tbody')[0];
+        sourcesTable.innerHTML = '';
+        if (data.sources && Array.isArray(data.sources) && data.sources.length > 0) {
+            data.sources.forEach(source => {
+                const row = sourcesTable.insertRow();
+                row.insertCell(0).textContent = source.name || '-';
+                row.insertCell(1).textContent = formatTimestamp(source.last_refresh);
+                row.insertCell(2).textContent = formatTimestamp(source.next_refresh);
+                row.insertCell(3).textContent = formatSourceStatus(source.status, source.error);
+                row.insertCell(4).textContent = formatAge(source.age_seconds);
+            });
+        } else {
+            const row = sourcesTable.insertRow();
+            const cell = row.insertCell(0);
+            cell.colSpan = 5;
+            cell.textContent = 'No source activity recorded yet';
+        }
+
         // Update recent queries table
         const queriesTable = document.getElementById('queries-table').getElementsByTagName('tbody')[0];
         let queriesToShow = lastRecentQueries;
@@ -167,7 +233,7 @@ function safeUpdateDashboard(data) {
                 row.insertCell(3).textContent = query.client_ip || '-';
                 row.insertCell(4).textContent = query.server || '-';
                 row.insertCell(5).textContent = query.response_code || '-';
-                row.insertCell(6).textContent = (query.response_time || 0) + ' ms';
+                row.insertCell(6).textContent = formatMilliseconds(query.response_time);
             });
         }
 
@@ -195,6 +261,120 @@ function formatUptime(seconds) {
     } catch (error) {
         return 'Error';
     }
+}
+
+function updateElementText(id, value) {
+    const el = document.getElementById(id);
+    if (!el) {
+        return;
+    }
+    el.textContent = value !== undefined && value !== null && value !== '' ? value : '-';
+}
+
+function formatNumber(value) {
+    if (value === undefined || value === null) {
+        return '-';
+    }
+    const num = Number(value);
+    if (Number.isNaN(num)) {
+        return '-';
+    }
+    return num.toLocaleString();
+}
+
+function formatPercent(value) {
+    if (value === undefined || value === null) {
+        return '-';
+    }
+    const num = Number(value);
+    if (Number.isNaN(num)) {
+        return '-';
+    }
+    return (num * 100).toFixed(1) + '%';
+}
+
+function formatMilliseconds(value) {
+    if (value === undefined || value === null) {
+        return '-';
+    }
+    const num = Number(value);
+    if (Number.isNaN(num)) {
+        return '-';
+    }
+    return num.toFixed(2) + ' ms';
+}
+
+function formatBoolean(value) {
+    if (value === undefined || value === null) {
+        return '-';
+    }
+    return value ? 'Yes' : 'No';
+}
+
+function formatStatus(status) {
+    if (!status || typeof status !== 'string') {
+        return 'Unknown';
+    }
+    const normalized = status.replace(/_/g, ' ').toLowerCase();
+    return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+}
+
+function formatTimestamp(value) {
+    if (!value) {
+        return '-';
+    }
+    try {
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) {
+            return '-';
+        }
+        return date.toLocaleString();
+    } catch (error) {
+        return '-';
+    }
+}
+
+function formatAge(seconds) {
+    if (seconds === undefined || seconds === null) {
+        return '-';
+    }
+    const num = Number(seconds);
+    if (Number.isNaN(num) || num < 0) {
+        return '-';
+    }
+    const totalSeconds = Math.round(num);
+    const days = Math.floor(totalSeconds / 86400);
+    const hours = Math.floor((totalSeconds % 86400) / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const secs = totalSeconds % 60;
+    const parts = [];
+    if (days > 0) parts.push(days + 'd');
+    if (hours > 0) parts.push(hours + 'h');
+    if (minutes > 0) parts.push(minutes + 'm');
+    parts.push(secs + 's');
+    return parts.join(' ');
+}
+
+function formatTTLRange(cacheStats) {
+    if (!cacheStats || typeof cacheStats !== 'object') {
+        return '-';
+    }
+    const parts = [];
+    if (cacheStats.min_ttl !== undefined && cacheStats.max_ttl !== undefined) {
+        parts.push('pos ' + cacheStats.min_ttl + 's-' + cacheStats.max_ttl + 's');
+    }
+    if (cacheStats.neg_min_ttl !== undefined && cacheStats.neg_max_ttl !== undefined) {
+        parts.push('neg ' + cacheStats.neg_min_ttl + 's-' + cacheStats.neg_max_ttl + 's');
+    }
+    return parts.length ? parts.join(' / ') : '-';
+}
+
+function formatSourceStatus(status, error) {
+    let label = formatStatus(status);
+    if (error) {
+        label += ' (' + error + ')';
+    }
+    return label;
 }
 
 // Simple direct data loading approach
@@ -398,14 +578,20 @@ window.handlePollData = function(data) {
 
 // Initialize dashboard with default values
 function initializeDashboard() {
-    document.getElementById('total-queries').textContent = '0';
-    document.getElementById('blocked-queries').textContent = '0';
-    document.getElementById('qps').textContent = '0.00';
-    document.getElementById('uptime').textContent = '0s';
-    document.getElementById('avg-response-time').textContent = '0.00 ms';
-    document.getElementById('cache-hit-ratio').textContent = '0.00%';
-    document.getElementById('cache-hits').textContent = '0';
-    document.getElementById('cache-misses').textContent = '0';
+    updateElementText('total-queries', '0');
+    updateElementText('blocked-queries', '0');
+    updateElementText('qps', '0.00');
+    updateElementText('uptime', '0s');
+    updateElementText('avg-response-time', '0.00 ms');
+    updateElementText('cache-hit-ratio', '0.0%');
+    updateElementText('cache-hits', '0');
+    updateElementText('cache-misses', '0');
+    updateElementText('cache-enabled', '-');
+    updateElementText('cache-configured-size', '-');
+    updateElementText('cache-entries', '-');
+    updateElementText('cache-capacity', '-');
+    updateElementText('cache-ttl-range', '-');
+    updateElementText('last-updated', '-');
 }
 
 // Initialize with default values

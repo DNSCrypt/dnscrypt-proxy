@@ -22,10 +22,25 @@
             color: white;
             padding: 1rem;
             margin-bottom: 20px;
+            position: relative;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: center;
         }
         h1 {
             margin: 0;
             font-size: 1.5rem;
+        }
+        .header-meta {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            font-size: 0.9rem;
+        }
+        .header-meta a {
+            color: white;
+            text-decoration: underline;
         }
         .dashboard {
             display: grid;
@@ -70,16 +85,59 @@
         table th {
             background-color: #f9f9f9;
         }
+        .status-table td:nth-child(2) {
+            font-weight: bold;
+        }
+        .section-nav {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .section-nav a {
+            background-color: #e0e6ed;
+            color: #2c3e50;
+            padding: 6px 12px;
+            border-radius: 4px;
+            text-decoration: none;
+            font-size: 0.9rem;
+            transition: background-color 0.2s ease;
+        }
+        .section-nav a:hover,
+        .section-nav a:focus {
+            background-color: #cbd5e1;
+        }
+        @media (max-width: 600px) {
+            .section-nav {
+                gap: 6px;
+            }
+            .section-nav a {
+                font-size: 0.8rem;
+                padding: 6px 10px;
+            }
+        }
     </style>
 </head>
 <body>
     <header>
         <h1>DNSCrypt Proxy Monitoring Dashboard</h1>
-        <div style="position: absolute; top: 10px; right: 10px;">
-            <a href="/api/metrics" target="_blank" style="color: white; text-decoration: underline;">Raw Data</a>
+        <div class="header-meta">
+            <span>Last Updated: <strong id="last-updated">-</strong></span>
+            <a href="/api/metrics" target="_blank">Raw Data</a>
         </div>
     </header>
     <div class="container">
+        <nav class="section-nav">
+            <a href="#overview">Overview</a>
+            <a href="#cache-performance">Cache</a>
+            <a href="#query-types">Query Types</a>
+            <a href="#resolver-health">Resolvers</a>
+            <a href="#server-performance">Servers</a>
+            <a href="#top-domains">Top Domains</a>
+            <a href="#source-refresh">Sources</a>
+            <a href="#recent-queries">Recent Queries</a>
+        </nav>
+
         <!-- Loading indicator -->
         <div id="loading-indicator" style="text-align: center; padding: 40px; margin: 20px 0; background-color: #f8f9fa; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
             <h2>Loading DNSCrypt Proxy Monitoring...</h2>
@@ -99,7 +157,7 @@
 
         <div class="dashboard">
             <div class="card">
-                <h2>Overview</h2>
+                <h2 id="overview">Overview</h2>
                 <div class="stat">
                     <span class="stat-label">Total Queries:</span>
                     <span id="total-queries">-</span>
@@ -122,7 +180,11 @@
                 </div>
             </div>
             <div class="card">
-                <h2>Cache Performance</h2>
+                <h2 id="cache-performance">Cache Performance</h2>
+                <div class="stat">
+                    <span class="stat-label">Enabled:</span>
+                    <span id="cache-enabled">-</span>
+                </div>
                 <div class="stat">
                     <span class="stat-label">Cache Hit Ratio:</span>
                     <span id="cache-hit-ratio">-</span>
@@ -135,10 +197,21 @@
                     <span class="stat-label">Cache Misses:</span>
                     <span id="cache-misses">-</span>
                 </div>
-                <div class="chart-container" id="cache-chart"></div>
+                <div class="stat">
+                    <span class="stat-label">Configured Size:</span>
+                    <span id="cache-configured-size">-</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Entries / Capacity:</span>
+                    <span><span id="cache-entries">-</span> / <span id="cache-capacity">-</span></span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">TTL Ranges:</span>
+                    <span id="cache-ttl-range">-</span>
+                </div>
             </div>
             <div class="card">
-                <h2>Query Types</h2>
+                <h2 id="query-types">Query Types</h2>
                 <div id="query-types-container">
                     <table id="query-types-table">
                         <thead>
@@ -155,13 +228,18 @@
         </div>
 
         <div class="card">
-            <h2>Server Performance</h2>
-            <table id="server-table">
+            <h2 id="resolver-health">Resolver Health</h2>
+            <table id="resolver-table" class="status-table">
                 <thead>
                     <tr>
-                        <th>Server</th>
-                        <th>Queries</th>
-                        <th>Avg Response Time</th>
+                        <th>Resolver</th>
+                        <th>Status</th>
+                        <th>Success</th>
+                        <th>Total</th>
+                        <th>Failures</th>
+                        <th>Avg Response</th>
+                        <th>Baseline RTT</th>
+                        <th>Last Seen</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -170,7 +248,22 @@
         </div>
 
         <div class="card">
-            <h2>Top Domains</h2>
+            <h2 id="server-performance">Server Performance</h2>
+            <table id="server-table">
+                <thead>
+                    <tr>
+                        <th>Server</th>
+                        <th>Queries</th>
+                        <th>Avg Response</th>
+                    </tr>
+                </thead>
+                <tbody>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="card">
+            <h2 id="top-domains">Top Domains</h2>
             <table id="domains-table">
                 <thead>
                     <tr>
@@ -184,7 +277,24 @@
         </div>
 
         <div class="card">
-            <h2>Recent Queries</h2>
+            <h2 id="source-refresh">Source Refresh Status</h2>
+            <table id="sources-table">
+                <thead>
+                    <tr>
+                        <th>Source</th>
+                        <th>Last Refresh</th>
+                        <th>Next Refresh</th>
+                        <th>Status</th>
+                        <th>Age</th>
+                    </tr>
+                </thead>
+                <tbody>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="card">
+            <h2 id="recent-queries">Recent Queries</h2>
             <table id="queries-table">
                 <thead>
                     <tr>
