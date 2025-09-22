@@ -140,7 +140,39 @@ function safeUpdateDashboard(data) {
             : (Array.isArray(data.servers) ? data.servers : []);
 
         if (resolverRows.length > 0) {
-            resolverRows.forEach(resolver => {
+            // Sort by total queries (desc), then avg response, name, and last seen.
+            const sortedResolvers = resolverRows.slice().sort((a, b) => {
+                const totalQueries = resolver => {
+                    if (typeof resolver.total_queries === 'number') {
+                        return resolver.total_queries;
+                    }
+                    if (typeof resolver.queries === 'number') {
+                        return resolver.queries;
+                    }
+                    return -1;
+                };
+                const avgResponse = resolver => {
+                    return typeof resolver.avg_response_ms === 'number' ? resolver.avg_response_ms : Number.POSITIVE_INFINITY;
+                };
+                const name = resolver => (resolver.name || '').toLowerCase();
+                const lastSeen = resolver => {
+                    const value = resolver.last_update;
+                    if (!value) {
+                        return 0;
+                    }
+                    const parsed = Date.parse(value);
+                    return Number.isNaN(parsed) ? 0 : parsed;
+                };
+
+                return (
+                    (totalQueries(b) - totalQueries(a)) ||
+                    (avgResponse(a) - avgResponse(b)) ||
+                    (name(a) > name(b) ? 1 : name(a) < name(b) ? -1 : 0) ||
+                    (lastSeen(b) - lastSeen(a))
+                );
+            });
+
+            sortedResolvers.forEach(resolver => {
                 const row = resolverTable.insertRow();
                 row.insertCell(0).textContent = resolver.name || 'Unknown';
                 row.insertCell(1).textContent = formatStatus(resolver.status);
@@ -148,31 +180,13 @@ function safeUpdateDashboard(data) {
                 row.insertCell(3).textContent = formatNumber(resolver.total_queries !== undefined ? resolver.total_queries : resolver.queries);
                 row.insertCell(4).textContent = formatNumber(resolver.failed_queries);
                 row.insertCell(5).textContent = formatMilliseconds(resolver.avg_response_ms);
-                row.insertCell(6).textContent = formatMilliseconds(resolver.avg_rtt_ms);
-                row.insertCell(7).textContent = formatTimestamp(resolver.last_update);
+                row.insertCell(6).textContent = formatTimestamp(resolver.last_update);
             });
         } else {
             const row = resolverTable.insertRow();
             const cell = row.insertCell(0);
-            cell.colSpan = 8;
+            cell.colSpan = 7;
             cell.textContent = 'No resolver data yet';
-        }
-
-        // Update server performance table
-        const serverTable = document.getElementById('server-table').getElementsByTagName('tbody')[0];
-        serverTable.innerHTML = '';
-        if (data.servers && Array.isArray(data.servers) && data.servers.length > 0) {
-            data.servers.forEach(server => {
-                const row = serverTable.insertRow();
-                row.insertCell(0).textContent = server.name || 'Unknown';
-                row.insertCell(1).textContent = formatNumber(server.queries);
-                row.insertCell(2).textContent = formatMilliseconds(server.avg_response_ms);
-            });
-        } else {
-            const row = serverTable.insertRow();
-            const cell = row.insertCell(0);
-            cell.colSpan = 3;
-            cell.textContent = 'No server samples yet';
         }
 
         // Update query types table
