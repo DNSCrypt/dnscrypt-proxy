@@ -134,7 +134,7 @@ func (xTransport *XTransport) markUpdatingCachedIP(host string) {
 		until := now.Add(xTransport.timeout)
 		item.updatingUntil = &until
 		xTransport.cachedIPs.cache[host] = item
-		dlog.Debugf("[%s] IP addresss marked as updating", host)
+		dlog.Debugf("[%s] IP address marked as updating", host)
 	}
 	xTransport.cachedIPs.Unlock()
 }
