@@ -124,7 +124,7 @@ func (source *Source) updateCache(bin, sig []byte) {
 	now := getCurrentTime()
 	file := source.cacheFile
 	absPath := file
-	if resolved, err := filepath.Abs(file); err != nil {
+	if resolved, err := filepath.Abs(file); err == nil {
 		absPath = resolved
 	}
 
