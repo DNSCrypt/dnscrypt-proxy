@@ -283,28 +283,33 @@ func (plugin *PluginCloak) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 		// Reacquire read lock
 		plugin.RLock()
 	}
+
+	ipv4 := append([]net.IP(nil), cloakedName.ipv4...)
+	ipv6 := append([]net.IP(nil), cloakedName.ipv6...)
+	ptrs := append([]string(nil), cloakedName.PTR...)
+	ttlLocal := ttl
 	plugin.RUnlock()
 
 	synth := EmptyResponseFromMessage(msg)
 	synth.Answer = []dns.RR{}
 	if question.Qtype == dns.TypeA {
-		for _, ip := range cloakedName.ipv4 {
+		for _, ip := range ipv4 {
 			rr := new(dns.A)
-			rr.Hdr = dns.RR_Header{Name: question.Name, Rrtype: dns.TypeA, Class: dns.ClassINET, Ttl: ttl}
+			rr.Hdr = dns.RR_Header{Name: question.Name, Rrtype: dns.TypeA, Class: dns.ClassINET, Ttl: ttlLocal}
 			rr.A = ip
 			synth.Answer = append(synth.Answer, rr)
 		}
 	} else if question.Qtype == dns.TypeAAAA {
-		for _, ip := range cloakedName.ipv6 {
+		for _, ip := range ipv6 {
 			rr := new(dns.AAAA)
-			rr.Hdr = dns.RR_Header{Name: question.Name, Rrtype: dns.TypeAAAA, Class: dns.ClassINET, Ttl: ttl}
+			rr.Hdr = dns.RR_Header{Name: question.Name, Rrtype: dns.TypeAAAA, Class: dns.ClassINET, Ttl: ttlLocal}
 			rr.AAAA = ip
 			synth.Answer = append(synth.Answer, rr)
 		}
 	} else if question.Qtype == dns.TypePTR {
-		for _, ptr := range cloakedName.PTR {
+		for _, ptr := range ptrs {
 			rr := new(dns.PTR)
-			rr.Hdr = dns.RR_Header{Name: question.Name, Rrtype: dns.TypePTR, Class: dns.ClassINET, Ttl: ttl}
+			rr.Hdr = dns.RR_Header{Name: question.Name, Rrtype: dns.TypePTR, Class: dns.ClassINET, Ttl: ttlLocal}
 			rr.Ptr = ptr
 			synth.Answer = append(synth.Answer, rr)
 		}
