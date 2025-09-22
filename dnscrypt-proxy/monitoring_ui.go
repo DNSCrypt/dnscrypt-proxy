@@ -106,7 +106,6 @@ type resolverSnapshot struct {
 	total         uint64
 	failed        uint64
 	success       float64
-	avgRttMs      float64
 	avgObservedMs float64
 	lastUpdate    time.Time
 	lastAction    time.Time
@@ -658,7 +657,6 @@ func (mc *MetricsCollector) collectResolverSnapshots() ([]resolverSnapshot, map[
 			successRate = float64(total-failed) / float64(total)
 		}
 
-		avgRtt := server.rtt.Value()
 		lastUpdate := server.lastUpdateTime
 		lastAction := server.lastActionTS
 		score := mc.proxy.serversInfo.calculateServerScore(server)
@@ -678,7 +676,6 @@ func (mc *MetricsCollector) collectResolverSnapshots() ([]resolverSnapshot, map[
 			total:      total,
 			failed:     failed,
 			success:    successRate,
-			avgRttMs:   avgRtt,
 			lastUpdate: lastUpdate,
 			lastAction: lastAction,
 			status:     status,
@@ -857,68 +854,24 @@ func (mc *MetricsCollector) GetMetrics() map[string]interface{} {
 	cacheStats := mc.collectCacheStats(cacheHitRatio, cacheHits, cacheMisses)
 	resolverSnapshots, resolverIndex := mc.collectResolverSnapshots()
 
-	// Calculate per-server metrics sorted by increasing average response time
-	serverMetrics := make([]map[string]interface{}, 0)
-
-	// Create a slice of server performance data
-	type serverPerf struct {
-		name    string
-		queries uint64
-		avgTime float64
-	}
-
-	// Read server data with its own lock
+	// Update resolver snapshots with observed average response times.
 	mc.serverMutex.RLock()
-	serverPerfs := make([]serverPerf, 0, len(mc.serverQueryCount))
 	for server, count := range mc.serverQueryCount {
 		avgTime := float64(0)
 		if count > 0 {
 			avgTime = float64(mc.serverResponseTime[server]) / float64(count)
 		}
-		serverPerfs = append(serverPerfs, serverPerf{
-			name:    server,
-			queries: count,
-			avgTime: avgTime,
-		})
+		if snapshot, ok := resolverIndex[server]; ok {
+			snapshot.avgObservedMs = avgTime
+			resolverIndex[server] = snapshot
+		}
 	}
 	mc.serverMutex.RUnlock()
 
-	// Sort by increasing average response time (faster servers first)
-	sort.Slice(serverPerfs, func(i, j int) bool {
-		if serverPerfs[i].avgTime != serverPerfs[j].avgTime {
-			return serverPerfs[i].avgTime < serverPerfs[j].avgTime
-		}
-		return serverPerfs[i].name < serverPerfs[j].name
-	})
-
-	for _, sp := range serverPerfs {
-		if snapshot, ok := resolverIndex[sp.name]; ok {
-			snapshot.avgObservedMs = sp.avgTime
-			resolverIndex[sp.name] = snapshot
-		}
-	}
 	for i, snapshot := range resolverSnapshots {
 		if updated, ok := resolverIndex[snapshot.name]; ok {
 			resolverSnapshots[i] = updated
 		}
-	}
-
-	// Convert to map for JSON output
-	for _, sp := range serverPerfs {
-		entry := map[string]interface{}{
-			"name":            sp.name,
-			"queries":         sp.queries,
-			"avg_response_ms": sp.avgTime,
-		}
-		if snapshot, ok := resolverIndex[sp.name]; ok {
-			entry["status"] = snapshot.status
-			entry["success_rate"] = snapshot.success
-			entry["failed_queries"] = snapshot.failed
-			entry["total_queries"] = snapshot.total
-			entry["score"] = snapshot.score
-			entry["avg_rtt_ms"] = snapshot.avgRttMs
-		}
-		serverMetrics = append(serverMetrics, entry)
 	}
 
 	// Get top domains (limited to 20) sorted by decreasing count
@@ -1011,7 +964,6 @@ func (mc *MetricsCollector) GetMetrics() map[string]interface{} {
 			"success_rate":   snapshot.success,
 			"total_queries":  snapshot.total,
 			"failed_queries": snapshot.failed,
-			"avg_rtt_ms":     snapshot.avgRttMs,
 			"score":          snapshot.score,
 		}
 		if snapshot.avgObservedMs > 0 {
@@ -1042,7 +994,6 @@ func (mc *MetricsCollector) GetMetrics() map[string]interface{} {
 		"cache_misses":       cacheMisses,
 		"avg_response_time":  avgResponseTime,
 		"blocked_queries":    blockCount,
-		"servers":            serverMetrics,
 		"top_domains":        topDomainsList,
 		"query_types":        queryTypesList,
 		"recent_queries":     recentQueries,

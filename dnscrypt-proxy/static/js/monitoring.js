@@ -135,9 +135,7 @@ function safeUpdateDashboard(data) {
         // Update resolver health table
         const resolverTable = document.getElementById('resolver-table').getElementsByTagName('tbody')[0];
         resolverTable.innerHTML = '';
-        const resolverRows = Array.isArray(data.resolver_health) && data.resolver_health.length > 0
-            ? data.resolver_health
-            : (Array.isArray(data.servers) ? data.servers : []);
+        const resolverRows = Array.isArray(data.resolver_health) ? data.resolver_health : [];
 
         if (resolverRows.length > 0) {
             // Sort by total queries (desc), then avg response, name, and last seen.
