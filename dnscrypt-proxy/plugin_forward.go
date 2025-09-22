@@ -331,7 +331,7 @@ func (plugin *PluginForward) Eval(pluginsState *PluginsState, msg *dns.Msg) erro
 		pluginsState.returnCode = PluginsReturnCodeForward
 		if len(sequence) > 0 {
 			switch respMsg.Rcode {
-			case dns.RcodeNameError, dns.RcodeRefused, dns.RcodeNotAuth:
+			case dns.RcodeServerFailure, dns.RcodeRefused, dns.RcodeNotAuth:
 				continue
 			}
 		}
