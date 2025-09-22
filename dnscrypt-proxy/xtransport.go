@@ -321,10 +321,10 @@ func (xTransport *XTransport) rebuildTransport() {
 			tlsCfg.ServerName = host
 			conn, err := quic.DialEarly(ctx, udpConn, udpAddr, tlsCfg, cfg)
 			if err != nil {
-				conn.Close()
+				udpConn.Close()
 				return nil, err
 			}
-			return conn, err
+			return conn, nil
 		}
 		h3Transport := &http3.Transport{DisableCompression: true, TLSClientConfig: &tlsClientConfig, Dial: dial}
 		xTransport.h3Transport = h3Transport
