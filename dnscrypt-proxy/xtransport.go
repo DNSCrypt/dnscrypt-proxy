@@ -341,15 +341,9 @@ func (xTransport *XTransport) resolveUsingSystem(host string) (ip net.IP, ttl ti
 	ips := make([]net.IP, 0)
 	for _, ip := range foundIPs {
 		if foundIP := net.ParseIP(ip); foundIP != nil {
-			if xTransport.useIPv4 {
-				if ipv4 := foundIP.To4(); ipv4 != nil {
-					ips = append(ips, foundIP)
-				}
-			}
-			if xTransport.useIPv6 {
-				if foundIP.To4() == nil {
-					ips = append(ips, foundIP)
-				}
+			isIPv4 := foundIP.To4() != nil
+			if (isIPv4 && xTransport.useIPv4) || (!isIPv4 && xTransport.useIPv6) {
+				ips = append(ips, foundIP)
 			}
 		}
 	}
