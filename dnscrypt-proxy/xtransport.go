@@ -363,7 +363,7 @@ func (xTransport *XTransport) rebuildTransport() {
 		}
 	}
 	transport.TLSClientConfig = &tlsClientConfig
-	if http2Transport, _ := http2.ConfigureTransports(transport); http2Transport == nil {
+	if http2Transport, _ := http2.ConfigureTransports(transport); http2Transport != nil {
 		http2Transport.ReadIdleTimeout = timeout
 		http2Transport.AllowHTTP = false
 	}
