@@ -74,7 +74,7 @@ func (handler localDoHHandler) ServeHTTP(writer http.ResponseWriter, request *ht
 	}
 	msg := dns.Msg{}
 	if err := msg.Unpack(packet); err != nil {
-		writer.WriteHeader(500)
+		writer.WriteHeader(400)
 		return
 	}
 	responseLen := len(response)
@@ -84,6 +84,7 @@ func (handler localDoHHandler) ServeHTTP(writer http.ResponseWriter, request *ht
 		response, err = addEDNS0PaddingIfNoneFound(&msg, response, padLen)
 		if err != nil {
 			dlog.Critical(err)
+			writer.WriteHeader(500)
 			return
 		}
 	} else {
