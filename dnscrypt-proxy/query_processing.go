@@ -88,7 +88,10 @@ func processDNSCryptQuery(
 	if err != nil {
 		if stale, ok := pluginsState.sessionData["stale"]; ok {
 			dlog.Debug("Serving stale response")
-			response, err = (stale.(*dns.Msg)).Pack()
+			serverInfo.noticeFailure(proxy)
+			if staleResponse, packErr := (stale.(*dns.Msg)).Pack(); packErr == nil {
+				return staleResponse, nil
+			}
 		}
 	}
 
@@ -122,9 +125,12 @@ func processDoHQuery(
 
 	// Check for stale response if there was an error
 	if err != nil || tls == nil || !tls.HandshakeComplete {
+		serverInfo.noticeFailure(proxy)
 		if stale, ok := pluginsState.sessionData["stale"]; ok {
-			dlog.Debug("Serving stale response")
-			return (stale.(*dns.Msg)).Pack()
+			dlog.Debug("Serving stale response after error")
+			if staleResponse, err := (stale.(*dns.Msg)).Pack(); err == nil {
+				return staleResponse, nil
+			}
 		}
 	}
 
@@ -132,7 +138,6 @@ func processDoHQuery(
 	if err != nil {
 		pluginsState.returnCode = PluginsReturnCodeNetworkError
 		pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
-		serverInfo.noticeFailure(proxy)
 		return nil, err
 	}
 
@@ -157,10 +162,13 @@ func processODoHQuery(
 		return nil, nil
 	}
 
+	serverInfo.noticeBegin(proxy)
+
 	target := serverInfo.odohTargetConfigs[rand.Intn(len(serverInfo.odohTargetConfigs))]
 	odohQuery, err := target.encryptQuery(query)
 	if err != nil {
 		dlog.Errorf("Failed to encrypt query for [%v]", serverInfo.Name)
+		serverInfo.noticeFailure(proxy)
 		return nil, err
 	}
 
@@ -176,6 +184,7 @@ func processODoHQuery(
 		response, err := odohQuery.decryptResponse(responseBody)
 		if err != nil {
 			dlog.Warnf("Failed to decrypt response from [%v]", serverInfo.Name)
+			serverInfo.noticeFailure(proxy)
 			return nil, err
 		}
 
