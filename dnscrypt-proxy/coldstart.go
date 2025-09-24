@@ -59,12 +59,10 @@ func HandleCaptivePortalQuery(msg *dns.Msg, question *dns.Question, ips *Captive
 	} else if question.Qtype == dns.TypeAAAA {
 		for _, xip := range *ips {
 			if xip.To4() == nil {
-				if ip := xip.To16(); ip != nil {
-					rr := new(dns.AAAA)
-					rr.Hdr = dns.RR_Header{Name: question.Name, Rrtype: dns.TypeAAAA, Class: dns.ClassINET, Ttl: ttl}
-					rr.AAAA = ip
-					respMsg.Answer = append(respMsg.Answer, rr)
-				}
+				rr := new(dns.AAAA)
+				rr.Hdr = dns.RR_Header{Name: question.Name, Rrtype: dns.TypeAAAA, Class: dns.ClassINET, Ttl: ttl}
+				rr.AAAA = xip
+				respMsg.Answer = append(respMsg.Answer, rr)
 			}
 		}
 	}
@@ -78,7 +76,7 @@ func HandleCaptivePortalQuery(msg *dns.Msg, question *dns.Question, ips *Captive
 }
 
 func handleColdStartClient(clientPc *net.UDPConn, cancelChannel chan struct{}, ipsMap *CaptivePortalMap) bool {
-	buffer := make([]byte, MaxDNSPacketSize-1)
+	buffer := make([]byte, MaxDNSPacketSize)
 	clientPc.SetDeadline(time.Now().Add(time.Duration(1) * time.Second))
 	length, clientAddr, err := clientPc.ReadFrom(buffer)
 	exit := false

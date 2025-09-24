@@ -31,17 +31,21 @@ import (
 )
 
 const (
-	DefaultBootstrapResolver = "9.9.9.9:53"
-	DefaultKeepAlive         = 5 * time.Second
-	DefaultTimeout           = 30 * time.Second
-	SystemResolverIPTTL      = 12 * time.Hour
-	MinResolverIPTTL         = 4 * time.Hour
-	ResolverIPTTLMaxJitter   = 15 * time.Minute
-	ExpiredCachedIPGraceTTL  = 15 * time.Minute
+	DefaultBootstrapResolver    = "9.9.9.9:53"
+	DefaultKeepAlive            = 5 * time.Second
+	DefaultTimeout              = 30 * time.Second
+	ResolverReadTimeout         = 5 * time.Second
+	SystemResolverIPTTL         = 12 * time.Hour
+	MinResolverIPTTL            = 4 * time.Hour
+	ResolverIPTTLMaxJitter      = 15 * time.Minute
+	ExpiredCachedIPGraceTTL     = 15 * time.Minute
+	resolverRetryCount          = 3
+	resolverRetryInitialBackoff = 150 * time.Millisecond
+	resolverRetryMaxBackoff     = 1 * time.Second
 )
 
 type CachedIPItem struct {
-	ip            net.IP
+	ips           []net.IP
 	expiration    *time.Time
 	updatingUntil *time.Time
 }
@@ -108,8 +112,33 @@ func ParseIP(ipStr string) net.IP {
 
 // If ttl < 0, never expire
 // Otherwise, ttl is set to max(ttl, MinResolverIPTTL)
-func (xTransport *XTransport) saveCachedIP(host string, ip net.IP, ttl time.Duration) {
-	item := &CachedIPItem{ip: ip, expiration: nil, updatingUntil: nil}
+func uniqueNormalizedIPs(ips []net.IP) []net.IP {
+	if len(ips) == 0 {
+		return nil
+	}
+	unique := make([]net.IP, 0, len(ips))
+	seen := make(map[string]struct{}, len(ips))
+	for _, ip := range ips {
+		if ip == nil {
+			continue
+		}
+		copyIP := append(net.IP(nil), ip...)
+		key := copyIP.String()
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		unique = append(unique, copyIP)
+	}
+	return unique
+}
+
+func (xTransport *XTransport) saveCachedIPs(host string, ips []net.IP, ttl time.Duration) {
+	normalized := uniqueNormalizedIPs(ips)
+	if len(normalized) == 0 {
+		return
+	}
+	item := &CachedIPItem{ips: normalized}
 	if ttl >= 0 {
 		if ttl < MinResolverIPTTL {
 			ttl = MinResolverIPTTL
@@ -119,9 +148,21 @@ func (xTransport *XTransport) saveCachedIP(host string, ip net.IP, ttl time.Dura
 		item.expiration = &expiration
 	}
 	xTransport.cachedIPs.Lock()
+	item.updatingUntil = nil
 	xTransport.cachedIPs.cache[host] = item
 	xTransport.cachedIPs.Unlock()
-	dlog.Debugf("[%s] IP address [%s] stored to the cache, valid for %v", host, ip, ttl)
+	if len(normalized) == 1 {
+		dlog.Debugf("[%s] cached IP [%s], valid for %v", host, normalized[0], ttl)
+	} else {
+		dlog.Debugf("[%s] cached %d IP addresses (first: %s), valid for %v", host, len(normalized), normalized[0], ttl)
+	}
+}
+
+func (xTransport *XTransport) saveCachedIP(host string, ip net.IP, ttl time.Duration) {
+	if ip == nil {
+		return
+	}
+	xTransport.saveCachedIPs(host, []net.IP{ip}, ttl)
 }
 
 // Mark an entry as being updated
@@ -133,32 +174,50 @@ func (xTransport *XTransport) markUpdatingCachedIP(host string) {
 		until := now.Add(xTransport.timeout)
 		item.updatingUntil = &until
 		xTransport.cachedIPs.cache[host] = item
-		dlog.Debugf("[%s] IP addresss marked as updating", host)
+		dlog.Debugf("[%s] IP address marked as updating", host)
 	}
 	xTransport.cachedIPs.Unlock()
 }
 
-func (xTransport *XTransport) loadCachedIP(host string) (ip net.IP, expired bool, updating bool) {
-	ip, expired, updating = nil, false, false
+func (xTransport *XTransport) loadCachedIPs(host string) (ips []net.IP, expired bool, updating bool) {
+	ips = nil
 	xTransport.cachedIPs.RLock()
 	item, ok := xTransport.cachedIPs.cache[host]
-	xTransport.cachedIPs.RUnlock()
 	if !ok {
+		xTransport.cachedIPs.RUnlock()
 		dlog.Debugf("[%s] IP address not found in the cache", host)
-		return ip, expired, updating
+		return nil, false, false
 	}
-	ip = item.ip
-	expiration := item.expiration
-	if expiration != nil && time.Until(*expiration) < 0 {
-		expired = true
-		if item.updatingUntil != nil && time.Until(*item.updatingUntil) > 0 {
-			updating = true
-			dlog.Debugf("[%s] IP address is being updated", host)
-		} else {
-			dlog.Debugf("[%s] IP address expired, not being updated yet", host)
+	if len(item.ips) > 0 {
+		ips = make([]net.IP, 0, len(item.ips))
+		for _, ip := range item.ips {
+			if ip == nil {
+				continue
+			}
+			ips = append(ips, append(net.IP(nil), ip...))
 		}
 	}
-	return ip, expired, updating
+	expiration := item.expiration
+	updatingUntil := item.updatingUntil
+	xTransport.cachedIPs.RUnlock()
+	if expiration != nil && time.Until(*expiration) < 0 {
+		expired = true
+		if updatingUntil != nil && time.Until(*updatingUntil) > 0 {
+			updating = true
+			dlog.Debugf("[%s] cached IP addresses are being updated", host)
+		} else {
+			dlog.Debugf("[%s] cached IP addresses expired, not being updated yet", host)
+		}
+	}
+	return ips, expired, updating
+}
+
+func (xTransport *XTransport) loadCachedIP(host string) (net.IP, bool, bool) {
+	ips, expired, updating := xTransport.loadCachedIPs(host)
+	if len(ips) > 0 {
+		return ips[0], expired, updating
+	}
+	return nil, expired, updating
 }
 
 func (xTransport *XTransport) rebuildTransport() {
@@ -177,25 +236,49 @@ func (xTransport *XTransport) rebuildTransport() {
 		MaxResponseHeaderBytes: 4096,
 		DialContext: func(ctx context.Context, network, addrStr string) (net.Conn, error) {
 			host, port := ExtractHostAndPort(addrStr, stamps.DefaultPort)
-			ipOnly := host
-			// resolveAndUpdateCache() is always called in `Fetch()` before the `Dial()`
-			// method is used, so that a cached entry must be present at this point.
-			cachedIP, _, _ := xTransport.loadCachedIP(host)
-			if cachedIP != nil {
-				if ipv4 := cachedIP.To4(); ipv4 != nil {
-					ipOnly = ipv4.String()
-				} else {
-					ipOnly = "[" + cachedIP.String() + "]"
+			formatEndpoint := func(ip net.IP) string {
+				if ip != nil {
+					if ipv4 := ip.To4(); ipv4 != nil {
+						return ipv4.String() + ":" + strconv.Itoa(port)
+					}
+					return "[" + ip.String() + "]:" + strconv.Itoa(port)
 				}
-			} else {
+				if parsed := ParseIP(host); parsed != nil && parsed.To4() == nil {
+					return "[" + host + "]:" + strconv.Itoa(port)
+				}
+				return host + ":" + strconv.Itoa(port)
+			}
+
+			cachedIPs, _, _ := xTransport.loadCachedIPs(host)
+			targets := make([]string, 0, len(cachedIPs))
+			for _, ip := range cachedIPs {
+				targets = append(targets, formatEndpoint(ip))
+			}
+			if len(targets) == 0 {
 				dlog.Debugf("[%s] IP address was not cached in DialContext", host)
+				targets = append(targets, formatEndpoint(nil))
 			}
-			addrStr = ipOnly + ":" + strconv.Itoa(port)
-			if xTransport.proxyDialer == nil {
-				dialer := &net.Dialer{Timeout: timeout, KeepAlive: timeout, DualStack: true}
-				return dialer.DialContext(ctx, network, addrStr)
+
+			dial := func(address string) (net.Conn, error) {
+				if xTransport.proxyDialer == nil {
+					dialer := &net.Dialer{Timeout: timeout, KeepAlive: timeout, DualStack: true}
+					return dialer.DialContext(ctx, network, address)
+				}
+				return (*xTransport.proxyDialer).Dial(network, address)
 			}
-			return (*xTransport.proxyDialer).Dial(network, addrStr)
+
+			var lastErr error
+			for idx, target := range targets {
+				conn, err := dial(target)
+				if err == nil {
+					return conn, nil
+				}
+				lastErr = err
+				if idx < len(targets)-1 {
+					dlog.Debugf("Dial attempt using [%s] failed: %v", target, err)
+				}
+			}
+			return nil, lastErr
 		},
 	}
 	if xTransport.httpProxyFunction != nil {
@@ -280,7 +363,7 @@ func (xTransport *XTransport) rebuildTransport() {
 		}
 	}
 	transport.TLSClientConfig = &tlsClientConfig
-	if http2Transport, err := http2.ConfigureTransports(transport); err != nil {
+	if http2Transport, _ := http2.ConfigureTransports(transport); http2Transport != nil {
 		http2Transport.ReadIdleTimeout = timeout
 		http2Transport.AllowHTTP = false
 	}
@@ -289,155 +372,184 @@ func (xTransport *XTransport) rebuildTransport() {
 		dial := func(ctx context.Context, addrStr string, tlsCfg *tls.Config, cfg *quic.Config) (*quic.Conn, error) {
 			dlog.Debugf("Dialing for H3: [%v]", addrStr)
 			host, port := ExtractHostAndPort(addrStr, stamps.DefaultPort)
-			ipOnly := host
-			cachedIP, _, _ := xTransport.loadCachedIP(host)
-			network := "udp4"
-			if cachedIP != nil {
-				if ipv4 := cachedIP.To4(); ipv4 != nil {
-					ipOnly = ipv4.String()
-				} else {
-					ipOnly = "[" + cachedIP.String() + "]"
-					network = "udp6"
+			type udpTarget struct {
+				addr    string
+				network string
+			}
+			buildAddr := func(ip net.IP) udpTarget {
+				if ip != nil {
+					if ipv4 := ip.To4(); ipv4 != nil {
+						return udpTarget{addr: ipv4.String() + ":" + strconv.Itoa(port), network: "udp4"}
+					}
+					return udpTarget{addr: "[" + ip.String() + "]:" + strconv.Itoa(port), network: "udp6"}
 				}
-			} else {
-				dlog.Debugf("[%s] IP address was not cached in H3 context", host)
-				if xTransport.useIPv6 {
+				network := "udp4"
+				addr := host
+				if parsed := ParseIP(host); parsed != nil {
+					if parsed.To4() != nil {
+						addr = parsed.String()
+					} else {
+						network = "udp6"
+						addr = "[" + parsed.String() + "]"
+					}
+				} else if xTransport.useIPv6 {
 					if xTransport.useIPv4 {
 						network = "udp"
 					} else {
 						network = "udp6"
 					}
 				}
+				return udpTarget{addr: addr + ":" + strconv.Itoa(port), network: network}
 			}
-			addrStr = ipOnly + ":" + strconv.Itoa(port)
-			udpAddr, err := net.ResolveUDPAddr(network, addrStr)
-			if err != nil {
-				return nil, err
+
+			cachedIPs, _, _ := xTransport.loadCachedIPs(host)
+			targets := make([]udpTarget, 0, len(cachedIPs))
+			for _, ip := range cachedIPs {
+				targets = append(targets, buildAddr(ip))
 			}
-			udpConn, err := net.ListenUDP(network, nil)
-			if err != nil {
-				return nil, err
+			if len(targets) == 0 {
+				dlog.Debugf("[%s] IP address was not cached in H3 context", host)
+				targets = append(targets, buildAddr(nil))
 			}
-			tlsCfg.ServerName = host
-			return quic.DialEarly(ctx, udpConn, udpAddr, tlsCfg, cfg)
+
+			var lastErr error
+			for idx, target := range targets {
+				udpAddr, err := net.ResolveUDPAddr(target.network, target.addr)
+				if err != nil {
+					lastErr = err
+					if idx < len(targets)-1 {
+						dlog.Debugf("H3: failed to resolve [%s] on %s: %v", target.addr, target.network, err)
+					}
+					continue
+				}
+				udpConn, err := net.ListenUDP(target.network, nil)
+				if err != nil {
+					lastErr = err
+					if idx < len(targets)-1 {
+						dlog.Debugf("H3: failed to listen for [%s] on %s: %v", target.addr, target.network, err)
+					}
+					continue
+				}
+				tlsCfg.ServerName = host
+				conn, err := quic.DialEarly(ctx, udpConn, udpAddr, tlsCfg, cfg)
+				if err != nil {
+					udpConn.Close()
+					lastErr = err
+					if idx < len(targets)-1 {
+						dlog.Debugf("H3: dialing [%s] via %s failed: %v", target.addr, target.network, err)
+					}
+					continue
+				}
+				return conn, nil
+			}
+			return nil, lastErr
 		}
 		h3Transport := &http3.Transport{DisableCompression: true, TLSClientConfig: &tlsClientConfig, Dial: dial}
 		xTransport.h3Transport = h3Transport
 	}
 }
 
-func (xTransport *XTransport) resolveUsingSystem(host string) (ip net.IP, ttl time.Duration, err error) {
-	ttl = SystemResolverIPTTL
-	var foundIPs []string
-	foundIPs, err = net.LookupHost(host)
-	if err != nil {
-		return ip, ttl, err
+func (xTransport *XTransport) resolveUsingSystem(host string, returnIPv4, returnIPv6 bool) ([]net.IP, time.Duration, error) {
+	ipa, err := net.LookupIP(host)
+	if returnIPv4 && returnIPv6 {
+		return ipa, SystemResolverIPTTL, err
 	}
 	ips := make([]net.IP, 0)
-	for _, ip := range foundIPs {
-		if foundIP := net.ParseIP(ip); foundIP != nil {
-			if xTransport.useIPv4 {
-				if ipv4 := foundIP.To4(); ipv4 != nil {
-					ips = append(ips, foundIP)
-				}
-			}
-			if xTransport.useIPv6 {
-				if ipv6 := foundIP.To16(); ipv6 != nil {
-					ips = append(ips, foundIP)
-				}
-			}
+	for _, ip := range ipa {
+		ipv4 := ip.To4()
+		if returnIPv4 && ipv4 != nil {
+			ips = append(ips, ipv4)
+		}
+		if returnIPv6 && ipv4 == nil {
+			ips = append(ips, ip)
 		}
 	}
-	if len(ips) > 0 {
-		ip = ips[rand.Intn(len(ips))]
-	}
-	return ip, ttl, err
+	return ips, SystemResolverIPTTL, err
 }
 
 func (xTransport *XTransport) resolveUsingResolver(
 	proto, host string,
 	resolver string,
-) (ip net.IP, ttl time.Duration, err error) {
-	dnsClient := dns.Client{Net: proto}
-	if xTransport.useIPv4 {
+	returnIPv4, returnIPv6 bool,
+) (ips []net.IP, ttl time.Duration, err error) {
+	dnsClient := dns.Client{Net: proto, ReadTimeout: ResolverReadTimeout}
+	queryType := make([]uint16, 0, 2)
+	if returnIPv4 {
+		queryType = append(queryType, dns.TypeA)
+	}
+	if returnIPv6 {
+		queryType = append(queryType, dns.TypeAAAA)
+	}
+	var rrTTL uint32
+	for _, rrType := range queryType {
 		msg := dns.Msg{}
-		msg.SetQuestion(dns.Fqdn(host), dns.TypeA)
+		msg.SetQuestion(dns.Fqdn(host), rrType)
 		msg.SetEdns0(uint16(MaxDNSPacketSize), true)
 		var in *dns.Msg
 		if in, _, err = dnsClient.Exchange(&msg, resolver); err == nil {
-			answers := make([]dns.RR, 0)
 			for _, answer := range in.Answer {
-				if answer.Header().Rrtype == dns.TypeA {
-					answers = append(answers, answer)
+				if answer.Header().Rrtype == rrType {
+					switch rrType {
+					case dns.TypeA:
+						ips = append(ips, answer.(*dns.A).A)
+					case dns.TypeAAAA:
+						ips = append(ips, answer.(*dns.AAAA).AAAA)
+					}
+					rrTTL = answer.Header().Ttl
 				}
-			}
-			if len(answers) > 0 {
-				answer := answers[rand.Intn(len(answers))]
-				ip = answer.(*dns.A).A
-				ttl = time.Duration(answer.Header().Ttl) * time.Second
-				return ip, ttl, err
 			}
 		}
 	}
-	if xTransport.useIPv6 {
-		msg := dns.Msg{}
-		msg.SetQuestion(dns.Fqdn(host), dns.TypeAAAA)
-		msg.SetEdns0(uint16(MaxDNSPacketSize), true)
-		var in *dns.Msg
-		if in, _, err = dnsClient.Exchange(&msg, resolver); err == nil {
-			answers := make([]dns.RR, 0)
-			for _, answer := range in.Answer {
-				if answer.Header().Rrtype == dns.TypeAAAA {
-					answers = append(answers, answer)
-				}
-			}
-			if len(answers) > 0 {
-				answer := answers[rand.Intn(len(answers))]
-				ip = answer.(*dns.AAAA).AAAA
-				ttl = time.Duration(answer.Header().Ttl) * time.Second
-				return ip, ttl, err
-			}
-		}
+	if len(ips) > 0 {
+		ttl = time.Duration(rrTTL) * time.Second
 	}
-	return ip, ttl, err
+	return ips, ttl, err
 }
 
-func (xTransport *XTransport) resolveUsingResolvers(
+func (xTransport *XTransport) resolveUsingServers(
 	proto, host string,
 	resolvers []string,
-) (ip net.IP, ttl time.Duration, err error) {
-	err = errors.New("Empty resolvers")
-	for i, resolver := range resolvers {
-		ip, ttl, err = xTransport.resolveUsingResolver(proto, host, resolver)
-		if err == nil {
-			if i > 0 {
-				dlog.Infof("Resolution succeeded with resolver %s[%s]", proto, resolver)
-				resolvers[0], resolvers[i] = resolvers[i], resolvers[0]
-			}
-			break
-		}
-		dlog.Infof("Unable to resolve [%s] using resolver [%s] (%s): %v", host, resolver, proto, err)
+	returnIPv4, returnIPv6 bool,
+) (ips []net.IP, ttl time.Duration, err error) {
+	if len(resolvers) == 0 {
+		return nil, 0, errors.New("Empty resolvers")
 	}
-	return ip, ttl, err
+	var lastErr error
+	for i, resolver := range resolvers {
+		delay := resolverRetryInitialBackoff
+		for attempt := 1; attempt <= resolverRetryCount; attempt++ {
+			ips, ttl, err = xTransport.resolveUsingResolver(proto, host, resolver, returnIPv4, returnIPv6)
+			if err == nil && len(ips) > 0 {
+				if i > 0 {
+					dlog.Infof("Resolution succeeded with resolver %s[%s]", proto, resolver)
+					resolvers[0], resolvers[i] = resolvers[i], resolvers[0]
+				}
+				return ips, ttl, nil
+			}
+			if err == nil {
+				err = errors.New("no IP addresses returned")
+			}
+			lastErr = err
+			dlog.Debugf("Resolver attempt %d failed for [%s] using [%s] (%s): %v", attempt, host, resolver, proto, err)
+			if attempt < resolverRetryCount {
+				time.Sleep(delay)
+				if delay < resolverRetryMaxBackoff {
+					delay *= 2
+					if delay > resolverRetryMaxBackoff {
+						delay = resolverRetryMaxBackoff
+					}
+				}
+			}
+		}
+		dlog.Infof("Unable to resolve [%s] using resolver [%s] (%s): %v", host, resolver, proto, lastErr)
+	}
+	if lastErr == nil {
+		lastErr = errors.New("no IP addresses returned")
+	}
+	return nil, 0, lastErr
 }
 
-// If a name is not present in the cache, resolve the name and update the cache
-func (xTransport *XTransport) resolveAndUpdateCache(host string) error {
-	if xTransport.proxyDialer != nil || xTransport.httpProxyFunction != nil {
-		return nil
-	}
-	if ParseIP(host) != nil {
-		return nil
-	}
-	cachedIP, expired, updating := xTransport.loadCachedIP(host)
-	if cachedIP != nil && (!expired || updating) {
-		return nil
-	}
-	xTransport.markUpdatingCachedIP(host)
-
-	var foundIP net.IP
-	var ttl time.Duration
-	var err error
+func (xTransport *XTransport) resolve(host string, returnIPv4, returnIPv6 bool) (ips []net.IP, ttl time.Duration, err error) {
 	protos := []string{"udp", "tcp"}
 	if xTransport.mainProto == "tcp" {
 		protos = []string{"tcp", "udp"}
@@ -445,7 +557,7 @@ func (xTransport *XTransport) resolveAndUpdateCache(host string) error {
 	if xTransport.ignoreSystemDNS {
 		if xTransport.internalResolverReady {
 			for _, proto := range protos {
-				foundIP, ttl, err = xTransport.resolveUsingResolvers(proto, host, xTransport.internalResolvers)
+				ips, ttl, err = xTransport.resolveUsingServers(proto, host, xTransport.internalResolvers, returnIPv4, returnIPv6)
 				if err == nil {
 					break
 				}
@@ -455,7 +567,7 @@ func (xTransport *XTransport) resolveAndUpdateCache(host string) error {
 			dlog.Notice(err)
 		}
 	} else {
-		foundIP, ttl, err = xTransport.resolveUsingSystem(host)
+		ips, ttl, err = xTransport.resolveUsingSystem(host, returnIPv4, returnIPv6)
 		if err != nil {
 			err = errors.New("System DNS is not usable yet")
 			dlog.Notice(err)
@@ -470,7 +582,7 @@ func (xTransport *XTransport) resolveAndUpdateCache(host string) error {
 					proto,
 				)
 			}
-			foundIP, ttl, err = xTransport.resolveUsingResolvers(proto, host, xTransport.bootstrapResolvers)
+			ips, ttl, err = xTransport.resolveUsingServers(proto, host, xTransport.bootstrapResolvers, returnIPv4, returnIPv6)
 			if err == nil {
 				break
 			}
@@ -478,21 +590,40 @@ func (xTransport *XTransport) resolveAndUpdateCache(host string) error {
 	}
 	if err != nil && xTransport.ignoreSystemDNS {
 		dlog.Noticef("Bootstrap resolvers didn't respond - Trying with the system resolver as a last resort")
-		foundIP, ttl, err = xTransport.resolveUsingSystem(host)
+		ips, ttl, err = xTransport.resolveUsingSystem(host, returnIPv4, returnIPv6)
 	}
+	return ips, ttl, err
+}
+
+// If a name is not present in the cache, resolve the name and update the cache
+func (xTransport *XTransport) resolveAndUpdateCache(host string) error {
+	if xTransport.proxyDialer != nil || xTransport.httpProxyFunction != nil {
+		return nil
+	}
+	if ParseIP(host) != nil {
+		return nil
+	}
+	cachedIPs, expired, updating := xTransport.loadCachedIPs(host)
+	if len(cachedIPs) > 0 && (!expired || updating) {
+		return nil
+	}
+	xTransport.markUpdatingCachedIP(host)
+
+	ips, ttl, err := xTransport.resolve(host, xTransport.useIPv4, xTransport.useIPv6)
 	if ttl < MinResolverIPTTL {
 		ttl = MinResolverIPTTL
 	}
-	if err != nil {
-		if cachedIP != nil {
-			dlog.Noticef("Using stale [%v] cached address for a grace period", host)
-			foundIP = cachedIP
-			ttl = ExpiredCachedIPGraceTTL
-		} else {
-			return err
-		}
+	selectedIPs := ips
+	if (err != nil || len(selectedIPs) == 0) && len(cachedIPs) > 0 {
+		dlog.Noticef("Using stale [%v] cached address for a grace period", host)
+		selectedIPs = cachedIPs
+		ttl = ExpiredCachedIPGraceTTL
+		err = nil
 	}
-	if foundIP == nil {
+	if err != nil {
+		return err
+	}
+	if len(selectedIPs) == 0 {
 		if !xTransport.useIPv4 && xTransport.useIPv6 {
 			dlog.Warnf("no IPv6 address found for [%s]", host)
 		} else if xTransport.useIPv4 && !xTransport.useIPv6 {
@@ -500,8 +631,9 @@ func (xTransport *XTransport) resolveAndUpdateCache(host string) error {
 		} else {
 			dlog.Errorf("no IP address found for [%s]", host)
 		}
+		return nil
 	}
-	xTransport.saveCachedIP(host, foundIP, ttl)
+	xTransport.saveCachedIPs(host, selectedIPs, ttl)
 	return nil
 }
 

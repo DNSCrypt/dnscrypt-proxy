@@ -7,6 +7,7 @@ import (
 	"html"
 	"net"
 	"net/http"
+	"os"
 	"runtime"
 	"sort"
 	"strings"
@@ -71,6 +72,9 @@ type MetricsCollector struct {
 
 	// Prometheus metrics (optional)
 	prometheusEnabled bool
+
+	// Runtime context
+	proxy *Proxy
 }
 
 // QueryLogEntry - Entry for the query log
@@ -94,6 +98,20 @@ func (q *QueryLogEntry) EstimateMemoryUsage() int64 {
 		len(q.Type) +
 		len(q.ResponseCode) +
 		len(q.Server))
+}
+
+type resolverSnapshot struct {
+	name          string
+	proto         string
+	total         uint64
+	failed        uint64
+	success       float64
+	avgObservedMs float64
+	lastUpdate    time.Time
+	lastAction    time.Time
+	status        string
+	score         float64
+	ageSeconds    float64
 }
 
 // MonitoringUI - Handles the monitoring UI
@@ -155,6 +173,7 @@ func NewMonitoringUI(proxy *Proxy) *MonitoringUI {
 		cachedMetrics: make(map[string]interface{}),
 		// Initialize Prometheus
 		prometheusEnabled: proxy.monitoringUI.PrometheusEnabled,
+		proxy:             proxy,
 	}
 
 	dlog.Debugf("Metrics collector initialized with privacy level: %d", metricsCollector.privacyLevel)
@@ -561,6 +580,229 @@ func (mc *MetricsCollector) generatePrometheusMetrics() string {
 	return result.String()
 }
 
+func determineResolverStatus(total uint64, successRate float64, lastUpdate, lastAction, now time.Time) string {
+	staleThreshold := 5 * time.Minute
+	refTime := lastUpdate
+	if refTime.IsZero() {
+		refTime = lastAction
+	}
+
+	if total == 0 {
+		if refTime.IsZero() {
+			return "idle"
+		}
+		if !refTime.IsZero() && now.Sub(refTime) > staleThreshold {
+			return "stale"
+		}
+		return "warming"
+	}
+
+	status := "healthy"
+	switch {
+	case successRate >= 0.97:
+		status = "healthy"
+	case successRate >= 0.9:
+		status = "degraded"
+	default:
+		status = "failing"
+	}
+
+	if !refTime.IsZero() && now.Sub(refTime) > staleThreshold {
+		status = "stale"
+	}
+
+	return status
+}
+
+func resolverStatusRank(status string) int {
+	switch status {
+	case "failing":
+		return 0
+	case "degraded":
+		return 1
+	case "stale":
+		return 2
+	case "warming":
+		return 3
+	case "healthy":
+		return 4
+	case "idle":
+		return 5
+	default:
+		return 6
+	}
+}
+
+func (mc *MetricsCollector) collectResolverSnapshots() ([]resolverSnapshot, map[string]resolverSnapshot) {
+	snapshots := make([]resolverSnapshot, 0)
+	index := make(map[string]resolverSnapshot)
+
+	if mc.proxy == nil {
+		return snapshots, index
+	}
+
+	mc.proxy.serversInfo.RLock()
+	defer mc.proxy.serversInfo.RUnlock()
+
+	now := time.Now()
+	for _, server := range mc.proxy.serversInfo.inner {
+		if server == nil {
+			continue
+		}
+
+		total := server.totalQueries
+		failed := server.failedQueries
+		successRate := 1.0
+		if total > 0 {
+			successRate = float64(total-failed) / float64(total)
+		}
+
+		lastUpdate := server.lastUpdateTime
+		lastAction := server.lastActionTS
+		score := mc.proxy.serversInfo.calculateServerScore(server)
+		status := determineResolverStatus(total, successRate, lastUpdate, lastAction, now)
+		ageSeconds := -1.0
+		refTime := lastUpdate
+		if refTime.IsZero() {
+			refTime = lastAction
+		}
+		if !refTime.IsZero() {
+			ageSeconds = now.Sub(refTime).Seconds()
+		}
+
+		snapshot := resolverSnapshot{
+			name:       server.Name,
+			proto:      server.Proto.String(),
+			total:      total,
+			failed:     failed,
+			success:    successRate,
+			lastUpdate: lastUpdate,
+			lastAction: lastAction,
+			status:     status,
+			score:      score,
+			ageSeconds: ageSeconds,
+		}
+
+		snapshots = append(snapshots, snapshot)
+		index[server.Name] = snapshot
+	}
+
+	sort.Slice(snapshots, func(i, j int) bool {
+		if rankI, rankJ := resolverStatusRank(snapshots[i].status), resolverStatusRank(snapshots[j].status); rankI != rankJ {
+			return rankI < rankJ
+		}
+		if snapshots[i].score != snapshots[j].score {
+			return snapshots[i].score > snapshots[j].score
+		}
+		return snapshots[i].name < snapshots[j].name
+	})
+
+	return snapshots, index
+}
+
+func (mc *MetricsCollector) collectCacheStats(cacheHitRatio float64, cacheHits, cacheMisses uint64) map[string]interface{} {
+	stats := map[string]interface{}{
+		"enabled":         false,
+		"configured_size": 0,
+		"entries":         0,
+		"capacity":        0,
+		"cache_hit_ratio": cacheHitRatio,
+		"cache_hits":      cacheHits,
+		"cache_misses":    cacheMisses,
+	}
+
+	if mc.proxy == nil {
+		return stats
+	}
+
+	stats["enabled"] = mc.proxy.cache
+	stats["configured_size"] = mc.proxy.cacheSize
+	stats["max_ttl"] = mc.proxy.cacheMaxTTL
+	stats["min_ttl"] = mc.proxy.cacheMinTTL
+	stats["neg_max_ttl"] = mc.proxy.cacheNegMaxTTL
+	stats["neg_min_ttl"] = mc.proxy.cacheNegMinTTL
+
+	if cachedResponses.cache != nil {
+		stats["entries"] = cachedResponses.cache.Len()
+		stats["capacity"] = cachedResponses.cache.Capacity()
+	}
+
+	return stats
+}
+
+func (mc *MetricsCollector) collectSourceRefresh() []map[string]interface{} {
+	if mc.proxy == nil || len(mc.proxy.sources) == 0 {
+		return nil
+	}
+
+	results := make([]map[string]interface{}, 0, len(mc.proxy.sources))
+	now := time.Now()
+
+	for _, source := range mc.proxy.sources {
+		if source == nil {
+			continue
+		}
+
+		source.RLock()
+		name := source.name
+		cacheFile := source.cacheFile
+		nextRefresh := source.refresh
+		cacheTTL := source.cacheTTL
+		source.RUnlock()
+
+		var lastRefresh time.Time
+		var errorMessage string
+		if cacheFile != "" {
+			if fi, err := os.Stat(cacheFile); err == nil {
+				lastRefresh = fi.ModTime()
+			} else {
+				errorMessage = err.Error()
+			}
+		}
+
+		ageSeconds := -1.0
+		if !lastRefresh.IsZero() {
+			ageSeconds = now.Sub(lastRefresh).Seconds()
+		}
+
+		status := "ok"
+		switch {
+		case errorMessage != "":
+			status = "error"
+		case lastRefresh.IsZero():
+			status = "unknown"
+		case !nextRefresh.IsZero() && nextRefresh.Before(now):
+			status = "due"
+		case cacheTTL > 0 && lastRefresh.Add(cacheTTL).Before(now):
+			status = "stale"
+		}
+
+		entry := map[string]interface{}{
+			"name":        name,
+			"cache_file":  cacheFile,
+			"age_seconds": ageSeconds,
+			"status":      status,
+		}
+		if !lastRefresh.IsZero() {
+			entry["last_refresh"] = lastRefresh
+		}
+		if !nextRefresh.IsZero() {
+			entry["next_refresh"] = nextRefresh
+		}
+		if errorMessage != "" {
+			entry["error"] = errorMessage
+		}
+
+		results = append(results, entry)
+	}
+
+	sort.Slice(results, func(i, j int) bool {
+		return results[i]["name"].(string) < results[j]["name"].(string)
+	})
+
+	return results
+}
+
 // invalidateCache - Marks the cache as stale (call when data changes)
 func (mc *MetricsCollector) invalidateCache() {
 	mc.cacheMutex.Lock()
@@ -609,47 +851,27 @@ func (mc *MetricsCollector) GetMetrics() map[string]interface{} {
 		cacheHitRatio = float64(cacheHits) / float64(totalCacheQueries)
 	}
 
-	// Calculate per-server metrics sorted by increasing average response time
-	serverMetrics := make([]map[string]interface{}, 0)
+	cacheStats := mc.collectCacheStats(cacheHitRatio, cacheHits, cacheMisses)
+	resolverSnapshots, resolverIndex := mc.collectResolverSnapshots()
 
-	// Create a slice of server performance data
-	type serverPerf struct {
-		name    string
-		queries uint64
-		avgTime float64
-	}
-
-	// Read server data with its own lock
+	// Update resolver snapshots with observed average response times.
 	mc.serverMutex.RLock()
-	serverPerfs := make([]serverPerf, 0, len(mc.serverQueryCount))
 	for server, count := range mc.serverQueryCount {
 		avgTime := float64(0)
 		if count > 0 {
 			avgTime = float64(mc.serverResponseTime[server]) / float64(count)
 		}
-		serverPerfs = append(serverPerfs, serverPerf{
-			name:    server,
-			queries: count,
-			avgTime: avgTime,
-		})
+		if snapshot, ok := resolverIndex[server]; ok {
+			snapshot.avgObservedMs = avgTime
+			resolverIndex[server] = snapshot
+		}
 	}
 	mc.serverMutex.RUnlock()
 
-	// Sort by increasing average response time (faster servers first)
-	sort.Slice(serverPerfs, func(i, j int) bool {
-		if serverPerfs[i].avgTime != serverPerfs[j].avgTime {
-			return serverPerfs[i].avgTime < serverPerfs[j].avgTime
+	for i, snapshot := range resolverSnapshots {
+		if updated, ok := resolverIndex[snapshot.name]; ok {
+			resolverSnapshots[i] = updated
 		}
-		return serverPerfs[i].name < serverPerfs[j].name
-	})
-
-	// Convert to map for JSON output
-	for _, sp := range serverPerfs {
-		serverMetrics = append(serverMetrics, map[string]interface{}{
-			"name":            sp.name,
-			"queries":         sp.queries,
-			"avg_response_ms": sp.avgTime,
-		})
 	}
 
 	// Get top domains (limited to 20) sorted by decreasing count
@@ -733,6 +955,35 @@ func (mc *MetricsCollector) GetMetrics() map[string]interface{} {
 	copy(recentQueries, mc.recentQueries)
 	mc.queryLogMutex.RUnlock()
 
+	resolverHealth := make([]map[string]interface{}, 0, len(resolverSnapshots))
+	for _, snapshot := range resolverSnapshots {
+		entry := map[string]interface{}{
+			"name":           snapshot.name,
+			"proto":          snapshot.proto,
+			"status":         snapshot.status,
+			"success_rate":   snapshot.success,
+			"total_queries":  snapshot.total,
+			"failed_queries": snapshot.failed,
+			"score":          snapshot.score,
+		}
+		if snapshot.avgObservedMs > 0 {
+			entry["avg_response_ms"] = snapshot.avgObservedMs
+		}
+		if snapshot.ageSeconds >= 0 {
+			entry["age_seconds"] = snapshot.ageSeconds
+		}
+		if !snapshot.lastUpdate.IsZero() {
+			entry["last_update"] = snapshot.lastUpdate
+		}
+		if !snapshot.lastAction.IsZero() {
+			entry["last_action"] = snapshot.lastAction
+		}
+		resolverHealth = append(resolverHealth, entry)
+	}
+
+	sourceRefresh := mc.collectSourceRefresh()
+	generatedAt := time.Now().UTC()
+
 	// Return all metrics and cache the result
 	metrics := map[string]interface{}{
 		"total_queries":      totalQueries,
@@ -743,16 +994,19 @@ func (mc *MetricsCollector) GetMetrics() map[string]interface{} {
 		"cache_misses":       cacheMisses,
 		"avg_response_time":  avgResponseTime,
 		"blocked_queries":    blockCount,
-		"servers":            serverMetrics,
 		"top_domains":        topDomainsList,
 		"query_types":        queryTypesList,
 		"recent_queries":     recentQueries,
+		"cache_stats":        cacheStats,
+		"resolver_health":    resolverHealth,
+		"sources":            sourceRefresh,
+		"generated_at":       generatedAt,
 	}
 
 	// Cache the computed metrics
 	mc.cacheMutex.Lock()
 	mc.cachedMetrics = metrics
-	mc.cacheLastUpdate = time.Now()
+	mc.cacheLastUpdate = generatedAt
 	mc.cacheMutex.Unlock()
 
 	dlog.Debugf("Computed and cached new metrics")

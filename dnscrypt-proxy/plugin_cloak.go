@@ -15,13 +15,14 @@ import (
 )
 
 type CloakedName struct {
-	target     string
-	ipv4       []net.IP
-	ipv6       []net.IP
-	lastUpdate *time.Time
-	lineNo     int
-	isIP       bool
-	PTR        []string
+	target      string
+	ipv4        []net.IP
+	ipv6        []net.IP
+	lastUpdate4 *time.Time
+	lastUpdate6 *time.Time
+	lineNo      int
+	isIP        bool
+	PTR         []string
 }
 
 type PluginCloak struct {
@@ -98,11 +99,8 @@ func (plugin *PluginCloak) loadRules(lines string, patternMatcher *PatternMatche
 		if ip != nil {
 			if ipv4 := ip.To4(); ipv4 != nil {
 				cloakedName.ipv4 = append(cloakedName.ipv4, ipv4)
-			} else if ipv6 := ip.To16(); ipv6 != nil {
-				cloakedName.ipv6 = append(cloakedName.ipv6, ipv6)
 			} else {
-				dlog.Errorf("Invalid IP address in cloaking rule at line %d", 1+lineNo)
-				continue
+				cloakedName.ipv6 = append(cloakedName.ipv6, ip)
 			}
 			cloakedName.isIP = true
 		} else {
@@ -120,7 +118,7 @@ func (plugin *PluginCloak) loadRules(lines string, patternMatcher *PatternMatche
 			reversed, _ := dns.ReverseAddr(ip.To4().String())
 			ptrLine = strings.TrimSuffix(reversed, ".")
 		} else {
-			reversed, _ := dns.ReverseAddr(cloakedName.ipv6[0].To16().String())
+			reversed, _ := dns.ReverseAddr(cloakedName.ipv6[0].String())
 			ptrLine = strings.TrimSuffix(reversed, ".")
 		}
 		ptrQueryLine := ptrEntryToQuery(ptrLine)
@@ -245,37 +243,53 @@ func (plugin *PluginCloak) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 	}
 	cloakedName := xcloakedName.(*CloakedName)
 	ttl, expired := plugin.ttl, false
-	if cloakedName.lastUpdate != nil {
-		if elapsed := uint32(now.Sub(*cloakedName.lastUpdate).Seconds()); elapsed < ttl {
+	var lastUpdate *time.Time
+	switch question.Qtype {
+	case dns.TypeA:
+		lastUpdate = cloakedName.lastUpdate4
+	case dns.TypeAAAA:
+		lastUpdate = cloakedName.lastUpdate6
+	}
+	if lastUpdate != nil {
+		if elapsed := uint32(now.Sub(*lastUpdate).Seconds()); elapsed < ttl {
 			ttl -= elapsed
 		} else {
 			expired = true
 		}
 	}
-	if !cloakedName.isIP && ((cloakedName.ipv4 == nil && cloakedName.ipv6 == nil) || expired) {
+	synth := EmptyResponseFromMessage(msg)
+	if !cloakedName.isIP && ((question.Qtype == dns.TypeA && cloakedName.ipv4 == nil) ||
+		(question.Qtype == dns.TypeAAAA && cloakedName.ipv6 == nil) || expired) {
 		target := cloakedName.target
 		plugin.RUnlock()
-		foundIPs, err := net.LookupIP(target)
+		returnIPv4 := question.Qtype == dns.TypeA
+		returnIPv6 := question.Qtype == dns.TypeAAAA
+		foundIPs, _, err := pluginsState.xTransport.resolveUsingServers(
+			pluginsState.xTransport.mainProto,
+			target,
+			pluginsState.xTransport.internalResolvers,
+			returnIPv4,
+			returnIPv6,
+		)
 		if err != nil {
+			synth.Rcode = dns.RcodeServerFailure
+			pluginsState.synthResponse = synth
+			pluginsState.action = PluginsActionSynth
+			pluginsState.returnCode = PluginsReturnCodeCloak
 			return nil
 		}
 
 		// Use write lock to update cloakedName
 		plugin.Lock()
-		cloakedName.lastUpdate = &now
-		cloakedName.ipv4 = nil
-		cloakedName.ipv6 = nil
-		for _, foundIP := range foundIPs {
-			if ipv4 := foundIP.To4(); ipv4 != nil {
-				cloakedName.ipv4 = append(cloakedName.ipv4, foundIP)
-				if len(cloakedName.ipv4) >= 16 {
-					break
-				}
-			} else {
-				cloakedName.ipv6 = append(cloakedName.ipv6, foundIP)
-				if len(cloakedName.ipv6) >= 16 {
-					break
-				}
+		if len(foundIPs) > 0 {
+			n := Min(16, len(foundIPs))
+			switch question.Qtype {
+			case dns.TypeA:
+				cloakedName.lastUpdate4 = &now
+				cloakedName.ipv4 = foundIPs[:n]
+			case dns.TypeAAAA:
+				cloakedName.lastUpdate6 = &now
+				cloakedName.ipv6 = foundIPs[:n]
 			}
 		}
 		plugin.Unlock()
@@ -291,6 +305,7 @@ func (plugin *PluginCloak) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 	plugin.RUnlock()
 
 	synth := EmptyResponseFromMessage(msg)
+
 	synth.Answer = []dns.RR{}
 	if question.Qtype == dns.TypeA {
 		for _, ip := range ipv4 {
@@ -314,6 +329,8 @@ func (plugin *PluginCloak) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 			synth.Answer = append(synth.Answer, rr)
 		}
 	}
+	plugin.RUnlock()
+
 	rand.Shuffle(
 		len(synth.Answer),
 		func(i, j int) { synth.Answer[i], synth.Answer[j] = synth.Answer[j], synth.Answer[i] },
