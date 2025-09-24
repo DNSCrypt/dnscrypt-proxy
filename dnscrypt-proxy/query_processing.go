@@ -75,6 +75,7 @@ func processDNSCryptQuery(
 			if err != nil {
 				pluginsState.returnCode = PluginsReturnCodeParseError
 				pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
+				serverInfo.noticeFailure(proxy)
 				return nil, err
 			}
 			response, err = proxy.exchangeWithTCPServer(serverInfo, sharedKey, encryptedQuery, clientNonce)
