@@ -87,9 +87,9 @@ func processDNSCryptQuery(
 	// Check for stale response if there was an error
 	if err != nil {
 		if stale, ok := pluginsState.sessionData["stale"]; ok {
-			dlog.Debug("Serving stale response")
+			dlog.Debug("Serving stale response after error")
 			serverInfo.noticeFailure(proxy)
-			if staleResponse, packErr := (stale.(*dns.Msg)).Pack(); packErr == nil {
+			if staleResponse, err := (stale.(*dns.Msg)).Pack(); err == nil {
 				return staleResponse, nil
 			}
 		}
@@ -123,31 +123,30 @@ func processDoHQuery(
 	serverResponse, _, tls, _, err := proxy.xTransport.DoHQuery(serverInfo.useGet, serverInfo.URL, query, proxy.timeout)
 	SetTransactionID(query, tid)
 
-	// Check for stale response if there was an error
-	if err != nil || tls == nil || !tls.HandshakeComplete {
-		serverInfo.noticeFailure(proxy)
-		if stale, ok := pluginsState.sessionData["stale"]; ok {
-			dlog.Debug("Serving stale response after error")
-			if staleResponse, err := (stale.(*dns.Msg)).Pack(); err == nil {
-				return staleResponse, nil
-			}
+	// A response was received, and the TLS handshake was complete.
+	if err == nil && tls != nil && tls.HandshakeComplete {
+		// Restore the original transaction ID
+		response := serverResponse
+		if len(response) >= MinDNSPacketSize {
+			SetTransactionID(response, tid)
+		}
+		return response, nil
+	}
+
+	serverInfo.noticeFailure(proxy)
+
+	// Attempt to serve a stale response as a fallback.
+	if stale, ok := pluginsState.sessionData["stale"]; ok {
+		dlog.Debug("Serving stale response after error")
+		if staleResponse, packErr := (stale.(*dns.Msg)).Pack(); packErr == nil {
+			return staleResponse, nil
 		}
 	}
 
-	// Handle error cases
-	if err != nil {
-		pluginsState.returnCode = PluginsReturnCodeNetworkError
-		pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
-		return nil, err
-	}
-
-	// Restore the original transaction ID
-	response := serverResponse
-	if len(response) >= MinDNSPacketSize {
-		SetTransactionID(response, tid)
-	}
-
-	return response, nil
+	// If no stale response was served, return the original error.
+	pluginsState.returnCode = PluginsReturnCodeNetworkError
+	pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
+	return nil, err
 }
 
 // processODoHQuery - Processes a query using the ODoH protocol
