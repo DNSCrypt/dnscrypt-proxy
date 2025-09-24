@@ -302,9 +302,9 @@ func (xTransport *XTransport) rebuildTransport() {
 		if err != nil {
 			dlog.Fatalf("Unable to read rootCA file [%s]: %v", clientCreds.rootCA, err)
 		}
-        if ok := certPool.AppendCertsFromPEM(additionalCaCert); !ok {
-            dlog.Fatalf("No valid certificates found in rootCA file [%s]", clientCreds.rootCA)
-        }
+		if ok := certPool.AppendCertsFromPEM(additionalCaCert); !ok {
+			dlog.Fatalf("No valid certificates found in rootCA file [%s]", clientCreds.rootCA)
+		}
 	}
 
 	if certPool != nil {
