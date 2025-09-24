@@ -87,7 +87,7 @@ func processDNSCryptQuery(
 	// Check for stale response if there was an error
 	if err != nil {
 		if stale, ok := pluginsState.sessionData["stale"]; ok {
-			dlog.Debug("Serving stale response after error")
+			dlog.Debug("Serving stale response")
 			serverInfo.noticeFailure(proxy)
 			if staleResponse, err := (stale.(*dns.Msg)).Pack(); err == nil {
 				return staleResponse, nil
@@ -137,7 +137,7 @@ func processDoHQuery(
 
 	// Attempt to serve a stale response as a fallback.
 	if stale, ok := pluginsState.sessionData["stale"]; ok {
-		dlog.Debug("Serving stale response after error")
+		dlog.Debug("Serving stale response")
 		if staleResponse, packErr := (stale.(*dns.Msg)).Pack(); packErr == nil {
 			return staleResponse, nil
 		}
@@ -167,7 +167,6 @@ func processODoHQuery(
 	odohQuery, err := target.encryptQuery(query)
 	if err != nil {
 		dlog.Errorf("Failed to encrypt query for [%v]", serverInfo.Name)
-		serverInfo.noticeFailure(proxy)
 		return nil, err
 	}
 
