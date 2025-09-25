@@ -54,6 +54,7 @@ func processDNSCryptQuery(
 	if err != nil {
 		pluginsState.returnCode = PluginsReturnCodeParseError
 		pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
+		updateMonitoringMetrics(proxy, pluginsState)
 		return nil, err
 	}
 
@@ -75,6 +76,7 @@ func processDNSCryptQuery(
 			if err != nil {
 				pluginsState.returnCode = PluginsReturnCodeParseError
 				pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
+				updateMonitoringMetrics(proxy, pluginsState)
 				return nil, err
 			}
 			response, err = proxy.exchangeWithTCPServer(serverInfo, sharedKey, encryptedQuery, clientNonce)
@@ -100,6 +102,7 @@ func processDNSCryptQuery(
 		}
 		pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
 		serverInfo.noticeFailure(proxy)
+		updateMonitoringMetrics(proxy, pluginsState)
 		return nil, err
 	}
 
@@ -132,6 +135,7 @@ func processDoHQuery(
 		pluginsState.returnCode = PluginsReturnCodeNetworkError
 		pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
 		serverInfo.noticeFailure(proxy)
+		updateMonitoringMetrics(proxy, pluginsState)
 		return nil, err
 	}
 
@@ -207,6 +211,7 @@ func processODoHQuery(
 	pluginsState.returnCode = PluginsReturnCodeNetworkError
 	pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
 	serverInfo.noticeFailure(proxy)
+	updateMonitoringMetrics(proxy, pluginsState)
 
 	return nil, err
 }
@@ -240,6 +245,7 @@ func handleDNSExchange(
 		pluginsState.returnCode = PluginsReturnCodeParseError
 		pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
 		serverInfo.noticeFailure(proxy)
+		updateMonitoringMetrics(proxy, pluginsState)
 		return nil, err
 	}
 
@@ -261,12 +267,14 @@ func processPlugins(
 		pluginsState.returnCode = PluginsReturnCodeParseError
 		pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
 		serverInfo.noticeFailure(proxy)
+		updateMonitoringMetrics(proxy, pluginsState)
 		return response, err
 	}
 
 	if pluginsState.action == PluginsActionDrop {
 		pluginsState.returnCode = PluginsReturnCodeDrop
 		pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
+		updateMonitoringMetrics(proxy, pluginsState)
 		return response, nil
 	}
 
@@ -275,6 +283,7 @@ func processPlugins(
 		if err != nil {
 			pluginsState.returnCode = PluginsReturnCodeParseError
 			pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
+			updateMonitoringMetrics(proxy, pluginsState)
 			return response, err
 		}
 	}
@@ -310,6 +319,7 @@ func sendResponse(
 			pluginsState.returnCode = PluginsReturnCodeParseError
 		}
 		pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
+		updateMonitoringMetrics(proxy, pluginsState)
 		return
 	}
 
@@ -320,6 +330,7 @@ func sendResponse(
 			if err != nil {
 				pluginsState.returnCode = PluginsReturnCodeParseError
 				pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
+				updateMonitoringMetrics(proxy, pluginsState)
 				return
 			}
 		}
@@ -334,6 +345,7 @@ func sendResponse(
 		if err != nil {
 			pluginsState.returnCode = PluginsReturnCodeParseError
 			pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
+			updateMonitoringMetrics(proxy, pluginsState)
 			return
 		}
 		if clientPc != nil {
