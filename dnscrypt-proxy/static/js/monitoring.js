@@ -313,7 +313,7 @@ function formatMilliseconds(value) {
     if (Number.isNaN(num)) {
         return '-';
     }
-    return num.toFixed(2) + ' ms';
+    return Math.round(num) + ' ms';
 }
 
 function formatBoolean(value) {
