@@ -349,7 +349,7 @@ func updateMonitoringMetrics(
 ) {
 	if proxy.monitoringUI.Enabled && proxy.monitoringInstance != nil && pluginsState.questionMsg != nil {
 		dlog.Debugf("Calling UpdateMetrics for query: %s", pluginsState.qName)
-		proxy.monitoringInstance.UpdateMetrics(*pluginsState, pluginsState.questionMsg)
+		proxy.monitoringInstance.tasks <- pluginsState
 	} else {
 		if pluginsState.questionMsg == nil {
 			dlog.Debugf("Question message is nil")
