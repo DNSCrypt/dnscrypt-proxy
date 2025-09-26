@@ -845,6 +845,9 @@ func (c *Conn) handleHandshakeComplete(now time.Time) error {
 }
 
 func (c *Conn) handleHandshakeConfirmed(now time.Time) error {
+	if err := c.dropEncryptionLevel(protocol.EncryptionInitial, now); err != nil {
+		return err
+	}
 	if err := c.dropEncryptionLevel(protocol.EncryptionHandshake, now); err != nil {
 		return err
 	}
