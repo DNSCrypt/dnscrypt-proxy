@@ -53,7 +53,9 @@ func processDNSCryptQuery(
 
 	if err != nil {
 		pluginsState.returnCode = PluginsReturnCodeParseError
-		pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
+		if err2 := pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals); err2 != nil {
+			dlog.Debugf("ApplyLoggingPlugins failed: %v", err2)
+		}
 		return nil, err
 	}
 
@@ -74,7 +76,9 @@ func processDNSCryptQuery(
 			sharedKey, encryptedQuery, clientNonce, err = proxy.Encrypt(serverInfo, query, serverProto)
 			if err != nil {
 				pluginsState.returnCode = PluginsReturnCodeParseError
-				pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
+				if err2 := pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals); err2 != nil {
+					dlog.Debugf("ApplyLoggingPlugins failed: %v", err2)
+				}
 				return nil, err
 			}
 			response, err = proxy.exchangeWithTCPServer(serverInfo, sharedKey, encryptedQuery, clientNonce)
@@ -98,7 +102,9 @@ func processDNSCryptQuery(
 		} else {
 			pluginsState.returnCode = PluginsReturnCodeNetworkError
 		}
-		pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
+		if err2 := pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals); err2 != nil {
+			dlog.Debugf("ApplyLoggingPlugins failed: %v", err2)
+		}
 		serverInfo.noticeFailure(proxy)
 		return nil, err
 	}
@@ -130,7 +136,9 @@ func processDoHQuery(
 	// Handle error cases
 	if err != nil {
 		pluginsState.returnCode = PluginsReturnCodeNetworkError
-		pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
+		if err2 := pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals); err2 != nil {
+			dlog.Debugf("ApplyLoggingPlugins failed: %v", err2)
+		}
 		serverInfo.noticeFailure(proxy)
 		return nil, err
 	}
@@ -205,7 +213,9 @@ func processODoHQuery(
 	}
 
 	pluginsState.returnCode = PluginsReturnCodeNetworkError
-	pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
+	if err2 := pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals); err2 != nil {
+		dlog.Debugf("ApplyLoggingPlugins failed: %v", err2)
+	}
 	serverInfo.noticeFailure(proxy)
 
 	return nil, err
@@ -238,7 +248,9 @@ func handleDNSExchange(
 
 	if len(response) < MinDNSPacketSize || len(response) > MaxDNSPacketSize {
 		pluginsState.returnCode = PluginsReturnCodeParseError
-		pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
+		if err2 := pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals); err2 != nil {
+			dlog.Debugf("ApplyLoggingPlugins failed: %v", err2)
+		}
 		serverInfo.noticeFailure(proxy)
 		return nil, err
 	}
@@ -259,14 +271,18 @@ func processPlugins(
 	response, err = pluginsState.ApplyResponsePlugins(&proxy.pluginsGlobals, response)
 	if err != nil {
 		pluginsState.returnCode = PluginsReturnCodeParseError
-		pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
+		if err2 := pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals); err2 != nil {
+			dlog.Debugf("ApplyLoggingPlugins failed: %v", err2)
+		}
 		serverInfo.noticeFailure(proxy)
 		return response, err
 	}
 
 	if pluginsState.action == PluginsActionDrop {
 		pluginsState.returnCode = PluginsReturnCodeDrop
-		pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
+		if err2 := pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals); err2 != nil {
+			dlog.Debugf("ApplyLoggingPlugins failed: %v", err2)
+		}
 		return response, nil
 	}
 
@@ -274,7 +290,9 @@ func processPlugins(
 		response, err = pluginsState.synthResponse.PackBuffer(response)
 		if err != nil {
 			pluginsState.returnCode = PluginsReturnCodeParseError
-			pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
+			if err2 := pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals); err2 != nil {
+				dlog.Debugf("ApplyLoggingPlugins failed: %v", err2)
+			}
 			return response, err
 		}
 	}
@@ -309,7 +327,9 @@ func sendResponse(
 		} else {
 			pluginsState.returnCode = PluginsReturnCodeParseError
 		}
-		pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
+		if err2 := pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals); err2 != nil {
+			dlog.Debugf("ApplyLoggingPlugins failed: %v", err2)
+		}
 		return
 	}
 
@@ -319,7 +339,9 @@ func sendResponse(
 			response, err = TruncatedResponse(response)
 			if err != nil {
 				pluginsState.returnCode = PluginsReturnCodeParseError
-				pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
+				if err2 := pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals); err2 != nil {
+					dlog.Debugf("ApplyLoggingPlugins failed: %v", err2)
+				}
 				return
 			}
 		}
@@ -333,7 +355,9 @@ func sendResponse(
 		response, err = PrefixWithSize(response)
 		if err != nil {
 			pluginsState.returnCode = PluginsReturnCodeParseError
-			pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
+			if err2 := pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals); err2 != nil {
+				dlog.Debugf("ApplyLoggingPlugins failed: %v", err2)
+			}
 			return
 		}
 		if clientPc != nil {

@@ -743,7 +743,10 @@ func (proxy *Proxy) processIncomingQuery(
 	// Handle query plugin actions
 	if pluginsState.action == PluginsActionDrop {
 		pluginsState.returnCode = PluginsReturnCodeDrop
-		pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
+
+		if err := pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals); err != nil {
+			dlog.Debugf("ApplyLoggingPlugins failed: %v", err)
+		}
 		return response
 	}
 
@@ -805,7 +808,9 @@ func (proxy *Proxy) processIncomingQuery(
 		} else {
 			pluginsState.returnCode = PluginsReturnCodeParseError
 		}
-		pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
+		if err := pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals); err != nil {
+			dlog.Debugf("ApplyLoggingPlugins failed: %v", err)
+		}
 		if serverInfo != nil {
 			serverInfo.noticeFailure(proxy)
 		}
@@ -816,7 +821,9 @@ func (proxy *Proxy) processIncomingQuery(
 	sendResponse(proxy, &pluginsState, response, clientProto, clientAddr, clientPc)
 
 	// Apply logging plugins
-	pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
+	if err := pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals); err != nil {
+		dlog.Debugf("ApplyLoggingPlugins failed: %v", err)
+	}
 
 	// Update monitoring metrics
 	updateMonitoringMetrics(proxy, &pluginsState)
