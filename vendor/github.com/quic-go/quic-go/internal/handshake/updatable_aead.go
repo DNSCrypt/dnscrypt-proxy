@@ -7,8 +7,8 @@ import (
 	"encoding/binary"
 	"fmt"
 	"sync/atomic"
-	"time"
 
+	"github.com/quic-go/quic-go/internal/monotime"
 	"github.com/quic-go/quic-go/internal/protocol"
 	"github.com/quic-go/quic-go/internal/qerr"
 	"github.com/quic-go/quic-go/internal/utils"
@@ -42,7 +42,7 @@ type updatableAEAD struct {
 	invalidPacketCount uint64
 
 	// Time when the keys should be dropped. Keys are dropped on the next call to Open().
-	prevRcvAEADExpiry time.Time
+	prevRcvAEADExpiry monotime.Time
 	prevRcvAEAD       cipher.AEAD
 
 	firstRcvdWithCurrentKey protocol.PacketNumber
@@ -97,7 +97,7 @@ func (a *updatableAEAD) rollKeys() {
 		if a.tracer != nil && a.tracer.DroppedKey != nil {
 			a.tracer.DroppedKey(a.keyPhase - 1)
 		}
-		a.prevRcvAEADExpiry = time.Time{}
+		a.prevRcvAEADExpiry = 0
 	}
 
 	a.keyPhase++
@@ -115,7 +115,7 @@ func (a *updatableAEAD) rollKeys() {
 	a.nextSendAEAD = createAEAD(a.suite, a.nextSendTrafficSecret, a.version)
 }
 
-func (a *updatableAEAD) startKeyDropTimer(now time.Time) {
+func (a *updatableAEAD) startKeyDropTimer(now monotime.Time) {
 	d := 3 * a.rttStats.PTO(true)
 	a.logger.Debugf("Starting key drop timer to drop key phase %d (in %s)", a.keyPhase-1, d)
 	a.prevRcvAEADExpiry = now.Add(d)
@@ -171,7 +171,7 @@ func (a *updatableAEAD) DecodePacketNumber(wirePN protocol.PacketNumber, wirePNL
 	return protocol.DecodePacketNumber(wirePNLen, a.highestRcvdPN, wirePN)
 }
 
-func (a *updatableAEAD) Open(dst, src []byte, rcvTime time.Time, pn protocol.PacketNumber, kp protocol.KeyPhaseBit, ad []byte) ([]byte, error) {
+func (a *updatableAEAD) Open(dst, src []byte, rcvTime monotime.Time, pn protocol.PacketNumber, kp protocol.KeyPhaseBit, ad []byte) ([]byte, error) {
 	dec, err := a.open(dst, src, rcvTime, pn, kp, ad)
 	if err == ErrDecryptionFailed {
 		a.invalidPacketCount++
@@ -185,11 +185,11 @@ func (a *updatableAEAD) Open(dst, src []byte, rcvTime time.Time, pn protocol.Pac
 	return dec, err
 }
 
-func (a *updatableAEAD) open(dst, src []byte, rcvTime time.Time, pn protocol.PacketNumber, kp protocol.KeyPhaseBit, ad []byte) ([]byte, error) {
+func (a *updatableAEAD) open(dst, src []byte, rcvTime monotime.Time, pn protocol.PacketNumber, kp protocol.KeyPhaseBit, ad []byte) ([]byte, error) {
 	if a.prevRcvAEAD != nil && !a.prevRcvAEADExpiry.IsZero() && rcvTime.After(a.prevRcvAEADExpiry) {
 		a.prevRcvAEAD = nil
 		a.logger.Debugf("Dropping key phase %d", a.keyPhase-1)
-		a.prevRcvAEADExpiry = time.Time{}
+		a.prevRcvAEADExpiry = 0
 		if a.tracer != nil && a.tracer.DroppedKey != nil {
 			a.tracer.DroppedKey(a.keyPhase - 1)
 		}

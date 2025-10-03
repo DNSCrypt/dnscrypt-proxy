@@ -24,7 +24,7 @@ const numECNTestingPackets = 10
 type ecnHandler interface {
 	SentPacket(protocol.PacketNumber, protocol.ECN)
 	Mode() protocol.ECN
-	HandleNewlyAcked(packets []*packet, ect0, ect1, ecnce int64) (congested bool)
+	HandleNewlyAcked(packets []packetWithPacketNumber, ect0, ect1, ecnce int64) (congested bool)
 	LostPacket(protocol.PacketNumber)
 }
 
@@ -144,7 +144,7 @@ func (e *ecnTracker) LostPacket(pn protocol.PacketNumber) {
 // HandleNewlyAcked handles the ECN counts on an ACK frame.
 // It must only be called for ACK frames that increase the largest acknowledged packet number,
 // see section 13.4.2.1 of RFC 9000.
-func (e *ecnTracker) HandleNewlyAcked(packets []*packet, ect0, ect1, ecnce int64) (congested bool) {
+func (e *ecnTracker) HandleNewlyAcked(packets []packetWithPacketNumber, ect0, ect1, ecnce int64) (congested bool) {
 	if e.state == ecnStateFailed {
 		return false
 	}

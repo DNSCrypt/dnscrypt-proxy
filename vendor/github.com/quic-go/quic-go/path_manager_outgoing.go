@@ -128,6 +128,9 @@ type pathManagerOutgoing struct {
 	pathToSwitchTo *pathOutgoing
 }
 
+// newPathManagerOutgoing creates a new pathManagerOutgoing object. This
+// function must be side-effect free as it may be called multiple times for a
+// single connection.
 func newPathManagerOutgoing(
 	getConnID func(pathID) (_ protocol.ConnectionID, ok bool),
 	retireConnID func(pathID),

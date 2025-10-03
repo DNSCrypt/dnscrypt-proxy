@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 	"sync"
-	"time"
 
 	"github.com/quic-go/quic-go/internal/flowcontrol"
+	"github.com/quic-go/quic-go/internal/monotime"
 	"github.com/quic-go/quic-go/internal/protocol"
 	"github.com/quic-go/quic-go/internal/qerr"
 	"github.com/quic-go/quic-go/internal/wire"
@@ -251,8 +251,8 @@ func (m *streamsMap) HandleStopSendingFrame(f *wire.StopSendingFrame) error {
 }
 
 type receiveStreamFrameHandler interface {
-	handleResetStreamFrame(*wire.ResetStreamFrame, time.Time) error
-	handleStreamFrame(*wire.StreamFrame, time.Time) error
+	handleResetStreamFrame(*wire.ResetStreamFrame, monotime.Time) error
+	handleStreamFrame(*wire.StreamFrame, monotime.Time) error
 }
 
 func (m *streamsMap) getReceiveStream(id protocol.StreamID) (receiveStreamFrameHandler, error) {
@@ -295,7 +295,7 @@ func (m *streamsMap) HandleStreamDataBlockedFrame(f *wire.StreamDataBlockedFrame
 	return nil // we don't need to do anything in response to a STREAM_DATA_BLOCKED frame
 }
 
-func (m *streamsMap) HandleResetStreamFrame(f *wire.ResetStreamFrame, rcvTime time.Time) error {
+func (m *streamsMap) HandleResetStreamFrame(f *wire.ResetStreamFrame, rcvTime monotime.Time) error {
 	str, err := m.getReceiveStream(f.StreamID)
 	if err != nil {
 		return err
@@ -306,7 +306,7 @@ func (m *streamsMap) HandleResetStreamFrame(f *wire.ResetStreamFrame, rcvTime ti
 	return str.handleResetStreamFrame(f, rcvTime)
 }
 
-func (m *streamsMap) HandleStreamFrame(f *wire.StreamFrame, rcvTime time.Time) error {
+func (m *streamsMap) HandleStreamFrame(f *wire.StreamFrame, rcvTime monotime.Time) error {
 	str, err := m.getReceiveStream(f.StreamID)
 	if err != nil {
 		return err

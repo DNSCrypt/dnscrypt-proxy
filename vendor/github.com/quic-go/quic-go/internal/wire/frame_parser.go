@@ -17,6 +17,7 @@ type FrameParser struct {
 	ackDelayExponent      uint8
 	supportsDatagrams     bool
 	supportsResetStreamAt bool
+	supportsAckFrequency  bool
 
 	// To avoid allocating when parsing, keep a single ACK frame struct.
 	// It is used over and over again.
@@ -24,10 +25,11 @@ type FrameParser struct {
 }
 
 // NewFrameParser creates a new frame parser.
-func NewFrameParser(supportsDatagrams, supportsResetStreamAt bool) *FrameParser {
+func NewFrameParser(supportsDatagrams, supportsResetStreamAt, supportsAckFrequency bool) *FrameParser {
 	return &FrameParser{
 		supportsDatagrams:     supportsDatagrams,
 		supportsResetStreamAt: supportsResetStreamAt,
+		supportsAckFrequency:  supportsAckFrequency,
 		ackFrame:              &AckFrame{},
 	}
 }
@@ -52,7 +54,8 @@ func (p *FrameParser) ParseType(b []byte, encLevel protocol.EncryptionLevel) (Fr
 		ft := FrameType(typ)
 		valid := ft.isValidRFC9000() ||
 			(p.supportsDatagrams && ft.IsDatagramFrameType()) ||
-			(p.supportsResetStreamAt && ft == FrameTypeResetStreamAt)
+			(p.supportsResetStreamAt && ft == FrameTypeResetStreamAt) ||
+			(p.supportsAckFrequency && (ft == FrameTypeAckFrequency || ft == FrameTypeImmediateAck))
 		if !valid {
 			return 0, parsed, &qerr.TransportError{
 				ErrorCode:    qerr.FrameEncodingError,
@@ -158,6 +161,10 @@ func (p *FrameParser) ParseLessCommonFrame(frameType FrameType, data []byte, v p
 		frame = &HandshakeDoneFrame{}
 	case FrameTypeResetStreamAt:
 		frame, l, err = parseResetStreamFrame(data, true, v)
+	case FrameTypeAckFrequency:
+		frame, l, err = parseAckFrequencyFrame(data, v)
+	case FrameTypeImmediateAck:
+		frame = &ImmediateAckFrame{}
 	default:
 		err = errUnknownFrameType
 	}

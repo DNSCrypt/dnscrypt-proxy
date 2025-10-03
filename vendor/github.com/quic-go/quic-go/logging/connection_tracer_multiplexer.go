@@ -134,6 +134,13 @@ func NewMultiplexedConnectionTracer(tracers ...*ConnectionTracer) *ConnectionTra
 				}
 			}
 		},
+		DetectedSpuriousLoss: func(encLevel EncryptionLevel, pn PacketNumber, reordering uint64, dur time.Duration) {
+			for _, t := range tracers {
+				if t.DetectedSpuriousLoss != nil {
+					t.DetectedSpuriousLoss(encLevel, pn, reordering, dur)
+				}
+			}
+		},
 		UpdatedMTU: func(mtu ByteCount, done bool) {
 			for _, t := range tracers {
 				if t.UpdatedMTU != nil {

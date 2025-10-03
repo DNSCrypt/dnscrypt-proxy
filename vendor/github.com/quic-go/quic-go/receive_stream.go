@@ -8,9 +8,9 @@ import (
 
 	"github.com/quic-go/quic-go/internal/ackhandler"
 	"github.com/quic-go/quic-go/internal/flowcontrol"
+	"github.com/quic-go/quic-go/internal/monotime"
 	"github.com/quic-go/quic-go/internal/protocol"
 	"github.com/quic-go/quic-go/internal/qerr"
-	"github.com/quic-go/quic-go/internal/utils"
 	"github.com/quic-go/quic-go/internal/wire"
 )
 
@@ -47,7 +47,7 @@ type ReceiveStream struct {
 
 	readChan chan struct{}
 	readOnce chan struct{} // cap: 1, to protect against concurrent use of Read
-	deadline time.Time
+	deadline monotime.Time
 
 	flowController flowcontrol.StreamFlowController
 }
@@ -140,7 +140,7 @@ func (s *ReceiveStream) readImpl(p []byte) (hasStreamWindowUpdate bool, hasConnW
 	}
 
 	var bytesRead int
-	var deadlineTimer *utils.Timer
+	var deadlineTimer *time.Timer
 	for bytesRead < len(p) {
 		if s.currentFrame == nil || s.readPosInFrame >= len(s.currentFrame) {
 			s.dequeueNextFrame()
@@ -161,14 +161,15 @@ func (s *ReceiveStream) readImpl(p []byte) (hasStreamWindowUpdate bool, hasConnW
 
 			deadline := s.deadline
 			if !deadline.IsZero() {
-				if !time.Now().Before(deadline) {
+				if !monotime.Now().Before(deadline) {
 					return hasStreamWindowUpdate, hasConnWindowUpdate, bytesRead, errDeadline
 				}
 				if deadlineTimer == nil {
-					deadlineTimer = utils.NewTimer()
+					deadlineTimer = time.NewTimer(monotime.Until(deadline))
 					defer deadlineTimer.Stop()
+				} else {
+					deadlineTimer.Reset(monotime.Until(deadline))
 				}
-				deadlineTimer.Reset(deadline)
 			}
 
 			if s.currentFrame != nil || s.currentFrameIsLast {
@@ -181,8 +182,7 @@ func (s *ReceiveStream) readImpl(p []byte) (hasStreamWindowUpdate bool, hasConnW
 			} else {
 				select {
 				case <-s.readChan:
-				case <-deadlineTimer.Chan():
-					deadlineTimer.SetRead()
+				case <-deadlineTimer.C:
 				}
 			}
 			s.mutex.Lock()
@@ -283,7 +283,7 @@ func (s *ReceiveStream) cancelReadImpl(errorCode qerr.StreamErrorCode) (queuedNe
 	return true
 }
 
-func (s *ReceiveStream) handleStreamFrame(frame *wire.StreamFrame, now time.Time) error {
+func (s *ReceiveStream) handleStreamFrame(frame *wire.StreamFrame, now monotime.Time) error {
 	s.mutex.Lock()
 	err := s.handleStreamFrameImpl(frame, now)
 	completed := s.isNewlyCompleted()
@@ -296,7 +296,7 @@ func (s *ReceiveStream) handleStreamFrame(frame *wire.StreamFrame, now time.Time
 	return err
 }
 
-func (s *ReceiveStream) handleStreamFrameImpl(frame *wire.StreamFrame, now time.Time) error {
+func (s *ReceiveStream) handleStreamFrameImpl(frame *wire.StreamFrame, now monotime.Time) error {
 	maxOffset := frame.Offset + frame.DataLen()
 	if err := s.flowController.UpdateHighestReceived(maxOffset, frame.Fin, now); err != nil {
 		return err
@@ -314,7 +314,7 @@ func (s *ReceiveStream) handleStreamFrameImpl(frame *wire.StreamFrame, now time.
 	return nil
 }
 
-func (s *ReceiveStream) handleResetStreamFrame(frame *wire.ResetStreamFrame, now time.Time) error {
+func (s *ReceiveStream) handleResetStreamFrame(frame *wire.ResetStreamFrame, now monotime.Time) error {
 	s.mutex.Lock()
 	err := s.handleResetStreamFrameImpl(frame, now)
 	completed := s.isNewlyCompleted()
@@ -326,7 +326,7 @@ func (s *ReceiveStream) handleResetStreamFrame(frame *wire.ResetStreamFrame, now
 	return err
 }
 
-func (s *ReceiveStream) handleResetStreamFrameImpl(frame *wire.ResetStreamFrame, now time.Time) error {
+func (s *ReceiveStream) handleResetStreamFrameImpl(frame *wire.ResetStreamFrame, now monotime.Time) error {
 	if s.closeForShutdownErr != nil {
 		return nil
 	}
@@ -358,7 +358,7 @@ func (s *ReceiveStream) handleResetStreamFrameImpl(frame *wire.ResetStreamFrame,
 	return nil
 }
 
-func (s *ReceiveStream) getControlFrame(now time.Time) (_ ackhandler.Frame, ok, hasMore bool) {
+func (s *ReceiveStream) getControlFrame(now monotime.Time) (_ ackhandler.Frame, ok, hasMore bool) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
@@ -386,7 +386,7 @@ func (s *ReceiveStream) getControlFrame(now time.Time) (_ ackhandler.Frame, ok, 
 // A zero value for t means Read will not time out.
 func (s *ReceiveStream) SetReadDeadline(t time.Time) error {
 	s.mutex.Lock()
-	s.deadline = t
+	s.deadline = monotime.FromTime(t)
 	s.mutex.Unlock()
 	s.signalRead()
 	return nil

@@ -3,6 +3,7 @@ package congestion
 import (
 	"time"
 
+	"github.com/quic-go/quic-go/internal/monotime"
 	"github.com/quic-go/quic-go/internal/protocol"
 )
 
@@ -12,7 +13,7 @@ const maxBurstSizePackets = 10
 type pacer struct {
 	budgetAtLastSent  protocol.ByteCount
 	maxDatagramSize   protocol.ByteCount
-	lastSentTime      time.Time
+	lastSentTime      monotime.Time
 	adjustedBandwidth func() uint64 // in bytes/s
 }
 
@@ -33,7 +34,7 @@ func newPacer(getBandwidth func() Bandwidth) *pacer {
 	return p
 }
 
-func (p *pacer) SentPacket(sendTime time.Time, size protocol.ByteCount) {
+func (p *pacer) SentPacket(sendTime monotime.Time, size protocol.ByteCount) {
 	budget := p.Budget(sendTime)
 	if size >= budget {
 		p.budgetAtLastSent = 0
@@ -43,7 +44,7 @@ func (p *pacer) SentPacket(sendTime time.Time, size protocol.ByteCount) {
 	p.lastSentTime = sendTime
 }
 
-func (p *pacer) Budget(now time.Time) protocol.ByteCount {
+func (p *pacer) Budget(now monotime.Time) protocol.ByteCount {
 	if p.lastSentTime.IsZero() {
 		return p.maxBurstSize()
 	}
@@ -62,10 +63,10 @@ func (p *pacer) maxBurstSize() protocol.ByteCount {
 }
 
 // TimeUntilSend returns when the next packet should be sent.
-// It returns the zero value of time.Time if a packet can be sent immediately.
-func (p *pacer) TimeUntilSend() time.Time {
+// It returns zero if a packet can be sent immediately.
+func (p *pacer) TimeUntilSend() monotime.Time {
 	if p.budgetAtLastSent >= p.maxDatagramSize {
-		return time.Time{}
+		return 0
 	}
 	diff := 1e9 * uint64(p.maxDatagramSize-p.budgetAtLastSent)
 	bw := p.adjustedBandwidth()

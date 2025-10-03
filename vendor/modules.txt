@@ -86,14 +86,15 @@ github.com/powerman/deepequal
 # github.com/quic-go/qpack v0.5.1
 ## explicit; go 1.22
 github.com/quic-go/qpack
-# github.com/quic-go/quic-go v0.54.1
-## explicit; go 1.23
+# github.com/quic-go/quic-go v0.55.0
+## explicit; go 1.24
 github.com/quic-go/quic-go
 github.com/quic-go/quic-go/http3
 github.com/quic-go/quic-go/internal/ackhandler
 github.com/quic-go/quic-go/internal/congestion
 github.com/quic-go/quic-go/internal/flowcontrol
 github.com/quic-go/quic-go/internal/handshake
+github.com/quic-go/quic-go/internal/monotime
 github.com/quic-go/quic-go/internal/protocol
 github.com/quic-go/quic-go/internal/qerr
 github.com/quic-go/quic-go/internal/utils
@@ -108,8 +109,6 @@ github.com/smartystreets/goconvey/convey/gotest
 github.com/smartystreets/goconvey/convey/reporting
 # go.uber.org/mock v0.6.0
 ## explicit; go 1.23.0
-go.uber.org/mock/mockgen
-go.uber.org/mock/mockgen/model
 # golang.org/x/crypto v0.42.0
 ## explicit; go 1.24.0
 golang.org/x/crypto/blake2b
@@ -127,7 +126,6 @@ golang.org/x/crypto/salsa20/salsa
 # golang.org/x/mod v0.28.0
 ## explicit; go 1.24.0
 golang.org/x/mod/internal/lazyregexp
-golang.org/x/mod/modfile
 golang.org/x/mod/module
 golang.org/x/mod/semver
 # golang.org/x/net v0.44.0

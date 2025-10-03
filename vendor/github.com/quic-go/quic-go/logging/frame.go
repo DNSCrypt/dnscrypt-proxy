@@ -3,7 +3,7 @@ package logging
 import "github.com/quic-go/quic-go/internal/wire"
 
 // A Frame is a QUIC frame
-type Frame interface{}
+type Frame any
 
 // The AckRange is used within the AckFrame.
 // It is a range of packet numbers that is being acknowledged.
@@ -44,6 +44,10 @@ type (
 	StreamsBlockedFrame = wire.StreamsBlockedFrame
 	// A StreamDataBlockedFrame is a STREAM_DATA_BLOCKED frame.
 	StreamDataBlockedFrame = wire.StreamDataBlockedFrame
+	// An AckFrequencyFrame is an ACK_FREQUENCY frame.
+	AckFrequencyFrame = wire.AckFrequencyFrame
+	// An ImmediateAckFrame is an IMMEDIATE_ACK frame.
+	ImmediateAckFrame = wire.ImmediateAckFrame
 )
 
 // A CryptoFrame is a CRYPTO frame.

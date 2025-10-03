@@ -17,6 +17,7 @@ import (
 	"github.com/quic-go/quic-go/internal/ackhandler"
 	"github.com/quic-go/quic-go/internal/flowcontrol"
 	"github.com/quic-go/quic-go/internal/handshake"
+	"github.com/quic-go/quic-go/internal/monotime"
 	"github.com/quic-go/quic-go/internal/protocol"
 	"github.com/quic-go/quic-go/internal/qerr"
 	"github.com/quic-go/quic-go/internal/utils"
@@ -27,7 +28,7 @@ import (
 
 type unpacker interface {
 	UnpackLongHeader(hdr *wire.Header, data []byte) (*unpackedPacket, error)
-	UnpackShortHeader(rcvTime time.Time, data []byte) (protocol.PacketNumber, protocol.PacketNumberLen, protocol.KeyPhaseBit, []byte, error)
+	UnpackShortHeader(rcvTime monotime.Time, data []byte) (protocol.PacketNumber, protocol.PacketNumberLen, protocol.KeyPhaseBit, []byte, error)
 }
 
 type cryptoStreamHandler interface {
@@ -47,7 +48,7 @@ type receivedPacket struct {
 	buffer *packetBuffer
 
 	remoteAddr net.Addr
-	rcvTime    time.Time
+	rcvTime    monotime.Time
 	data       []byte
 
 	ecn protocol.ECN
@@ -90,8 +91,25 @@ func (e *errCloseForRecreating) Error() string {
 	return "closing connection in order to recreate it"
 }
 
+var deadlineSendImmediately = monotime.Time(42 * time.Millisecond) // any value > time.Time{} and before time.Now() is fine
+
 var connTracingID atomic.Uint64              // to be accessed atomically
 func nextConnTracingID() ConnectionTracingID { return ConnectionTracingID(connTracingID.Add(1)) }
+
+type blockMode uint8
+
+const (
+	// blockModeNone means that the connection is not blocked.
+	blockModeNone blockMode = iota
+	// blockModeCongestionLimited means that the connection is congestion limited.
+	// In that case, we can still send acknowledgments and PTO probe packets.
+	blockModeCongestionLimited
+	// blockModeHardBlocked means that no packet can be sent, under no circumstances. This can happen when:
+	// * the send queue is full
+	// * the SentPacketHandler returns SendNone, e.g. when we are tracking the maximum number of packets
+	// In that case, the timer will be set to the idle timeout.
+	blockModeHardBlocked
+)
 
 // A Conn is a QUIC connection between two peers.
 // Calls to the connection (and to streams) can return the following types of errors:
@@ -127,7 +145,8 @@ type Conn struct {
 	connIDManager   *connIDManager
 	connIDGenerator *connIDGenerator
 
-	rttStats *utils.RTTStats
+	rttStats  *utils.RTTStats
+	connStats utils.ConnectionStats
 
 	cryptoStreamManager   *cryptoStreamManager
 	sentPacketHandler     ackhandler.SentPacketHandler
@@ -176,19 +195,21 @@ type Conn struct {
 	versionNegotiated   bool
 	receivedFirstPacket bool
 
+	blocked blockMode
+
 	// the minimum of the max_idle_timeout values advertised by both endpoints
 	idleTimeout  time.Duration
-	creationTime time.Time
+	creationTime monotime.Time
 	// The idle timeout is set based on the max of the time we received the last packet...
-	lastPacketReceivedTime time.Time
+	lastPacketReceivedTime monotime.Time
 	// ... and the time we sent a new ack-eliciting packet after receiving a packet.
-	firstAckElicitingPacketAfterIdleSentTime time.Time
+	firstAckElicitingPacketAfterIdleSentTime monotime.Time
 	// pacingDeadline is the time when the next packet should be sent
-	pacingDeadline time.Time
+	pacingDeadline monotime.Time
 
 	peerParams *wire.TransportParameters
 
-	timer connectionTimer
+	timer *time.Timer
 	// keepAlivePingSent stores whether a keep alive PING is in flight.
 	// It is reset as soon as we receive a packet from the peer.
 	keepAlivePingSent bool
@@ -286,6 +307,7 @@ var newConnection = func(
 		0,
 		protocol.ByteCount(s.config.InitialPacketSize),
 		s.rttStats,
+		&s.connStats,
 		clientAddressValidated,
 		s.conn.capabilities().ECN,
 		s.perspective,
@@ -400,6 +422,7 @@ var newClientConnection = func(
 		initialPacketNumber,
 		protocol.ByteCount(s.config.InitialPacketSize),
 		s.rttStats,
+		&s.connStats,
 		false, // has no effect
 		s.conn.capabilities().ECN,
 		s.perspective,
@@ -473,6 +496,7 @@ func (c *Conn) preSetup() {
 	c.frameParser = *wire.NewFrameParser(
 		c.config.EnableDatagrams,
 		c.config.EnableStreamResetPartialDelivery,
+		false, // ACK_FREQUENCY is not supported yet
 	)
 	c.rttStats = &utils.RTTStats{}
 	c.connFlowController = flowcontrol.NewConnectionFlowController(
@@ -504,7 +528,7 @@ func (c *Conn) preSetup() {
 	c.sendingScheduled = make(chan struct{}, 1)
 	c.handshakeCompleteChan = make(chan struct{})
 
-	now := time.Now()
+	now := monotime.Now()
 	c.lastPacketReceivedTime = now
 	c.creationTime = now
 
@@ -528,12 +552,12 @@ func (c *Conn) run() (err error) {
 		}
 	}()
 
-	c.timer = *newTimer()
+	c.timer = time.NewTimer(monotime.Until(c.idleTimeoutStartTime().Add(c.config.HandshakeIdleTimeout)))
 
 	if err := c.cryptoStreamHandler.StartHandshake(c.ctx); err != nil {
 		return err
 	}
-	if err := c.handleHandshakeEvents(time.Now()); err != nil {
+	if err := c.handleHandshakeEvents(monotime.Now()); err != nil {
 		return err
 	}
 	go func() {
@@ -609,8 +633,7 @@ runLoop:
 			select {
 			case <-c.closeChan:
 				break runLoop
-			case <-c.timer.Chan():
-				c.timer.SetRead()
+			case <-c.timer.C:
 			case <-c.sendingScheduled:
 			case <-sendQueueAvailable:
 			case <-c.notifyReceivedPacket:
@@ -628,7 +651,7 @@ runLoop:
 
 		// Check for loss detection timeout.
 		// This could cause packets to be declared lost, and retransmissions to be enqueued.
-		now := time.Now()
+		now := monotime.Now()
 		if timeout := c.sentPacketHandler.GetLossDetectionTimeout(); !timeout.IsZero() && timeout.Before(now) {
 			if err := c.sentPacketHandler.OnLossDetectionTimeout(now); err != nil {
 				c.setCloseError(&closeError{err: err})
@@ -647,7 +670,7 @@ runLoop:
 		} else {
 			idleTimeoutStartTime := c.idleTimeoutStartTime()
 			if (!c.handshakeComplete && now.Sub(idleTimeoutStartTime) >= c.config.HandshakeIdleTimeout) ||
-				(c.handshakeComplete && now.After(c.nextIdleTimeoutTime())) {
+				(c.handshakeComplete && !now.Before(c.nextIdleTimeoutTime())) {
 				c.destroyImpl(qerr.ErrIdleTimeout)
 				break runLoop
 			}
@@ -669,7 +692,8 @@ runLoop:
 			// The send queue is still busy sending out packets. Wait until there's space to enqueue new packets.
 			sendQueueAvailable = c.sendQueue.Available()
 			// Cancel the pacing timer, as we can't send any more packets until the send queue is available again.
-			c.pacingDeadline = time.Time{}
+			c.pacingDeadline = 0
+			c.blocked = blockModeHardBlocked
 			continue
 		}
 
@@ -677,6 +701,7 @@ runLoop:
 			break runLoop
 		}
 
+		c.blocked = blockModeNone // sending might set it back to true if we're congestion limited
 		if err := c.triggerSending(now); err != nil {
 			c.setCloseError(&closeError{err: err})
 			break runLoop
@@ -685,7 +710,8 @@ runLoop:
 			// The send queue is still busy sending out packets. Wait until there's space to enqueue new packets.
 			sendQueueAvailable = c.sendQueue.Available()
 			// Cancel the pacing timer, as we can't send any more packets until the send queue is available again.
-			c.pacingDeadline = time.Time{}
+			c.pacingDeadline = 0
+			c.blocked = blockModeHardBlocked
 		} else {
 			sendQueueAvailable = nil
 		}
@@ -732,55 +758,133 @@ func (c *Conn) ConnectionState() ConnectionState {
 	return c.connState
 }
 
+// ConnectionStats contains statistics about the QUIC connection
+type ConnectionStats struct {
+	// MinRTT is the estimate of the minimum RTT observed on the active network
+	// path.
+	MinRTT time.Duration
+	// LatestRTT is the last RTT sample observed on the active network path.
+	LatestRTT time.Duration
+	// SmoothedRTT is an exponentially weighted moving average of an endpoint's
+	// RTT samples. See https://www.rfc-editor.org/rfc/rfc9002#section-5.3
+	SmoothedRTT time.Duration
+	// MeanDeviation estimates the variation in the RTT samples using a mean
+	// variation. See https://www.rfc-editor.org/rfc/rfc9002#section-5.3
+	MeanDeviation time.Duration
+
+	// BytesSent is the number of bytes sent on the underlying connection,
+	// including retransmissions. Does not include UDP or any other outer
+	// framing.
+	BytesSent uint64
+	// PacketsSent is the number of packets sent on the underlying connection,
+	// including those that are determined to have been lost.
+	PacketsSent uint64
+	// BytesReceived is the number of total bytes received on the underlying
+	// connection, including duplicate data for streams. Does not include UDP or
+	// any other outer framing.
+	BytesReceived uint64
+	// PacketsReceived is the number of total packets received on the underlying
+	// connection, including packets that were not processable.
+	PacketsReceived uint64
+	// BytesLost is the number of bytes lost on the underlying connection (does
+	// not monotonically increase, because packets that are declared lost can
+	// subsequently be received). Does not include UDP or any other outer
+	// framing.
+	BytesLost uint64
+	// PacketsLost is the number of packets lost on the underlying connection
+	// (does not monotonically increase, because packets that are declared lost
+	// can subsequently be received).
+	PacketsLost uint64
+}
+
+func (c *Conn) ConnectionStats() ConnectionStats {
+	return ConnectionStats{
+		MinRTT:        c.rttStats.MinRTT(),
+		LatestRTT:     c.rttStats.LatestRTT(),
+		SmoothedRTT:   c.rttStats.SmoothedRTT(),
+		MeanDeviation: c.rttStats.MeanDeviation(),
+
+		BytesSent:       c.connStats.BytesSent.Load(),
+		PacketsSent:     c.connStats.PacketsSent.Load(),
+		BytesReceived:   c.connStats.BytesReceived.Load(),
+		PacketsReceived: c.connStats.PacketsReceived.Load(),
+		BytesLost:       c.connStats.BytesLost.Load(),
+		PacketsLost:     c.connStats.PacketsLost.Load(),
+	}
+}
+
 // Time when the connection should time out
-func (c *Conn) nextIdleTimeoutTime() time.Time {
+func (c *Conn) nextIdleTimeoutTime() monotime.Time {
 	idleTimeout := max(c.idleTimeout, c.rttStats.PTO(true)*3)
 	return c.idleTimeoutStartTime().Add(idleTimeout)
 }
 
 // Time when the next keep-alive packet should be sent.
 // It returns a zero time if no keep-alive should be sent.
-func (c *Conn) nextKeepAliveTime() time.Time {
+func (c *Conn) nextKeepAliveTime() monotime.Time {
 	if c.config.KeepAlivePeriod == 0 || c.keepAlivePingSent {
-		return time.Time{}
+		return 0
 	}
 	keepAliveInterval := max(c.keepAliveInterval, c.rttStats.PTO(true)*3/2)
 	return c.lastPacketReceivedTime.Add(keepAliveInterval)
 }
 
 func (c *Conn) maybeResetTimer() {
-	var deadline time.Time
+	var deadline monotime.Time
 	if !c.handshakeComplete {
 		deadline = c.creationTime.Add(c.config.handshakeTimeout())
 		if t := c.idleTimeoutStartTime().Add(c.config.HandshakeIdleTimeout); t.Before(deadline) {
 			deadline = t
 		}
 	} else {
-		if keepAliveTime := c.nextKeepAliveTime(); !keepAliveTime.IsZero() {
-			deadline = keepAliveTime
-		} else {
+		// A keep-alive packet is ack-eliciting, so it can only be sent if the connection is
+		// neither congestion limited nor hard-blocked.
+		if c.blocked != blockModeNone {
 			deadline = c.nextIdleTimeoutTime()
+		} else {
+			if keepAliveTime := c.nextKeepAliveTime(); !keepAliveTime.IsZero() {
+				deadline = keepAliveTime
+			} else {
+				deadline = c.nextIdleTimeoutTime()
+			}
 		}
 	}
+	// If the connection is hard-blocked, we can't even send acknowledgments,
+	// nor can we send PTO probe packets.
+	if c.blocked == blockModeHardBlocked {
+		c.timer.Reset(monotime.Until(deadline))
+		return
+	}
 
-	c.timer.SetTimer(
-		deadline,
-		c.connIDGenerator.NextRetireTime(),
-		c.receivedPacketHandler.GetAlarmTimeout(),
-		c.sentPacketHandler.GetLossDetectionTimeout(),
-		c.pacingDeadline,
-	)
+	if t := c.receivedPacketHandler.GetAlarmTimeout(); !t.IsZero() && t.Before(deadline) {
+		deadline = t
+	}
+	if t := c.sentPacketHandler.GetLossDetectionTimeout(); !t.IsZero() && t.Before(deadline) {
+		deadline = t
+	}
+	if c.blocked == blockModeCongestionLimited {
+		c.timer.Reset(monotime.Until(deadline))
+		return
+	}
+
+	if t := c.connIDGenerator.NextRetireTime(); !t.IsZero() && t.Before(deadline) {
+		deadline = t
+	}
+	if !c.pacingDeadline.IsZero() && c.pacingDeadline.Before(deadline) {
+		deadline = c.pacingDeadline
+	}
+	c.timer.Reset(monotime.Until(deadline))
 }
 
-func (c *Conn) idleTimeoutStartTime() time.Time {
+func (c *Conn) idleTimeoutStartTime() monotime.Time {
 	startTime := c.lastPacketReceivedTime
-	if t := c.firstAckElicitingPacketAfterIdleSentTime; t.After(startTime) {
+	if t := c.firstAckElicitingPacketAfterIdleSentTime; !t.IsZero() && t.After(startTime) {
 		startTime = t
 	}
 	return startTime
 }
 
-func (c *Conn) switchToNewPath(tr *Transport, now time.Time) {
+func (c *Conn) switchToNewPath(tr *Transport, now monotime.Time) {
 	initialPacketSize := protocol.ByteCount(c.config.InitialPacketSize)
 	c.sentPacketHandler.MigratedPath(now, initialPacketSize)
 	maxPacketSize := protocol.ByteCount(protocol.MaxPacketBufferSize)
@@ -798,7 +902,7 @@ func (c *Conn) switchToNewPath(tr *Transport, now time.Time) {
 	}()
 }
 
-func (c *Conn) handleHandshakeComplete(now time.Time) error {
+func (c *Conn) handleHandshakeComplete(now monotime.Time) error {
 	defer close(c.handshakeCompleteChan)
 	// Once the handshake completes, we have derived 1-RTT keys.
 	// There's no point in queueing undecryptable packets for later decryption anymore.
@@ -844,7 +948,11 @@ func (c *Conn) handleHandshakeComplete(now time.Time) error {
 	return nil
 }
 
-func (c *Conn) handleHandshakeConfirmed(now time.Time) error {
+func (c *Conn) handleHandshakeConfirmed(now monotime.Time) error {
+	// Drop initial keys.
+	// On the client side, this should have happened when sending the first Handshake packet,
+	// but this is not guaranteed if the server misbehaves.
+	// See CVE-2025-59530 for more details.
 	if err := c.dropEncryptionLevel(protocol.EncryptionInitial, now); err != nil {
 		return err
 	}
@@ -998,6 +1106,7 @@ func (c *Conn) handleOnePacket(rp receivedPacket) (wasProcessed bool, _ error) {
 	}
 
 	p.buffer.MaybeRelease()
+	c.blocked = blockModeNone
 	return wasProcessed, nil
 }
 
@@ -1212,7 +1321,7 @@ func (c *Conn) handleUnpackError(err error, p receivedPacket, pt logging.PacketT
 	}
 }
 
-func (c *Conn) handleRetryPacket(hdr *wire.Header, data []byte, rcvTime time.Time) bool /* was this a valid Retry */ {
+func (c *Conn) handleRetryPacket(hdr *wire.Header, data []byte, rcvTime monotime.Time) bool /* was this a valid Retry */ {
 	if c.perspective == protocol.PerspectiveServer {
 		if c.tracer != nil && c.tracer.DroppedPacket != nil {
 			c.tracer.DroppedPacket(logging.PacketTypeRetry, protocol.InvalidPacketNumber, protocol.ByteCount(len(data)), logging.PacketDropUnexpectedPacket)
@@ -1328,7 +1437,7 @@ func (c *Conn) handleVersionNegotiationPacket(p receivedPacket) {
 func (c *Conn) handleUnpackedLongHeaderPacket(
 	packet *unpackedPacket,
 	ecn protocol.ECN,
-	rcvTime time.Time,
+	rcvTime monotime.Time,
 	packetSize protocol.ByteCount, // only for logging
 ) error {
 	if !c.receivedFirstPacket {
@@ -1381,7 +1490,7 @@ func (c *Conn) handleUnpackedLongHeaderPacket(
 	}
 
 	c.lastPacketReceivedTime = rcvTime
-	c.firstAckElicitingPacketAfterIdleSentTime = time.Time{}
+	c.firstAckElicitingPacketAfterIdleSentTime = 0
 	c.keepAlivePingSent = false
 
 	if packet.hdr.Type == protocol.PacketType0RTT {
@@ -1406,11 +1515,11 @@ func (c *Conn) handleUnpackedShortHeaderPacket(
 	pn protocol.PacketNumber,
 	data []byte,
 	ecn protocol.ECN,
-	rcvTime time.Time,
+	rcvTime monotime.Time,
 	log func([]logging.Frame),
 ) (isNonProbing bool, pathChallenge *wire.PathChallengeFrame, _ error) {
 	c.lastPacketReceivedTime = rcvTime
-	c.firstAckElicitingPacketAfterIdleSentTime = time.Time{}
+	c.firstAckElicitingPacketAfterIdleSentTime = 0
 	c.keepAlivePingSent = false
 
 	isAckEliciting, isNonProbing, pathChallenge, err := c.handleFrames(data, destConnID, protocol.Encryption1RTT, log, rcvTime)
@@ -1430,7 +1539,7 @@ func (c *Conn) handleFrames(
 	destConnID protocol.ConnectionID,
 	encLevel protocol.EncryptionLevel,
 	log func([]logging.Frame),
-	rcvTime time.Time,
+	rcvTime monotime.Time,
 ) (isAckEliciting, isNonProbing bool, pathChallenge *wire.PathChallengeFrame, _ error) {
 	// Only used for tracing.
 	// If we're not tracing, this slice will always remain empty.
@@ -1477,6 +1586,7 @@ func (c *Conn) handleFrames(
 			if skipHandling {
 				continue
 			}
+			wire.LogFrame(c.logger, streamFrame, false)
 			handleErr = c.streamsMap.HandleStreamFrame(streamFrame, rcvTime)
 		} else if frameType.IsAckFrameType() {
 			ackFrame, l, err := c.frameParser.ParseAckFrame(frameType, data, encLevel, c.version)
@@ -1491,6 +1601,7 @@ func (c *Conn) handleFrames(
 			if skipHandling {
 				continue
 			}
+			wire.LogFrame(c.logger, ackFrame, false)
 			handleErr = c.handleAckFrame(ackFrame, encLevel, rcvTime)
 		} else if frameType.IsDatagramFrameType() {
 			datagramFrame, l, err := c.frameParser.ParseDatagramFrame(frameType, data, c.version)
@@ -1506,6 +1617,7 @@ func (c *Conn) handleFrames(
 			if skipHandling {
 				continue
 			}
+			wire.LogFrame(c.logger, datagramFrame, false)
 			handleErr = c.handleDatagramFrame(datagramFrame)
 		} else {
 			frame, l, err := c.frameParser.ParseLessCommonFrame(frameType, data, c.version)
@@ -1560,7 +1672,7 @@ func (c *Conn) handleFrame(
 	f wire.Frame,
 	encLevel protocol.EncryptionLevel,
 	destConnID protocol.ConnectionID,
-	rcvTime time.Time,
+	rcvTime monotime.Time,
 ) (pathChallenge *wire.PathChallengeFrame, _ error) {
 	var err error
 	wire.LogFrame(c.logger, f, false)
@@ -1640,7 +1752,7 @@ func (c *Conn) handleConnectionCloseFrame(frame *wire.ConnectionCloseFrame) erro
 	}
 }
 
-func (c *Conn) handleCryptoFrame(frame *wire.CryptoFrame, encLevel protocol.EncryptionLevel, rcvTime time.Time) error {
+func (c *Conn) handleCryptoFrame(frame *wire.CryptoFrame, encLevel protocol.EncryptionLevel, rcvTime monotime.Time) error {
 	if err := c.cryptoStreamManager.HandleCryptoFrame(frame, encLevel); err != nil {
 		return err
 	}
@@ -1656,7 +1768,7 @@ func (c *Conn) handleCryptoFrame(frame *wire.CryptoFrame, encLevel protocol.Encr
 	return c.handleHandshakeEvents(rcvTime)
 }
 
-func (c *Conn) handleHandshakeEvents(now time.Time) error {
+func (c *Conn) handleHandshakeEvents(now monotime.Time) error {
 	for {
 		ev := c.cryptoStreamHandler.NextEvent()
 		var err error
@@ -1743,7 +1855,7 @@ func (c *Conn) handleNewTokenFrame(frame *wire.NewTokenFrame) error {
 	return nil
 }
 
-func (c *Conn) handleHandshakeDoneFrame(rcvTime time.Time) error {
+func (c *Conn) handleHandshakeDoneFrame(rcvTime monotime.Time) error {
 	if c.perspective == protocol.PerspectiveServer {
 		return &qerr.TransportError{
 			ErrorCode:    qerr.ProtocolViolation,
@@ -1756,7 +1868,7 @@ func (c *Conn) handleHandshakeDoneFrame(rcvTime time.Time) error {
 	return nil
 }
 
-func (c *Conn) handleAckFrame(frame *wire.AckFrame, encLevel protocol.EncryptionLevel, rcvTime time.Time) error {
+func (c *Conn) handleAckFrame(frame *wire.AckFrame, encLevel protocol.EncryptionLevel, rcvTime monotime.Time) error {
 	acked1RTTPacket, err := c.sentPacketHandler.ReceivedAck(frame, encLevel, c.lastPacketReceivedTime)
 	if err != nil {
 		return err
@@ -1918,7 +2030,7 @@ func (c *Conn) handleCloseError(closeErr *closeError) {
 	c.connIDGenerator.ReplaceWithClosed(connClosePacket, 3*c.rttStats.PTO(false))
 }
 
-func (c *Conn) dropEncryptionLevel(encLevel protocol.EncryptionLevel, now time.Time) error {
+func (c *Conn) dropEncryptionLevel(encLevel protocol.EncryptionLevel, now monotime.Time) error {
 	if c.tracer != nil && c.tracer.DroppedEncryptionLevel != nil {
 		c.tracer.DroppedEncryptionLevel(encLevel)
 	}
@@ -1941,6 +2053,9 @@ func (c *Conn) dropEncryptionLevel(encLevel protocol.EncryptionLevel, now time.T
 func (c *Conn) restoreTransportParameters(params *wire.TransportParameters) {
 	if c.logger.Debug() {
 		c.logger.Debugf("Restoring Transport Parameters: %s", params)
+	}
+	if c.tracer != nil && c.tracer.RestoredTransportParameters != nil {
+		c.tracer.RestoredTransportParameters(params)
 	}
 
 	c.peerParams = params
@@ -2050,14 +2165,15 @@ func (c *Conn) applyTransportParameters() {
 	)
 }
 
-func (c *Conn) triggerSending(now time.Time) error {
-	c.pacingDeadline = time.Time{}
+func (c *Conn) triggerSending(now monotime.Time) error {
+	c.pacingDeadline = 0
 
 	sendMode := c.sentPacketHandler.SendMode(now)
 	switch sendMode {
 	case ackhandler.SendAny:
 		return c.sendPackets(now)
 	case ackhandler.SendNone:
+		c.blocked = blockModeHardBlocked
 		return nil
 	case ackhandler.SendPacingLimited:
 		deadline := c.sentPacketHandler.TimeUntilSend()
@@ -2068,11 +2184,12 @@ func (c *Conn) triggerSending(now time.Time) error {
 		// Allow sending of an ACK if we're pacing limit.
 		// This makes sure that a peer that is mostly receiving data (and thus has an inaccurate cwnd estimate)
 		// sends enough ACKs to allow its peer to utilize the bandwidth.
-		fallthrough
+		return c.maybeSendAckOnlyPacket(now)
 	case ackhandler.SendAck:
 		// We can at most send a single ACK only packet.
 		// There will only be a new ACK after receiving new packets.
 		// SendAck is only returned when we're congestion limited, so we don't need to set the pacing timer.
+		c.blocked = blockModeCongestionLimited
 		return c.maybeSendAckOnlyPacket(now)
 	case ackhandler.SendPTOInitial, ackhandler.SendPTOHandshake, ackhandler.SendPTOAppData:
 		if err := c.sendProbePacket(sendMode, now); err != nil {
@@ -2088,7 +2205,7 @@ func (c *Conn) triggerSending(now time.Time) error {
 	}
 }
 
-func (c *Conn) sendPackets(now time.Time) error {
+func (c *Conn) sendPackets(now monotime.Time) error {
 	if c.perspective == protocol.PerspectiveClient && c.handshakeConfirmed {
 		if pm := c.pathManagerOutgoing.Load(); pm != nil {
 			connID, frame, tr, ok := pm.NextPathToProbe()
@@ -2159,7 +2276,7 @@ func (c *Conn) sendPackets(now time.Time) error {
 	return c.sendPacketsWithoutGSO(now)
 }
 
-func (c *Conn) sendPacketsWithoutGSO(now time.Time) error {
+func (c *Conn) sendPacketsWithoutGSO(now monotime.Time) error {
 	for {
 		buf := getPacketBuffer()
 		ecn := c.sentPacketHandler.ECNMode(true)
@@ -2195,7 +2312,7 @@ func (c *Conn) sendPacketsWithoutGSO(now time.Time) error {
 	}
 }
 
-func (c *Conn) sendPacketsWithGSO(now time.Time) error {
+func (c *Conn) sendPacketsWithGSO(now monotime.Time) error {
 	buf := getLargePacketBuffer()
 	maxSize := c.maxPacketSize()
 
@@ -2267,7 +2384,7 @@ func (c *Conn) resetPacingDeadline() {
 	c.pacingDeadline = deadline
 }
 
-func (c *Conn) maybeSendAckOnlyPacket(now time.Time) error {
+func (c *Conn) maybeSendAckOnlyPacket(now monotime.Time) error {
 	if !c.handshakeConfirmed {
 		ecn := c.sentPacketHandler.ECNMode(false)
 		packet, err := c.packer.PackCoalescedPacket(true, c.maxPacketSize(), now, c.version)
@@ -2294,7 +2411,7 @@ func (c *Conn) maybeSendAckOnlyPacket(now time.Time) error {
 	return nil
 }
 
-func (c *Conn) sendProbePacket(sendMode ackhandler.SendMode, now time.Time) error {
+func (c *Conn) sendProbePacket(sendMode ackhandler.SendMode, now monotime.Time) error {
 	var encLevel protocol.EncryptionLevel
 	//nolint:exhaustive // We only need to handle the PTO send modes here.
 	switch sendMode {
@@ -2335,7 +2452,7 @@ func (c *Conn) sendProbePacket(sendMode ackhandler.SendMode, now time.Time) erro
 
 // appendOneShortHeaderPacket appends a new packet to the given packetBuffer.
 // If there was nothing to pack, the returned size is 0.
-func (c *Conn) appendOneShortHeaderPacket(buf *packetBuffer, maxSize protocol.ByteCount, ecn protocol.ECN, now time.Time) (protocol.ByteCount, error) {
+func (c *Conn) appendOneShortHeaderPacket(buf *packetBuffer, maxSize protocol.ByteCount, ecn protocol.ECN, now monotime.Time) (protocol.ByteCount, error) {
 	startLen := buf.Len()
 	p, err := c.packer.AppendPacket(buf, maxSize, now, c.version)
 	if err != nil {
@@ -2347,7 +2464,7 @@ func (c *Conn) appendOneShortHeaderPacket(buf *packetBuffer, maxSize protocol.By
 	return size, nil
 }
 
-func (c *Conn) registerPackedShortHeaderPacket(p shortHeaderPacket, ecn protocol.ECN, now time.Time) {
+func (c *Conn) registerPackedShortHeaderPacket(p shortHeaderPacket, ecn protocol.ECN, now monotime.Time) {
 	if p.IsPathProbePacket {
 		c.sentPacketHandler.SentPacket(
 			now,
@@ -2386,7 +2503,7 @@ func (c *Conn) registerPackedShortHeaderPacket(p shortHeaderPacket, ecn protocol
 	c.connIDManager.SentPacket()
 }
 
-func (c *Conn) sendPackedCoalescedPacket(packet *coalescedPacket, ecn protocol.ECN, now time.Time) error {
+func (c *Conn) sendPackedCoalescedPacket(packet *coalescedPacket, ecn protocol.ECN, now monotime.Time) error {
 	c.logCoalescedPacket(packet, ecn)
 	for _, p := range packet.longHdrPackets {
 		if c.firstAckElicitingPacketAfterIdleSentTime.IsZero() && p.IsAckEliciting() {
@@ -2644,16 +2761,26 @@ func (c *Conn) LocalAddr() net.Addr { return c.conn.LocalAddr() }
 // RemoteAddr returns the remote address of the QUIC connection.
 func (c *Conn) RemoteAddr() net.Addr { return c.conn.RemoteAddr() }
 
+// getPathManager lazily initializes the Conn's pathManagerOutgoing.
+// May create multiple pathManagerOutgoing objects if called concurrently.
 func (c *Conn) getPathManager() *pathManagerOutgoing {
-	c.pathManagerOutgoing.CompareAndSwap(nil,
-		func() *pathManagerOutgoing { // this function is only called if a swap is performed
-			return newPathManagerOutgoing(
-				c.connIDManager.GetConnIDForPath,
-				c.connIDManager.RetireConnIDForPath,
-				c.scheduleSending,
-			)
-		}(),
+	old := c.pathManagerOutgoing.Load()
+	if old != nil {
+		// Path manager is already initialized
+		return old
+	}
+
+	// Initialize the path manager
+	new := newPathManagerOutgoing(
+		c.connIDManager.GetConnIDForPath,
+		c.connIDManager.RetireConnIDForPath,
+		c.scheduleSending,
 	)
+	if c.pathManagerOutgoing.CompareAndSwap(old, new) {
+		return new
+	}
+
+	// Swap failed. A concurrent writer wrote first, use their value.
 	return c.pathManagerOutgoing.Load()
 }
 

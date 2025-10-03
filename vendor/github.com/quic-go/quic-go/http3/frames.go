@@ -15,7 +15,7 @@ type FrameType uint64
 
 type unknownFrameHandlerFunc func(FrameType, error) (processed bool, err error)
 
-type frame interface{}
+type frame any
 
 var errHijacked = errors.New("hijacked")
 

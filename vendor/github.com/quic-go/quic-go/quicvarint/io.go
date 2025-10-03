@@ -31,7 +31,12 @@ func NewReader(r io.Reader) Reader {
 
 func (r *byteReader) ReadByte() (byte, error) {
 	var b [1]byte
-	n, err := r.Read(b[:])
+	var n int
+	var err error
+	for n == 0 && err == nil {
+		n, err = r.Read(b[:])
+	}
+
 	if n == 1 && err == io.EOF {
 		err = nil
 	}

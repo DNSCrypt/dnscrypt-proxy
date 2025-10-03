@@ -8,8 +8,8 @@ import (
 
 	"github.com/quic-go/quic-go/internal/ackhandler"
 	"github.com/quic-go/quic-go/internal/flowcontrol"
+	"github.com/quic-go/quic-go/internal/monotime"
 	"github.com/quic-go/quic-go/internal/protocol"
-	"github.com/quic-go/quic-go/internal/utils"
 	"github.com/quic-go/quic-go/internal/wire"
 )
 
@@ -52,7 +52,7 @@ type SendStream struct {
 
 	writeChan chan struct{}
 	writeOnce chan struct{}
-	deadline  time.Time
+	deadline  monotime.Time
 
 	flowController flowcontrol.StreamFlowController
 }
@@ -118,7 +118,7 @@ func (s *SendStream) write(p []byte) (bool /* is newly completed */, int, error)
 	if s.finishedWriting {
 		return false, 0, fmt.Errorf("write on closed stream %d", s.streamID)
 	}
-	if !s.deadline.IsZero() && !time.Now().Before(s.deadline) {
+	if !s.deadline.IsZero() && !monotime.Now().Before(s.deadline) {
 		return false, 0, errDeadline
 	}
 	if len(p) == 0 {
@@ -128,13 +128,13 @@ func (s *SendStream) write(p []byte) (bool /* is newly completed */, int, error)
 	s.dataForWriting = p
 
 	var (
-		deadlineTimer  *utils.Timer
+		deadlineTimer  *time.Timer
 		bytesWritten   int
 		notifiedSender bool
 	)
 	for {
 		var copied bool
-		var deadline time.Time
+		var deadline monotime.Time
 		// As soon as dataForWriting becomes smaller than a certain size x, we copy all the data to a STREAM frame (s.nextFrame),
 		// which can then be popped the next time we assemble a packet.
 		// This allows us to return Write() when all data but x bytes have been sent out.
@@ -161,15 +161,16 @@ func (s *SendStream) write(p []byte) (bool /* is newly completed */, int, error)
 			bytesWritten = len(p) - len(s.dataForWriting)
 			deadline = s.deadline
 			if !deadline.IsZero() {
-				if !time.Now().Before(deadline) {
+				if !monotime.Now().Before(deadline) {
 					s.dataForWriting = nil
 					return false, bytesWritten, errDeadline
 				}
 				if deadlineTimer == nil {
-					deadlineTimer = utils.NewTimer()
+					deadlineTimer = time.NewTimer(monotime.Until(deadline))
 					defer deadlineTimer.Stop()
+				} else {
+					deadlineTimer.Reset(monotime.Until(deadline))
 				}
-				deadlineTimer.Reset(deadline)
 			}
 			if s.dataForWriting == nil || s.shutdownErr != nil || s.resetErr != nil {
 				break
@@ -190,8 +191,7 @@ func (s *SendStream) write(p []byte) (bool /* is newly completed */, int, error)
 		} else {
 			select {
 			case <-s.writeChan:
-			case <-deadlineTimer.Chan():
-				deadlineTimer.SetRead()
+			case <-deadlineTimer.C:
 			}
 		}
 		s.mutex.Lock()
@@ -454,6 +454,19 @@ func (s *SendStream) SetReliableBoundary() {
 	}
 }
 
+// returnFramesToPool returns all queued frames to the sync.Pool
+func (s *SendStream) returnFramesToPool() {
+	for _, f := range s.retransmissionQueue {
+		f.PutBack()
+	}
+	clear(s.retransmissionQueue)
+	s.retransmissionQueue = nil
+	if s.nextFrame != nil {
+		s.nextFrame.PutBack()
+		s.nextFrame = nil
+	}
+}
+
 // CancelWrite aborts sending on this stream.
 // Data already written, but not yet delivered to the peer is not guaranteed to be delivered reliably.
 // Write will unblock immediately, and future calls to Write will fail.
@@ -485,7 +498,7 @@ func (s *SendStream) CancelWrite(errorCode StreamErrorCode) {
 	reliableOffset := s.reliableOffset()
 	if reliableOffset == 0 {
 		s.numOutstandingFrames = 0
-		s.retransmissionQueue = nil
+		s.returnFramesToPool()
 	}
 	s.queuedResetStreamFrame = &wire.ResetStreamFrame{
 		StreamID:  s.streamID,
@@ -561,7 +574,7 @@ func (s *SendStream) handleStopSendingFrame(f *wire.StopSendingFrame) {
 	// if the peer stopped reading from the stream, there's no need to transmit any data reliably
 	s.reliableSize = 0
 	s.numOutstandingFrames = 0
-	s.retransmissionQueue = nil
+	s.returnFramesToPool()
 	if s.resetErr == nil {
 		s.resetErr = &StreamError{StreamID: s.streamID, ErrorCode: f.ErrorCode, Remote: true}
 		s.ctxCancel(s.resetErr)
@@ -577,7 +590,7 @@ func (s *SendStream) handleStopSendingFrame(f *wire.StopSendingFrame) {
 	s.sender.onHasStreamControlFrame(s.streamID, s)
 }
 
-func (s *SendStream) getControlFrame(time.Time) (_ ackhandler.Frame, ok, hasMore bool) {
+func (s *SendStream) getControlFrame(monotime.Time) (_ ackhandler.Frame, ok, hasMore bool) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
@@ -616,7 +629,7 @@ func (s *SendStream) Context() context.Context {
 // A zero value for t means Write will not time out.
 func (s *SendStream) SetWriteDeadline(t time.Time) error {
 	s.mutex.Lock()
-	s.deadline = t
+	s.deadline = monotime.FromTime(t)
 	s.mutex.Unlock()
 	s.signalWrite()
 	return nil
@@ -629,6 +642,7 @@ func (s *SendStream) closeForShutdown(err error) {
 	s.mutex.Lock()
 	if s.shutdownErr == nil && !s.finishedWriting {
 		s.shutdownErr = err
+		s.returnFramesToPool()
 	}
 	s.mutex.Unlock()
 	s.signalWrite()
@@ -673,6 +687,8 @@ func (s *sendStreamAckHandler) OnLost(f wire.Frame) {
 	// If the reliable size was 0 when the stream was cancelled,
 	// the number of outstanding frames was immediately set to 0, and the retransmission queue was dropped.
 	if s.resetErr != nil && (*SendStream)(s).reliableOffset() == 0 {
+		// Return the frame to pool since it won't be retransmitted
+		sf.PutBack()
 		s.mutex.Unlock()
 		return
 	}

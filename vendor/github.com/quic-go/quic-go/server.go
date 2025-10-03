@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/quic-go/quic-go/internal/handshake"
+	"github.com/quic-go/quic-go/internal/monotime"
 	"github.com/quic-go/quic-go/internal/protocol"
 	"github.com/quic-go/quic-go/internal/qerr"
 	"github.com/quic-go/quic-go/internal/utils"
@@ -34,7 +35,7 @@ type packetHandler interface {
 
 type zeroRTTQueue struct {
 	packets    []receivedPacket
-	expiration time.Time
+	expiration monotime.Time
 }
 
 type rejectedPacket struct {
@@ -62,7 +63,7 @@ type baseServer struct {
 
 	receivedPackets chan receivedPacket
 
-	nextZeroRTTCleanup time.Time
+	nextZeroRTTCleanup monotime.Time
 	zeroRTTQueues      map[protocol.ConnectionID]*zeroRTTQueue // only initialized if acceptEarlyConns == true
 
 	connContext func(context.Context, *ClientInfo) (context.Context, error)
@@ -132,7 +133,7 @@ func (l *Listener) Accept(ctx context.Context) (*Conn, error) {
 // Close closes the listener.
 // Accept will return [ErrServerClosed] as soon as all connections in the accept queue have been accepted.
 // QUIC handshakes that are still in flight will be rejected with a CONNECTION_REFUSED error.
-// Already established (accepted)connections will be unaffected.
+// Already established (accepted) connections will be unaffected.
 func (l *Listener) Close() error {
 	return l.baseServer.Close()
 }
@@ -161,7 +162,10 @@ func (l *EarlyListener) Accept(ctx context.Context) (*Conn, error) {
 	return conn, nil
 }
 
-// Close the server. All active connections will be closed.
+// Close closes the listener.
+// Accept will return [ErrServerClosed] as soon as all connections in the accept queue have been accepted.
+// Early connections that are still in flight will be rejected with a CONNECTION_REFUSED error.
+// Already established (accepted) connections will be unaffected.
 func (l *EarlyListener) Close() error {
 	return l.baseServer.Close()
 }
@@ -535,10 +539,10 @@ func (s *baseServer) handle0RTTPacket(p receivedPacket) bool {
 	return true
 }
 
-func (s *baseServer) cleanupZeroRTTQueues(now time.Time) {
+func (s *baseServer) cleanupZeroRTTQueues(now monotime.Time) {
 	// Iterate over all queues to find those that are expired.
 	// This is ok since we're placing a pretty low limit on the number of queues.
-	var nextCleanup time.Time
+	var nextCleanup monotime.Time
 	for connID, q := range s.zeroRTTQueues {
 		if q.expiration.After(now) {
 			if nextCleanup.IsZero() || nextCleanup.After(q.expiration) {
