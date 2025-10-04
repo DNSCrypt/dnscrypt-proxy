@@ -76,6 +76,7 @@ type PluginsState struct {
 	synthResponse                    *dns.Msg
 	questionMsg                      *dns.Msg
 	xTransport                       *XTransport
+	proxy                            *Proxy
 	sessionData                      map[string]interface{}
 	action                           PluginsAction
 	timeout                          time.Duration
@@ -269,6 +270,7 @@ func NewPluginsState(
 		maxUnencryptedUDPSafePayloadSize: MaxDNSUDPSafePacketSize,
 		sessionData:                      make(map[string]interface{}),
 		xTransport:                       proxy.xTransport,
+		proxy:                            proxy,
 	}
 }
 
@@ -403,5 +405,7 @@ func (pluginsState *PluginsState) ApplyLoggingPlugins(pluginsGlobals *PluginsGlo
 			return err
 		}
 	}
+	// Update monitoring metrics
+	updateMonitoringMetrics(pluginsState.proxy, pluginsState)
 	return nil
 }
