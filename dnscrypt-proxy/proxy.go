@@ -27,6 +27,8 @@ type Proxy struct {
 	dns64Prefixes                 []string
 	serversBlockingFragments      []string
 	ednsClientSubnets             []*net.IPNet
+	ednsDeviceID                  string
+	ednsSubscriberID              string
 	queryLogIgnoredQtypes         []string
 	localDoHListeners             []*net.TCPListener
 	queryMeta                     []string

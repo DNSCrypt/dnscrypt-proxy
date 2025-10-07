@@ -276,6 +276,22 @@ func configureEDNSClientSubnet(proxy *Proxy, config *Config) error {
 	return nil
 }
 
+// configureEDNSDeviceAndSubscriberIDs - Configures EDSN device and subscriber IDs
+func configureEDNSDeviceAndSubscriberIDs(proxy *Proxy, config *Config) error {
+	// Only configure when both are non-empty
+	if len(config.EDNSDeviceID) != 0 && len(config.EDNSSubscriberID) != 0 {
+		if !isValidUUID4NoDashes(config.EDNSDeviceID) {
+			return fmt.Errorf("Invalid EDNS-device-id: must be a valid UUIDv4 without dashes")
+		}
+		if !isValidUUID4NoDashes(config.EDNSSubscriberID) {
+			return fmt.Errorf("Invalid EDNS-subscriber-id: must be a valid UUIDv4 without dashes")
+		}
+		proxy.ednsDeviceID = config.EDNSDeviceID
+		proxy.ednsSubscriberID = config.EDNSSubscriberID
+	}
+	return nil
+}
+
 // configureQueryLog - Configures query logging
 func configureQueryLog(proxy *Proxy, config *Config) error {
 	if len(config.QueryLog.Format) == 0 {
@@ -512,4 +528,32 @@ func initializeNetworking(proxy *Proxy, flags *ConfigFlags, config *Config) erro
 	}
 
 	return proxy.addSystemDListeners()
+}
+
+// isValidUUID4NoDashes validates that the given string is a UUID version 4
+// represented without dashes (32 hex characters), with correct version and variant bits.
+func isValidUUID4NoDashes(s string) bool {
+	uuidLenWithoutDashes := 32
+
+	if len(s) != uuidLenWithoutDashes {
+		return false
+	}
+	// Check all chars are hex and enforce version/variant nibbles
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		isHex := (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')
+		if !isHex {
+			return false
+		}
+	}
+	// Version nibble (13th hex, index 12) must be '4'
+	if s[12] != '4' {
+		return false
+	}
+	// Variant nibble (17th hex, index 16) must be 8,9,a,b (case-insensitive)
+	s16 := s[16]
+	if !((s16 == '8') || (s16 == '9') || (s16 == 'a') || (s16 == 'A') || (s16 == 'b') || (s16 == 'B')) {
+		return false
+	}
+	return true
 }

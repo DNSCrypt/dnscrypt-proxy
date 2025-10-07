@@ -111,6 +111,9 @@ func (proxy *Proxy) InitPluginsGlobals() error {
 	if len(proxy.ednsClientSubnets) != 0 {
 		*queryPlugins = append(*queryPlugins, Plugin(new(PluginECS)))
 	}
+	if len(proxy.ednsDeviceID) != 0 && len(proxy.ednsSubscriberID) != 0 {
+		*queryPlugins = append(*queryPlugins, Plugin(new(PluginDeviceAndSubscriberID)))
+	}
 	if len(proxy.blockNameFile) != 0 {
 		*queryPlugins = append(*queryPlugins, Plugin(new(PluginBlockName)))
 	}

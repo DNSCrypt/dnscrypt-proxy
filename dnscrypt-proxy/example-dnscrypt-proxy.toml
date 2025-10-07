@@ -162,6 +162,10 @@ keepalive = 30
 
 # edns_client_subnet = ['0.0.0.0/0', '2001:db8::/32']
 
+## Add EDNS device and subscriber IDs (UUIDs v4 without dashes)
+
+ # edns_device_id = 'c66373bb84764d47b7c8f0bf3fb247f1'
+ # edns_subscriber_id = '38a8fc7ecfae49c1ad267af1a0aff525'
 
 ## Response for blocked queries. Options are `refused`, `hinfo` (default) or
 ## an IP response. To give an IP response, use the format `a:<IPv4>,aaaa:<IPv6>`.

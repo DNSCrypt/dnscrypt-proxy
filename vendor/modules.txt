@@ -107,6 +107,8 @@ github.com/quic-go/quic-go/quicvarint
 ## explicit; go 1.18
 github.com/smartystreets/goconvey/convey/gotest
 github.com/smartystreets/goconvey/convey/reporting
+# github.com/stretchr/testify v1.9.0
+## explicit; go 1.17
 # go.uber.org/mock v0.6.0
 ## explicit; go 1.23.0
 # golang.org/x/crypto v0.42.0
@@ -231,3 +233,5 @@ google.golang.org/protobuf/types/known/anypb
 # gopkg.in/natefinch/lumberjack.v2 v2.2.1
 ## explicit; go 1.13
 gopkg.in/natefinch/lumberjack.v2
+# gopkg.in/yaml.v3 v3.0.1
+## explicit

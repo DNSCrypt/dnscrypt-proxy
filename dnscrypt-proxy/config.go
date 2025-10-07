@@ -105,6 +105,8 @@ type Config struct {
 	DoHClientX509AuthLegacy  DoHClientX509AuthConfig     `toml:"tls_client_auth"`
 	DNS64                    DNS64Config                 `toml:"dns64"`
 	EDNSClientSubnet         []string                    `toml:"edns_client_subnet"`
+	EDNSDeviceID             string                      `toml:"edns_device_id"`
+	EDNSSubscriberID         string                      `toml:"edns_subscriber_id"`
 	IPEncryption             IPEncryptionConfig          `toml:"ip_encryption"`
 }
 
@@ -399,6 +401,11 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 
 	// Configure EDNS client subnet
 	if err := configureEDNSClientSubnet(proxy, &config); err != nil {
+		return err
+	}
+
+	// Configure EDNS device and subscriber IDs
+	if err := configureEDNSDeviceAndSubscriberIDs(proxy, &config); err != nil {
 		return err
 	}
 
