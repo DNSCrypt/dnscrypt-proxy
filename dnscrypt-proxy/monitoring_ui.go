@@ -273,15 +273,12 @@ func (ui *MonitoringUI) UpdateMetrics(pluginsState PluginsState, msg *dns.Msg) {
 		return
 	}
 
-	dlog.Debugf("Updating metrics for query: %s", pluginsState.qName)
-
 	mc := ui.metricsCollector
 	now := time.Now()
 
 	// Update counters (total queries, cache, QPS) - separate lock
 	mc.countersMutex.Lock()
 	mc.totalQueries++
-	dlog.Debugf("Total queries now: %d", mc.totalQueries)
 
 	// Update queries per second
 	elapsed := now.Sub(mc.lastQueriesTime).Seconds()
@@ -296,16 +293,13 @@ func (ui *MonitoringUI) UpdateMetrics(pluginsState PluginsState, msg *dns.Msg) {
 			mc.lastQueriesCount = mc.totalQueries
 			mc.lastQueriesTime = now
 		}
-		dlog.Debugf("Updated QPS: %.2f", mc.queriesPerSecond)
 	}
 
 	// Update cache hits/misses
 	if pluginsState.cacheHit {
 		mc.cacheHits++
-		dlog.Debugf("Cache hit, total hits: %d", mc.cacheHits)
 	} else {
 		mc.cacheMisses++
-		dlog.Debugf("Cache miss, total misses: %d", mc.cacheMisses)
 	}
 
 	// Update blocked queries count
@@ -314,8 +308,6 @@ func (ui *MonitoringUI) UpdateMetrics(pluginsState PluginsState, msg *dns.Msg) {
 	if pluginsState.returnCode == PluginsReturnCodeReject ||
 		pluginsState.returnCode == PluginsReturnCodeDrop {
 		mc.blockCount++
-		dlog.Debugf("Blocked query (return code: %s), total blocks: %d",
-			PluginsReturnCodeToString[pluginsState.returnCode], mc.blockCount)
 	}
 	mc.countersMutex.Unlock()
 
@@ -331,7 +323,6 @@ func (ui *MonitoringUI) UpdateMetrics(pluginsState PluginsState, msg *dns.Msg) {
 		}
 		mc.queryTypesMutex.Lock()
 		mc.queryTypes[qType]++
-		dlog.Debugf("Query type %s, count: %d", qType, mc.queryTypes[qType])
 		mc.queryTypesMutex.Unlock()
 	} else {
 		dlog.Debugf("No question in message or message is nil")
@@ -348,7 +339,6 @@ func (ui *MonitoringUI) UpdateMetrics(pluginsState PluginsState, msg *dns.Msg) {
 	mc.countersMutex.Lock()
 	mc.responseTimeSum += uint64(responseTime)
 	mc.responseTimeCount++
-	dlog.Debugf("Response time: %dms, avg: %.2fms", responseTime, float64(mc.responseTimeSum)/float64(mc.responseTimeCount))
 	mc.countersMutex.Unlock()
 
 	// Update server stats - separate lock
@@ -356,10 +346,6 @@ func (ui *MonitoringUI) UpdateMetrics(pluginsState PluginsState, msg *dns.Msg) {
 		mc.serverMutex.Lock()
 		mc.serverQueryCount[pluginsState.serverName]++
 		mc.serverResponseTime[pluginsState.serverName] += uint64(responseTime)
-		dlog.Debugf("Server %s, queries: %d, avg response: %.2fms",
-			pluginsState.serverName,
-			mc.serverQueryCount[pluginsState.serverName],
-			float64(mc.serverResponseTime[pluginsState.serverName])/float64(mc.serverQueryCount[pluginsState.serverName]))
 		mc.serverMutex.Unlock()
 	} else {
 		dlog.Debugf("No server name or server is '-'")
@@ -371,7 +357,6 @@ func (ui *MonitoringUI) UpdateMetrics(pluginsState PluginsState, msg *dns.Msg) {
 		domainName := pluginsState.qName
 		mc.domainMutex.Lock()
 		mc.topDomains[domainName]++
-		dlog.Debugf("Domain %s, count: %d", domainName, mc.topDomains[domainName])
 		mc.domainMutex.Unlock()
 	}
 
@@ -452,8 +437,6 @@ func (ui *MonitoringUI) UpdateMetrics(pluginsState PluginsState, msg *dns.Msg) {
 			mc.currentMemoryBytes -= oldEntry.EstimateMemoryUsage()
 		}
 
-		dlog.Debugf("Added query log entry, total entries: %d, memory usage: %d bytes",
-			len(mc.recentQueries), mc.currentMemoryBytes)
 		mc.queryLogMutex.Unlock()
 	}
 
@@ -812,14 +795,11 @@ func (mc *MetricsCollector) invalidateCache() {
 
 // GetMetrics - Returns the current metrics
 func (mc *MetricsCollector) GetMetrics() map[string]interface{} {
-	dlog.Debugf("GetMetrics called")
-
 	// Check cache first
 	mc.cacheMutex.RLock()
 	if time.Since(mc.cacheLastUpdate) < mc.cacheTTL && mc.cachedMetrics != nil {
 		cached := mc.cachedMetrics
 		mc.cacheMutex.RUnlock()
-		dlog.Debugf("Returning cached metrics")
 		return cached
 	}
 	mc.cacheMutex.RUnlock()
@@ -835,8 +815,6 @@ func (mc *MetricsCollector) GetMetrics() map[string]interface{} {
 	responseTimeCount := mc.responseTimeCount
 	startTime := mc.startTime
 	mc.countersMutex.RUnlock()
-
-	dlog.Debugf("GetMetrics - total queries: %d", totalQueries)
 
 	// Calculate average response time
 	var avgResponseTime float64
@@ -1009,7 +987,6 @@ func (mc *MetricsCollector) GetMetrics() map[string]interface{} {
 	mc.cacheLastUpdate = generatedAt
 	mc.cacheMutex.Unlock()
 
-	dlog.Debugf("Computed and cached new metrics")
 	return metrics
 }
 
@@ -1035,8 +1012,6 @@ func setStaticCacheHeaders(w http.ResponseWriter, maxAge int) {
 
 // handleTestQuery - Handles test query requests for debugging
 func (ui *MonitoringUI) handleTestQuery(w http.ResponseWriter, r *http.Request) {
-	dlog.Debugf("Adding test query")
-
 	// Test queries modify state - no cache
 	setDynamicCacheHeaders(w)
 
@@ -1065,8 +1040,6 @@ func (ui *MonitoringUI) handleTestQuery(w http.ResponseWriter, r *http.Request) 
 
 // handleRoot - Handles the root path
 func (ui *MonitoringUI) handleRoot(w http.ResponseWriter, r *http.Request) {
-	dlog.Debugf("Received root request from %s", r.RemoteAddr)
-
 	// Set CORS headers
 	setCORSHeaders(w)
 
@@ -1122,15 +1095,12 @@ func (ui *MonitoringUI) handleMetrics(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	dlog.Debugf("Sending metrics response (%d bytes)", len(jsonData))
-
 	// If it's a JSONP request, wrap the JSON in the callback function
 	if callback != "" {
 		w.Header().Set("Content-Type", "application/javascript")
 		w.Write([]byte(callback + "("))
 		w.Write(jsonData)
 		w.Write([]byte(");"))
-		dlog.Debugf("Sent JSONP response with callback: %s", callback)
 	} else {
 		// Regular JSON response
 		w.Write(jsonData)
@@ -1261,8 +1231,6 @@ func (ui *MonitoringUI) handlePrometheus(w http.ResponseWriter, r *http.Request)
 	// Write metrics
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(metrics))
-
-	dlog.Debugf("Served Prometheus metrics (%d bytes)", len(metrics))
 }
 
 // basicAuthMiddleware - Adds basic authentication to the HTTP server
