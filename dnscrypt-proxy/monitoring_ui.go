@@ -347,8 +347,6 @@ func (ui *MonitoringUI) UpdateMetrics(pluginsState PluginsState, msg *dns.Msg) {
 		mc.serverQueryCount[pluginsState.serverName]++
 		mc.serverResponseTime[pluginsState.serverName] += uint64(responseTime)
 		mc.serverMutex.Unlock()
-	} else {
-		dlog.Debugf("No server name or server is '-'")
 	}
 
 	// Update top domains - separate lock
