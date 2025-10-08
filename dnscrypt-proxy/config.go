@@ -774,6 +774,11 @@ func isIPAndPort(addrStr string) error {
 		return fmt.Errorf("Port missing '%s'", addrStr)
 	} else if _, err := strconv.ParseUint(strconv.Itoa(port), 10, 16); err != nil {
 		return fmt.Errorf("Port does not parse '%s' [%v]", addrStr, err)
+	} else if ip.To4() == nil {
+		// IPv6 address must use bracket notation to avoid ambiguity
+		if !strings.HasPrefix(host, "[") || !strings.HasSuffix(host, "]") {
+			return fmt.Errorf("IPv6 addresses must use bracket notation, e.g., [%s]:%d", ip.String(), port)
+		}
 	}
 	return nil
 }
