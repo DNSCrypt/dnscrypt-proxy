@@ -244,7 +244,7 @@ func (xTransport *XTransport) rebuildTransport() {
 					return "[" + ip.String() + "]:" + strconv.Itoa(port)
 				}
 				if parsed := ParseIP(host); parsed != nil && parsed.To4() == nil {
-					return "[" + host + "]:" + strconv.Itoa(port)
+					return "[" + parsed.String() + "]:" + strconv.Itoa(port)
 				}
 				return host + ":" + strconv.Itoa(port)
 			}
