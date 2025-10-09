@@ -175,6 +175,14 @@ func NewServersInfo() ServersInfo {
 	}
 }
 
+func (serversInfo *ServersInfo) registerServers(registeredServers []RegisteredServer) {
+	rs := make([]RegisteredServer, len(registeredServers))
+	copy(rs, registeredServers)
+	serversInfo.Lock()
+	serversInfo.registeredServers = rs
+	serversInfo.Unlock()
+}
+
 func (serversInfo *ServersInfo) registerServer(name string, stamp stamps.ServerStamp) {
 	newRegisteredServer := RegisteredServer{name: name, stamp: stamp}
 	serversInfo.Lock()
@@ -186,6 +194,14 @@ func (serversInfo *ServersInfo) registerServer(name string, stamp stamps.ServerS
 		}
 	}
 	serversInfo.registeredServers = append(serversInfo.registeredServers, newRegisteredServer)
+}
+
+func (serversInfo *ServersInfo) registerRelays(registeredRelays []RegisteredServer) {
+	rr := make([]RegisteredServer, len(registeredRelays))
+	copy(rr, registeredRelays)
+	serversInfo.Lock()
+	serversInfo.registeredRelays = rr
+	serversInfo.Unlock()
 }
 
 func (serversInfo *ServersInfo) registerRelay(name string, stamp stamps.ServerStamp) {

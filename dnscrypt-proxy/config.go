@@ -664,7 +664,7 @@ func (config *Config) loadSources(proxy *Proxy) error {
 			if stamp.Proto == stamps.StampProtoTypeDNSCryptRelay || stamp.Proto == stamps.StampProtoTypeODoHRelay {
 				dlog.Debugf("Adding [%s] to the set of available static relays", name)
 				registeredServer := RegisteredServer{name: name, stamp: stamp, description: "static relay"}
-				proxy.registeredRelays = append(proxy.registeredRelays, registeredServer)
+				proxy.staticRelays = append(proxy.staticRelays, registeredServer)
 			}
 		}
 	}
@@ -685,7 +685,7 @@ func (config *Config) loadSources(proxy *Proxy) error {
 		if err != nil {
 			return fmt.Errorf("Stamp error for the static [%s] definition: [%v]", serverName, err)
 		}
-		proxy.registeredServers = append(proxy.registeredServers, RegisteredServer{name: serverName, stamp: stamp})
+		proxy.staticServers = append(proxy.staticServers, RegisteredServer{name: serverName, stamp: stamp})
 	}
 	if err := proxy.updateRegisteredServers(); err != nil {
 		return err
