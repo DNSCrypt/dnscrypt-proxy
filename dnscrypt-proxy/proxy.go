@@ -297,9 +297,7 @@ func (proxy *Proxy) StartProxy() {
 	if proxy.showCerts {
 		os.Exit(0)
 	}
-	if liveServers > 0 {
-		dlog.Noticef("dnscrypt-proxy is ready - live servers: %d", liveServers)
-	} else if err != nil {
+	if liveServers <= 0 {
 		dlog.Error(err)
 		dlog.Notice("dnscrypt-proxy is waiting for at least one server to be reachable")
 	}
