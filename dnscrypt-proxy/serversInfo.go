@@ -98,11 +98,11 @@ func (s LBStrategyPN) getActiveCount(serversCount int) int {
 type LBStrategyPH struct{}
 
 func (LBStrategyPH) getCandidate(serversCount int) int {
-	return rand.Intn(Max(Min(serversCount, 2), serversCount/2))
+	return rand.Intn((serversCount + 1) / 2)
 }
 
 func (LBStrategyPH) getActiveCount(serversCount int) int {
-	return Max(Min(serversCount, 2), serversCount/2)
+	return (serversCount + 1) / 2
 }
 
 type LBStrategyFirst struct{}
