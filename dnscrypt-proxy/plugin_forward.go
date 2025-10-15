@@ -282,7 +282,7 @@ func (plugin *PluginForward) Eval(pluginsState *PluginsState, msg *dns.Msg) erro
 			for _, dhcpdns := range plugin.dhcpdns {
 				inconsistency, ip, dhcpDNS, err := dhcpdns.Status()
 				if err != nil && ip != "" && inconsistency > maxInconsistency {
-					dlog.Infof("No response from the DHCP server while resolving [%s]", qName)
+					dlog.Infof("No response from the DHCP server while resolving [%s]: %v", qName, err)
 					continue
 				}
 				if len(dhcpDNS) > 0 {
