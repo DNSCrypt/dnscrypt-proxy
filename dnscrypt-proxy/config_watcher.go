@@ -201,10 +201,12 @@ func (cw *ConfigWatcher) AddFile(path string, reloadFunc func() error) error {
 	// Add to tracked files
 	cw.watchedFiles[absPath] = wf
 
-	// Watch directory containing the file to catch moves/renames
-	dirPath := filepath.Dir(absPath)
-	if err := cw.watcher.Add(dirPath); err != nil {
-		return err
+	// Watch directory containing the file to catch moves/renames when fsnotify is available
+	if cw.watcher != nil {
+		dirPath := filepath.Dir(absPath)
+		if err := cw.watcher.Add(dirPath); err != nil {
+			return err
+		}
 	}
 
 	dlog.Noticef("Now watching [%s] for changes", absPath)
