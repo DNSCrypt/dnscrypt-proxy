@@ -296,10 +296,17 @@ func (ui *MonitoringUI) UpdateMetrics(pluginsState PluginsState, msg *dns.Msg) {
 	}
 
 	// Update cache hits/misses
-	if pluginsState.cacheHit {
-		mc.cacheHits++
-	} else {
-		mc.cacheMisses++
+	// Only count cache statistics for queries that participate in caching:
+	// - Cache hits (cacheHit == true)
+	// - Cache misses (queries that went to a DNS server: serverName != "-")
+	// This excludes blocked queries (REJECT/DROP) that never reach the cache or server
+	shouldCountCacheStats := pluginsState.cacheHit || pluginsState.serverName != "-"
+	if shouldCountCacheStats {
+		if pluginsState.cacheHit {
+			mc.cacheHits++
+		} else {
+			mc.cacheMisses++
+		}
 	}
 
 	// Update blocked queries count
