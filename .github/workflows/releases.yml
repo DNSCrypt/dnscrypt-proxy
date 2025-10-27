@@ -76,7 +76,7 @@ jobs:
           ls -l dnscrypt-proxy*
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: dnscrypt-proxy-${{ steps.get_version.outputs.VERSION }}
           path: |
