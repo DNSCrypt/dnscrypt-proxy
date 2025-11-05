@@ -449,7 +449,7 @@ func _dnsExchange(
 			upstreamAddr = relay.RelayUDPAddr
 		}
 		now := time.Now()
-		pc, err := net.DialUDP("udp", nil, upstreamAddr)
+		pc, err := net.DialTimeout("udp", upstreamAddr.String(), proxy.timeout)
 		if err != nil {
 			return DNSExchangeResponse{err: err}
 		}
@@ -485,7 +485,7 @@ func _dnsExchange(
 		var pc net.Conn
 		proxyDialer := proxy.xTransport.proxyDialer
 		if proxyDialer == nil {
-			pc, err = net.DialTCP("tcp", nil, upstreamAddr)
+			pc, err = net.DialTimeout("tcp", upstreamAddr.String(), proxy.timeout)
 		} else {
 			pc, err = (*proxyDialer).Dial("tcp", tcpAddr.String())
 		}
