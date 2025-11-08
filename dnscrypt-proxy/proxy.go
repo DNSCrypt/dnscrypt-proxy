@@ -715,7 +715,7 @@ func (proxy *Proxy) processIncomingQuery(
 	var serverName string = "-"
 
 	// Apply query plugins with lazy server selection
-	query, _ = pluginsState.ApplyQueryPlugins(
+	query, err := pluginsState.ApplyQueryPlugins(
 		&proxy.pluginsGlobals,
 		query,
 		func() (*ServerInfo, bool) {
@@ -734,6 +734,13 @@ func (proxy *Proxy) processIncomingQuery(
 			return serverInfo, needsPadding
 		},
 	)
+	if err != nil {
+		dlog.Debugf("Plugins failed: %v", err)
+		pluginsState.action = PluginsActionDrop
+		pluginsState.returnCode = PluginsReturnCodeDrop
+		pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
+		return response
+	}
 	if !validateQuery(query) {
 		return response
 	}
@@ -746,7 +753,6 @@ func (proxy *Proxy) processIncomingQuery(
 	}
 
 	// Handle synthesized responses from plugins
-	var err error
 	if pluginsState.synthResponse != nil {
 		response, err = handleSynthesizedResponse(&pluginsState, pluginsState.synthResponse)
 		if err != nil {
