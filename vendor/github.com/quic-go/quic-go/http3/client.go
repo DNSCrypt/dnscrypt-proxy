@@ -6,12 +6,14 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"maps"
 	"net/http"
 	"net/http/httptrace"
 	"net/textproto"
 	"time"
 
 	"github.com/quic-go/quic-go"
+	"github.com/quic-go/quic-go/http3/qlog"
 	"github.com/quic-go/quic-go/quicvarint"
 
 	"github.com/quic-go/qpack"
@@ -136,6 +138,19 @@ func (c *ClientConn) setupConn() error {
 	b = quicvarint.Append(b, streamTypeControlStream)
 	// send the SETTINGS frame
 	b = (&settingsFrame{Datagram: c.enableDatagrams, Other: c.additionalSettings}).Append(b)
+	if c.conn.qlogger != nil {
+		sf := qlog.SettingsFrame{
+			Other: maps.Clone(c.additionalSettings),
+		}
+		if c.enableDatagrams {
+			sf.Datagram = pointer(true)
+		}
+		c.conn.qlogger.RecordEvent(qlog.FrameCreated{
+			StreamID: str.StreamID(),
+			Raw:      qlog.RawInfo{Length: len(b)},
+			Frame:    qlog.Frame{Frame: sf},
+		})
+	}
 	_, err = str.Write(b)
 	return err
 }
@@ -158,7 +173,7 @@ func (c *ClientConn) handleBidirectionalStreams(streamHijacker func(FrameType, q
 			},
 		}
 		go func() {
-			if _, err := fp.ParseNext(); err == errHijacked {
+			if _, err := fp.ParseNext(c.conn.qlogger); err == errHijacked {
 				return
 			}
 			if err != nil {

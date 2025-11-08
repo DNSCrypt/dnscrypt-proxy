@@ -14,6 +14,8 @@ import (
 	"time"
 
 	"github.com/quic-go/quic-go"
+	"github.com/quic-go/quic-go/http3/qlog"
+	"github.com/quic-go/quic-go/qlogwriter"
 	"github.com/quic-go/quic-go/quicvarint"
 
 	"github.com/quic-go/qpack"
@@ -51,6 +53,8 @@ type Conn struct {
 
 	idleTimeout time.Duration
 	idleTimer   *time.Timer
+
+	qlogger qlogwriter.Recorder
 }
 
 func newConnection(
@@ -61,6 +65,10 @@ func newConnection(
 	logger *slog.Logger,
 	idleTimeout time.Duration,
 ) *Conn {
+	var qlogger qlogwriter.Recorder
+	if qlogTrace := quicConn.QlogTrace(); qlogTrace != nil && qlogTrace.SupportsSchemas(qlog.EventSchema) {
+		qlogger = qlogTrace.AddProducer()
+	}
 	c := &Conn{
 		ctx:              ctx,
 		conn:             quicConn,
@@ -73,6 +81,7 @@ func newConnection(
 		streams:          make(map[quic.StreamID]*stateTrackingStream),
 		maxStreamID:      invalidStreamID,
 		lastStreamID:     invalidStreamID,
+		qlogger:          qlogger,
 	}
 	if idleTimeout > 0 {
 		c.idleTimer = time.AfterFunc(idleTimeout, c.onIdleTimer)
@@ -167,14 +176,14 @@ func (c *Conn) openRequestStream(
 	rsp := &http.Response{}
 	trace := httptrace.ContextClientTrace(ctx)
 	return newRequestStream(
-		newStream(hstr, c, trace, func(r io.Reader, l uint64) error {
-			hdr, err := c.decodeTrailers(r, l, maxHeaderBytes)
+		newStream(hstr, c, trace, func(r io.Reader, hf *headersFrame) error {
+			hdr, err := c.decodeTrailers(r, str.StreamID(), hf, maxHeaderBytes)
 			if err != nil {
 				return err
 			}
 			rsp.Trailer = hdr
 			return nil
-		}),
+		}, c.qlogger),
 		requestWriter,
 		reqDone,
 		c.decoder,
@@ -184,18 +193,23 @@ func (c *Conn) openRequestStream(
 	), nil
 }
 
-func (c *Conn) decodeTrailers(r io.Reader, l, maxHeaderBytes uint64) (http.Header, error) {
-	if l > maxHeaderBytes {
-		return nil, fmt.Errorf("HEADERS frame too large: %d bytes (max: %d)", l, maxHeaderBytes)
+func (c *Conn) decodeTrailers(r io.Reader, streamID quic.StreamID, hf *headersFrame, maxHeaderBytes uint64) (http.Header, error) {
+	if hf.Length > maxHeaderBytes {
+		maybeQlogInvalidHeadersFrame(c.qlogger, streamID, hf.Length)
+		return nil, fmt.Errorf("HEADERS frame too large: %d bytes (max: %d)", hf.Length, maxHeaderBytes)
 	}
 
-	b := make([]byte, l)
+	b := make([]byte, hf.Length)
 	if _, err := io.ReadFull(r, b); err != nil {
 		return nil, err
 	}
 	fields, err := c.decoder.DecodeFull(b)
 	if err != nil {
+		maybeQlogInvalidHeadersFrame(c.qlogger, streamID, hf.Length)
 		return nil, err
+	}
+	if c.qlogger != nil {
+		qlogParsedHeadersFrame(c.qlogger, streamID, hf, fields)
 	}
 	return parseTrailers(fields)
 }
@@ -303,8 +317,8 @@ func (c *Conn) handleUnidirectionalStreams(hijack func(StreamType, quic.Connecti
 }
 
 func (c *Conn) handleControlStream(str *quic.ReceiveStream) {
-	fp := &frameParser{closeConn: c.conn.CloseWithError, r: str}
-	f, err := fp.ParseNext()
+	fp := &frameParser{closeConn: c.conn.CloseWithError, r: str, streamID: str.StreamID()}
+	f, err := fp.ParseNext(c.qlogger)
 	if err != nil {
 		var serr *quic.StreamError
 		if err == io.EOF || errors.As(err, &serr) {
@@ -348,7 +362,7 @@ func (c *Conn) handleControlStream(str *quic.ReceiveStream) {
 	}
 
 	for {
-		f, err := fp.ParseNext()
+		f, err := fp.ParseNext(c.qlogger)
 		if err != nil {
 			var serr *quic.StreamError
 			if err == io.EOF || errors.As(err, &serr) {
@@ -391,8 +405,18 @@ func (c *Conn) handleControlStream(str *quic.ReceiveStream) {
 func (c *Conn) sendDatagram(streamID quic.StreamID, b []byte) error {
 	// TODO: this creates a lot of garbage and an additional copy
 	data := make([]byte, 0, len(b)+8)
+	quarterStreamID := uint64(streamID / 4)
 	data = quicvarint.Append(data, uint64(streamID/4))
 	data = append(data, b...)
+	if c.qlogger != nil {
+		c.qlogger.RecordEvent(qlog.DatagramCreated{
+			QuaterStreamID: quarterStreamID,
+			Raw: qlog.RawInfo{
+				Length:        len(data),
+				PayloadLength: len(b),
+			},
+		})
+	}
 	return c.conn.SendDatagram(data)
 }
 
@@ -406,6 +430,15 @@ func (c *Conn) receiveDatagrams() error {
 		if err != nil {
 			c.CloseWithError(quic.ApplicationErrorCode(ErrCodeDatagramError), "")
 			return fmt.Errorf("could not read quarter stream id: %w", err)
+		}
+		if c.qlogger != nil {
+			c.qlogger.RecordEvent(qlog.DatagramParsed{
+				QuaterStreamID: quarterStreamID,
+				Raw: qlog.RawInfo{
+					Length:        len(b),
+					PayloadLength: len(b) - n,
+				},
+			})
 		}
 		if quarterStreamID > maxQuarterStreamID {
 			c.CloseWithError(quic.ApplicationErrorCode(ErrCodeDatagramError), "")

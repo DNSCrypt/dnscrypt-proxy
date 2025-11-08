@@ -15,7 +15,8 @@ import (
 	"github.com/quic-go/quic-go/internal/qerr"
 	"github.com/quic-go/quic-go/internal/utils"
 	"github.com/quic-go/quic-go/internal/wire"
-	"github.com/quic-go/quic-go/logging"
+	"github.com/quic-go/quic-go/qlog"
+	"github.com/quic-go/quic-go/qlogwriter"
 )
 
 // ErrServerClosed is returned by the [Listener] or [EarlyListener]'s Accept method after a call to Close.
@@ -86,7 +87,7 @@ type baseServer struct {
 		*handshake.TokenGenerator,
 		bool, /* client address validated by an address validation token */
 		time.Duration,
-		*logging.ConnectionTracer,
+		qlogwriter.Trace,
 		utils.Logger,
 		protocol.Version,
 	) *wrappedConn
@@ -114,7 +115,7 @@ type baseServer struct {
 
 	connQueue chan *Conn
 
-	tracer *logging.Tracer
+	qlogger qlogwriter.Recorder
 
 	logger utils.Logger
 }
@@ -243,7 +244,7 @@ func newServer(
 	connContext func(context.Context, *ClientInfo) (context.Context, error),
 	tlsConf *tls.Config,
 	config *Config,
-	tracer *logging.Tracer,
+	qlogger qlogwriter.Recorder,
 	onClose func(),
 	tokenGeneratorKey TokenGeneratorKey,
 	maxTokenAge time.Duration,
@@ -272,7 +273,7 @@ func newServer(
 		connectionRefusedQueue:    make(chan rejectedPacket, 4),
 		retryQueue:                make(chan rejectedPacket, 8),
 		newConn:                   newConnection,
-		tracer:                    tracer,
+		qlogger:                   qlogger,
 		logger:                    utils.DefaultLogger.WithPrefix("server"),
 		acceptEarlyConns:          acceptEarly,
 		disableVersionNegotiation: disableVersionNegotiation,
@@ -397,8 +398,11 @@ func (s *baseServer) handlePacket(p receivedPacket) {
 		return
 	default:
 		s.logger.Debugf("Dropping packet from %s (%d bytes). Server receive queue full.", p.remoteAddr, p.Size())
-		if s.tracer != nil && s.tracer.DroppedPacket != nil {
-			s.tracer.DroppedPacket(p.remoteAddr, logging.PacketTypeNotDetermined, p.Size(), logging.PacketDropDOSPrevention)
+		if s.qlogger != nil {
+			s.qlogger.RecordEvent(qlog.PacketDropped{
+				Raw:     qlog.RawInfo{Length: int(p.Size())},
+				Trigger: qlog.PacketDropDOSPrevention,
+			})
 		}
 	}
 }
@@ -410,8 +414,12 @@ func (s *baseServer) handlePacketImpl(p receivedPacket) bool /* is the buffer st
 
 	if wire.IsVersionNegotiationPacket(p.data) {
 		s.logger.Debugf("Dropping Version Negotiation packet.")
-		if s.tracer != nil && s.tracer.DroppedPacket != nil {
-			s.tracer.DroppedPacket(p.remoteAddr, logging.PacketTypeVersionNegotiation, p.Size(), logging.PacketDropUnexpectedPacket)
+		if s.qlogger != nil {
+			s.qlogger.RecordEvent(qlog.PacketDropped{
+				Header:  qlog.PacketHeader{PacketType: qlog.PacketTypeVersionNegotiation},
+				Raw:     qlog.RawInfo{Length: int(p.Size())},
+				Trigger: qlog.PacketDropUnexpectedPacket,
+			})
 		}
 		return false
 	}
@@ -423,24 +431,35 @@ func (s *baseServer) handlePacketImpl(p receivedPacket) bool /* is the buffer st
 	// drop the packet if we failed to parse the protocol version
 	if err != nil {
 		s.logger.Debugf("Dropping a packet with an unknown version")
-		if s.tracer != nil && s.tracer.DroppedPacket != nil {
-			s.tracer.DroppedPacket(p.remoteAddr, logging.PacketTypeNotDetermined, p.Size(), logging.PacketDropUnexpectedPacket)
+		if s.qlogger != nil {
+			s.qlogger.RecordEvent(qlog.PacketDropped{
+				Raw:     qlog.RawInfo{Length: int(p.Size())},
+				Trigger: qlog.PacketDropUnexpectedPacket,
+			})
 		}
 		return false
 	}
 	// send a Version Negotiation Packet if the client is speaking a different protocol version
 	if !protocol.IsSupportedVersion(s.config.Versions, v) {
 		if s.disableVersionNegotiation {
-			if s.tracer != nil && s.tracer.DroppedPacket != nil {
-				s.tracer.DroppedPacket(p.remoteAddr, logging.PacketTypeNotDetermined, p.Size(), logging.PacketDropUnexpectedVersion)
+			if s.qlogger != nil {
+				s.qlogger.RecordEvent(qlog.PacketDropped{
+					Header:  qlog.PacketHeader{Version: v},
+					Raw:     qlog.RawInfo{Length: int(p.Size())},
+					Trigger: qlog.PacketDropUnexpectedVersion,
+				})
 			}
 			return false
 		}
 
 		if p.Size() < protocol.MinUnknownVersionPacketSize {
 			s.logger.Debugf("Dropping a packet with an unsupported version number %d that is too small (%d bytes)", v, p.Size())
-			if s.tracer != nil && s.tracer.DroppedPacket != nil {
-				s.tracer.DroppedPacket(p.remoteAddr, logging.PacketTypeNotDetermined, p.Size(), logging.PacketDropUnexpectedPacket)
+			if s.qlogger != nil {
+				s.qlogger.RecordEvent(qlog.PacketDropped{
+					Header:  qlog.PacketHeader{Version: v},
+					Raw:     qlog.RawInfo{Length: int(p.Size())},
+					Trigger: qlog.PacketDropUnexpectedPacket,
+				})
 			}
 			return false
 		}
@@ -449,8 +468,15 @@ func (s *baseServer) handlePacketImpl(p receivedPacket) bool /* is the buffer st
 
 	if wire.Is0RTTPacket(p.data) {
 		if !s.acceptEarlyConns {
-			if s.tracer != nil && s.tracer.DroppedPacket != nil {
-				s.tracer.DroppedPacket(p.remoteAddr, logging.PacketType0RTT, p.Size(), logging.PacketDropUnexpectedPacket)
+			if s.qlogger != nil {
+				s.qlogger.RecordEvent(qlog.PacketDropped{
+					Header: qlog.PacketHeader{
+						PacketType:   qlog.PacketType0RTT,
+						PacketNumber: protocol.InvalidPacketNumber,
+					},
+					Raw:     qlog.RawInfo{Length: int(p.Size())},
+					Trigger: qlog.PacketDropUnexpectedPacket,
+				})
 			}
 			return false
 		}
@@ -461,16 +487,27 @@ func (s *baseServer) handlePacketImpl(p receivedPacket) bool /* is the buffer st
 	// The header will then be parsed again.
 	hdr, _, _, err := wire.ParsePacket(p.data)
 	if err != nil {
-		if s.tracer != nil && s.tracer.DroppedPacket != nil {
-			s.tracer.DroppedPacket(p.remoteAddr, logging.PacketTypeNotDetermined, p.Size(), logging.PacketDropHeaderParseError)
+		if s.qlogger != nil {
+			s.qlogger.RecordEvent(qlog.PacketDropped{
+				Raw:     qlog.RawInfo{Length: int(p.Size())},
+				Trigger: qlog.PacketDropHeaderParseError,
+			})
 		}
 		s.logger.Debugf("Error parsing packet: %s", err)
 		return false
 	}
 	if hdr.Type == protocol.PacketTypeInitial && p.Size() < protocol.MinInitialPacketSize {
 		s.logger.Debugf("Dropping a packet that is too small to be a valid Initial (%d bytes)", p.Size())
-		if s.tracer != nil && s.tracer.DroppedPacket != nil {
-			s.tracer.DroppedPacket(p.remoteAddr, logging.PacketTypeInitial, p.Size(), logging.PacketDropUnexpectedPacket)
+		if s.qlogger != nil {
+			s.qlogger.RecordEvent(qlog.PacketDropped{
+				Header: qlog.PacketHeader{
+					PacketType:   qlog.PacketTypeInitial,
+					PacketNumber: protocol.InvalidPacketNumber,
+					Version:      v,
+				},
+				Raw:     qlog.RawInfo{Length: int(p.Size())},
+				Trigger: qlog.PacketDropUnexpectedPacket,
+			})
 		}
 		return false
 	}
@@ -480,8 +517,27 @@ func (s *baseServer) handlePacketImpl(p receivedPacket) bool /* is the buffer st
 		// There's little point in sending a Stateless Reset, since the client
 		// might not have received the token yet.
 		s.logger.Debugf("Dropping long header packet of type %s (%d bytes)", hdr.Type, len(p.data))
-		if s.tracer != nil && s.tracer.DroppedPacket != nil {
-			s.tracer.DroppedPacket(p.remoteAddr, logging.PacketTypeFromHeader(hdr), p.Size(), logging.PacketDropUnexpectedPacket)
+		if s.qlogger != nil {
+			var pt qlog.PacketType
+			switch hdr.Type {
+			case protocol.PacketTypeInitial:
+				pt = qlog.PacketTypeInitial
+			case protocol.PacketTypeHandshake:
+				pt = qlog.PacketTypeHandshake
+			case protocol.PacketType0RTT:
+				pt = qlog.PacketType0RTT
+			case protocol.PacketTypeRetry:
+				pt = qlog.PacketTypeRetry
+			}
+			s.qlogger.RecordEvent(qlog.PacketDropped{
+				Header: qlog.PacketHeader{
+					PacketType:   pt,
+					PacketNumber: protocol.InvalidPacketNumber,
+					Version:      v,
+				},
+				Raw:     qlog.RawInfo{Length: int(p.Size())},
+				Trigger: qlog.PacketDropUnexpectedPacket,
+			})
 		}
 		return false
 	}
@@ -499,8 +555,17 @@ func (s *baseServer) handlePacketImpl(p receivedPacket) bool /* is the buffer st
 func (s *baseServer) handle0RTTPacket(p receivedPacket) bool {
 	connID, err := wire.ParseConnectionID(p.data, 0)
 	if err != nil {
-		if s.tracer != nil && s.tracer.DroppedPacket != nil {
-			s.tracer.DroppedPacket(p.remoteAddr, logging.PacketType0RTT, p.Size(), logging.PacketDropHeaderParseError)
+		if s.qlogger != nil {
+			v, _ := wire.ParseVersion(p.data)
+			s.qlogger.RecordEvent(qlog.PacketDropped{
+				Header: qlog.PacketHeader{
+					PacketType:   qlog.PacketType0RTT,
+					PacketNumber: protocol.InvalidPacketNumber,
+					Version:      v,
+				},
+				Raw:     qlog.RawInfo{Length: int(p.Size())},
+				Trigger: qlog.PacketDropHeaderParseError,
+			})
 		}
 		return false
 	}
@@ -513,8 +578,17 @@ func (s *baseServer) handle0RTTPacket(p receivedPacket) bool {
 
 	if q, ok := s.zeroRTTQueues[connID]; ok {
 		if len(q.packets) >= protocol.Max0RTTQueueLen {
-			if s.tracer != nil && s.tracer.DroppedPacket != nil {
-				s.tracer.DroppedPacket(p.remoteAddr, logging.PacketType0RTT, p.Size(), logging.PacketDropDOSPrevention)
+			if s.qlogger != nil {
+				v, _ := wire.ParseVersion(p.data)
+				s.qlogger.RecordEvent(qlog.PacketDropped{
+					Header: qlog.PacketHeader{
+						PacketType:   qlog.PacketType0RTT,
+						PacketNumber: protocol.InvalidPacketNumber,
+						Version:      v,
+					},
+					Raw:     qlog.RawInfo{Length: int(p.Size())},
+					Trigger: qlog.PacketDropDOSPrevention,
+				})
 			}
 			return false
 		}
@@ -523,8 +597,17 @@ func (s *baseServer) handle0RTTPacket(p receivedPacket) bool {
 	}
 
 	if len(s.zeroRTTQueues) >= protocol.Max0RTTQueues {
-		if s.tracer != nil && s.tracer.DroppedPacket != nil {
-			s.tracer.DroppedPacket(p.remoteAddr, logging.PacketType0RTT, p.Size(), logging.PacketDropDOSPrevention)
+		if s.qlogger != nil {
+			v, _ := wire.ParseVersion(p.data)
+			s.qlogger.RecordEvent(qlog.PacketDropped{
+				Header: qlog.PacketHeader{
+					PacketType:   qlog.PacketType0RTT,
+					PacketNumber: protocol.InvalidPacketNumber,
+					Version:      v,
+				},
+				Raw:     qlog.RawInfo{Length: int(p.Size())},
+				Trigger: qlog.PacketDropDOSPrevention,
+			})
 		}
 		return false
 	}
@@ -551,8 +634,17 @@ func (s *baseServer) cleanupZeroRTTQueues(now monotime.Time) {
 			continue
 		}
 		for _, p := range q.packets {
-			if s.tracer != nil && s.tracer.DroppedPacket != nil {
-				s.tracer.DroppedPacket(p.remoteAddr, logging.PacketType0RTT, p.Size(), logging.PacketDropDOSPrevention)
+			if s.qlogger != nil {
+				v, _ := wire.ParseVersion(p.data)
+				s.qlogger.RecordEvent(qlog.PacketDropped{
+					Header: qlog.PacketHeader{
+						PacketType:   qlog.PacketType0RTT,
+						PacketNumber: protocol.InvalidPacketNumber,
+						Version:      v,
+					},
+					Raw:     qlog.RawInfo{Length: int(p.Size())},
+					Trigger: qlog.PacketDropDOSPrevention,
+				})
 			}
 			p.buffer.Release()
 		}
@@ -586,8 +678,16 @@ func (s *baseServer) validateToken(token *handshake.Token, addr net.Addr) bool {
 
 func (s *baseServer) handleInitialImpl(p receivedPacket, hdr *wire.Header) error {
 	if len(hdr.Token) == 0 && hdr.DestConnectionID.Len() < protocol.MinConnectionIDLenInitial {
-		if s.tracer != nil && s.tracer.DroppedPacket != nil {
-			s.tracer.DroppedPacket(p.remoteAddr, logging.PacketTypeInitial, p.Size(), logging.PacketDropUnexpectedPacket)
+		if s.qlogger != nil {
+			s.qlogger.RecordEvent(qlog.PacketDropped{
+				Header: qlog.PacketHeader{
+					PacketType:   qlog.PacketTypeInitial,
+					PacketNumber: protocol.InvalidPacketNumber,
+					Version:      hdr.Version,
+				},
+				Raw:     qlog.RawInfo{Length: int(p.Size())},
+				Trigger: qlog.PacketDropUnexpectedPacket,
+			})
 		}
 		p.buffer.Release()
 		return errors.New("too short connection ID")
@@ -701,14 +801,14 @@ func (s *baseServer) handleInitialImpl(p receivedPacket, hdr *wire.Header) error
 		cancel = cancel1
 	}
 	ctx = context.WithValue(ctx, ConnectionTracingKey, nextConnTracingID())
-	var tracer *logging.ConnectionTracer
+	var qlogTrace qlogwriter.Trace
 	if config.Tracer != nil {
 		// Use the same connection ID that is passed to the client's GetLogWriter callback.
 		connID := hdr.DestConnectionID
 		if origDestConnID.Len() > 0 {
 			connID = origDestConnID
 		}
-		tracer = config.Tracer(ctx, protocol.PerspectiveServer, connID)
+		qlogTrace = config.Tracer(ctx, false, connID)
 	}
 	connID, err := s.connIDGenerator.GenerateConnectionID()
 	if err != nil {
@@ -732,7 +832,7 @@ func (s *baseServer) handleInitialImpl(p receivedPacket, hdr *wire.Header) error
 		s.tokenGenerator,
 		clientAddrVerified,
 		rtt,
-		tracer,
+		qlogTrace,
 		s.logger,
 		hdr.Version,
 	)
@@ -843,8 +943,20 @@ func (s *baseServer) sendRetryPacket(p rejectedPacket) error {
 	// append the Retry integrity tag
 	tag := handshake.GetRetryIntegrityTag(buf.Data, hdr.DestConnectionID, hdr.Version)
 	buf.Data = append(buf.Data, tag[:]...)
-	if s.tracer != nil && s.tracer.SentPacket != nil {
-		s.tracer.SentPacket(p.remoteAddr, &replyHdr.Header, protocol.ByteCount(len(buf.Data)), nil)
+	if s.qlogger != nil {
+		s.qlogger.RecordEvent(qlog.PacketSent{
+			Header: qlog.PacketHeader{
+				PacketType:       qlog.PacketTypeRetry,
+				SrcConnectionID:  replyHdr.SrcConnectionID,
+				DestConnectionID: replyHdr.DestConnectionID,
+				Version:          replyHdr.Version,
+				Token:            &qlog.Token{Raw: token},
+			},
+			Raw: qlog.RawInfo{
+				Length:        len(buf.Data),
+				PayloadLength: int(replyHdr.Length),
+			},
+		})
 	}
 	_, err = s.conn.WritePacket(buf.Data, p.remoteAddr, p.info.OOB(), 0, protocol.ECNUnsupported)
 	return err
@@ -862,15 +974,30 @@ func (s *baseServer) maybeSendInvalidToken(p rejectedPacket) {
 	// Only send INVALID_TOKEN if we can unprotect the packet.
 	// This makes sure that we won't send it for packets that were corrupted.
 	if err != nil {
-		if s.tracer != nil && s.tracer.DroppedPacket != nil {
-			s.tracer.DroppedPacket(p.remoteAddr, logging.PacketTypeInitial, p.Size(), logging.PacketDropHeaderParseError)
+		if s.qlogger != nil {
+			s.qlogger.RecordEvent(qlog.PacketDropped{
+				Header: qlog.PacketHeader{
+					PacketType:   qlog.PacketTypeInitial,
+					PacketNumber: protocol.InvalidPacketNumber,
+				},
+				Raw:     qlog.RawInfo{Length: int(p.Size())},
+				Trigger: qlog.PacketDropHeaderParseError,
+			})
 		}
 		return
 	}
 	hdrLen := extHdr.ParsedLen()
 	if _, err := opener.Open(data[hdrLen:hdrLen], data[hdrLen:], extHdr.PacketNumber, data[:hdrLen]); err != nil {
-		if s.tracer != nil && s.tracer.DroppedPacket != nil {
-			s.tracer.DroppedPacket(p.remoteAddr, logging.PacketTypeInitial, p.Size(), logging.PacketDropPayloadDecryptError)
+		if s.qlogger != nil {
+			s.qlogger.RecordEvent(qlog.PacketDropped{
+				Header: qlog.PacketHeader{
+					PacketType:   qlog.PacketTypeInitial,
+					PacketNumber: protocol.InvalidPacketNumber,
+					Version:      hdr.Version,
+				},
+				Raw:     qlog.RawInfo{Length: int(p.Size())},
+				Trigger: qlog.PacketDropPayloadDecryptError,
+			})
 		}
 		return
 	}
@@ -928,8 +1055,21 @@ func (s *baseServer) sendError(remoteAddr net.Addr, hdr *wire.Header, sealer han
 
 	replyHdr.Log(s.logger)
 	wire.LogFrame(s.logger, ccf, true)
-	if s.tracer != nil && s.tracer.SentPacket != nil {
-		s.tracer.SentPacket(remoteAddr, &replyHdr.Header, protocol.ByteCount(len(b.Data)), []logging.Frame{ccf})
+	if s.qlogger != nil {
+		s.qlogger.RecordEvent(qlog.PacketSent{
+			Header: qlog.PacketHeader{
+				PacketType:       qlog.PacketTypeInitial,
+				SrcConnectionID:  replyHdr.SrcConnectionID,
+				DestConnectionID: replyHdr.DestConnectionID,
+				PacketNumber:     replyHdr.PacketNumber,
+				Version:          replyHdr.Version,
+			},
+			Raw: qlog.RawInfo{
+				Length:        len(b.Data),
+				PayloadLength: int(replyHdr.Length),
+			},
+			Frames: []qlog.Frame{{Frame: ccf}},
+		})
 	}
 	_, err = s.conn.WritePacket(b.Data, remoteAddr, info.OOB(), 0, protocol.ECNUnsupported)
 	return err
@@ -957,8 +1097,11 @@ func (s *baseServer) maybeSendVersionNegotiationPacket(p receivedPacket) {
 	_, src, dest, err := wire.ParseArbitraryLenConnectionIDs(p.data)
 	if err != nil { // should never happen
 		s.logger.Debugf("Dropping a packet with an unknown version for which we failed to parse connection IDs")
-		if s.tracer != nil && s.tracer.DroppedPacket != nil {
-			s.tracer.DroppedPacket(p.remoteAddr, logging.PacketTypeNotDetermined, p.Size(), logging.PacketDropUnexpectedPacket)
+		if s.qlogger != nil {
+			s.qlogger.RecordEvent(qlog.PacketDropped{
+				Raw:     qlog.RawInfo{Length: int(p.Size())},
+				Trigger: qlog.PacketDropUnexpectedPacket,
+			})
 		}
 		return
 	}
@@ -966,8 +1109,14 @@ func (s *baseServer) maybeSendVersionNegotiationPacket(p receivedPacket) {
 	s.logger.Debugf("Client offered version %s, sending Version Negotiation", v)
 
 	data := wire.ComposeVersionNegotiation(dest, src, s.config.Versions)
-	if s.tracer != nil && s.tracer.SentVersionNegotiationPacket != nil {
-		s.tracer.SentVersionNegotiationPacket(p.remoteAddr, src, dest, s.config.Versions)
+	if s.qlogger != nil {
+		s.qlogger.RecordEvent(qlog.VersionNegotiationSent{
+			Header: qlog.PacketHeaderVersionNegotiation{
+				SrcConnectionID:  src,
+				DestConnectionID: dest,
+			},
+			SupportedVersions: s.config.Versions,
+		})
 	}
 	if _, err := s.conn.WritePacket(data, p.remoteAddr, p.info.OOB(), 0, protocol.ECNUnsupported); err != nil {
 		s.logger.Debugf("Error sending Version Negotiation: %s", err)

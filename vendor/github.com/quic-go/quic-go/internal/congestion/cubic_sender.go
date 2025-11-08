@@ -6,7 +6,8 @@ import (
 	"github.com/quic-go/quic-go/internal/monotime"
 	"github.com/quic-go/quic-go/internal/protocol"
 	"github.com/quic-go/quic-go/internal/utils"
-	"github.com/quic-go/quic-go/logging"
+	"github.com/quic-go/quic-go/qlog"
+	"github.com/quic-go/quic-go/qlogwriter"
 )
 
 const (
@@ -56,8 +57,8 @@ type cubicSender struct {
 
 	maxDatagramSize protocol.ByteCount
 
-	lastState logging.CongestionState
-	tracer    *logging.ConnectionTracer
+	lastState qlog.CongestionState
+	qlogger   qlogwriter.Recorder
 }
 
 var (
@@ -72,7 +73,7 @@ func NewCubicSender(
 	connStats *utils.ConnectionStats,
 	initialMaxDatagramSize protocol.ByteCount,
 	reno bool,
-	tracer *logging.ConnectionTracer,
+	qlogger qlogwriter.Recorder,
 ) *cubicSender {
 	return newCubicSender(
 		clock,
@@ -82,7 +83,7 @@ func NewCubicSender(
 		initialMaxDatagramSize,
 		initialCongestionWindow*initialMaxDatagramSize,
 		protocol.MaxCongestionWindowPackets*initialMaxDatagramSize,
-		tracer,
+		qlogger,
 	)
 }
 
@@ -94,7 +95,7 @@ func newCubicSender(
 	initialMaxDatagramSize,
 	initialCongestionWindow,
 	initialMaxCongestionWindow protocol.ByteCount,
-	tracer *logging.ConnectionTracer,
+	qlogger qlogwriter.Recorder,
 ) *cubicSender {
 	c := &cubicSender{
 		rttStats:                   rttStats,
@@ -109,13 +110,15 @@ func newCubicSender(
 		cubic:                      NewCubic(clock),
 		clock:                      clock,
 		reno:                       reno,
-		tracer:                     tracer,
+		qlogger:                    qlogger,
 		maxDatagramSize:            initialMaxDatagramSize,
 	}
 	c.pacer = newPacer(c.BandwidthEstimate)
-	if c.tracer != nil && c.tracer.UpdatedCongestionState != nil {
-		c.lastState = logging.CongestionStateSlowStart
-		c.tracer.UpdatedCongestionState(logging.CongestionStateSlowStart)
+	if c.qlogger != nil {
+		c.lastState = qlog.CongestionStateSlowStart
+		c.qlogger.RecordEvent(qlog.CongestionStateUpdated{
+			State: qlog.CongestionStateSlowStart,
+		})
 	}
 	return c
 }
@@ -173,7 +176,7 @@ func (c *cubicSender) MaybeExitSlowStart() {
 		c.hybridSlowStart.ShouldExitSlowStart(c.rttStats.LatestRTT(), c.rttStats.MinRTT(), c.GetCongestionWindow()/c.maxDatagramSize) {
 		// exit slow start
 		c.slowStartThreshold = c.congestionWindow
-		c.maybeTraceStateChange(logging.CongestionStateCongestionAvoidance)
+		c.maybeQlogStateChange(qlog.CongestionStateCongestionAvoidance)
 	}
 }
 
@@ -203,7 +206,7 @@ func (c *cubicSender) OnCongestionEvent(packetNumber protocol.PacketNumber, lost
 		return
 	}
 	c.lastCutbackExitedSlowstart = c.InSlowStart()
-	c.maybeTraceStateChange(logging.CongestionStateRecovery)
+	c.maybeQlogStateChange(qlog.CongestionStateRecovery)
 
 	if c.reno {
 		c.congestionWindow = protocol.ByteCount(float64(c.congestionWindow) * renoBeta)
@@ -232,7 +235,7 @@ func (c *cubicSender) maybeIncreaseCwnd(
 	// the current window.
 	if !c.isCwndLimited(priorInFlight) {
 		c.cubic.OnApplicationLimited()
-		c.maybeTraceStateChange(logging.CongestionStateApplicationLimited)
+		c.maybeQlogStateChange(qlog.CongestionStateApplicationLimited)
 		return
 	}
 	if c.congestionWindow >= c.maxCongestionWindow() {
@@ -241,11 +244,11 @@ func (c *cubicSender) maybeIncreaseCwnd(
 	if c.InSlowStart() {
 		// TCP slow start, exponential growth, increase by one for each ACK.
 		c.congestionWindow += c.maxDatagramSize
-		c.maybeTraceStateChange(logging.CongestionStateSlowStart)
+		c.maybeQlogStateChange(qlog.CongestionStateSlowStart)
 		return
 	}
 	// Congestion avoidance
-	c.maybeTraceStateChange(logging.CongestionStateCongestionAvoidance)
+	c.maybeQlogStateChange(qlog.CongestionStateCongestionAvoidance)
 	if c.reno {
 		// Classic Reno congestion avoidance.
 		c.numAckedPackets++
@@ -275,8 +278,8 @@ func (c *cubicSender) isCwndLimited(bytesInFlight protocol.ByteCount) bool {
 func (c *cubicSender) BandwidthEstimate() Bandwidth {
 	srtt := c.rttStats.SmoothedRTT()
 	if srtt == 0 {
-		// If we haven't measured an rtt, the bandwidth estimate is unknown.
-		return infBandwidth
+		// This should never happen, but if it does, avoid division by zero.
+		srtt = protocol.TimerGranularity
 	}
 	return BandwidthFromDelta(c.GetCongestionWindow(), srtt)
 }
@@ -306,11 +309,11 @@ func (c *cubicSender) OnConnectionMigration() {
 	c.slowStartThreshold = c.initialMaxCongestionWindow
 }
 
-func (c *cubicSender) maybeTraceStateChange(new logging.CongestionState) {
-	if c.tracer == nil || c.tracer.UpdatedCongestionState == nil || new == c.lastState {
+func (c *cubicSender) maybeQlogStateChange(new qlog.CongestionState) {
+	if c.qlogger == nil || new == c.lastState {
 		return
 	}
-	c.tracer.UpdatedCongestionState(new)
+	c.qlogger.RecordEvent(qlog.CongestionStateUpdated{State: new})
 	c.lastState = new
 }
 

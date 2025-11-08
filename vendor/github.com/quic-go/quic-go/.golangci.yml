@@ -53,6 +53,8 @@ linters:
           deny:
             - pkg: 'github.com/quic-go/quic-go/internal'
               desc: 'no dependency on quic-go/internal'
+          allow:
+            - 'github.com/quic-go/quic-go/internal/synctest'
     misspell:
       ignore-rules:
         - ect

@@ -20,6 +20,14 @@ const (
 	maxVarInt8 = 4611686018427387903
 )
 
+type varintLengthError struct {
+	Num uint64
+}
+
+func (e *varintLengthError) Error() string {
+	return fmt.Sprintf("value doesn't fit into 62 bits: %d", e.Num)
+}
+
 // Read reads a number in the QUIC varint format from r.
 func Read(r io.ByteReader) (uint64, error) {
 	firstByte, err := r.ReadByte()
@@ -118,7 +126,7 @@ func Append(b []byte, i uint64) []byte {
 			uint8(i >> 24), uint8(i >> 16), uint8(i >> 8), uint8(i),
 		}...)
 	}
-	panic(fmt.Sprintf("%#x doesn't fit into 62 bits", i))
+	panic(&varintLengthError{Num: i})
 }
 
 // AppendWithLen append i in the QUIC varint format with the desired length.
@@ -151,6 +159,8 @@ func AppendWithLen(b []byte, i uint64, length int) []byte {
 }
 
 // Len determines the number of bytes that will be needed to write the number i.
+//
+//gcassert:inline
 func Len(i uint64) int {
 	if i <= maxVarInt1 {
 		return 1
@@ -166,8 +176,5 @@ func Len(i uint64) int {
 	}
 	// Don't use a fmt.Sprintf here to format the error message.
 	// The function would then exceed the inlining budget.
-	panic(struct {
-		message string
-		num     uint64
-	}{"value doesn't fit into 62 bits: ", i})
+	panic(&varintLengthError{Num: i})
 }

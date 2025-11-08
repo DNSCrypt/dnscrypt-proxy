@@ -9,8 +9,6 @@ coverage:
     - internal/utils/linkedlist/linkedlist.go
     - internal/testdata
     - internal/synctest
-    - logging/connection_tracer_multiplexer.go
-    - logging/tracer_multiplexer.go
     - testutils/
     - fuzzing/
     - metrics/
