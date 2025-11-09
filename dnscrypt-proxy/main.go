@@ -7,8 +7,9 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"os/signal"
 	"runtime"
-	"sync"
+	"syscall"
 
 	"github.com/jedisct1/dlog"
 	"github.com/kardianos/service"
@@ -20,8 +21,7 @@ const (
 )
 
 type App struct {
-	wg    sync.WaitGroup
-	quit  chan struct{}
+	quit  chan os.Signal
 	proxy *Proxy
 	flags *ConfigFlags
 }
@@ -120,18 +120,17 @@ func main() {
 			dlog.Fatal(err)
 		}
 	} else {
-		app.Start(nil)
+		app.quit = make(chan os.Signal, 1)
+		signal.Notify(app.quit, os.Interrupt, syscall.SIGTERM)
+		// Possible to exit while initializing
+		go app.AppMain()
+		<-app.quit
+		dlog.Notice("Quit signal received...")
 	}
 }
 
 func (app *App) Start(service service.Service) error {
-	if service != nil {
-		go func() {
-			app.AppMain()
-		}()
-	} else {
-		app.AppMain()
-	}
+	go app.AppMain()
 	return nil
 }
 
@@ -149,13 +148,8 @@ func (app *App) AppMain() {
 	if err := app.proxy.InitHotReload(); err != nil {
 		dlog.Warnf("Failed to initialize hot-reloading: %v", err)
 	}
-	app.quit = make(chan struct{})
-	app.wg.Add(1)
 	app.proxy.StartProxy()
 	runtime.GC()
-	<-app.quit
-	dlog.Notice("Quit signal received...")
-	app.wg.Done()
 }
 
 func (app *App) Stop(service service.Service) error {
