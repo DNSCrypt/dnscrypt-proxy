@@ -696,7 +696,9 @@ func (proxy *Proxy) getDynamicTimeout() time.Duration {
 	currentClients := atomic.LoadUint32(&proxy.clientsCount)
 	utilization := float64(currentClients) / float64(proxy.maxClients)
 
-	factor := 1.0 - (utilization * utilization * proxy.timeoutLoadReduction)
+	// Use quartic (power 4) curve for slow decrease at low load, sharp decrease near limit
+	utilization4 := utilization * utilization * utilization * utilization
+	factor := 1.0 - (utilization4 * proxy.timeoutLoadReduction)
 	if factor < 0.1 {
 		factor = 0.1
 	}
