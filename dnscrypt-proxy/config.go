@@ -82,6 +82,7 @@ type Config struct {
 	SourceIPv4               bool                        `toml:"ipv4_servers"`
 	SourceIPv6               bool                        `toml:"ipv6_servers"`
 	MaxClients               uint32                      `toml:"max_clients"`
+	TimeoutLoadReduction     float64                     `toml:"timeout_load_reduction"`
 	BootstrapResolversLegacy []string                    `toml:"fallback_resolvers"`
 	BootstrapResolvers       []string                    `toml:"bootstrap_resolvers"`
 	IgnoreSystemDNS          bool                        `toml:"ignore_system_dns"`
@@ -147,6 +148,7 @@ func newConfig() Config {
 		SourceDoH:                true,
 		SourceODoH:               false,
 		MaxClients:               250,
+		TimeoutLoadReduction:     0.5,
 		BootstrapResolvers:       []string{DefaultBootstrapResolver},
 		IgnoreSystemDNS:          false,
 		LogMaxSize:               10,

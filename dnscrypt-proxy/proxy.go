@@ -86,6 +86,7 @@ type Proxy struct {
 	cacheMaxTTL                   uint32
 	clientsCount                  uint32
 	maxClients                    uint32
+	timeoutLoadReduction          float64
 	cacheMinTTL                   uint32
 	cacheNegMaxTTL                uint32
 	cloakTTL                      uint32
@@ -474,7 +475,8 @@ func (proxy *Proxy) tcpListener(acceptPc *net.TCPListener) {
 		go func() {
 			defer clientPc.Close()
 			defer proxy.clientsCountDec()
-			if err := clientPc.SetDeadline(time.Now().Add(proxy.timeout)); err != nil {
+			dynamicTimeout := proxy.getDynamicTimeout()
+			if err := clientPc.SetDeadline(time.Now().Add(dynamicTimeout)); err != nil {
 				return
 			}
 			start := time.Now()
@@ -684,6 +686,25 @@ func (proxy *Proxy) clientsCountDec() {
 		}
 		// CAS failed, retry with updated count
 	}
+}
+
+func (proxy *Proxy) getDynamicTimeout() time.Duration {
+	if proxy.timeoutLoadReduction <= 0.0 || proxy.maxClients == 0 {
+		return proxy.timeout
+	}
+
+	currentClients := atomic.LoadUint32(&proxy.clientsCount)
+	utilization := float64(currentClients) / float64(proxy.maxClients)
+
+	factor := 1.0 - (utilization * utilization * proxy.timeoutLoadReduction)
+	if factor < 0.1 {
+		factor = 0.1
+	}
+
+	dynamicTimeout := time.Duration(float64(proxy.timeout) * factor)
+	dlog.Debugf("Dynamic timeout: %v (utilization: %.2f%%, factor: %.2f)", dynamicTimeout, utilization*100, factor)
+
+	return dynamicTimeout
 }
 
 func (proxy *Proxy) processIncomingQuery(

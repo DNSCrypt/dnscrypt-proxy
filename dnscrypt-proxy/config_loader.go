@@ -171,6 +171,11 @@ func configureServerParams(proxy *Proxy, config *Config) {
 	proxy.blockedQueryResponse = config.BlockedQueryResponse
 	proxy.timeout = time.Duration(config.Timeout) * time.Millisecond
 	proxy.maxClients = config.MaxClients
+	proxy.timeoutLoadReduction = config.TimeoutLoadReduction
+	if proxy.timeoutLoadReduction < 0.0 || proxy.timeoutLoadReduction > 1.0 {
+		dlog.Warnf("timeout_load_reduction must be between 0.0 and 1.0, using default 0.5")
+		proxy.timeoutLoadReduction = 0.5
+	}
 	proxy.mainProto = "udp"
 	if config.ForceTCP {
 		proxy.mainProto = "tcp"
