@@ -29,7 +29,7 @@ func NetProbe(proxy *Proxy, address string, timeout int) error {
 		timeout = Min(MaxTimeout, timeout)
 	}
 	for tries := timeout; tries > 0; tries-- {
-		pc, err := net.DialUDP("udp", nil, remoteUDPAddr)
+		pc, err := net.DialTimeout("udp", remoteUDPAddr.String(), proxy.timeout)
 		if err == nil {
 			// Write at least 1 byte. This ensures that sockets are ready to use for writing.
 			// Windows specific: during the system startup, sockets can be created but the underlying buffers may not be
