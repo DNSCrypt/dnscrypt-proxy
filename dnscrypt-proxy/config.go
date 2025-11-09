@@ -148,7 +148,7 @@ func newConfig() Config {
 		SourceDoH:                true,
 		SourceODoH:               false,
 		MaxClients:               250,
-		TimeoutLoadReduction:     0.4,
+		TimeoutLoadReduction:     0.75,
 		BootstrapResolvers:       []string{DefaultBootstrapResolver},
 		IgnoreSystemDNS:          false,
 		LogMaxSize:               10,
