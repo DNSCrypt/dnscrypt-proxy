@@ -751,6 +751,7 @@ func (xTransport *XTransport) Fetch(
 	}
 	statusCode := 503
 	if resp != nil {
+		defer resp.Body.Close()
 		statusCode = resp.StatusCode
 	}
 	if err != nil {
@@ -821,7 +822,6 @@ func (xTransport *XTransport) Fetch(
 	if err != nil {
 		return nil, statusCode, tls, rtt, err
 	}
-	resp.Body.Close()
 	return bin, statusCode, tls, rtt, err
 }
 
