@@ -442,6 +442,7 @@ func (proxy *Proxy) udpListener(clientPc *net.UDPConn) {
 		packet := buffer[:length]
 		if !proxy.clientsCountInc() {
 			dlog.Warnf("Too many incoming connections (max=%d)", proxy.maxClients)
+			dlog.Debugf("Number of goroutines: %d", runtime.NumGoroutine())
 			proxy.processIncomingQuery(
 				"udp",
 				proxy.mainProto,
@@ -469,6 +470,7 @@ func (proxy *Proxy) tcpListener(acceptPc *net.TCPListener) {
 		}
 		if !proxy.clientsCountInc() {
 			dlog.Warnf("Too many incoming connections (max=%d)", proxy.maxClients)
+			dlog.Debugf("Number of goroutines: %d", runtime.NumGoroutine())
 			clientPc.Close()
 			continue
 		}
