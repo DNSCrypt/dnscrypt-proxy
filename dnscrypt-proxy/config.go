@@ -690,14 +690,6 @@ func (config *Config) loadSources(proxy *Proxy) error {
 	if err := proxy.updateRegisteredServers(); err != nil {
 		return err
 	}
-	rs1 := proxy.registeredServers
-	rs2 := proxy.serversInfo.registeredServers
-	rand.Shuffle(len(rs1), func(i, j int) {
-		rs1[i], rs1[j] = rs1[j], rs1[i]
-	})
-	rand.Shuffle(len(rs2), func(i, j int) {
-		rs2[i], rs2[j] = rs2[j], rs2[i]
-	})
 	return nil
 }
 
