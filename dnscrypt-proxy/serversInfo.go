@@ -661,7 +661,8 @@ func route(proxy *Proxy, name string, serverProto stamps.StampProtoType) (*Relay
 			return nil, err
 		}
 		var relayURLforTarget *url.URL
-		for _, server := range proxy.registeredServers {
+		proxy.serversInfo.RLock()
+		for _, server := range proxy.serversInfo.registeredServers {
 			if server.name != name || server.stamp.Proto != stamps.StampProtoTypeODoHTarget {
 				continue
 			}
@@ -673,6 +674,7 @@ func route(proxy *Proxy, name string, serverProto stamps.StampProtoType) (*Relay
 			relayURLforTarget = &tmp
 			break
 		}
+		proxy.serversInfo.RUnlock()
 		if relayURLforTarget == nil {
 			return nil, fmt.Errorf("Relay [%v] not found", relayName)
 		}
