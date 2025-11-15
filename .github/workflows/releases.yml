@@ -48,6 +48,8 @@ jobs:
         run: |
           go version
           cd .ci
+          # Need bash rather than dash to get $LINENO on Ubuntu
+          sudo ln -sf /bin/bash /bin/sh
           ./ci-test.sh
           cd -
 
