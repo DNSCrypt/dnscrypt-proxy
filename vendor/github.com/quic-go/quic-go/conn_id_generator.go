@@ -157,13 +157,6 @@ func (m *connIDGenerator) SetHandshakeComplete(connIDExpiry monotime.Time) {
 	}
 }
 
-func (m *connIDGenerator) NextRetireTime() monotime.Time {
-	if len(m.connIDsToRetire) == 0 {
-		return 0
-	}
-	return m.connIDsToRetire[0].t
-}
-
 func (m *connIDGenerator) RemoveRetiredConnIDs(now monotime.Time) {
 	if len(m.connIDsToRetire) == 0 {
 		return

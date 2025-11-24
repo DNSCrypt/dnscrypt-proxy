@@ -1,23 +1,22 @@
-run:
-linters-settings:
+version: "2"
 linters:
-  disable-all: true
+  default: none
   enable:
     - asciicheck
     - copyloopvar
     - exhaustive
-    - goconst
-    - gofmt # redundant, since gofmt *should* be a no-op after gofumpt
-    - gofumpt
-    - goimports
-    - gosimple
     - govet
     - ineffassign
     - misspell
+    - nolintlint
     - prealloc
     - staticcheck
-    - stylecheck
     - unconvert
     - unparam
     - unused
-
+    - usetesting
+formatters:
+  enable:
+    - gofmt
+    - gofumpt
+    - goimports

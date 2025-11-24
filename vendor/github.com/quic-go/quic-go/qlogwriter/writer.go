@@ -115,6 +115,7 @@ func newFileSeq(w io.WriteCloser, pers string, odcid *ConnectionID, eventSchemas
 		runStopped:    make(chan struct{}),
 		encodeErr:     encodeErr,
 		events:        make(chan event, eventChanSize),
+		eventSchemas:  eventSchemas,
 	}
 }
 

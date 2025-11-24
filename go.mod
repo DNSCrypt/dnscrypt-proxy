@@ -26,7 +26,7 @@ require (
 	github.com/lifenjoiner/dhcpdns v0.0.7
 	github.com/miekg/dns v1.1.68
 	github.com/powerman/check v1.9.0
-	github.com/quic-go/quic-go v0.56.0
+	github.com/quic-go/quic-go v0.57.0
 	golang.org/x/crypto v0.43.0
 	golang.org/x/net v0.46.0
 	golang.org/x/sys v0.38.0
@@ -40,7 +40,7 @@ require (
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/powerman/deepequal v0.1.0 // indirect
-	github.com/quic-go/qpack v0.5.1 // indirect
+	github.com/quic-go/qpack v0.6.0 // indirect
 	github.com/smartystreets/goconvey v1.8.1 // indirect
 	golang.org/x/mod v0.29.0 // indirect
 	golang.org/x/sync v0.18.0 // indirect

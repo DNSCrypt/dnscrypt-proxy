@@ -97,9 +97,10 @@ func (f *GoAwayFrame) encode(enc *jsontext.Encoder) error {
 }
 
 type SettingsFrame struct {
-	Datagram        *bool
-	ExtendedConnect *bool
-	Other           map[uint64]uint64
+	MaxFieldSectionSize int64
+	Datagram            *bool
+	ExtendedConnect     *bool
+	Other               map[uint64]uint64
 }
 
 func (f *SettingsFrame) encode(enc *jsontext.Encoder) error {
@@ -109,6 +110,14 @@ func (f *SettingsFrame) encode(enc *jsontext.Encoder) error {
 	h.WriteToken(jsontext.String("settings"))
 	h.WriteToken(jsontext.String("settings"))
 	h.WriteToken(jsontext.BeginArray)
+	if f.MaxFieldSectionSize >= 0 {
+		h.WriteToken(jsontext.BeginObject)
+		h.WriteToken(jsontext.String("name"))
+		h.WriteToken(jsontext.String("settings_max_field_section_size"))
+		h.WriteToken(jsontext.String("value"))
+		h.WriteToken(jsontext.Uint(uint64(f.MaxFieldSectionSize)))
+		h.WriteToken(jsontext.EndObject)
+	}
 	if f.Datagram != nil {
 		h.WriteToken(jsontext.BeginObject)
 		h.WriteToken(jsontext.String("name"))
