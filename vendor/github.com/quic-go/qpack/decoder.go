@@ -1,248 +1,157 @@
 package qpack
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
-	"sync"
+	"io"
 
 	"golang.org/x/net/http2/hpack"
 )
 
-// A decodingError is something the spec defines as a decoding error.
-type decodingError struct {
-	err error
-}
-
-func (de decodingError) Error() string {
-	return fmt.Sprintf("decoding error: %v", de.err)
-}
-
-// An invalidIndexError is returned when an encoder references a table
-// entry before the static table or after the end of the dynamic table.
+// An invalidIndexError is returned when decoding encounters an invalid index
+// (e.g., an index that is out of bounds for the static table).
 type invalidIndexError int
 
 func (e invalidIndexError) Error() string {
 	return fmt.Sprintf("invalid indexed representation index %d", int(e))
 }
 
-var errNoDynamicTable = decodingError{errors.New("no dynamic table")}
+var errNoDynamicTable = errors.New("no dynamic table")
 
-// errNeedMore is an internal sentinel error value that means the
-// buffer is truncated and we need to read more data before we can
-// continue parsing.
-var errNeedMore = errors.New("need more data")
+// A Decoder decodes QPACK header blocks.
+// A Decoder can be reused to decode multiple header blocks on different streams
+// on the same connection (e.g., headers then trailers).
+// This will be useful when dynamic table support is added.
+type Decoder struct{}
 
-// A Decoder is the decoding context for incremental processing of
-// header blocks.
-type Decoder struct {
-	mutex sync.Mutex
+// DecodeFunc is a function that decodes the next header field from a header block.
+// It should be called repeatedly until it returns io.EOF.
+// It returns io.EOF when all header fields have been decoded.
+// Any error other than io.EOF indicates a decoding error.
+type DecodeFunc func() (HeaderField, error)
 
-	emitFunc func(f HeaderField)
-
-	readRequiredInsertCount bool
-	readDeltaBase           bool
-
-	// buf is the unparsed buffer. It's only written to
-	// saveBuf if it was truncated in the middle of a header
-	// block. Because it's usually not owned, we can only
-	// process it under Write.
-	buf []byte // not owned; only valid during Write
-
-	// saveBuf is previous data passed to Write which we weren't able
-	// to fully parse before. Unlike buf, we own this data.
-	saveBuf bytes.Buffer
+// NewDecoder returns a new Decoder.
+func NewDecoder() *Decoder {
+	return &Decoder{}
 }
 
-// NewDecoder returns a new decoder
-// The emitFunc will be called for each valid field parsed,
-// in the same goroutine as calls to Write, before Write returns.
-func NewDecoder(emitFunc func(f HeaderField)) *Decoder {
-	return &Decoder{emitFunc: emitFunc}
-}
+// Decode returns a function that decodes header fields from the given header block.
+// It does not copy the slice; the caller must ensure it remains valid during decoding.
+func (d *Decoder) Decode(p []byte) DecodeFunc {
+	var readRequiredInsertCount bool
+	var readDeltaBase bool
 
-func (d *Decoder) Write(p []byte) (int, error) {
-	if len(p) == 0 {
-		return 0, nil
-	}
-
-	d.mutex.Lock()
-	n, err := d.writeLocked(p)
-	d.mutex.Unlock()
-	return n, err
-}
-
-func (d *Decoder) writeLocked(p []byte) (int, error) {
-	// Only copy the data if we have to. Optimistically assume
-	// that p will contain a complete header block.
-	if d.saveBuf.Len() == 0 {
-		d.buf = p
-	} else {
-		d.saveBuf.Write(p)
-		d.buf = d.saveBuf.Bytes()
-		d.saveBuf.Reset()
-	}
-
-	if err := d.decode(); err != nil {
-		if err != errNeedMore {
-			return 0, err
+	return func() (HeaderField, error) {
+		if !readRequiredInsertCount {
+			requiredInsertCount, rest, err := readVarInt(8, p)
+			if err != nil {
+				return HeaderField{}, err
+			}
+			p = rest
+			readRequiredInsertCount = true
+			if requiredInsertCount != 0 {
+				return HeaderField{}, errors.New("expected Required Insert Count to be zero")
+			}
 		}
-		// TODO: limit the size of the buffer
-		d.saveBuf.Write(d.buf)
-	}
-	return len(p), nil
-}
 
-// DecodeFull decodes an entire block.
-func (d *Decoder) DecodeFull(p []byte) ([]HeaderField, error) {
-	if len(p) == 0 {
-		return []HeaderField{}, nil
-	}
-
-	d.mutex.Lock()
-	defer d.mutex.Unlock()
-
-	saveFunc := d.emitFunc
-	defer func() { d.emitFunc = saveFunc }()
-
-	var hf []HeaderField
-	d.emitFunc = func(f HeaderField) { hf = append(hf, f) }
-	if _, err := d.writeLocked(p); err != nil {
-		return nil, err
-	}
-	if err := d.Close(); err != nil {
-		return nil, err
-	}
-	return hf, nil
-}
-
-// Close declares that the decoding is complete and resets the Decoder
-// to be reused again for a new header block. If there is any remaining
-// data in the decoder's buffer, Close returns an error.
-func (d *Decoder) Close() error {
-	if d.saveBuf.Len() > 0 {
-		d.saveBuf.Reset()
-		return decodingError{errors.New("truncated headers")}
-	}
-	d.readRequiredInsertCount = false
-	d.readDeltaBase = false
-	return nil
-}
-
-func (d *Decoder) decode() error {
-	if !d.readRequiredInsertCount {
-		requiredInsertCount, rest, err := readVarInt(8, d.buf)
-		if err != nil {
-			return err
+		if !readDeltaBase {
+			base, rest, err := readVarInt(7, p)
+			if err != nil {
+				return HeaderField{}, err
+			}
+			p = rest
+			readDeltaBase = true
+			if base != 0 {
+				return HeaderField{}, errors.New("expected Base to be zero")
+			}
 		}
-		d.readRequiredInsertCount = true
-		if requiredInsertCount != 0 {
-			return decodingError{errors.New("expected Required Insert Count to be zero")}
-		}
-		d.buf = rest
-	}
-	if !d.readDeltaBase {
-		base, rest, err := readVarInt(7, d.buf)
-		if err != nil {
-			return err
-		}
-		d.readDeltaBase = true
-		if base != 0 {
-			return decodingError{errors.New("expected Base to be zero")}
-		}
-		d.buf = rest
-	}
-	if len(d.buf) == 0 {
-		return errNeedMore
-	}
 
-	for len(d.buf) > 0 {
-		b := d.buf[0]
+		if len(p) == 0 {
+			return HeaderField{}, io.EOF
+		}
+
+		b := p[0]
+		var hf HeaderField
+		var rest []byte
 		var err error
 		switch {
-		case b&0x80 > 0: // 1xxxxxxx
-			err = d.parseIndexedHeaderField()
-		case b&0xc0 == 0x40: // 01xxxxxx
-			err = d.parseLiteralHeaderField()
-		case b&0xe0 == 0x20: // 001xxxxx
-			err = d.parseLiteralHeaderFieldWithoutNameReference()
+		case (b & 0x80) > 0: // 1xxxxxxx
+			hf, rest, err = d.parseIndexedHeaderField(p)
+		case (b & 0xc0) == 0x40: // 01xxxxxx
+			hf, rest, err = d.parseLiteralHeaderField(p)
+		case (b & 0xe0) == 0x20: // 001xxxxx
+			hf, rest, err = d.parseLiteralHeaderFieldWithoutNameReference(p)
 		default:
 			err = fmt.Errorf("unexpected type byte: %#x", b)
 		}
+		p = rest
 		if err != nil {
-			return err
+			return HeaderField{}, err
 		}
+		return hf, nil
 	}
-	return nil
 }
 
-func (d *Decoder) parseIndexedHeaderField() error {
-	buf := d.buf
+func (d *Decoder) parseIndexedHeaderField(buf []byte) (_ HeaderField, rest []byte, _ error) {
 	if buf[0]&0x40 == 0 {
-		return errNoDynamicTable
+		return HeaderField{}, buf, errNoDynamicTable
 	}
-	index, buf, err := readVarInt(6, buf)
+	index, rest, err := readVarInt(6, buf)
 	if err != nil {
-		return err
+		return HeaderField{}, buf, err
 	}
 	hf, ok := d.at(index)
 	if !ok {
-		return decodingError{invalidIndexError(index)}
+		return HeaderField{}, buf, invalidIndexError(index)
 	}
-	d.emitFunc(hf)
-	d.buf = buf
-	return nil
+	return hf, rest, nil
 }
 
-func (d *Decoder) parseLiteralHeaderField() error {
-	buf := d.buf
+func (d *Decoder) parseLiteralHeaderField(buf []byte) (_ HeaderField, rest []byte, _ error) {
 	if buf[0]&0x10 == 0 {
-		return errNoDynamicTable
+		return HeaderField{}, buf, errNoDynamicTable
 	}
 	// We don't need to check the value of the N-bit here.
 	// It's only relevant when re-encoding header fields,
 	// and determines whether the header field can be added to the dynamic table.
 	// Since we don't support the dynamic table, we can ignore it.
-	index, buf, err := readVarInt(4, buf)
+	index, rest, err := readVarInt(4, buf)
 	if err != nil {
-		return err
+		return HeaderField{}, buf, err
 	}
 	hf, ok := d.at(index)
 	if !ok {
-		return decodingError{invalidIndexError(index)}
+		return HeaderField{}, buf, invalidIndexError(index)
 	}
+	buf = rest
 	if len(buf) == 0 {
-		return errNeedMore
+		return HeaderField{}, buf, io.ErrUnexpectedEOF
 	}
 	usesHuffman := buf[0]&0x80 > 0
-	val, buf, err := d.readString(buf, 7, usesHuffman)
+	val, rest, err := d.readString(rest, 7, usesHuffman)
 	if err != nil {
-		return err
+		return HeaderField{}, rest, err
 	}
 	hf.Value = val
-	d.emitFunc(hf)
-	d.buf = buf
-	return nil
+	return hf, rest, nil
 }
 
-func (d *Decoder) parseLiteralHeaderFieldWithoutNameReference() error {
-	buf := d.buf
+func (d *Decoder) parseLiteralHeaderFieldWithoutNameReference(buf []byte) (_ HeaderField, rest []byte, _ error) {
 	usesHuffmanForName := buf[0]&0x8 > 0
-	name, buf, err := d.readString(buf, 3, usesHuffmanForName)
+	name, rest, err := d.readString(buf, 3, usesHuffmanForName)
 	if err != nil {
-		return err
+		return HeaderField{}, rest, err
 	}
+	buf = rest
 	if len(buf) == 0 {
-		return errNeedMore
+		return HeaderField{}, rest, io.ErrUnexpectedEOF
 	}
 	usesHuffmanForVal := buf[0]&0x80 > 0
-	val, buf, err := d.readString(buf, 7, usesHuffmanForVal)
+	val, rest, err := d.readString(buf, 7, usesHuffmanForVal)
 	if err != nil {
-		return err
+		return HeaderField{}, rest, err
 	}
-	d.emitFunc(HeaderField{Name: name, Value: val})
-	d.buf = buf
-	return nil
+	return HeaderField{Name: name, Value: val}, rest, nil
 }
 
 func (d *Decoder) readString(buf []byte, n uint8, usesHuffman bool) (string, []byte, error) {
@@ -251,11 +160,10 @@ func (d *Decoder) readString(buf []byte, n uint8, usesHuffman bool) (string, []b
 		return "", nil, err
 	}
 	if uint64(len(buf)) < l {
-		return "", nil, errNeedMore
+		return "", nil, io.ErrUnexpectedEOF
 	}
 	var val string
 	if usesHuffman {
-		var err error
 		val, err = hpack.HuffmanDecodeToString(buf[:l])
 		if err != nil {
 			return "", nil, err

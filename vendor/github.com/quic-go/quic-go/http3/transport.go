@@ -88,7 +88,7 @@ type Transport struct {
 	// MaxResponseHeaderBytes specifies a limit on how many response bytes are
 	// allowed in the server's response header.
 	// Zero means to use a default limit.
-	MaxResponseHeaderBytes int64
+	MaxResponseHeaderBytes int
 
 	// DisableCompression, if true, prevents the Transport from requesting compression with an
 	// "Accept-Encoding: gzip" request header when the Request contains no existing Accept-Encoding value.

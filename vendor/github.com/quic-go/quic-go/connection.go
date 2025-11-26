@@ -885,9 +885,6 @@ func (c *Conn) maybeResetTimer() {
 		return
 	}
 
-	if t := c.connIDGenerator.NextRetireTime(); !t.IsZero() && t.Before(deadline) {
-		deadline = t
-	}
 	if !c.pacingDeadline.IsZero() && c.pacingDeadline.Before(deadline) {
 		deadline = c.pacingDeadline
 	}
@@ -3082,6 +3079,13 @@ func (c *Conn) QlogTrace() qlogwriter.Trace {
 	return c.qlogTrace
 }
 
+// NextConnection transitions a connection to be usable after a 0-RTT rejection.
+// It waits for the handshake to complete and then enables the connection for normal use.
+// This should be called when the server rejects 0-RTT and the application receives
+// [Err0RTTRejected] errors.
+//
+// Note that 0-RTT rejection invalidates all data sent in 0-RTT packets. It is the
+// application's responsibility to handle this (for example by resending the data).
 func (c *Conn) NextConnection(ctx context.Context) (*Conn, error) {
 	// The handshake might fail after the server rejected 0-RTT.
 	// This could happen if the Finished message is malformed or never received.

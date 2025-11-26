@@ -15,7 +15,7 @@ require (
 	github.com/hectane/go-acl v0.0.0-20230122075934-ca0b05cb1adb
 	github.com/jedisct1/dlog v0.0.0-20241212093805-3c5fd791b405
 	github.com/jedisct1/go-clocksmith v0.0.0-20250224222044-e151f21a353a
-	github.com/jedisct1/go-dnsstamps v0.0.0-20240423203910-07a0735c7774
+	github.com/jedisct1/go-dnsstamps v0.0.0-20251112173516-191fc465df31
 	github.com/jedisct1/go-hpke-compact v0.0.0-20241212093903-5caa4621366f
 	github.com/jedisct1/go-ipcrypt v0.1.1
 	github.com/jedisct1/go-minisign v0.0.0-20241212093149-d2f9f49435c7
@@ -26,9 +26,9 @@ require (
 	github.com/lifenjoiner/dhcpdns v0.0.7
 	github.com/miekg/dns v1.1.68
 	github.com/powerman/check v1.9.0
-	github.com/quic-go/quic-go v0.56.0
-	golang.org/x/crypto v0.43.0
-	golang.org/x/net v0.46.0
+	github.com/quic-go/quic-go v0.57.1
+	golang.org/x/crypto v0.45.0
+	golang.org/x/net v0.47.0
 	golang.org/x/sys v0.38.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 )
@@ -40,12 +40,12 @@ require (
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/powerman/deepequal v0.1.0 // indirect
-	github.com/quic-go/qpack v0.5.1 // indirect
+	github.com/quic-go/qpack v0.6.0 // indirect
 	github.com/smartystreets/goconvey v1.8.1 // indirect
-	golang.org/x/mod v0.29.0 // indirect
+	golang.org/x/mod v0.30.0 // indirect
 	golang.org/x/sync v0.18.0 // indirect
-	golang.org/x/text v0.30.0 // indirect
-	golang.org/x/tools v0.38.0 // indirect
+	golang.org/x/text v0.31.0 // indirect
+	golang.org/x/tools v0.39.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20251103181224-f26f9409b101 // indirect
 	google.golang.org/grpc v1.76.0 // indirect
 	google.golang.org/protobuf v1.36.10 // indirect

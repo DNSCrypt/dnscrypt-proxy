@@ -155,6 +155,9 @@ func (h *appDataReceivedPacketTracker) isMissing(p protocol.PacketNumber) bool {
 }
 
 func (h *appDataReceivedPacketTracker) hasNewMissingPackets() bool {
+	if h.lastAck == nil {
+		return false
+	}
 	if h.largestObserved < reorderingThreshold {
 		return false
 	}
@@ -170,12 +173,6 @@ func (h *appDataReceivedPacketTracker) hasNewMissingPackets() bool {
 }
 
 func (h *appDataReceivedPacketTracker) shouldQueueACK(pn protocol.PacketNumber, ecn protocol.ECN, wasMissing bool) bool {
-	// always acknowledge the first packet
-	if h.lastAck == nil {
-		h.logger.Debugf("\tQueueing ACK because the first packet should be acknowledged.")
-		return true
-	}
-
 	// Send an ACK if this packet was reported missing in an ACK sent before.
 	// Ack decimation with reordering relies on the timer to send an ACK, but if
 	// missing packets we reported in the previous ACK, send an ACK immediately.
