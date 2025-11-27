@@ -324,7 +324,7 @@ func (proxy *Proxy) StartProxy() {
 				if liveServers == 0 {
 					delay = proxy.certRefreshDelayAfterFailure
 				}
-				clocksmith.Sleep(delay)
+				sleepIncludeInertia(delay)
 				liveServers, _ = proxy.serversInfo.refresh(proxy)
 				if liveServers > 0 {
 					proxy.certIgnoreTimestamp = false
@@ -333,6 +333,16 @@ func (proxy *Proxy) StartProxy() {
 			}
 		}()
 	}
+}
+
+func sleepIncludeInertia(duration time.Duration) {
+	// When restoring from hibernation, the NIC (Network Interface Card) needs time to get ready.
+	nicInitDelay := time.Minute
+	if duration > nicInitDelay {
+		clocksmith.Sleep(duration - nicInitDelay)
+		duration = nicInitDelay
+	}
+	time.Sleep(duration) // Frozen during this?! Lower probability.
 }
 
 func (proxy *Proxy) updateRegisteredServers() error {
