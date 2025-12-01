@@ -12,6 +12,7 @@ func (proxy *Proxy) udpListenerConfig() (*net.ListenConfig, error) {
 				_ = syscall.SetsockoptInt(int(fd), syscall.IPPROTO_IP, syscall.IP_FREEBIND, 1)
 				_ = syscall.SetsockoptInt(int(fd), syscall.IPPROTO_IP, syscall.IP_DF, 0)
 				_ = syscall.SetsockoptInt(int(fd), syscall.IPPROTO_IP, syscall.IP_TOS, 0x70)
+				_ = syscall.SetsockoptInt(int(fd), syscall.IPPROTO_IPV6, syscall.IPV6_TCLASS, 0x70)
 				_ = syscall.SetsockoptInt(
 					int(fd),
 					syscall.IPPROTO_IP,
@@ -32,6 +33,7 @@ func (proxy *Proxy) tcpListenerConfig() (*net.ListenConfig, error) {
 			_ = c.Control(func(fd uintptr) {
 				_ = syscall.SetsockoptInt(int(fd), syscall.IPPROTO_IP, syscall.IP_FREEBIND, 1)
 				_ = syscall.SetsockoptInt(int(fd), syscall.IPPROTO_IP, syscall.IP_TOS, 0x70)
+				_ = syscall.SetsockoptInt(int(fd), syscall.IPPROTO_IPV6, syscall.IPV6_TCLASS, 0x70)
 				_ = syscall.SetsockoptInt(int(fd), syscall.IPPROTO_TCP, syscall.TCP_QUICKACK, 1)
 			})
 			return nil
