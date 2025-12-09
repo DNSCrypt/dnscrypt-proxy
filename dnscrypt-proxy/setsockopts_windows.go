@@ -5,12 +5,16 @@ import (
 	"syscall"
 )
 
+const (
+	IPV6_TCLASS = 39 // Not defined in Go's syscall package for Windows
+)
+
 func (proxy *Proxy) udpListenerConfig() (*net.ListenConfig, error) {
 	return &net.ListenConfig{
 		Control: func(network, address string, c syscall.RawConn) error {
 			_ = c.Control(func(fd uintptr) {
 				_ = syscall.SetsockoptInt(syscall.Handle(fd), syscall.IPPROTO_IP, syscall.IP_TOS, 0x70)
-				_ = syscall.SetsockoptInt(syscall.Handle(fd), syscall.IPPROTO_IPV6, syscall.IPV6_TCLASS, 0x70)
+				_ = syscall.SetsockoptInt(syscall.Handle(fd), syscall.IPPROTO_IPV6, IPV6_TCLASS, 0x70)
 				_ = syscall.SetsockoptInt(syscall.Handle(fd), syscall.SOL_SOCKET, syscall.SO_RCVBUF, 4096)
 				_ = syscall.SetsockoptInt(syscall.Handle(fd), syscall.SOL_SOCKET, syscall.SO_SNDBUF, 4096)
 			})
@@ -24,7 +28,7 @@ func (proxy *Proxy) tcpListenerConfig() (*net.ListenConfig, error) {
 		Control: func(network, address string, c syscall.RawConn) error {
 			_ = c.Control(func(fd uintptr) {
 				_ = syscall.SetsockoptInt(syscall.Handle(fd), syscall.IPPROTO_IP, syscall.IP_TOS, 0x70)
-				_ = syscall.SetsockoptInt(syscall.Handle(fd), syscall.IPPROTO_IPV6, syscall.IPV6_TCLASS, 0x70)
+				_ = syscall.SetsockoptInt(syscall.Handle(fd), syscall.IPPROTO_IPV6, IPV6_TCLASS, 0x70)
 			})
 			return nil
 		},
