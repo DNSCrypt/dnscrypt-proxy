@@ -67,6 +67,13 @@ ln ../LICENSE example-dnscrypt-proxy.toml localhost.pem example-*.txt freebsd-ar
 tar czpvf dnscrypt-proxy-freebsd_arm-${PACKAGE_VERSION:-dev}.tar.gz freebsd-arm
 
 go clean
+env GOOS=freebsd GOARCH=arm64 go build -mod vendor -ldflags="-s -w"
+mkdir freebsd-arm64
+ln dnscrypt-proxy freebsd-arm64/
+ln ../LICENSE example-dnscrypt-proxy.toml localhost.pem example-*.txt freebsd-arm64/
+tar czpvf dnscrypt-proxy-freebsd_arm64-${PACKAGE_VERSION:-dev}.tar.gz freebsd-arm64
+
+go clean
 env GOOS=dragonfly GOARCH=amd64 go build -mod vendor -ldflags="-s -w"
 mkdir dragonflybsd-amd64
 ln dnscrypt-proxy dragonflybsd-amd64/
@@ -156,6 +163,13 @@ mkdir linux-riscv64
 ln dnscrypt-proxy linux-riscv64/
 ln ../LICENSE example-dnscrypt-proxy.toml localhost.pem example-*.txt linux-riscv64/
 tar czpvf dnscrypt-proxy-linux_riscv64-${PACKAGE_VERSION:-dev}.tar.gz linux-riscv64
+
+go clean
+env CGO_ENABLED=0 GOOS=linux GOARCH=loong64 go build -mod vendor -ldflags="-s -w"
+mkdir linux-loong64
+ln dnscrypt-proxy linux-loong64/
+ln ../LICENSE example-dnscrypt-proxy.toml localhost.pem example-*.txt linux-loong64/
+tar czpvf dnscrypt-proxy-linux_loong64-${PACKAGE_VERSION:-dev}.tar.gz linux-loong64
 
 go clean
 env GOOS=darwin GOARCH=amd64 go build -mod vendor -ldflags="-s -w"
