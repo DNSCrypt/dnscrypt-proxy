@@ -1,6 +1,7 @@
 package sievecache
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"hash/maphash"
@@ -29,6 +30,12 @@ func NewShardedWithShards[K comparable, V any](capacity int, numShards int) (*Sh
 	}
 	if numShards <= 0 {
 		return nil, errors.New("ShardedSieveCache: number of shards must be greater than 0")
+	}
+
+	// Avoid inflating total capacity: never create more shards than the
+	// total capacity can support (each shard needs at least 1 slot).
+	if numShards > capacity {
+		numShards = capacity
 	}
 
 	// Calculate per-shard capacity
@@ -105,21 +112,11 @@ func (c *ShardedSieveCache[K, V]) getShardIndex(key K) int {
 		h.Write(k)
 	case int:
 		var buf [8]byte
-		buf[0] = byte(k)
-		buf[1] = byte(k >> 8)
-		buf[2] = byte(k >> 16)
-		buf[3] = byte(k >> 24)
-		h.Write(buf[:4])
+		binary.LittleEndian.PutUint64(buf[:], uint64(k))
+		h.Write(buf[:])
 	case int64:
 		var buf [8]byte
-		buf[0] = byte(k)
-		buf[1] = byte(k >> 8)
-		buf[2] = byte(k >> 16)
-		buf[3] = byte(k >> 24)
-		buf[4] = byte(k >> 32)
-		buf[5] = byte(k >> 40)
-		buf[6] = byte(k >> 48)
-		buf[7] = byte(k >> 56)
+		binary.LittleEndian.PutUint64(buf[:], uint64(k))
 		h.Write(buf[:])
 	default:
 		// For other types, convert to string

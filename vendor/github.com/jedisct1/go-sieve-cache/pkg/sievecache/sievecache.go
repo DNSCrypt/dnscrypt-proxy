@@ -104,7 +104,15 @@ func (c *SieveCache[K, V]) Insert(key K, value V) bool {
 
 	// Evict if at capacity
 	if len(c.nodes) >= c.capacity {
-		c.Evict()
+		_, evicted := c.Evict()
+		// When the cache is full and *all* entries are marked `visited`, our Evict() performs
+		// a first pass that clears the `visited` bits but may return false without removing
+		// anything. We still must free a slot before inserting, so we call Evict() a second
+		// time. This mirrors the original SIEVE miss path, which keeps scanning (wrapping once)
+		// until it finds an item to evict after clearing bits.
+		if !evicted {
+			c.Evict()
+		}
 	}
 
 	// Add new node to the end
@@ -136,16 +144,18 @@ func (c *SieveCache[K, V]) Remove(key K) (V, bool) {
 		return node.Value, true
 	}
 
-	// Update hand if needed
+	// Update hand if needed (scan direction is from low to high indices)
 	if c.handInitialized {
+		lastIdx := len(c.nodes) - 1
 		if c.hand == idx {
-			// Move hand to the previous node or wrap to end
-			if idx > 0 {
-				c.hand = idx - 1
-			} else {
-				c.hand = len(c.nodes) - 2
+			newLen := len(c.nodes) - 1
+			if newLen == 0 {
+				c.handInitialized = false
+			} else if idx >= newLen {
+				c.hand = 0
 			}
-		} else if c.hand == len(c.nodes)-1 {
+			// Otherwise keep hand at same position (swapped element will be there)
+		} else if c.hand == lastIdx {
 			// If hand points to the last element (which will be moved to idx)
 			c.hand = idx
 		}
@@ -182,12 +192,12 @@ func (c *SieveCache[K, V]) Evict() (V, bool) {
 		return zero, false
 	}
 
-	// Start from the hand pointer or the end if hand is not initialized
+	// Start from the hand pointer or index 0 (tail/oldest) if hand is not initialized
 	var currentIdx int
 	if c.handInitialized {
 		currentIdx = c.hand
 	} else {
-		currentIdx = len(c.nodes) - 1
+		currentIdx = 0
 	}
 	startIdx := currentIdx
 
@@ -195,7 +205,7 @@ func (c *SieveCache[K, V]) Evict() (V, bool) {
 	wrapped := false
 	foundIdx := -1
 
-	// Scan for a non-visited entry
+	// Scan for a non-visited entry (from tail toward head)
 	for {
 		// If current node is not visited, mark it for eviction
 		if !c.visited.Get(currentIdx) {
@@ -206,17 +216,17 @@ func (c *SieveCache[K, V]) Evict() (V, bool) {
 		// Mark as non-visited for next scan
 		c.visited.Set(currentIdx, false)
 
-		// Move to previous node or wrap to end
-		if currentIdx > 0 {
-			currentIdx--
+		// Move to next node (toward head) or wrap to beginning (tail)
+		if currentIdx+1 < len(c.nodes) {
+			currentIdx++
 		} else {
-			// Wrap around to end of slice
+			// Wrap around to beginning of slice
 			if wrapped {
 				// If we've already wrapped, break to avoid infinite loop
 				break
 			}
 			wrapped = true
-			currentIdx = len(c.nodes) - 1
+			currentIdx = 0
 		}
 
 		// If we've looped back to start, we've checked all nodes
@@ -228,17 +238,29 @@ func (c *SieveCache[K, V]) Evict() (V, bool) {
 	// If we found a node to evict
 	if foundIdx >= 0 {
 		evictIdx := foundIdx
+		lastIdx := len(c.nodes) - 1
 
-		// Update the hand pointer to the previous node or wrap to end
-		if evictIdx > 0 {
-			c.hand = evictIdx - 1
-		} else if len(c.nodes) > 1 {
-			c.hand = len(c.nodes) - 2
+		// Update the hand pointer to the next position in scan order
+		if evictIdx == lastIdx {
+			// Evicting the last element, hand wraps to 0
+			if len(c.nodes) > 1 {
+				c.hand = 0
+				c.handInitialized = true
+			} else {
+				c.handInitialized = false
+			}
 		} else {
-			// Keep hand at 0 but mark as not initialized
-			c.handInitialized = false
+			// swap_remove will move the last element to evictIdx
+			// Hand should point to evictIdx (where the moved element now is) to continue scanning
+			// But if hand would be >= new length, wrap to 0
+			newLen := len(c.nodes) - 1
+			if evictIdx < newLen {
+				c.hand = evictIdx
+			} else {
+				c.hand = 0
+			}
+			c.handInitialized = true
 		}
-		c.handInitialized = true
 
 		// Remove the key from the map
 		delete(c.indices, c.nodes[evictIdx].Key)
@@ -246,7 +268,7 @@ func (c *SieveCache[K, V]) Evict() (V, bool) {
 		// Remove the node and return its value
 		nodeToEvict := c.nodes[evictIdx]
 
-		if evictIdx == len(c.nodes)-1 {
+		if evictIdx == lastIdx {
 			// If last node, just remove it
 			c.nodes = c.nodes[:len(c.nodes)-1]
 			c.visited.Truncate(len(c.nodes))
@@ -254,7 +276,6 @@ func (c *SieveCache[K, V]) Evict() (V, bool) {
 		}
 
 		// Otherwise swap with the last node
-		lastIdx := len(c.nodes) - 1
 		lastNode := c.nodes[lastIdx]
 		c.nodes[evictIdx] = lastNode
 		c.visited.Set(evictIdx, c.visited.Get(lastIdx))

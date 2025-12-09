@@ -42,6 +42,8 @@ github.com/jedisct1/go-minisign v0.0.0-20241212093149-d2f9f49435c7 h1:FWpSWRD8Fb
 github.com/jedisct1/go-minisign v0.0.0-20241212093149-d2f9f49435c7/go.mod h1:BMxO138bOokdgt4UaxZiEfypcSHX0t6SIFimVP1oRfk=
 github.com/jedisct1/go-sieve-cache v0.1.7 h1:mdc4gTMZI6pUvMTze5K5CHxLxkk5iJcug85g2hERBVk=
 github.com/jedisct1/go-sieve-cache v0.1.7/go.mod h1:EN88bnjKpiyS9TfZZNbUkCwgpWueZSaUi4vgVtw2988=
+github.com/jedisct1/go-sieve-cache v0.1.8 h1:0/yr4dj2rI+u5XWSB4dyxCNeM8AX+vJdnH1mi/bOljc=
+github.com/jedisct1/go-sieve-cache v0.1.8/go.mod h1:LV8jfNmswZpdMxHc2uu4R+gTe3kH8CGn/sKnKJVnank=
 github.com/jedisct1/xsecretbox v0.0.0-20241212092125-3afc4917ac41 h1:TPF+VETyhqUOY51j3KF0uk5cgHQ2Bzi6XCorcGNGfTs=
 github.com/jedisct1/xsecretbox v0.0.0-20241212092125-3afc4917ac41/go.mod h1:eh2PYNEklsNDqUxnbnN9Duvpw1b+ZectZAtDUDRj2tA=
 github.com/jtolds/gls v4.20.0+incompatible h1:xdiiI2gbIgH/gLH7ADydsJ1uDOEzR8yvV7C0MuV77Wo=
