@@ -103,7 +103,7 @@ disabled_server_names = []
 force_tcp = false
 
 
-## Enable *experimental* support for HTTP/3 (HTTP over QUIC)
+## Enable support for HTTP/3 (HTTP over QUIC)
 ## Note that, like DNSCrypt but unlike other HTTP versions, this uses
 ## UDP and (usually) port 443 instead of TCP.
 
