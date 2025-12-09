@@ -153,6 +153,9 @@ func (app *App) AppMain() {
 }
 
 func (app *App) Stop(service service.Service) error {
+	if app.proxy != nil && app.proxy.udpConnPool != nil {
+		app.proxy.udpConnPool.Close()
+	}
 	if err := PidFileRemove(); err != nil {
 		dlog.Warnf("Failed to remove the PID file: [%v]", err)
 	}

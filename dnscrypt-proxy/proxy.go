@@ -16,6 +16,7 @@ import (
 	clocksmith "github.com/jedisct1/go-clocksmith"
 	stamps "github.com/jedisct1/go-dnsstamps"
 	"golang.org/x/crypto/curve25519"
+	netproxy "golang.org/x/net/proxy"
 )
 
 type Proxy struct {
@@ -108,6 +109,7 @@ type Proxy struct {
 	SourceODoH                    bool
 	listenersMu                   sync.Mutex
 	ipCryptConfig                 *IPCryptConfig
+	udpConnPool                   *UDPConnPool
 }
 
 func (proxy *Proxy) registerUDPListener(conn *net.UDPConn) {
@@ -587,18 +589,68 @@ func (proxy *Proxy) exchangeWithUDPServer(
 	if serverInfo.Relay != nil && serverInfo.Relay.Dnscrypt != nil {
 		upstreamAddr = serverInfo.Relay.Dnscrypt.RelayUDPAddr
 	}
-	var err error
-	var pc net.Conn
+
 	proxyDialer := proxy.xTransport.proxyDialer
-	if proxyDialer == nil {
-		pc, err = net.DialTimeout("udp", upstreamAddr.String(), serverInfo.Timeout)
-	} else {
-		pc, err = (*proxyDialer).Dial("udp", upstreamAddr.String())
+	if proxyDialer != nil {
+		return proxy.exchangeWithUDPServerViaProxy(serverInfo, sharedKey, encryptedQuery, clientNonce, upstreamAddr, proxyDialer)
 	}
+
+	pc, err := proxy.udpConnPool.Get(upstreamAddr)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := pc.SetDeadline(time.Now().Add(serverInfo.Timeout)); err != nil {
+		proxy.udpConnPool.Discard(pc)
+		return nil, err
+	}
+
+	query := encryptedQuery
+	if serverInfo.Relay != nil && serverInfo.Relay.Dnscrypt != nil {
+		proxy.prepareForRelay(serverInfo.UDPAddr.IP, serverInfo.UDPAddr.Port, &query)
+	}
+
+	encryptedResponse := make([]byte, MaxDNSPacketSize)
+	var readErr error
+	for tries := 2; tries > 0; tries-- {
+		if _, err := pc.Write(query); err != nil {
+			proxy.udpConnPool.Discard(pc)
+			return nil, err
+		}
+		length, err := pc.Read(encryptedResponse)
+		if err == nil {
+			encryptedResponse = encryptedResponse[:length]
+			readErr = nil
+			break
+		}
+		readErr = err
+		dlog.Debugf("[%v] Retry on timeout", serverInfo.Name)
+	}
+
+	if readErr != nil {
+		proxy.udpConnPool.Discard(pc)
+		return nil, readErr
+	}
+
+	proxy.udpConnPool.Put(upstreamAddr, pc)
+
+	return proxy.Decrypt(serverInfo, sharedKey, encryptedResponse, clientNonce)
+}
+
+func (proxy *Proxy) exchangeWithUDPServerViaProxy(
+	serverInfo *ServerInfo,
+	sharedKey *[32]byte,
+	encryptedQuery []byte,
+	clientNonce []byte,
+	upstreamAddr *net.UDPAddr,
+	proxyDialer *netproxy.Dialer,
+) ([]byte, error) {
+	pc, err := (*proxyDialer).Dial("udp", upstreamAddr.String())
 	if err != nil {
 		return nil, err
 	}
 	defer pc.Close()
+
 	if err := pc.SetDeadline(time.Now().Add(serverInfo.Timeout)); err != nil {
 		return nil, err
 	}
@@ -856,5 +908,6 @@ func (proxy *Proxy) processIncomingQuery(
 func NewProxy() *Proxy {
 	return &Proxy{
 		serversInfo: NewServersInfo(),
+		udpConnPool: NewUDPConnPool(),
 	}
 }
