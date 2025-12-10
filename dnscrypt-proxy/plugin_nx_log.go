@@ -52,7 +52,7 @@ func (plugin *PluginNxLog) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 	question := msg.Question[0]
 	qType, ok := dns.TypeToString[question.Qtype]
 	if !ok {
-		qType = string(qType)
+		qType = fmt.Sprintf("%d", question.Qtype)
 	}
 	qName := pluginsState.qName
 
