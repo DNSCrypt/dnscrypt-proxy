@@ -1,4 +1,4 @@
-# Version 2.1.15 [not released yet]
+# Version 2.1.15
  - The proxy now dynamically reduces timeouts as the connection limit is
 approached, improving performance and preventing connection exhaustion under
 heavy load.
