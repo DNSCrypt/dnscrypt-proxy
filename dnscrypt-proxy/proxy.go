@@ -242,7 +242,9 @@ func (proxy *Proxy) addLocalDoHListener(listenAddrStr string) {
 			dlog.Fatalf("Unable to switch to a different user: %v", err)
 		}
 		defer listenerTCP.Close()
+		FileDescriptorsMu.Lock()
 		FileDescriptors = append(FileDescriptors, fdTCP)
+		FileDescriptorsMu.Unlock()
 		return
 	}
 
