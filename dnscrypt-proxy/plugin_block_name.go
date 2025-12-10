@@ -145,6 +145,7 @@ func (plugin *PluginBlockName) PrepareReload() error {
 			patternMatcher:  NewPatternMatcher(),
 			logger:          currentBlockedNames.logger,
 			format:          currentBlockedNames.format,
+			ipCryptConfig:   currentBlockedNames.ipCryptConfig,
 		}
 
 		// Load rules into staging structure
