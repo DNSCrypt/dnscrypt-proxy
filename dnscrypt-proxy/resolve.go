@@ -288,7 +288,7 @@ cname:
 		} else if len(mxs) > 1 {
 			fmt.Printf("%d mail servers found\n", len(mxs))
 		} else {
-			fmt.Println("1 mail servers found")
+			fmt.Println("1 mail server found")
 		}
 	}
 
