@@ -337,3 +337,38 @@ func InitializePluginLogger(logFile, format string, maxSize, maxAge, maxBackups 
 	}
 	return nil, ""
 }
+
+// reverseAddr returns the in-addr.arpa. or ip6.arpa. hostname of the IP
+// address suitable for reverse DNS (PTR) record lookups.
+func reverseAddr(addr string) (string, error) {
+	ip := net.ParseIP(addr)
+	if ip == nil {
+		return "", errors.New("unrecognized address: " + addr)
+	}
+	if v4 := ip.To4(); v4 != nil {
+		buf := make([]byte, 0, net.IPv4len*4+len("in-addr.arpa."))
+		for i := len(v4) - 1; i >= 0; i-- {
+			buf = strconv.AppendInt(buf, int64(v4[i]), 10)
+			buf = append(buf, '.')
+		}
+		buf = append(buf, "in-addr.arpa."...)
+		return string(buf), nil
+	}
+	// Must be IPv6
+	const hexDigits = "0123456789abcdef"
+	buf := make([]byte, 0, net.IPv6len*4+len("ip6.arpa."))
+	for i := len(ip) - 1; i >= 0; i-- {
+		v := ip[i]
+		buf = append(buf, hexDigits[v&0xF], '.', hexDigits[v>>4], '.')
+	}
+	buf = append(buf, "ip6.arpa."...)
+	return string(buf), nil
+}
+
+// fqdn returns the fully qualified domain name (with trailing dot)
+func fqdn(name string) string {
+	if len(name) == 0 || name[len(name)-1] == '.' {
+		return name
+	}
+	return name + "."
+}

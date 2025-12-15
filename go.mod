@@ -1,10 +1,11 @@
 module github.com/dnscrypt/dnscrypt-proxy
 
-go 1.24.0
+go 1.25.0
 
 exclude google.golang.org/genproto v0.0.0-20230410155749-daa745c078e1
 
 require (
+	codeberg.org/miekg/dns v0.6.1
 	github.com/BurntSushi/toml v1.5.0
 	github.com/VividCortex/ewma v1.2.0
 	github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf
@@ -48,5 +49,5 @@ require (
 	golang.org/x/tools v0.39.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250811230008-5f3141c8851a // indirect
 	google.golang.org/grpc v1.74.2 // indirect
-	google.golang.org/protobuf v1.36.7 // indirect
+	google.golang.org/protobuf v1.36.8 // indirect
 )

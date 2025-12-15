@@ -5,8 +5,8 @@ import (
 	"io"
 	"sync"
 
+	"codeberg.org/miekg/dns"
 	"github.com/jedisct1/dlog"
-	"github.com/miekg/dns"
 )
 
 type PluginAllowName struct {

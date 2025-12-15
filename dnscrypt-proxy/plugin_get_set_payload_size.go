@@ -1,6 +1,6 @@
 package main
 
-import "github.com/miekg/dns"
+import "codeberg.org/miekg/dns"
 
 type PluginGetSetPayloadSize struct{}
 
@@ -26,41 +26,28 @@ func (plugin *PluginGetSetPayloadSize) Reload() error {
 
 func (plugin *PluginGetSetPayloadSize) Eval(pluginsState *PluginsState, msg *dns.Msg) error {
 	pluginsState.originalMaxPayloadSize = 512 - ResponseOverhead
-	edns0 := msg.IsEdns0()
-	dnssec := false
-	if edns0 != nil {
-		pluginsState.maxUnencryptedUDPSafePayloadSize = int(edns0.UDPSize())
+
+	// In v2, EDNS0 info is directly on msg
+	dnssec := msg.Security
+	if msg.UDPSize > 0 {
+		pluginsState.maxUnencryptedUDPSafePayloadSize = int(msg.UDPSize)
 		pluginsState.originalMaxPayloadSize = Max(
 			pluginsState.maxUnencryptedUDPSafePayloadSize-ResponseOverhead,
 			pluginsState.originalMaxPayloadSize,
 		)
-		dnssec = edns0.Do()
 	}
-	var options *[]dns.EDNS0
+
 	pluginsState.dnssec = dnssec
 	pluginsState.maxPayloadSize = Min(
 		MaxDNSUDPPacketSize-ResponseOverhead,
 		Max(pluginsState.originalMaxPayloadSize, pluginsState.maxPayloadSize),
 	)
+
 	if pluginsState.maxPayloadSize > 512 {
-		extra2 := []dns.RR{}
-		for _, extra := range msg.Extra {
-			if extra.Header().Rrtype != dns.TypeOPT {
-				extra2 = append(extra2, extra)
-			} else if xoptions := &extra.(*dns.OPT).Option; len(*xoptions) > 0 && options == nil {
-				options = xoptions
-			}
-		}
-		msg.Extra = extra2
-		msg.SetEdns0(uint16(pluginsState.maxPayloadSize), dnssec)
-		if options != nil {
-			for _, extra := range msg.Extra {
-				if extra.Header().Rrtype == dns.TypeOPT {
-					extra.(*dns.OPT).Option = *options
-					break
-				}
-			}
-		}
+		// Set the EDNS0 parameters on msg directly
+		msg.UDPSize = uint16(pluginsState.maxPayloadSize)
+		msg.Security = dnssec
 	}
+
 	return nil
 }

@@ -15,11 +15,11 @@ import (
 	"sync"
 	"time"
 
+	"codeberg.org/miekg/dns"
 	"github.com/VividCortex/ewma"
 	"github.com/jedisct1/dlog"
 	clocksmith "github.com/jedisct1/go-clocksmith"
 	stamps "github.com/jedisct1/go-dnsstamps"
-	"github.com/miekg/dns"
 	"golang.org/x/crypto/ed25519"
 )
 
@@ -766,19 +766,20 @@ func fetchDNSCryptServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp
 		)
 		if err == nil && len(msg.Question) > 0 {
 			question := msg.Question[0]
-			if question.Qtype == query.Question[0].Qtype && strings.EqualFold(question.Name, query.Question[0].Name) {
+			if dns.RRToType(question) == dns.RRToType(query.Question[0]) && strings.EqualFold(question.Header().Name, query.Question[0].Header().Name) {
 				dlog.Debugf("[%s] also serves plaintext DNS", name)
-				if msg.Id != 0xcafe {
+				if msg.ID != 0xcafe {
 					dlog.Infof("[%s] handling of DNS message identifiers is broken", name)
 				}
 				for _, rr := range msg.Answer {
-					if rr.Header().Rrtype == dns.TypeA || rr.Header().Rrtype == dns.TypeAAAA {
+					rrType := dns.RRToType(rr)
+					if rrType == dns.TypeA || rrType == dns.TypeAAAA {
 						dlog.Warnf("[%s] may be a lying resolver -- skipping", name)
 						return ServerInfo{}, fmt.Errorf("[%s] unexpected record: [%s]", name, rr.String())
 					}
 				}
 				for _, rr := range msg.Extra {
-					if rr.Header().Rrtype == dns.TypeTXT {
+					if dns.RRToType(rr) == dns.TypeTXT {
 						dlog.Warnf("[%s] may be a dummy resolver -- skipping", name)
 						txts := rr.(*dns.TXT).Txt
 						cause := ""
@@ -809,57 +810,52 @@ func fetchDNSCryptServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp
 }
 
 func dohTestPacket(msgID uint16) []byte {
-	msg := dns.Msg{}
-	msg.SetQuestion(".", dns.TypeNS)
-	msg.Id = msgID
-	msg.MsgHdr.RecursionDesired = true
-	msg.SetEdns0(uint16(MaxDNSPacketSize), false)
-	ext := new(dns.EDNS0_PADDING)
-	ext.Padding = make([]byte, 16)
-	_, _ = crypto_rand.Read(ext.Padding)
-	edns0 := msg.IsEdns0()
-	edns0.Option = append(edns0.Option, ext)
-	body, err := msg.Pack()
-	if err != nil {
+	msg := dns.NewMsg(".", dns.TypeNS)
+	msg.ID = msgID
+	msg.RecursionDesired = true
+	msg.UDPSize = uint16(MaxDNSPacketSize)
+	msg.Security = false
+	paddingData := make([]byte, 16)
+	_, _ = crypto_rand.Read(paddingData)
+	padding := &dns.PADDING{Padding: string(paddingData)}
+	msg.Pseudo = append(msg.Pseudo, padding)
+	if err := msg.Pack(); err != nil {
 		dlog.Fatal(err)
 	}
-	return body
+	return msg.Data
 }
 
 func dohNXTestPacket(msgID uint16) []byte {
-	msg := dns.Msg{}
 	qName := make([]byte, 16)
 	charset := "abcdefghijklmnopqrstuvwxyz"
 	for i := range qName {
 		qName[i] = charset[rand.Intn(len(charset))]
 	}
-	msg.SetQuestion(string(qName)+".test.dnscrypt.", dns.TypeNS)
-	msg.Id = msgID
-	msg.MsgHdr.RecursionDesired = true
-	msg.SetEdns0(uint16(MaxDNSPacketSize), false)
-	ext := new(dns.EDNS0_PADDING)
-	ext.Padding = make([]byte, 16)
-	_, _ = crypto_rand.Read(ext.Padding)
-	edns0 := msg.IsEdns0()
-	edns0.Option = append(edns0.Option, ext)
-	body, err := msg.Pack()
-	if err != nil {
+	msg := dns.NewMsg(string(qName)+".test.dnscrypt.", dns.TypeNS)
+	msg.ID = msgID
+	msg.RecursionDesired = true
+	msg.UDPSize = uint16(MaxDNSPacketSize)
+	msg.Security = false
+	paddingData := make([]byte, 16)
+	_, _ = crypto_rand.Read(paddingData)
+	padding := &dns.PADDING{Padding: string(paddingData)}
+	msg.Pseudo = append(msg.Pseudo, padding)
+	if err := msg.Pack(); err != nil {
 		dlog.Fatal(err)
 	}
-	return body
+	return msg.Data
 }
 
 func plainNXTestPacket(msgID uint16) dns.Msg {
-	msg := dns.Msg{}
 	qName := make([]byte, 16)
 	charset := "abcdefghijklmnopqrstuvwxyz"
 	for i := range qName {
 		qName[i] = charset[rand.Intn(len(charset))]
 	}
-	msg.SetQuestion(string(qName)+".test.dnscrypt.", dns.TypeNS)
-	msg.Id = msgID
-	msg.MsgHdr.RecursionDesired = true
-	return msg
+	msg := dns.NewMsg(string(qName)+".test.dnscrypt.", dns.TypeNS)
+	msg.ID = msgID
+	msg.RecursionDesired = true
+	return *msg
 }
 
 func fetchDoHServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, isNew bool) (ServerInfo, error) {
@@ -897,8 +893,8 @@ func fetchDoHServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, isN
 	if tls == nil || !tls.HandshakeComplete {
 		return ServerInfo{}, errors.New("TLS handshake failed")
 	}
-	msg := dns.Msg{}
-	if err := msg.Unpack(serverResponse); err != nil {
+	msg := dns.Msg{Data: serverResponse}
+	if err := msg.Unpack(); err != nil {
 		dlog.Warnf("[%s]: %v", name, err)
 		return ServerInfo{}, err
 	}
@@ -1060,8 +1056,8 @@ func _fetchODoHTargetInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, i
 		}
 		workingConfigs = append(workingConfigs, odohTargetConfig)
 
-		msg := dns.Msg{}
-		if err := msg.Unpack(serverResponse); err != nil {
+		msg := dns.Msg{Data: serverResponse}
+		if err := msg.Unpack(); err != nil {
 			dlog.Warnf("[%s]: %v", name, err)
 			return ServerInfo{}, err
 		}

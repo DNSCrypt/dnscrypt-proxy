@@ -1,0 +1,8 @@
+tcp up
+
+udp conns, make it fit in buffer, see what we need other tc
+
+cache, use the btree, with Msg, without buffer and minttl of the message, and janitor go routine
+that remove them but refetches them upstream.
+
+closed source, plugins.... how to keep external

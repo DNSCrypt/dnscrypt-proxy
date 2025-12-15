@@ -7,8 +7,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"codeberg.org/miekg/dns"
 	"github.com/jedisct1/dlog"
-	"github.com/miekg/dns"
 )
 
 // ReloadablePlugin is an interface for plugins that support hot-reloading

@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"codeberg.org/miekg/dns"
 	"github.com/jedisct1/dlog"
-	"github.com/miekg/dns"
 )
 
 type PluginQueryLog struct {
@@ -50,9 +50,9 @@ func (plugin *PluginQueryLog) Eval(pluginsState *PluginsState, msg *dns.Msg) err
 		return nil
 	}
 	question := msg.Question[0]
-	qType, ok := dns.TypeToString[question.Qtype]
+	qType, ok := dns.TypeToString[dns.RRToType(question)]
 	if !ok {
-		qType = fmt.Sprintf("%d", question.Qtype)
+		qType = fmt.Sprintf("%d", dns.RRToType(question))
 	}
 	if len(plugin.ignoredQtypes) > 0 {
 		for _, ignoredQtype := range plugin.ignoredQtypes {

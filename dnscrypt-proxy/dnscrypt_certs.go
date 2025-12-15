@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"codeberg.org/miekg/dns"
 	"github.com/jedisct1/dlog"
-	"github.com/miekg/dns"
 	"golang.org/x/crypto/ed25519"
 )
 
@@ -40,8 +40,7 @@ func FetchCurrentDNSCryptCert(
 	if serverName == nil {
 		serverName = &providerName
 	}
-	query := dns.Msg{}
-	query.SetQuestion(providerName, dns.TypeTXT)
+	query := dns.NewMsg(providerName, dns.TypeTXT)
 	if !strings.HasPrefix(providerName, "2.dnscrypt-cert.") {
 		if relay != nil && !proxy.anonDirectCertFallback {
 			dlog.Warnf(
@@ -61,7 +60,7 @@ func FetchCurrentDNSCryptCert(
 	in, rtt, fragmentsBlocked, err := DNSExchange(
 		proxy,
 		proto,
-		&query,
+		query,
 		serverAddress,
 		relay,
 		serverName,
@@ -78,7 +77,7 @@ func FetchCurrentDNSCryptCert(
 	for _, answerRr := range in.Answer {
 		var txt string
 		if t, ok := answerRr.(*dns.TXT); !ok {
-			dlog.Noticef("[%v] Extra record of type [%v] found in certificate", *serverName, answerRr.Header().Rrtype)
+			dlog.Noticef("[%v] Extra record of type [%v] found in certificate", *serverName, dns.RRToType(answerRr))
 			continue
 		} else {
 			txt = strings.Join(t.Txt, "")

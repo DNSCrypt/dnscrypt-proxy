@@ -1,8 +1,8 @@
 package main
 
 import (
+	"codeberg.org/miekg/dns"
 	"github.com/k-sone/critbitgo"
-	"github.com/miekg/dns"
 )
 
 var undelegatedSet = []string{

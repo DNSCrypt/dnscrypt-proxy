@@ -5,13 +5,15 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
+	"net/netip"
 	"strings"
 	"sync"
 	"time"
 	"unicode"
 
+	"codeberg.org/miekg/dns"
+	"codeberg.org/miekg/dns/rdata"
 	"github.com/jedisct1/dlog"
-	"github.com/miekg/dns"
 )
 
 type CloakedName struct {
@@ -115,10 +117,10 @@ func (plugin *PluginCloak) loadRules(lines string, patternMatcher *PatternMatche
 
 		var ptrLine string
 		if ipv4 := ip.To4(); ipv4 != nil {
-			reversed, _ := dns.ReverseAddr(ip.To4().String())
+			reversed, _ := reverseAddr(ip.To4().String())
 			ptrLine = strings.TrimSuffix(reversed, ".")
 		} else {
-			reversed, _ := dns.ReverseAddr(cloakedName.ipv6[0].String())
+			reversed, _ := reverseAddr(cloakedName.ipv6[0].String())
 			ptrLine = strings.TrimSuffix(reversed, ".")
 		}
 		ptrQueryLine := ptrEntryToQuery(ptrLine)
@@ -223,7 +225,9 @@ func (plugin *PluginCloak) SetConfigWatcher(watcher *ConfigWatcher) {
 
 func (plugin *PluginCloak) Eval(pluginsState *PluginsState, msg *dns.Msg) error {
 	question := msg.Question[0]
-	if question.Qclass != dns.ClassINET || question.Qtype == dns.TypeNS || question.Qtype == dns.TypeSOA {
+	qtype := dns.RRToType(question)
+	qname := question.Header().Name
+	if question.Header().Class != dns.ClassINET || qtype == dns.TypeNS || qtype == dns.TypeSOA {
 		return nil
 	}
 	now := time.Now()
@@ -235,7 +239,7 @@ func (plugin *PluginCloak) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 		plugin.RUnlock()
 		return nil
 	}
-	if question.Qtype != dns.TypeA && question.Qtype != dns.TypeAAAA && question.Qtype != dns.TypePTR {
+	if qtype != dns.TypeA && qtype != dns.TypeAAAA && qtype != dns.TypePTR {
 		plugin.RUnlock()
 		pluginsState.action = PluginsActionReject
 		pluginsState.returnCode = PluginsReturnCodeCloak
@@ -244,7 +248,7 @@ func (plugin *PluginCloak) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 	cloakedName := xcloakedName.(*CloakedName)
 	ttl, expired := plugin.ttl, false
 	var lastUpdate *time.Time
-	switch question.Qtype {
+	switch qtype {
 	case dns.TypeA:
 		lastUpdate = cloakedName.lastUpdate4
 	case dns.TypeAAAA:
@@ -258,12 +262,12 @@ func (plugin *PluginCloak) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 		}
 	}
 	synth := EmptyResponseFromMessage(msg)
-	if !cloakedName.isIP && ((question.Qtype == dns.TypeA && cloakedName.ipv4 == nil) ||
-		(question.Qtype == dns.TypeAAAA && cloakedName.ipv6 == nil) || expired) {
+	if !cloakedName.isIP && ((qtype == dns.TypeA && cloakedName.ipv4 == nil) ||
+		(qtype == dns.TypeAAAA && cloakedName.ipv6 == nil) || expired) {
 		target := cloakedName.target
 		plugin.RUnlock()
-		returnIPv4 := question.Qtype == dns.TypeA
-		returnIPv6 := question.Qtype == dns.TypeAAAA
+		returnIPv4 := qtype == dns.TypeA
+		returnIPv6 := qtype == dns.TypeAAAA
 		foundIPs, _, err := pluginsState.xTransport.resolveUsingServers(
 			pluginsState.xTransport.mainProto,
 			target,
@@ -283,7 +287,7 @@ func (plugin *PluginCloak) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 		plugin.Lock()
 		if len(foundIPs) > 0 {
 			n := Min(16, len(foundIPs))
-			switch question.Qtype {
+			switch qtype {
 			case dns.TypeA:
 				cloakedName.lastUpdate4 = &now
 				cloakedName.ipv4 = foundIPs[:n]
@@ -298,24 +302,24 @@ func (plugin *PluginCloak) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 		plugin.RLock()
 	}
 	synth.Answer = []dns.RR{}
-	if question.Qtype == dns.TypeA {
+	if qtype == dns.TypeA {
 		for _, ip := range cloakedName.ipv4 {
 			rr := new(dns.A)
-			rr.Hdr = dns.RR_Header{Name: question.Name, Rrtype: dns.TypeA, Class: dns.ClassINET, Ttl: ttl}
-			rr.A = ip
+			rr.Hdr = dns.Header{Name: qname, Class: dns.ClassINET, TTL: ttl}
+			rr.A = rdata.A{Addr: netip.AddrFrom4([4]byte(ip.To4()))}
 			synth.Answer = append(synth.Answer, rr)
 		}
-	} else if question.Qtype == dns.TypeAAAA {
+	} else if qtype == dns.TypeAAAA {
 		for _, ip := range cloakedName.ipv6 {
 			rr := new(dns.AAAA)
-			rr.Hdr = dns.RR_Header{Name: question.Name, Rrtype: dns.TypeAAAA, Class: dns.ClassINET, Ttl: ttl}
-			rr.AAAA = ip
+			rr.Hdr = dns.Header{Name: qname, Class: dns.ClassINET, TTL: ttl}
+			rr.AAAA = rdata.AAAA{Addr: netip.AddrFrom16([16]byte(ip.To16()))}
 			synth.Answer = append(synth.Answer, rr)
 		}
-	} else if question.Qtype == dns.TypePTR {
+	} else if qtype == dns.TypePTR {
 		for _, ptr := range cloakedName.PTR {
 			rr := new(dns.PTR)
-			rr.Hdr = dns.RR_Header{Name: question.Name, Rrtype: dns.TypePTR, Class: dns.ClassINET, Ttl: ttl}
+			rr.Hdr = dns.Header{Name: qname, Class: dns.ClassINET, TTL: ttl}
 			rr.Ptr = ptr
 			synth.Answer = append(synth.Answer, rr)
 		}

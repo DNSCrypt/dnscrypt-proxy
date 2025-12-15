@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math/rand"
@@ -8,9 +9,9 @@ import (
 	"strings"
 	"sync"
 
+	"codeberg.org/miekg/dns"
 	"github.com/jedisct1/dlog"
 	"github.com/lifenjoiner/dhcpdns"
-	"github.com/miekg/dns"
 )
 
 type SearchSequenceItemType int
@@ -305,27 +306,30 @@ func (plugin *PluginForward) Eval(pluginsState *PluginsState, msg *dns.Msg) erro
 		}
 		tries--
 		dlog.Debugf("Forwarding [%s] to [%s]", qName, server)
-		client := dns.Client{Net: pluginsState.serverProto, Timeout: pluginsState.timeout}
+		client := dns.Client{}
+		ctx, cancel := context.WithTimeout(context.Background(), pluginsState.timeout)
 
 		// Create a clean copy of the message without Extra section for forwarding
 		forwardMsg := msg.Copy()
 		forwardMsg.Extra = nil
 
-		respMsg, _, err = client.Exchange(forwardMsg, server)
+		respMsg, _, err = client.Exchange(ctx, forwardMsg, pluginsState.serverProto, server)
 		if err != nil {
+			cancel()
 			continue
 		}
 		if respMsg.Truncated {
-			client.Net = "tcp"
-			respMsg, _, err = client.Exchange(forwardMsg, server)
+			respMsg, _, err = client.Exchange(ctx, forwardMsg, "tcp", server)
 			if err != nil {
+				cancel()
 				continue
 			}
 		}
-		if edns0 := respMsg.IsEdns0(); edns0 == nil || !edns0.Do() {
+		cancel()
+		if !respMsg.Security {
 			respMsg.AuthenticatedData = false
 		}
-		respMsg.Id = msg.Id
+		respMsg.ID = msg.ID
 		pluginsState.synthResponse = respMsg
 		pluginsState.action = PluginsActionSynth
 		pluginsState.returnCode = PluginsReturnCodeForward

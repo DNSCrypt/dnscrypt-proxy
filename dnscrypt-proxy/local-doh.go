@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"codeberg.org/miekg/dns"
 	"github.com/jedisct1/dlog"
-	"github.com/miekg/dns"
 )
 
 type localDoHHandler struct {
@@ -72,8 +72,8 @@ func (handler localDoHHandler) ServeHTTP(writer http.ResponseWriter, request *ht
 		writer.WriteHeader(500)
 		return
 	}
-	msg := dns.Msg{}
-	if err := msg.Unpack(packet); err != nil {
+	msg := dns.Msg{Data: packet}
+	if err := msg.Unpack(); err != nil {
 		writer.WriteHeader(400)
 		return
 	}

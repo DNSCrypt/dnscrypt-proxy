@@ -5,8 +5,8 @@ import (
 	"io"
 	"sync"
 
+	"codeberg.org/miekg/dns"
 	"github.com/jedisct1/dlog"
-	"github.com/miekg/dns"
 )
 
 type BlockedNames struct {
@@ -268,11 +268,12 @@ func (plugin *PluginBlockNameResponse) Eval(pluginsState *PluginsState, msg *dns
 			continue
 		}
 		var target string
-		if header.Rrtype == dns.TypeCNAME {
+		rrtype := dns.RRToType(answer)
+		if rrtype == dns.TypeCNAME {
 			target = answer.(*dns.CNAME).Target
-		} else if header.Rrtype == dns.TypeSVCB && answer.(*dns.SVCB).Priority == 0 {
+		} else if rrtype == dns.TypeSVCB && answer.(*dns.SVCB).Priority == 0 {
 			target = answer.(*dns.SVCB).Target
-		} else if header.Rrtype == dns.TypeHTTPS && answer.(*dns.HTTPS).Priority == 0 {
+		} else if rrtype == dns.TypeHTTPS && answer.(*dns.HTTPS).Priority == 0 {
 			target = answer.(*dns.HTTPS).Target
 		} else {
 			continue

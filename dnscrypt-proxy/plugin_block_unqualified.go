@@ -3,7 +3,7 @@ package main
 import (
 	"strings"
 
-	"github.com/miekg/dns"
+	"codeberg.org/miekg/dns"
 )
 
 type PluginBlockUnqualified struct{}
@@ -30,7 +30,8 @@ func (plugin *PluginBlockUnqualified) Reload() error {
 
 func (plugin *PluginBlockUnqualified) Eval(pluginsState *PluginsState, msg *dns.Msg) error {
 	question := msg.Question[0]
-	if question.Qclass != dns.ClassINET || (question.Qtype != dns.TypeA && question.Qtype != dns.TypeAAAA) {
+	qtype := dns.RRToType(question)
+	if question.Header().Class != dns.ClassINET || (qtype != dns.TypeA && qtype != dns.TypeAAAA) {
 		return nil
 	}
 	if strings.IndexByte(pluginsState.qName, '.') >= 0 {

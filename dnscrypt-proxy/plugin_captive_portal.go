@@ -1,8 +1,8 @@
 package main
 
 import (
+	"codeberg.org/miekg/dns"
 	"github.com/jedisct1/dlog"
-	"github.com/miekg/dns"
 )
 
 type PluginCaptivePortal struct {

@@ -5,10 +5,10 @@ import (
 	"net"
 	"time"
 
+	"codeberg.org/miekg/dns"
 	"github.com/jedisct1/dlog"
 	clocksmith "github.com/jedisct1/go-clocksmith"
 	stamps "github.com/jedisct1/go-dnsstamps"
-	"github.com/miekg/dns"
 )
 
 // validateQuery - Performs basic validation on the incoming query
@@ -24,16 +24,11 @@ func validateQuery(query []byte) bool {
 
 // handleSynthesizedResponse - Handles a synthesized DNS response from plugins
 func handleSynthesizedResponse(pluginsState *PluginsState, synth *dns.Msg) ([]byte, error) {
-	var response []byte
-	var err error
-
-	response, err = synth.PackBuffer(response)
-	if err != nil {
+	if err := synth.Pack(); err != nil {
 		pluginsState.returnCode = PluginsReturnCodeParseError
-		// We can't access proxy from pluginsState directly, but the caller will handle logging
+		return nil, err
 	}
-
-	return response, err
+	return synth.Data, nil
 }
 
 // processDNSCryptQuery - Processes a query using the DNSCrypt protocol
@@ -89,8 +84,9 @@ func processDNSCryptQuery(
 		serverInfo.noticeFailure(proxy)
 		if stale, ok := pluginsState.sessionData["stale"]; ok {
 			dlog.Debug("Serving stale response")
-			if staleResponse, packErr := (stale.(*dns.Msg)).Pack(); packErr == nil {
-				return staleResponse, nil
+			staleMsg := stale.(*dns.Msg)
+			if packErr := staleMsg.Pack(); packErr == nil {
+				return staleMsg.Data, nil
 			}
 		}
 		// If no stale response was served, return the original error
@@ -134,8 +130,9 @@ func processDoHQuery(
 	// Attempt to serve a stale response as a fallback.
 	if stale, ok := pluginsState.sessionData["stale"]; ok {
 		dlog.Debug("Serving stale response")
-		if staleResponse, packErr := (stale.(*dns.Msg)).Pack(); packErr == nil {
-			return staleResponse, nil
+		staleMsg := stale.(*dns.Msg)
+		if packErr := staleMsg.Pack(); packErr == nil {
+			return staleMsg.Data, nil
 		}
 	}
 
@@ -275,12 +272,12 @@ func processPlugins(
 	}
 
 	if pluginsState.synthResponse != nil {
-		response, err = pluginsState.synthResponse.PackBuffer(response)
-		if err != nil {
+		if err = pluginsState.synthResponse.Pack(); err != nil {
 			pluginsState.returnCode = PluginsReturnCodeParseError
 			pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
 			return response, err
 		}
+		response = pluginsState.synthResponse.Data
 	}
 
 	// Check rcode and handle failures

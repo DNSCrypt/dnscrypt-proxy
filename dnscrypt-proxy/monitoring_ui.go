@@ -14,9 +14,9 @@ import (
 	"sync"
 	"time"
 
+	"codeberg.org/miekg/dns"
 	"github.com/gorilla/websocket"
 	"github.com/jedisct1/dlog"
-	"github.com/miekg/dns"
 )
 
 // MonitoringUIConfig - Configuration for the monitoring UI
@@ -324,9 +324,9 @@ func (ui *MonitoringUI) UpdateMetrics(pluginsState PluginsState, msg *dns.Msg) {
 	// Update query types - separate lock
 	if msg != nil && len(msg.Question) > 0 {
 		question := msg.Question[0]
-		qType, ok := dns.TypeToString[question.Qtype]
+		qType, ok := dns.TypeToString[dns.RRToType(question)]
 		if !ok {
-			qType = fmt.Sprintf("%d", question.Qtype)
+			qType = fmt.Sprintf("%d", dns.RRToType(question))
 		}
 		mc.queryTypesMutex.Lock()
 		mc.queryTypes[qType]++
@@ -399,9 +399,9 @@ func (ui *MonitoringUI) UpdateMetrics(pluginsState PluginsState, msg *dns.Msg) {
 		var qType string
 		if msg != nil && len(msg.Question) > 0 {
 			var ok bool
-			qType, ok = dns.TypeToString[msg.Question[0].Qtype]
+			qType, ok = dns.TypeToString[dns.RRToType(msg.Question[0])]
 			if !ok {
-				qType = fmt.Sprintf("%d", msg.Question[0].Qtype)
+				qType = fmt.Sprintf("%d", dns.RRToType(msg.Question[0]))
 			}
 		} else {
 			qType = "unknown"
@@ -1021,8 +1021,7 @@ func (ui *MonitoringUI) handleTestQuery(w http.ResponseWriter, r *http.Request) 
 	setDynamicCacheHeaders(w)
 
 	// Create a fake DNS message
-	msg := &dns.Msg{}
-	msg.SetQuestion("test.example.com.", dns.TypeA)
+	msg := dns.NewMsg("test.example.com.", dns.TypeA)
 
 	// Create a fake plugin state
 	testStart := time.Now().Add(-10 * time.Millisecond)

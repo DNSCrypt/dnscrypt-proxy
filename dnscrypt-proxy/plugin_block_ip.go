@@ -5,9 +5,9 @@ import (
 	"io"
 	"sync"
 
+	"codeberg.org/miekg/dns"
 	iradix "github.com/hashicorp/go-immutable-radix"
 	"github.com/jedisct1/dlog"
-	"github.com/miekg/dns"
 )
 
 type PluginBlockIP struct {
@@ -149,14 +149,14 @@ func (plugin *PluginBlockIP) Eval(pluginsState *PluginsState, msg *dns.Msg) erro
 
 	for _, answer := range answers {
 		header := answer.Header()
-		Rrtype := header.Rrtype
-		if header.Class != dns.ClassINET || (Rrtype != dns.TypeA && Rrtype != dns.TypeAAAA) {
+		rrtype := dns.RRToType(answer)
+		if header.Class != dns.ClassINET || (rrtype != dns.TypeA && rrtype != dns.TypeAAAA) {
 			continue
 		}
-		if Rrtype == dns.TypeA {
-			ipStr = answer.(*dns.A).A.String()
-		} else if Rrtype == dns.TypeAAAA {
-			ipStr = answer.(*dns.AAAA).AAAA.String() // IPv4-mapped IPv6 addresses are converted to IPv4
+		if rrtype == dns.TypeA {
+			ipStr = answer.(*dns.A).A.Addr.String()
+		} else if rrtype == dns.TypeAAAA {
+			ipStr = answer.(*dns.AAAA).AAAA.Addr.String() // IPv4-mapped IPv6 addresses are converted to IPv4
 		}
 		if _, found := plugin.blockedIPs[ipStr]; found {
 			reject, reason = true, ipStr

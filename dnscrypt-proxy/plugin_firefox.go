@@ -25,8 +25,8 @@ package main
 import (
 	"strings"
 
+	"codeberg.org/miekg/dns"
 	"github.com/jedisct1/dlog"
-	"github.com/miekg/dns"
 )
 
 type PluginFirefox struct{}
@@ -57,7 +57,8 @@ func (plugin *PluginFirefox) Eval(pluginsState *PluginsState, msg *dns.Msg) erro
 		return nil
 	}
 	question := msg.Question[0]
-	if question.Qclass != dns.ClassINET || (question.Qtype != dns.TypeA && question.Qtype != dns.TypeAAAA) {
+	qtype := dns.RRToType(question)
+	if question.Header().Class != dns.ClassINET || (qtype != dns.TypeA && qtype != dns.TypeAAAA) {
 		return nil
 	}
 	qName := pluginsState.qName

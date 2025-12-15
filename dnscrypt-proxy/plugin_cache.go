@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
+	"codeberg.org/miekg/dns"
 	"github.com/jedisct1/go-sieve-cache/pkg/sievecache"
-	"github.com/miekg/dns"
 )
 
 const StaleResponseTTL = 30 * time.Second
@@ -29,13 +29,13 @@ func computeCacheKey(pluginsState *PluginsState, msg *dns.Msg) [32]byte {
 	question := msg.Question[0]
 	h := sha512.New512_256()
 	var tmp [5]byte
-	binary.LittleEndian.PutUint16(tmp[0:2], question.Qtype)
-	binary.LittleEndian.PutUint16(tmp[2:4], question.Qclass)
+	binary.LittleEndian.PutUint16(tmp[0:2], dns.RRToType(question))
+	binary.LittleEndian.PutUint16(tmp[2:4], question.Header().Class)
 	if pluginsState.dnssec {
 		tmp[4] = 1
 	}
 	h.Write(tmp[:])
-	normalizedRawQName := []byte(question.Name)
+	normalizedRawQName := []byte(question.Header().Name)
 	NormalizeRawQName(&normalizedRawQName)
 	h.Write(normalizedRawQName)
 	var sum [32]byte
@@ -81,9 +81,8 @@ func (plugin *PluginCache) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 	expiration := cached.expiration
 	synth := cached.msg.Copy()
 
-	synth.Id = msg.Id
+	synth.ID = msg.ID
 	synth.Response = true
-	synth.Compress = true
 	synth.Question = msg.Question
 
 	if time.Now().After(expiration) {

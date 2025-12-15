@@ -3,7 +3,7 @@ package main
 import (
 	"strings"
 
-	"github.com/miekg/dns"
+	"codeberg.org/miekg/dns"
 )
 
 type PluginBlockIPv6 struct{}
@@ -30,19 +30,18 @@ func (plugin *PluginBlockIPv6) Reload() error {
 
 func (plugin *PluginBlockIPv6) Eval(pluginsState *PluginsState, msg *dns.Msg) error {
 	question := msg.Question[0]
-	if question.Qclass != dns.ClassINET || question.Qtype != dns.TypeAAAA {
+	if question.Header().Class != dns.ClassINET || dns.RRToType(question) != dns.TypeAAAA {
 		return nil
 	}
 	synth := EmptyResponseFromMessage(msg)
 	hinfo := new(dns.HINFO)
-	hinfo.Hdr = dns.RR_Header{
-		Name: question.Name, Rrtype: dns.TypeHINFO,
-		Class: dns.ClassINET, Ttl: 86400,
+	hinfo.Hdr = dns.Header{
+		Name: question.Header().Name, Class: dns.ClassINET, TTL: 86400,
 	}
 	hinfo.Cpu = "AAAA queries have been locally blocked by dnscrypt-proxy"
 	hinfo.Os = "Set block_ipv6 to false to disable that feature"
 	synth.Answer = []dns.RR{hinfo}
-	qName := question.Name
+	qName := question.Header().Name
 	i := strings.Index(qName, ".")
 	parentZone := "."
 	if !(i < 0 || i+1 >= len(qName)) {
@@ -56,9 +55,8 @@ func (plugin *PluginBlockIPv6) Eval(pluginsState *PluginsState, msg *dns.Msg) er
 	soa.Minttl = 2400
 	soa.Expire = 604800
 	soa.Retry = 300
-	soa.Hdr = dns.RR_Header{
-		Name: parentZone, Rrtype: dns.TypeSOA,
-		Class: dns.ClassINET, Ttl: 60,
+	soa.Hdr = dns.Header{
+		Name: parentZone, Class: dns.ClassINET, TTL: 60,
 	}
 	synth.Ns = []dns.RR{soa}
 	pluginsState.synthResponse = synth
