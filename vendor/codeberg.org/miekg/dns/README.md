@@ -60,6 +60,7 @@ A not-so-up-to-date-list-that-may-be-actually-current:
 
 - atomdns - included in cmd/atomdns - a high performance DNS server, based on the principles of CoreDNS, but
   faster and simpler.
+- [dnscrypt-proxy](https://github.com/DNSCrypt/dnscrypt-proxy) - a flexible DNS proxy, with support for encrypted DNS protocols such as DNSCrypt v2, DoH, Anonymized DNSCrypt and ODoH.
 
 Send pull request if you want to be listed here.
 
