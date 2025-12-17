@@ -69,7 +69,9 @@ func (s *MANDATORY) pack(msg []byte, off int) (off1 int, err error) {
 		return len(msg), err
 	}
 	for _, k := range s.Key {
-		off, err = pack.Uint16(k, msg, off)
+		if off, err = pack.Uint16(k, msg, off); err != nil {
+			return len(msg), err
+		}
 	}
 	return off, nil
 }
@@ -87,6 +89,9 @@ func (s *MANDATORY) unpack(sc *cryptobyte.String) error {
 
 func (s *ALPN) pack(msg []byte, off int) (off1 int, err error) {
 	off, err = packTLV(s, msg, off)
+	if err != nil {
+		return len(msg), err
+	}
 	for _, e := range s.Alpn {
 		if e == "" {
 			return len(msg), errors.New("dns: svcbalpn: empty alpn-id")

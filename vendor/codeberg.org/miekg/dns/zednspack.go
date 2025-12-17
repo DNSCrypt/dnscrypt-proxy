@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
+	"net"
 	"net/netip"
 
 	"codeberg.org/miekg/dns/internal/pack"
@@ -234,18 +235,27 @@ func (o *SUBNET) unpack(s *cryptobyte.String) (err error) {
 	if !s.ReadUint8(&o.SourceScope) {
 		return unpack.ErrOverflow
 	}
+	ok := false
+	n := o.SourceNetmask / 8
 	switch o.Family {
 	case 0:
+		// TODO(miek): make something that does not do a full parse.
 		o.Address = netip.MustParseAddr("0.0.0.0")
 	case 1:
-		o.Address, err = unpack.A(s)
-		if err != nil {
-			return err
+		in := make([]byte, net.IPv4len, net.IPv4len)
+		if !s.CopyBytes(in[:n]) {
+			return &Error{"overflow a"}
+		}
+		if o.Address, ok = netip.AddrFromSlice(in); !ok {
+			return &Error{"overflow a"}
 		}
 	case 2:
-		o.Address, err = unpack.AAAA(s)
-		if err != nil {
-			return err
+		in := make([]byte, net.IPv6len, net.IPv6len)
+		if !s.CopyBytes(in[:n]) {
+			return &Error{"overflow aaaa"}
+		}
+		if o.Address, ok = netip.AddrFromSlice(in); !ok {
+			return &Error{"overflow aaaa"}
 		}
 	default:
 		return errors.New("dns: bad address family")

@@ -104,9 +104,7 @@ type Server struct {
 	// Crucially this allows binding when an existing server is listening on `0.0.0.0` or `::`.
 	// It is only supported on certain GOOSes and when using ListenAndServe.
 	ReuseAddr bool
-	// BatchSize controls how many UDP buffers we should pre-alloc when user recvmmsg, the default is 15, but
-	// adjust this value can yield significant performance wins.
-	BatchSize int
+
 	// AcceptMsgFunc will check the incoming message and will reject it early in the process. Defaults to
 	// [DefaultMsgAcceptFunc].
 	MsgAcceptFunc MsgAcceptFunc
@@ -157,9 +155,6 @@ func (srv *Server) init() {
 	}
 	if srv.MsgPool == nil {
 		srv.MsgPool = pool.New(srv.UDPSize)
-	}
-	if srv.BatchSize == 0 {
-		srv.BatchSize = 15
 	}
 
 	srv.ctx, srv.cancel = context.WithCancel(context.Background())
@@ -264,6 +259,11 @@ func (srv *Server) listenTCP(ln net.Listener) {
 
 // If this is a not a const, but var, or worse a field in [Server] it's about 10k qps *slower*.
 // cd cmd/reflect; go test -v -count=1 # check the perf values, 15 does 360K on my M2 8-core with Asahi Linux
+
+// BatchSize controls the maximum of packets we should read using recvmmsg, using ReadBatch, a tradeoff
+// needs to be made with how much memory needs to be pre-allocated and how fast things should go. It is
+// set to set to 15.
+const BatchSize = 15
 
 // Serve a new TCP connection. ServeUDP is split out in server_no_recvmmsg.go and server_recvmmsg.go.
 func (srv *Server) serveTCP(wg *sync.WaitGroup, conn net.Conn) {

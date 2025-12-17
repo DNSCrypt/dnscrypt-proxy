@@ -18,9 +18,9 @@ func (srv *Server) listenUDP(pc net.PacketConn) {
 	var wg sync.WaitGroup
 	xpc := ipv4.NewPacketConn(pc) // suspect this somehow works on Linux, but not other OSes.
 
-	bufs := make([][]byte, srv.BatchSize)
-	msgs := make([]ipv4.Message, srv.BatchSize)
-	for i := range srv.BatchSize {
+	bufs := make([][]byte, BatchSize)
+	msgs := make([]ipv4.Message, BatchSize)
+	for i := range BatchSize {
 		bufs[i] = make([]byte, srv.UDPSize)
 		msgs[i].Buffers = [][]byte{bufs[i]}
 		msgs[i].OOB = make([]byte, oobSize)
@@ -36,14 +36,14 @@ Read:
 			return
 		default:
 
-			// if we set the read deadline is will timeout every ReadTimeout and reallocate the msgs, we are
+			// If we set the read deadline is will timeout every ReadTimeout and reallocate the msgs, we are
 			// also a server, so just wait for incoming messages.
 
 			n, err := xpc.ReadBatch(msgs, 0)
 			if err != nil {
 				continue Read
 			}
-			for _, msg := range msgs[:n] {
+			for i, msg := range msgs[:n] {
 
 				r := &Msg{Data: srv.MsgPool.Get()}
 				copy(r.Data, msg.Buffers[0][:msg.N])
@@ -58,6 +58,8 @@ Read:
 					srv.serveDNS(w, r)
 					wg.Done()
 				}()
+
+				bufs[i] = bufs[i][:0]
 			}
 		}
 	}

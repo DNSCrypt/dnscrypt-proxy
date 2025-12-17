@@ -1,15 +1,16 @@
 # Difference with github.com/miekg/dns
 
-- Many functions (and new ones) are moved into dns/dnsutil, and dns/dnstest. This copied some stuff from CoreDNS.
-- dns/dnshttp was added for help with DOH - DNS over HTTPs.
+- Many functions (and new ones) are moved into _dnsutil_, and _dnstest_. This copied a lot of stuff from CoreDNS.
+- _dnshttp_ was added for help with DOH - DNS over HTTPs.
 - `RR` lost the `Type` and `Rdlength` fields, type is derived from the Go type, `Rdlength` served no function at all.
-- The date of each `RR` is split out in to a dns/rdata package. This makes it much more memory efficient to
+- The rdata of each `RR` is split out in to a _rdata_ package. This makes it much more memory efficient to
   store RRSets - as the RR's header isn't duplicated.
 - `context.Context` is used in the correct places. `ServeDNS` now has a context.Context, with `Zone(ctx)` you
   retrieve the pattern zone that lead to invocation of this Handler.
-- `internal/*` packages that hold code that used to be private, but was cluttering the top level directory; also allowed for better
+- _internal/..._ packages that hold code that used to be private, but was cluttering the top level directory; also allowed for better
   naming.
-  - builtin perf testing with internal/dnsperf
+  - builtin perf testing with _internal/dnsperf_. Need `dnsperf`, on deb-based systems `apt-get install
+dnsperf`.
 - Interfaces do not have private methods.
 - `Msg` contains a buffer named `Data` that holds the binary data for this message. This pulls TSIG/SIG(0)
   handling out of the client and server, simplifying it enormously as we can get rid of `dns.Conn`.
@@ -24,33 +25,59 @@
   Pseudo section RR (EDNS0 OPT) can also be parsed from their (also unique to this library) presentation format.
 
   The `Stateful` section in the message that holds DNS Stateful Operation (DSO) records, these records are
-  also _RRs_.
+  also `RR`s.
 
-- `New` will return an RR, `NewRR` is gone.
+- `New` will return an `RR`, `NewRR` is gone, `dnstest/New` will do the same, but panic on errors.
 - `Client` has a `dns.Transport` just like `http.Client`, so _all_ connection management is now external.
 - More:
-  - msg is a io.Writer.
-  - msg.Data can be re-used between request and reply in Exchange.
-  - msg.Data can be returned to a server buffer pool, for reuse in new messages, this is done automatically,
-    see msg.Hijack() for hijacking the buffer.
+  - `Msg` is a io.Writer.
+  - `msg.Data` can be re-used between request and reply in Exchange.
+  - `msg.Data` can be returned to a server buffer pool, for reuse in new messages, this is done automatically,
+    see `msg.Hijack()` for hijacking the buffer.
   - private RRs are easier.
   - private EDNS0 are implementable and hopefully easier.
-- SVCB record got its own package _dns/svcb_ where all the key-values (called `svcb.Pair`) now reside.
-- DELEG record also got its own package _dns/deleg/_, where its key-values (called `deleg.Info`) live.
+- SVCB record got its own package _svcb_ where all the key-values (called `svcb.Pair`) now reside.
+- DELEG record also got its own package _deleg_, where its key-values (called `deleg.Info`) live.
 - IsDuplicate is gone in favor of Compare and a full support for the `sort.Interface`, so you can just
   sort RRs in an RRset. This also simplified the DNSSEC signing and make wireformat even less important.
 - Copied, sanitized and removed tests that accumulated over 16 years of development.
 - Escapes in domain names is not supported. This added 50-100% overhead in low-level functions that are often
-  used in the hot path.
+  used in the hot path. In rdata (TXT records) it still is.
 
-## Create an RR
+## RRs
+
+Create an RR.
 
 ```
 OLD                                                                  | NEW
+                                                                     |
 r := &MX{ Header{Name:"miek.nl.", Class: dns.ClassINET, TTL: 3600},  | r := &MX{
         Preference: 10, Mx: "mx.miek.nl."}                           |   Header{Name:"miek.nl.", Class: dns.ClassINET, TTL: 3600},
                                                                      |   MX: rdata.MX{Preference: 10, Mx: "mx.miek.nl."},
                                                                      | }
+```
+
+Print RR without header.
+
+```
+OLD                                                        | NEW
+                                                           |
+mx, _ := dns.NewRR("miek.nl. 3600 IN MX 10 mx.miek.nl.")   | mx := dnstest.New("miek.nl. 3600 IN MX 10 mx.miek.nl.")
+hdr := mx.Header().String()                                | hdr := mx.Header().String()
+flds := mx.String()[len(hdr)+1:]                           | fmt.Printf("Fields: %q\n", mx.MX.String())
+fmt.Printf("Fields: %q\n", flds)                           |
+```
+
+Access RR's rdata.
+
+```
+OLD                                                        | NEW
+                                                           |
+mx, _ := dns.NewRR("miek.nl. 3600 IN MX 10 mx.miek.nl.")   | mx := dnstest.New("miek.nl. 3600 IN MX 10 mx.miek.nl.")
+num := dns.NumField(mx)                                    | rdata := mx.MX
+for i := range num {                                       | rdata.Preference = 10
+    fmt.Printf("%q", dns.Field(i))                         |
+}                                                          |
 ```
 
 ## Setting EDNS0
@@ -68,7 +95,7 @@ m.SetEdns0(4096, true)                        |
                                               | m.UDPSize, m.Security = 4096, true
 ```
 
-Setting the UDP buffer size:
+Setting the UDP buffer size.
 
 ```
 OLD                                                      | NEW
@@ -81,7 +108,7 @@ for i := len(m.Extra) - 1; i >= 0; i-- {                 |
 }                                                        |
 ```
 
-Accessing ENDS0 options:
+Accessing ENDS0 options.
 
 ```
 OLD                                                      | NEW
@@ -97,7 +124,7 @@ for i, options := range opt.Options {                    |
 }                                                        |
 ```
 
-Checking if there _is_ an EDNS0 option added
+Checking if there _is_ an EDNS0 option added.
 
 ```
 OLD                                                      | NEW
@@ -105,7 +132,7 @@ OLD                                                      | NEW
 x := m.IsEdns0()                                         | x := len(m.Pseudo) > 0
 ```
 
-Adding an EDNS0 option is just as easy, assign to the pseudo section:
+Adding an EDNS0 option is just as easy, assign to the pseudo section.
 
 ```
 OLD                                                               |
@@ -151,7 +178,7 @@ r := m.Copy()         | r := m.Copy() // Shallow copy!
 Because `Msg` now carries its binary data too there is no need to do TSIG in the server it self, it can now be
 done in a handler. This, again, removes a little of internal code that slowed things down.
 
-The default implementation of `dns.ResponseWriter` is thread safe and this for TCP pipelining, which is thusly
+The default implementation of `dns.ResponseWriter` is thread safe and this for TCP pipe lining, which is thusly
 implemented in `dns.Server`. Writing or reading data is now done with `io.Copy` no more `ReadMsg` or `WriteMsg`.
 
 A handler for instance:
