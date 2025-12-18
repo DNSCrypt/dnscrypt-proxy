@@ -2,6 +2,61 @@
 
 This is the generated changelog for codeberg.org/miekg/dns.
 
+## HEAD - 2025-12-16
+
+23 commits.
+
+
+## v0.6.2 - 2025-12-15
+
+18 commits.
+
+
+## v0.6.1 - 2025-12-14
+
+10 commits.
+
+
+## v0.6.0 - 2025-12-13
+
+10 commits.
+
+
+## v0.5.38 - 2025-12-13
+
+6 commits.
+
+
+## v0.5.37 - 2025-12-13
+
+31 commits.
+
+
+## v0.5.36 - 2025-12-10
+
+8 commits.
+
+
+## v0.5.35 - 2025-12-10
+
+13 commits.
+
+
+## v0.5.34 - 2025-12-06
+
+6 commits. With the following change log.
+
+* d2701d1 Rename NewDefaultTransport to NewTransport. (Miek Gieben)
+* d2701d1 Prepare to get rid of ExchangeWithConn by overriding Transport's Dial. (Miek Gieben)
+
+## v0.5.33 - 2025-12-05
+
+39 commits. With the following change log.
+
+* 43ba136 Atomdns: add tsig handler. (Miek Gieben)
+* c2427ee Atomdns: rename subnet to ecs. (Miek Gieben)
+* 7519646 Add subnet handler, a edns0 subnet client context setter. (Miek Gieben)
+* 990fd1c Atomdns,geoip: set region codes. Also allow []string in the context. (Miek Gieben)
 
 ## v0.5.32 - 2025-12-03
 
