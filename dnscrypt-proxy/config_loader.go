@@ -166,9 +166,6 @@ func configureDoHClientAuth(proxy *Proxy, config *Config) error {
 
 // configureServerParams - Configures server parameters
 func configureServerParams(proxy *Proxy, config *Config) {
-	// Handle legacy response format for blocked queries (handled elsewhere)
-	// This is handled in the main ConfigLoad function
-
 	proxy.blockedQueryResponse = config.BlockedQueryResponse
 	proxy.timeout = time.Duration(config.Timeout) * time.Millisecond
 	proxy.maxClients = config.MaxClients
