@@ -121,6 +121,7 @@ func configureXTransport(proxy *Proxy, config *Config) error {
 		}
 		proxy.xTransport.proxyDialer = &proxyDialer
 		proxy.mainProto = "tcp"
+		proxy.xTransport.mainProto = "tcp"
 	}
 
 	proxy.xTransport.rebuildTransport()
