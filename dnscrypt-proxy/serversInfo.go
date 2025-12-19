@@ -721,7 +721,7 @@ func fetchDNSCryptServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp
 	certInfo, rtt, fragmentsBlocked, err := FetchCurrentDNSCryptCert(
 		proxy,
 		&name,
-		proxy.mainProto,
+		proxy.xTransport.mainProto,
 		stamp.ServerPk,
 		stamp.ServerAddrStr,
 		stamp.ProviderName,
@@ -757,7 +757,7 @@ func fetchDNSCryptServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp
 		query := plainNXTestPacket(0xcafe)
 		msg, _, _, err := DNSExchange(
 			proxy,
-			proxy.mainProto,
+			proxy.xTransport.mainProto,
 			&query,
 			stamp.ServerAddrStr,
 			dnscryptRelay,

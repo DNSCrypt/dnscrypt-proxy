@@ -100,7 +100,7 @@ func (plugin *PluginDNS64) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 	}
 	respPacket := plugin.proxy.processIncomingQuery(
 		"trampoline",
-		plugin.proxy.mainProto,
+		plugin.proxy.xTransport.mainProto,
 		msgAPacket,
 		nil,
 		nil,

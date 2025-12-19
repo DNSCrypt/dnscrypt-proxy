@@ -383,7 +383,7 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	// Configure server parameters
 	configureServerParams(proxy, &config)
 
-	// Configure XTransport (needs proxy.mainProto to be set)
+	// Configure XTransport (may override mainProto if proxy is configured)
 	if err := configureXTransport(proxy, &config); err != nil {
 		return err
 	}
