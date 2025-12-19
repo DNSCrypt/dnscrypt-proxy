@@ -380,7 +380,10 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	// Configure logging
 	configureLogging(proxy, flags, &config)
 
-	// Configure XTransport
+	// Configure server parameters
+	configureServerParams(proxy, &config)
+
+	// Configure XTransport (needs proxy.mainProto to be set)
 	if err := configureXTransport(proxy, &config); err != nil {
 		return err
 	}
@@ -389,9 +392,6 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	if err := configureDoHClientAuth(proxy, &config); err != nil {
 		return err
 	}
-
-	// Configure server parameters
-	configureServerParams(proxy, &config)
 
 	// Configure load balancing
 	configureLoadBalancing(proxy, &config)
