@@ -213,11 +213,17 @@ func (o *SUBNET) pack(msg []byte, off int) (int, error) {
 	off++
 	msg[off] = o.SourceScope
 	off++
+	// RFC 7871: Only write the significant bytes based on the source prefix length
+	numBytes := (int(o.SourceNetmask) + 7) / 8
 	switch o.Family {
 	case 1:
-		msg[off] = 32
+		addr := o.Address.As4()
+		copy(msg[off:off+numBytes], addr[:numBytes])
+		off += numBytes
 	case 2:
-		msg[off] = 128
+		addr := o.Address.As16()
+		copy(msg[off:off+numBytes], addr[:numBytes])
+		off += numBytes
 	default:
 		return off, errors.New("dns: bad address family")
 	}
@@ -234,19 +240,27 @@ func (o *SUBNET) unpack(s *cryptobyte.String) (err error) {
 	if !s.ReadUint8(&o.SourceScope) {
 		return unpack.ErrOverflow
 	}
+	// RFC 7871: Only the significant bytes are present based on the prefix length
+	numBytes := (int(o.SourceNetmask) + 7) / 8
 	switch o.Family {
 	case 0:
 		o.Address = netip.MustParseAddr("0.0.0.0")
 	case 1:
-		o.Address, err = unpack.A(s)
-		if err != nil {
-			return err
+		addr := make([]byte, 4)
+		partial := make([]byte, numBytes)
+		if !s.CopyBytes(partial) {
+			return unpack.ErrOverflow
 		}
+		copy(addr, partial)
+		o.Address, _ = netip.AddrFromSlice(addr)
 	case 2:
-		o.Address, err = unpack.AAAA(s)
-		if err != nil {
-			return err
+		addr := make([]byte, 16)
+		partial := make([]byte, numBytes)
+		if !s.CopyBytes(partial) {
+			return unpack.ErrOverflow
 		}
+		copy(addr, partial)
+		o.Address, _ = netip.AddrFromSlice(addr)
 	default:
 		return errors.New("dns: bad address family")
 	}

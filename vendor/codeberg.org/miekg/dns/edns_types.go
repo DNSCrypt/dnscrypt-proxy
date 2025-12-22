@@ -300,7 +300,11 @@ type SUBNET struct {
 	Address       netip.Addr // Client IP address.
 }
 
-func (o *SUBNET) Len() int { return tlv + 2 + 2 + o.Address.BitLen()/8 }
+func (o *SUBNET) Len() int {
+	// RFC 7871: Only the significant bytes based on the source prefix length
+	numBytes := (int(o.SourceNetmask) + 7) / 8
+	return tlv + 2 + 2 + numBytes
+}
 func (o *SUBNET) String() string {
 	sb := sprintOptionHeader(o)
 	switch {
