@@ -112,16 +112,13 @@ const MinStreamFrameSize ByteCount = 128
 // we send after the handshake completes.
 const MaxPostHandshakeCryptoFrameSize = 1000
 
-// MaxAckFrameSize is the maximum size for an ACK frame that we write
-// Due to the varint encoding, ACK frames can grow (almost) indefinitely large.
-// The MaxAckFrameSize should be large enough to encode many ACK range,
-// but must ensure that a maximum size ACK frame fits into one packet.
-const MaxAckFrameSize ByteCount = 1000
-
 // MaxNumAckRanges is the maximum number of ACK ranges that we send in an ACK frame.
 // It also serves as a limit for the packet history.
 // If at any point we keep track of more ranges, old ranges are discarded.
-const MaxNumAckRanges = 32
+//
+// This value also guarantees that ACK Range Count value in the ACK frame can be encoded
+// in a single byte varint.
+const MaxNumAckRanges = 64
 
 // MinPacingDelay is the minimum duration that is used for packet pacing
 // If the packet packing frequency is higher, multiple packets might be sent at once.
