@@ -27,7 +27,7 @@ Or even:
 
 	mx, err := dns.New("$ORIGIN nl.\nmiek 1H IN MX 10 mx.miek")
 
-In the DNS, messages are exchanged, these messages contain RRs ([RRset]s). Use pattern for creating a message:
+In the DNS, messages are exchanged, these messages contain RRs (RRsets). Use pattern for creating a message:
 
 	m := new(dns.Msg)
 	m.Question = []dns.RR{mx}
@@ -90,7 +90,7 @@ bit to a request.
 When sending a message [Msg.Pack] is called, this takes care of allocating an OPT RR and setting the DO bit and the
 UDPSize in there.
 
-Signature generation, signature verification (See [RRSIG]) and key generation are all supported.
+Signature generation, signature verification (see [RRSIG]) and key generation are all supported.
 
 # EDNS0
 

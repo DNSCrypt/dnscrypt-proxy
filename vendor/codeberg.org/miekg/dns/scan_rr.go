@@ -514,15 +514,16 @@ func (rr *NAPTR) parse(c *zlexer, o string) *ParseError {
 		return &ParseError{err: "bad NAPTR Flags", lex: l}
 	}
 	l, _ = c.Next() // Either String or Quote
-	if l.value == zString {
+	switch l.value {
+	case zString:
 		rr.Flags = l.token
 		l, _ = c.Next() // _QUOTE
 		if l.value != zQuote {
 			return &ParseError{err: "bad NAPTR Flags", lex: l}
 		}
-	} else if l.value == zQuote {
+	case zQuote:
 		rr.Flags = ""
-	} else {
+	default:
 		return &ParseError{err: "bad NAPTR Flags", lex: l}
 	}
 
@@ -533,15 +534,16 @@ func (rr *NAPTR) parse(c *zlexer, o string) *ParseError {
 		return &ParseError{err: "bad NAPTR Service", lex: l}
 	}
 	l, _ = c.Next() // Either String or Quote
-	if l.value == zString {
+	switch l.value {
+	case zString:
 		rr.Service = l.token
 		l, _ = c.Next() // _QUOTE
 		if l.value != zQuote {
 			return &ParseError{err: "bad NAPTR Service", lex: l}
 		}
-	} else if l.value == zQuote {
+	case zQuote:
 		rr.Service = ""
-	} else {
+	default:
 		return &ParseError{err: "bad NAPTR Service", lex: l}
 	}
 
@@ -552,15 +554,16 @@ func (rr *NAPTR) parse(c *zlexer, o string) *ParseError {
 		return &ParseError{err: "bad NAPTR Regexp", lex: l}
 	}
 	l, _ = c.Next() // Either String or Quote
-	if l.value == zString {
+	switch l.value {
+	case zString:
 		rr.Regexp = l.token
 		l, _ = c.Next() // _QUOTE
 		if l.value != zQuote {
 			return &ParseError{err: "bad NAPTR Regexp", lex: l}
 		}
-	} else if l.value == zQuote {
+	case zQuote:
 		rr.Regexp = ""
-	} else {
+	default:
 		return &ParseError{err: "bad NAPTR Regexp", lex: l}
 	}
 

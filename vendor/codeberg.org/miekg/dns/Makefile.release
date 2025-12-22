@@ -40,7 +40,7 @@ release: commit push
 commit:
 	@echo Committing release $(VERSION)
 	git commit -am"Release $(VERSION)"
-	git tag $(TAG)
+	git tag -am $(TAG) $(TAG)
 
 .PHONY: push
 push:

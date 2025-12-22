@@ -294,10 +294,10 @@ func (o *EDE) String() string {
 //
 // This record must be put in the pseudo section.
 type SUBNET struct {
-	Family        uint16 // 1 for IP, 2 for IP6.
-	SourceNetmask uint8  // 32 for IPV4, 128 for IPv6.
-	SourceScope   uint8
-	Address       netip.Addr // Client IP address.
+	Family  uint16 // 1 for IP, 2 for IP6.
+	Netmask uint8  // 32 for IPV4, 128 for IPv6.
+	Scope   uint8
+	Address netip.Addr // Client IP address.
 }
 
 func (o *SUBNET) Len() int { return tlv + 2 + 2 + o.Address.BitLen()/8 }
@@ -314,9 +314,9 @@ func (o *SUBNET) String() string {
 		sb.WriteByte(']')
 	}
 	sb.WriteByte('/')
-	sb.WriteString(strconv.Itoa(int(o.SourceNetmask)))
+	sb.WriteString(strconv.Itoa(int(o.Netmask)))
 	sb.WriteByte('/')
-	sb.WriteString(strconv.Itoa(int(o.SourceScope)))
+	sb.WriteString(strconv.Itoa(int(o.Scope)))
 	s := sb.String()
 	builderPool.Put(*sb)
 	return s

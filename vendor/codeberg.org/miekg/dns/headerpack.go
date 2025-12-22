@@ -10,7 +10,8 @@ import (
 // all need to move to internal/pack or internal/unpack
 
 // unpackHeader unpacks an RR header advancing msg.
-func unpackHeader(msg *cryptobyte.String, msgBuf []byte) (h Header, typ, rdlength uint16, err error) {
+func unpackHeader(msg *cryptobyte.String, msgBuf []byte) (h *Header, typ, rdlength uint16, err error) {
+	h = new(Header)
 	h.Name, err = unpack.Name(msg, msgBuf)
 	if err != nil {
 		return h, 0, 0, err

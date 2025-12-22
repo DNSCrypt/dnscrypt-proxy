@@ -36,7 +36,6 @@ Read:
 				srv.MsgPool.Put(r.Data)
 				continue Read
 			}
-			// TODO(miek): oob?
 			w := &response{conn: pc.(*net.UDPConn), session: &Session{src.(*net.UDPAddr), nil}}
 			wg.Add(1) // no wg.Go to prevent defer usage
 			go func() {

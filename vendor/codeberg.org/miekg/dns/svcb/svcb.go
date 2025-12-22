@@ -1,4 +1,4 @@
-// Package svcb deals with all the intricacies of the SVCB/HTTPS RR. All the sub-types ([Pairs]) used in
+// Package svcb deals with all the intricacies of the SVCB/HTTPS RR. All the sub-types ([Pair]) used in
 // the RR are defined here.
 package svcb
 
@@ -359,7 +359,7 @@ func (*OHTTP) String() string { return "" }
 func (*OHTTP) Len() int       { return tlv + 0 }
 
 // LOCAL pair is intended for experimental/private use. The key is recommended
-// to be in the range [SVCB_PRIVATE_LOWER, SVCB_PRIVATE_UPPER].
+// to be in the range [65280, 65534], see Section 14.3.2. of RFC 9460.
 // Basic use pattern for creating a keyNNNNN option:
 //
 //	h := &dns.HTTPS{Hdr: dns.Header{Name: ".", Class: dns.ClassINET}}

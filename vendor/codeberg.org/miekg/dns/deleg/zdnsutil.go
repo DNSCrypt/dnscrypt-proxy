@@ -118,7 +118,7 @@ func dnsutilIsName(s string) bool {
 		off   uint16
 		begin uint16
 	)
-	for i := uint16(0); i < ls; i++ {
+	for i := range ls {
 		switch s[i] {
 		case '.':
 			labelLen := i - begin
@@ -203,7 +203,7 @@ func dnsutilAbsolute(s, origin string) string {
 	if s == "\n" || s == "" { // this can happen when a zone is parsed, internal quirk, should not be here...
 		return ""
 	}
-	if dnsutilIsName(s) == false { // done to make the conversion via dnsutil_generate.go work.
+	if dnsutilIsName(s) == false { // done to make the conversion via dnsutil_generate.go work, instead of !IsName(s)
 		return ""
 	}
 	if dnsutilIsFqdn(s) {

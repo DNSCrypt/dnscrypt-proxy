@@ -2,27 +2,24 @@
 [![Go Doc](https://godoc.org/coreberg.org/miekg/dns?status.svg)](https://godoc.org/codeberg.org/miekg/dns)
 [![status-badge](https://ci.codeberg.org/api/badges/15045/status.svg)](https://ci.codeberg.org/repos/15045)
 
-Major changes:
-
-In #470 the rdata was split off into a rdata subpackage. See #258 and https://miek.nl/2022/july/15/a-miekg/dns-v2-package/,
-where I expressed this need also.
-
-In #468 as mass move to the netip package was made.
-
 # Even more alternative approach to a DNS library (version 2)
 
 # Status
 
 - Fast(er); recvmmsg and pipeling suppport.
-  - Since a46996c I can get 370K (UDP) qps on my laptop (M2/Asahi Linux).
+  - Since a46996c I can get ~370K (UDP) qps on my laptop (M2/Asahi Linux), also see 1766e44.
   - On my Dell XPS 17 (Intel) it is similar.
-  - On Intel/AMD it is lower (200K (UDP) qps) - yet to understand why.
-  - See `cmd/reflect` and do a `go build; go test -v`. Requires `dnsperf` to be installed.
-- More convenience functions included in _dns_ or otherwise in _dnsutils_.
-- Test helper function included _dnstest_.
-- Example programs included _and_ benchmarked in `cmd/`, [`cmd/atomdns`](https://codeberg.org/miekg/dns/src/branch/main/cmd/atomdns/README.md)
-  runs as a nameserver on my server.
-- Everything from <https://github.com/miekg/dns> should work. See README-diff-with-v1.md for the differences.
+  - On Intel/AMD it is lower (~200K (UDP) qps) - yet to understand why.
+  - See `cmd/reflect` and do a `go build; make new.txt`. Requires `dnsperf` to be installed.
+- Many more convenience functions included in _dns_ or otherwise in _dnsutils_.
+- Test helper function included _dnstest_, ala _httptest_, also includes useful function for non-test code.
+- Example programs included _and_ benchmarked in `cmd`, [`cmd/atomdns`](https://codeberg.org/miekg/dns/src/branch/main/cmd/atomdns/README.md)
+  which is a full blown production ready name server.
+- Everything from <https://github.com/miekg/dns> should work. See
+  [README-diff-with-v1.md](https://codeberg.org/miekg/dns/src/branch/main/README-diff-with-v1.md) for the differences.
+
+For developers please read the
+[developer README](https://codeberg.org/miekg/dns/src/branch/main/README-dev.md).
 
 > Less is more.
 
@@ -43,6 +40,7 @@ wins. See PADDING and DPADDING as an example.
 
 - KISS.
 - Everything is an resource record.
+  - Easy way to access RR's header and resource data (rdata).
 - Small API.
   - Package _dnsutil_ contains functions that help programmers, but are not nessecarily in scope the the
     _dns_ package.
@@ -51,7 +49,7 @@ wins. See PADDING and DPADDING as an example.
   - Pacakge _deleg_ holds details for the DELEG record.
   - Many helper/debug functions are moved into _internal_ packages, making the top-level much, much cleaner.
 - Fast.
-  - The cmd/reflect server does 400K/380K UDP/TCP respectively on the right hardware.
+  - The cmd/reflect server does ~370/300K UDP/TCP respectively on the right hardware.
     (As stated, unsure why other machines qps numbers are lower).
 
 # Users
@@ -60,12 +58,30 @@ A not-so-up-to-date-list-that-may-be-actually-current:
 
 - atomdns - included in cmd/atomdns - a high performance DNS server, based on the principles of CoreDNS, but
   faster and simpler.
+- [dnscrypt-proxy](https://github.com/DNSCrypt/dnscrypt-proxy) - a flexible DNS proxy, with support for
+  encrypted DNS protocols such as DNSCrypt v2, DOH, Anonymized DNSCrypt and
+  [ODOH](https://developers.cloudflare.com/1.1.1.1/encryption/oblivious-dns-over-https/).
+- [DNSControl](https://dnscontrol.org/) - DNSControl is an opinionated platform for seamlessly managing your DNS configuration across any number of DNS hosts,
+  both in the cloud or in your own infrastructure.
 
 Send pull request if you want to be listed here.
 
+## Comments
+
+What users say:
+
+> miekg/dns is probably my favorite Go module in the open source ecosystem. It is very complete (every DNS rtype is defined)
+> and strict (field names match the RFCs, etc). DNSControl has used miekg/dns since the first release.
+
+- <https://codeberg.org/miekg/dns/issues/258#issue-2471506>
+
+> Your library is a blast and I cannot thank you enough 🙏.
+
+- <https://infosec.exchange/@x_cli/115745919220339651>
+
 # Features
 
-- UDP/TCP queries, recvmmsg, TCP query-pipelining, IPv4 and IPv6.
+- UDP/TCP queries, recvmmsg(2), TCP query-pipelining, IPv4 and IPv6.
 - Fast(er).
 - RFC 1035 zone file parsing ($INCLUDE, $ORIGIN, $TTL and $GENERATE - for _all_ record types) is supported.
 - Server side programming (mimicking the net/http package), with `dns.Handle` and `dns.HandleFunc` allowing
@@ -78,6 +94,7 @@ Send pull request if you want to be listed here.
 - DNS over TLS (DOT): encrypted connection between client and server over TCP.
 - DNS over HTTP (DOH), see the _dnshttp_ package.
 - Improved naming by embracing sub-packages.
+- Improved RRs, by having the rdata specified in an _rdata_ package.
 - Examples included the cmd/ directory.
 - Escapes (\DDD and \x) in domain names is not supported (anymore) - the overhead (50-100%) was too high.
 
@@ -108,7 +125,7 @@ developed in tandem with the library.
 
 ## Supported RFCs
 
-_all of them_
+_all of them_ and _then some_
 
 - 103{4,5} - DNS standard
 - 1348 - NSAP record (removed the record)
