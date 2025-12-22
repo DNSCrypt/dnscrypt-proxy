@@ -312,6 +312,7 @@ func (plugin *PluginForward) Eval(pluginsState *PluginsState, msg *dns.Msg) erro
 		// Create a clean copy of the message without Extra section for forwarding
 		forwardMsg := msg.Copy()
 		forwardMsg.Extra = nil
+		forwardMsg.Data = nil // Clear packed data so Exchange will re-pack without Extra
 
 		respMsg, _, err = client.Exchange(ctx, forwardMsg, pluginsState.serverProto, server)
 		if err != nil {
