@@ -1,137 +1,41 @@
+name: Build Optimized Go Binary
+
 on:
   push:
-    paths:
-      - "**.go"
-      - "go.*"
-      - "**/testdata/**"
-      - ".ci/**"
-      - ".git*"
-      - ".github/workflows/releases.yml"
-  pull_request:
-    paths:
-      - "**.go"
-      - "go.*"
-      - "**/testdata/**"
-      - ".ci/**"
-      - ".git*"
-      - ".github/workflows/releases.yml"
-
-name: GitHub CI
+  workflow_dispatch:
 
 jobs:
   build:
-    name: Build
+    name: Build (Linux/AMD64)
     runs-on: ubuntu-latest
     steps:
-      - name: Get the version
-        id: get_version
-        run: |
-          if [[ $GITHUB_REF == refs/tags/* ]]; then
-            VERSION=${GITHUB_REF/refs\/tags\//}
-          else
-            VERSION="dev-$(date +'%Y%m%d-%H%M%S')-${GITHUB_SHA::8}"
-          fi
-          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
-          echo "Tag version: $VERSION"
-
-      - name: Check out code
+      - name: Checkout code
         uses: actions/checkout@v6
 
-      - name: Set up Go
+      - name: Setup Go 1.25
         uses: actions/setup-go@v6
         with:
-          go-version: 1
-          check-latest: true
-        id: go
+          go-version: '1.25.5'
+          cache: true 
 
-      - name: Test suite
+      - name: Build Optimized Binary
+        env:
+          CGO_ENABLED: 0
+          GOOS: linux
+          GOARCH: amd64
+          GOAMD64: v3
+          GODEBUG: "thp=1,netdns=go"
         run: |
-          go version
-          cd .ci
-          ./ci-test.sh
-          cd -
+          go build \
+            -trimpath \
+            -ldflags="-s -w" \
+            -o dnscrypt-proxy \
+            ./dnscrypt-proxy
 
-      - name: Build all
-        run: |
-          .ci/ci-build.sh "${{ steps.get_version.outputs.VERSION }}"
-
-      - name: Package
-        run: |
-          .ci/ci-package.sh "${{ steps.get_version.outputs.VERSION }}"
-
-      - name: Install minisign and sign
-        if: startsWith(github.ref, 'refs/tags/')
-        run: |
-          sudo apt-get -y install libsodium-dev
-          git clone --depth 1 https://github.com/jedisct1/minisign.git
-          cd minisign/src
-          mkdir -p /tmp/bin
-          cc -O2 -o /tmp/bin/minisign -D_GNU_SOURCE *.c -lsodium
-          cd -
-          /tmp/bin/minisign -v
-          echo '#' > /tmp/minisign.key
-          echo "${{ secrets.MINISIGN_SK }}" >> /tmp/minisign.key
-          cd dnscrypt-proxy
-          echo | /tmp/bin/minisign -s /tmp/minisign.key -Sm *.tar.gz *.zip
-          ls -l dnscrypt-proxy*
-
-      - name: Upload artifacts
+      - name: Upload Artifact
         uses: actions/upload-artifact@v6
         with:
-          name: dnscrypt-proxy-${{ steps.get_version.outputs.VERSION }}
-          path: |
-            dnscrypt-proxy/*.zip
-            dnscrypt-proxy/*.tar.gz
-          retention-days: 30
+          name: dnscrypt-proxy-linux-amd64
+          path: dnscrypt-proxy
           if-no-files-found: error
-
-      - name: Check if release exists
-        id: check_release
-        if: startsWith(github.ref, 'refs/tags/')
-        run: |
-          TAG="${GITHUB_REF#refs/tags/}"
-          HTTP_CODE=$(curl -s -o response.json -w "%{http_code}" \
-            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            https://api.github.com/repos/${{ github.repository }}/releases/tags/$TAG)
-          if [ "$HTTP_CODE" = "200" ]; then
-            echo "release_exists=true" >> $GITHUB_ENV
-          else
-            echo "release_exists=false" >> $GITHUB_ENV
-          fi
-
-      - name: Debug Release Existence
-        if: startsWith(github.ref, 'refs/tags/')
-        run: echo "Release exists? ${{ env.release_exists }}"
-
-      - name: Create release and upload assets
-        id: create_release
-        uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/tags/') && env.release_exists == 'false'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          name: Release ${{ github.ref }}
-          draft: false
-          prerelease: false
-          make_latest: true
-          fail_on_unmatched_files: false
-          files: |
-            dnscrypt-proxy/*.zip
-            dnscrypt-proxy/*.tar.gz
-            dnscrypt-proxy/*.minisig
-            dnscrypt-proxy/*.msi
-            
-      - name: Upload assets to existing release
-        id: upload_to_existing_release
-        uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/tags/') && env.release_exists == 'true'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ steps.get_version.outputs.VERSION }}
-          fail_on_unmatched_files: false
-          files: |
-            dnscrypt-proxy/*.zip
-            dnscrypt-proxy/*.tar.gz
-            dnscrypt-proxy/*.minisig
-            dnscrypt-proxy/*.msi
+          retention-days: 5
