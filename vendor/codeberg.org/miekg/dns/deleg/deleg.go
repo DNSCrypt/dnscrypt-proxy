@@ -1,6 +1,6 @@
-// Package deleg deals with all the intricacies of the DELEG RR. All the sub-types ([Infos]) used in the RR are defined here.
-// As DELEG is derived from the [dns.SVCB] RR so there are a lot of similarities. This implements draft
-// version -03.
+// Package deleg deals with all the intricacies of the DELEG RR. All the sub-types ([Info]) used in the RR are defined here.
+// As DELEG is derived from the SVCB RR so there are a lot of similarities. This implements draft version -03
+// and higher.
 package deleg
 
 import (

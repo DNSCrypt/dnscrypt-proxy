@@ -58,17 +58,10 @@ func (h *sentPacketHistory) SkippedPacket(pn protocol.PacketNumber) {
 	h.skippedPackets = append(h.skippedPackets, pn)
 }
 
-func (h *sentPacketHistory) SentNonAckElicitingPacket(pn protocol.PacketNumber) {
-	h.checkSequentialPacketNumberUse(pn)
-	if len(h.packets) > 0 {
-		h.packets = append(h.packets, nil)
-	}
-}
-
-func (h *sentPacketHistory) SentAckElicitingPacket(pn protocol.PacketNumber, p *packet) {
+func (h *sentPacketHistory) SentPacket(pn protocol.PacketNumber, p *packet) {
 	h.checkSequentialPacketNumberUse(pn)
 	h.packets = append(h.packets, p)
-	if p.outstanding() {
+	if p.Outstanding() {
 		h.numOutstanding++
 	}
 }
@@ -111,7 +104,7 @@ func (h *sentPacketHistory) FirstOutstanding() (protocol.PacketNumber, *packet) 
 		return protocol.InvalidPacketNumber, nil
 	}
 	for i, p := range h.packets {
-		if p != nil && p.outstanding() {
+		if p != nil && p.Outstanding() {
 			return h.firstPacketNumber + protocol.PacketNumber(i), p
 		}
 	}
@@ -148,7 +141,7 @@ func (h *sentPacketHistory) Remove(pn protocol.PacketNumber) error {
 		return fmt.Errorf("packet %d not found in sent packet history", pn)
 	}
 	p := h.packets[idx]
-	if p.outstanding() {
+	if p.Outstanding() {
 		h.numOutstanding--
 		if h.numOutstanding < 0 {
 			panic("negative number of outstanding packets")
@@ -243,7 +236,7 @@ func (h *sentPacketHistory) DeclareLost(pn protocol.PacketNumber) {
 		return
 	}
 	p := h.packets[idx]
-	if p.outstanding() {
+	if p.Outstanding() {
 		h.numOutstanding--
 		if h.numOutstanding < 0 {
 			panic("negative number of outstanding packets")

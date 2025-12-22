@@ -895,8 +895,8 @@ func (rr *EDE) Clone() RR {
 func (rr *SUBNET) Clone() RR {
 	return &SUBNET{
 		rr.Family,
-		rr.SourceNetmask,
-		rr.SourceScope,
+		rr.Netmask,
+		rr.Scope,
 		rr.Address,
 	}
 }

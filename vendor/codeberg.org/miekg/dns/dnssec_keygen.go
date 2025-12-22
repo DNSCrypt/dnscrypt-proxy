@@ -61,7 +61,7 @@ func (k *DNSKEY) Generate(bits int) (crypto.PrivateKey, error) {
 		if err != nil {
 			return nil, err
 		}
-		k.setPublicKeyECDSA(priv.PublicKey.X, priv.PublicKey.Y)
+		k.setPublicKeyECDSA(priv.X, priv.Y)
 		return priv, nil
 	case ED25519:
 		pub, priv, err := ed25519.GenerateKey(rand.Reader)

@@ -73,10 +73,10 @@ func (plugin *PluginECS) Eval(pluginsState *PluginsState, msg *dns.Msg) error {
 	}
 
 	subnet := &dns.SUBNET{
-		Family:        family,
-		SourceNetmask: uint8(bits),
-		SourceScope:   0,
-		Address:       addr,
+		Family:  family,
+		Netmask: uint8(bits),
+		Scope:   0,
+		Address: addr,
 	}
 	msg.Pseudo = append(msg.Pseudo, subnet)
 

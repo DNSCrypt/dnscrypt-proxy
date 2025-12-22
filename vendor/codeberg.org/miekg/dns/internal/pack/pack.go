@@ -196,7 +196,7 @@ func Name(s string, msg []byte, off int, compression map[string]uint16, compress
 	)
 
 	var c byte
-	for i := uint16(0); i < ls; i++ {
+	for i := range ls {
 		c = s[i]
 
 		switch c {

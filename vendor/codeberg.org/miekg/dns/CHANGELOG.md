@@ -2,6 +2,86 @@
 
 This is the generated changelog for codeberg.org/miekg/dns.
 
+## HEAD - 2025-12-20
+
+11 commits.
+
+
+## v0.6.6 - 2025-12-19
+
+57 commits. With the following change log.
+
+* 326fb72 Dnshttp: do MsgAcceptFunc similar to main package. (Miek Gieben)
+* eece5cd Atomdns: add kill handler. (Miek Gieben)
+* 760ee12 Atomdns: log ecs/address and id/id if set in the context. (Miek Gieben)
+* fe27af3 Atomdns,id: add id handler that adds a request ID. (Miek Gieben)
+
+## v0.6.5 - 2025-12-17
+
+7 commits. With the following change log.
+
+* a8f63ce Fix SUBNET unpacking bug. (Miek Gieben)
+
+## v0.6.4 - 2025-12-16
+
+10 commits.
+
+
+## v0.6.3 - 2025-12-16
+
+25 commits.
+
+
+## v0.6.2 - 2025-12-15
+
+18 commits.
+
+
+## v0.6.1 - 2025-12-14
+
+10 commits.
+
+
+## v0.6.0 - 2025-12-13
+
+10 commits.
+
+
+## v0.5.38 - 2025-12-13
+
+6 commits.
+
+
+## v0.5.37 - 2025-12-13
+
+31 commits.
+
+
+## v0.5.36 - 2025-12-10
+
+8 commits.
+
+
+## v0.5.35 - 2025-12-10
+
+13 commits.
+
+
+## v0.5.34 - 2025-12-06
+
+6 commits. With the following change log.
+
+* d2701d1 Rename NewDefaultTransport to NewTransport. (Miek Gieben)
+* d2701d1 Prepare to get rid of ExchangeWithConn by overriding Transport's Dial. (Miek Gieben)
+
+## v0.5.33 - 2025-12-05
+
+39 commits. With the following change log.
+
+* 43ba136 Atomdns: add tsig handler. (Miek Gieben)
+* c2427ee Atomdns: rename subnet to ecs. (Miek Gieben)
+* 7519646 Add subnet handler, a edns0 subnet client context setter. (Miek Gieben)
+* 990fd1c Atomdns,geoip: set region codes. Also allow []string in the context. (Miek Gieben)
 
 ## v0.5.32 - 2025-12-03
 

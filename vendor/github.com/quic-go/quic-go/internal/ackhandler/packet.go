@@ -28,8 +28,12 @@ type packet struct {
 	isPathProbePacket       bool
 }
 
-func (p *packet) outstanding() bool {
-	return !p.declaredLost && !p.IsPathMTUProbePacket && !p.isPathProbePacket
+func (p *packet) Outstanding() bool {
+	return !p.declaredLost && !p.IsPathMTUProbePacket && !p.isPathProbePacket && p.IsAckEliciting()
+}
+
+func (p *packet) IsAckEliciting() bool {
+	return len(p.StreamFrames) > 0 || len(p.Frames) > 0
 }
 
 var packetPool = sync.Pool{New: func() any { return &packet{} }}

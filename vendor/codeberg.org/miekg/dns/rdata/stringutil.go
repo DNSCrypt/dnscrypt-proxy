@@ -24,12 +24,13 @@ func cmToM(x uint8) string {
 		return fmt.Sprintf("0.%02d", m)
 	}
 
-	s := fmt.Sprintf("%d", m)
+	var s strings.Builder
+	s.WriteString(fmt.Sprintf("%d", m))
 	for e > 2 {
-		s += "0"
+		s.WriteString("0")
 		e--
 	}
-	return s
+	return s.String()
 }
 
 // sprint write the rdata to sb with spaces between the elements.

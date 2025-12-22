@@ -2,6 +2,7 @@ package qlog
 
 import (
 	"fmt"
+	"hash/crc32"
 
 	"github.com/quic-go/quic-go/internal/protocol"
 	"github.com/quic-go/quic-go/internal/qerr"
@@ -293,3 +294,11 @@ const (
 	// StatelessReset indicates the connection was closed due to receiving a stateless reset from the peer
 	ConnectionCloseTriggerStatelessReset ConnectionCloseTrigger = "stateless_reset"
 )
+
+// DatagramID is a unique identifier for a datagram
+type DatagramID uint32
+
+// CalculateDatagramID computes a DatagramID for a given packet
+func CalculateDatagramID(packet []byte) DatagramID {
+	return DatagramID(crc32.ChecksumIEEE(packet))
+}

@@ -78,12 +78,8 @@ var RcodeToString = map[uint16]string{
 }
 
 // packQuestion packs an RR into a question section.
-func packQuestion(rr RR, msg []byte, off int) (off1 int, err error) {
-	if rr == nil {
-		return len(msg), &Error{err: "nil rr"}
-	}
-
-	off, err = pack.Name(rr.Header().Name, msg, off, nil, false)
+func packQuestion(rr RR, msg []byte, off int, compression map[string]uint16) (off1 int, err error) {
+	off, err = pack.Name(rr.Header().Name, msg, off, compression, false)
 	if err != nil {
 		return len(msg), err
 	}
@@ -101,10 +97,6 @@ func packQuestion(rr RR, msg []byte, off int) (off1 int, err error) {
 }
 
 func packRR(rr RR, msg []byte, off int, compression map[string]uint16) (headerEnd int, off1 int, err error) {
-	if rr == nil {
-		return len(msg), len(msg), &pack.Error{Err: "nil rr"}
-	}
-
 	rrtype := RRToType(rr)
 	headerEnd, err = rr.Header().packHeader(msg, off, rrtype, compression)
 	if err != nil {
@@ -117,7 +109,7 @@ func packRR(rr RR, msg []byte, off int, compression map[string]uint16) (headerEn
 
 	rdlength := off1 - headerEnd
 	if int(uint16(rdlength)) != rdlength { // overflow
-		return headerEnd, len(msg), pack.Errorf("inconsitent rdata length")
+		return headerEnd, len(msg), pack.Errorf("inconsistent rdata length")
 	}
 
 	// The RDLENGTH field is the last field in the header and we set it here.
@@ -130,26 +122,22 @@ func unpackRR(msg *cryptobyte.String, msgBuf []byte) (RR, error) {
 	if err != nil {
 		return nil, err
 	}
-	return unpackRRWithHeader(h, typ, rdlength, msg, msgBuf)
-}
 
-func unpackRRWithHeader(h Header, typ, rdlength uint16, msg *cryptobyte.String, msgBuf []byte) (RR, error) {
 	var data []byte
 	if !msg.ReadBytes(&data, int(rdlength)) {
-		h := h // Avoid spilling h to the heap in the happy path.
-		return &h, unpack.ErrTruncatedMessage
+		return h, unpack.ErrTruncatedMessage
 	}
 
-	// Restrict msgBuf to the end of the RR (the current position of msg) so
-	// that we compute the correct offset in unpack.Name.
+	// Restrict msgBuf to the end of the RR (the current position of msg) so that we compute the correct offset
+	// in unpack.Name.
 	msgBuf = msgBuf[:unpack.Offset(*msg, msgBuf)]
 
 	var rr RR
 	if newFn, ok := TypeToRR[typ]; ok {
 		rr = newFn()
-		*rr.Header() = h
+		*rr.Header() = *h
 	} else {
-		rr = &RFC3597{Hdr: h}
+		rr = &RFC3597{Hdr: *h}
 	}
 
 	if len(data) == 0 {
@@ -163,16 +151,7 @@ func unpackRRWithHeader(h Header, typ, rdlength uint16, msg *cryptobyte.String, 
 	return rr, nil
 }
 
-// Pack packs a Msg: it is converted to to wire format.
 func (m *Msg) Pack() error {
-	if m.isCompressible() {
-		compressions := make(map[string]uint16) // Compression pointer mappings.
-		return m.pack(compressions)
-	}
-	return m.pack(nil)
-}
-
-func (m *Msg) pack(compression map[string]uint16) (err error) {
 	// Convert convenient Msg into wire-like Header.
 	var dh header
 	dh.ID = m.ID
@@ -215,14 +194,22 @@ func (m *Msg) pack(compression map[string]uint16) (err error) {
 
 	// Pack it in: header and then the pieces.
 	off := 0
+	var err error
 	if off, err = dh.pack(m.Data, off); err != nil {
 		return err
 	}
+
+	// Is this compressible?
+	var compression map[string]uint16
+	if len(m.Question) > 1 || len(m.Answer) > 0 || len(m.Ns) > 0 || len(m.Extra) > 0 {
+		compression = map[string]uint16{}
+	}
+
 	for _, r := range m.Question {
-		if off, err = packQuestion(r, m.Data, off); err != nil {
+		if off, err = packQuestion(r, m.Data, off, compression); err != nil {
 			return err
 		}
-		break
+		break // allow only one
 	}
 	for _, r := range m.Answer {
 		if _, off, err = packRR(r, m.Data, off, compression); err != nil {
@@ -308,13 +295,13 @@ func (m *Msg) unpackQuestion(msg *cryptobyte.String, msgBuf []byte) (RR, error) 
 	}
 	var qtype uint16
 	if !msg.Empty() && !msg.ReadUint16(&qtype) {
-		return nil, unpack.Errorf("overflow: %s", "question.Type")
+		return nil, unpack.Errorf("overflow %s", "Question type")
 	}
 	m.qtype = qtype
 
 	var qclass uint16
 	if !msg.Empty() && !msg.ReadUint16(&qclass) {
-		return nil, unpack.Errorf("overflow: %s", "question.Class")
+		return nil, unpack.Errorf("overflow %s", "Question class")
 	}
 
 	var rr RR
@@ -449,7 +436,7 @@ func (m *Msg) Unpack() error {
 	s := cryptobyte.String(m.Data)
 	var dh header
 	if !dh.unpack(&s) {
-		return unpack.Errorf("overflow: %s", "MsgHeader")
+		return unpack.Errorf("overflow %s", "MsgHeader")
 	}
 	m.setMsgHeader(dh)
 	if m.Options > 0 && m.Options <= MsgOptionUnpackHeader {
@@ -588,13 +575,6 @@ func (m *Msg) String() string {
 	s := sb.String()
 	builderPool.Put(sb)
 	return s
-}
-
-// isCompressible returns whether the msg may be compressible.
-func (m *Msg) isCompressible() bool {
-	// If we only have one question, there is nothing we can ever compress.
-	return len(m.Question) > 1 || len(m.Answer) > 0 ||
-		len(m.Ns) > 0 || len(m.Extra) > 0
 }
 
 // isPseudo returns (1) true of we should have a pseudo section in this message, or not (0). It returns an

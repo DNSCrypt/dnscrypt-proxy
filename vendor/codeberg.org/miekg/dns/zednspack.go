@@ -3,9 +3,8 @@ package dns
 // should be generated, it is not...
 
 import (
-	"encoding/binary"
 	"encoding/hex"
-	"errors"
+	"net"
 	"net/netip"
 
 	"codeberg.org/miekg/dns/internal/pack"
@@ -141,7 +140,7 @@ func (o *EDE) unpack(s *cryptobyte.String) (err error) {
 		return unpack.ErrOverflow
 	}
 	if o.ExtraText, err = unpack.StringAny(s, len(*s)); err != nil {
-		return unpack.Errorf("overflow: %s", "EDE option")
+		return unpack.Errorf("overflow EDE option")
 	}
 	return nil
 }
@@ -158,17 +157,13 @@ func (o *EDE) pack(msg []byte, off int) (int, error) {
 func (e *REPORTING) unpack(s *cryptobyte.String) (err error) {
 	e.AgentDomain, err = unpack.Name(s, nil) // TODO: unpackNAme with nil buffer, no compression pointers..
 	if err != nil {
-		return unpack.Errorf("overflow: %s", "REPORTING agent domain")
+		return unpack.Errorf("overflow REPORTING agent domain")
 	}
 	return nil
 }
 
 func (e *REPORTING) pack(msg []byte, off int) (int, error) {
-	off, err := pack.Name(e.AgentDomain, msg, off, nil, false)
-	if err != nil {
-		return off, err
-	}
-	return off, nil
+	return pack.Name(e.AgentDomain, msg, off, nil, false)
 }
 
 func (o *EXPIRE) pack(msg []byte, off int) (int, error) {
@@ -207,25 +202,54 @@ func (o *TCPKEEPALIVE) unpack(s *cryptobyte.String) error {
 }
 
 func (o *SUBNET) pack(msg []byte, off int) (int, error) {
-	binary.BigEndian.PutUint16(msg[off:], o.Family)
-	off += 2
-	msg[off] = o.SourceNetmask
-	off++
-	msg[off] = o.SourceScope
-	off++
-	// RFC 7871: Only write the significant bytes based on the source prefix length
-	numBytes := (int(o.SourceNetmask) + 7) / 8
+	var err error
+	if off, err = pack.Uint16(o.Family, msg, off); err != nil {
+		return off, err
+	}
+	if off, err = pack.Uint8(o.Netmask, msg, off); err != nil {
+		return off, err
+	}
+	if off, err = pack.Uint8(o.Scope, msg, off); err != nil {
+		return off, err
+	}
+
+	n := int((o.Netmask + 7) / 8)
 	switch o.Family {
 	case 1:
-		addr := o.Address.As4()
-		copy(msg[off:off+numBytes], addr[:numBytes])
-		off += numBytes
+		if n > net.IPv4len {
+			return off, pack.Errorf("overflow SUBNET a Netmask")
+		}
+		if n == 0 {
+			return off, nil
+		}
+		addr := o.Address.Unmap()
+		if !addr.IsValid() || !addr.Is4() {
+			return off, pack.Errorf("bad address family")
+		}
+		if off+n > len(msg) {
+			return len(msg), pack.ErrBuf
+		}
+		a := addr.As4()
+		copy(msg[off:off+n], a[:n])
+		off += n
 	case 2:
-		addr := o.Address.As16()
-		copy(msg[off:off+numBytes], addr[:numBytes])
-		off += numBytes
+		if n > net.IPv6len {
+			return off, pack.Errorf("overflow SUBNET aaaa Netmask")
+		}
+		if n == 0 {
+			return off, nil
+		}
+		if !o.Address.IsValid() || !o.Address.Is6() {
+			return off, pack.Errorf("bad address family")
+		}
+		if off+n > len(msg) {
+			return len(msg), pack.ErrBuf
+		}
+		a := o.Address.As16()
+		copy(msg[off:off+n], a[:n])
+		off += n
 	default:
-		return off, errors.New("dns: bad address family")
+		return off, pack.Errorf("bad address family")
 	}
 	return off, nil
 }
@@ -234,35 +258,43 @@ func (o *SUBNET) unpack(s *cryptobyte.String) (err error) {
 	if !s.ReadUint16(&o.Family) {
 		return unpack.ErrOverflow
 	}
-	if !s.ReadUint8(&o.SourceNetmask) {
+	if !s.ReadUint8(&o.Netmask) {
 		return unpack.ErrOverflow
 	}
-	if !s.ReadUint8(&o.SourceScope) {
+	if !s.ReadUint8(&o.Scope) {
 		return unpack.ErrOverflow
 	}
-	// RFC 7871: Only the significant bytes are present based on the prefix length
-	numBytes := (int(o.SourceNetmask) + 7) / 8
+	n := o.Netmask / 8
 	switch o.Family {
 	case 0:
+		// TODO(miek): make something that does not do a full parse.
 		o.Address = netip.MustParseAddr("0.0.0.0")
 	case 1:
-		addr := make([]byte, 4)
-		partial := make([]byte, numBytes)
-		if !s.CopyBytes(partial) {
-			return unpack.ErrOverflow
+		if n > net.IPv4len {
+			return unpack.Errorf("overflow SUBNET a Netmask")
 		}
-		copy(addr, partial)
-		o.Address, _ = netip.AddrFromSlice(addr)
+		in := make([]byte, net.IPv4len)
+		if !s.CopyBytes(in[:n]) {
+			return unpack.Errorf("overflow SUBNET a")
+		}
+		var ok bool
+		if o.Address, ok = netip.AddrFromSlice(in); !ok {
+			return unpack.Errorf("overflow SUBNET a")
+		}
 	case 2:
-		addr := make([]byte, 16)
-		partial := make([]byte, numBytes)
-		if !s.CopyBytes(partial) {
-			return unpack.ErrOverflow
+		if n > net.IPv6len {
+			return unpack.Errorf("overflow SUBNET aaaa Netmask")
 		}
-		copy(addr, partial)
-		o.Address, _ = netip.AddrFromSlice(addr)
+		in := make([]byte, net.IPv6len)
+		if !s.CopyBytes(in[:n]) {
+			return unpack.Errorf("overflow SUBNET aaaa")
+		}
+		var ok bool
+		if o.Address, ok = netip.AddrFromSlice(in); !ok {
+			return unpack.Errorf("overflow SUBNET aaaa")
+		}
 	default:
-		return errors.New("dns: bad address family")
+		return unpack.Errorf("bad address family")
 	}
 	return nil
 }

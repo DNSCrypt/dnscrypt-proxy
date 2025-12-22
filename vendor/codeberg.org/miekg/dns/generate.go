@@ -59,7 +59,7 @@ func (zp *ZoneParser) generate(l lex) (RR, bool) {
 	}
 
 	// Create a complete new string, which we then parse again.
-	var s string
+	sb := builderPool.Get()
 	for l, ok := zp.c.Next(); ok; l, ok = zp.c.Next() {
 		if l.err {
 			return zp.setParseError("bad data in $GENERATE directive", l)
@@ -67,12 +67,11 @@ func (zp *ZoneParser) generate(l lex) (RR, bool) {
 		if l.value == zNewline {
 			break
 		}
-
-		s += l.token
+		sb.WriteString(l.token)
 	}
 
 	r := &generateReader{
-		s: s,
+		s: sb.String(),
 
 		cur:   start,
 		start: start,
@@ -82,6 +81,7 @@ func (zp *ZoneParser) generate(l lex) (RR, bool) {
 		file: zp.file,
 		lex:  &l,
 	}
+	builderPool.Put(sb)
 	zp.sub = NewZoneParser(r, zp.origin, zp.file)
 	zp.sub.includeDepth, zp.sub.IncludeAllowFunc = zp.includeDepth, zp.IncludeAllowFunc
 	zp.sub.generateDisallowed = true

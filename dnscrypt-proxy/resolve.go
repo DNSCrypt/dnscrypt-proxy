@@ -40,10 +40,10 @@ func resolveQuery(server string, qName string, qType uint16, sendClientSubnet bo
 		}
 		addr, _ := netip.AddrFromSlice(subnet.IP)
 		ecsOpt := &dns.SUBNET{
-			Family:        family,
-			SourceNetmask: uint8(bits),
-			SourceScope:   0,
-			Address:       addr,
+			Family:  family,
+			Netmask: uint8(bits),
+			Scope:   0,
+			Address: addr,
 		}
 		msg.Pseudo = append(msg.Pseudo, ecsOpt)
 	}
