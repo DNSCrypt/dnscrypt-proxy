@@ -4,6 +4,7 @@ package main
 
 import (
 	"net"
+	"os"
 	"slices"
 
 	"github.com/coreos/go-systemd/activation"
@@ -23,7 +24,11 @@ func (proxy *Proxy) addSystemDListeners() error {
 		proxy.listenAddresses = make([]string, 0)
 	}
 	for i, file := range files {
-		defer file.Close()
+		defer func(file *os.File) {
+			if file != nil {
+				_ = file.Close()
+			}
+		}(file)
 		var listenAddress string
 		if listener, err := net.FileListener(file); err == nil {
 			proxy.registerTCPListener(listener.(*net.TCPListener))
