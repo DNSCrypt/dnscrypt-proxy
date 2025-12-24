@@ -757,7 +757,7 @@ func (xTransport *XTransport) Fetch(
 	statusCode := 503
 	if resp != nil {
 		defer func(Body io.ReadCloser) {
-			if resp.Body != nil {
+			if resp != nil && resp.Body != nil {
 				_ = resp.Body.Close()
 			}
 		}(resp.Body)
