@@ -459,7 +459,11 @@ func _dnsExchange(
 		if err != nil {
 			return DNSExchangeResponse{err: err}
 		}
-		defer pc.Close()
+		defer func(pc net.Conn) {
+			if pc != nil {
+				_ = pc.Close()
+			}
+		}(pc)
 		if err := pc.SetDeadline(time.Now().Add(proxy.timeout)); err != nil {
 			return DNSExchangeResponse{err: err}
 		}
@@ -498,7 +502,11 @@ func _dnsExchange(
 		if err != nil {
 			return DNSExchangeResponse{err: err}
 		}
-		defer pc.Close()
+		defer func(pc net.Conn) {
+			if pc != nil {
+				_ = pc.Close()
+			}
+		}(pc)
 		if err := pc.SetDeadline(time.Now().Add(proxy.timeout)); err != nil {
 			return DNSExchangeResponse{err: err}
 		}
