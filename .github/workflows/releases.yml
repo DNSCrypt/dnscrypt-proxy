@@ -27,7 +27,7 @@ jobs:
           GODEBUG: "thp=1,netdns=go"
         run: |
           go build \
-            -mod=mod
+            -mod=mod \
             -trimpath \
             -ldflags="-s -w" \
             -o dnscrypt-proxy \
