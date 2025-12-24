@@ -487,20 +487,22 @@ func (xTransport *XTransport) resolveUsingResolver(
 	defer cancel()
 	for _, rrType := range queryType {
 		msg := dns.NewMsg(fqdn(host), rrType)
-		msg.RecursionDesired = true
-		msg.UDPSize = uint16(MaxDNSPacketSize)
-		msg.Security = true
-		var in *dns.Msg
-		if in, _, err = dnsClient.Exchange(ctx, msg, proto, resolver); err == nil {
-			for _, answer := range in.Answer {
-				if dns.RRToType(answer) == rrType {
-					switch rrType {
-					case dns.TypeA:
-						ips = append(ips, answer.(*dns.A).A.Addr.AsSlice())
-					case dns.TypeAAAA:
-						ips = append(ips, answer.(*dns.AAAA).AAAA.Addr.AsSlice())
+		if msg != nil {
+			msg.RecursionDesired = true
+			msg.UDPSize = uint16(MaxDNSPacketSize)
+			msg.Security = true
+			var in *dns.Msg
+			if in, _, err = dnsClient.Exchange(ctx, msg, proto, resolver); err == nil {
+				for _, answer := range in.Answer {
+					if dns.RRToType(answer) == rrType {
+						switch rrType {
+						case dns.TypeA:
+							ips = append(ips, answer.(*dns.A).A.Addr.AsSlice())
+						case dns.TypeAAAA:
+							ips = append(ips, answer.(*dns.AAAA).AAAA.Addr.AsSlice())
+						}
+						rrTTL = answer.Header().TTL
 					}
-					rrTTL = answer.Header().TTL
 				}
 			}
 		}
