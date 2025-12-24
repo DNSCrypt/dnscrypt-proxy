@@ -756,7 +756,11 @@ func (xTransport *XTransport) Fetch(
 	}
 	statusCode := 503
 	if resp != nil {
-		defer resp.Body.Close()
+		defer func(Body io.ReadCloser) {
+			if Body != nil {
+				_ = Body.Close()
+			}
+		}(resp.Body)
 		statusCode = resp.StatusCode
 	}
 	if err != nil {
@@ -820,7 +824,11 @@ func (xTransport *XTransport) Fetch(
 		if err != nil {
 			return nil, statusCode, tls, rtt, err
 		}
-		defer bodyReader.Close()
+		defer func(bodyReader io.ReadCloser) {
+			if bodyReader != nil {
+				_ = bodyReader.Close()
+			}
+		}(bodyReader)
 	}
 
 	bin, err := io.ReadAll(io.LimitReader(bodyReader, MaxHTTPBodyLength))
