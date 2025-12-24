@@ -98,7 +98,11 @@ func (handler localDoHHandler) ServeHTTP(writer http.ResponseWriter, request *ht
 }
 
 func (proxy *Proxy) localDoHListener(acceptPc *net.TCPListener) {
-	defer acceptPc.Close()
+	defer func(acceptPc *net.TCPListener) {
+		if acceptPc != nil {
+			_ = acceptPc.Close()
+		}
+	}(acceptPc)
 	if len(proxy.localDoHCertFile) == 0 || len(proxy.localDoHCertKeyFile) == 0 {
 		dlog.Fatal("A certificate and a key are required to start a local DoH service")
 	}
