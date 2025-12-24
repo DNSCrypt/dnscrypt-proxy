@@ -41,7 +41,9 @@ func NetProbe(proxy *Proxy, address string, timeout int) error {
 			time.Sleep(1 * time.Second)
 			continue
 		}
-		pc.Close()
+		if pc != nil {
+			_ = pc.Close()
+		}
 		dlog.Notice("Network connectivity detected")
 		return nil
 	}

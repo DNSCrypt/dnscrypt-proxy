@@ -103,11 +103,19 @@ func writeSource(f string, bin, sig []byte) error {
 	if fSrc, err = safefile.Create(f, 0o644); err != nil {
 		return err
 	}
-	defer fSrc.Close()
+	defer func(fSrc *safefile.File) {
+		if fSrc != nil {
+			_ = fSrc.Close()
+		}
+	}(fSrc)
 	if fSig, err = safefile.Create(f+".minisig", 0o644); err != nil {
 		return err
 	}
-	defer fSig.Close()
+	defer func(fSig *safefile.File) {
+		if fSig != nil {
+			_ = fSig.Close()
+		}
+	}(fSig)
 	if _, err = fSrc.Write(bin); err != nil {
 		return err
 	}
