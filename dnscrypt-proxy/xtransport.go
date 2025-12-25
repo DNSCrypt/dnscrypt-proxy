@@ -217,14 +217,6 @@ func (xTransport *XTransport) loadCachedIPs(host string) (ips []net.IP, expired 
 	return ips, expired, updating
 }
 
-func (xTransport *XTransport) loadCachedIP(host string) (net.IP, bool, bool) {
-	ips, expired, updating := xTransport.loadCachedIPs(host)
-	if len(ips) > 0 {
-		return ips[0], expired, updating
-	}
-	return nil, expired, updating
-}
-
 func (xTransport *XTransport) rebuildTransport() {
 	dlog.Debug("Rebuilding transport")
 	if xTransport.transport != nil {
