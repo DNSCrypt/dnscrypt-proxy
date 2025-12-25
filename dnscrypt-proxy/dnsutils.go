@@ -200,27 +200,6 @@ func getMinTTL(msg *dns.Msg, minTTL uint32, maxTTL uint32, cacheNegMinTTL uint32
 	return time.Duration(ttl) * time.Second
 }
 
-func setMaxTTL(msg *dns.Msg, ttl uint32) {
-	for _, rr := range msg.Answer {
-		if ttl < rr.Header().TTL {
-			rr.Header().TTL = ttl
-		}
-	}
-	for _, rr := range msg.Ns {
-		if ttl < rr.Header().TTL {
-			rr.Header().TTL = ttl
-		}
-	}
-	for _, rr := range msg.Extra {
-		if dns.RRToType(rr) == dns.TypeOPT {
-			continue
-		}
-		if ttl < rr.Header().TTL {
-			rr.Header().TTL = ttl
-		}
-	}
-}
-
 func updateTTL(msg *dns.Msg, expiration time.Time) {
 	until := time.Until(expiration)
 	ttl := uint32(0)
