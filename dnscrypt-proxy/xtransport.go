@@ -77,7 +77,6 @@ type XTransport struct {
 	http3                    bool
 	http3Probe               bool
 	tlsDisableSessionTickets bool
-	tlsCipherSuite           []uint16
 	proxyDialer              *netproxy.Dialer
 	httpProxyFunction        func(*http.Request) (*url.URL, error)
 	tlsClientCreds           DOHClientCreds
@@ -100,7 +99,6 @@ func NewXTransport() *XTransport {
 		useIPv6:                  false,
 		http3Probe:               false,
 		tlsDisableSessionTickets: false,
-		tlsCipherSuite:           nil,
 		keyLogWriter:             nil,
 	}
 	return &xTransport
@@ -327,40 +325,8 @@ func (xTransport *XTransport) rebuildTransport() {
 		tlsClientConfig.Certificates = []tls.Certificate{cert}
 	}
 
-	overrideCipherSuite := len(xTransport.tlsCipherSuite) > 0
-	if xTransport.tlsDisableSessionTickets || overrideCipherSuite {
-		tlsClientConfig.SessionTicketsDisabled = xTransport.tlsDisableSessionTickets
-		if !xTransport.tlsDisableSessionTickets {
-			tlsClientConfig.ClientSessionCache = tls.NewLRUClientSessionCache(10)
-		}
-		if overrideCipherSuite {
-			tlsClientConfig.PreferServerCipherSuites = false
-			tlsClientConfig.CipherSuites = xTransport.tlsCipherSuite
-
-			// Go doesn't allow changing the cipher suite with TLS 1.3
-			// So, check if the requested set of ciphers matches the TLS 1.3 suite.
-			// If it doesn't, downgrade to TLS 1.2
-			compatibleSuitesCount := 0
-			for _, suite := range tls.CipherSuites() {
-				if suite.Insecure {
-					continue
-				}
-				for _, supportedVersion := range suite.SupportedVersions {
-					if supportedVersion == tls.VersionTLS12 {
-						for _, expectedSuiteID := range xTransport.tlsCipherSuite {
-							if expectedSuiteID == suite.ID {
-								compatibleSuitesCount += 1
-								break
-							}
-						}
-					}
-				}
-			}
-			if compatibleSuitesCount != len(tls.CipherSuites()) {
-				dlog.Notice("Explicit cipher suite configured - downgrading to TLS 1.2")
-				tlsClientConfig.MaxVersion = tls.VersionTLS12
-			}
-		}
+	if xTransport.tlsDisableSessionTickets {
+		tlsClientConfig.SessionTicketsDisabled = true
 	}
 	transport.TLSClientConfig = &tlsClientConfig
 	if http2Transport, _ := http2.ConfigureTransports(transport); http2Transport != nil {
@@ -761,13 +727,6 @@ func (xTransport *XTransport) Fetch(
 	}
 	if err != nil {
 		dlog.Debugf("[%s]: [%s]", req.URL, err)
-		if xTransport.tlsCipherSuite != nil && strings.Contains(err.Error(), "handshake failure") {
-			dlog.Warnf(
-				"TLS handshake failure - Try changing or deleting the tls_cipher_suite value in the configuration file",
-			)
-			xTransport.tlsCipherSuite = nil
-			xTransport.rebuildTransport()
-		}
 		return nil, statusCode, nil, rtt, err
 	}
 	if xTransport.h3Transport != nil && !hasAltSupport {
