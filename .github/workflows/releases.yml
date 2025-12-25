@@ -26,8 +26,7 @@ jobs:
           GOAMD64: v3
           GODEBUG: "thp=1,netdns=go"
         run: |
-          go get -u ./... \
-          go mod tidy \
+          go mod download \
           go build \
             -mod=mod \
             -trimpath \
