@@ -287,23 +287,6 @@ cert_refresh_delay = 240
 # tls_disable_session_tickets = false
 
 
-## DoH: Use TLS 1.2 and specific cipher suite instead of the server preference
-## 49199 = TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
-## 49195 = TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
-## 52392 = TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305
-## 52393 = TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305
-##
-## On non-Intel CPUs such as MIPS routers and ARM systems (Android, Raspberry Pi...),
-## uncommenting the following line may improve performance.
-## This may also help on Intel CPUs running 32-bit operating systems.
-## However, this can cause issues fetching sources or connecting to some HTTP servers,
-## and should not be set on regular CPUs.
-##
-## Keep tls_cipher_suite undefined to let the app automatically choose secure parameters.
-
-# tls_cipher_suite = [52392, 49199]
-
-
 ## Log TLS key material to a file, for debugging purposes only.
 ## This file will contain the TLS master key, which can be used to decrypt
 ## all TLS traffic to/from DoH servers.
