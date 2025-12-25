@@ -27,7 +27,7 @@ jobs:
           GOEXPERIMENT: "greenteagc,jsonv2,nodwarf5,rangefunc"
           GOGC: "300"
           GOAMD64: v3
-          GODEBUG: "thp=1,netdns=go,gctrace=0"
+          GODEBUG: "thp=1,netdns=go,gctrace=0,fips140=on"
           GOPRIVATE: "codeberg.org/miekg/dns,github.com/quic-go/quic-go"
           GOPROXY: "https://proxy.golang.org,direct"
         run: |
@@ -35,7 +35,6 @@ jobs:
           go get github.com/quic-go/quic-go@master
           go mod tidy
           go build \
-            -fips140=latest \
             -mod=mod \
             -trimpath \
             -ldflags="-s -w" \
