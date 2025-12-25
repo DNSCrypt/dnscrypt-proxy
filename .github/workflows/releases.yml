@@ -29,7 +29,7 @@ jobs:
           GOPROXY: "https://proxy.golang.org,direct"
         run: |
           go get codeberg.org/miekg/dns@main
-          go get github.com/quic-go/quic-go
+          go get github.com/quic-go/quic-go@master
           go mod tidy
           go build \
             -mod=mod \
