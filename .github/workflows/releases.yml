@@ -25,11 +25,11 @@ jobs:
           GOARCH: amd64
           GOAMD64: v3
           GODEBUG: "thp=1,netdns=go"
-          GOPRIVATE: "codeberg.org/miekg/dns"      
+          GOPRIVATE: "codeberg.org/miekg/dns"
+          GOPROXY: "https://proxy.golang.org,direct"
         run: |
           go get codeberg.org/miekg/dns@master
           go mod tidy
-          go mod download
           go build \
             -mod=mod \
             -trimpath \
