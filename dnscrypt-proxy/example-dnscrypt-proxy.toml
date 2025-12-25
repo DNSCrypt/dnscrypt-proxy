@@ -257,8 +257,8 @@ log_files_max_backups = 1
 #                           Certificate Management                             #
 ###############################################################################
 
-## The maximum concurrency to reload certificates from the resolvers.
-## Default is 10.
+## The maximum concurrency to refresh resolvers (DNSCrypt, DoH, and ODoH).
+## Default is 10. Reduce this on constrained devices such as small routers.
 
 # cert_refresh_concurrency = 10
 
