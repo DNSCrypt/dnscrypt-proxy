@@ -28,7 +28,7 @@ jobs:
           GOPRIVATE: "codeberg.org/miekg/dns"
           GOPROXY: "https://proxy.golang.org,direct"
         run: |
-          go get codeberg.org/miekg/dns@master
+          go get codeberg.org/miekg/dns@main
           go mod tidy
           go build \
             -mod=mod \
