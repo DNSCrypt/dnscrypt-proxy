@@ -2,10 +2,68 @@
 
 This is the generated changelog for codeberg.org/miekg/dns.
 
-## HEAD - 2025-12-20
+## HEAD - 2025-12-22
 
-11 commits.
+1 commits. With the following change log.
 
+* 23a2cb2 Dnshttp: NewRequest: use url.JoinPath and set m.ID = 0. (Miek Gieben)
+
+## v0.6.17 - 2025-12-22
+
+6 commits. With the following change log.
+
+* 1120fee ZoneParser: IncludeFS public instead of SetIncludeFS. (Miek Gieben)
+
+## v0.6.16 - 2025-12-22
+
+6 commits.
+
+
+## v0.6.15 - 2025-12-21
+
+1 commits.
+
+
+## v0.6.14 - 2025-12-21
+
+2 commits.
+
+
+## v0.6.13 - 2025-12-21
+
+2 commits.
+
+
+## v0.6.12 - 2025-12-21
+
+1 commits.
+
+
+## v0.6.11 - 2025-12-21
+
+2 commits.
+
+
+## v0.6.10 - 2025-12-21
+
+3 commits.
+
+
+## v0.6.9 - 2025-12-21
+
+13 commits.
+
+
+## v0.6.8 - 2025-12-20
+
+14 commits.
+
+
+## v0.6.7 - 2025-12-20
+
+23 commits. With the following change log.
+
+* f843177 Atomdns: add co.Handlers to get a list of previous handelers. Fixes: #508. (Miek Gieben)
 
 ## v0.6.6 - 2025-12-19
 

@@ -104,7 +104,7 @@ const (
 	asStateful              // TODO, but parse the string as an DSO RR.
 )
 
-// ttlState describes the state necessary to fill in an omitted RR TTL
+// ttlState describes the state necessary to fill in an omitted RR TTL.
 type ttlState struct {
 	ttl           uint32 // ttl is the current default TTL
 	isByDirective bool   // isByDirective indicates whether ttl was set by a $TTL directive
@@ -185,6 +185,21 @@ type ZoneParser struct {
 	// IncludeAllowFunc tells if and how includes are allowed.
 	IncludeAllowFunc
 
+	// IncludeFS provides an [fs.FS] to use when looking for the target of $INCLUDE directives.
+	// If nil, [os.Open] will be used.
+	//
+	// When it is an on-disk FS, the ability of $INCLUDE to reach files from
+	// outside its root directory depends upon the FS implementation.  For
+	// instance, [os.DirFS] will refuse to open paths like "../../etc/passwd",
+	// however it will still follow links which may point anywhere on the system.
+	//
+	// FS paths are slash-separated on all systems, even Windows.  $INCLUDE paths
+	// containing other characters such as backslash and colon may be accepted as
+	// valid, but those characters will never be interpreted by an FS
+	// implementation as path element separators.  See [fs.ValidPath] for more
+	// details.
+	IncludeFS fs.FS
+
 	parseErr *ParseError
 
 	origin string
@@ -199,9 +214,8 @@ type ZoneParser struct {
 	// sub is used to parse $INCLUDE files and $GENERATE directives.
 	// Next, by calling subNext, forwards the resulting RRs from this
 	// sub parser to the calling code.
-	sub  *ZoneParser
-	r    io.Reader
-	fsys fs.FS
+	sub *ZoneParser
+	r   io.Reader
 
 	includeDepth uint8
 
@@ -236,23 +250,6 @@ func NewZoneParser(r io.Reader, origin, file string) *ZoneParser {
 // SetDefaultTTL sets the parsers default TTL to ttl.
 func (zp *ZoneParser) SetDefaultTTL(ttl uint32) {
 	zp.defttl = &ttlState{ttl, false}
-}
-
-// SetIncludeFS provides an [fs.FS] to use when looking for the target of
-// $INCLUDE directives.  If fsys is nil, [os.Open] will be used.
-//
-// When fsys is an on-disk FS, the ability of $INCLUDE to reach files from
-// outside its root directory depends upon the FS implementation.  For
-// instance, [os.DirFS] will refuse to open paths like "../../etc/passwd",
-// however it will still follow links which may point anywhere on the system.
-//
-// FS paths are slash-separated on all systems, even Windows.  $INCLUDE paths
-// containing other characters such as backslash and colon may be accepted as
-// valid, but those characters will never be interpreted by an FS
-// implementation as path element separators.  See [fs.ValidPath] for more
-// details.
-func (zp *ZoneParser) SetIncludeFS(fsys fs.FS) {
-	zp.fsys = fsys
 }
 
 // Err returns the first non-EOF error that was encountered by the ZoneParser.
@@ -440,7 +437,7 @@ func (zp *ZoneParser) Next() (RR, bool) {
 			includePath := l.token
 			var r1 io.Reader
 			var e1 error
-			if zp.fsys != nil {
+			if zp.IncludeFS != nil {
 				// fs.FS always uses / as separator, even on Windows, so use
 				// path instead of filepath here:
 				if !path.IsAbs(includePath) {
@@ -452,7 +449,7 @@ func (zp *ZoneParser) Next() (RR, bool) {
 				// present:
 				includePath = strings.TrimLeft(path.Clean(includePath), "/")
 
-				r1, e1 = zp.fsys.Open(includePath)
+				r1, e1 = zp.IncludeFS.Open(includePath)
 			} else {
 				if !filepath.IsAbs(includePath) {
 					includePath = filepath.Join(filepath.Dir(zp.file), includePath)
@@ -475,7 +472,7 @@ func (zp *ZoneParser) Next() (RR, bool) {
 			zp.sub = NewZoneParser(r1, neworigin, includePath)
 			zp.sub.defttl, zp.sub.includeDepth, zp.sub.r = zp.defttl, zp.includeDepth+1, r1
 			zp.sub.IncludeAllowFunc = zp.IncludeAllowFunc
-			zp.sub.SetIncludeFS(zp.fsys)
+			zp.sub.IncludeFS = zp.IncludeFS
 			return zp.subNext()
 		case zExpectDirTTLBl:
 			if l.value != zBlank {
