@@ -287,6 +287,15 @@ cert_refresh_delay = 240
 # tls_disable_session_tickets = false
 
 
+## Prefer RSA certificates over ECDSA for TLS connections.
+## When this is enabled, some servers may become impossible to use,
+## or may stop to work later as they upgrade their configuratione.
+## Changing this setting is generally not recommended, but it may
+## reduce CPU usage on small routers with slow CPUs.
+
+# tls_prefer_rsa = false
+
+
 ## Log TLS key material to a file, for debugging purposes only.
 ## This file will contain the TLS master key, which can be used to decrypt
 ## all TLS traffic to/from DoH servers.
