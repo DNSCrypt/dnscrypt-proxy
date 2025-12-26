@@ -92,6 +92,7 @@ type Config struct {
 	LogMaxBackups            int                         `toml:"log_files_max_backups"`
 	TLSDisableSessionTickets bool                        `toml:"tls_disable_session_tickets"`
 	TLSCipherSuite           []uint16                    `toml:"tls_cipher_suite"`
+	TLSPreferRSA             bool                        `toml:"tls_prefer_rsa"`
 	TLSKeyLogFile            string                      `toml:"tls_key_log_file"`
 	NetprobeAddress          string                      `toml:"netprobe_address"`
 	NetprobeTimeout          int                         `toml:"netprobe_timeout"`
@@ -156,6 +157,7 @@ func newConfig() Config {
 		LogMaxBackups:            1,
 		TLSDisableSessionTickets: false,
 		TLSCipherSuite:           nil,
+		TLSPreferRSA:             false,
 		TLSKeyLogFile:            "",
 		NetprobeTimeout:          60,
 		OfflineMode:              false,

@@ -257,8 +257,8 @@ log_files_max_backups = 1
 #                           Certificate Management                             #
 ###############################################################################
 
-## The maximum concurrency to reload certificates from the resolvers.
-## Default is 10.
+## The maximum concurrency to refresh resolvers (DNSCrypt, DoH, and ODoH).
+## Default is 10. Reduce this on constrained devices such as small routers.
 
 # cert_refresh_concurrency = 10
 
@@ -285,6 +285,15 @@ cert_refresh_delay = 240
 ## DoH: Disable TLS session tickets - increases privacy but also latency
 
 # tls_disable_session_tickets = false
+
+
+## Prefer RSA certificates over ECDSA for TLS connections.
+## When this is enabled, some servers may become impossible to use,
+## or may stop to work later as they upgrade their configuratione.
+## Changing this setting is generally not recommended, but it may
+## reduce CPU usage on small routers with slow CPUs.
+
+# tls_prefer_rsa = false
 
 
 ## Log TLS key material to a file, for debugging purposes only.
