@@ -12,7 +12,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
-      - name: Setup Go 1.25
+      - name: Setup Go 1.26.0-rc.1
         uses: actions/setup-go@v6
         with:
           go-version: '1.26.0-rc.1'
@@ -28,11 +28,12 @@ jobs:
           GOGC: "300"
           GOAMD64: v3
           GODEBUG: "thp=1,netdns=go,gctrace=0,fips140=on"
-          GOPRIVATE: "codeberg.org/miekg/dns,github.com/quic-go/quic-go"
+          GOPRIVATE: "codeberg.org/miekg/dns,github.com/quic-go/quic-go,https://github.com/gorilla/websocket/tree/main"
           GOPROXY: "https://proxy.golang.org,direct"
         run: |
           go get codeberg.org/miekg/dns@main
           go get github.com/quic-go/quic-go@master
+          go get https://github.com/gorilla/websocket@main
           go mod tidy
           go build \
             -mod=mod \
