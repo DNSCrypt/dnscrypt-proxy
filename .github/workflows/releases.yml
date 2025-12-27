@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.1
 
       - name: Setup Go 1.26.0-rc.1
         uses: actions/setup-go@v6
