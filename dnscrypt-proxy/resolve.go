@@ -24,6 +24,9 @@ func resolveQuery(server string, qName string, qType uint16, sendClientSubnet bo
 	transport.ReadTimeout = 2 * time.Second
 	client := &dns.Client{Transport: transport}
 	msg := dns.NewMsg(qName, qType)
+	if msg == nil {
+		return nil, fmt.Errorf("unsupported DNS record type: %d", qType)
+	}
 	msg.RecursionDesired = true
 	msg.Opcode = dns.OpcodeQuery
 	msg.UDPSize = uint16(MaxDNSPacketSize)
