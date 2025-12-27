@@ -474,6 +474,9 @@ func (xTransport *XTransport) resolveUsingResolver(
 	defer cancel()
 	for _, rrType := range queryType {
 		msg := dns.NewMsg(fqdn(host), rrType)
+		if msg == nil {
+			continue
+		}
 		msg.RecursionDesired = true
 		msg.UDPSize = uint16(MaxDNSPacketSize)
 		msg.Security = true
