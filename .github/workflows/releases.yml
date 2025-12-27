@@ -24,7 +24,7 @@ jobs:
           GOOS: linux
           GOARCH: amd64
           GOFIPS140: "latest"
-          GOEXPERIMENT: "greenteagc,jsonv2,nodwarf5,swissmap"
+          GOEXPERIMENT: "greenteagc,jsonv2,nodwarf5"
           GOGC: "300"
           GOAMD64: v3
           GODEBUG: "thp=1,netdns=go,gctrace=0,fips140=on"
