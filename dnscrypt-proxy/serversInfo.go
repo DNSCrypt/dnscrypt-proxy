@@ -559,6 +559,9 @@ func findFarthestRoute(proxy *Proxy, name string, relayStamps []stamps.ServerSta
 			bestRelayIdxs = append(bestRelayIdxs, relayIdx)
 		}
 	}
+	if len(bestRelayIdxs) == 0 {
+		return nil
+	}
 	return &relayStamps[bestRelayIdxs[rand.Intn(len(bestRelayIdxs))]]
 }
 
