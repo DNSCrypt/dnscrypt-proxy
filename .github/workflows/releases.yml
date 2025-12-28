@@ -28,7 +28,7 @@ jobs:
           GOGC: "300"
           GOAMD64: v3
           GODEBUG: "thp=1,netdns=go,gctrace=0,fips140=on"
-          GOPRIVATE: "codeberg.org/miekg/dns,github.com/quic-go/quic-go,github.com/gorilla/websocket,google.golang.org/grpc,github.com/coreos/go-systemdx"
+          GOPRIVATE: "codeberg.org/miekg/dns,github.com/quic-go/quic-go,github.com/gorilla/websocket,google.golang.org/grpc,github.com/coreos/go-systemd"
           GOPROXY: "https://proxy.golang.org,direct"
         run: |
           go get codeberg.org/miekg/dns@main
