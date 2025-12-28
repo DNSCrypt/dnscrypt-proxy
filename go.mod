@@ -8,7 +8,7 @@ require (
 	codeberg.org/miekg/dns v0.6.18
 	github.com/BurntSushi/toml v1.6.0
 	github.com/VividCortex/ewma v1.2.0
-	github.com/coreos/go-systemd/v22@latest
+	github.com/coreos/go-systemd/v22@main
 	github.com/dchest/safefile v0.0.0-20151022103144-855e8d98f185
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/gorilla/websocket v1.5.3
