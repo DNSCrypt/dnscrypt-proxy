@@ -35,7 +35,7 @@ jobs:
           go get github.com/quic-go/quic-go@master
           go get google.golang.org/grpc
           go get github.com/gorilla/websocket@main
-          go get github.com/hashicorp/go-immutable-radix v2.1.0
+          go get github.com/hashicorp/go-immutable-radix
           go mod tidy
           go build \
             -mod=mod \
