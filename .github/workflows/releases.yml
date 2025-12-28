@@ -35,7 +35,7 @@ jobs:
           go get github.com/quic-go/quic-go@master
           go get google.golang.org/grpc
           go get github.com/gorilla/websocket@main
-          go get github.com/coreos/go-systemd@main
+          go get github.com/coreos/go-systemd
           go mod tidy
           go build \
             -mod=mod \
