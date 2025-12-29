@@ -10,8 +10,8 @@ import (
 )
 
 const (
-	UDPPoolMaxConnsPerAddr = 4
-	UDPPoolMaxIdleTime     = 30 * time.Second
+	UDPPoolMaxConnsPerAddr = 1000
+	UDPPoolMaxIdleTime     = 360 * time.Second
 	UDPPoolCleanupInterval = 10 * time.Second
 	UDPPoolShards          = 64
 )
