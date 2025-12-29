@@ -394,9 +394,8 @@ func (xTransport *XTransport) rebuildTransport() {
 
 	if xTransport.tlsDisableSessionTickets {
 		tlsClientConfig.SessionTicketsDisabled = true
-	if !xTransport.tlsDisableSessionTickets {
+	} else {
 		tlsClientConfig.ClientSessionCache = tls.NewLRUClientSessionCache(4096)
-	}
 	}
 	if xTransport.tlsPreferRSA {
 		tlsClientConfig.MaxVersion = tls.VersionTLS13
@@ -900,6 +899,7 @@ func (xTransport *XTransport) Fetch(
 							}
 						}
 					}
+				}
 				xTransport.altSupport.Lock()
 				xTransport.altSupport.cache[url.Host] = altPort
 				dlog.Debugf("Caching altPort for [%v]", url.Host)
