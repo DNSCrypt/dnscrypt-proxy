@@ -26,9 +26,9 @@ import (
     stamps "github.com/jedisct1/go-dnsstamps"
     "github.com/quic-go/quic-go"
     "github.com/quic-go/quic-go/http3"
+    "golang.org/x/sync/singleflight"
     "golang.org/x/net/http2"
     netproxy "golang.org/x/net/proxy"
-    "golang.org/x/sync/singleflight"
     "golang.org/x/sys/cpu"
 )
 
@@ -48,8 +48,6 @@ const (
     resolverRetryCount          = 3
     resolverRetryInitialBackoff = 150 * time.Millisecond
     resolverRetryMaxBackoff     = 1 * time.Second
-    MaxHTTPBodyLength           = 10 * 1024 * 1024 // 10 MiB limit for safety
-    MaxDNSPacketSize            = 65535
 )
 
 type CachedIPItem struct {
@@ -109,6 +107,7 @@ type XTransport struct {
     quicTr6  *quic.Transport
 }
 
+
 func NewXTransport() *XTransport {
     if err := isIPAndPort(DefaultBootstrapResolver); err != nil {
         panic("DefaultBootstrapResolver does not parse")
@@ -128,10 +127,10 @@ func NewXTransport() *XTransport {
         tlsPreferRSA:             false,
         keyLogWriter:             nil,
     }
-
+    
     xTransport.gzipPool.New = func() any { return new(gzip.Reader) }
 
-    return &xTransport
+return &xTransport
 }
 
 func ParseIP(ipStr string) net.IP {
@@ -145,24 +144,18 @@ func uniqueNormalizedIPs(ips []net.IP) []net.IP {
         return nil
     }
     unique := make([]net.IP, 0, len(ips))
+    seen := make(map[string]struct{}, len(ips))
     for _, ip := range ips {
         if ip == nil {
             continue
         }
-        // Optimized: O(N^2) scan is faster than map allocation for small N (N < ~20)
-        found := false
-        for _, u := range unique {
-            if u.Equal(ip) {
-                found = true
-                break
-            }
+        copyIP := append(net.IP(nil), ip...)
+        key := copyIP.String()
+        if _, ok := seen[key]; ok {
+            continue
         }
-        if !found {
-            // Copy to ensure we don't hold references to larger arrays if sliced
-            ipCopy := make(net.IP, len(ip))
-            copy(ipCopy, ip)
-            unique = append(unique, ipCopy)
-        }
+        seen[key] = struct{}{}
+        unique = append(unique, copyIP)
     }
     return unique
 }
@@ -290,6 +283,7 @@ func (xTransport *XTransport) getQUICTransport(network string) (*quic.Transport,
     }
 }
 
+
 func (xTransport *XTransport) rebuildTransport() {
     dlog.Debug("Rebuilding transport")
     if xTransport.transport != nil {
@@ -361,37 +355,15 @@ func (xTransport *XTransport) rebuildTransport() {
                 return (*xTransport.proxyDialer).Dial(network, address)
             }
 
-            // Happy Eyeballs: Race all connections
-            type raceResult struct {
-                c   net.Conn
-                err error
-            }
-            results := make(chan raceResult, len(targets))
-            ctx, cancel := context.WithCancel(ctx)
-            defer cancel()
-
-            for _, t := range targets {
-                go func(target string) {
-                    c, err := dial(target)
-                    select {
-                    case results <- raceResult{c, err}:
-                    case <-ctx.Done():
-                        if c != nil {
-                            c.Close()
-                        }
-                    }
-                }(t)
-            }
-
             var lastErr error
-            for i := 0; i < len(targets); i++ {
-                res := <-results
-                if res.err == nil {
-                    return res.c, nil
+            for idx, target := range targets {
+                conn, err := dial(target)
+                if err == nil {
+                    return conn, nil
                 }
-                lastErr = res.err
-                if i < len(targets)-1 {
-                    dlog.Debugf("Dial attempt failed: %v", res.err)
+                lastErr = err
+                if idx < len(targets)-1 {
+                    dlog.Debugf("Dial attempt using [%s] failed: %v", target, err)
                 }
             }
             return nil, lastErr
@@ -482,25 +454,24 @@ func (xTransport *XTransport) rebuildTransport() {
             dlog.Debugf("Dialing for H3: [%v]", addrStr)
             host, port := ExtractHostAndPort(addrStr, stamps.DefaultPort)
             type udpTarget struct {
-                addr    *net.UDPAddr
+                addr    string
                 network string
             }
             buildAddr := func(ip net.IP) udpTarget {
                 if ip != nil {
                     if ipv4 := ip.To4(); ipv4 != nil {
-                        return udpTarget{addr: &net.UDPAddr{IP: ipv4, Port: port}, network: "udp4"}
+                        return udpTarget{addr: ipv4.String() + ":" + strconv.Itoa(port), network: "udp4"}
                     }
-                    return udpTarget{addr: &net.UDPAddr{IP: ip, Port: port}, network: "udp6"}
+                    return udpTarget{addr: "[" + ip.String() + "]:" + strconv.Itoa(port), network: "udp6"}
                 }
-                // Fallback for unresolved hosts
                 network := "udp4"
-                addrStr := host
+                addr := host
                 if parsed := ParseIP(host); parsed != nil {
                     if parsed.To4() != nil {
-                        addrStr = parsed.String()
+                        addr = parsed.String()
                     } else {
                         network = "udp6"
-                        addrStr = "[" + parsed.String() + "]"
+                        addr = "[" + parsed.String() + "]"
                     }
                 } else if xTransport.useIPv6 {
                     if xTransport.useIPv4 {
@@ -509,8 +480,7 @@ func (xTransport *XTransport) rebuildTransport() {
                         network = "udp6"
                     }
                 }
-                ua, _ := net.ResolveUDPAddr(network, addrStr+":"+strconv.Itoa(port))
-                return udpTarget{addr: ua, network: network}
+                return udpTarget{addr: addr + ":" + strconv.Itoa(port), network: network}
             }
 
             cachedIPs, _, _ := xTransport.loadCachedIPs(host)
@@ -525,7 +495,12 @@ func (xTransport *XTransport) rebuildTransport() {
 
             var lastErr error
             for idx, target := range targets {
-                if target.addr == nil {
+                udpAddr, err := net.ResolveUDPAddr(target.network, target.addr)
+                if err != nil {
+                    lastErr = err
+                    if idx < len(targets)-1 {
+                        dlog.Debugf("H3: failed to resolve [%s] on %s: %v", target.addr, target.network, err)
+                    }
                     continue
                 }
                 tr, err := xTransport.getQUICTransport(target.network)
@@ -540,7 +515,7 @@ func (xTransport *XTransport) rebuildTransport() {
                 if cfg != nil && cfg.KeepAlivePeriod == 0 {
                     cfg.KeepAlivePeriod = 15 * time.Second
                 }
-                conn, err := tr.DialEarly(ctx, target.addr, tlsCfg, cfg)
+                conn, err := tr.DialEarly(ctx, udpAddr, tlsCfg, cfg)
                 if err != nil {
                     /* transport-owned socket */
                     lastErr = err
@@ -555,7 +530,7 @@ func (xTransport *XTransport) rebuildTransport() {
         }
         h3Transport := &http3.Transport{DisableCompression: true, TLSClientConfig: &tlsClientConfig, Dial: dial}
         xTransport.h3Transport = h3Transport
-        xTransport.h3Client = &http.Client{Transport: xTransport.h3Transport}
+    xTransport.h3Client = &http.Client{Transport: xTransport.h3Transport}
     }
 }
 
@@ -772,8 +747,8 @@ func (xTransport *XTransport) resolveAndUpdateCacheBlocking(host string, cachedI
     return nil
 }
 
+
 func (xTransport *XTransport) Fetch(
-    ctx context.Context,
     method string,
     url *url.URL,
     accept string,
@@ -785,7 +760,7 @@ func (xTransport *XTransport) Fetch(
     if timeout <= 0 {
         timeout = xTransport.timeout
     }
-    ctx, cancel := context.WithTimeout(ctx, timeout)
+    ctx, cancel := context.WithTimeout(context.Background(), timeout)
     defer cancel()
 
     host, port := ExtractHostAndPort(url.Host, 443)
@@ -937,9 +912,9 @@ func (xTransport *XTransport) Fetch(
                             break
                         }
                         v = strings.TrimSpace(v)
-                        if strings.HasPrefix(v, "h3=":") {
-                            v = strings.TrimPrefix(v, "h3=":")
-                            v = strings.TrimSuffix(v, """)
+                        if strings.HasPrefix(v, "h3=\":") {
+                            v = strings.TrimPrefix(v, "h3=\":")
+                            v = strings.TrimSuffix(v, "\"")
                             if xAltPort, err := strconv.ParseUint(v, 10, 16); err == nil && xAltPort <= 65535 {
                                 altPort = uint16(xAltPort)
                                 dlog.Debugf("Using HTTP/3 for [%s]", url.Host)
@@ -977,37 +952,34 @@ func (xTransport *XTransport) Fetch(
     return bin, statusCode, tlsState, rtt, nil
 }
 
+
 func (xTransport *XTransport) GetWithCompression(
-    ctx context.Context,
     url *url.URL,
     accept string,
     timeout time.Duration,
 ) ([]byte, int, *tls.ConnectionState, time.Duration, error) {
-    return xTransport.Fetch(ctx, "GET", url, accept, "", nil, timeout, true)
+    return xTransport.Fetch("GET", url, accept, "", nil, timeout, true)
 }
 
 func (xTransport *XTransport) Get(
-    ctx context.Context,
     url *url.URL,
     accept string,
     timeout time.Duration,
 ) ([]byte, int, *tls.ConnectionState, time.Duration, error) {
-    return xTransport.Fetch(ctx, "GET", url, accept, "", nil, timeout, false)
+    return xTransport.Fetch("GET", url, accept, "", nil, timeout, false)
 }
 
 func (xTransport *XTransport) Post(
-    ctx context.Context,
     url *url.URL,
     accept string,
     contentType string,
     body *[]byte,
     timeout time.Duration,
 ) ([]byte, int, *tls.ConnectionState, time.Duration, error) {
-    return xTransport.Fetch(ctx, "POST", url, accept, contentType, body, timeout, false)
+    return xTransport.Fetch("POST", url, accept, contentType, body, timeout, false)
 }
 
 func (xTransport *XTransport) dohLikeQuery(
-    ctx context.Context,
     dataType string,
     useGet bool,
     url *url.URL,
@@ -1020,9 +992,9 @@ func (xTransport *XTransport) dohLikeQuery(
         qs.Add("dns", encBody)
         url2 := *url
         url2.RawQuery = qs.Encode()
-        return xTransport.Get(ctx, &url2, dataType, timeout)
+        return xTransport.Get(&url2, dataType, timeout)
     }
-    return xTransport.Post(ctx, url, dataType, dataType, &body, timeout)
+    return xTransport.Post(url, dataType, dataType, &body, timeout)
 }
 
 func (xTransport *XTransport) DoHQuery(
@@ -1031,7 +1003,7 @@ func (xTransport *XTransport) DoHQuery(
     body []byte,
     timeout time.Duration,
 ) ([]byte, int, *tls.ConnectionState, time.Duration, error) {
-    return xTransport.dohLikeQuery(context.Background(), "application/dns-message", useGet, url, body, timeout)
+    return xTransport.dohLikeQuery("application/dns-message", useGet, url, body, timeout)
 }
 
 func (xTransport *XTransport) ObliviousDoHQuery(
@@ -1040,5 +1012,5 @@ func (xTransport *XTransport) ObliviousDoHQuery(
     body []byte,
     timeout time.Duration,
 ) ([]byte, int, *tls.ConnectionState, time.Duration, error) {
-    return xTransport.dohLikeQuery(context.Background(), "application/oblivious-dns-message", useGet, url, body, timeout)
+    return xTransport.dohLikeQuery("application/oblivious-dns-message", useGet, url, body, timeout)
 }
