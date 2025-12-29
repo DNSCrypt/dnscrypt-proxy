@@ -67,11 +67,34 @@ type AltSupport struct {
 }
 
 type XTransport struct {
-	transport                *http.Transport	h3Transport              *http3.Transport
+	transport   *http.Transport
+	h3Transport *http3.Transport
+
 	// Reused clients (avoid per-request allocations)
 	httpClient *http.Client
 	h3Client   *http.Client
-	keepAlive                time.Duration	timeout                  time.Duration	cachedIPs                CachedIPs	altSupport               AltSupport	internalResolvers        []string	bootstrapResolvers       []string	mainProto                string	ignoreSystemDNS          bool	internalResolverReady    bool	useIPv4                  bool	useIPv6                  bool	http3                    bool	http3Probe               bool	tlsDisableSessionTickets bool	tlsPreferRSA             bool	proxyDialer              *netproxy.Dialer	httpProxyFunction        func(*http.Request) (*url.URL, error)	tlsClientCreds           DOHClientCreds	keyLogWriter             io.Writer
+
+	keepAlive  time.Duration
+	timeout    time.Duration
+	cachedIPs  CachedIPs
+	altSupport AltSupport
+
+	internalResolvers        []string
+	bootstrapResolvers       []string
+	mainProto                string
+	ignoreSystemDNS          bool
+	internalResolverReady    bool
+	useIPv4                  bool
+	useIPv6                  bool
+	http3                    bool
+	http3Probe               bool
+	tlsDisableSessionTickets bool
+	tlsPreferRSA             bool
+	proxyDialer              *netproxy.Dialer
+	httpProxyFunction        func(*http.Request) (*url.URL, error)
+	tlsClientCreds           DOHClientCreds
+	keyLogWriter             io.Writer
+
 	// Hot-path pools / coalescing
 	gzipPool     sync.Pool
 	resolveGroup singleflight.Group
@@ -889,9 +912,9 @@ func (xTransport *XTransport) Fetch(
 							break
 						}
 						v = strings.TrimSpace(v)
-						if strings.HasPrefix(v, "h3=":") {
-							v = strings.TrimPrefix(v, "h3=":")
-							v = strings.TrimSuffix(v, """)
+						if strings.HasPrefix(v, "h3=\":") {
+							v = strings.TrimPrefix(v, "h3=\":")
+							v = strings.TrimSuffix(v, "\"")
 							if xAltPort, err := strconv.ParseUint(v, 10, 16); err == nil && xAltPort <= 65535 {
 								altPort = uint16(xAltPort)
 								dlog.Debugf("Using HTTP/3 for [%s]", url.Host)
