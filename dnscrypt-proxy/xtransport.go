@@ -329,7 +329,7 @@ func (xTransport *XTransport) rebuildTransport() {
 		tlsClientConfig.SessionTicketsDisabled = true
 	}
 	if xTransport.tlsPreferRSA {
-		tlsClientConfig.MaxVersion = tls.VersionTLS12
+		tlsClientConfig.MaxVersion = tls.VersionTLS13
 		if hasAESGCMHardwareSupport {
 			tlsClientConfig.CipherSuites = []uint16{
 				tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
