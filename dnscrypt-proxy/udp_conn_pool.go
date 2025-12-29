@@ -18,12 +18,12 @@ const (
 
 type pooledConn struct {
 	conn     *net.UDPConn
-	lastUsed time.Time
+	lastUsed int64 // unix nanos
 }
 
 type poolShard struct {
 	sync.Mutex
-	conns map[string][]*pooledConn
+	conns map[string][]pooledConn
 }
 
 type UDPConnPool struct {
@@ -34,20 +34,18 @@ type UDPConnPool struct {
 }
 
 func NewUDPConnPool() *UDPConnPool {
-	pool := &UDPConnPool{
-		stopCh: make(chan struct{}),
-	}
+	pool := &UDPConnPool{stopCh: make(chan struct{})}
 	for i := range pool.shards {
-		pool.shards[i].conns = make(map[string][]*pooledConn)
+		pool.shards[i].conns = make(map[string][]pooledConn)
 	}
 	go pool.cleanupLoop()
 	return pool
 }
 
-func (p *UDPConnPool) getShard(addr string) *poolShard {
+func (p *UDPConnPool) getShard(key string) *poolShard {
 	h := uint32(0)
-	for i := 0; i < len(addr); i++ {
-		h = h*31 + uint32(addr[i])
+	for i := 0; i < len(key); i++ {
+		h = h*31 + uint32(key[i])
 	}
 	return &p.shards[h%UDPPoolShards]
 }
@@ -55,7 +53,6 @@ func (p *UDPConnPool) getShard(addr string) *poolShard {
 func (p *UDPConnPool) cleanupLoop() {
 	ticker := time.NewTicker(UDPPoolCleanupInterval)
 	defer ticker.Stop()
-
 	for {
 		select {
 		case <-ticker.C:
@@ -67,95 +64,91 @@ func (p *UDPConnPool) cleanupLoop() {
 }
 
 func (p *UDPConnPool) cleanupStale() {
-	now := time.Now()
+	now := time.Now().UnixNano()
+	maxIdle := int64(UDPPoolMaxIdleTime)
 	for i := range p.shards {
 		shard := &p.shards[i]
 		shard.Lock()
-		for addr, conns := range shard.conns {
-			var active []*pooledConn
+		for key, conns := range shard.conns {
+			n := 0
 			for _, pc := range conns {
-				if now.Sub(pc.lastUsed) > UDPPoolMaxIdleTime {
-					pc.conn.Close()
-					dlog.Debugf("UDP pool: closed stale connection to %s", addr)
-				} else {
-					active = append(active, pc)
+				if now-pc.lastUsed > maxIdle {
+					_ = pc.conn.Close()
+					dlog.Debugf("UDP pool: closed stale connection to %s", key)
+					continue
 				}
+				conns[n] = pc
+				n++
 			}
-			if len(active) == 0 {
-				delete(shard.conns, addr)
+			if n == 0 {
+				delete(shard.conns, key)
 			} else {
-				shard.conns[addr] = active
+				shard.conns[key] = conns[:n]
 			}
 		}
 		shard.Unlock()
 	}
 }
 
-func (p *UDPConnPool) Get(addr *net.UDPAddr) (*net.UDPConn, error) {
-	addrStr := addr.String()
-	shard := p.getShard(addrStr)
-
+func (p *UDPConnPool) GetNet(network string, addr *net.UDPAddr) (*net.UDPConn, error) {
+	key := network + "|" + addr.String()
+	shard := p.getShard(key)
 	shard.Lock()
-	conns := shard.conns[addrStr]
+	conns := shard.conns[key]
 	if len(conns) > 0 {
 		pc := conns[len(conns)-1]
-		shard.conns[addrStr] = conns[:len(conns)-1]
+		shard.conns[key] = conns[:len(conns)-1]
 		shard.Unlock()
-		pc.conn.SetReadDeadline(time.Time{})
-		pc.conn.SetWriteDeadline(time.Time{})
+		_ = pc.conn.SetReadDeadline(time.Time{})
+		_ = pc.conn.SetWriteDeadline(time.Time{})
 		return pc.conn, nil
 	}
 	shard.Unlock()
-
-	return net.DialUDP("udp", nil, addr)
+	return net.DialUDP(network, nil, addr)
 }
 
-func (p *UDPConnPool) Put(addr *net.UDPAddr, conn *net.UDPConn) {
+func (p *UDPConnPool) PutNet(network string, addr *net.UDPAddr, conn *net.UDPConn) {
 	if conn == nil {
 		return
 	}
 	if atomic.LoadInt32(&p.closed) != 0 {
-		conn.Close()
+		_ = conn.Close()
 		return
 	}
-
-	addrStr := addr.String()
-	shard := p.getShard(addrStr)
-
+	key := network + "|" + addr.String()
+	shard := p.getShard(key)
 	shard.Lock()
-	conns := shard.conns[addrStr]
+	conns := shard.conns[key]
 	if len(conns) >= UDPPoolMaxConnsPerAddr {
 		shard.Unlock()
-		conn.Close()
+		_ = conn.Close()
 		return
 	}
-	shard.conns[addrStr] = append(conns, &pooledConn{
-		conn:     conn,
-		lastUsed: time.Now(),
-	})
+	shard.conns[key] = append(conns, pooledConn{conn: conn, lastUsed: time.Now().UnixNano()})
 	shard.Unlock()
 }
 
+// Backwards-compatible wrappers.
+func (p *UDPConnPool) Get(addr *net.UDPAddr) (*net.UDPConn, error) { return p.GetNet("udp", addr) }
+func (p *UDPConnPool) Put(addr *net.UDPAddr, conn *net.UDPConn) { p.PutNet("udp", addr, conn) }
+
 func (p *UDPConnPool) Discard(conn *net.UDPConn) {
 	if conn != nil {
-		conn.Close()
+		_ = conn.Close()
 	}
 }
 
 func (p *UDPConnPool) Close() {
-	p.stopOnce.Do(func() {
-		close(p.stopCh)
-	})
+	p.stopOnce.Do(func() { close(p.stopCh) })
 	atomic.StoreInt32(&p.closed, 1)
-
 	for i := range p.shards {
 		shard := &p.shards[i]
 		shard.Lock()
-		for addr, conns := range shard.conns {
+		for key, conns := range shard.conns {
 			for _, pc := range conns {
-				pc.conn.Close()
+				_ = pc.conn.Close()
 			}
-			delete(shard.conns, addr)
+			delete(shard.conns, key)
 		}
 		shard.Unlock()
 	}
