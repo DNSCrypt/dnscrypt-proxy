@@ -682,7 +682,11 @@ func (xTransport *XTransport) Fetch(
 	if body != nil {
 		h := sha512.Sum512(*body)
 		qs := url.Query()
-		qs.Add("body_hash", hex.EncodeToString(h[:32]))
+		if qs.Has("body_hash") {
+			qs.Set("body_hash", hex.EncodeToString(h[:32]))
+		} else {
+			qs.Add("body_hash", hex.EncodeToString(h[:32]))
+		}
 		url2 := *url
 		url2.RawQuery = qs.Encode()
 		url = &url2
