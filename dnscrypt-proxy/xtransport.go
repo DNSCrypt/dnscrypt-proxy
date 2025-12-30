@@ -317,6 +317,7 @@ func (xTransport *XTransport) rebuildTransport() {
         DisableKeepAlives:      false,
         DisableCompression:     true,
         MaxIdleConns:           1000,
+        MaxIdleConnsPerHost:    100,
         MaxConnsPerHost:        100,
         IdleConnTimeout:        xTransport.keepAlive,
         ResponseHeaderTimeout:  timeout,
