@@ -14,53 +14,14 @@ crypto_rand "crypto/rand"
 "golang.org/x/crypto/nacl/secretbox"
 )
 
-// Define dummy constants and types to make the package compilable if standalone
-// These effectively mock the environment this code usually runs in (e.g. dnscrypt-proxy)
 const (
-NonceSize               = xsecretbox.NonceSize
-HalfNonceSize           = xsecretbox.NonceSize / 2
-TagSize                 = xsecretbox.TagSize
-PublicKeySize           = 32
-ClientMagicLen          = 8
-MaxDNSUDPPacketSize     = 1252
-MaxDNSUDPSafePacketSize = 1252
-MaxDNSPacketSize        = 65535
-MinDNSPacketSize        = 12 + 20 // Header + Query
-QueryOverhead           = ClientMagicLen + PublicKeySize + HalfNonceSize + TagSize
+NonceSize        = xsecretbox.NonceSize
+HalfNonceSize    = xsecretbox.NonceSize / 2
+TagSize          = xsecretbox.TagSize
+PublicKeySize    = 32
+QueryOverhead    = ClientMagicLen + PublicKeySize + HalfNonceSize + TagSize
+ResponseOverhead = len(ServerMagic) + NonceSize + TagSize
 )
-
-var (
-ServerMagic = [8]byte{0x72, 0x36, 0x66, 0x6e, 0x76, 0x57, 0x6a, 0x38}
-)
-
-type CryptoConstruction int
-
-const (
-XSalsa20Poly1305 CryptoConstruction = iota
-XChacha20Poly1305
-)
-
-type ServerInfo struct {
-CryptoConstruction CryptoConstruction
-ServerPk           [32]byte
-SharedKey          [32]byte
-MagicQuery         [ClientMagicLen]byte
-knownBugs          struct {
-fragmentsBlocked bool
-}
-Relay interface{}
-}
-
-type QuestionSizeEstimator interface {
-MinQuestionSize() int
-}
-
-type Proxy struct {
-ephemeralKeys         bool
-proxySecretKey        [32]byte
-proxyPublicKey        [32]byte
-questionSizeEstimator QuestionSizeEstimator
-}
 
 var (
 // bufferPool reduces GC pressure by reusing buffers for plaintext padding
@@ -73,24 +34,9 @@ return &b
 }
 )
 
-// Helper functions for min/max
-func Min(a, b int) int {
-if a < b {
-return a
-}
-return b
-}
-
-func Max(a, b int) int {
-if a > b {
-return a
-}
-return b
-}
-
-// padTo copies packet to a new buffer of size minSize with ISO/IEC 7816-4 padding.
+// pad copies packet to a new buffer of size minSize with ISO/IEC 7816-4 padding.
 // It avoids the iterative append loop for O(1) allocation.
-func padTo(packet []byte, minSize int) []byte {
+func pad(packet []byte, minSize int) []byte {
 out := make([]byte, minSize)
 copy(out, packet)
 out[len(packet)] = 0x80
@@ -154,8 +100,8 @@ if _, err := crypto_rand.Read(nonce[:HalfNonceSize]); err != nil {
 return nil, nil, nil, err
 }
 
-// Slice for return value (points to stack array, forces escape? No, we return a copy usually, 
-// but here we return a slice. To be safe/efficient, we copy to a small return buffer 
+// Slice for return value (points to stack array, forces escape? No, we return a copy usually,
+// but here we return a slice. To be safe/efficient, we copy to a small return buffer
 // or accept the escape. In this signature, clientNonce is returned.)
 // Optimally, return [HalfNonceSize]byte, but signature is fixed.
 // We'll create a slice view.
@@ -245,7 +191,7 @@ encrypted = secretbox.Seal(encrypted, paddedBuf, &xsalsaNonce, sharedKey)
 }
 
 // Return buffer to pool
-// Note: For high security, one might want to Zero this before returning, 
+// Note: For high security, one might want to Zero this before returning,
 // but that trades performance.
 *ptr = paddedBuf
 bufferPool.Put(ptr)
@@ -314,8 +260,4 @@ return encrypted, errors.New("Incorrect padding")
 }
 
 return packet, nil
-}
-
-func main() {
-// Dummy main to allow compilation
 }
