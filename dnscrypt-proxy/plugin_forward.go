@@ -60,7 +60,6 @@ func (plugin *PluginForward) Init(proxy *Proxy) error {
     plugin.configFile = proxy.forwardFile
     dlog.Noticef("Loading the set of forwarding rules from [%s]", plugin.configFile)
 
-    // Optimized: Persistent clients to reduce socket overhead
     plugin.udpClient = &dns.Client{
         Net:            "udp",
         Timeout:        5 * time.Second,
@@ -125,7 +124,7 @@ func (plugin *PluginForward) parseForwardFile(lines string) (bool, []PluginForwa
             ok = false
         }
         if !ok {
-            return false, nil, fmt.Errorf("Syntax error at line %d. Expected: example.com 9.9.9.9", 1+lineNo)
+            return false, nil, fmt.Errorf("syntax error at line %d", 1+lineNo)
         }
         domain = strings.ToLower(domain)
         var sequence []SearchSequenceItem
@@ -134,7 +133,7 @@ func (plugin *PluginForward) parseForwardFile(lines string) (bool, []PluginForwa
             switch server {
             case "$BOOTSTRAP":
                 if len(plugin.bootstrapResolvers) == 0 {
-                    return false, nil, fmt.Errorf("Error at line %d. No bootstrap resolvers available", 1+lineNo)
+                    return false, nil, fmt.Errorf("no bootstrap resolvers at line %d", 1+lineNo)
                 }
                 if len(sequence) == 0 || sequence[len(sequence)-1].typ != Bootstrap {
                     sequence = append(sequence, SearchSequenceItem{typ: Bootstrap})
@@ -202,7 +201,6 @@ func (plugin *PluginForward) ApplyReload() error {
     if plugin.stagingMap == nil {
         return errors.New("no staged configuration")
     }
-    // Atomic Swap: Wait-free for readers
     plugin.config.Store(&ForwardConfig{forwardMap: plugin.stagingMap})
     plugin.stagingMap = nil
     dlog.Noticef("Applied new configuration for plugin [%s]", plugin.Name())
@@ -233,8 +231,6 @@ func (plugin *PluginForward) SetConfigWatcher(watcher *ConfigWatcher) {
 func (plugin *PluginForward) Eval(pluginsState *PluginsState, msg *dns.Msg) error {
     qName := pluginsState.qName
     qNameLen := len(qName)
-    
-    // Optimization: Atomic Load (Wait-free)
     conf := plugin.config.Load().(*ForwardConfig)
 
     var sequence []SearchSequenceItem
@@ -263,7 +259,6 @@ func (plugin *PluginForward) Eval(pluginsState *PluginsState, msg *dns.Msg) erro
         var server string
         switch item.typ {
         case Explicit:
-            // Optimization: Avoid rand.Intn if single server
             if len(item.servers) == 1 {
                 server = item.servers[0]
             } else {
@@ -306,13 +301,11 @@ func (plugin *PluginForward) Eval(pluginsState *PluginsState, msg *dns.Msg) erro
 
         ctx, cancel := context.WithTimeout(context.Background(), pluginsState.timeout)
         
-        // Optimization: Shallow copy
         forwardMsg := *msg
         forwardMsg.Extra = nil
         forwardMsg.Data = nil
         forwardMsg.Id = msg.Id
 
-        // Use persistent client
         respMsg, _, err = plugin.udpClient.ExchangeContext(ctx, &forwardMsg, server)
 
         if err != nil {
