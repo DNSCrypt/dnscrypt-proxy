@@ -112,8 +112,8 @@ func (plugin *PluginForward) parseForwardFile(lines string) (bool, []PluginForwa
     requiresDHCP := false
     forwardMap := []PluginForwardEntry{}
 
-    for lineNo, line := range strings.Split(lines, "
-") {
+    for lineNo, line := range strings.Split(lines, ") 
+       {
         line = TrimAndStripInlineComments(line)
         if len(line) == 0 {
             continue
