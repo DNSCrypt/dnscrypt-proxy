@@ -124,7 +124,8 @@ func (plugin *PluginForward) parseForwardFile(lines string) (bool, []PluginForwa
             ok = false
         }
         if !ok {
-            return false, nil, fmt.Errorf("Syntax error for a forwarding rule at line %d. Expected syntax: example.com 9.9.9.9,8.8.8.8", 1+lineNo)
+            return false, nil, fmt.Errorf("Syntax error for a forwarding rule at line %d. "+
+                "Expected syntax: example.com 9.9.9.9,8.8.8.8", 1+lineNo)
         }
         domain = strings.ToLower(domain)
         var sequence []SearchSequenceItem
@@ -133,7 +134,8 @@ func (plugin *PluginForward) parseForwardFile(lines string) (bool, []PluginForwa
             switch server {
             case "$BOOTSTRAP":
                 if len(plugin.bootstrapResolvers) == 0 {
-                    return false, nil, fmt.Errorf("Syntax error for a forwarding rule at line %d. No bootstrap resolvers available", 1+lineNo)
+                    return false, nil, fmt.Errorf("Syntax error for a forwarding rule at line %d. "+
+                        "No bootstrap resolvers available", 1+lineNo)
                 }
                 if len(sequence) == 0 || sequence[len(sequence)-1].typ != Bootstrap {
                     sequence = append(sequence, SearchSequenceItem{typ: Bootstrap})
