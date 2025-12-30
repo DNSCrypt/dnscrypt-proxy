@@ -28,7 +28,7 @@ jobs:
           GOGC: "300"
           GOAMD64: v3
           GODEBUG: "thp=1,netdns=go,gctrace=0,fips140=on"
-          GOPRIVATE: "codeberg.org/miekg/dns,github.com/quic-go/quic-go,github.com/gorilla/websocket,google.golang.org/grpc,github.com/hashicorp/go-immutable-radix/v2"
+          GOPRIVATE: "codeberg.org/miekg/dns,github.com/quic-go/quic-go,github.com/gorilla/websocket,google.golang.org/grpc,github.com/hashicorp/go-immutable-radix/v2,github.com/davecgh/go-spew"
           GOPROXY: "https://proxy.golang.org,direct"
         run: |
           go get codeberg.org/miekg/dns@main
@@ -36,6 +36,7 @@ jobs:
           go get google.golang.org/grpc
           go get github.com/gorilla/websocket@main
           go get github.com/hashicorp/go-immutable-radix/v2
+          go get github.com/davecgh/go-spew
           go mod tidy
           go build \
             -mod=mod \
