@@ -33,24 +33,16 @@ type PluginForwardEntry struct {
     sequence []SearchSequenceItem
 }
 
-// ForwardConfig holds the immutable configuration for atomic swapping
 type ForwardConfig struct {
     forwardMap []PluginForwardEntry
 }
 
 type PluginForward struct {
-    // Atomic value holds *ForwardConfig
-    // This allows wait-free reads during Eval(), eliminating RWMutex contention
-    config atomic.Value
-
+    config        atomic.Value
     bootstrapResolvers []string
-    dhcpdns            []*dhcpdns.Detector
-
-    // Persistent client reduces socket creation overhead and syscalls
-    // SingleInflight suppresses duplicate concurrent queries to the same upstream
-    udpClient *dns.Client
-    tcpClient *dns.Client
-
+    dhcpdns       []*dhcpdns.Detector
+    udpClient     *dns.Client
+    tcpClient     *dns.Client
     configFile    string
     configWatcher *ConfigWatcher
     stagingMap    []PluginForwardEntry
@@ -68,8 +60,6 @@ func (plugin *PluginForward) Init(proxy *Proxy) error {
     plugin.configFile = proxy.forwardFile
     dlog.Noticef("Loading the set of forwarding rules from [%s]", plugin.configFile)
 
-    // Initialize persistent clients once
-    // Set UDPSize to 4096 to support larger EDNS0 responses without truncation
     plugin.udpClient = &dns.Client{
         Net:            "udp",
         Timeout:        5 * time.Second,
@@ -77,7 +67,6 @@ func (plugin *PluginForward) Init(proxy *Proxy) error {
         UDPSize:        4096,
     }
 
-    // TCP client for fallback
     plugin.tcpClient = &dns.Client{
         Net:     "tcp",
         Timeout: 5 * time.Second,
@@ -97,12 +86,11 @@ func (plugin *PluginForward) Init(proxy *Proxy) error {
         return err
     }
 
-    // Store initial config atomically
     plugin.config.Store(&ForwardConfig{forwardMap: forwardMap})
 
     if requiresDHCP {
         if len(proxy.userName) > 0 {
-            dlog.Warn("DHCP/DNS detection may not work when 'user_name' is set or when starting as a non-root user")
+            dlog.Warn("DHCP/DNS detection may not work when 'user_name' is set")
         }
         if proxy.SourceIPv6 {
             dlog.Notice("Starting a DHCP/DNS detector for IPv6")
@@ -120,7 +108,6 @@ func (plugin *PluginForward) Init(proxy *Proxy) error {
     return nil
 }
 
-// parseForwardFile parses forward rules from text
 func (plugin *PluginForward) parseForwardFile(lines string) (bool, []PluginForwardEntry, error) {
     requiresDHCP := false
     forwardMap := []PluginForwardEntry{}
@@ -137,10 +124,7 @@ func (plugin *PluginForward) parseForwardFile(lines string) (bool, []PluginForwa
             ok = false
         }
         if !ok {
-            return false, nil, fmt.Errorf(
-                "Syntax error for a forwarding rule at line %d. Expected syntax: example.com 9.9.9.9,8.8.8.8",
-                1+lineNo,
-            )
+            return false, nil, fmt.Errorf("Syntax error at line %d. Expected: example.com 9.9.9.9", 1+lineNo)
         }
         domain = strings.ToLower(domain)
         var sequence []SearchSequenceItem
@@ -149,21 +133,14 @@ func (plugin *PluginForward) parseForwardFile(lines string) (bool, []PluginForwa
             switch server {
             case "$BOOTSTRAP":
                 if len(plugin.bootstrapResolvers) == 0 {
-                    return false, nil, fmt.Errorf(
-                        "Syntax error for a forwarding rule at line %d. No bootstrap resolvers available",
-                        1+lineNo,
-                    )
+                    return false, nil, fmt.Errorf("Error at line %d. No bootstrap resolvers available", 1+lineNo)
                 }
-                if len(sequence) > 0 && sequence[len(sequence)-1].typ == Bootstrap {
-                    // Ignore repetitions
-                } else {
+                if len(sequence) == 0 || sequence[len(sequence)-1].typ != Bootstrap {
                     sequence = append(sequence, SearchSequenceItem{typ: Bootstrap})
                     dlog.Infof("Forwarding [%s] to the bootstrap servers", domain)
                 }
             case "$DHCP":
-                if len(sequence) > 0 && sequence[len(sequence)-1].typ == DHCP {
-                    // Ignore repetitions
-                } else {
+                if len(sequence) == 0 || sequence[len(sequence)-1].typ != DHCP {
                     sequence = append(sequence, SearchSequenceItem{typ: DHCP})
                     dlog.Infof("Forwarding [%s] to the DHCP servers", domain)
                 }
@@ -197,7 +174,6 @@ func (plugin *PluginForward) parseForwardFile(lines string) (bool, []PluginForwa
             sequence: sequence,
         })
     }
-
     return requiresDHCP, forwardMap, nil
 }
 
@@ -211,28 +187,22 @@ func (plugin *PluginForward) Drop() error {
 func (plugin *PluginForward) PrepareReload() error {
     lines, err := SafeReadTextFile(plugin.configFile)
     if err != nil {
-        return fmt.Errorf("error reading config file during reload preparation: %w", err)
+        return fmt.Errorf("error reading config file: %w", err)
     }
-
     _, stagingMap, err := plugin.parseForwardFile(lines)
     if err != nil {
-        return fmt.Errorf("error parsing config during reload preparation: %w", err)
+        return fmt.Errorf("error parsing config: %w", err)
     }
-
     plugin.stagingMap = stagingMap
     return nil
 }
 
-// ApplyReload atomically replaces the active rules
 func (plugin *PluginForward) ApplyReload() error {
     if plugin.stagingMap == nil {
-        return errors.New("no staged configuration to apply")
+        return errors.New("no staged configuration")
     }
-
-    // Atomic Swap: Very fast, thread-safe, no mutex needed for readers
     plugin.config.Store(&ForwardConfig{forwardMap: plugin.stagingMap})
     plugin.stagingMap = nil
-
     dlog.Noticef("Applied new configuration for plugin [%s]", plugin.Name())
     return nil
 }
@@ -261,8 +231,6 @@ func (plugin *PluginForward) SetConfigWatcher(watcher *ConfigWatcher) {
 func (plugin *PluginForward) Eval(pluginsState *PluginsState, msg *dns.Msg) error {
     qName := pluginsState.qName
     qNameLen := len(qName)
-
-    // Wait-free config load via Atomic
     conf := plugin.config.Load().(*ForwardConfig)
 
     var sequence []SearchSequenceItem
@@ -271,7 +239,6 @@ func (plugin *PluginForward) Eval(pluginsState *PluginsState, msg *dns.Msg) erro
         if candidateLen > qNameLen {
             continue
         }
-        // Match logic
         if (qName[qNameLen-candidateLen:] == candidate.domain &&
             (candidateLen == qNameLen || (qName[qNameLen-candidateLen-1] == '.'))) ||
             (candidate.domain == ".") {
@@ -292,7 +259,6 @@ func (plugin *PluginForward) Eval(pluginsState *PluginsState, msg *dns.Msg) erro
         var server string
         switch item.typ {
         case Explicit:
-            // Optimization: Avoid rand.Intn call if there is only one server
             if len(item.servers) == 1 {
                 server = item.servers[0]
             } else {
@@ -309,7 +275,7 @@ func (plugin *PluginForward) Eval(pluginsState *PluginsState, msg *dns.Msg) erro
             for _, dhcpdns := range plugin.dhcpdns {
                 inconsistency, ip, dhcpDNS, err := dhcpdns.Status()
                 if err != nil && ip != "" && inconsistency > maxInconsistency {
-                    dlog.Infof("No response from the DHCP server while resolving [%s]: %v", qName, err)
+                    dlog.Infof("DHCP check failed for [%s]: %v", qName, err)
                     continue
                 }
                 if len(dhcpDNS) > 0 {
@@ -318,7 +284,7 @@ func (plugin *PluginForward) Eval(pluginsState *PluginsState, msg *dns.Msg) erro
                 }
             }
             if len(server) == 0 {
-                dlog.Infof("DHCP didn't provide any DNS server to forward [%s]", qName)
+                dlog.Infof("DHCP provided no server for [%s]", qName)
                 continue
             }
         }
@@ -334,15 +300,12 @@ func (plugin *PluginForward) Eval(pluginsState *PluginsState, msg *dns.Msg) erro
         dlog.Debugf("Forwarding [%s] to [%s]", qName, server)
 
         ctx, cancel := context.WithTimeout(context.Background(), pluginsState.timeout)
-
-        // Optimization: Shallow copy for performance instead of msg.Copy()
-        // We only modify fields that are reconstructed by Pack() anyway.
+        
         forwardMsg := *msg
         forwardMsg.Extra = nil
-        forwardMsg.Data = nil // Invalidate pre-packed data
+        forwardMsg.Data = nil
         forwardMsg.Id = msg.Id
 
-        // Use persistent client
         respMsg, _, err = plugin.udpClient.ExchangeContext(ctx, &forwardMsg, server)
 
         if err != nil {
@@ -350,7 +313,6 @@ func (plugin *PluginForward) Eval(pluginsState *PluginsState, msg *dns.Msg) erro
             continue
         }
         if respMsg.Truncated {
-            // Use persistent TCP client for fallback
             respMsg, _, err = plugin.tcpClient.ExchangeContext(ctx, &forwardMsg, server)
             if err != nil {
                 cancel()
@@ -366,6 +328,7 @@ func (plugin *PluginForward) Eval(pluginsState *PluginsState, msg *dns.Msg) erro
         pluginsState.synthResponse = respMsg
         pluginsState.action = PluginsActionSynth
         pluginsState.returnCode = PluginsReturnCodeForward
+        
         if len(sequence) > 0 {
             switch respMsg.Rcode {
             case dns.RcodeNameError, dns.RcodeRefused, dns.RcodeNotAuth:
