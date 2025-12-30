@@ -9,16 +9,16 @@ import (
 "github.com/jedisct1/dlog"
 )
 
-// Config allows tuning for specific network environments
-type Config struct {
+// UDPPoolConfig allows tuning for specific network environments
+type UDPPoolConfig struct {
 MaxConnsPerAddr int
 MaxIdleTime     time.Duration
 CleanupInterval time.Duration
 }
 
-// DefaultConfig optimizes for general high-throughput
-func DefaultConfig() Config {
-return Config{
+// DefaultUDPPoolConfig optimizes for general high-throughput
+func DefaultUDPPoolConfig() UDPPoolConfig {
+return UDPPoolConfig{
 MaxConnsPerAddr: 1000,
 MaxIdleTime:     120 * time.Second, // Lowered to 120s for safer NAT traversal
 CleanupInterval: 10 * time.Second,
@@ -57,15 +57,17 @@ TotalOpen int64
 }
 
 shards [64]poolShard
-config Config
+config UDPPoolConfig
 closed int32
 stopCh chan struct{}
 once   sync.Once
 }
 
-func NewUDPConnPool(cfg Config) *UDPConnPool {
+// NewUDPConnPool creates a pool with default optimized settings.
+// Signature matches the original expectation in proxy.go.
+func NewUDPConnPool() *UDPConnPool {
 pool := &UDPConnPool{
-config: cfg,
+config: DefaultUDPPoolConfig(),
 stopCh: make(chan struct{}),
 }
 for i := range pool.shards {
