@@ -30,6 +30,7 @@ import (
     "golang.org/x/net/http2"
     netproxy "golang.org/x/net/proxy"
     "golang.org/x/sys/cpu"
+    "golang.org/x/net/ipv4"
 )
 
 var hasAESGCMHardwareSupport = cpu.X86.HasAES && cpu.X86.HasPCLMULQDQ ||
