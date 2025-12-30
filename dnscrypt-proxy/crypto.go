@@ -21,7 +21,6 @@ NonceSize        = xsecretbox.NonceSize
 HalfNonceSize    = xsecretbox.NonceSize / 2
 TagSize          = xsecretbox.TagSize
 PublicKeySize    = 32
-ClientMagicLen   = 8
 QueryOverhead    = ClientMagicLen + PublicKeySize + HalfNonceSize + TagSize
 ResponseOverhead = len(ServerMagic) + NonceSize + TagSize
 )
@@ -76,6 +75,42 @@ reader := randReaderPool.Get().(*bufio.Reader)
 _, err := io.ReadFull(reader, p)
 randReaderPool.Put(reader)
 return err
+}
+
+func ComputeSharedKey(
+cryptoConstruction CryptoConstruction,
+secretKey *[32]byte,
+serverPk *[32]byte,
+providerName *string,
+) (sharedKey [32]byte) {
+if cryptoConstruction == XChacha20Poly1305 {
+var err error
+sharedKey, err = xsecretbox.SharedKey(*secretKey, *serverPk)
+if err != nil {
+if providerName != nil {
+dlog.Criticalf("[%v] Weak XChaCha20 public key", *providerName)
+} else {
+dlog.Criticalf("Weak XChaCha20 public key")
+}
+}
+} else {
+box.Precompute(&sharedKey, serverPk, secretKey)
+c := byte(0)
+for i := 0; i < 32; i++ {
+c |= sharedKey[i]
+}
+if c == 0 {
+if providerName != nil {
+dlog.Criticalf("[%v] Weak XSalsa20 public key", *providerName)
+} else {
+dlog.Criticalf("Weak XSalsa20 public key")
+}
+if _, err := crypto_rand.Read(sharedKey[:]); err != nil {
+dlog.Fatal(err)
+}
+}
+}
+return sharedKey
 }
 
 func (proxy *Proxy) Encrypt(
