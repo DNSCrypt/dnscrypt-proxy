@@ -33,14 +33,15 @@ func EmptyResponseFromMessage(srcMsg *dns.Msg) *dns.Msg {
 
 // TruncatedResponse - Optimized to avoid full Unpack/Pack allocations
 func TruncatedResponse(packet []byte) ([]byte, error) {
+    // 1. Minimum valid DNS packet size is header (12 bytes)
     if len(packet) < 12 {
         return nil, errors.New("packet too short")
     }
 
-    // Parse Question Count (QDCOUNT)
+    // 2. Parse Question Count (QDCOUNT) to find where Question section ends
     qdCount := binary.BigEndian.Uint16(packet[4:6])
 
-    // Find end of Question section
+    // 3. Walk through questions to find the cut-off point
     offset := 12
     for i := uint16(0); i < qdCount; i++ {
         for {
@@ -48,32 +49,37 @@ func TruncatedResponse(packet []byte) ([]byte, error) {
                 return nil, errors.New("packet malformed")
             }
             labelLen := int(packet[offset])
-            // Check for compression pointer
+            
+            // Check for compression pointer (starts with 11xx xxxx)
             if (labelLen & 0xC0) == 0xC0 {
                 offset += 2
                 break
             }
+            
             offset++ // consume length byte
             if labelLen == 0 {
                 break // End of name
             }
             offset += labelLen
         }
-        offset += 4 // Skip QTYPE and QCLASS
+        
+        // Skip QTYPE (2) and QCLASS (2)
+        offset += 4
     }
 
     if offset > len(packet) {
         return nil, errors.New("packet malformed")
     }
 
-    // Create truncated packet
+    // 4. Create the truncated packet
     newPacket := make([]byte, offset)
     copy(newPacket, packet[:offset])
 
-    // Modify Header Flags: Set TC (bit 1 of byte 2) and QR (bit 0 of byte 2)
-    newPacket[2] |= 0x82 // 1000 0010: QR=1, TC=1
+    // 5. Modify Header Flags
+    // Set TC bit (0x02) and QR bit (0x80)
+    newPacket[2] |= 0x82 
 
-    // Zero out ANCOUNT, NSCOUNT, ARCOUNT
+    // 6. Zero out ANCOUNT, NSCOUNT, ARCOUNT (bytes 6-11)
     for i := 6; i < 12; i++ {
         newPacket[i] = 0
     }
@@ -257,7 +263,7 @@ func updateTTL(msg *dns.Msg, expiration time.Time) {
     }
 }
 
-// hasEDNS0Padding - Signature reverted to []byte for compatibility
+// hasEDNS0Padding - Reverted to []byte signature for compatibility
 func hasEDNS0Padding(packet []byte) (bool, error) {
     msg := dns.Msg{Data: packet}
     if err := msg.Unpack(); err != nil {
@@ -305,6 +311,7 @@ func dddToByte(s []byte) byte {
     return byte((s[0]-'0')*100 + (s[1]-'0')*10 + (s[2] - '0'))
 }
 
+// PackTXTRR - Fixed syntax errors by using byte literals and inlined checks
 func PackTXTRR(s string) []byte {
     bs := make([]byte, len(s))
     msg := make([]byte, 0)
@@ -315,17 +322,18 @@ func PackTXTRR(s string) []byte {
             if i == len(bs) {
                 break
             }
-            if i+2 < len(bs) && isDigit(bs[i]) && isDigit(bs[i+1]) && isDigit(bs[i+2]) {
+            if i+2 < len(bs) && 
+               (bs[i] >= '0' && bs[i] <= '9') && 
+               (bs[i+1] >= '0' && bs[i+1] <= '9') && 
+               (bs[i+2] >= '0' && bs[i+2] <= '9') {
                 msg = append(msg, dddToByte(bs[i:]))
                 i += 2
             } else if bs[i] == 't' {
-                msg = append(msg, '\t')
+                msg = append(msg, 9) // Tab
             } else if bs[i] == 'r' {
-                msg = append(msg, '
-')
+                msg = append(msg, 13) // CR
             } else if bs[i] == 'n' {
-                msg = append(msg, '
-')
+                msg = append(msg, 10) // LF
             } else {
                 msg = append(msg, bs[i])
             }
