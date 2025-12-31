@@ -3,33 +3,85 @@
 package main
 
 import (
-	"github.com/coreos/go-systemd/daemon"
-	clocksmith "github.com/jedisct1/go-clocksmith"
+    "log"
+    "net"
+    "os"
+    "time"
+
+    "github.com/coreos/go-systemd/daemon"
 )
 
-const SdNotifyStatus = "STATUS="
+var (
+    // Pre-allocate messages as bytes to avoid runtime conversion overhead
+    notifyStart    = []byte("STATUS=Starting...")
+    notifyReady    = []byte("READY=1
+STATUS=Ready")
+    notifyWatchdog = []byte("WATCHDOG=1")
+)
 
+// ServiceManagerStartNotify notifies systemd that the service is starting.
 func ServiceManagerStartNotify() error {
-	daemon.SdNotify(false, SdNotifyStatus+"Starting...")
-	return nil
+    // Start is a one-time event, so we use the standard helper for simplicity
+    _, err := daemon.SdNotify(false, string(notifyStart))
+    return err
 }
 
+// ServiceManagerReadyNotify notifies systemd that the service is ready and starts the watchdog.
 func ServiceManagerReadyNotify() error {
-	daemon.SdNotify(false, daemon.SdNotifyReady+"\n"+SdNotifyStatus+"Ready")
-	return systemDWatchdog()
+    // Send "Ready" notification
+    if _, err := daemon.SdNotify(false, string(notifyReady)); err != nil {
+        return err
+    }
+    // Start the optimized watchdog in the background
+    return startOptimizedWatchdog()
 }
 
-func systemDWatchdog() error {
-	watchdogFailureDelay, err := daemon.SdWatchdogEnabled(false)
-	if err != nil || watchdogFailureDelay == 0 {
-		return err
-	}
-	refreshInterval := watchdogFailureDelay / 3
-	go func() {
-		for {
-			daemon.SdNotify(false, daemon.SdNotifyWatchdog)
-			clocksmith.Sleep(refreshInterval)
-		}
-	}()
-	return nil
+func startOptimizedWatchdog() error {
+    // 1. Check if watchdog is enabled using the library (parses timestamps correctly)
+    interval, err := daemon.SdWatchdogEnabled(false)
+    if err != nil || interval == 0 {
+        return err
+    }
+
+    // 2. Establish a persistent connection to the socket
+    // This avoids dialing and looking up env vars in every loop iteration
+    addr := os.Getenv("NOTIFY_SOCKET")
+    if addr == "" {
+        return nil
+    }
+
+    // Handle Linux abstract namespace sockets (starting with @)
+    if addr[0] == '@' {
+        addr = "" + addr[1:]
+    }
+
+    conn, err := net.Dial("unixgram", addr)
+    if err != nil {
+        return err
+    }
+
+    // 3. Run the watchdog loop
+    // Using refreshInterval / 3 is safe (recommended is / 2, but / 3 provides buffer)
+    refreshInterval := interval / 3
+
+    go func() {
+        defer conn.Close()
+        ticker := time.NewTicker(refreshInterval)
+        defer ticker.Stop()
+
+        // Send initial ping immediately
+        if _, err := conn.Write(notifyWatchdog); err != nil {
+            log.Printf("watchdog: failed to send initial heartbeat: %v", err)
+        }
+
+        for range ticker.C {
+            // Zero-allocation write directly to the open socket
+            if _, err := conn.Write(notifyWatchdog); err != nil {
+                // Log error but attempt to continue; broken pipes might recover on restart
+                log.Printf("watchdog: failed to send heartbeat: %v", err)
+            }
+        }
+    }()
+
+    return nil
 }
