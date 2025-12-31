@@ -18,7 +18,6 @@ import (
 const (
 	myResolverHost  string = "resolver.dnscrypt.info."
 	nonexistentName string = "nonexistent-zone.dnscrypt-test."
-	MaxDNSPacketSize = 4096
 )
 
 // Resolver holds reusable client state to avoid per-query allocations
@@ -110,13 +109,6 @@ func (r *Resolver) resolveQuery(ctx context.Context, qName string, qType uint16,
 	return nil, errors.New("timeout")
 }
 
-// queryResult holds results from parallel queries
-type queryResult struct {
-	recordType uint16
-	response   *dns.Msg
-	err        error
-}
-
 // parallelQueries executes multiple DNS queries concurrently
 func (r *Resolver) parallelQueries(ctx context.Context, qName string, qTypes []uint16) map[uint16]*dns.Msg {
 	results := make(map[uint16]*dns.Msg, len(qTypes))
@@ -138,33 +130,6 @@ func (r *Resolver) parallelQueries(ctx context.Context, qName string, qTypes []u
 
 	wg.Wait()
 	return results
-}
-
-func fqdn(name string) string {
-	if !strings.HasSuffix(name, ".") {
-		return name + "."
-	}
-	return name
-}
-
-func reverseAddr(ip string) (string, error) {
-	addr := net.ParseIP(ip)
-	if addr == nil {
-		return "", errors.New("invalid IP")
-	}
-	return dns.Fqdn(dns.ReverseAddr(addr)), nil
-}
-
-func ExtractHostAndPort(server string, defaultPort int) (string, int) {
-	host, portStr, err := net.SplitHostPort(server)
-	if err != nil {
-		return server, defaultPort
-	}
-	port := defaultPort
-	if portStr != "" {
-		fmt.Sscanf(portStr, "%d", &port)
-	}
-	return host, port
 }
 
 func Resolve(server string, name string, singleResolver bool) {
