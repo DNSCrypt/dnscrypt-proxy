@@ -98,8 +98,7 @@ func (plugin *PluginForward) Init(proxy *Proxy) error {
         return err
     }
 
-    rules := plugin.buildRules(forwardMap)
-    plugin.rules.Store(rules)
+    plugin.rules.Store(plugin.buildRules(forwardMap))
 
     if requiresDHCP {
         plugin.ensureDHCPDetectors()
@@ -211,6 +210,7 @@ func (plugin *PluginForward) lookupSequence(qName string) []SearchSequenceItem {
         }
         name = "."
     }
+
     return nil
 }
 
@@ -218,16 +218,19 @@ func (plugin *PluginForward) ensureDHCPDetectors() {
     if len(plugin.dhcpdns) > 0 {
         return
     }
-    if len(plugin.proxy.userName) > 0 {
+
+    if plugin.proxy != nil && len(plugin.proxy.userName) > 0 {
         dlog.Warn("DHCP/DNS detection may not work when 'user_name' is set or when starting as a non-root user")
     }
-    if plugin.proxy.SourceIPv6 {
+
+    if plugin.proxy != nil && plugin.proxy.SourceIPv6 {
         dlog.Notice("Starting a DHCP/DNS detector for IPv6")
         d6 := &dhcpdns.Detector{RemoteIPPort: "[2001:DB8::53]:80"}
         go d6.Serve(9, 10)
         plugin.dhcpdns = append(plugin.dhcpdns, d6)
     }
-    if plugin.proxy.SourceIPv4 {
+
+    if plugin.proxy != nil && plugin.proxy.SourceIPv4 {
         dlog.Notice("Starting a DHCP/DNS detector for IPv4")
         d4 := &dhcpdns.Detector{RemoteIPPort: "192.0.2.53:80"}
         go d4.Serve(9, 10)
@@ -239,9 +242,11 @@ func (plugin *PluginForward) startDHCPCacheRefresher() {
     if len(plugin.dhcpdns) == 0 {
         return
     }
+
     if plugin.dhcpCache.Load() != nil {
         return
     }
+
     plugin.dhcpCache.Store([]string{})
 
     go func() {
@@ -273,6 +278,7 @@ func (plugin *PluginForward) collectDHCPServers() []string {
             out = append(out, s)
         }
     }
+
     return out
 }
 
@@ -292,6 +298,7 @@ func (plugin *PluginForward) getTCPPool(server string) chan net.Conn {
     if ok {
         return pool
     }
+
     pool = make(chan net.Conn, 16)
     plugin.tcpPools[server] = pool
     return pool
@@ -352,6 +359,7 @@ func (plugin *PluginForward) exchangeUpstream(ctx context.Context, msg *dns.Msg,
 
 func (plugin *PluginForward) Eval(pluginsState *PluginsState, msg *dns.Msg) error {
     qName := pluginsState.qName
+
     sequence := plugin.lookupSequence(qName)
     if len(sequence) == 0 {
         return nil
@@ -362,7 +370,7 @@ func (plugin *PluginForward) Eval(pluginsState *PluginsState, msg *dns.Msg) erro
     forwardMsg.Data = nil
 
     tries := 4
-    var err error
+    var lastErr error
 
     for _, item := range sequence {
         if tries == 0 {
@@ -379,12 +387,14 @@ func (plugin *PluginForward) Eval(pluginsState *PluginsState, msg *dns.Msg) erro
                 continue
             }
             server = item.servers[r.Intn(len(item.servers))]
+
         case Bootstrap:
             if len(plugin.bootstrapResolvers) == 0 {
                 plugin.putRand(r)
                 continue
             }
             server = plugin.bootstrapResolvers[r.Intn(len(plugin.bootstrapResolvers))]
+
         case DHCP:
             cached := plugin.dhcpCache.Load()
             var servers []string
@@ -397,6 +407,7 @@ func (plugin *PluginForward) Eval(pluginsState *PluginsState, msg *dns.Msg) erro
                 continue
             }
             server = servers[r.Intn(len(servers))]
+
         default:
             plugin.putRand(r)
             continue
@@ -412,21 +423,23 @@ func (plugin *PluginForward) Eval(pluginsState *PluginsState, msg *dns.Msg) erro
         dlog.Debugf("Forwarding [%s] to [%s]", qName, server)
 
         ctx, cancel := context.WithTimeout(context.Background(), pluginsState.timeout)
-        respMsg, exErr := plugin.exchangeUpstream(ctx, forwardMsg, pluginsState.serverProto, server)
-        if exErr != nil {
+
+        respMsg, err := plugin.exchangeUpstream(ctx, forwardMsg, pluginsState.serverProto, server)
+        if err != nil {
             cancel()
-            err = exErr
+            lastErr = err
             continue
         }
 
         if respMsg != nil && respMsg.Truncated {
-            respMsg, exErr = plugin.exchangeUpstream(ctx, forwardMsg, "tcp", server)
-            if exErr != nil {
+            respMsg, err = plugin.exchangeUpstream(ctx, forwardMsg, "tcp", server)
+            if err != nil {
                 cancel()
-                err = exErr
+                lastErr = err
                 continue
             }
         }
+
         cancel()
 
         if respMsg == nil {
@@ -450,10 +463,9 @@ func (plugin *PluginForward) Eval(pluginsState *PluginsState, msg *dns.Msg) erro
         return nil
     }
 
-    return err
+    return lastErr
 }
 
-// parseForwardFile parses forward rules from text
 func (plugin *PluginForward) parseForwardFile(lines string) (bool, []PluginForwardEntry, error) {
     requiresDHCP := false
     forwardMap := []PluginForwardEntry{}
@@ -471,10 +483,7 @@ func (plugin *PluginForward) parseForwardFile(lines string) (bool, []PluginForwa
             ok = false
         }
         if !ok {
-            return false, nil, fmt.Errorf(
-                "Syntax error for a forwarding rule at line %d. Expected syntax: example.com 9.9.9.9,8.8.8.8",
-                1+lineNo,
-            )
+            return false, nil, fmt.Errorf("Syntax error for a forwarding rule at line %d. Expected syntax: example.com 9.9.9.9,8.8.8.8", 1+lineNo)
         }
 
         domain = strings.ToLower(domain)
@@ -484,13 +493,11 @@ func (plugin *PluginForward) parseForwardFile(lines string) (bool, []PluginForwa
 
         for _, server := range strings.Split(serversStr, ",") {
             server = strings.TrimSpace(server)
+
             switch server {
             case "$BOOTSTRAP":
                 if len(plugin.bootstrapResolvers) == 0 {
-                    return false, nil, fmt.Errorf(
-                        "Syntax error for a forwarding rule at line %d. No bootstrap resolvers available",
-                        1+lineNo,
-                    )
+                    return false, nil, fmt.Errorf("Syntax error for a forwarding rule at line %d. No bootstrap resolvers available", 1+lineNo)
                 }
                 if len(sequence) > 0 && sequence[len(sequence)-1].typ == Bootstrap {
                     continue
@@ -511,6 +518,7 @@ func (plugin *PluginForward) parseForwardFile(lines string) (bool, []PluginForwa
                     dlog.Criticalf("Unknown keyword [%s] at line %d", server, 1+lineNo)
                     continue
                 }
+
                 normalized, err := normalizeIPAndOptionalPort(server, "53")
                 if err != nil {
                     dlog.Criticalf("Syntax error for a forwarding rule at line %d: %s", 1+lineNo, err)
@@ -523,6 +531,7 @@ func (plugin *PluginForward) parseForwardFile(lines string) (bool, []PluginForwa
                 } else {
                     sequence[explicitIdx].servers = append(sequence[explicitIdx].servers, normalized)
                 }
+
                 dlog.Infof("Forwarding [%s] to [%s]", domain, normalized)
             }
         }
