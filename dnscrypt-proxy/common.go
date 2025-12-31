@@ -52,8 +52,7 @@ var (
     FileDescriptorsMu sync.Mutex
 )
 
-// PacketBufferPool reuses 4KB buffers to eliminate GC pressure on hot paths.
-// Optimized for high-throughput DNS handling.
+// PacketBufferPool reuses 4KB buffers to eliminate GC pressure.
 var PacketBufferPool = sync.Pool{
     New: func() interface{} {
         b := make([]byte, 2+MaxDNSPacketSize)
@@ -70,7 +69,6 @@ func PrefixWithSize(packet []byte) ([]byte, error) {
     if packetLen > 0xffff {
         return packet, errors.New("Packet too large")
     }
-    // Optimization: Single allocation for the result
     out := make([]byte, 2+packetLen)
     binary.BigEndian.PutUint16(out[0:2], uint16(packetLen))
     copy(out[2:], packet)
@@ -78,14 +76,9 @@ func PrefixWithSize(packet []byte) ([]byte, error) {
 }
 
 func ReadPrefixed(conn *net.Conn) ([]byte, error) {
-    // Acquire buffer from Pool
     ptr := PacketBufferPool.Get().(*[]byte)
     buf := *ptr
-    
-    // We cannot defer Put() here because we need to return a slice of the buffer
-    // or copy data out. To be safe and immutable, we copy the valid data out 
-    // and return the huge buffer to the pool immediately.
-    
+
     packetLength, pos := -1, 0
     for {
         readnb, err := (*conn).Read(buf[pos:])
@@ -106,8 +99,6 @@ func ReadPrefixed(conn *net.Conn) ([]byte, error) {
             }
         }
         if packetLength >= 0 && pos >= 2+packetLength {
-            // Optimization: Copy only valid bytes to a precisely sized slice.
-            // This relieves GC pressure by allowing the 4KB buffer to be reused.
             result := make([]byte, packetLength)
             copy(result, buf[2:2+packetLength])
             PacketBufferPool.Put(ptr)
@@ -116,7 +107,6 @@ func ReadPrefixed(conn *net.Conn) ([]byte, error) {
     }
 }
 
-// StringReverse uses rune slice for correct UTF-8 reversal.
 func StringReverse(s string) string {
     r := []rune(s)
     for i, j := 0, len(r)-1; i < len(r)/2; i, j = i+1, j-1 {
@@ -129,9 +119,6 @@ func StringTwoFields(str string) (string, string, bool) {
     if len(str) < 3 {
         return "", "", false
     }
-    // Optimization: strings.Cut is cleaner and often faster than IndexFunc
-    // assuming space separation. If strict Unicode space is needed, IndexFunc is fine.
-    // Here we stick to IndexFunc for broad compatibility with the original logic.
     pos := strings.IndexFunc(str, unicode.IsSpace)
     if pos == -1 {
         return "", "", false
@@ -160,26 +147,18 @@ func StringStripSpaces(str string) string {
 }
 
 func TrimAndStripInlineComments(str string) string {
-    // Optimization: strings.Cut is perfect for splitting on '#'
     if before, _, found := strings.Cut(str, "#"); found {
-        // Handle the specific logic of checking previous char
         if len(before) > 0 {
-             // If comment started immediately (e.g. "#comment"), before is empty.
-             // Original logic checked if it wasn't the very start or strictly formatted.
-             // We'll preserve strict original logic for safety.
-             idx := len(before)
-             if idx > 0 {
-                 if prev := before[idx-1]; prev == ' ' || prev == '\t' {
-                     str = before[:idx-1]
-                 } else {
-                    // Comment character was not preceded by whitespace, 
-                    // might be part of the string? Original code implies 
-                    // simple stripping if valid.
+            idx := len(before)
+            if idx > 0 {
+                if prev := before[idx-1]; prev == ' ' || prev == '\t' {
+                    str = before[:idx-1]
+                } else {
                     str = before
-                 }
-             } else {
-                 return "" // Starts with #
-             }
+                }
+            } else {
+                return ""
+            }
         } else {
             return ""
         }
@@ -189,7 +168,6 @@ func TrimAndStripInlineComments(str string) string {
 
 func ExtractHostAndPort(str string, defaultPort int) (host string, port int) {
     host, port = str, defaultPort
-    // Optimization: strings.LastIndexByte is faster
     if idx := strings.LastIndexByte(str, ':'); idx >= 0 && idx < len(str)-1 {
         if portX, err := strconv.Atoi(str[idx+1:]); err == nil {
             host, port = host[:idx], portX
@@ -231,33 +209,42 @@ func ExtractClientIPStrEncrypted(pluginsState *PluginsState, ipCryptConfig *IPCr
     return ipCryptConfig.EncryptIPString(ipStr), ok
 }
 
-// FormatLogLine optimized with strings.Builder and strconv.Append*
+// FormatLogLine optimized with strings.Builder and safe multi-line syntax.
 func FormatLogLine(format, clientIP, qName, reason string, additionalFields ...string) (string, error) {
     var sb strings.Builder
-    // Pre-allocate average line length to avoid resizing
     sb.Grow(128 + len(qName) + len(reason))
 
     if format == "tsv" {
         now := time.Now()
         year, month, day := now.Date()
         hour, minute, second := now.Clock()
-        
+
         sb.WriteByte('[')
         sb.WriteString(strconv.Itoa(year))
         sb.WriteByte('-')
-        if month < 10 { sb.WriteByte('0') }
+        if month < 10 {
+            sb.WriteByte('0')
+        }
         sb.WriteString(strconv.Itoa(int(month)))
         sb.WriteByte('-')
-        if day < 10 { sb.WriteByte('0') }
+        if day < 10 {
+            sb.WriteByte('0')
+        }
         sb.WriteString(strconv.Itoa(day))
         sb.WriteByte(' ')
-        if hour < 10 { sb.WriteByte('0') }
+        if hour < 10 {
+            sb.WriteByte('0')
+        }
         sb.WriteString(strconv.Itoa(hour))
         sb.WriteByte(':')
-        if minute < 10 { sb.WriteByte('0') }
+        if minute < 10 {
+            sb.WriteByte('0')
+        }
         sb.WriteString(strconv.Itoa(minute))
         sb.WriteByte(':')
-        if second < 10 { sb.WriteByte('0') }
+        if second < 10 {
+            sb.WriteByte('0')
+        }
         sb.WriteString(strconv.Itoa(second))
         sb.WriteByte(']')
         sb.WriteByte('\t')
@@ -319,17 +306,14 @@ func WritePluginLog(logger io.Writer, format, clientIP, qName, reason string, ad
 }
 
 func ParseTimeBasedRule(line string, lineNo int, allWeeklyRanges *map[string]WeeklyRanges) (rulePart string, weeklyRanges *WeeklyRanges, err error) {
-    // Go 1.18+ strings.Cut optimization
     before, after, found := strings.Cut(line, "@")
-    
+
     if found {
         rulePart = strings.TrimSpace(before)
         timeRangeName := strings.TrimSpace(after)
-        
-        // Validation: strings.Cut splits on the first instance. 
-        // If there are more '@', they are part of 'after'.
+
         if strings.Contains(after, "@") {
-             return "", nil, fmt.Errorf("syntax error at line %d -- Unexpected @ character", 1+lineNo)
+            return "", nil, fmt.Errorf("syntax error at line %d -- Unexpected @ character", 1+lineNo)
         }
 
         if len(timeRangeName) > 0 {
@@ -350,11 +334,9 @@ func ParseIPRule(line string, lineNo int) (cleanLine string, trailingStar bool, 
     if len(line) < 2 {
         return "", false, fmt.Errorf("suspicious IP rule [%s] at line %d", line, lineNo)
     }
-    
-    // Direct byte comparison
+
     trailingStar = line[len(line)-1] == '*'
 
-    // Expensive call, but necessary for validation
     ip := net.ParseIP(line)
 
     if ip != nil && trailingStar {
@@ -365,7 +347,7 @@ func ParseIPRule(line string, lineNo int) (cleanLine string, trailingStar bool, 
     if trailingStar {
         cleanLine = cleanLine[:len(cleanLine)-1]
     }
-    
+
     if len(cleanLine) == 0 {
         return "", false, fmt.Errorf("empty IP rule at line %d", lineNo)
     }
@@ -374,7 +356,7 @@ func ParseIPRule(line string, lineNo int) (cleanLine string, trailingStar bool, 
     if lastChar == ':' || lastChar == '.' {
         cleanLine = cleanLine[:len(cleanLine)-1]
     }
-    
+
     if strings.Contains(cleanLine, "*") {
         return "", false, fmt.Errorf("invalid rule: [%s] - wildcards can only be used as a suffix at line %d", line, lineNo)
     }
@@ -382,8 +364,7 @@ func ParseIPRule(line string, lineNo int) (cleanLine string, trailingStar bool, 
     return strings.ToLower(cleanLine), trailingStar, nil
 }
 
-// ProcessConfigLines uses Go 1.23+ iterators (iter.Seq2).
-// This allows the caller to use: for line, lineNo := range ProcessConfigLines(data) { ... }
+// ProcessConfigLines uses Go 1.23+ iterators.
 func ProcessConfigLines(lines string) iter.Seq2[string, int] {
     return func(yield func(string, int) bool) {
         scanner := bufio.NewScanner(strings.NewReader(lines))
@@ -402,7 +383,6 @@ func ProcessConfigLines(lines string) iter.Seq2[string, int] {
 }
 
 func LoadIPRules(lines string, prefixes *iradix.Tree, ips map[string]interface{}) (*iradix.Tree, error) {
-    // Updated to use the new iterator-based ProcessConfigLines
     for line, lineNo := range ProcessConfigLines(lines) {
         cleanLine, trailingStar, lineErr := ParseIPRule(line, lineNo)
         if lineErr != nil {
@@ -431,7 +411,7 @@ func reverseAddr(addr string) (string, error) {
     if ip == nil {
         return "", errors.New("unrecognized address: " + addr)
     }
-    
+
     var sb strings.Builder
     if v4 := ip.To4(); v4 != nil {
         sb.Grow(30)
@@ -442,8 +422,7 @@ func reverseAddr(addr string) (string, error) {
         sb.WriteString("in-addr.arpa.")
         return sb.String(), nil
     }
-    
-    // IPv6
+
     const hexDigits = "0123456789abcdef"
     sb.Grow(75)
     for i := len(ip) - 1; i >= 0; i-- {
