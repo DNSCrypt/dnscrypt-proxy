@@ -9,7 +9,8 @@ import (
     "golang.org/x/sys/unix"
 )
 
-type Proxy struct{}
+// NOTE: 'type Proxy struct{}' is removed here because it is already defined in proxy.go.
+// The methods below effectively extend the existing Proxy struct.
 
 func (proxy *Proxy) udpListenerConfig() (*net.ListenConfig, error) {
     return &net.ListenConfig{
@@ -50,7 +51,6 @@ func (proxy *Proxy) udpListenerConfig() (*net.ListenConfig, error) {
                 }
 
                 // QoS / DSCP: Changed to 0xB8 (DSCP 46 / EF - Expedited Forwarding) for low latency.
-                // Previous: 0x70 (DSCP 28 / AF32).
                 if isV4 {
                     set(unix.SetsockoptInt(fdi, unix.IPPROTO_IP, unix.IP_TOS, 0xB8))
                 }
