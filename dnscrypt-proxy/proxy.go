@@ -1,40 +1,474 @@
 package main
 
 import (
-	"context"
-	crypto_rand "crypto/rand"
-	"encoding/binary"
-	"net"
-	"os"
-	"runtime"
-	"strings"
-	"sync"
-	"sync/atomic"
-	"time"
+    "context"
+    crypto_rand "crypto/rand"
+    "encoding/binary"
+    "net"
+    "os"
+    "runtime"
+    "strings"
+    "sync"
+    "sync/atomic"
+    "time"
 
-	"github.com/jedisct1/dlog"
-	clocksmith "github.com/jedisct1/go-clocksmith"
-	stamps "github.com/jedisct1/go-dnsstamps"
-	"golang.org/x/crypto/curve25519"
-	netproxy "golang.org/x/net/proxy"
+    "github.com/jedisct1/dlog"
+    clocksmith "github.com/jedisct1/go-clocksmith"
+    stamps "github.com/jedisct1/go-dnsstamps"
+    "golang.org/x/crypto/curve25519"
+    netproxy "golang.org/x/net/proxy"
 )
 
+// Optimization: Reuse buffers to reduce GC pressure
+var packetBufferPool = sync.Pool{
+    New: func() interface{} {
+        b := make([]byte, MaxDNSPacketSize)
+        return &b
+    },
+}
+
 type Proxy struct {
-	pluginsGlobals                PluginsGlobals
-	serversInfo                   ServersInfo
-	questionSizeEstimator         QuestionSizeEstimator
-	registeredServers             []RegisteredServer
-	dns64Resolvers                []string
-	dns64Prefixes                 []string
-	serversBlockingFragments      []string
-	ednsClientSubnets             []*net.IPNet
-	queryLogIgnoredQtypes         []string
-	localDoHListeners             []*net.TCPListener
-	queryMeta                     []string
-	enableHotReload               bool
-	udpListeners                  []*net.UDPConn
-	sources                       []*Source
-	tcpListeners                  []*net.TCPListener
+    pluginsGlobals                PluginsGlobals
+    serversInfo                   ServersInfo
+    questionSizeEstimator         QuestionSizeEstimator
+    registeredServers             []RegisteredServer
+    dns64Resolvers                []string
+    dns64Prefixes                 []string
+    serversBlockingFragments      []string
+    ednsClientSubnets             []*net.IPNet
+    queryLogIgnoredQtypes         []string
+    localDoHListeners             []*net.TCPListener
+    queryMeta                     []string
+    enableHotReload               bool
+    udpListeners                  []*net.UDPConn
+    sources                       []*Source
+    tcpListeners                  []*net.TCPListener
+    registeredRelays              []RegisteredServer
+    listenAddresses               []string
+    localDoHListenAddresses       []string
+    monitoringUI                  MonitoringUIConfig
+    monitoringInstance            *MonitoringUI
+    xTransport                    *XTransport
+    allWeeklyRanges               *map[string]WeeklyRanges
+    routes                        *map[string][]string
+    captivePortalMap              *CaptivePortalMap
+    nxLogFormat                   string
+    localDoHCertFile              string
+    localDoHCertKeyFile           string
+    captivePortalMapFile          string
+    localDoHPath                  string
+    cloakFile                     string
+    forwardFile                   string
+    blockIPFormat                 string
+    blockIPLogFile                string
+    allowedIPFile                 string
+    allowedIPFormat               string
+    allowedIPLogFile              string
+    queryLogFormat                string
+    blockIPFile                   string
+    allowNameFile                 string
+    allowNameFormat               string
+    allowNameLogFile              string
+    blockNameLogFile              string
+    blockNameFormat               string
+    blockNameFile                 string
+    queryLogFile                  string
+    blockedQueryResponse          string
+    userName                      string
+    nxLogFile                     string
+    proxySecretKey                [32]byte
+    proxyPublicKey                [32]byte
+    ServerNames                   []string
+    DisabledServerNames           []string
+    requiredProps                 stamps.ServerInformalProperties
+    certRefreshDelayAfterFailure  time.Duration
+    timeout                       time.Duration
+    certRefreshDelay              time.Duration
+    certRefreshConcurrency        int
+    cacheSize                     int
+    logMaxBackups                 int
+    logMaxAge                     int
+    logMaxSize                    int
+    cacheNegMinTTL                uint32
+    rejectTTL                     uint32
+    cacheMaxTTL                   uint32
+    clientsCount                  uint32
+    maxClients                    uint32
+    timeoutLoadReduction          float64
+    cacheMinTTL                   uint32
+    cacheNegMaxTTL                uint32
+    cloakTTL                      uint32
+    cloakedPTR                    bool
+    cache                         bool
+    pluginBlockIPv6               bool
+    ephemeralKeys                 bool
+    pluginBlockUnqualified        bool
+    showCerts                     bool
+    certIgnoreTimestamp           bool
+    skipAnonIncompatibleResolvers bool
+    anonDirectCertFallback        bool
+    pluginBlockUndelegated        bool
+    child                         bool
+    SourceIPv4                    bool
+    SourceIPv6                    bool
+    SourceDNSCrypt                bool
+    SourceDoH                     bool
+    SourceODoH                    bool
+    listenersMu                   sync.Mutex
+    ipCryptConfig                 *IPCryptConfig
+    udpConnPool                   *UDPConnPool
+}
+
+func (proxy *Proxy) registerUDPListener(conn *net.UDPConn) {
+    proxy.listenersMu.Lock()
+    proxy.udpListeners = append(proxy.udpListeners, conn)
+    proxy.listenersMu.Unlock()
+}
+
+func (proxy *Proxy) registerTCPListener(listener *net.TCPListener) {
+    proxy.listenersMu.Lock()
+    proxy.tcpListeners = append(proxy.tcpListeners, listener)
+    proxy.listenersMu.Unlock()
+}
+
+func (proxy *Proxy) registerLocalDoHListener(listener *net.TCPListener) {
+    proxy.listenersMu.Lock()
+    proxy.localDoHListeners = append(proxy.localDoHListeners, listener)
+    proxy.listenersMu.Unlock()
+}
+
+func (proxy *Proxy) addDNSListener(listenAddrStr string) {
+    udp := "udp"
+    tcp := "tcp"
+    isIPv4 := len(listenAddrStr) > 0 && isDigit(listenAddrStr[0])
+    if isIPv4 {
+        udp = "udp4"
+        tcp = "tcp4"
+    }
+    listenUDPAddr, err := net.ResolveUDPAddr(udp, listenAddrStr)
+    if err != nil {
+        dlog.Fatal(err)
+    }
+    listenTCPAddr, err := net.ResolveTCPAddr(tcp, listenAddrStr)
+    if err != nil {
+        dlog.Fatal(err)
+    }
+    if err := proxy.udpListenerFromAddr(listenUDPAddr); err != nil {
+        dlog.Fatal(err)
+    }
+    if err := proxy.tcpListenerFromAddr(listenTCPAddr); err != nil {
+        dlog.Fatal(err)
+    }
+}
+
+func (proxy *Proxy) udpListenerFromAddr(listenAddr *net.UDPAddr) error {
+    listenConfig, err := proxy.udpListenerConfig()
+    if err != nil {
+        return err
+    }
+    listenAddrStr := listenAddr.String()
+    network := "udp"
+    isIPv4 := isDigit(listenAddrStr[0])
+    if isIPv4 {
+        network = "udp4"
+    }
+    clientPc, err := listenConfig.ListenPacket(context.Background(), network, listenAddrStr)
+    if err != nil {
+        return err
+    }
+    proxy.registerUDPListener(clientPc.(*net.UDPConn))
+    dlog.Noticef("Now listening to %v [UDP]", listenAddr)
+    return nil
+}
+
+func (proxy *Proxy) tcpListenerFromAddr(listenAddr *net.TCPAddr) error {
+    listenConfig, err := proxy.tcpListenerConfig()
+    if err != nil {
+        return err
+    }
+    listenAddrStr := listenAddr.String()
+    network := "tcp"
+    isIPv4 := isDigit(listenAddrStr[0])
+    if isIPv4 {
+        network = "tcp4"
+    }
+    acceptPc, err := listenConfig.Listen(context.Background(), network, listenAddrStr)
+    if err != nil {
+        return err
+    }
+    proxy.registerTCPListener(acceptPc.(*net.TCPListener))
+    dlog.Noticef("Now listening to %v [TCP]", listenAddr)
+    return nil
+}
+
+func (proxy *Proxy) localDoHListenerFromAddr(listenAddr *net.TCPAddr) error {
+    listenConfig, err := proxy.tcpListenerConfig()
+    if err != nil {
+        return err
+    }
+    listenAddrStr := listenAddr.String()
+    network := "tcp"
+    isIPv4 := isDigit(listenAddrStr[0])
+    if isIPv4 {
+        network = "tcp4"
+    }
+    acceptPc, err := listenConfig.Listen(context.Background(), network, listenAddrStr)
+    if err != nil {
+        return err
+    }
+    proxy.registerLocalDoHListener(acceptPc.(*net.TCPListener))
+    dlog.Noticef("Now listening to https://%v%v [DoH]", listenAddr, proxy.localDoHPath)
+    return nil
+}
+
+func (proxy *Proxy) startAcceptingClients() {
+    for _, clientPc := range proxy.udpListeners {
+        go proxy.udpListener(clientPc)
+    }
+    proxy.udpListeners = nil
+    for _, acceptPc := range proxy.tcpListeners {
+        go proxy.tcpListener(acceptPc)
+    }
+    proxy.tcpListeners = nil
+    for _, acceptPc := range proxy.localDoHListeners {
+        go proxy.localDoHListener(acceptPc)
+    }
+    proxy.localDoHListeners = nil
+}
+
+// Optimization: Eliminated intermediate slice allocations.
+// We now calculate the total size needed and append directly, leveraging capacity if available.
+func (proxy *Proxy) prepareForRelay(ip net.IP, port int, encryptedQuery *[]byte) {
+    const relayHeaderSize = 10 + 16 + 2 // magic(10) + IP(16) + Port(2)
+    oldQ := *encryptedQuery
+    neededSize := relayHeaderSize + len(oldQ)
+
+    var newQ []byte
+    if cap(oldQ) >= neededSize {
+        // Optimization: In-place expansion if capacity exists (zero allocation)
+        newQ = oldQ[:neededSize]
+        // Shift original data to the end
+        copy(newQ[relayHeaderSize:], oldQ)
+    } else {
+        // Fallback: Allocate exactly once
+        newQ = make([]byte, neededSize)
+        copy(newQ[relayHeaderSize:], oldQ)
+    }
+
+    // Construct Header directly into the buffer
+    // Magic: 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00, 0x00
+    copy(newQ[0:8], []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff})
+    newQ[8] = 0x00
+    newQ[9] = 0x00
+
+    // IP
+    copy(newQ[10:26], ip.To16())
+
+    // Port
+    binary.BigEndian.PutUint16(newQ[26:28], uint16(port))
+
+    *encryptedQuery = newQ
+}
+
+func (proxy *Proxy) exchangeWithUDPServer(
+    serverInfo *ServerInfo,
+    sharedKey *[32]byte,
+    encryptedQuery []byte,
+    clientNonce []byte,
+) ([]byte, error) {
+    upstreamAddr := serverInfo.UDPAddr
+    if serverInfo.Relay != nil && serverInfo.Relay.Dnscrypt != nil {
+        upstreamAddr = serverInfo.Relay.Dnscrypt.RelayUDPAddr
+    }
+
+    proxyDialer := proxy.xTransport.proxyDialer
+    if proxyDialer != nil {
+        return proxy.exchangeWithUDPServerViaProxy(serverInfo, sharedKey, encryptedQuery, clientNonce, upstreamAddr, proxyDialer)
+    }
+
+    pc, err := proxy.udpConnPool.Get(upstreamAddr)
+    if err != nil {
+        return nil, err
+    }
+
+    if err := pc.SetDeadline(time.Now().Add(serverInfo.Timeout)); err != nil {
+        proxy.udpConnPool.Discard(pc)
+        return nil, err
+    }
+
+    query := encryptedQuery
+    if serverInfo.Relay != nil && serverInfo.Relay.Dnscrypt != nil {
+        proxy.prepareForRelay(serverInfo.UDPAddr.IP, serverInfo.UDPAddr.Port, &query)
+    }
+
+    // Optimization: Use sync.Pool for the response buffer
+    respBufPtr := packetBufferPool.Get().(*[]byte)
+    defer packetBufferPool.Put(respBufPtr)
+    encryptedResponse := *respBufPtr
+
+    var readErr error
+    var length int
+    for tries := 2; tries > 0; tries-- {
+        if _, err := pc.Write(query); err != nil {
+            proxy.udpConnPool.Discard(pc)
+            return nil, err
+        }
+        length, err = pc.Read(encryptedResponse)
+        if err == nil {
+            readErr = nil
+            break
+        }
+        readErr = err
+        dlog.Debugf("[%v] Retry on timeout", serverInfo.Name)
+    }
+
+    if readErr != nil {
+        proxy.udpConnPool.Discard(pc)
+        return nil, readErr
+    }
+
+    proxy.udpConnPool.Put(upstreamAddr, pc)
+
+    // Decrypt handles its own allocation usually, or we pass slice.
+    // Note: We pass the slice of the pooled array.
+    return proxy.Decrypt(serverInfo, sharedKey, encryptedResponse[:length], clientNonce)
+}
+
+func (proxy *Proxy) exchangeWithUDPServerViaProxy(
+    serverInfo *ServerInfo,
+    sharedKey *[32]byte,
+    encryptedQuery []byte,
+    clientNonce []byte,
+    upstreamAddr *net.UDPAddr,
+    proxyDialer *netproxy.Dialer,
+) ([]byte, error) {
+    pc, err := (*proxyDialer).Dial("udp", upstreamAddr.String())
+    if err != nil {
+        return nil, err
+    }
+    defer pc.Close()
+
+    if err := pc.SetDeadline(time.Now().Add(serverInfo.Timeout)); err != nil {
+        return nil, err
+    }
+    if serverInfo.Relay != nil && serverInfo.Relay.Dnscrypt != nil {
+        proxy.prepareForRelay(serverInfo.UDPAddr.IP, serverInfo.UDPAddr.Port, &encryptedQuery)
+    }
+
+    // Optimization: Use sync.Pool
+    respBufPtr := packetBufferPool.Get().(*[]byte)
+    defer packetBufferPool.Put(respBufPtr)
+    encryptedResponse := *respBufPtr
+
+    var length int
+    for tries := 2; tries > 0; tries-- {
+        if _, err := pc.Write(encryptedQuery); err != nil {
+            return nil, err
+        }
+        length, err = pc.Read(encryptedResponse)
+        if err == nil {
+            break
+        }
+        dlog.Debugf("[%v] Retry on timeout", serverInfo.Name)
+    }
+    return proxy.Decrypt(serverInfo, sharedKey, encryptedResponse[:length], clientNonce)
+}
+
+func (proxy *Proxy) exchangeWithTCPServer(
+    serverInfo *ServerInfo,
+    sharedKey *[32]byte,
+    encryptedQuery []byte,
+    clientNonce []byte,
+) ([]byte, error) {
+    upstreamAddr := serverInfo.TCPAddr
+    if serverInfo.Relay != nil && serverInfo.Relay.Dnscrypt != nil {
+        upstreamAddr = serverInfo.Relay.Dnscrypt.RelayTCPAddr
+    }
+    var err error
+    var pc net.Conn
+    proxyDialer := proxy.xTransport.proxyDialer
+    if proxyDialer == nil {
+        pc, err = net.DialTimeout("tcp", upstreamAddr.String(), serverInfo.Timeout)
+    } else {
+        pc, err = (*proxyDialer).Dial("tcp", upstreamAddr.String())
+    }
+    if err != nil {
+        return nil, err
+    }
+    defer pc.Close()
+
+    if err := pc.SetDeadline(time.Now().Add(serverInfo.Timeout)); err != nil {
+        return nil, err
+    }
+    if serverInfo.Relay != nil && serverInfo.Relay.Dnscrypt != nil {
+        proxy.prepareForRelay(serverInfo.TCPAddr.IP, serverInfo.TCPAddr.Port, &encryptedQuery)
+    }
+    encryptedQuery, err = PrefixWithSize(encryptedQuery)
+    if err != nil {
+        return nil, err
+    }
+    if _, err := pc.Write(encryptedQuery); err != nil {
+        return nil, err
+    }
+
+    // ReadPrefixed internally allocates, but since it's variable length (TCP),
+    // it's harder to pool without a specialized reader.
+    // However, if ReadPrefixed supports passing a buffer, we should use it.
+    // Assuming standard implementation, we leave it, but ensure connection closure is clean.
+    encryptedResponse, err := ReadPrefixed(&pc)
+    if err != nil {
+        return nil, err
+    }
+    return proxy.Decrypt(serverInfo, sharedKey, encryptedResponse, clientNonce)
+}
+
+func (proxy *Proxy) clientsCountInc() bool {
+    for {
+        count := atomic.LoadUint32(&proxy.clientsCount)
+        if count >= proxy.maxClients {
+            return false
+        }
+        if atomic.CompareAndSwapUint32(&proxy.clientsCount, count, count+1) {
+            dlog.Debugf("clients count: %d", count+1)
+            return true
+        }
+    }
+}
+
+func (proxy *Proxy) clientsCountDec() {
+    for {
+        count := atomic.LoadUint32(&proxy.clientsCount)
+        if count == 0 {
+            // Already at zero, nothing to do
+            break
+        }
+        if atomic.CompareAndSwapUint32(&proxy.clientsCount, count, count-1) {
+            dlog.Debugf("clients count: %d", count-1)
+            break
+        }
+        // CAS failed, retry with updated count
+    }
+}
+
+func (proxy *Proxy) getDynamicTimeout() time.Duration {
+    if proxy.timeoutLoadReduction <= 0.0 || proxy.maxClients == 0 {
+        return proxy.timeout
+    }
+
+    currentClients := atomic.LoadUint32(&proxy.clientsCount)
+    utilization := float64(currentClients) / float64(proxy.maxClients)
+    if utilization < 0.8 {
+        return proxy.timeout
+    }
+
+    // Linearly decrease timeout as load approaches 100%
+    // Reduced timeout helps shed load faster when congested
+    factor := 1.0 - (utilization-0.8)*5.0*proxy.timeoutLoadReduction
+    if factor < 0.1 {
+        factor = 0.1
+    }
+    return time.Duration(float64(proxy.timeout) * factor)
+}	tcpListeners                  []*net.TCPListener
 	registeredRelays              []RegisteredServer
 	listenAddresses               []string
 	localDoHListenAddresses       []string
