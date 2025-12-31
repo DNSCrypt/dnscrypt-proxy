@@ -242,7 +242,6 @@ func (plugin *PluginForward) startDHCPCacheRefresher() {
     if len(plugin.dhcpdns) == 0 {
         return
     }
-
     if plugin.dhcpCache.Load() != nil {
         return
     }
@@ -253,9 +252,12 @@ func (plugin *PluginForward) startDHCPCacheRefresher() {
         ticker := time.NewTicker(2 * time.Second)
         defer ticker.Stop()
 
-        for range ticker.C {
-            servers := plugin.collectDHCPServers()
-            plugin.dhcpCache.Store(servers)
+        for {
+            select {
+            case <-ticker.C:
+                servers := plugin.collectDHCPServers()
+                plugin.dhcpCache.Store(servers)
+            }
         }
     }()
 }
@@ -466,6 +468,7 @@ func (plugin *PluginForward) Eval(pluginsState *PluginsState, msg *dns.Msg) erro
     return lastErr
 }
 
+// parseForwardFile parses forward rules from text
 func (plugin *PluginForward) parseForwardFile(lines string) (bool, []PluginForwardEntry, error) {
     requiresDHCP := false
     forwardMap := []PluginForwardEntry{}
@@ -483,7 +486,7 @@ func (plugin *PluginForward) parseForwardFile(lines string) (bool, []PluginForwa
             ok = false
         }
         if !ok {
-            return false, nil, fmt.Errorf("Syntax error for a forwarding rule at line %d. Expected syntax: example.com 9.9.9.9,8.8.8.8", 1+lineNo)
+            return false, nil, fmt.Errorf(`Syntax error for a forwarding rule at line %d. Expected syntax: example.com 9.9.9.9,8.8.8.8`, 1+lineNo)
         }
 
         domain = strings.ToLower(domain)
@@ -497,7 +500,7 @@ func (plugin *PluginForward) parseForwardFile(lines string) (bool, []PluginForwa
             switch server {
             case "$BOOTSTRAP":
                 if len(plugin.bootstrapResolvers) == 0 {
-                    return false, nil, fmt.Errorf("Syntax error for a forwarding rule at line %d. No bootstrap resolvers available", 1+lineNo)
+                    return false, nil, fmt.Errorf(`Syntax error for a forwarding rule at line %d. No bootstrap resolvers available`, 1+lineNo)
                 }
                 if len(sequence) > 0 && sequence[len(sequence)-1].typ == Bootstrap {
                     continue
