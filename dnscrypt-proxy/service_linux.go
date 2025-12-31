@@ -14,8 +14,11 @@ import (
 var (
     // Pre-allocate messages as bytes to avoid runtime conversion overhead
     notifyStart    = []byte("STATUS=Starting...")
+    
+    // Split the string to prevent "newline in string" syntax errors
     notifyReady    = []byte("READY=1
-STATUS=Ready")
+" + "STATUS=Ready")
+    
     notifyWatchdog = []byte("WATCHDOG=1")
 )
 
