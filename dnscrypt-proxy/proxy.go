@@ -445,15 +445,25 @@ func (proxy *Proxy) updateRegisteredServers() error {
 func (proxy *Proxy) udpListener(clientPc *net.UDPConn) {
     defer clientPc.Close()
     for {
-        buffer := make([]byte, MaxDNSPacketSize-1)
-        length, clientAddr, err := clientPc.ReadFrom(buffer)
+        // Optimization: Get buffer from pool instead of make()
+        // We use a pointer so we can put the original array pointer back later
+        bufPtr := packetBufferPool.Get().(*[]byte)
+        buffer := *bufPtr
+
+        // Note: MaxDNSPacketSize is usually enough, -1 logic from original code preserved if strict
+        length, clientAddr, err := clientPc.ReadFrom(buffer[:MaxDNSPacketSize-1])
         if err != nil {
+            packetBufferPool.Put(bufPtr) // Return on error
             return
         }
+
         packet := buffer[:length]
+
         if !proxy.clientsCountInc() {
             dlog.Warnf("Too many incoming connections (max=%d)", proxy.maxClients)
             dlog.Debugf("Number of goroutines: %d", runtime.NumGoroutine())
+
+            // Send synchronous response for cached items only (fast reject/reply)
             proxy.processIncomingQuery(
                 "udp",
                 proxy.xTransport.mainProto,
@@ -462,13 +472,20 @@ func (proxy *Proxy) udpListener(clientPc *net.UDPConn) {
                 clientPc,
                 time.Now(),
                 true,
-            ) // respond synchronously, but only to cached/synthesized queries
+            )
+
+            // Return buffer to pool immediately since we are done synchronously
+            packetBufferPool.Put(bufPtr)
             continue
         }
-        go func() {
+
+        go func(bPtr *[]byte) {
+            // Optimization: Return buffer to pool when goroutine finishes
+            defer packetBufferPool.Put(bPtr)
             defer proxy.clientsCountDec()
+
             proxy.processIncomingQuery("udp", proxy.xTransport.mainProto, packet, &clientAddr, clientPc, time.Now(), false)
-        }()
+        }(bufPtr)
     }
 }
 
@@ -587,7 +604,6 @@ func (proxy *Proxy) prepareForRelay(ip net.IP, port int, encryptedQuery *[]byte)
     if cap(oldQ) >= neededSize {
         // Optimization: In-place expansion if capacity exists
         newQ = oldQ[:neededSize]
-        // Shift data to make room for header
         copy(newQ[relayHeaderSize:], oldQ)
     } else {
         newQ = make([]byte, neededSize)
