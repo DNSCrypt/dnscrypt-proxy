@@ -88,7 +88,6 @@ func HandleCaptivePortalQuery(msg *dns.Msg, question dns.RR, ips *CaptivePortalE
     if !ok {
         qTypeStr = fmt.Sprint(qtype)
     }
-    // Use Debugf instead of Infof for hot paths to avoid log spam affecting performance
     dlog.Debugf("Query for captive portal detection: [%v] (%v)", hdr.Name, qTypeStr)
     return respMsg
 }
@@ -123,10 +122,8 @@ func addColdStartListener(
         buffer := make([]byte, MaxDNSPacketSize)
         
         for {
-            // No SetDeadline needed; Close() handles unblocking
             length, clientAddr, err := clientPc.ReadFrom(buffer)
             if err != nil {
-                // Check if error is due to socket closing
                 if errors.Is(err, net.ErrClosed) {
                     return
                 }
@@ -136,8 +133,9 @@ func addColdStartListener(
 
             packet := buffer[:length]
             msg := &dns.Msg{}
-            // unpack directly from the reused buffer
-            if err := msg.Unpack(packet); err != nil {
+            // Optimization: Assign to Data field first, then Unpack()
+            msg.Data = packet
+            if err := msg.Unpack(); err != nil {
                 continue
             }
 
@@ -151,8 +149,10 @@ func addColdStartListener(
                 continue
             }
 
-            if packed, err := respMsg.Pack(); err == nil {
-                clientPc.WriteTo(packed, clientAddr)
+            // Optimization: Use existing Pack() API which returns error only
+            // and writes to respMsg.Data
+            if err := respMsg.Pack(); err == nil {
+                clientPc.WriteTo(respMsg.Data, clientAddr)
             }
         }
     }()
@@ -164,7 +164,6 @@ func ColdStart(proxy *Proxy) (*CaptivePortalHandler, error) {
         return nil, nil
     }
 
-    // Use bufio.Scanner for efficient file reading
     file, err := os.Open(proxy.captivePortalMapFile)
     if err != nil {
         dlog.Warn(err)
@@ -234,7 +233,6 @@ func ColdStart(proxy *Proxy) (*CaptivePortalHandler, error) {
         return handler, nil
     }
     
-    // If no listeners started, clean up any that might have
     handler.Stop()
     return handler, err
 }
