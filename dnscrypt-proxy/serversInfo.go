@@ -990,7 +990,7 @@ func _fetchODoHTargetInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, i
 
 	if relay == nil {
 		dlog.Criticalf(
-			"No relay defined for [%v] - Configuring a relay is required for ODoH servers (see the `[anonymized_dns]` section)",
+			"No relay defined for [%v] - Configuring an ODoH relay is required for ODoH servers (see the `[anonymized_dns]` section)",
 			name,
 		)
 		return ServerInfo{}, errors.New("No ODoH relay")
