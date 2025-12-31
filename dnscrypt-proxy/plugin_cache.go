@@ -15,7 +15,7 @@ const StaleResponseTTL = 30 * time.Second
 
 type CachedResponse struct {
 	expiration time.Time
-	msg        dns.Msg
+	msg        *dns.Msg
 }
 
 type CachedResponses struct {
@@ -141,7 +141,7 @@ func (plugin *PluginCacheResponse) Eval(pluginsState *PluginsState, msg *dns.Msg
 	)
 	cachedResponse := CachedResponse{
 		expiration: time.Now().Add(ttl),
-		msg:        *msg,
+		msg:        msg.Copy(),
 	}
 	var cacheInitError error
 	cachedResponses.cacheOnce.Do(func() {

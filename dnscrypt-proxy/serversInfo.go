@@ -761,7 +761,7 @@ func fetchDNSCryptServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp
 		msg, _, _, err := DNSExchange(
 			proxy,
 			proxy.xTransport.mainProto,
-			&query,
+			query,
 			stamp.ServerAddrStr,
 			dnscryptRelay,
 			&name,
@@ -849,7 +849,7 @@ func dohNXTestPacket(msgID uint16) []byte {
 	return msg.Data
 }
 
-func plainNXTestPacket(msgID uint16) dns.Msg {
+func plainNXTestPacket(msgID uint16) *dns.Msg {
 	qName := make([]byte, 16)
 	charset := "abcdefghijklmnopqrstuvwxyz"
 	for i := range qName {
@@ -858,7 +858,7 @@ func plainNXTestPacket(msgID uint16) dns.Msg {
 	msg := dns.NewMsg(string(qName)+".test.dnscrypt.", dns.TypeNS)
 	msg.ID = msgID
 	msg.RecursionDesired = true
-	return *msg
+	return msg
 }
 
 func fetchDoHServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, isNew bool) (ServerInfo, error) {
@@ -990,7 +990,7 @@ func _fetchODoHTargetInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, i
 
 	if relay == nil {
 		dlog.Criticalf(
-			"No relay defined for [%v] - Configuring a relay is required for ODoH servers (see the `[anonymized_dns]` section)",
+			"No relay defined for [%v] - Configuring an ODoH relay is required for ODoH servers (see the `[anonymized_dns]` section)",
 			name,
 		)
 		return ServerInfo{}, errors.New("No ODoH relay")
