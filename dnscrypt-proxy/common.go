@@ -259,8 +259,7 @@ func FormatLogLine(format, clientIP, qName, reason string, additionalFields ...s
             sb.WriteByte('\t')
             sb.WriteString(StringQuote(field))
         }
-        sb.WriteByte('
-')
+        sb.WriteByte('')
         return sb.String(), nil
 
     } else if format == "ltsv" {
@@ -284,8 +283,7 @@ func FormatLogLine(format, clientIP, qName, reason string, additionalFields ...s
             }
             sb.WriteString(StringQuote(field))
         }
-        sb.WriteByte('
-')
+        sb.WriteByte('')
         return sb.String(), nil
     }
     return "", fmt.Errorf("unexpected log format: [%s]", format)
