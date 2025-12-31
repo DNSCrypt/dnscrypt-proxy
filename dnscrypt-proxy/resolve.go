@@ -8,6 +8,7 @@ import (
 	"net/netip"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"codeberg.org/miekg/dns"
@@ -17,21 +18,24 @@ import (
 const (
 	myResolverHost  string = "resolver.dnscrypt.info."
 	nonexistentName string = "nonexistent-zone.dnscrypt-test."
+	MaxDNSPacketSize = 4096
 )
 
-func resolveQuery(server string, qName string, qType uint16, sendClientSubnet bool) (*dns.Msg, error) {
-	transport := dns.NewTransport()
-	transport.ReadTimeout = 2 * time.Second
-	client := &dns.Client{Transport: transport}
-	msg := dns.NewMsg(qName, qType)
-	if msg == nil {
-		return nil, fmt.Errorf("unsupported DNS record type: %d", qType)
-	}
-	msg.RecursionDesired = true
-	msg.Opcode = dns.OpcodeQuery
-	msg.UDPSize = uint16(MaxDNSPacketSize)
-	msg.Security = true
+// Resolver holds reusable client state to avoid per-query allocations
+type Resolver struct {
+	server    string
+	transport *dns.Transport
+	client    *dns.Client
+	ecsOpt    *dns.SUBNET // pre-built ECS option
+}
 
+// NewResolver creates a reusable resolver instance
+func NewResolver(server string, sendClientSubnet bool) *Resolver {
+	tr := dns.NewTransport()
+	tr.ReadTimeout = 1500 * time.Millisecond
+	c := &dns.Client{Transport: tr}
+
+	var ecs *dns.SUBNET
 	if sendClientSubnet {
 		subnet := net.IPNet{IP: net.IPv4(93, 184, 216, 0), Mask: net.CIDRMask(24, 32)}
 		bits, totalSize := subnet.Mask.Size()
@@ -42,33 +46,125 @@ func resolveQuery(server string, qName string, qType uint16, sendClientSubnet bo
 			family = 2
 		}
 		addr, _ := netip.AddrFromSlice(subnet.IP)
-		ecsOpt := &dns.SUBNET{
+		ecs = &dns.SUBNET{
 			Family:  family,
 			Netmask: uint8(bits),
 			Scope:   0,
 			Address: addr,
 		}
-		msg.Pseudo = append(msg.Pseudo, ecsOpt)
 	}
 
-	readTimeout := transport.ReadTimeout
-	for i := 0; i < 3; i++ {
+	return &Resolver{
+		server:    server,
+		transport: tr,
+		client:    c,
+		ecsOpt:    ecs,
+	}
+}
+
+// resolveQuery performs a DNS query with automatic TCP fallback on truncation
+func (r *Resolver) resolveQuery(ctx context.Context, qName string, qType uint16, useECS bool) (*dns.Msg, error) {
+	msg := dns.NewMsg(qName, qType)
+	if msg == nil {
+		return nil, fmt.Errorf("unsupported DNS record type: %d", qType)
+	}
+	msg.RecursionDesired = true
+	msg.Opcode = dns.OpcodeQuery
+	msg.UDPSize = uint16(MaxDNSPacketSize)
+	msg.Security = true
+
+	if useECS && r.ecsOpt != nil {
+		msg.Pseudo = append(msg.Pseudo, r.ecsOpt)
+	}
+
+	// Retry with bounded timeout growth
+	timeout := r.transport.ReadTimeout
+	for attempt := 0; attempt < 2; attempt++ {
 		msg.ID = dns.ID()
-		msg.Data = nil // Clear packed data so Exchange will re-pack with new ID
-		ctx, cancel := context.WithTimeout(context.Background(), readTimeout)
-		response, rtt, err := client.Exchange(ctx, msg, "udp", server)
+		msg.Data = nil
+
+		queryCtx, cancel := context.WithTimeout(ctx, timeout)
+		response, _, err := r.client.Exchange(queryCtx, msg, "udp", r.server)
 		cancel()
+
+		// TCP fallback on truncation
+		if err == nil && response != nil && response.Truncated {
+			msg.ID = dns.ID()
+			msg.Data = nil
+			tcpCtx, tcpCancel := context.WithTimeout(ctx, timeout)
+			response, _, err = r.client.Exchange(tcpCtx, msg, "tcp", r.server)
+			tcpCancel()
+			return response, err
+		}
+
+		if err == nil {
+			return response, nil
+		}
+
 		if neterr, ok := err.(net.Error); ok && neterr.Timeout() {
-			readTimeout *= 2
+			timeout = timeout * 3 / 2 // 1.5x instead of 2x
 			continue
 		}
-		_ = rtt
-		if err != nil {
-			return nil, err
-		}
-		return response, nil
+		return nil, err
 	}
-	return nil, errors.New("Timeout")
+	return nil, errors.New("timeout")
+}
+
+// queryResult holds results from parallel queries
+type queryResult struct {
+	recordType uint16
+	response   *dns.Msg
+	err        error
+}
+
+// parallelQueries executes multiple DNS queries concurrently
+func (r *Resolver) parallelQueries(ctx context.Context, qName string, qTypes []uint16) map[uint16]*dns.Msg {
+	results := make(map[uint16]*dns.Msg, len(qTypes))
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+
+	for _, qType := range qTypes {
+		wg.Add(1)
+		go func(qt uint16) {
+			defer wg.Done()
+			resp, err := r.resolveQuery(ctx, qName, qt, false)
+			if err == nil && resp != nil {
+				mu.Lock()
+				results[qt] = resp
+				mu.Unlock()
+			}
+		}(qType)
+	}
+
+	wg.Wait()
+	return results
+}
+
+func fqdn(name string) string {
+	if !strings.HasSuffix(name, ".") {
+		return name + "."
+	}
+	return name
+}
+
+func reverseAddr(ip string) (string, error) {
+	addr := net.ParseIP(ip)
+	if addr == nil {
+		return "", errors.New("invalid IP")
+	}
+	return dns.Fqdn(dns.ReverseAddr(addr)), nil
+}
+
+func ExtractHostAndPort(server string, defaultPort int) (string, int) {
+	host, portStr, err := net.SplitHostPort(server)
+	if err != nil {
+		return server, defaultPort
+	}
+	port := defaultPort
+	if portStr != "" {
+		fmt.Sscanf(portStr, "%d", &port)
+	}
+	return host, port
 }
 
 func Resolve(server string, name string, singleResolver bool) {
@@ -89,17 +185,28 @@ func Resolve(server string, name string, singleResolver bool) {
 	fmt.Printf("Resolving [%s] using %s port %d\n\n", name, host, port)
 	name = fqdn(name)
 
+	ctx := context.Background()
+	resolver := NewResolver(server, true)
+
 	cname := name
 	var clientSubnet string
 
+	// Resolver identification with parallel PTR lookups
 	for once := true; once; once = false {
-		response, err := resolveQuery(server, myResolverHost, dns.TypeTXT, true)
+		response, err := resolver.resolveQuery(ctx, myResolverHost, dns.TypeTXT, true)
 		if err != nil {
 			fmt.Printf("Unable to resolve: [%s]\n", err)
 			os.Exit(1)
 		}
 		fmt.Printf("Resolver      : ")
-		res := make([]string, 0)
+
+		type resolverInfo struct {
+			ip  string
+			ptr string
+		}
+
+		infos := make([]resolverInfo, 0, len(response.Answer))
+
 		for _, answer := range response.Answer {
 			if answer.Header().Class != dns.ClassINET || dns.RRToType(answer) != dns.TypeTXT {
 				continue
@@ -112,24 +219,40 @@ func Resolve(server string, name string, singleResolver bool) {
 					clientSubnet = strings.TrimPrefix(txt, "EDNS0 client subnet: ")
 				}
 			}
-			if ip == "" {
-				continue
+			if ip != "" {
+				infos = append(infos, resolverInfo{ip: ip})
 			}
-			if rev, err := reverseAddr(ip); err == nil {
-				response, err = resolveQuery(server, rev, dns.TypePTR, false)
-				if err != nil {
-					break
-				}
-				for _, answer := range response.Answer {
-					if dns.RRToType(answer) != dns.TypePTR || answer.Header().Class != dns.ClassINET {
-						continue
-					}
-					ip = ip + " (" + answer.(*dns.PTR).Ptr + ")"
-					break
-				}
-			}
-			res = append(res, ip)
 		}
+
+		// Parallel PTR lookups
+		var wg sync.WaitGroup
+		for i := range infos {
+			if rev, err := reverseAddr(infos[i].ip); err == nil {
+				wg.Add(1)
+				go func(idx int, revAddr string) {
+					defer wg.Done()
+					if response, err := resolver.resolveQuery(ctx, revAddr, dns.TypePTR, false); err == nil {
+						for _, answer := range response.Answer {
+							if dns.RRToType(answer) == dns.TypePTR && answer.Header().Class == dns.ClassINET {
+								infos[idx].ptr = answer.(*dns.PTR).Ptr
+								break
+							}
+						}
+					}
+				}(i, rev)
+			}
+		}
+		wg.Wait()
+
+		res := make([]string, 0, len(infos))
+		for _, info := range infos {
+			if info.ptr != "" {
+				res = append(res, info.ip+" ("+info.ptr+")")
+			} else {
+				res = append(res, info.ip)
+			}
+		}
+
 		if len(res) == 0 {
 			fmt.Println("-")
 		} else {
@@ -140,7 +263,7 @@ func Resolve(server string, name string, singleResolver bool) {
 	if singleResolver {
 		for once := true; once; once = false {
 			fmt.Printf("Lying         : ")
-			response, err := resolveQuery(server, nonexistentName, dns.TypeA, false)
+			response, err := resolver.resolveQuery(ctx, nonexistentName, dns.TypeA, false)
 			if err != nil {
 				fmt.Printf("[%v]", err)
 				break
@@ -173,11 +296,12 @@ func Resolve(server string, name string, singleResolver bool) {
 
 	fmt.Println("")
 
+	// CNAME resolution with early exit
 cname:
 	for once := true; once; once = false {
 		fmt.Printf("Canonical name: ")
-		for i := 0; i < 100; i++ {
-			response, err := resolveQuery(server, cname, dns.TypeCNAME, false)
+		for i := 0; i < 10; i++ { // reduced from 100
+			response, err := resolver.resolveQuery(ctx, cname, dns.TypeCNAME, false)
 			if err != nil {
 				break cname
 			}
@@ -199,60 +323,58 @@ cname:
 
 	fmt.Println("")
 
-	for once := true; once; once = false {
-		fmt.Printf("IPv4 addresses: ")
-		response, err := resolveQuery(server, cname, dns.TypeA, false)
-		if err != nil {
-			break
-		}
-		ipv4 := make([]string, 0)
-		for _, answer := range response.Answer {
-			if dns.RRToType(answer) != dns.TypeA || answer.Header().Class != dns.ClassINET {
-				continue
+	// Parallel A/AAAA queries
+	ipQueries := resolver.parallelQueries(ctx, cname, []uint16{dns.TypeA, dns.TypeAAAA})
+
+	fmt.Printf("IPv4 addresses: ")
+	if resp, ok := ipQueries[dns.TypeA]; ok {
+		ipv4 := make([]string, 0, len(resp.Answer))
+		for _, answer := range resp.Answer {
+			if dns.RRToType(answer) == dns.TypeA && answer.Header().Class == dns.ClassINET {
+				ipv4 = append(ipv4, answer.(*dns.A).A.String())
 			}
-			ipv4 = append(ipv4, answer.(*dns.A).A.String())
 		}
 		if len(ipv4) == 0 {
 			fmt.Println("-")
 		} else {
 			fmt.Println(strings.Join(ipv4, ", "))
 		}
+	} else {
+		fmt.Println("-")
 	}
 
-	for once := true; once; once = false {
-		fmt.Printf("IPv6 addresses: ")
-		response, err := resolveQuery(server, cname, dns.TypeAAAA, false)
-		if err != nil {
-			break
-		}
-		ipv6 := make([]string, 0)
-		for _, answer := range response.Answer {
-			if dns.RRToType(answer) != dns.TypeAAAA || answer.Header().Class != dns.ClassINET {
-				continue
+	fmt.Printf("IPv6 addresses: ")
+	if resp, ok := ipQueries[dns.TypeAAAA]; ok {
+		ipv6 := make([]string, 0, len(resp.Answer))
+		for _, answer := range resp.Answer {
+			if dns.RRToType(answer) == dns.TypeAAAA && answer.Header().Class == dns.ClassINET {
+				ipv6 = append(ipv6, answer.(*dns.AAAA).AAAA.String())
 			}
-			ipv6 = append(ipv6, answer.(*dns.AAAA).AAAA.String())
 		}
 		if len(ipv6) == 0 {
 			fmt.Println("-")
 		} else {
 			fmt.Println(strings.Join(ipv6, ", "))
 		}
+	} else {
+		fmt.Println("-")
 	}
 
 	fmt.Println("")
 
-	for once := true; once; once = false {
-		fmt.Printf("Name servers  : ")
-		response, err := resolveQuery(server, cname, dns.TypeNS, false)
-		if err != nil {
-			break
-		}
-		nss := make([]string, 0)
+	// Parallel record queries (NS/MX/HTTPS/HINFO/TXT)
+	recordQueries := resolver.parallelQueries(ctx, cname, []uint16{
+		dns.TypeNS, dns.TypeMX, dns.TypeHTTPS, dns.TypeHINFO, dns.TypeTXT,
+	})
+
+	// Name servers
+	fmt.Printf("Name servers  : ")
+	if response, ok := recordQueries[dns.TypeNS]; ok {
+		nss := make([]string, 0, len(response.Answer))
 		for _, answer := range response.Answer {
-			if dns.RRToType(answer) != dns.TypeNS || answer.Header().Class != dns.ClassINET {
-				continue
+			if dns.RRToType(answer) == dns.TypeNS && answer.Header().Class == dns.ClassINET {
+				nss = append(nss, answer.(*dns.NS).Ns)
 			}
-			nss = append(nss, answer.(*dns.NS).Ns)
 		}
 		if response.Rcode == dns.RcodeNameError {
 			fmt.Println("name does not exist")
@@ -269,20 +391,19 @@ cname:
 		} else {
 			fmt.Println("no")
 		}
+	} else {
+		fmt.Println("-")
+		fmt.Printf("DNSSEC signed : -\n")
 	}
 
-	for once := true; once; once = false {
-		fmt.Printf("Mail servers  : ")
-		response, err := resolveQuery(server, cname, dns.TypeMX, false)
-		if err != nil {
-			break
-		}
-		mxs := make([]string, 0)
+	// Mail servers
+	fmt.Printf("Mail servers  : ")
+	if response, ok := recordQueries[dns.TypeMX]; ok {
+		mxs := make([]string, 0, len(response.Answer))
 		for _, answer := range response.Answer {
-			if dns.RRToType(answer) != dns.TypeMX || answer.Header().Class != dns.ClassINET {
-				continue
+			if dns.RRToType(answer) == dns.TypeMX && answer.Header().Class == dns.ClassINET {
+				mxs = append(mxs, answer.(*dns.MX).Mx)
 			}
-			mxs = append(mxs, answer.(*dns.MX).Mx)
 		}
 		if len(mxs) == 0 {
 			fmt.Println("no mail servers found")
@@ -291,26 +412,23 @@ cname:
 		} else {
 			fmt.Println("1 mail server found")
 		}
+	} else {
+		fmt.Println("-")
 	}
 
 	fmt.Println("")
 
-	for once := true; once; once = false {
-		fmt.Printf("HTTPS alias   : ")
-		response, err := resolveQuery(server, cname, dns.TypeHTTPS, false)
-		if err != nil {
-			break
-		}
-		aliases := make([]string, 0)
+	// HTTPS records
+	fmt.Printf("HTTPS alias   : ")
+	if response, ok := recordQueries[dns.TypeHTTPS]; ok {
+		aliases := make([]string, 0, len(response.Answer))
 		for _, answer := range response.Answer {
-			if dns.RRToType(answer) != dns.TypeHTTPS || answer.Header().Class != dns.ClassINET {
-				continue
+			if dns.RRToType(answer) == dns.TypeHTTPS && answer.Header().Class == dns.ClassINET {
+				https := answer.(*dns.HTTPS)
+				if https.Priority == 0 && len(https.Target) >= 2 {
+					aliases = append(aliases, https.Target)
+				}
 			}
-			https := answer.(*dns.HTTPS)
-			if https.Priority != 0 || len(https.Target) < 2 {
-				continue
-			}
-			aliases = append(aliases, https.Target)
 		}
 		if len(aliases) == 0 {
 			fmt.Println("-")
@@ -319,17 +437,15 @@ cname:
 		}
 
 		fmt.Printf("HTTPS info    : ")
-		info := make([]string, 0)
+		info := make([]string, 0, len(response.Answer)*2)
 		for _, answer := range response.Answer {
-			if dns.RRToType(answer) != dns.TypeHTTPS || answer.Header().Class != dns.ClassINET {
-				continue
-			}
-			https := answer.(*dns.HTTPS)
-			if https.Priority == 0 || len(https.Target) > 1 {
-				continue
-			}
-			for _, value := range https.Value {
-				info = append(info, fmt.Sprintf("[%s]=[%s]", svcb.KeyToString(svcb.PairToKey(value)), value.String()))
+			if dns.RRToType(answer) == dns.TypeHTTPS && answer.Header().Class == dns.ClassINET {
+				https := answer.(*dns.HTTPS)
+				if https.Priority != 0 || len(https.Target) <= 1 {
+					for _, value := range https.Value {
+						info = append(info, fmt.Sprintf("[%s]=[%s]", svcb.KeyToString(svcb.PairToKey(value)), value.String()))
+					}
+				}
 			}
 		}
 		if len(info) == 0 {
@@ -337,48 +453,47 @@ cname:
 		} else {
 			fmt.Println(strings.Join(info, ", "))
 		}
+	} else {
+		fmt.Println("-")
+		fmt.Printf("HTTPS info    : -\n")
 	}
 
 	fmt.Println("")
 
-	for once := true; once; once = false {
-		fmt.Printf("Host info     : ")
-		response, err := resolveQuery(server, cname, dns.TypeHINFO, false)
-		if err != nil {
-			break
-		}
-		hinfo := make([]string, 0)
+	// Host info
+	fmt.Printf("Host info     : ")
+	if response, ok := recordQueries[dns.TypeHINFO]; ok {
+		hinfo := make([]string, 0, len(response.Answer))
 		for _, answer := range response.Answer {
-			if dns.RRToType(answer) != dns.TypeHINFO || answer.Header().Class != dns.ClassINET {
-				continue
+			if dns.RRToType(answer) == dns.TypeHINFO && answer.Header().Class == dns.ClassINET {
+				hinfo = append(hinfo, fmt.Sprintf("%s %s", answer.(*dns.HINFO).Cpu, answer.(*dns.HINFO).Os))
 			}
-			hinfo = append(hinfo, fmt.Sprintf("%s %s", answer.(*dns.HINFO).Cpu, answer.(*dns.HINFO).Os))
 		}
 		if len(hinfo) == 0 {
 			fmt.Println("-")
 		} else {
 			fmt.Println(strings.Join(hinfo, ", "))
 		}
+	} else {
+		fmt.Println("-")
 	}
 
-	for once := true; once; once = false {
-		fmt.Printf("TXT records   : ")
-		response, err := resolveQuery(server, cname, dns.TypeTXT, false)
-		if err != nil {
-			break
-		}
-		txt := make([]string, 0)
+	// TXT records
+	fmt.Printf("TXT records   : ")
+	if response, ok := recordQueries[dns.TypeTXT]; ok {
+		txt := make([]string, 0, len(response.Answer))
 		for _, answer := range response.Answer {
-			if dns.RRToType(answer) != dns.TypeTXT || answer.Header().Class != dns.ClassINET {
-				continue
+			if dns.RRToType(answer) == dns.TypeTXT && answer.Header().Class == dns.ClassINET {
+				txt = append(txt, strings.Join(answer.(*dns.TXT).Txt, " "))
 			}
-			txt = append(txt, strings.Join(answer.(*dns.TXT).Txt, " "))
 		}
 		if len(txt) == 0 {
 			fmt.Println("-")
 		} else {
 			fmt.Println(strings.Join(txt, ", "))
 		}
+	} else {
+		fmt.Println("-")
 	}
 
 	fmt.Println("")
