@@ -26,7 +26,7 @@ type CachedResponses struct {
 
 var cachedResponses CachedResponses
 
-// Use a pool to reuse hashers and avoid allocations on every request
+// Optimized: Pool for hashers to reduce memory allocations on every request
 var hasherPool = sync.Pool{
     New: func() interface{} {
         return sha512.New512_256()
@@ -36,27 +36,27 @@ var hasherPool = sync.Pool{
 func computeCacheKey(pluginsState *PluginsState, msg *dns.Msg) [32]byte {
     question := msg.Question[0]
     
-    // Get a hasher from the pool
+    // Optimized: Reuse hasher from pool
     h := hasherPool.Get().(hash.Hash)
     
     var tmp [5]byte
-    // Use Qtype and Qclass directly to avoid overhead
-    binary.LittleEndian.PutUint16(tmp[0:2], question.Qtype)
-    binary.LittleEndian.PutUint16(tmp[2:4], question.Qclass)
+    // Corrected: Use Header() and RRToType as question is an RR interface
+    binary.LittleEndian.PutUint16(tmp[0:2], dns.RRToType(question))
+    binary.LittleEndian.PutUint16(tmp[2:4], question.Header().Class)
     if pluginsState.dnssec {
         tmp[4] = 1
     }
     h.Write(tmp[:])
     
-    // Note: question.Name is used directly instead of Header()
-    normalizedRawQName := []byte(question.Name)
+    // Corrected: Use Header().Name
+    normalizedRawQName := []byte(question.Header().Name)
     NormalizeRawQName(&normalizedRawQName)
     h.Write(normalizedRawQName)
     
     var sum [32]byte
     h.Sum(sum[:0])
     
-    // Reset and put back in pool
+    // Reset hasher and return to pool
     h.Reset()
     hasherPool.Put(h)
 
@@ -98,7 +98,7 @@ func (plugin *PluginCache) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
         return nil
     }
     
-    // Optimization: Call time.Now() once
+    // Optimized: Call time.Now() only once
     now := time.Now()
     
     synth := cached.msg.Copy()
@@ -107,7 +107,6 @@ func (plugin *PluginCache) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
     synth.Question = msg.Question
 
     if now.After(cached.expiration) {
-        // Use the cached 'now' time
         expiration2 := now.Add(StaleResponseTTL)
         updateTTL(synth, expiration2)
         pluginsState.sessionData["stale"] = synth
@@ -154,7 +153,8 @@ func (plugin *PluginCacheResponse) Eval(pluginsState *PluginsState, msg *dns.Msg
         return nil
     }
     
-    // Optimization: Check if cache is nil before incurring sync.Once overhead
+    // Optimized: Double-checked locking pattern implicitly handled by sync.Once,
+    // but we check nil first to avoid function call overhead on happy path.
     if cachedResponses.cache == nil {
         var cacheInitError error
         cachedResponses.cacheOnce.Do(func() {
@@ -168,7 +168,6 @@ func (plugin *PluginCacheResponse) Eval(pluginsState *PluginsState, msg *dns.Msg
         if cacheInitError != nil {
             return fmt.Errorf("failed to initialize the cache: %w", cacheInitError)
         }
-        // If it's still nil (initialization failed silently or other issue), return
         if cachedResponses.cache == nil {
             return nil
         }
@@ -183,7 +182,7 @@ func (plugin *PluginCacheResponse) Eval(pluginsState *PluginsState, msg *dns.Msg
         pluginsState.cacheNegMaxTTL,
     )
     
-    // Optimization: Use calculated TTL directly
+    // Optimized: Calculate expiration once
     expiration := time.Now().Add(ttl)
     cachedResponse := CachedResponse{
         expiration: expiration,
