@@ -472,9 +472,7 @@ func (plugin *PluginForward) Eval(pluginsState *PluginsState, msg *dns.Msg) erro
 func (plugin *PluginForward) parseForwardFile(lines string) (bool, []PluginForwardEntry, error) {
     requiresDHCP := false
     forwardMap := []PluginForwardEntry{}
-
-    for lineNo, line := range strings.Split(lines, "
-") {
+    for lineNo, line := range strings.Split(lines, "") {
         line = TrimAndStripInlineComments(line)
         if len(line) == 0 {
             continue
