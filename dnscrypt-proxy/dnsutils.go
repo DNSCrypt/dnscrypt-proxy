@@ -45,13 +45,14 @@ func PutMsg(m *dns.Msg) {
     m.AuthenticatedData = false
     m.CheckingDisabled = false
     m.Rcode = 0
-    // m.Compress is not present in this fork/version
+    // m.Compress removed in v2
     
     // Clear slices while keeping capacity
     m.Question = m.Question[:0]
     m.Answer = m.Answer[:0]
     m.Ns = m.Ns[:0]
     m.Extra = m.Extra[:0]
+    m.Pseudo = m.Pseudo[:0]
     msgPool.Put(m)
 }
 
@@ -84,7 +85,7 @@ func EmptyResponseFromMessage(srcMsg *dns.Msg) *dns.Msg {
     
     if srcMsg.UDPSize > 0 {
         dstMsg.UDPSize = srcMsg.UDPSize
-        // dstMsg.Security = srcMsg.Security // Removed if not supported in fork, or keep if known good
+        // dstMsg.Security = srcMsg.Security // Copy security bit (DO) if needed
     }
     return dstMsg
 }
@@ -141,29 +142,10 @@ func TruncatedResponse(packet []byte) ([]byte, error) {
 func RefusedResponseFromMessage(srcMsg *dns.Msg, refusedCode bool, ipv4 net.IP, ipv6 net.IP, ttl uint32) *dns.Msg {
     dstMsg := EmptyResponseFromMessage(srcMsg)
 
-    // Handle OPT record manually since SetEdns0 might be missing/different
-    var opt *dns.OPT
-    // Check existing OPT
-    for _, extra := range srcMsg.Extra {
-        if o, ok := extra.(*dns.OPT); ok {
-            opt = o
-            break
-        }
-    }
-    
+    // v2: Append EDE directly to Pseudo if EDNS0 is active (UDPSize > 0)
     ede := &dns.EDE{InfoCode: dns.ExtendedErrorFiltered}
-    
-    // Add OPT if needed for EDE
-    if opt == nil && dstMsg.UDPSize > 0 {
-         opt = &dns.OPT{}
-         opt.Hdr.Name = "."
-         opt.Hdr.Rrtype = dns.TypeOPT
-         opt.SetUDPSize(dstMsg.UDPSize)
-         dstMsg.Extra = append(dstMsg.Extra, opt)
-    }
-    
-    if opt != nil {
-        opt.Option = append(opt.Option, ede)
+    if dstMsg.UDPSize > 0 {
+        dstMsg.Pseudo = append(dstMsg.Pseudo, ede)
     }
 
     if refusedCode {
@@ -338,15 +320,11 @@ func hasEDNS0Padding(packet []byte) (bool, error) {
     if err := msg.Unpack(); err != nil {
         return false, err
     }
-    // Manually iterate Pseudo section if implied by fork, or just Extra for OPT
-    // Standard miekg/dns puts OPT in Extra. "Pseudo" field might be specific to this fork.
-    // Assuming 'Pseudo' exists based on original file.
-    if len(msg.Pseudo) > 0 {
-         for _, rr := range msg.Pseudo {
-             if _, ok := rr.(*dns.PADDING); ok {
-                 return true, nil
-             }
-         }
+    // In v2, options are in Pseudo
+    for _, rr := range msg.Pseudo {
+        if _, ok := rr.(*dns.PADDING); ok {
+            return true, nil
+        }
     }
     return false, nil
 }
@@ -356,7 +334,6 @@ func addEDNS0PaddingIfNoneFound(msg *dns.Msg, unpaddedPacket []byte, paddingLen 
         msg.UDPSize = uint16(MaxDNSPacketSize)
     }
     
-    // Check loop
     for _, rr := range msg.Pseudo {
         if _, ok := rr.(*dns.PADDING); ok {
             return unpaddedPacket, nil
