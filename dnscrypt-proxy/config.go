@@ -47,6 +47,7 @@ type Config struct {
     SourceIPv6               bool               `toml:"ipv6_servers"`
     IgnoreSystemDNS          bool               `toml:"ignore_system_dns"`
     TLSDisableSessionTickets bool               `toml:"tls_disable_session_tickets"`
+    TLSPreferRSA             bool               `toml:"tls_prefer_rsa"`
     OfflineMode              bool               `toml:"offline_mode"`
     RefusedCodeInResponses   bool               `toml:"refused_code_in_responses"`
     CloakedPTR               bool               `toml:"cloak_ptr"`
@@ -61,6 +62,7 @@ type Config struct {
     LogMaxBackups            int                `toml:"log_files_max_backups"`
     NetprobeTimeout          int                `toml:"netprobe_timeout"`
     MaxClients               uint32             `toml:"max_clients"`
+    TimeoutLoadReduction     float64            `toml:"timeout_load_reduction"`
     CacheNegTTL              uint32             `toml:"cache_neg_ttl"`
     CacheNegMinTTL           uint32             `toml:"cache_neg_min_ttl"`
     CacheNegMaxTTL           uint32             `toml:"cache_neg_max_ttl"`
@@ -147,6 +149,7 @@ func newConfig() Config {
         SourceDoH:                true,
         SourceODoH:               false,
         MaxClients:               250,
+        TimeoutLoadReduction:     0.75,
         BootstrapResolvers:       []string{DefaultBootstrapResolver},
         IgnoreSystemDNS:          false,
         LogMaxSize:               10,
@@ -154,6 +157,7 @@ func newConfig() Config {
         LogMaxBackups:            1,
         TLSDisableSessionTickets: false,
         TLSCipherSuite:           nil,
+        TLSPreferRSA:             false,
         TLSKeyLogFile:            "",
         NetprobeTimeout:          60,
         OfflineMode:              false,
