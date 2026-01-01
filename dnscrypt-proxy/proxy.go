@@ -1,935 +1,305 @@
 package main
 
 import (
-    "context"
-    crypto_rand "crypto/rand"
     "encoding/binary"
+    "math/rand"
     "net"
-    "os"
-    "runtime"
-    "strings"
-    "sync"
-    "sync/atomic"
     "time"
 
+    "codeberg.org/miekg/dns"
     "github.com/jedisct1/dlog"
     clocksmith "github.com/jedisct1/go-clocksmith"
     stamps "github.com/jedisct1/go-dnsstamps"
-    "golang.org/x/crypto/curve25519"
-    netproxy "golang.org/x/net/proxy"
 )
 
-// Optimization: Reuse buffers to reduce GC pressure
-var packetBufferPool = sync.Pool{
-    New: func() interface{} {
-        b := make([]byte, MaxDNSPacketSize)
-        return &b
-    },
+// Elite: In-place Transaction ID extraction (No dns.Msg overhead)
+func fastGetID(query []byte) uint16 {
+    if len(query) < 2 {
+        return 0
+    }
+    return binary.BigEndian.Uint16(query[0:2])
 }
 
-type Proxy struct {
-    pluginsGlobals                PluginsGlobals
-    serversInfo                   ServersInfo
-    questionSizeEstimator         QuestionSizeEstimator
-    registeredServers             []RegisteredServer
-    dns64Resolvers                []string
-    dns64Prefixes                 []string
-    serversBlockingFragments      []string
-    ednsClientSubnets             []*net.IPNet
-    queryLogIgnoredQtypes         []string
-    localDoHListeners             []*net.TCPListener
-    queryMeta                     []string
-    enableHotReload               bool
-    udpListeners                  []*net.UDPConn
-    sources                       []*Source
-    tcpListeners                  []*net.TCPListener
-    registeredRelays              []RegisteredServer
-    listenAddresses               []string
-    localDoHListenAddresses       []string
-    monitoringUI                  MonitoringUIConfig
-    monitoringInstance            *MonitoringUI
-    xTransport                    *XTransport
-    allWeeklyRanges               *map[string]WeeklyRanges
-    routes                        *map[string][]string
-    captivePortalMap              *CaptivePortalMap
-    nxLogFormat                   string
-    localDoHCertFile              string
-    localDoHCertKeyFile           string
-    captivePortalMapFile          string
-    localDoHPath                  string
-    cloakFile                     string
-    forwardFile                   string
-    blockIPFormat                 string
-    blockIPLogFile                string
-    allowedIPFile                 string
-    allowedIPFormat               string
-    allowedIPLogFile              string
-    queryLogFormat                string
-    blockIPFile                   string
-    allowNameFile                 string
-    allowNameFormat               string
-    allowNameLogFile              string
-    blockNameLogFile              string
-    blockNameFormat               string
-    blockNameFile                 string
-    queryLogFile                  string
-    blockedQueryResponse          string
-    userName                      string
-    nxLogFile                     string
-    proxySecretKey                [32]byte
-    proxyPublicKey                [32]byte
-    ServerNames                   []string
-    DisabledServerNames           []string
-    requiredProps                 stamps.ServerInformalProperties
-    certRefreshDelayAfterFailure  time.Duration
-    timeout                       time.Duration
-    certRefreshDelay              time.Duration
-    certRefreshConcurrency        int
-    cacheSize                     int
-    logMaxBackups                 int
-    logMaxAge                     int
-    logMaxSize                    int
-    cacheNegMinTTL                uint32
-    rejectTTL                     uint32
-    cacheMaxTTL                   uint32
-    clientsCount                  uint32
-    maxClients                    uint32
-    timeoutLoadReduction          float64
-    cacheMinTTL                   uint32
-    cacheNegMaxTTL                uint32
-    cloakTTL                      uint32
-    cloakedPTR                    bool
-    cache                         bool
-    pluginBlockIPv6               bool
-    ephemeralKeys                 bool
-    pluginBlockUnqualified        bool
-    showCerts                     bool
-    certIgnoreTimestamp           bool
-    skipAnonIncompatibleResolvers bool
-    anonDirectCertFallback        bool
-    pluginBlockUndelegated        bool
-    child                         bool
-    SourceIPv4                    bool
-    SourceIPv6                    bool
-    SourceDNSCrypt                bool
-    SourceDoH                     bool
-    SourceODoH                    bool
-    listenersMu                   sync.Mutex
-    ipCryptConfig                 *IPCryptConfig
-    udpConnPool                   *UDPConnPool
-}
-
-func (proxy *Proxy) registerUDPListener(conn *net.UDPConn) {
-    proxy.listenersMu.Lock()
-    proxy.udpListeners = append(proxy.udpListeners, conn)
-    proxy.listenersMu.Unlock()
-}
-
-func (proxy *Proxy) registerTCPListener(listener *net.TCPListener) {
-    proxy.listenersMu.Lock()
-    proxy.tcpListeners = append(proxy.tcpListeners, listener)
-    proxy.listenersMu.Unlock()
-}
-
-func (proxy *Proxy) registerLocalDoHListener(listener *net.TCPListener) {
-    proxy.listenersMu.Lock()
-    proxy.localDoHListeners = append(proxy.localDoHListeners, listener)
-    proxy.listenersMu.Unlock()
-}
-
-func (proxy *Proxy) addDNSListener(listenAddrStr string) {
-    udp := "udp"
-    tcp := "tcp"
-    isIPv4 := len(listenAddrStr) > 0 && isDigit(listenAddrStr[0])
-    if isIPv4 {
-        udp = "udp4"
-        tcp = "tcp4"
-    }
-    listenUDPAddr, err := net.ResolveUDPAddr(udp, listenAddrStr)
-    if err != nil {
-        dlog.Fatal(err)
-    }
-    listenTCPAddr, err := net.ResolveTCPAddr(tcp, listenAddrStr)
-    if err != nil {
-        dlog.Fatal(err)
-    }
-
-    // if 'userName' is not set, continue as before
-    if len(proxy.userName) <= 0 {
-        if err := proxy.udpListenerFromAddr(listenUDPAddr); err != nil {
-            dlog.Fatal(err)
-        }
-        if err := proxy.tcpListenerFromAddr(listenTCPAddr); err != nil {
-            dlog.Fatal(err)
-        }
-        return
-    }
-
-    // if 'userName' is set and we are the parent process
-    if !proxy.child {
-        // parent
-        listenerUDP, err := net.ListenUDP(udp, listenUDPAddr)
-        if err != nil {
-            dlog.Fatal(err)
-        }
-        listenerTCP, err := net.ListenTCP(tcp, listenTCPAddr)
-        if err != nil {
-            dlog.Fatal(err)
-        }
-
-        fdUDP, err := listenerUDP.File() // On Windows, the File method of UDPConn is not implemented.
-        if err != nil {
-            dlog.Fatalf("Unable to switch to a different user: %v", err)
-        }
-        fdTCP, err := listenerTCP.File() // On Windows, the File method of TCPListener is not implemented.
-        if err != nil {
-            dlog.Fatalf("Unable to switch to a different user: %v", err)
-        }
-        defer listenerUDP.Close()
-        defer listenerTCP.Close()
-        FileDescriptorsMu.Lock()
-        FileDescriptors = append(FileDescriptors, fdUDP)
-        FileDescriptors = append(FileDescriptors, fdTCP)
-        FileDescriptorsMu.Unlock()
-        return
-    }
-
-    // child
-    FileDescriptorsMu.Lock()
-    listenerUDP, err := net.FilePacketConn(os.NewFile(InheritedDescriptorsBase+FileDescriptorNum, "listenerUDP"))
-    if err != nil {
-        FileDescriptorsMu.Unlock()
-        dlog.Fatalf("Unable to switch to a different user: %v", err)
-    }
-    FileDescriptorNum++
-
-    listenerTCP, err := net.FileListener(os.NewFile(InheritedDescriptorsBase+FileDescriptorNum, "listenerTCP"))
-    if err != nil {
-        FileDescriptorsMu.Unlock()
-        dlog.Fatalf("Unable to switch to a different user: %v", err)
-    }
-    FileDescriptorNum++
-    FileDescriptorsMu.Unlock()
-
-    dlog.Noticef("Now listening to %v [UDP]", listenUDPAddr)
-    proxy.registerUDPListener(listenerUDP.(*net.UDPConn))
-
-    dlog.Noticef("Now listening to %v [TCP]", listenAddrStr)
-    proxy.registerTCPListener(listenerTCP.(*net.TCPListener))
-}
-
-func (proxy *Proxy) addLocalDoHListener(listenAddrStr string) {
-    network := "tcp"
-    isIPv4 := len(listenAddrStr) > 0 && isDigit(listenAddrStr[0])
-    if isIPv4 {
-        network = "tcp4"
-    }
-    listenTCPAddr, err := net.ResolveTCPAddr(network, listenAddrStr)
-    if err != nil {
-        dlog.Fatal(err)
-    }
-
-    // if 'userName' is not set, continue as before
-    if len(proxy.userName) <= 0 {
-        if err := proxy.localDoHListenerFromAddr(listenTCPAddr); err != nil {
-            dlog.Fatal(err)
-        }
-        return
-    }
-
-    // if 'userName' is set and we are the parent process
-    if !proxy.child {
-        // parent
-        listenerTCP, err := net.ListenTCP(network, listenTCPAddr)
-        if err != nil {
-            dlog.Fatal(err)
-        }
-        fdTCP, err := listenerTCP.File() // On Windows, the File method of TCPListener is not implemented.
-        if err != nil {
-            dlog.Fatalf("Unable to switch to a different user: %v", err)
-        }
-        defer listenerTCP.Close()
-        FileDescriptorsMu.Lock()
-        FileDescriptors = append(FileDescriptors, fdTCP)
-        FileDescriptorsMu.Unlock()
-        return
-    }
-
-    // child
-
-    listenerTCP, err := net.FileListener(os.NewFile(InheritedDescriptorsBase+FileDescriptorNum, "listenerTCP"))
-    if err != nil {
-        dlog.Fatalf("Unable to switch to a different user: %v", err)
-    }
-    FileDescriptorNum++
-
-    proxy.registerLocalDoHListener(listenerTCP.(*net.TCPListener))
-    dlog.Noticef("Now listening to https://%v%v [DoH]", listenAddrStr, proxy.localDoHPath)
-}
-
-func (proxy *Proxy) StartProxy() {
-    proxy.questionSizeEstimator = NewQuestionSizeEstimator()
-    if _, err := crypto_rand.Read(proxy.proxySecretKey[:]); err != nil {
-        dlog.Fatal(err)
-    }
-    curve25519.ScalarBaseMult(&proxy.proxyPublicKey, &proxy.proxySecretKey)
-
-    // Initialize and start the monitoring UI if enabled
-    if proxy.monitoringUI.Enabled {
-        dlog.Noticef("Initializing monitoring UI")
-        proxy.monitoringInstance = NewMonitoringUI(proxy)
-        if proxy.monitoringInstance == nil {
-            dlog.Errorf("Failed to create monitoring UI instance")
-        } else {
-            dlog.Noticef("Starting monitoring UI")
-            if err := proxy.monitoringInstance.Start(); err != nil {
-                dlog.Errorf("Failed to start monitoring UI: %v", err)
-            } else {
-                dlog.Noticef("Monitoring UI started successfully")
-            }
-        }
-    }
-
-    proxy.startAcceptingClients()
-    if !proxy.child {
-        // Notify the service manager that dnscrypt-proxy is ready. dnscrypt-proxy manages itself in case
-        // servers are not immediately live/reachable. The service manager may assume it is initialized and
-        // functioning properly. Note that the service manager 'Ready' signal is delayed if netprobe
-        // cannot reach the internet during start-up.
-        if err := ServiceManagerReadyNotify(); err != nil {
-            dlog.Fatal(err)
-        }
-    }
-    proxy.xTransport.internalResolverReady = false
-    proxy.xTransport.internalResolvers = proxy.listenAddresses
-    liveServers, err := proxy.serversInfo.refresh(proxy)
-    if liveServers > 0 {
-        proxy.certIgnoreTimestamp = false
-    }
-    if proxy.showCerts {
-        os.Exit(0)
-    }
-    if liveServers <= 0 {
-        dlog.Error(err)
-        dlog.Notice("dnscrypt-proxy is waiting for at least one server to be reachable")
-    }
-    go func() {
-        lastLogTime := time.Now()
-        for {
-            clocksmith.Sleep(PrefetchSources(proxy.xTransport, proxy.sources))
-            proxy.updateRegisteredServers()
-
-            // Log WP2 statistics every 5 minutes if debug logging is enabled
-            if time.Since(lastLogTime) > 5*time.Minute {
-                proxy.serversInfo.logWP2Stats()
-                lastLogTime = time.Now()
-            }
-
-            runtime.GC()
-        }
-    }()
-    if len(proxy.serversInfo.registeredServers) > 0 {
-        go func() {
-            for {
-                delay := proxy.certRefreshDelay
-                if liveServers == 0 {
-                    delay = proxy.certRefreshDelayAfterFailure
-                }
-                clocksmith.Sleep(delay)
-                liveServers, _ = proxy.serversInfo.refresh(proxy)
-                if liveServers > 0 {
-                    proxy.certIgnoreTimestamp = false
-                }
-                runtime.GC()
-            }
-        }()
+func fastSetID(query []byte, tid uint16) {
+    if len(query) >= 2 {
+        binary.BigEndian.PutUint16(query[0:2], tid)
     }
 }
 
-func (proxy *Proxy) updateRegisteredServers() error {
-    for _, source := range proxy.sources {
-        registeredServers, err := source.Parse()
-        if err != nil {
-            if len(registeredServers) == 0 {
-                dlog.Criticalf("Unable to use source [%s]: [%s]", source.name, err)
-                return err
-            }
-            dlog.Warnf(
-                "Error in source [%s]: [%s] -- Continuing with reduced server count [%d]",
-                source.name,
-                err,
-                len(registeredServers),
-            )
-        }
-        for _, registeredServer := range registeredServers {
-            if registeredServer.stamp.Proto != stamps.StampProtoTypeDNSCryptRelay &&
-                registeredServer.stamp.Proto != stamps.StampProtoTypeODoHRelay {
-                if len(proxy.ServerNames) > 0 {
-                    if !includesName(proxy.ServerNames, registeredServer.name) {
-                        continue
-                    }
-                } else if registeredServer.stamp.Props&proxy.requiredProps != proxy.requiredProps {
-                    continue
-                }
-            }
-            if includesName(proxy.DisabledServerNames, registeredServer.name) {
-                continue
-            }
-            if proxy.SourceIPv4 || proxy.SourceIPv6 {
-                isIPv4, isIPv6 := true, false
-                if registeredServer.stamp.Proto == stamps.StampProtoTypeDoH {
-                    isIPv4, isIPv6 = true, true
-                }
-                if strings.HasPrefix(registeredServer.stamp.ServerAddrStr, "[") {
-                    isIPv4, isIPv6 = false, true
-                }
-                if !(proxy.SourceIPv4 == isIPv4 || proxy.SourceIPv6 == isIPv6) {
-                    continue
-                }
-            }
-            if registeredServer.stamp.Proto == stamps.StampProtoTypeDNSCryptRelay ||
-                registeredServer.stamp.Proto == stamps.StampProtoTypeODoHRelay {
-                var found bool
-                for i, currentRegisteredRelay := range proxy.registeredRelays {
-                    if currentRegisteredRelay.name == registeredServer.name {
-                        found = true
-                        if currentRegisteredRelay.stamp.String() != registeredServer.stamp.String() {
-                            dlog.Infof(
-                                "Updating stamp for [%s] was: %s now: %s",
-                                registeredServer.name,
-                                currentRegisteredRelay.stamp.String(),
-                                registeredServer.stamp.String(),
-                            )
-                            proxy.registeredRelays[i].stamp = registeredServer.stamp
-                            dlog.Debugf("Total count of registered relays %v", len(proxy.registeredRelays))
-                        }
-                    }
-                }
-                if !found {
-                    dlog.Debugf("Adding [%s] to the set of available relays", registeredServer.name)
-                    proxy.registeredRelays = append(proxy.registeredRelays, registeredServer)
-                }
-            } else {
-                if !((proxy.SourceDNSCrypt && registeredServer.stamp.Proto == stamps.StampProtoTypeDNSCrypt) ||
-                    (proxy.SourceDoH && registeredServer.stamp.Proto == stamps.StampProtoTypeDoH) ||
-                    (proxy.SourceODoH && registeredServer.stamp.Proto == stamps.StampProtoTypeODoHTarget)) {
-                    continue
-                }
-                var found bool
-                for i, currentRegisteredServer := range proxy.registeredServers {
-                    if currentRegisteredServer.name == registeredServer.name {
-                        found = true
-                        if currentRegisteredServer.stamp.String() != registeredServer.stamp.String() {
-                            dlog.Infof("Updating stamp for [%s] was: %s now: %s", registeredServer.name, currentRegisteredServer.stamp.String(), registeredServer.stamp.String())
-                            proxy.registeredServers[i].stamp = registeredServer.stamp
-                        }
-                    }
-                }
-                if !found {
-                    dlog.Debugf("Adding [%s] to the set of wanted resolvers", registeredServer.name)
-                    proxy.registeredServers = append(proxy.registeredServers, registeredServer)
-                    dlog.Debugf("Total count of registered servers %v", len(proxy.registeredServers))
-                }
-            }
-        }
+// validateQuery - Performs basic validation on the incoming query
+func validateQuery(query []byte) bool {
+    if len(query) < MinDNSPacketSize || len(query) > MaxDNSPacketSize {
+        return false
     }
-    for _, registeredServer := range proxy.registeredServers {
-        proxy.serversInfo.registerServer(registeredServer.name, registeredServer.stamp)
-    }
-    for _, registeredRelay := range proxy.registeredRelays {
-        proxy.serversInfo.registerRelay(registeredRelay.name, registeredRelay.stamp)
-    }
-    return nil
+    return true
 }
 
-func (proxy *Proxy) udpListener(clientPc *net.UDPConn) {
-    defer clientPc.Close()
-    for {
-        // Optimization: Get buffer from pool instead of make()
-        // We use a pointer so we can put the original array pointer back later
-        bufPtr := packetBufferPool.Get().(*[]byte)
-        buffer := *bufPtr
-
-        // Note: MaxDNSPacketSize is usually enough, -1 logic from original code preserved if strict
-        length, clientAddr, err := clientPc.ReadFrom(buffer[:MaxDNSPacketSize-1])
-        if err != nil {
-            packetBufferPool.Put(bufPtr) // Return on error
-            return
-        }
-
-        packet := buffer[:length]
-
-        if !proxy.clientsCountInc() {
-            dlog.Warnf("Too many incoming connections (max=%d)", proxy.maxClients)
-            dlog.Debugf("Number of goroutines: %d", runtime.NumGoroutine())
-
-            // Send synchronous response for cached items only (fast reject/reply)
-            proxy.processIncomingQuery(
-                "udp",
-                proxy.xTransport.mainProto,
-                packet,
-                &clientAddr,
-                clientPc,
-                time.Now(),
-                true,
-            )
-
-            // Return buffer to pool immediately since we are done synchronously
-            packetBufferPool.Put(bufPtr)
-            continue
-        }
-
-        go func(bPtr *[]byte) {
-            // Optimization: Return buffer to pool when goroutine finishes
-            defer packetBufferPool.Put(bPtr)
-            defer proxy.clientsCountDec()
-
-            proxy.processIncomingQuery("udp", proxy.xTransport.mainProto, packet, &clientAddr, clientPc, time.Now(), false)
-        }(bufPtr)
+// handleSynthesizedResponse - Handles a synthesized DNS response from plugins
+func handleSynthesizedResponse(pluginsState *PluginsState, synth *dns.Msg) ([]byte, error) {
+    if err := synth.Pack(); err != nil {
+        pluginsState.returnCode = PluginsReturnCodeParseError
+        return nil, err
     }
+    return synth.Data, nil
 }
 
-func (proxy *Proxy) tcpListener(acceptPc *net.TCPListener) {
-    defer acceptPc.Close()
-    for {
-        clientPc, err := acceptPc.Accept()
-        if err != nil {
-            continue
-        }
-        if !proxy.clientsCountInc() {
-            dlog.Warnf("Too many incoming connections (max=%d)", proxy.maxClients)
-            dlog.Debugf("Number of goroutines: %d", runtime.NumGoroutine())
-            clientPc.Close()
-            continue
-        }
-        go func() {
-            defer clientPc.Close()
-            defer proxy.clientsCountDec()
-            dynamicTimeout := proxy.getDynamicTimeout()
-            if err := clientPc.SetDeadline(time.Now().Add(dynamicTimeout)); err != nil {
-                return
-            }
-            start := time.Now()
-            packet, err := ReadPrefixed(&clientPc)
-            if err != nil {
-                return
-            }
-            clientAddr := clientPc.RemoteAddr()
-            proxy.processIncomingQuery("tcp", "tcp", packet, &clientAddr, clientPc, start, false)
-        }()
-    }
-}
-
-func (proxy *Proxy) udpListenerFromAddr(listenAddr *net.UDPAddr) error {
-    listenConfig, err := proxy.udpListenerConfig()
-    if err != nil {
-        return err
-    }
-    listenAddrStr := listenAddr.String()
-    network := "udp"
-    isIPv4 := isDigit(listenAddrStr[0])
-    if isIPv4 {
-        network = "udp4"
-    }
-    clientPc, err := listenConfig.ListenPacket(context.Background(), network, listenAddrStr)
-    if err != nil {
-        return err
-    }
-    proxy.registerUDPListener(clientPc.(*net.UDPConn))
-    dlog.Noticef("Now listening to %v [UDP]", listenAddr)
-    return nil
-}
-
-func (proxy *Proxy) tcpListenerFromAddr(listenAddr *net.TCPAddr) error {
-    listenConfig, err := proxy.tcpListenerConfig()
-    if err != nil {
-        return err
-    }
-    listenAddrStr := listenAddr.String()
-    network := "tcp"
-    isIPv4 := isDigit(listenAddrStr[0])
-    if isIPv4 {
-        network = "tcp4"
-    }
-    acceptPc, err := listenConfig.Listen(context.Background(), network, listenAddrStr)
-    if err != nil {
-        return err
-    }
-    proxy.registerTCPListener(acceptPc.(*net.TCPListener))
-    dlog.Noticef("Now listening to %v [TCP]", listenAddr)
-    return nil
-}
-
-func (proxy *Proxy) localDoHListenerFromAddr(listenAddr *net.TCPAddr) error {
-    listenConfig, err := proxy.tcpListenerConfig()
-    if err != nil {
-        return err
-    }
-    listenAddrStr := listenAddr.String()
-    network := "tcp"
-    isIPv4 := isDigit(listenAddrStr[0])
-    if isIPv4 {
-        network = "tcp4"
-    }
-    acceptPc, err := listenConfig.Listen(context.Background(), network, listenAddrStr)
-    if err != nil {
-        return err
-    }
-    proxy.registerLocalDoHListener(acceptPc.(*net.TCPListener))
-    dlog.Noticef("Now listening to https://%v%v [DoH]", listenAddr, proxy.localDoHPath)
-    return nil
-}
-
-func (proxy *Proxy) startAcceptingClients() {
-    for _, clientPc := range proxy.udpListeners {
-        go proxy.udpListener(clientPc)
-    }
-    proxy.udpListeners = nil
-    for _, acceptPc := range proxy.tcpListeners {
-        go proxy.tcpListener(acceptPc)
-    }
-    proxy.tcpListeners = nil
-    for _, acceptPc := range proxy.localDoHListeners {
-        go proxy.localDoHListener(acceptPc)
-    }
-    proxy.localDoHListeners = nil
-}
-
-func (proxy *Proxy) prepareForRelay(ip net.IP, port int, encryptedQuery *[]byte) {
-    const relayHeaderSize = 10 + 16 + 2 // magic(10) + IP(16) + Port(2)
-    oldQ := *encryptedQuery
-    neededSize := relayHeaderSize + len(oldQ)
-
-    var newQ []byte
-    if cap(oldQ) >= neededSize {
-        // Optimization: In-place expansion if capacity exists
-        newQ = oldQ[:neededSize]
-        copy(newQ[relayHeaderSize:], oldQ)
-    } else {
-        newQ = make([]byte, neededSize)
-        copy(newQ[relayHeaderSize:], oldQ)
-    }
-
-    // Construct Header
-    copy(newQ[0:8], []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff})
-    newQ[8] = 0x00
-    newQ[9] = 0x00
-    copy(newQ[10:26], ip.To16())
-    binary.BigEndian.PutUint16(newQ[26:28], uint16(port))
-
-    *encryptedQuery = newQ
-}
-
-func (proxy *Proxy) exchangeWithUDPServer(
+// processDNSCryptQuery - Processes a query using the DNSCrypt protocol
+func processDNSCryptQuery(
+    proxy *Proxy,
     serverInfo *ServerInfo,
-    sharedKey *[32]byte,
-    encryptedQuery []byte,
-    clientNonce []byte,
-) ([]byte, error) {
-    upstreamAddr := serverInfo.UDPAddr
-    if serverInfo.Relay != nil && serverInfo.Relay.Dnscrypt != nil {
-        upstreamAddr = serverInfo.Relay.Dnscrypt.RelayUDPAddr
-    }
-
-    proxyDialer := proxy.xTransport.proxyDialer
-    if proxyDialer != nil {
-        return proxy.exchangeWithUDPServerViaProxy(serverInfo, sharedKey, encryptedQuery, clientNonce, upstreamAddr, proxyDialer)
-    }
-
-    pc, err := proxy.udpConnPool.Get(upstreamAddr)
-    if err != nil {
-        return nil, err
-    }
-
-    if err := pc.SetDeadline(time.Now().Add(serverInfo.Timeout)); err != nil {
-        proxy.udpConnPool.Discard(pc)
-        return nil, err
-    }
-
-    query := encryptedQuery
-    if serverInfo.Relay != nil && serverInfo.Relay.Dnscrypt != nil {
-        proxy.prepareForRelay(serverInfo.UDPAddr.IP, serverInfo.UDPAddr.Port, &query)
-    }
-
-    // Optimization: Use sync.Pool
-    respBufPtr := packetBufferPool.Get().(*[]byte)
-    defer packetBufferPool.Put(respBufPtr)
-    encryptedResponse := *respBufPtr
-
-    var readErr error
-    var length int
-    for tries := 2; tries > 0; tries-- {
-        if _, err := pc.Write(query); err != nil {
-            proxy.udpConnPool.Discard(pc)
-            return nil, err
-        }
-        length, err = pc.Read(encryptedResponse)
-        if err == nil {
-            readErr = nil
-            break
-        }
-        readErr = err
-        dlog.Debugf("[%v] Retry on timeout", serverInfo.Name)
-    }
-
-    if readErr != nil {
-        proxy.udpConnPool.Discard(pc)
-        return nil, readErr
-    }
-
-    proxy.udpConnPool.Put(upstreamAddr, pc)
-
-    return proxy.Decrypt(serverInfo, sharedKey, encryptedResponse[:length], clientNonce)
-}
-
-func (proxy *Proxy) exchangeWithUDPServerViaProxy(
-    serverInfo *ServerInfo,
-    sharedKey *[32]byte,
-    encryptedQuery []byte,
-    clientNonce []byte,
-    upstreamAddr *net.UDPAddr,
-    proxyDialer *netproxy.Dialer,
-) ([]byte, error) {
-    pc, err := (*proxyDialer).Dial("udp", upstreamAddr.String())
-    if err != nil {
-        return nil, err
-    }
-    defer pc.Close()
-
-    if err := pc.SetDeadline(time.Now().Add(serverInfo.Timeout)); err != nil {
-        return nil, err
-    }
-    if serverInfo.Relay != nil && serverInfo.Relay.Dnscrypt != nil {
-        proxy.prepareForRelay(serverInfo.UDPAddr.IP, serverInfo.UDPAddr.Port, &encryptedQuery)
-    }
-
-    // Optimization: Use sync.Pool
-    respBufPtr := packetBufferPool.Get().(*[]byte)
-    defer packetBufferPool.Put(respBufPtr)
-    encryptedResponse := *respBufPtr
-
-    var length int
-    for tries := 2; tries > 0; tries-- {
-        if _, err := pc.Write(encryptedQuery); err != nil {
-            return nil, err
-        }
-        length, err = pc.Read(encryptedResponse)
-        if err == nil {
-            break
-        }
-        dlog.Debugf("[%v] Retry on timeout", serverInfo.Name)
-    }
-    return proxy.Decrypt(serverInfo, sharedKey, encryptedResponse[:length], clientNonce)
-}
-
-func (proxy *Proxy) exchangeWithTCPServer(
-    serverInfo *ServerInfo,
-    sharedKey *[32]byte,
-    encryptedQuery []byte,
-    clientNonce []byte,
-) ([]byte, error) {
-    upstreamAddr := serverInfo.TCPAddr
-    if serverInfo.Relay != nil && serverInfo.Relay.Dnscrypt != nil {
-        upstreamAddr = serverInfo.Relay.Dnscrypt.RelayTCPAddr
-    }
-    var err error
-    var pc net.Conn
-    proxyDialer := proxy.xTransport.proxyDialer
-    if proxyDialer == nil {
-        pc, err = net.DialTimeout("tcp", upstreamAddr.String(), serverInfo.Timeout)
-    } else {
-        pc, err = (*proxyDialer).Dial("tcp", upstreamAddr.String())
-    }
-    if err != nil {
-        return nil, err
-    }
-    defer pc.Close()
-    if err := pc.SetDeadline(time.Now().Add(serverInfo.Timeout)); err != nil {
-        return nil, err
-    }
-    if serverInfo.Relay != nil && serverInfo.Relay.Dnscrypt != nil {
-        proxy.prepareForRelay(serverInfo.TCPAddr.IP, serverInfo.TCPAddr.Port, &encryptedQuery)
-    }
-    encryptedQuery, err = PrefixWithSize(encryptedQuery)
-    if err != nil {
-        return nil, err
-    }
-    if _, err := pc.Write(encryptedQuery); err != nil {
-        return nil, err
-    }
-    encryptedResponse, err := ReadPrefixed(&pc)
-    if err != nil {
-        return nil, err
-    }
-    return proxy.Decrypt(serverInfo, sharedKey, encryptedResponse, clientNonce)
-}
-
-func (proxy *Proxy) clientsCountInc() bool {
-    for {
-        count := atomic.LoadUint32(&proxy.clientsCount)
-        if count >= proxy.maxClients {
-            return false
-        }
-        if atomic.CompareAndSwapUint32(&proxy.clientsCount, count, count+1) {
-            dlog.Debugf("clients count: %d", count+1)
-            return true
-        }
-    }
-}
-
-func (proxy *Proxy) clientsCountDec() {
-    for {
-        count := atomic.LoadUint32(&proxy.clientsCount)
-        if count == 0 {
-            // Already at zero, nothing to do
-            break
-        }
-        if atomic.CompareAndSwapUint32(&proxy.clientsCount, count, count-1) {
-            dlog.Debugf("clients count: %d", count-1)
-            break
-        }
-        // CAS failed, retry with updated count
-    }
-}
-
-func (proxy *Proxy) getDynamicTimeout() time.Duration {
-    if proxy.timeoutLoadReduction <= 0.0 || proxy.maxClients == 0 {
-        return proxy.timeout
-    }
-
-    currentClients := atomic.LoadUint32(&proxy.clientsCount)
-    utilization := float64(currentClients) / float64(proxy.maxClients)
-
-    // Use quartic (power 4) curve for slow decrease at low load, sharp decrease near limit
-    utilization4 := utilization * utilization * utilization * utilization
-    factor := 1.0 - (utilization4 * proxy.timeoutLoadReduction)
-    if factor < 0.1 {
-        factor = 0.1
-    }
-
-    dynamicTimeout := time.Duration(float64(proxy.timeout) * factor)
-    dlog.Debugf("Dynamic timeout: %v (utilization: %.2f%%, factor: %.2f)", dynamicTimeout, utilization*100, factor)
-
-    return dynamicTimeout
-}
-
-func (proxy *Proxy) processIncomingQuery(
-    clientProto string,
-    serverProto string,
+    pluginsState *PluginsState,
     query []byte,
-    clientAddr *net.Addr,
-    clientPc net.Conn,
-    start time.Time,
-    onlyCached bool,
-) []byte {
-    // Initialize metrics for this query
-    clientAddrStr := "unknown"
-    if clientAddr != nil {
-        clientAddrStr = (*clientAddr).String()
-    }
-    dlog.Debugf("Processing incoming query from %s", clientAddrStr)
-
-    // Validate the query
-    var response []byte
-    if !validateQuery(query) {
-        return response
+    serverProto string,
+) ([]byte, error) {
+    sharedKey, encryptedQuery, clientNonce, err := proxy.Encrypt(serverInfo, query, serverProto)
+    if err != nil && serverProto == "udp" {
+        dlog.Debug("Unable to pad for UDP, re-encrypting query for TCP")
+        serverProto = "tcp"
+        sharedKey, encryptedQuery, clientNonce, err = proxy.Encrypt(serverInfo, query, serverProto)
     }
 
-    // Initialize plugin state
-    pluginsState := NewPluginsState(proxy, clientProto, clientAddr, serverProto, start)
-
-    var serverInfo *ServerInfo
-    var serverName string = "-"
-
-    // Apply query plugins with lazy server selection
-    query, err := pluginsState.ApplyQueryPlugins(
-        &proxy.pluginsGlobals,
-        query,
-        func() (*ServerInfo, bool) {
-            // Only get server info once when actually needed
-            if serverInfo == nil {
-                serverInfo = proxy.serversInfo.getOne()
-                if serverInfo != nil {
-                    serverName = serverInfo.Name
-                }
-            }
-            if serverInfo == nil {
-                return nil, false
-            }
-            needsPadding := (serverInfo.Proto == stamps.StampProtoTypeDoH ||
-                serverInfo.Proto == stamps.StampProtoTypeTLS)
-            return serverInfo, needsPadding
-        },
-    )
     if err != nil {
-        dlog.Debugf("Plugins failed: %v", err)
-        pluginsState.action = PluginsActionDrop
-        pluginsState.returnCode = PluginsReturnCodeDrop
+        pluginsState.returnCode = PluginsReturnCodeParseError
         pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
-        return response
-    }
-    if !validateQuery(query) {
-        return response
+        return nil, err
     }
 
-    // Handle query plugin actions
+    serverInfo.noticeBegin(proxy)
+    var response []byte
+
+    if serverProto == "udp" {
+        // Elite: Use [:] to slice the array for the interface
+        response, err = proxy.exchangeWithUDPServer(serverInfo, sharedKey, encryptedQuery, clientNonce[:])
+        retryOverTCP := false
+        if err == nil && len(response) >= MinDNSPacketSize && response[2]&0x02 == 0x02 {
+            retryOverTCP = true
+        } else if neterr, ok := err.(net.Error); ok && neterr.Timeout() {
+            dlog.Debugf("[%v] Retry over TCP after UDP timeouts", serverInfo.Name)
+            retryOverTCP = true
+        }
+        if retryOverTCP {
+            serverProto = "tcp"
+            sharedKey, encryptedQuery, clientNonce, err = proxy.Encrypt(serverInfo, query, serverProto)
+            if err != nil {
+                pluginsState.returnCode = PluginsReturnCodeParseError
+                pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
+                serverInfo.noticeFailure(proxy)
+                return nil, err
+            }
+            response, err = proxy.exchangeWithTCPServer(serverInfo, sharedKey, encryptedQuery, clientNonce[:])
+        }
+    } else {
+        response, err = proxy.exchangeWithTCPServer(serverInfo, sharedKey, encryptedQuery, clientNonce[:])
+    }
+
+    if err != nil {
+        serverInfo.noticeFailure(proxy)
+        if stale, ok := pluginsState.sessionData["stale"]; ok {
+            dlog.Debug("Serving stale response")
+            staleMsg := stale.(*dns.Msg)
+            if packErr := staleMsg.Pack(); packErr == nil {
+                return staleMsg.Data, nil
+            }
+        }
+        if neterr, ok := err.(net.Error); ok && neterr.Timeout() {
+            pluginsState.returnCode = PluginsReturnCodeServerTimeout
+        } else {
+            pluginsState.returnCode = PluginsReturnCodeNetworkError
+        }
+        pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
+        return nil, err
+    }
+
+    return response, nil
+}
+
+// processDoHQuery - Processes a query using the DoH protocol
+func processDoHQuery(
+    proxy *Proxy,
+    serverInfo *ServerInfo,
+    pluginsState *PluginsState,
+    query []byte,
+) ([]byte, error) {
+    tid := fastGetID(query)
+    fastSetID(query, 0)
+    serverInfo.noticeBegin(proxy)
+    serverResponse, _, tls, _, err := proxy.xTransport.DoHQuery(serverInfo.useGet, serverInfo.URL, query, proxy.timeout)
+    fastSetID(query, tid)
+
+    if err == nil && tls != nil && tls.HandshakeComplete {
+        response := serverResponse
+        if len(response) >= MinDNSPacketSize {
+            fastSetID(response, tid)
+        }
+        return response, nil
+    }
+
+    serverInfo.noticeFailure(proxy)
+    if stale, ok := pluginsState.sessionData["stale"]; ok {
+        staleMsg := stale.(*dns.Msg)
+        if packErr := staleMsg.Pack(); packErr == nil {
+            return staleMsg.Data, nil
+        }
+    }
+
+    pluginsState.returnCode = PluginsReturnCodeNetworkError
+    pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
+    return nil, err
+}
+
+// processODoHQuery - Processes a query using the ODoH protocol
+func processODoHQuery(
+    proxy *Proxy,
+    serverInfo *ServerInfo,
+    pluginsState *PluginsState,
+    query []byte,
+) ([]byte, error) {
+    tid := fastGetID(query)
+    if len(serverInfo.odohTargetConfigs) == 0 {
+        return nil, nil
+    }
+
+    serverInfo.noticeBegin(proxy)
+    target := serverInfo.odohTargetConfigs[rand.Intn(len(serverInfo.odohTargetConfigs))]
+    odohQuery, err := target.encryptQuery(query)
+    if err != nil {
+        dlog.Errorf("Failed to encrypt query for [%v]", serverInfo.Name)
+        return nil, err
+    }
+
+    targetURL := serverInfo.URL
+    if serverInfo.Relay != nil && serverInfo.Relay.ODoH != nil {
+        targetURL = serverInfo.Relay.ODoH.URL
+    }
+
+    responseBody, responseCode, _, _, err := proxy.xTransport.ObliviousDoHQuery(
+        serverInfo.useGet, targetURL, odohQuery.odohMessage, proxy.timeout)
+
+    if err == nil && len(responseBody) > 0 && responseCode == 200 {
+        response, err := odohQuery.decryptResponse(responseBody)
+        if err != nil {
+            dlog.Warnf("Failed to decrypt response from [%v]", serverInfo.Name)
+            serverInfo.noticeFailure(proxy)
+            return nil, err
+        }
+        if len(response) >= MinDNSPacketSize {
+            fastSetID(response, tid)
+        }
+        return response, nil
+    } else if responseCode == 401 || (responseCode == 200 && len(responseBody) == 0) {
+        if responseCode == 200 {
+            dlog.Warnf("ODoH relay for [%v] is buggy and returns a 200 status code instead of 401 after a key update", serverInfo.Name)
+        }
+        dlog.Infof("Forcing key update for [%v]", serverInfo.Name)
+        for _, registeredServer := range proxy.serversInfo.registeredServers {
+            if registeredServer.name == serverInfo.Name {
+                if err = proxy.serversInfo.refreshServer(proxy, registeredServer.name, registeredServer.stamp); err != nil {
+                    dlog.Noticef("Key update failed for [%v]", serverInfo.Name)
+                    serverInfo.noticeFailure(proxy)
+                    clocksmith.Sleep(10 * time.Second)
+                }
+                break
+            }
+        }
+    } else {
+        dlog.Warnf("Failed to receive successful response from [%v]", serverInfo.Name)
+    }
+
+    pluginsState.returnCode = PluginsReturnCodeNetworkError
+    pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
+    serverInfo.noticeFailure(proxy)
+    return nil, err
+}
+
+// handleDNSExchange - Orchestrator for protocol dispatch
+func handleDNSExchange(
+    proxy *Proxy,
+    serverInfo *ServerInfo,
+    pluginsState *PluginsState,
+    query []byte,
+    serverProto string,
+) ([]byte, error) {
+    var err error
+    var response []byte
+
+    switch serverInfo.Proto {
+    case stamps.StampProtoTypeDNSCrypt:
+        response, err = processDNSCryptQuery(proxy, serverInfo, pluginsState, query, serverProto)
+    case stamps.StampProtoTypeDoH:
+        response, err = processDoHQuery(proxy, serverInfo, pluginsState, query)
+    case stamps.StampProtoTypeODoHTarget:
+        response, err = processODoHQuery(proxy, serverInfo, pluginsState, query)
+    default:
+        dlog.Fatal("Unsupported protocol")
+    }
+
+    if err != nil {
+        return nil, err
+    }
+
+    if len(response) < MinDNSPacketSize || len(response) > MaxDNSPacketSize {
+        pluginsState.returnCode = PluginsReturnCodeParseError
+        pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
+        serverInfo.noticeFailure(proxy)
+        return nil, err
+    }
+
+    return response, nil
+}
+
+// processPlugins - Elite: Processes plugins for both query and response
+func processPlugins(
+    proxy *Proxy,
+    pluginsState *PluginsState,
+    query []byte,
+    serverInfo *ServerInfo,
+    response []byte,
+) ([]byte, error) {
+    var err error
+    response, err = pluginsState.ApplyResponsePlugins(&proxy.pluginsGlobals, response)
+    if err != nil {
+        pluginsState.returnCode = PluginsReturnCodeParseError
+        pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
+        serverInfo.noticeFailure(proxy)
+        return response, err
+    }
+
     if pluginsState.action == PluginsActionDrop {
         pluginsState.returnCode = PluginsReturnCodeDrop
         pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
-        return response
+        return response, nil
     }
 
-    // Handle synthesized responses from plugins
     if pluginsState.synthResponse != nil {
-        response, err = handleSynthesizedResponse(&pluginsState, pluginsState.synthResponse)
-        if err != nil {
-            return response
+        if err = pluginsState.synthResponse.Pack(); err != nil {
+            pluginsState.returnCode = PluginsReturnCodeParseError
+            pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
+            return response, err
         }
+        response = pluginsState.synthResponse.Data
     }
 
-    // Return early if only cached results are requested
-    if onlyCached {
-        if len(response) == 0 {
-            return response
+    if rcode := Rcode(response); rcode == dns.RcodeServerFailure {
+        if !pluginsState.dnssec {
+            dlog.Infof("A response with status code 2 was received from [%v]", serverInfo.Name)
+            serverInfo.noticeFailure(proxy)
         }
-        serverInfo = nil
+    } else {
+        serverInfo.noticeSuccess(proxy)
     }
 
-    // Process query with a DNS server if there's no cached response
-    // Note: if serverInfo is still nil here, we need to get it
-    if len(response) == 0 {
-        if serverInfo == nil {
-            serverInfo = proxy.serversInfo.getOne()
-            if serverInfo != nil {
-                serverName = serverInfo.Name
-            }
-        }
-        if serverInfo != nil {
-            pluginsState.serverName = serverName
+    return response, nil
+}
 
-            exchangeResponse, err := handleDNSExchange(proxy, serverInfo, &pluginsState, query, serverProto)
-
-            // Update server statistics for WP2 strategy
-            success := (err == nil && exchangeResponse != nil)
-            proxy.serversInfo.updateServerStats(serverName, success)
-
-            if err != nil || exchangeResponse == nil {
-                return response
-            }
-
-            response = exchangeResponse
-
-            // Process the response through plugins
-            processedResponse, err := processPlugins(proxy, &pluginsState, query, serverInfo, response)
-            if err != nil {
-                return response
-            }
-
-            response = processedResponse
-        }
-    }
-
-    // Validate the response before sending
+// sendResponse - Elite: Optimized write back to the client
+func sendResponse(
+    proxy *Proxy,
+    pluginsState *PluginsState,
+    response []byte,
+    clientProto string,
+    clientAddr *net.Addr,
+    clientPc net.Conn,
+) {
     if len(response) < MinDNSPacketSize || len(response) > MaxDNSPacketSize {
         if len(response) == 0 {
             pluginsState.returnCode = PluginsReturnCodeNotReady
@@ -937,27 +307,44 @@ func (proxy *Proxy) processIncomingQuery(
             pluginsState.returnCode = PluginsReturnCodeParseError
         }
         pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
-        if serverInfo != nil {
-            serverInfo.noticeFailure(proxy)
-        }
-        return response
+        return
     }
 
-    // Send the response back to the client
-    sendResponse(proxy, &pluginsState, response, clientProto, clientAddr, clientPc)
-
-    // Apply logging plugins
-    pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
-
-    // Update monitoring metrics
-    updateMonitoringMetrics(proxy, &pluginsState)
-
-    return response
+    var err error
+    if clientProto == "udp" {
+        if len(response) > pluginsState.maxUnencryptedUDPSafePayloadSize {
+            response, err = TruncatedResponse(response)
+            if err != nil {
+                pluginsState.returnCode = PluginsReturnCodeParseError
+                pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
+                return
+            }
+        }
+        clientPc.(net.PacketConn).WriteTo(response, *clientAddr)
+        if HasTCFlag(response) {
+            proxy.questionSizeEstimator.blindAdjust()
+        } else {
+            proxy.questionSizeEstimator.adjust(ResponseOverhead + len(response))
+        }
+    } else if clientProto == "tcp" {
+        response, err = PrefixWithSize(response)
+        if err != nil {
+            pluginsState.returnCode = PluginsReturnCodeParseError
+            pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
+            return
+        }
+        if clientPc != nil {
+            clientPc.Write(response)
+        }
+    }
 }
 
-func NewProxy() *Proxy {
-    return &Proxy{
-        serversInfo: NewServersInfo(),
-        udpConnPool: NewUDPConnPool(),
+// updateMonitoringMetrics - Elite: Metrics collection
+func updateMonitoringMetrics(
+    proxy *Proxy,
+    pluginsState *PluginsState,
+) {
+    if proxy.monitoringUI.Enabled && proxy.monitoringInstance != nil && pluginsState.questionMsg != nil {
+        proxy.monitoringInstance.UpdateMetrics(*pluginsState, pluginsState.questionMsg)
     }
 }
