@@ -47,7 +47,6 @@ type Config struct {
     SourceIPv6               bool               `toml:"ipv6_servers"`
     IgnoreSystemDNS          bool               `toml:"ignore_system_dns"`
     TLSDisableSessionTickets bool               `toml:"tls_disable_session_tickets"`
-    TLSPreferRSA             bool               `toml:"tls_prefer_rsa"`
     OfflineMode              bool               `toml:"offline_mode"`
     RefusedCodeInResponses   bool               `toml:"refused_code_in_responses"`
     CloakedPTR               bool               `toml:"cloak_ptr"`
@@ -69,7 +68,6 @@ type Config struct {
     CacheMaxTTL              uint32             `toml:"cache_max_ttl"`
     RejectTTL                uint32             `toml:"reject_ttl"`
     CloakTTL                 uint32             `toml:"cloak_ttl"`
-    TimeoutLoadReduction     float64            `toml:"timeout_load_reduction"`
     LogFile                  *string            `toml:"log_file"`
     UserName                 string             `toml:"user_name"`
     Proxy                    string             `toml:"proxy"`
@@ -108,7 +106,6 @@ type Config struct {
     DoHClientX509Auth        DoHClientX509AuthConfig `toml:"doh_client_x509_auth"`
     DoHClientX509AuthLegacy  DoHClientX509AuthConfig `toml:"tls_client_auth"`
     DNS64                    DNS64Config        `toml:"dns64"`
-    IPEncryption             IPEncryptionConfig `toml:"ip_encryption"`
 }
 
 func newConfig() Config {
@@ -150,7 +147,6 @@ func newConfig() Config {
         SourceDoH:                true,
         SourceODoH:               false,
         MaxClients:               250,
-        TimeoutLoadReduction:     0.75,
         BootstrapResolvers:       []string{DefaultBootstrapResolver},
         IgnoreSystemDNS:          false,
         LogMaxSize:               10,
@@ -158,7 +154,6 @@ func newConfig() Config {
         LogMaxBackups:            1,
         TLSDisableSessionTickets: false,
         TLSCipherSuite:           nil,
-        TLSPreferRSA:             false,
         TLSKeyLogFile:            "",
         NetprobeTimeout:          60,
         OfflineMode:              false,
@@ -268,15 +263,6 @@ type LocalDoHConfig struct {
     CertKeyFile     string   `toml:"cert_key_file"`
 }
 
-type MonitoringUIConfig struct {
-    Enabled        bool
-    ListenAddress  string
-    Username       string
-    Password       string
-    EnableQueryLog bool
-    PrivacyLevel   int
-}
-
 type ServerSummary struct {
     Name        string   `json:"name"`
     Proto       string   `json:"proto"`
@@ -306,17 +292,8 @@ type DNS64Config struct {
     Resolvers []string `toml:"resolver"`
 }
 
-type IPEncryptionConfig struct {
-    Key       string `toml:"key"`
-    Algorithm string `toml:"algorithm"`
-}
-
 type CaptivePortalsConfig struct {
     MapFile string `toml:"map_file"`
-}
-
-type WeeklyRangesStr struct {
-    // Define if needed
 }
 
 type ConfigFlags struct {
@@ -443,10 +420,6 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
     configureBrokenImplementations(proxy, &config)
     configureDNS64(proxy, &config)
 
-    if err := configureIPEncryption(proxy, &config); err != nil {
-        return err
-    }
-
     configureSourceRestrictions(proxy, flags, &config)
 
     if err := initializeNetworking(proxy, flags, &config); err != nil {
@@ -528,18 +501,6 @@ func configureBrokenImplementations(proxy *Proxy, config *Config) {
 func configureDNS64(proxy *Proxy, config *Config) {
     proxy.dns64Prefixes = config.DNS64.Prefixes
     proxy.dns64Resolvers = config.DNS64.Resolvers
-}
-
-func configureIPEncryption(proxy *Proxy, config *Config) error {
-    ipCryptConfig, err := NewIPCryptConfig(
-        config.IPEncryption.Key,
-        config.IPEncryption.Algorithm,
-    )
-    if err != nil {
-        return fmt.Errorf("IP encryption configuration error: %w", err)
-    }
-    proxy.ipCryptConfig = ipCryptConfig
-    return nil
 }
 
 func (config *Config) buildServerSummary(name string, stamp stamps.ServerStamp, description string) ServerSummary {
