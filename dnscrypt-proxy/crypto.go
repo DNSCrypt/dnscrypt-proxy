@@ -36,8 +36,9 @@ var (
     ErrQuestionTooLarge = errors.New("question too large; cannot be padded")
 
     zeroPage [4096]byte
+    // Used for constant-time zero checks
+    zero32 [32]byte
 
-    // Pool for the plaintext padding buffer
     bufferPool = sync.Pool{
         New: func() interface{} {
             b := make([]byte, MaxDNSUDPPacketSize)
@@ -45,7 +46,6 @@ var (
         },
     }
 
-    // Elite: Added pool for the final encrypted output to prevent heap escape
     encryptedPool = sync.Pool{
         New: func() interface{} {
             b := make([]byte, MaxDNSUDPPacketSize+QueryOverhead)
@@ -115,8 +115,8 @@ func ComputeSharedKey(
     } else {
         box.Precompute(&sharedKey, serverPk, secretKey)
         
-        // Elite: Use crypto/subtle for constant-time validation
-        if subtle.ConstantTimeAllZero(sharedKey[:]) == 1 {
+        // Fix: Use ConstantTimeCompare against a zero-filled array
+        if subtle.ConstantTimeCompare(sharedKey[:], zero32[:]) == 1 {
             logMsg := "Weak XSalsa20 public key"
             if providerName != nil {
                 dlog.Criticalf("[%v] %s", *providerName, logMsg)
@@ -131,13 +131,11 @@ func ComputeSharedKey(
     return sharedKey
 }
 
-// Encrypt now returns the clientNonce as a fixed-size array to prevent heap allocation
 func (proxy *Proxy) Encrypt(
     serverInfo *ServerInfo,
     packet []byte,
     proto string,
 ) (sharedKey *[32]byte, encrypted []byte, clientNonce [HalfNonceSize]byte, err error) {
-    // Zero-alloc: Read directly into the return array
     if err := readRandom(clientNonce[:]); err != nil {
         return nil, nil, clientNonce, err
     }
@@ -183,7 +181,6 @@ func (proxy *Proxy) Encrypt(
         return sharedKey, nil, clientNonce, ErrQuestionTooLarge
     }
 
-    // Elite: Acquire pre-allocated output buffer from pool
     encPtr := encryptedPool.Get().(*[]byte)
     encrypted = (*encPtr)[:0] 
 
@@ -208,7 +205,6 @@ func (proxy *Proxy) Encrypt(
     }
 
     bufferPool.Put(ptr)
-    // Note: Caller must return 'encrypted' slice back to encryptedPool after use
     return sharedKey, encrypted, clientNonce, nil
 }
 
@@ -226,22 +222,19 @@ func (proxy *Proxy) Decrypt(
         return encrypted, ErrInvalidMsgSize
     }
 
-    // Elite: Constant-time prefix check
     if subtle.ConstantTimeCompare(encrypted[:serverMagicLen], ServerMagic[:]) == 0 {
         return encrypted, ErrInvalidPrefix
     }
 
     serverNonce := encrypted[serverMagicLen:responseHeaderLen]
-    // Elite: Constant-time nonce verification
     if subtle.ConstantTimeCompare(nonce[:HalfNonceSize], serverNonce[:HalfNonceSize]) == 0 {
         return encrypted, ErrUnexpectedNonce
     }
 
     ciphertext := encrypted[responseHeaderLen:]
-    outCap := len(ciphertext) - TagSize
     
-    // Elite: Use pooled result buffer to avoid heap allocation per packet
     ptr := bufferPool.Get().(*[]byte)
+    // Fix: removed unused outCap and correctly slice the pooled buffer
     packet := (*ptr)[:0]
 
     var err error
@@ -268,7 +261,5 @@ func (proxy *Proxy) Decrypt(
         return encrypted, ErrInvalidPadding
     }
 
-    // The returned packet is a slice of the pooled buffer. 
-    // It must be used before the next Decrypt call or copied.
     return packet, nil
 }
