@@ -5,6 +5,7 @@ import (
     "bytes"
     crypto_rand "crypto/rand"
     "crypto/sha512"
+    "crypto/subtle"
     "errors"
     "io"
     "sync"
@@ -26,7 +27,6 @@ const (
 )
 
 var (
-    // Pre-allocated errors to avoid runtime allocation
     ErrInvalidPadding   = errors.New("invalid padding: delimiter not found")
     ErrInvalidPadBytes  = errors.New("invalid padding: non-zero bytes after delimiter")
     ErrInvalidMsgSize   = errors.New("invalid message size")
@@ -35,50 +35,47 @@ var (
     ErrIncorrectTag     = errors.New("incorrect tag")
     ErrQuestionTooLarge = errors.New("question too large; cannot be padded")
 
-    // Global zero buffer for efficient padding verification (memcmp)
-    // Size covers MaxDNSUDPPacketSize to ensure we can always compare.
     zeroPage [4096]byte
 
-    // Pool for padding buffers (plaintext)
-    // Storing *[]byte avoids interface conversion overhead on slice headers
+    // Pool for the plaintext padding buffer
     bufferPool = sync.Pool{
         New: func() interface{} {
-            b := make([]byte, 0, 2048)
+            b := make([]byte, MaxDNSUDPPacketSize)
             return &b
         },
     }
 
-    // Pool for buffered random readers
+    // Elite: Added pool for the final encrypted output to prevent heap escape
+    encryptedPool = sync.Pool{
+        New: func() interface{} {
+            b := make([]byte, MaxDNSUDPPacketSize+QueryOverhead)
+            return &b
+        },
+    }
+
     randReaderPool = sync.Pool{
         New: func() interface{} {
-            // 1KB buffer reduces syscalls for batched queries
             return bufio.NewReaderSize(crypto_rand.Reader, 1024)
         },
     }
 )
 
-// padTo copies packet to a new buffer of size minSize with ISO/IEC 7816-4 padding.
 func padTo(packet []byte, minSize int) []byte {
     out := make([]byte, minSize)
     copy(out, packet)
     out[len(packet)] = 0x80
-    // Remaining bytes are zero-initialized by make()
     return out
 }
 
 func unpad(packet []byte) ([]byte, error) {
-    // Optimization: Assembly-optimized search
     idx := bytes.LastIndexByte(packet, 0x80)
     if idx == -1 {
         return nil, ErrInvalidPadding
     }
 
-    // Optimization: Verify trailing zeros using SIMD-optimized memcmp (bytes.Equal)
-    // instead of a slow loop.
     tailLen := len(packet) - idx - 1
     if tailLen > 0 {
         if tailLen > len(zeroPage) {
-            // Fallback for theoretically huge packets (unlikely in DNS)
             for i := idx + 1; i < len(packet); i++ {
                 if packet[i] != 0 {
                     return nil, ErrInvalidPadBytes
@@ -91,7 +88,6 @@ func unpad(packet []byte) ([]byte, error) {
     return packet[:idx], nil
 }
 
-// readRandom reads n bytes from a pooled buffered reader
 func readRandom(p []byte) error {
     reader := randReaderPool.Get().(*bufio.Reader)
     _, err := io.ReadFull(reader, p)
@@ -119,20 +115,14 @@ func ComputeSharedKey(
     } else {
         box.Precompute(&sharedKey, serverPk, secretKey)
         
-        // Manual constant-time check for zero key
-        var c byte
-        for _, b := range sharedKey {
-            c |= b
-        }
-        
-        if c == 0 {
+        // Elite: Use crypto/subtle for constant-time validation
+        if subtle.ConstantTimeAllZero(sharedKey[:]) == 1 {
             logMsg := "Weak XSalsa20 public key"
             if providerName != nil {
                 dlog.Criticalf("[%v] %s", *providerName, logMsg)
             } else {
                 dlog.Critical(logMsg)
             }
-            // Fallback to random to prevent catastrophe (though caller likely panics/exits)
             if _, err := crypto_rand.Read(sharedKey[:]); err != nil {
                 dlog.Fatal(err)
             }
@@ -141,23 +131,24 @@ func ComputeSharedKey(
     return sharedKey
 }
 
+// Encrypt now returns the clientNonce as a fixed-size array to prevent heap allocation
 func (proxy *Proxy) Encrypt(
     serverInfo *ServerInfo,
     packet []byte,
     proto string,
-) (sharedKey *[32]byte, encrypted []byte, clientNonce []byte, err error) {
-    // 1. Zero-alloc, Batched Randomness
-    var nonce [NonceSize]byte
-    if err := readRandom(nonce[:HalfNonceSize]); err != nil {
-        return nil, nil, nil, err
+) (sharedKey *[32]byte, encrypted []byte, clientNonce [HalfNonceSize]byte, err error) {
+    // Zero-alloc: Read directly into the return array
+    if err := readRandom(clientNonce[:]); err != nil {
+        return nil, nil, clientNonce, err
     }
 
-    clientNonceSlice := nonce[:HalfNonceSize]
-    var publicKey *[PublicKeySize]byte
+    var nonce [NonceSize]byte
+    copy(nonce[:], clientNonce[:])
 
+    var publicKey *[PublicKeySize]byte
     if proxy.ephemeralKeys {
         var buf [HalfNonceSize + 32]byte
-        copy(buf[:], clientNonceSlice)
+        copy(buf[:], clientNonce[:])
         copy(buf[HalfNonceSize:], proxy.proxySecretKey[:])
         ephSk := sha512.Sum512_256(buf[:])
         var xPublicKey [PublicKeySize]byte
@@ -176,12 +167,11 @@ func (proxy *Proxy) Encrypt(
     } else {
         var xpad [1]byte
         if err := readRandom(xpad[:]); err != nil {
-            return nil, nil, nil, err
+            return nil, nil, clientNonce, err
         }
         minQuestionSize += int(xpad[0])
     }
 
-    // Upgrade: Use Go 1.21 max/min builtins
     paddedLength := min(MaxDNSUDPPacketSize, (max(minQuestionSize, QueryOverhead)+1+63)&^63)
     if serverInfo.knownBugs.fragmentsBlocked && proto == "udp" {
         paddedLength = MaxDNSUDPSafePacketSize
@@ -190,33 +180,24 @@ func (proxy *Proxy) Encrypt(
     }
 
     if QueryOverhead+len(packet)+1 > paddedLength {
-        return sharedKey, nil, clientNonceSlice, ErrQuestionTooLarge
+        return sharedKey, nil, clientNonce, ErrQuestionTooLarge
     }
 
-    totalSize := len(serverInfo.MagicQuery) + PublicKeySize + HalfNonceSize + (paddedLength - QueryOverhead) + TagSize
-    encrypted = make([]byte, 0, totalSize)
+    // Elite: Acquire pre-allocated output buffer from pool
+    encPtr := encryptedPool.Get().(*[]byte)
+    encrypted = (*encPtr)[:0] 
 
     encrypted = append(encrypted, serverInfo.MagicQuery[:]...)
     encrypted = append(encrypted, publicKey[:]...)
-    encrypted = append(encrypted, nonce[:HalfNonceSize]...)
+    encrypted = append(encrypted, clientNonce[:]...)
 
     plaintextLen := paddedLength - QueryOverhead
     ptr := bufferPool.Get().(*[]byte)
-    paddedBuf := *ptr
-
-    // Ensure capacity without discarding pooled memory if possible
-    if cap(paddedBuf) < plaintextLen {
-        paddedBuf = make([]byte, plaintextLen)
-    } else {
-        paddedBuf = paddedBuf[:plaintextLen]
-    }
+    paddedBuf := (*ptr)[:plaintextLen]
 
     copy(paddedBuf, packet)
     paddedBuf[len(packet)] = 0x80
-
-    // Upgrade: Use clear() for efficient intrinsic zeroing (Go 1.21+)
-    tail := paddedBuf[len(packet)+1:]
-    clear(tail)
+    clear(paddedBuf[len(packet)+1:])
 
     if serverInfo.CryptoConstruction == XChacha20Poly1305 {
         encrypted = xsecretbox.Seal(encrypted, nonce[:], paddedBuf, sharedKey[:])
@@ -226,15 +207,9 @@ func (proxy *Proxy) Encrypt(
         encrypted = secretbox.Seal(encrypted, paddedBuf, &xsalsaNonce, sharedKey)
     }
 
-    // Update the pool pointer to the potentially larger buffer
-    *ptr = paddedBuf
     bufferPool.Put(ptr)
-
-    // Allocation Note: We must allocate for the return value here as it escapes.
-    retClientNonce := make([]byte, HalfNonceSize)
-    copy(retClientNonce, clientNonceSlice)
-
-    return sharedKey, encrypted, retClientNonce, nil
+    // Note: Caller must return 'encrypted' slice back to encryptedPool after use
+    return sharedKey, encrypted, clientNonce, nil
 }
 
 func (proxy *Proxy) Decrypt(
@@ -246,27 +221,28 @@ func (proxy *Proxy) Decrypt(
     serverMagicLen := len(ServerMagic)
     responseHeaderLen := serverMagicLen + NonceSize
 
-    // Pre-check constraints
     if len(encrypted) < responseHeaderLen+TagSize+int(MinDNSPacketSize) ||
         len(encrypted) > responseHeaderLen+TagSize+int(MaxDNSPacketSize) {
         return encrypted, ErrInvalidMsgSize
     }
 
-    if !bytes.Equal(encrypted[:serverMagicLen], ServerMagic[:]) {
+    // Elite: Constant-time prefix check
+    if subtle.ConstantTimeCompare(encrypted[:serverMagicLen], ServerMagic[:]) == 0 {
         return encrypted, ErrInvalidPrefix
     }
 
     serverNonce := encrypted[serverMagicLen:responseHeaderLen]
-    if !bytes.Equal(nonce[:HalfNonceSize], serverNonce[:HalfNonceSize]) {
+    // Elite: Constant-time nonce verification
+    if subtle.ConstantTimeCompare(nonce[:HalfNonceSize], serverNonce[:HalfNonceSize]) == 0 {
         return encrypted, ErrUnexpectedNonce
     }
 
     ciphertext := encrypted[responseHeaderLen:]
-
-    // Optimization: Pre-allocate result buffer to avoid internal re-allocs
     outCap := len(ciphertext) - TagSize
-    if outCap < 0 { outCap = 0 }
-    packet := make([]byte, 0, outCap)
+    
+    // Elite: Use pooled result buffer to avoid heap allocation per packet
+    ptr := bufferPool.Get().(*[]byte)
+    packet := (*ptr)[:0]
 
     var err error
     if serverInfo.CryptoConstruction == XChacha20Poly1305 {
@@ -282,13 +258,17 @@ func (proxy *Proxy) Decrypt(
     }
 
     if err != nil {
+        bufferPool.Put(ptr)
         return encrypted, err
     }
 
     packet, err = unpad(packet)
     if err != nil || len(packet) < MinDNSPacketSize {
+        bufferPool.Put(ptr)
         return encrypted, ErrInvalidPadding
     }
 
+    // The returned packet is a slice of the pooled buffer. 
+    // It must be used before the next Decrypt call or copied.
     return packet, nil
 }
