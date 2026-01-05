@@ -74,7 +74,7 @@ func StringToKey(s string) uint16 {
 
 var stringToKey = reverse.Int16(keyToString)
 
-// KeyToPair convert the key value to a Pair.
+// KeyToPair converts the key value to a Pair constructor function.
 func KeyToPair(k uint16) func() Pair {
 	switch k {
 	case KeyMandatory:

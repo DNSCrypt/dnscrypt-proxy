@@ -1,4 +1,4 @@
-# codeberg.org/miekg/dns v0.6.18
+# codeberg.org/miekg/dns v0.6.20
 ## explicit; go 1.25.0
 codeberg.org/miekg/dns
 codeberg.org/miekg/dns/deleg
@@ -51,8 +51,8 @@ github.com/hectane/go-acl/api
 # github.com/jedisct1/dlog v0.0.0-20241212093805-3c5fd791b405
 ## explicit; go 1.23
 github.com/jedisct1/dlog
-# github.com/jedisct1/go-clocksmith v0.0.0-20250224222044-e151f21a353a
-## explicit
+# github.com/jedisct1/go-clocksmith v0.0.0-20260103230147-eff3e038eebd
+## explicit; go 1.21
 github.com/jedisct1/go-clocksmith
 # github.com/jedisct1/go-dnsstamps v0.0.0-20251112173516-191fc465df31
 ## explicit; go 1.18

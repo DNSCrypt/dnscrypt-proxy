@@ -3,6 +3,7 @@
 - Many functions (and new ones) are moved into _dnsutil_, and _dnstest_. This copied a lot of stuff from CoreDNS.
 - _dnshttp_ was added for help with DOH - DNS over HTTPs.
 - `RR` lost the `Type` and `Rdlength` fields, type is derived from the Go type, `Rdlength` served no function at all.
+  The RFC3597 (unknown RRs) has gained a `Type` field because of this.
 - The rdata of each `RR` is split out in to a _rdata_ package. This makes it much more memory efficient to
   store RRSets - as the RR's header isn't duplicated.
 - `context.Context` is used in the correct places. `ServeDNS` now has a context.Context, with `Zone(ctx)` you

@@ -479,6 +479,10 @@ func unpackOptionCode(option EDNS0, s *cryptobyte.String) error {
 	case *ZONEVERSION:
 		return x.unpack(s)
 	}
+	if x, ok := option.(Packer); ok {
+		msg := []byte(*s)
+		return x.Unpack(msg)
+	}
 	return fmt.Errorf("dns: no option unpack defined")
 }
 
@@ -513,7 +517,9 @@ func packOptionCode(option EDNS0, msg []byte, off int) (int, error) {
 	case *ZONEVERSION:
 		return x.pack(msg, off)
 	}
-	// Coder() check, abuse Type()?
+	if x, ok := option.(Packer); ok {
+		return x.Pack(msg, off)
+	}
 	return 0, fmt.Errorf("dns: no option pack defined")
 }
 

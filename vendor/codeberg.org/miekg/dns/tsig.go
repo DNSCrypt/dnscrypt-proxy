@@ -8,7 +8,7 @@ import (
 	"codeberg.org/miekg/dns/internal/pack"
 )
 
-// HMAC hashing codes. These are transmitted as domain names.
+// HMAC hashing codes. These are transmitted as domain names and as such need a closing dot.
 const (
 	HmacSHA1   = "hmac-sha1."
 	HmacSHA224 = "hmac-sha224."

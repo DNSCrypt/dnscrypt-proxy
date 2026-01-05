@@ -1,5 +1,5 @@
-codeberg.org/miekg/dns v0.6.18 h1:BsT8pfCfRMSwFZqNEE/kC9kKRopurMRkk/t/8V2umrw=
-codeberg.org/miekg/dns v0.6.18/go.mod h1:tCC/ub6ImKc6++xEJXJAs6kyhP1vQeMnoC8M1yLRcxo=
+codeberg.org/miekg/dns v0.6.20 h1:e06zFnE2oozGakqCEwFq2yAVzQ5apkBDpjAA4PNxNsc=
+codeberg.org/miekg/dns v0.6.20/go.mod h1:tCC/ub6ImKc6++xEJXJAs6kyhP1vQeMnoC8M1yLRcxo=
 github.com/BurntSushi/toml v1.6.0 h1:dRaEfpa2VI55EwlIW72hMRHdWouJeRF7TPYhI+AUQjk=
 github.com/BurntSushi/toml v1.6.0/go.mod h1:ukJfTF/6rtPPRCnwkur4qwRxa8vTRFBF0uk2lLoLwho=
 github.com/VividCortex/ewma v1.2.0 h1:f58SaIzcDXrSy3kWaHNvuJgJ3Nmz59Zji6XoJR/q1ow=
@@ -33,8 +33,8 @@ github.com/hectane/go-acl v0.0.0-20230122075934-ca0b05cb1adb h1:PGufWXXDq9yaev6x
 github.com/hectane/go-acl v0.0.0-20230122075934-ca0b05cb1adb/go.mod h1:QiyDdbZLaJ/mZP4Zwc9g2QsfaEA4o7XvvgZegSci5/E=
 github.com/jedisct1/dlog v0.0.0-20241212093805-3c5fd791b405 h1:6j/0utSiy3KhZSpFJgobk+ME1BIwXeq9jepJaDLW3Yg=
 github.com/jedisct1/dlog v0.0.0-20241212093805-3c5fd791b405/go.mod h1:OO1HpQNlMCMaPdHPuI00fhChZQZ8npbVTTjMvJUxUqQ=
-github.com/jedisct1/go-clocksmith v0.0.0-20250224222044-e151f21a353a h1:8z8OvuZGZYGuvTeT5RD80ii6B6LftADl0EQr2z5asCg=
-github.com/jedisct1/go-clocksmith v0.0.0-20250224222044-e151f21a353a/go.mod h1:SAINchklztk2jcLWJ4bpNF4KnwDUSUTX+cJbspWC2Rw=
+github.com/jedisct1/go-clocksmith v0.0.0-20260103230147-eff3e038eebd h1:88y5uQ4oCBina++xZviZ3ty8y4ZrGw7TUd6BP1lXjgQ=
+github.com/jedisct1/go-clocksmith v0.0.0-20260103230147-eff3e038eebd/go.mod h1:UoybhVbWd4L9SD+jnFFagcR8NwymL75SFfJ1Hpud7Mw=
 github.com/jedisct1/go-dnsstamps v0.0.0-20251112173516-191fc465df31 h1:O2qUxpVUeJxoBU5FJ0vGD03g5bY9uRrouaLlJeVOHr8=
 github.com/jedisct1/go-dnsstamps v0.0.0-20251112173516-191fc465df31/go.mod h1:mEGEFZsGe4sG5Mb3Xi89pmsy+TZ0946ArbYMGKAM5uA=
 github.com/jedisct1/go-hpke-compact v0.0.0-20241212093903-5caa4621366f h1:h5/HKrLaDfrb/Zi1y8eCsPGQpcOnKIslT/OpFc81i4c=

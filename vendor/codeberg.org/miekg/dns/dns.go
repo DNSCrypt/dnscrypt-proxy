@@ -59,7 +59,7 @@ type RDATA interface {
 	String() string
 }
 
-// The Typer interface it will be used to return the type of RR in the RRToType function or the EDNS0 option
+// The Typer interface is used to return the type of RR in the RRToType function or the EDNS0 option
 // code when the "RR" is an EDNS0 option. This is only needed for RRs that are defined outside of this package.
 // Once this method is defined the following extra registration needs to happen:
 //
@@ -82,7 +82,8 @@ type Comparer interface {
 type Packer interface {
 	// Pack packs the RR into msg at offset off. This method only needs to deals with the RR's rdata, as the
 	// header is taken care off. For examples of such code look in zmsg.go. The returned int is the new offset in
-	// msg after this RR is packed.
+	// msg after this RR is packed. For EDNS0 types this only need to pack the data, not the type-length-value
+	// (TLV) header.
 	Pack(msg []byte, off int) (int, error)
 	// Unpack unpacks the RR. Data is the byte slice that should contain the all the data for the RR.
 	Unpack(data []byte) error
