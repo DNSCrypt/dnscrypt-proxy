@@ -6,35 +6,33 @@
 
 # Status
 
-- Fast(er); recvmmsg and pipeling suppport.
-  - Since a46996c I can get ~370K (UDP) qps on my laptop (M2/Asahi Linux), also see 1766e44.
-  - On my Dell XPS 17 (Intel) it is similar.
-  - On Intel/AMD it is lower (~200K (UDP) qps) - yet to understand why.
-  - See `cmd/reflect` and do a `go build; make new.txt`. Requires `dnsperf` to be installed.
-- Many more convenience functions included in _dns_ or otherwise in _dnsutils_.
-- Test helper function included _dnstest_, ala _httptest_, also includes useful function for non-test code.
-- Example programs included _and_ benchmarked in `cmd`, [`cmd/atomdns`](https://codeberg.org/miekg/dns/src/branch/main/cmd/atomdns/README.md)
-  which is a full blown production ready name server.
-- Everything from <https://github.com/miekg/dns> should work. See
-  [README-diff-with-v1.md](https://codeberg.org/miekg/dns/src/branch/main/README-diff-with-v1.md) for the differences.
-
-For developers please read the
-[developer README](https://codeberg.org/miekg/dns/src/branch/main/README-dev.md).
-
 > Less is more.
 
 Complete and usable DNS library. All Resource Records are supported, including the DNSSEC types. It follows a
 lean and mean philosophy. Server side and client side programming is supported, i.e. you can build servers and
 resolvers with it.
 
+Many convenience functions are included in _dns_, _dnstest_ or otherwise in _dnsutils_.
+
 We try to keep the "main" branch as sane as possible and at the bleeding edge of standards, avoiding breaking
 changes wherever reasonable. But because this version is young, we allow ourselves some more headroom.
+
+Example programs are included _and_ benchmarked in `cmd`,
+[`cmd/atomdns`](https://codeberg.org/miekg/dns/src/branch/main/cmd/atomdns/README.md) which is a full blown
+production ready name server.
 
 The naming of types follows the RFCs. EDNS0 types are similarly named, for instance, DHU (Ds Hash Understood).
 If there is a clash between an actual RR's and an EDNS0 one, the EDNS0 type will get an 'E' as prefix, e.g.
 EDHU. This will also be done if the RR was named later than the EDNS0 option! The same is the for DSO (DNS
 Stateful Operations), when clashing those types will be prefixed with a 'D'. If EDNS0 and DSO clash, EDNS0
 wins. See PADDING and DPADDING as an example.
+
+Everything from <https://github.com/miekg/dns> works. See
+[README-diff-with-v1.md](https://codeberg.org/miekg/dns/src/branch/main/README-diff-with-v1.md)
+for the differences, if you are porting your application.
+
+For developers please read the
+[developer README](https://codeberg.org/miekg/dns/src/branch/main/README-dev.md).
 
 # Goals
 
@@ -49,8 +47,12 @@ wins. See PADDING and DPADDING as an example.
   - Pacakge _deleg_ holds details for the DELEG record.
   - Many helper/debug functions are moved into _internal_ packages, making the top-level much, much cleaner.
 - Fast.
-  - The cmd/reflect server does ~370/300K UDP/TCP respectively on the right hardware.
-    (As stated, unsure why other machines qps numbers are lower).
+  - recvmmsg(2) and TCP pipeling suppport.
+  - The `cmd/reflect` server does ~370/300K UDP/TCP respectively on the right hardware.
+  - Since a46996c I can get ~370K (UDP) qps on my laptop (M2/Asahi Linux), also see 1766e44.
+  - On my Dell XPS 17 (Intel) it is similar.
+  - On Intel/AMD it is lower (~200K (UDP) qps) - yet to understand why.
+  - See `cmd/reflect` and do a `go build; make new.txt`. Requires `dnsperf` to be installed.
 
 # Users
 
@@ -82,7 +84,7 @@ What users say:
 # Features
 
 - UDP/TCP queries, recvmmsg(2), TCP query-pipelining, IPv4 and IPv6.
-- Fast(er).
+- Fast.
 - RFC 1035 zone file parsing ($INCLUDE, $ORIGIN, $TTL and $GENERATE - for _all_ record types) is supported.
 - Server side programming (mimicking the net/http package), with `dns.Handle` and `dns.HandleFunc` allowing
   for middleware servers.
@@ -97,10 +99,11 @@ What users say:
 - Improved RRs, by having the rdata specified in an _rdata_ package.
 - Examples included the cmd/ directory.
 - Escapes (\DDD and \x) in domain names is not supported (anymore) - the overhead (50-100%) was too high.
+- Easy way for custom RRs and EDNS0 pseudo RRs.
 
 Have fun!
 
-Miek Gieben - 2025- - <miek@miek.nl>
+Miek Gieben - 2026- - <miek@miek.nl>
 
 See [anonymous users asking for support](https://berthub.eu/articles/posts/anonymous-help/) on why these kind
 of requests/issues usually get closed pretty swiftly.

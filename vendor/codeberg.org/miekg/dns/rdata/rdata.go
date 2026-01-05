@@ -1,4 +1,4 @@
-// Package rdata contains all the rdata elements of all the resource records.
+// Package rdata contains the rdata elements of all the resource records.
 package rdata
 
 import (

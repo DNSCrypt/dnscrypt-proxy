@@ -122,7 +122,7 @@ const (
 	ClassNONE   = 254
 	ClassANY    = 255
 
-	// Message Response Codes, see https://www.iana.org/assignments/dns-parameters/dns-parameters.xhtml
+	// Message Response Codes, see https://www.iana.org/assignments/dns-parameters/dns-parameters.xhtml.
 	RcodeSuccess                = 0  // NoError   - No Error                          [DNS]
 	RcodeFormatError            = 1  // FormErr   - Format Error                      [DNS]
 	RcodeServerFailure          = 2  // ServFail  - Server Failure                    [DNS]
@@ -197,33 +197,33 @@ const (
 	LOCAltitudebase  = 100000
 )
 
-// Different Certificate Types, see RFC 4398, Section 2.1
+// Different Certificate Types, see RFC 4398, Section 2.1.
 const (
-	CertPKIX = 1 + iota
-	CertSPKI
-	CertPGP
-	CertIPIX
-	CertISPKI
-	CertIPGP
-	CertACPKIX
-	CertIACPKIX
-	CertURI = 253
-	CertOID = 254
+	CERTPkix = 1 + iota
+	CERTSpki
+	CERTPgp
+	CERTIpix
+	CERTIspki
+	CERTIpgp
+	CERTAcpkix
+	CERTIAcpkix
+	CERTUri = 253
+	CERTOid = 254
 )
 
 // CertTypeToString converts the Cert Type to its string representation.
 // See RFC 4398 and RFC 6944.
 var CertTypeToString = map[uint16]string{
-	CertPKIX:    "PKIX",
-	CertSPKI:    "SPKI",
-	CertPGP:     "PGP",
-	CertIPIX:    "IPIX",
-	CertISPKI:   "ISPKI",
-	CertIPGP:    "IPGP",
-	CertACPKIX:  "ACPKIX",
-	CertIACPKIX: "IACPKIX",
-	CertURI:     "URI",
-	CertOID:     "OID",
+	CERTPkix:    "PKIX",
+	CERTSpki:    "SPKI",
+	CERTPgp:     "PGP",
+	CERTIpix:    "IPIX",
+	CERTIspki:   "ISPKI",
+	CERTIpgp:    "IPGP",
+	CERTAcpkix:  "ACPKIX",
+	CERTIAcpkix: "IACPKIX",
+	CERTUri:     "URI",
+	CERTOid:     "OID",
 }
 
 // NULL RR. See RFC 1035.
@@ -237,7 +237,7 @@ func (rr *NULL) String() string {
 	return ";" + rr.Hdr.String() + rr.Null
 }
 
-func (*NULL) parse(c *zlexer, origin string) *ParseError {
+func (*NULL) parse(_ *zlexer, _ string) *ParseError {
 	return &ParseError{err: "NULL records do not have a presentation format"}
 }
 
@@ -251,7 +251,7 @@ type NXNAME struct {
 func (rr *NXNAME) Len() int       { return rr.Hdr.Len() }
 func (rr *NXNAME) String() string { return rr.Hdr.String() }
 
-func (*NXNAME) parse(c *zlexer, origin string) *ParseError {
+func (*NXNAME) parse(_ *zlexer, _ string) *ParseError {
 	return &ParseError{err: "NXNAME records do not have a presentation format"}
 }
 
@@ -996,7 +996,8 @@ func (rr *RFC3597) String() string {
 	return s
 }
 
-// Type implements the Typer interface.
+// Type implements the Typer interface. This is mandatory for this type as its Go type isn't indicitive of the
+// actual type it is carrying.
 func (rr *RFC3597) Type() uint16 { return rr.RRType }
 
 // URI RR. See RFC 7553.
