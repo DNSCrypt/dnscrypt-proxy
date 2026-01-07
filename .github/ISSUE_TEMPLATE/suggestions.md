@@ -1,22 +1,39 @@
 ---
-name: "🙋🏽 Planned changes"
-about: List of planned changes
+name: "Feature Request"
+about: Suggest an idea or improvement
 title: ''
 labels: ''
 assignees: ''
 
 ---
 
-The starting point should be a discussion.
+Got an idea for improving dnscrypt-proxy? We'd love to hear it!
 
-https://github.com/DNSCrypt/dnscrypt-proxy/discussions/
+### Start with a discussion
 
-Suggestions may be raised as an "Ideas" discussion.
+The best way to propose a new feature is to start in [Discussions](https://github.com/DNSCrypt/dnscrypt-proxy/discussions/) under the "Ideas" category. This lets us:
 
-We can then determine if the discussion needs to be escalated into a "planned change" or not.
+- Talk through the idea together
+- Get feedback from other users
+- Figure out the best approach
 
-This will help us ensure that the issue tracker properly reflects ongoing or needed work on the project.
+Once we've discussed and agreed on a direction, we can convert it into a tracked issue here.
+
+This helps keep the issue tracker focused on work that's ready to be done.
 
 ---
 
 - [ ] Initially raised as discussion #...
+
+## Summary
+
+<!-- Brief description of your idea -->
+
+## Why would this be useful?
+
+<!-- What problem does it solve? Who would benefit? -->
+
+## Possible implementation
+
+<!-- Optional: any thoughts on how this could work? -->
+
