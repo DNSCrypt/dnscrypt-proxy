@@ -3,18 +3,20 @@
 - Many functions (and new ones) are moved into _dnsutil_, and _dnstest_. This copied a lot of stuff from CoreDNS.
 - _dnshttp_ was added for help with DOH - DNS over HTTPs.
 - `RR` lost the `Type` and `Rdlength` fields, type is derived from the Go type, `Rdlength` served no function at all.
-  The RFC3597 (unknown RRs) has gained a `Type` field because of this.
+  The `Header` is thus 4 bytes smaller than in v1. The RFC3597 (unknown RRs) has gained a `Type` field because of this.
 - The rdata of each `RR` is split out in to a _rdata_ package. This makes it much more memory efficient to
-  store RRSets - as the RR's header isn't duplicated.
+  store RRSets - as the RR's header isn't duplicated. This saves a minimal of 24 bytes (empty string, ttl, and
+  class) per RR stored.
 - `context.Context` is used in the correct places. `ServeDNS` now has a context.Context, with `Zone(ctx)` you
   retrieve the pattern zone that lead to invocation of this Handler.
 - _internal/..._ packages that hold code that used to be private, but was cluttering the top level directory; also allowed for better
   naming.
-  - builtin perf testing with _internal/dnsperf_. Need `dnsperf`, on deb-based systems `apt-get install
-dnsperf`.
+  - builtin perf testing with _internal/dnsperf_. Need `dnsperf`, on deb-based systems `apt-get install dnsperf`.
 - Interfaces do not have private methods.
+- No more `dns.Conn`.
 - `Msg` contains a buffer named `Data` that holds the binary data for this message. This pulls TSIG/SIG(0)
-  handling out of the client and server, simplifying it enormously as we can get rid of `dns.Conn`.
+  handling out of the client and server, simplifying it enormously as we can get rid of `dns.Conn`, and just
+  use io.Writer and io.Reader interfaces.
 - `Msg` includes `Options` that control on how you want it packed/unpacked.
 - `Msg` includes all the ENDS0 OPT RR bits, as this almost was a real message header; in this package it now is.
 - `Msg` has a pseudo section that holds all EDNS0 Options as (faked) resource records.

@@ -27,12 +27,20 @@ Or even:
 
 	mx, err := dns.New("$ORIGIN nl.\nmiek 1H IN MX 10 mx.miek")
 
-In the DNS, messages are exchanged, these messages contain RRs (RRsets). Use pattern for creating a message:
+Or with dnstest.New, if you are sure no error will occur:
+
+	mx := dnstest.New("miek.nl.  IN MX 10 mx.miek.nl.")
+
+In the DNS, messages ([Msg]) are exchanged, these messages contain RRs ([RR]) and/or RRsets ([RRset]). Use pattern for creating a message:
 
 	m := new(dns.Msg)
 	m.Question = []dns.RR{mx}
 
-The message m is now a message with the question section set to ask the MX records for the miek.nl. zone. Or when making an actual request.
+Or faster, with the correct header bits:
+
+	m := dns.NewMsg("miek.nl.", dns.TypeMX)
+
+The message m is now a message with the question section set to ask the MX records for the miek.nl. zone. When making an actual request:
 
 	m.ID = dns.ID()
 	m.RecursionDesired = true
@@ -40,9 +48,9 @@ The message m is now a message with the question section set to ask the MX recor
 After creating a message it can be sent. Basic use pattern for synchronous querying the DNS at a server configured on 127.0.0.1 and port 53 using UDP:
 
 	c := new(dns.Client)
-	r, rtt, err := c.Exchange(m, "udp", "127.0.0.1:53")
+	r, rtt, err := c.Exchange(context.TODO(), m, "udp", "127.0.0.1:53")
 
-When this functions returns you will get DNS message back. A DNS message consists out of four (five in this package) sections.
+When this functions returns you will get DNS message back. A DNS message consists out of four (on the wire), but five in this package, sections.
 
   - The question section: r.Question.
   - The answer section: r.Answer.
@@ -76,30 +84,28 @@ quotations marks will be escaped. Bytes below 32 and above 127 will be converted
 
 # DNSSEC
 
-DNSSEC (DNS Security Extension) adds a layer of security to the DNS. It uses
-public key cryptography to sign resource records. The public keys are stored in
-DNSKEY records and the signatures in RRSIG records.
+DNSSEC (DNS Security Extension) adds a layer of security to the DNS. It uses public key cryptography to sign
+resource records. The public keys are stored in DNSKEY records and the signatures in RRSIG records.
 
-Requesting DNSSEC information for a zone is done by adding the DO (DNSSEC OK)
-bit to a request.
+Requesting DNSSEC information for a zone is done by adding the DO (DNSSEC OK) bit to a request.
 
 	m := new(dns.Msg)
 	m.Security = true
 	m.UDPSize = 4096
 
-When sending a message [Msg.Pack] is called, this takes care of allocating an OPT RR and setting the DO bit and the
-UDPSize in there.
+When sending a message [Msg.Pack] is called, this takes care of allocating an [OPT] [RR] and setting the DO bit and the
+UDP Size in there.
 
 Signature generation, signature verification (see [RRSIG]) and key generation are all supported.
 
 # EDNS0
 
-EDNS0 is an extension mechanism for the DNS defined in RFC 2671 and updated by RFC 6891. It defines a RR type,
+[EDNS0] is an extension mechanism for the DNS defined in RFC 2671 and updated by RFC 6891. It defines a RR type,
 the [OPT] RR, which holds type-length-value sub-types.
 In this package all EDNS0 options are implemented as RRs. Doing basic "EDNS0" things, like
 setting the DNSSEC OK bit (DO) or the UDP buffer size is handled for you and these can be set directly on message as shown above.
 
-The data of an OPT RR sits in the [Msg] Pseudo section consists out of a slice of EDNS0 (RFC 6891) interfaces.
+The data of an [OPT] [RR] sits in the [Msg] Pseudo section consists out of a slice of EDNS0 (RFC 6891) interfaces.
 These are just RRs with an extra Pseudo() method.
 
 Basic use pattern for a server to check if (and which) options are set, which is similar to how to deal with RRs.
@@ -124,10 +130,6 @@ Any struct can be used as a private resource record. To make it work you need to
   - [Packer], if you need to use your new RR on the wire.
   - [Comparer], if your RR will be signed with DNSSEC.
 
-See rr_test.for a complete example for both an external RR and EDNS0.
-
-# Further Reading
-
-All functionality and types are documented in their respective types and functions.
+See rr_test.go for a complete example for both an external [RR] and [EDNS0].
 */
 package dns

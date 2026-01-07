@@ -12,20 +12,26 @@ Complete and usable DNS library. All Resource Records are supported, including t
 lean and mean philosophy. Server side and client side programming is supported, i.e. you can build servers and
 resolvers with it.
 
-Many convenience functions are included in _dns_, _dnstest_ or otherwise in _dnsutils_.
+Many convenience functions are included in _dns_, _dnstest_ or otherwise in _dnsutils_. The RR's resource data
+(RDATA) is split off into its own package: _rdata_. This means accessing the RR's header and rdata is much
+simpler now.
 
 We try to keep the "main" branch as sane as possible and at the bleeding edge of standards, avoiding breaking
-changes wherever reasonable. But because this version is young, we allow ourselves some more headroom.
+changes wherever reasonable. But because this version is young, we allow ourselves some more headroom for
+making backwards incompatible changes.
 
-Example programs are included _and_ benchmarked in `cmd`,
-[`cmd/atomdns`](https://codeberg.org/miekg/dns/src/branch/main/cmd/atomdns/README.md) which is a full blown
-production ready name server.
+Example programs are included _and_ benchmarked in `cmd`.
+[`cmd/atomdns`](https://codeberg.org/miekg/dns/src/branch/main/cmd/atomdns/README.md) is a full blown
+production ready name server. Because of these we are depending on a lot more external packages - at some
+point these servers will be split off.
 
-The naming of types follows the RFCs. EDNS0 types are similarly named, for instance, DHU (Ds Hash Understood).
+The naming of types follows the RFCs. EDNS0 types are similarly named, for instance, DHU (DS Hash Understood).
 If there is a clash between an actual RR's and an EDNS0 one, the EDNS0 type will get an 'E' as prefix, e.g.
 EDHU. This will also be done if the RR was named later than the EDNS0 option! The same is the for DSO (DNS
 Stateful Operations), when clashing those types will be prefixed with a 'D'. If EDNS0 and DSO clash, EDNS0
 wins. See PADDING and DPADDING as an example.
+
+# Porting From v1
 
 Everything from <https://github.com/miekg/dns> works. See
 [README-diff-with-v1.md](https://codeberg.org/miekg/dns/src/branch/main/README-diff-with-v1.md)
