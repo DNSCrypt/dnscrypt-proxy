@@ -155,6 +155,7 @@ type Relay struct {
 	Proto    stamps.StampProtoType
 	Dnscrypt *DNSCryptRelay
 	ODoH     *ODoHRelay
+	Name     string
 }
 
 type ServersInfo struct {
@@ -655,6 +656,7 @@ func route(proxy *Proxy, name string, serverProto stamps.StampProtoType) (*Relay
 		return &Relay{
 			Proto:    stamps.StampProtoTypeDNSCryptRelay,
 			Dnscrypt: &DNSCryptRelay{RelayUDPAddr: relayUDPAddr, RelayTCPAddr: relayTCPAddr},
+			Name:     relayName,
 		}, nil
 	case stamps.StampProtoTypeODoHRelay:
 		relayBaseURL, err := url.Parse(
@@ -691,7 +693,7 @@ func route(proxy *Proxy, name string, serverProto stamps.StampProtoType) (*Relay
 		dlog.Noticef("Anonymizing queries for [%v] via [%v]", name, relayName)
 		return &Relay{Proto: stamps.StampProtoTypeODoHRelay, ODoH: &ODoHRelay{
 			URL: relayURLforTarget,
-		}}, nil
+		}, Name: relayName}, nil
 	}
 	return nil, fmt.Errorf("Invalid relay set for server [%v]", name)
 }

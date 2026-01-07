@@ -552,6 +552,12 @@ cache_neg_max_ttl = 600
 
 
 ## Query log format (currently supported: tsv and ltsv)
+##
+## TSV format columns: timestamp, client_ip, query_name, query_type, return_code, duration, server, relay
+## LTSV format fields: time, host, message, type, return, cached, duration, server, relay
+##
+## The relay field shows the anonymizing relay name when using Anonymized DNS or ODoH,
+## or "-" when no relay is used.
 
 format = 'tsv'
 

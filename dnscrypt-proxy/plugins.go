@@ -70,6 +70,7 @@ type PluginsState struct {
 	requestEnd                       time.Time
 	clientProto                      string
 	serverName                       string
+	relayName                        string
 	serverProto                      string
 	qName                            string
 	clientAddr                       *net.Addr

@@ -90,6 +90,11 @@ func (plugin *PluginQueryLog) Eval(pluginsState *PluginsState, msg *dns.Msg) err
 	if requestDuration > triedUDPTCPTimeout {
 		requestDuration = triedUDPTCPTimeout
 	}
+	relayName := pluginsState.relayName
+	if relayName == "" {
+		relayName = "-"
+	}
+
 	var line string
 	if plugin.format == "tsv" {
 		now := time.Now()
@@ -97,7 +102,7 @@ func (plugin *PluginQueryLog) Eval(pluginsState *PluginsState, msg *dns.Msg) err
 		hour, minute, second := now.Clock()
 		tsStr := fmt.Sprintf("[%d-%02d-%02d %02d:%02d:%02d]", year, int(month), day, hour, minute, second)
 		line = fmt.Sprintf(
-			"%s\t%s\t%s\t%s\t%s\t%dms\t%s\n",
+			"%s\t%s\t%s\t%s\t%s\t%dms\t%s\t%s\n",
 			tsStr,
 			clientIPStr,
 			StringQuote(qName),
@@ -105,14 +110,15 @@ func (plugin *PluginQueryLog) Eval(pluginsState *PluginsState, msg *dns.Msg) err
 			returnCode,
 			requestDuration/time.Millisecond,
 			StringQuote(pluginsState.serverName),
+			StringQuote(relayName),
 		)
 	} else if plugin.format == "ltsv" {
 		cached := 0
 		if pluginsState.cacheHit {
 			cached = 1
 		}
-		line = fmt.Sprintf("time:%d\thost:%s\tmessage:%s\ttype:%s\treturn:%s\tcached:%d\tduration:%d\tserver:%s\n",
-			time.Now().Unix(), clientIPStr, StringQuote(qName), qType, returnCode, cached, requestDuration/time.Millisecond, StringQuote(pluginsState.serverName))
+		line = fmt.Sprintf("time:%d\thost:%s\tmessage:%s\ttype:%s\treturn:%s\tcached:%d\tduration:%d\tserver:%s\trelay:%s\n",
+			time.Now().Unix(), clientIPStr, StringQuote(qName), qType, returnCode, cached, requestDuration/time.Millisecond, StringQuote(pluginsState.serverName), StringQuote(relayName))
 	} else {
 		dlog.Fatalf("Unexpected log format: [%s]", plugin.format)
 	}

@@ -857,6 +857,9 @@ func (proxy *Proxy) processIncomingQuery(
 		}
 		if serverInfo != nil {
 			pluginsState.serverName = serverName
+			if serverInfo.Relay != nil {
+				pluginsState.relayName = serverInfo.Relay.Name
+			}
 
 			exchangeResponse, err := handleDNSExchange(proxy, serverInfo, &pluginsState, query, serverProto)
 
