@@ -116,8 +116,8 @@ section
 t || grep -Fq 'a.www.dnscrypt-test' nx.log || fail $LINENO
 
 section
-t || grep -Eq 'microsoft.com.*PASS.*[^-]$' query.log || fail $LINENO
-t || grep -Eq 'microsoft.com.*PASS.*-$' query.log || fail $LINENO
+t || grep -Eq $'microsoft.com.*PASS.*ms\t[a-zA-Z]' query.log || fail $LINENO
+t || grep -Eq $'microsoft.com.*PASS.*ms\t-\t' query.log || fail $LINENO
 t || grep -Eq 'ipv6.google.com.*SYNTH' query.log || fail $LINENO
 t || grep -Eq 'invalid.*SYNTH' query.log || fail $LINENO
 t || grep -Eq '168.192.in-addr.arpa.*SYNTH' query.log || fail $LINENO
