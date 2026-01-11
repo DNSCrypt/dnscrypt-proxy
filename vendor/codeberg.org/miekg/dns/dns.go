@@ -2,6 +2,7 @@ package dns
 
 import (
 	"encoding/hex"
+	"math"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -29,11 +30,11 @@ const (
 	// MinMsgSize is the minimal size of a DNS message.
 	MinMsgSize = 512
 	// MaxMsgSize is the largest possible DNS message.
-	MaxMsgSize = 65535
+	MaxMsgSize = math.MaxUint16
 	// MsgHeaderSize is the length of the header in the DNS message.
 	MsgHeaderSize = 12
 	// MaxSerialIncrement is the maximum difference between two serial numbers. See RFC 1982.
-	MaxSerialIncrement = 2147483647
+	MaxSerialIncrement = math.MaxUint32 / 2 // 2147483647
 
 	defaultTTL = 3600 // Default internal TTL.
 )
@@ -104,7 +105,7 @@ type Cloner interface {
 // RFC 7719, Section 4 "RRset", use [dnsutil.IsRRset] to make that determination.
 // The type is defined here to implement the [sort.Interface].
 //
-// Typical use for sort a slice of RRs: sort.Sort(dns.RRset(....)).
+// Typical use for sorting a slice of RRs: sort.Sort(dns.RRset(....)).
 type RRset []RR
 
 // Header is the header in a DNS resource record. It implements the RR interface, as a header is the RR

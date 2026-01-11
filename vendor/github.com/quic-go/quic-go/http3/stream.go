@@ -36,7 +36,7 @@ type datagramStream interface {
 // When writing to and reading from the stream, data is framed in HTTP/3 DATA frames.
 type Stream struct {
 	datagramStream
-	conn        *Conn
+	conn        *rawConn
 	frameParser *frameParser
 
 	buf []byte // used as a temporary buffer when writing the HTTP/3 frame headers
@@ -51,7 +51,7 @@ type Stream struct {
 
 func newStream(
 	str datagramStream,
-	conn *Conn,
+	conn *rawConn,
 	trace *httptrace.ClientTrace,
 	parseTrailer func(io.Reader, *headersFrame) error,
 	qlogger qlogwriter.Recorder,
@@ -86,9 +86,6 @@ func (s *Stream) Read(b []byte) (int, error) {
 				s.bytesRemainingInFrame = f.Length
 				break parseLoop
 			case *headersFrame:
-				if s.conn.isServer {
-					continue
-				}
 				if s.parsedTrailer {
 					maybeQlogInvalidHeadersFrame(s.qlogger, s.StreamID(), f.Length)
 					return 0, errors.New("additional HEADERS frame received after trailers")
@@ -308,6 +305,12 @@ func (s *RequestStream) sendRequestHeader(req *http.Request) error {
 	return s.requestWriter.WriteRequestHeader(s.str.datagramStream, req, s.requestedGzip, s.str.StreamID(), s.str.qlogger)
 }
 
+// sendRequestTrailer sends request trailers to the stream.
+// It should be called after the request body has been fully written.
+func (s *RequestStream) sendRequestTrailer(req *http.Request) error {
+	return s.requestWriter.WriteRequestTrailer(s.str.datagramStream, req, s.str.StreamID(), s.str.qlogger)
+}
+
 // ReadResponse reads the HTTP response from the stream.
 //
 // It must be called after sending the request (using SendRequestHeader).
@@ -316,7 +319,7 @@ func (s *RequestStream) sendRequestHeader(req *http.Request) error {
 // It is invalid to call it after Read has been called.
 func (s *RequestStream) ReadResponse() (*http.Response, error) {
 	if !s.sentRequest {
-		return nil, errors.New("http3: invalid duplicate use of RequestStream.ReadResponse before SendRequestHeader")
+		return nil, errors.New("http3: invalid use of RequestStream.ReadResponse before SendRequestHeader")
 	}
 	frame, err := s.str.frameParser.ParseNext(s.str.qlogger)
 	if err != nil {

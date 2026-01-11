@@ -16,11 +16,11 @@ import (
 // FrameType is the frame type of a HTTP/3 frame
 type FrameType uint64
 
-type unknownFrameHandlerFunc func(FrameType, error) (processed bool, err error)
-
 type frame any
 
-var errHijacked = errors.New("hijacked")
+// The maximum length of an encoded HTTP/3 frame header is 16:
+// The frame has a type and length field, both QUIC varints (maximum 8 bytes in length)
+const frameHeaderLen = 16
 
 type countingByteReader struct {
 	quicvarint.Reader
@@ -46,10 +46,9 @@ func (r *countingByteReader) Reset() {
 }
 
 type frameParser struct {
-	r                   io.Reader
-	streamID            quic.StreamID
-	closeConn           func(quic.ApplicationErrorCode, string) error
-	unknownFrameHandler unknownFrameHandlerFunc
+	r         io.Reader
+	streamID  quic.StreamID
+	closeConn func(quic.ApplicationErrorCode, string) error
 }
 
 func (p *frameParser) ParseNext(qlogger qlogwriter.Recorder) (frame, error) {
@@ -57,27 +56,7 @@ func (p *frameParser) ParseNext(qlogger qlogwriter.Recorder) (frame, error) {
 	for {
 		t, err := quicvarint.Read(r)
 		if err != nil {
-			if p.unknownFrameHandler != nil {
-				hijacked, err := p.unknownFrameHandler(0, err)
-				if err != nil {
-					return nil, err
-				}
-				if hijacked {
-					return nil, errHijacked
-				}
-			}
 			return nil, err
-		}
-		// Call the unknownFrameHandler for frames not defined in the HTTP/3 spec
-		if t > 0xd && p.unknownFrameHandler != nil {
-			hijacked, err := p.unknownFrameHandler(FrameType(t), nil)
-			if err != nil {
-				return nil, err
-			}
-			if hijacked {
-				return nil, errHijacked
-			}
-			// If the unknownFrameHandler didn't process the frame, it is our responsibility to skip it.
 		}
 		l, err := quicvarint.Read(r)
 		if err != nil {

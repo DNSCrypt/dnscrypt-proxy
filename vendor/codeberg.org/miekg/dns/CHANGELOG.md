@@ -2,9 +2,27 @@
 
 This is the generated changelog for codeberg.org/miekg/dns.
 
-## HEAD - 2025-12-22
 
-1 commits. With the following change log.
+## v0.6.21 - 2026-01-06
+
+8 commits.
+
+
+## v0.6.20 - 2026-01-02
+
+1 commits.
+
+
+## v0.6.19 - 2026-01-02
+
+19 commits. With the following change log.
+
+* 395a31c Allow external EDNS0 options via the Packer interface. (Miek Gieben)
+* df6df38 Rename CertXXXX to CERTXxxx as this is a CERT RR constant - inline with LOC and ZONEMD. (Miek Gieben)
+
+## v0.6.18 - 2025-12-22
+
+4 commits. With the following change log.
 
 * 23a2cb2 Dnshttp: NewRequest: use url.JoinPath and set m.ID = 0. (Miek Gieben)
 

@@ -590,21 +590,20 @@ func (m *Msg) isPseudo() int {
 func (m *Msg) Len() int {
 	l := MsgHeaderSize
 
-	for _, r := range m.Question {
-		l += r.Len()
+	for i := range m.Question {
+		l += m.Question[i].Len()
 	}
-	for _, r := range m.Answer {
-		l += r.Len()
+	for i := range m.Answer {
+		l += m.Answer[i].Len()
 	}
-	for _, r := range m.Ns {
-		l += r.Len()
+	for i := range m.Ns {
+		l += m.Ns[i].Len()
 	}
-	for _, r := range m.Extra {
-		l += r.Len()
+	for i := range m.Extra {
+		l += m.Extra[i].Len()
 	}
-
-	for _, r := range m.Pseudo {
-		l += r.Len()
+	for i := range m.Pseudo {
+		l += m.Pseudo[i].Len()
 	}
 
 	const minHeaderSize = 11 // smallest possible RR header where the name is the root label.

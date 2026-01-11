@@ -7,12 +7,9 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"maps"
 	"net"
 	"net/http"
-	"runtime"
 	"slices"
-	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -21,9 +18,6 @@ import (
 	"github.com/quic-go/quic-go"
 	"github.com/quic-go/quic-go/http3/qlog"
 	"github.com/quic-go/quic-go/qlogwriter"
-	"github.com/quic-go/quic-go/quicvarint"
-
-	"github.com/quic-go/qpack"
 )
 
 // NextProtoH3 is the ALPN protocol negotiated during the TLS handshake, for QUIC v1 and v2.
@@ -150,20 +144,6 @@ type Server struct {
 	// AdditionalSettings specifies additional HTTP/3 settings.
 	// It is invalid to specify any settings defined by RFC 9114 (HTTP/3) and RFC 9297 (HTTP Datagrams).
 	AdditionalSettings map[uint64]uint64
-
-	// StreamHijacker, when set, is called for the first unknown frame parsed on a bidirectional stream.
-	// It is called right after parsing the frame type.
-	// If parsing the frame type fails, the error is passed to the callback.
-	// In that case, the frame type will not be set.
-	// Callers can either ignore the frame and return control of the stream back to HTTP/3
-	// (by returning hijacked false).
-	// Alternatively, callers can take over the QUIC stream (by returning hijacked true).
-	StreamHijacker func(FrameType, quic.ConnectionTracingID, *quic.Stream, error) (hijacked bool, err error)
-
-	// UniStreamHijacker, when set, is called for unknown unidirectional stream of unknown stream type.
-	// If parsing the stream type fails, the error is passed to the callback.
-	// In that case, the stream type will not be set.
-	UniStreamHijacker func(StreamType, quic.ConnectionTracingID, *quic.ReceiveStream, error) (hijacked bool)
 
 	// IdleTimeout specifies how long until idle clients connection should be
 	// closed. Idle refers only to the HTTP/3 layer, activity at the QUIC layer
@@ -437,45 +417,19 @@ func (s *Server) removeListener(l *QUICListener) {
 	s.generateAltSvcHeader()
 }
 
-// handleConn handles the HTTP/3 exchange on a QUIC connection.
-// It blocks until all HTTP handlers for all streams have returned.
-func (s *Server) handleConn(conn *quic.Conn) error {
+func (s *Server) NewRawServerConn(conn *quic.Conn) (*RawServerConn, error) {
+	hconn, _, _, err := s.newRawServerConn(conn)
+	if err != nil {
+		return nil, err
+	}
+	return hconn, nil
+}
+
+func (s *Server) newRawServerConn(conn *quic.Conn) (*RawServerConn, *quic.SendStream, qlogwriter.Recorder, error) {
 	var qlogger qlogwriter.Recorder
 	if qlogTrace := conn.QlogTrace(); qlogTrace != nil && qlogTrace.SupportsSchemas(qlog.EventSchema) {
 		qlogger = qlogTrace.AddProducer()
 	}
-
-	// open the control stream and send a SETTINGS frame, it's also used to send a GOAWAY frame later
-	// when the server is gracefully closed
-	ctrlStr, err := conn.OpenUniStream()
-	if err != nil {
-		return fmt.Errorf("opening the control stream failed: %w", err)
-	}
-	b := make([]byte, 0, 64)
-	b = quicvarint.Append(b, streamTypeControlStream) // stream type
-	b = (&settingsFrame{
-		MaxFieldSectionSize: int64(s.maxHeaderBytes()),
-		Datagram:            s.EnableDatagrams,
-		ExtendedConnect:     true,
-		Other:               s.AdditionalSettings,
-	}).Append(b)
-	if qlogger != nil {
-		sf := qlog.SettingsFrame{
-			MaxFieldSectionSize: int64(s.maxHeaderBytes()),
-			ExtendedConnect:     pointer(true),
-			Other:               maps.Clone(s.AdditionalSettings),
-		}
-		if s.EnableDatagrams {
-			sf.Datagram = pointer(true)
-		}
-		qlogger.RecordEvent(qlog.FrameCreated{
-			StreamID: ctrlStr.StreamID(),
-			Raw:      qlog.RawInfo{Length: len(b)},
-			Frame:    qlog.Frame{Frame: sf},
-		})
-	}
-	ctrlStr.Write(b)
-
 	connCtx := conn.Context()
 	connCtx = context.WithValue(connCtx, ServerContextKey, s)
 	connCtx = context.WithValue(connCtx, http.LocalAddrContextKey, conn.LocalAddr())
@@ -486,19 +440,54 @@ func (s *Server) handleConn(conn *quic.Conn) error {
 			panic("http3: ConnContext returned nil")
 		}
 	}
-
-	hconn := newConnection(
-		connCtx,
+	hconn := newRawServerConn(
 		conn,
 		s.EnableDatagrams,
-		true, // server
-		s.Logger,
 		s.IdleTimeout,
+		qlogger,
+		s.Logger,
+		connCtx,
+		s.Handler,
+		s.maxHeaderBytes(),
 	)
-	go hconn.handleUnidirectionalStreams(s.UniStreamHijacker)
+
+	// open the control stream and send a SETTINGS frame, it's also used to send a GOAWAY frame later
+	// when the server is gracefully closed
+	ctrlStr, err := hconn.openControlStream(&settingsFrame{
+		MaxFieldSectionSize: int64(s.maxHeaderBytes()),
+		Datagram:            s.EnableDatagrams,
+		ExtendedConnect:     true,
+		Other:               s.AdditionalSettings,
+	})
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("opening the control stream failed: %w", err)
+	}
+	return hconn, ctrlStr, qlogger, nil
+}
+
+// handleConn handles the HTTP/3 exchange on a QUIC connection.
+// It blocks until all HTTP handlers for all streams have returned.
+func (s *Server) handleConn(conn *quic.Conn) error {
+	hconn, ctrlStr, qlogger, err := s.newRawServerConn(conn)
+	if err != nil {
+		return err
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	go func() {
+		defer wg.Done()
+		for {
+			str, err := conn.AcceptUniStream(context.Background())
+			if err != nil {
+				return
+			}
+			go hconn.HandleUnidirectionalStream(str)
+		}
+	}()
 
 	var nextStreamID quic.StreamID
-	var wg sync.WaitGroup
 	var handleErr error
 	var inGracefulShutdown bool
 	// Process all requests immediately.
@@ -509,10 +498,10 @@ func (s *Server) handleConn(conn *quic.Conn) error {
 		// * before graceful shutdown: s.graceCtx
 		// * after graceful shutdown: s.closeCtx
 		// This allows us to keep accepting (and resetting) streams after graceful shutdown has started.
-		str, err := hconn.acceptStream(ctx)
+		str, err := conn.AcceptStream(ctx)
 		if err != nil {
 			// the underlying connection was closed (by either side)
-			if hconn.Context().Err() != nil {
+			if conn.Context().Err() != nil {
 				var appErr *quic.ApplicationError
 				if !errors.As(err, &appErr) || appErr.ErrorCode != quic.ApplicationErrorCode(ErrCodeNoError) {
 					handleErr = fmt.Errorf("accepting stream failed: %w", err)
@@ -521,7 +510,7 @@ func (s *Server) handleConn(conn *quic.Conn) error {
 			}
 			// server (not gracefully) closed, close the connection immediately
 			if s.closeCtx.Err() != nil {
-				conn.CloseWithError(quic.ApplicationErrorCode(ErrCodeNoError), "")
+				hconn.CloseWithError(quic.ApplicationErrorCode(ErrCodeNoError), "")
 				handleErr = http.ErrServerClosed
 				break
 			}
@@ -562,10 +551,10 @@ func (s *Server) handleConn(conn *quic.Conn) error {
 		nextStreamID = str.StreamID() + 4
 		wg.Add(1)
 		go func() {
-			// handleRequest will return once the request has been handled,
-			// or the underlying connection is closed
+			// HandleRequestStream will return once the request has been handled,
+			// or the underlying connection is closed.
 			defer wg.Done()
-			s.handleRequest(hconn, str, hconn.decoder, qlogger)
+			hconn.HandleRequestStream(str)
 		}()
 	}
 	wg.Wait()
@@ -577,164 +566,6 @@ func (s *Server) maxHeaderBytes() int {
 		return http.DefaultMaxHeaderBytes
 	}
 	return s.MaxHeaderBytes
-}
-
-func (s *Server) handleRequest(
-	conn *Conn,
-	str *stateTrackingStream,
-	decoder *qpack.Decoder,
-	qlogger qlogwriter.Recorder,
-) {
-	var ufh unknownFrameHandlerFunc
-	if s.StreamHijacker != nil {
-		ufh = func(ft FrameType, e error) (processed bool, err error) {
-			return s.StreamHijacker(
-				ft,
-				conn.Context().Value(quic.ConnectionTracingKey).(quic.ConnectionTracingID),
-				str.QUICStream(),
-				e,
-			)
-		}
-	}
-	fp := &frameParser{closeConn: conn.CloseWithError, r: str, unknownFrameHandler: ufh}
-	frame, err := fp.ParseNext(qlogger)
-	if err != nil {
-		if !errors.Is(err, errHijacked) {
-			str.CancelRead(quic.StreamErrorCode(ErrCodeRequestIncomplete))
-			str.CancelWrite(quic.StreamErrorCode(ErrCodeRequestIncomplete))
-		}
-		return
-	}
-	hf, ok := frame.(*headersFrame)
-	if !ok {
-		conn.CloseWithError(quic.ApplicationErrorCode(ErrCodeFrameUnexpected), "expected first frame to be a HEADERS frame")
-		return
-	}
-	if hf.Length > uint64(s.maxHeaderBytes()) {
-		maybeQlogInvalidHeadersFrame(qlogger, str.StreamID(), hf.Length)
-		// stop the client from sending more data
-		str.CancelRead(quic.StreamErrorCode(ErrCodeExcessiveLoad))
-		// send a 431 Response (Request Header Fields Too Large)
-		s.rejectWithHeaderFieldsTooLarge(str, conn, qlogger)
-		return
-	}
-	headerBlock := make([]byte, hf.Length)
-	if _, err := io.ReadFull(str, headerBlock); err != nil {
-		maybeQlogInvalidHeadersFrame(qlogger, str.StreamID(), hf.Length)
-		str.CancelRead(quic.StreamErrorCode(ErrCodeRequestIncomplete))
-		str.CancelWrite(quic.StreamErrorCode(ErrCodeRequestIncomplete))
-		return
-	}
-	decodeFn := decoder.Decode(headerBlock)
-	var hfs []qpack.HeaderField
-	if qlogger != nil {
-		hfs = make([]qpack.HeaderField, 0, 16)
-	}
-	req, err := requestFromHeaders(decodeFn, s.maxHeaderBytes(), &hfs)
-	if qlogger != nil {
-		qlogParsedHeadersFrame(qlogger, str.StreamID(), hf, hfs)
-	}
-	if err != nil {
-		if errors.Is(err, errHeaderTooLarge) {
-			// stop the client from sending more data
-			str.CancelRead(quic.StreamErrorCode(ErrCodeExcessiveLoad))
-			// send a 431 Response (Request Header Fields Too Large)
-			s.rejectWithHeaderFieldsTooLarge(str, conn, qlogger)
-			return
-		}
-
-		errCode := ErrCodeMessageError
-		var qpackErr *qpackError
-		if errors.As(err, &qpackErr) {
-			errCode = ErrCodeQPACKDecompressionFailed
-		}
-		str.CancelRead(quic.StreamErrorCode(errCode))
-		str.CancelWrite(quic.StreamErrorCode(errCode))
-		return
-	}
-
-	connState := conn.ConnectionState().TLS
-	req.TLS = &connState
-	req.RemoteAddr = conn.RemoteAddr().String()
-
-	// Check that the client doesn't send more data in DATA frames than indicated by the Content-Length header (if set).
-	// See section 4.1.2 of RFC 9114.
-	contentLength := int64(-1)
-	if _, ok := req.Header["Content-Length"]; ok && req.ContentLength >= 0 {
-		contentLength = req.ContentLength
-	}
-	hstr := newStream(str, conn, nil, nil, qlogger)
-	body := newRequestBody(hstr, contentLength, conn.Context(), conn.ReceivedSettings(), conn.Settings)
-	req.Body = body
-
-	if s.Logger != nil {
-		s.Logger.Debug("handling request", "method", req.Method, "host", req.Host, "uri", req.RequestURI)
-	}
-
-	ctx, cancel := context.WithCancel(conn.Context())
-	req = req.WithContext(ctx)
-	context.AfterFunc(str.Context(), cancel)
-
-	r := newResponseWriter(hstr, conn, req.Method == http.MethodHead, s.Logger)
-	handler := s.Handler
-	if handler == nil {
-		handler = http.DefaultServeMux
-	}
-
-	// It's the client's responsibility to decide which requests are eligible for 0-RTT.
-	var panicked bool
-	func() {
-		defer func() {
-			if p := recover(); p != nil {
-				panicked = true
-				if p == http.ErrAbortHandler {
-					return
-				}
-				// Copied from net/http/server.go
-				const size = 64 << 10
-				buf := make([]byte, size)
-				buf = buf[:runtime.Stack(buf, false)]
-				logger := s.Logger
-				if logger == nil {
-					logger = slog.Default()
-				}
-				logger.Error("http3: panic serving", "arg", p, "trace", string(buf))
-			}
-		}()
-		handler.ServeHTTP(r, req)
-	}()
-
-	if r.wasStreamHijacked() {
-		return
-	}
-
-	// abort the stream when there is a panic
-	if panicked {
-		str.CancelRead(quic.StreamErrorCode(ErrCodeInternalError))
-		str.CancelWrite(quic.StreamErrorCode(ErrCodeInternalError))
-		return
-	}
-
-	// response not written to the client yet, set Content-Length
-	if !r.headerWritten {
-		if _, haveCL := r.header["Content-Length"]; !haveCL {
-			r.header.Set("Content-Length", strconv.FormatInt(r.numWritten, 10))
-		}
-	}
-	r.Flush()
-	r.flushTrailers()
-
-	// If the EOF was read by the handler, CancelRead() is a no-op.
-	str.CancelRead(quic.StreamErrorCode(ErrCodeNoError))
-	str.Close()
-}
-
-func (s *Server) rejectWithHeaderFieldsTooLarge(str *stateTrackingStream, conn *Conn, qlogger qlogwriter.Recorder) {
-	hstr := newStream(str, conn, nil, nil, qlogger)
-	defer hstr.Close()
-	r := newResponseWriter(hstr, conn, false, s.Logger)
-	r.WriteHeader(http.StatusRequestHeaderFieldsTooLarge)
-	r.Flush()
 }
 
 // Close the server immediately, aborting requests and sending CONNECTION_CLOSE frames to connected clients.

@@ -24,12 +24,11 @@ type packet struct {
 	IsPathMTUProbePacket bool // We don't report the loss of Path MTU probe packets to the congestion controller.
 
 	includedInBytesInFlight bool
-	declaredLost            bool
 	isPathProbePacket       bool
 }
 
 func (p *packet) Outstanding() bool {
-	return !p.declaredLost && !p.IsPathMTUProbePacket && !p.isPathProbePacket && p.IsAckEliciting()
+	return !p.IsPathMTUProbePacket && !p.isPathProbePacket && p.IsAckEliciting()
 }
 
 func (p *packet) IsAckEliciting() bool {
@@ -48,7 +47,6 @@ func getPacket() *packet {
 	p.SendTime = 0
 	p.IsPathMTUProbePacket = false
 	p.includedInBytesInFlight = false
-	p.declaredLost = false
 	p.isPathProbePacket = false
 	return p
 }

@@ -800,7 +800,6 @@ func (s *baseServer) handleInitialImpl(p receivedPacket, hdr *wire.Header) error
 	} else {
 		cancel = cancel1
 	}
-	ctx = context.WithValue(ctx, ConnectionTracingKey, nextConnTracingID())
 	var qlogTrace qlogwriter.Trace
 	if config.Tracer != nil {
 		// Use the same connection ID that is passed to the client's GetLogWriter callback.

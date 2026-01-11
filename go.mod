@@ -5,7 +5,7 @@ go 1.25.0
 exclude google.golang.org/genproto v0.0.0-20230410155749-daa745c078e1
 
 require (
-	codeberg.org/miekg/dns v0.6.21
+	codeberg.org/miekg/dns v0.6.22
 	github.com/BurntSushi/toml v1.6.0
 	github.com/VividCortex/ewma v1.2.0
 	github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf
@@ -27,10 +27,10 @@ require (
 	github.com/lifenjoiner/dhcpdns v0.0.7
 	github.com/miekg/dns v1.1.69
 	github.com/powerman/check v1.9.0
-	github.com/quic-go/quic-go v0.58.0
+	github.com/quic-go/quic-go v0.59.0
 	golang.org/x/crypto v0.46.0
 	golang.org/x/net v0.48.0
-	golang.org/x/sys v0.39.0
+	golang.org/x/sys v0.40.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 )
 
@@ -45,7 +45,7 @@ require (
 	github.com/smartystreets/goconvey v1.8.1 // indirect
 	golang.org/x/mod v0.31.0 // indirect
 	golang.org/x/sync v0.19.0 // indirect
-	golang.org/x/text v0.32.0 // indirect
+	golang.org/x/text v0.33.0 // indirect
 	golang.org/x/tools v0.40.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20251213004720-97cd9d5aeac2 // indirect
 	google.golang.org/grpc v1.77.0 // indirect

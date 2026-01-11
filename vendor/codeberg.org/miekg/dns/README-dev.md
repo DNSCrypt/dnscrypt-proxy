@@ -5,7 +5,7 @@ years it is nice to give some guidance to new contributors and to lay out some o
 
 ## Source Layout
 
-The main codebase sits in _dns_ and package _rdata_, which defines the rdata for all RRs only. Helper
+The main codebase sits in _dns_ and package _rdata_, which defines the rdata for all RRs. Helper
 functions are put in _dnsutil_, unless this is impossible because of cyclic dependencies. A dnsutil
 function/method that is _also_ useful in _dns_ should be put in `dnsutil/shared.go`; this file is "go
 generated" to various other locations.
@@ -56,10 +56,10 @@ If you have a bunch of values that certain types can take the are named: `ValueT
 `RcodeScucces` and `ClassINET`.
 
 Naming constants for RRs needs to have the RR's mnemonic prefixed and in upper case letters, i.e.
-ZONEMDSchemeSimple, for a constants used in the ZONEMD RR.
+ZONEMDSchemeSimple, for a constant used in the ZONEMD RR.
 
 Methods on RR types have `rr` as the receiver's name. For EDNS0 "RRs", the receiver is named `o`. For DSO `d`
-is used. Methods on `Msg` use `m`. (There are a few historical exceptions).
+is used. Methods on `Msg` use `m`.
 
 ### Tests
 
@@ -68,3 +68,5 @@ tests for that sub-system. `TestZoneParserXXX`, `TestMsgXXX`, etc.
 
 Most tests are table driven with (optional) subtests, the main tests are usually put in a struct called
 `testcases` and while ranging over them at test is named `tc`.
+
+There are also many more Example tests to aid and documenting this package.

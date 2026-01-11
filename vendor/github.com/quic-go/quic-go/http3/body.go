@@ -9,10 +9,14 @@ import (
 	"github.com/quic-go/quic-go"
 )
 
-// A Hijacker allows hijacking of the stream creating part of a quic.Conn from a http.ResponseWriter.
-// It is used by WebTransport to create WebTransport streams after a session has been established.
-type Hijacker interface {
-	Connection() *Conn
+// Settingser allows waiting for and retrieving the peer's HTTP/3 settings.
+type Settingser interface {
+	// ReceivedSettings returns a channel that is closed once the peer's SETTINGS frame was received.
+	// Settings can be obtained from the Settings method after the channel was closed.
+	ReceivedSettings() <-chan struct{}
+	// Settings returns the settings received on this connection.
+	// It is only valid to call this function after the channel returned by ReceivedSettings was closed.
+	Settings() *Settings
 }
 
 var errTooMuchData = errors.New("peer sent too much data")
