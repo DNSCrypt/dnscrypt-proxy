@@ -6,7 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 
-	"codeberg.org/miekg/dns/pool"
+	"codeberg.org/miekg/dns/pkg/pool"
 	"codeberg.org/miekg/dns/rdata"
 )
 
@@ -40,18 +40,18 @@ func (rr *ZONEMD) Sign(zone []RR, options *ZONEMDOption) error {
 	rrdata := options.Get()
 	defer options.Put(rrdata)
 	s := hash.New()
-	for _, rr1 := range zone {
-		if _, ok := rr1.(*ZONEMD); ok {
+	for i := range zone {
+		if _, ok := zone[i].(*ZONEMD); ok {
 			continue
 		}
-		if s, ok := rr1.(*RRSIG); ok && s.TypeCovered == TypeZONEMD {
+		if s, ok := zone[i].(*RRSIG); ok && s.TypeCovered == TypeZONEMD {
 			continue
 		}
-		if s, ok := rr1.(*SOA); ok {
+		if s, ok := zone[i].(*SOA); ok {
 			rr.Serial = s.Serial
 		}
-		canonicalize(rr1)
-		_, off, err := packRR(rr1, rrdata, 0, nil)
+		canonicalize(zone[i])
+		_, off, err := packRR(zone[i], rrdata, 0, nil)
 		if err != nil {
 			return err
 		}

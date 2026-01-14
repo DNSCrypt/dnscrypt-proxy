@@ -135,15 +135,14 @@ func Name(s *cryptobyte.String, msgBuf []byte) (string, error) {
 				return string(name), nil
 			}
 
-			var label []byte
-			if !cs.ReadBytes(&label, int(c)) {
-				return "", &Error{"overflow"}
-			}
-			if len(name)+len(label)+1 > maxNamePresentationLength {
+			if len(name)+int(c)+1 > maxNamePresentationLength {
 				return "", &Error{"name exceeded max wire-format octets: " + string(*s)}
 			}
+			var label []byte
+			cs.ReadBytes(&label, int(c))
 			name = append(name, label...)
 			name = append(name, '.')
+
 		case 0xC0: // pointer
 			if msgBuf == nil {
 				return "", &Error{"pointer in uncompressable name"}
@@ -166,6 +165,7 @@ func Name(s *cryptobyte.String, msgBuf []byte) (string, error) {
 			// Jump to the offset in msgBuf. We carry msgBuf around with us solely for this line.
 			cs = msgBuf[off:]
 			ptrs = true
+
 		default: // 0x80 and 0x40 are reserved
 			return "", &Error{"reserved domain name label type"}
 		}

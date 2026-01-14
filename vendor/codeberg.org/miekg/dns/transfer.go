@@ -268,8 +268,8 @@ func (c *Client) transferInIXFR(ctx context.Context, m *Msg, ch chan<- *Envelope
 
 		// If we see the first SOA's serial expectSOA times we need to stop.
 		if options.TimersOnly {
-			for _, rr := range r.Answer {
-				if s, ok := rr.(*SOA); ok && s.Serial == serial {
+			for i := range r.Answer {
+				if s, ok := r.Answer[i].(*SOA); ok && s.Serial == serial {
 					expectSOA--
 					if expectSOA == 0 {
 						ch <- &Envelope{r.Answer, nil}

@@ -56,8 +56,8 @@ For developers please read the
   - recvmmsg(2) and TCP pipeling suppport.
   - The `cmd/reflect` server does ~370/300K UDP/TCP respectively on the right hardware.
   - Since a46996c I can get ~370K (UDP) qps on my laptop (M2/Asahi Linux), also see 1766e44.
-  - On my Dell XPS 17 (Intel) it is similar.
-  - On Intel/AMD it is lower (~200K (UDP) qps) - yet to understand why.
+  - On my Dell XPS 17 (Intel) it is similar-ish (~300K/240K UDP/TCP).
+  - On other Intel/AMD it is lower (~200K (UDP) qps) - yet to understand why.
   - See `cmd/reflect` and do a `go build; make new.txt`. Requires `dnsperf` to be installed.
 
 # Users
