@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"net"
 	"net/netip"
+	"strings"
 
 	"codeberg.org/miekg/dns/internal/ddd"
 )
@@ -90,8 +91,8 @@ func Txt(txt []string, msg []byte, off int) (int, error) {
 		return off, nil
 	}
 	var err error
-	for _, s := range txt {
-		off, err = TxtString(s, msg, off)
+	for i := range txt {
+		off, err = TxtString(txt[i], msg, off)
 		if err != nil {
 			return len(msg), err
 		}
@@ -150,9 +151,8 @@ func A(a netip.Addr, msg []byte, off int) (int, error) {
 		return len(msg), &Error{"invalid a"}
 	}
 	val := a.As4()
-	copy(msg[off:], val[:])
-	off += net.IPv4len
-	return off, nil
+	copy(msg[off:off+net.IPv4len], val[:])
+	return off + net.IPv4len, nil
 }
 
 func AAAA(aaaa netip.Addr, msg []byte, off int) (int, error) {
@@ -160,91 +160,74 @@ func AAAA(aaaa netip.Addr, msg []byte, off int) (int, error) {
 		return len(msg), &Error{"overflow aaaa"}
 	}
 	val := aaaa.As16()
-	copy(msg[off:], val[:])
-	off += net.IPv6len
-	return off, nil
+	copy(msg[off:off+net.IPv6len], val[:])
+	return off + net.IPv6len, nil
 }
 
 func Name(s string, msg []byte, off int, compression map[string]uint16, compress bool) (off1 int, err error) {
 	// XXX: A logical copy of this function exists in dnsutil.IsName and should be kept in sync with this function.
 
-	ls := uint16(len(s))
+	lenmsg := len(msg)
+	ls := len(s)
 
 	if ls == 1 && s[0] == '.' {
 		msg[off] = 0
 		return off + 1, nil
-
 	}
-	if ls > 1 {
-		if s[0] == '.' { // leading dots are not legal except for the root zone
-			return len(msg), &Error{"leading dot in name: " + s}
-		}
+	if ls > 1 && s[0] == '.' { // leading dots are not legal except for the root zone
+		return len(msg), &Error{"leading dot in name: " + s}
 	}
-	// TODO(miek): add back?
-	//	if !strings.HasSuffix(s, ".") {
-	//		return len(msg), &Error{"name must be fully qualified: " + s}
-	//	}
+	if s[ls-1] != '.' {
+		return len(msg), &Error{"name must be fully qualified: " + s}
+	}
 
 	// Each dot ends a segment of the name. We trade each dot byte for a length byte.
 	// Except for escaped dots (\.), which are normal dots. There is also a trailing zero.
 
 	// Emit sequence of counted strings, chopping at dots.
 	var (
-		begin     uint16
-		compBegin uint16
-		compOff   uint16
+		begin    int
+		labelLen int
 	)
 
-	var c byte
-	for i := range ls {
-		c = s[i]
-
-		switch c {
-		case '.':
-			labelLen := i - begin
-			if labelLen >= 1<<6 { // top two bits of length must be clear
-				return len(msg), &Error{"illegal label type in name: " + s}
-			}
-			if labelLen == 0 {
-				return len(msg), &Error{"consecutive dots in name: " + s}
-			}
-
-			// off can already (we're in a loop) be bigger than len(msg)
-			// this happens when a name isn't fully qualified
-			if uint16(off)+1+labelLen > uint16(len(msg)) {
-				return len(msg), &Error{"buffer size too small"}
-			}
-
-			// Don't try to compress '.'
-			// We should only compress when compress is true, but we should also still pick
-			// up names that can be used for *future* compression(s).
-			if compression != nil && labelLen > 1 {
-				if p, ok := compression[s[compBegin:]]; ok {
-					// The first hit is the longest matching dname keep the pointer offset we get back and store
-					// the offset of the current name, because that's where we need to insert the pointer later
-
-					// If compress is true, we're allowed to compress this name.
-					if compress {
-						// We have two bytes (14 bits) to put the pointer in.
-						binary.BigEndian.PutUint16(msg[off:], 0xC000|p)
-						return off + 2, nil
-					}
-				} else if off < maxCompressionOffset {
-					// Only offsets smaller than maxCompressionOffset can be used.
-					compression[s[compBegin:]] = uint16(off)
-				}
-			}
-
-			// The following is covered by the length check above.
-			msg[off] = byte(labelLen)
-
-			copy(msg[off+1:], s[begin:i])
-			off += 1 + int(labelLen)
-
-			begin = i + 1
-			compBegin = begin + compOff
+	for begin < ls {
+		i := strings.IndexByte(s[begin:], '.')
+		if i == -1 {
+			break
 		}
+		i += begin
+
+		labelLen = i - begin
+		if labelLen >= 1<<6 { // top two bits of length must be clear
+			return lenmsg, &Error{"illegal label type in name: " + s}
+		}
+		if labelLen == 0 {
+			return lenmsg, &Error{"consecutive dots in name: " + s}
+		}
+
+		// off can already (we're in a loop) be bigger than len(msg)
+		if off+1+labelLen > lenmsg {
+			return lenmsg, &Error{"buffer size too small"}
+		}
+
+		if compress && labelLen > 1 { // don't try to compress '.'
+			if p, ok := compression[s[begin:]]; ok {
+				binary.BigEndian.PutUint16(msg[off:], 0xC000|p)
+				return off + 2, nil
+			}
+		}
+		if compression != nil && off < maxCompressionOffset {
+			compression[s[begin:]] = uint16(off)
+		}
+
+		// the following is covered by the length check above
+		msg[off] = byte(labelLen)
+		copy(msg[off+1:], s[begin:i])
+
+		off += 1 + labelLen
+		begin = i + 1
 	}
+
 	msg[off] = 0 // length check needed??
 	return off + 1, nil
 }
@@ -312,8 +295,8 @@ func StringHex(s string, msg []byte, off int) (int, error) {
 
 func Names(names []string, msg []byte, off int, compress map[string]uint16) (int, error) {
 	var err error
-	for _, name := range names {
-		off, err = Name(name, msg, off, compress, false)
+	for i := range names {
+		off, err = Name(names[i], msg, off, compress, false)
 		if err != nil {
 			return len(msg), err
 		}

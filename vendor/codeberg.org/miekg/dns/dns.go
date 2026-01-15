@@ -7,7 +7,7 @@ import (
 	"strings"
 	"sync/atomic"
 
-	"codeberg.org/miekg/dns/pool"
+	"codeberg.org/miekg/dns/pkg/pool"
 )
 
 //go:generate go run rr_generate.go
