@@ -25,12 +25,12 @@ var ID = id
 
 // id returns a 16 bits random number to be used as a message id. The random provided should be good enough.
 func id() uint16 {
-	var output uint16
-	err := binary.Read(rand.Reader, binary.BigEndian, &output)
+	var b [2]byte
+	_, err := rand.Read(b[:])
 	if err != nil {
 		panic("dns: reading random ID failed: " + err.Error())
 	}
-	return output
+	return uint16(b[0])<<8 | uint16(b[1])
 }
 
 // ClassToString is a maps Classes to strings for each CLASS wire type.
@@ -188,8 +188,10 @@ func (m *Msg) Pack() error {
 
 	// We need the uncompressed length here, because we first pack it and then compress it.
 	l := m.Len()
-	if len(m.Data) < l {
-		m.Data = append(m.Data, make([]byte, l-len(m.Data))...)
+	if cap(m.Data) < l {
+		m.Data = make([]byte, l)
+	} else {
+		m.Data = m.Data[:l]
 	}
 
 	// Pack it in: header and then the pieces.
@@ -202,27 +204,27 @@ func (m *Msg) Pack() error {
 	// Is this compressible?
 	var compression map[string]uint16
 	if len(m.Question) > 1 || len(m.Answer) > 0 || len(m.Ns) > 0 || len(m.Extra) > 0 {
-		compression = map[string]uint16{}
+		compression = make(map[string]uint16, len(m.Answer)+len(m.Ns)+len(m.Extra)+3) // 3 is randomly choosen, as such much rdata might be compressable...
 	}
 
-	for _, r := range m.Question {
-		if off, err = packQuestion(r, m.Data, off, compression); err != nil {
+	for i := range m.Question {
+		if off, err = packQuestion(m.Question[i], m.Data, off, compression); err != nil {
 			return err
 		}
 		break // allow only one
 	}
-	for _, r := range m.Answer {
-		if _, off, err = packRR(r, m.Data, off, compression); err != nil {
+	for i := range m.Answer {
+		if _, off, err = packRR(m.Answer[i], m.Data, off, compression); err != nil {
 			return err
 		}
 	}
-	for _, r := range m.Ns {
-		if _, off, err = packRR(r, m.Data, off, compression); err != nil {
+	for i := range m.Ns {
+		if _, off, err = packRR(m.Ns[i], m.Data, off, compression); err != nil {
 			return err
 		}
 	}
-	for _, r := range m.Extra {
-		if _, off, err = packRR(r, m.Data, off, compression); err != nil {
+	for i := range m.Extra {
+		if _, off, err = packRR(m.Extra[i], m.Data, off, compression); err != nil {
 			return err
 		}
 	}
@@ -250,8 +252,8 @@ func (m *Msg) Pack() error {
 			opt.Hdr.Name = "."
 			opt.SetDelegation(true)
 		}
-		for _, option := range m.Pseudo {
-			if edns0, ok := option.(EDNS0); ok {
+		for i := range m.Pseudo {
+			if edns0, ok := m.Pseudo[i].(EDNS0); ok {
 				opt.Hdr.Name = "."
 				opt.Options = append(opt.Options, edns0)
 			}
@@ -265,24 +267,17 @@ func (m *Msg) Pack() error {
 			}
 		}
 	}
-	m.ps = 0
 
 	// records that really need to be last, TSIG or SGI0
-	for _, r := range m.Pseudo {
-		if _, ok := r.(*TSIG); ok {
-			if _, off, err = packRR(r, m.Data, off, compression); err != nil {
+	for i := range m.Pseudo {
+		_, ok1 := m.Pseudo[i].(*TSIG)
+		_, ok2 := m.Pseudo[i].(*SIG)
+		if ok1 || ok2 {
+			if _, off, err = packRR(m.Pseudo[i], m.Data, off, compression); err != nil {
 				return err
 			}
-			m.ps++
-		}
-		if _, ok := r.(*SIG); ok {
-			if _, off, err = packRR(r, m.Data, off, compression); err != nil {
-				return err
-			}
-			m.ps++
 		}
 	}
-
 	m.Data = m.Data[:off]
 	return nil
 }
@@ -332,8 +327,11 @@ func (m *Msg) unpackQuestions(cnt uint16, msg *cryptobyte.String, msgBuf []byte)
 }
 
 func unpackRRs(cnt uint16, msg *cryptobyte.String, msgBuf []byte) ([]RR, error) {
+	if cnt == 0 {
+		return []RR{}, nil
+	}
 	// See unpackQuestions for why we don't pre-allocate here.
-	dst := make([]RR, 0, 3)
+	dst := make([]RR, 0, min(5, cnt))
 	for i := 0; i < int(cnt); i++ {
 		r, err := unpackRR(msg, msgBuf)
 		if err != nil {
@@ -341,92 +339,79 @@ func unpackRRs(cnt uint16, msg *cryptobyte.String, msgBuf []byte) ([]RR, error) 
 		}
 		dst = append(dst, r)
 	}
-	if cnt != uint16(len(dst)) {
-		return dst, unpack.Errorf("section count mismatch: %d != %d", cnt, len(dst))
 
-	}
 	return dst, nil
 }
 
-func (m *Msg) unpack(dh header, msg, msgBuf []byte) error {
-	s := cryptobyte.String(msg)
-	var err error
+func (m *Msg) unpack(dh header, s *cryptobyte.String, msgBuf []byte) (err error) {
+	if m.offset > MsgHeaderSize {
+		s.Skip(int(m.offset - MsgHeaderSize)) // should never fail...?
+		goto Rest
+	}
 
-	m.Question, err = m.unpackQuestions(dh.Qdcount, &s, msgBuf)
-	if err != nil {
+	if m.Question, err = m.unpackQuestions(dh.Qdcount, s, msgBuf); err != nil {
 		return err
 	}
 	if m.Options > 0 && m.Options <= MsgOptionUnpackQuestion {
+		m.offset = uint16(len(msgBuf) - len(*s))
 		return nil
 	}
 
-	m.Answer, err = unpackRRs(dh.Ancount, &s, msgBuf)
-	if err != nil {
+Rest:
+	if m.Answer, err = unpackRRs(dh.Ancount, s, msgBuf); err != nil {
 		return err
 	}
 	if m.Options > 0 && m.Options <= MsgOptionUnpackAnswer {
 		return nil
 	}
 
-	m.Ns, err = unpackRRs(dh.Nscount, &s, msgBuf)
-	if err != nil {
+	if m.Ns, err = unpackRRs(dh.Nscount, s, msgBuf); err != nil {
 		return err
 	}
 
-	m.Extra, err = unpackRRs(dh.Arcount, &s, msgBuf)
-	if err != nil {
+	if m.Extra, err = unpackRRs(dh.Arcount, s, msgBuf); err != nil {
 		return err
 	}
-
-	m.Pseudo, m.Stateful = nil, nil // we append here, so don't want carry stuff from before with us
 
 	// Check for the OPT RR and remove it entirely, unpack the OPT for option codes and put those in the Pseudo
-	// section. Any TSIG and SIG0 records will also be put in the pseudo section, but after the options.
-	j := 0
-	for i := 0; i < len(m.Extra)-j; i++ {
+	// section. We will only check one OPT, any others will be left in Extra.
+	for i := 0; i < len(m.Extra); i++ {
 		if opt, ok := m.Extra[i].(*OPT); ok {
-			// move to end, so it can be removed later and unpack the opt for the settings.
 			m.Security = opt.Security()
 			m.CompactAnswers = opt.CompactAnswers()
 			m.Delegation = opt.Delegation()
 			m.Rcode += opt.Rcode() // See TestMsgExtendedRcode.
 			m.Version = opt.Version()
-			m.UDPSize = max(
-				// RFC 6891 mandates that the payload size in an OPT record less than 512 (MinMsgSize) bytes must be treated as equal to 512 bytes.
-				opt.UDPSize(), MinMsgSize)
+			// RFC 6891 mandates that the payload size in an OPT record less than 512 (MinMsgSize) bytes must be treated as equal to 512 bytes.
+			m.UDPSize = max(opt.UDPSize(), MinMsgSize)
 
-			m.Pseudo = make([]RR, len(opt.Options))
-			for i, o := range opt.Options {
-				m.Pseudo[i] = RR(o)
+			m.Pseudo = make([]RR, len(opt.Options), len(opt.Options)+1) // +1 for tsig/sig zero, avoid 2x in a append
+			for i := range opt.Options {
+				m.Pseudo[i] = RR(opt.Options[i])
 			}
+			m.Extra[i] = m.Extra[len(m.Extra)-1] // opt's place taken with last rr
+			m.Extra = m.Extra[:len(m.Extra)-1]   // remove the OPT RR
 
-			m.Extra[len(m.Extra)-j-1] = m.Extra[i]
-			j++
+			break
 		}
 	}
-	// remove the OPT RR
-	m.Extra = m.Extra[:len(m.Extra)-j]
-	m.ps = 0
 
 	// Check for m.Extra TSIG and SIG(0) and move them to pseudo. This MUST be the the last RR in the extra section.
-	// Now we should also error out on having these both. TODO(miek): flag protocol error?
-	if last := len(m.Extra); last > 0 {
-		if _, ok := m.Extra[last-1].(*TSIG); ok {
-			m.ps++
-			m.Pseudo = append(m.Pseudo, m.Extra[last-1])
-			m.Extra = m.Extra[:last-1]
-		}
-	}
-	if last := len(m.Extra); last > 0 {
-		if _, ok := m.Extra[last-1].(*SIG); ok {
-			m.ps++
-			m.Pseudo = append(m.Pseudo, m.Extra[last-1])
-			m.Extra = m.Extra[:last-1]
+	// But as we may have moved things around, we need to iterate over m.Extra again.
+	for i := 0; i < len(m.Extra); i++ {
+		_, ok1 := m.Extra[i].(*TSIG)
+		_, ok2 := m.Extra[i].(*SIG)
+		if ok1 || ok2 {
+			m.Pseudo = append(m.Pseudo, m.Extra[i])
+			m.Extra[i] = m.Extra[len(m.Extra)-1] // sig/tsig's place taken with last rr
+			m.Extra = m.Extra[:len(m.Extra)-1]   // remove the sig/tsig RR
+
+			break
 		}
 	}
 
 	if !s.Empty() {
-		return unpack.Errorf("%d more octets", len(s))
+		return unpack.Errorf("%d more octets", len(*s))
 	}
 	return nil
 }
@@ -443,7 +428,7 @@ func (m *Msg) Unpack() error {
 		return nil
 	}
 
-	return m.unpack(dh, s, m.Data)
+	return m.unpack(dh, &s, m.Data)
 }
 
 // Convert a complete message to a string with dig-like output. String also looks at the [Msg.Options] and
@@ -686,6 +671,7 @@ func (m *Msg) Write(p []byte) (n int, err error) {
 			return 0, err
 		}
 	}
+	m.offset = 0
 
 	n = copy(m.Data, p)
 	return n, nil
@@ -699,6 +685,7 @@ func (m *Msg) Read(p []byte) (n int, err error) {
 			return 0, err
 		}
 	}
+	m.offset = 0
 
 	n = copy(p, m.Data)
 	return n, nil
@@ -721,6 +708,7 @@ func (m *Msg) WriteTo(w io.Writer) (int64, error) {
 			return 0, err
 		}
 	}
+	m.offset = 0
 
 	if rc, ok := w.(ResponseController); ok {
 		rc.SetWriteDeadline()
@@ -733,7 +721,7 @@ func (m *Msg) WriteTo(w io.Writer) (int64, error) {
 			n, _, err := sock.WriteMsgUDP(m.Data, oob, sess.Addr)
 			if m.msgPool != nil && !m.hijacked.Load() {
 				m.msgPool.Put(m.Data)
-				m.Data = nil
+				m.Data, m.msgPool = nil, nil
 			}
 			return int64(n), err
 		}
@@ -741,7 +729,7 @@ func (m *Msg) WriteTo(w io.Writer) (int64, error) {
 		n, err := r.Conn().Write(m.Data)
 		if m.msgPool != nil && !m.hijacked.Load() {
 			m.msgPool.Put(m.Data)
-			m.Data = nil
+			m.Data, m.msgPool = nil, nil
 		}
 		return int64(n), err
 	}
@@ -752,7 +740,7 @@ func (m *Msg) WriteTo(w io.Writer) (int64, error) {
 	n, err := r.Write(l)
 	if m.msgPool != nil && !m.hijacked.Load() {
 		m.msgPool.Put(m.Data)
-		m.Data = nil
+		m.Data, m.msgPool = nil, nil
 	}
 	return int64(n), err
 }
@@ -766,6 +754,7 @@ func (m *Msg) ReadFrom(r io.Reader) (int64, error) {
 			return 0, err
 		}
 	}
+	m.offset = 0
 
 	if sock, ok := r.(*net.UDPConn); ok {
 		n, err := sock.Read(m.Data)
@@ -807,33 +796,28 @@ func (m *Msg) ReadFrom(r io.Reader) (int64, error) {
 func (m *Msg) RRs() iter.Seq[RR] {
 	return func(yield func(RR) bool) {
 		for {
-			for _, rr := range m.Question {
-				if !yield(rr) {
+			for i := range m.Question {
+				if !yield(m.Question[i]) {
 					return
 				}
 			}
-			for _, rr := range m.Answer {
-				if !yield(rr) {
+			for i := range m.Answer {
+				if !yield(m.Answer[i]) {
 					return
 				}
 			}
-			for _, rr := range m.Ns {
-				if !yield(rr) {
+			for i := range m.Ns {
+				if !yield(m.Ns[i]) {
 					return
 				}
 			}
-			for _, rr := range m.Extra {
-				if !yield(rr) {
+			for i := range m.Extra {
+				if !yield(m.Extra[i]) {
 					return
 				}
 			}
-			for _, rr := range m.Pseudo {
-				if !yield(rr) {
-					return
-				}
-			}
-			for _, rr := range m.Stateful {
-				if !yield(rr) {
+			for i := range m.Pseudo {
+				if !yield(m.Pseudo[i]) {
 					return
 				}
 			}
@@ -849,16 +833,12 @@ func (m *Msg) RRs() iter.Seq[RR] {
 func (m *Msg) Copy() *Msg {
 	return &Msg{
 		MsgHeader: m.MsgHeader,
-		qtype:     m.qtype,
 		Question:  m.Question,
 		Answer:    m.Answer,
 		Ns:        m.Ns,
 		Extra:     m.Extra,
-		ps:        m.ps,
 		Pseudo:    m.Pseudo,
-		Stateful:  m.Stateful,
 		Data:      m.Data,
-		Options:   m.Options,
 		msgPool:   m.msgPool,
 	}
 }

@@ -12,7 +12,7 @@ generated" to various other locations.
 
 Useful helper function? -> _dnsutil_.
 Useful helper function, that can help with testing (and other things) -> _dnstest_.
-Helper function -> new package in _internal/..._.
+Helper function(s) -> new package in _internal/..._.
 
 ## Go Generate
 
@@ -69,4 +69,4 @@ tests for that sub-system. `TestZoneParserXXX`, `TestMsgXXX`, etc.
 Most tests are table driven with (optional) subtests, the main tests are usually put in a struct called
 `testcases` and while ranging over them at test is named `tc`.
 
-There are also many more Example tests to aid and documenting this package.
+There are also many more Example tests to aid in documenting this package.

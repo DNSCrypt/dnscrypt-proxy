@@ -8,7 +8,7 @@ import (
 
 	"codeberg.org/miekg/dns/deleg"
 	"codeberg.org/miekg/dns/internal/dnsstring"
-	"codeberg.org/miekg/dns/pool"
+	"codeberg.org/miekg/dns/pkg/pool"
 	"codeberg.org/miekg/dns/svcb"
 )
 
