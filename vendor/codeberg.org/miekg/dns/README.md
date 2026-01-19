@@ -54,11 +54,11 @@ For developers please read the
   - Many helper/debug functions are moved into _internal_ packages, making the top-level much, much cleaner.
 - Fast.
   - recvmmsg(2) and TCP pipeling suppport.
-  - The `cmd/reflect` server does ~370/300K UDP/TCP respectively on the right hardware.
-  - Since a46996c I can get ~370K (UDP) qps on my laptop (M2/Asahi Linux), also see 1766e44.
-  - On my Dell XPS 17 (Intel) it is similar.
-  - On Intel/AMD it is lower (~200K (UDP) qps) - yet to understand why.
-  - See `cmd/reflect` and do a `go build; make new.txt`. Requires `dnsperf` to be installed.
+  - The `cmd/reflect` server does ~400K/330K qps UDP/TCP respectively on the right hardware.
+    - Since a46996c I can get ~400K (UDP) qps on my laptop (M2/Asahi Linux), also see 1766e44, 86b53fe and 06e5e0f.
+    - On my Dell XPS 17 (Intel) it is similar-ish (~300K/240K qps UDP/TCP).
+    - On other Intel/AMD hardware it is lower (~200K (UDP) qps) - yet to understand why.
+  - See `cmd/reflect` and do a `go build; make new.txt` to redo the performance test. Requires `dnsperf` to be installed.
 
 # Users
 

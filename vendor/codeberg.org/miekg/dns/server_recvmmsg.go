@@ -20,12 +20,14 @@ func (srv *Server) listenUDP(pc net.PacketConn) {
 
 	bufs := make([][]byte, BatchSize)
 	msgs := make([]ipv4.Message, BatchSize)
+
 	for i := range BatchSize {
 		bufs[i] = make([]byte, srv.UDPSize)
 		msgs[i].Buffers = [][]byte{bufs[i]}
 		msgs[i].OOB = make([]byte, oobSize)
 	}
 
+	udpConn := pc.(*net.UDPConn)
 Read:
 	for {
 		select {
@@ -43,16 +45,17 @@ Read:
 			if err != nil {
 				continue Read
 			}
-			for i, msg := range msgs[:n] {
+			_ = msgs[:n] // eliminate further bounds checking
 
+			for i := range msgs[:n] {
 				r := &Msg{Data: srv.MsgPool.Get()}
-				copy(r.Data, msg.Buffers[0][:msg.N])
-				r.Data = r.Data[:msg.N]
+				copy(r.Data, msgs[i].Buffers[0][:msgs[i].N])
+				r.Data = r.Data[:msgs[i].N]
 
 				oob := make([]byte, oobSize)
-				copy(oob, msg.OOB[:msg.NN])
+				copy(oob, msgs[i].OOB[:msgs[i].NN])
 
-				w := &response{conn: pc.(*net.UDPConn), session: &Session{msg.Addr.(*net.UDPAddr), oob}}
+				w := &response{conn: udpConn, session: &Session{msgs[i].Addr.(*net.UDPAddr), oob}}
 				wg.Add(1) // no wg.Go to prevent defer usage
 				go func() {
 					srv.serveDNS(w, r)

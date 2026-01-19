@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"codeberg.org/miekg/dns/pool"
+	"codeberg.org/miekg/dns/pkg/pool"
 )
 
 // Default maximum number of TCP queries before we close the socket.
@@ -96,13 +96,6 @@ type Server struct {
 	// Maximum number of TCP queries before we close the socket. Default is [MaxTCPQueries], unlimited if -1.
 	// See [ResponseWriter.Hijack] on how a handler can bypass this.
 	MaxTCPQueries int
-	// Whether to set the SO_REUSEPORT socket option, allowing multiple listeners to be bound to a single address.
-	// It is only supported on certain GOOSes and when using ListenAndServe.
-	ReusePort bool
-	// Whether to set the SO_REUSEADDR socket option, allowing multiple listeners to be bound to a single address.
-	// Crucially this allows binding when an existing server is listening on `0.0.0.0` or `::`.
-	// It is only supported on certain GOOSes and when using ListenAndServe.
-	ReuseAddr bool
 
 	// AcceptMsgFunc will check the incoming message and will reject it early in the process. Defaults to
 	// [DefaultMsgAcceptFunc].
@@ -122,8 +115,17 @@ type Server struct {
 	ctx      context.Context // server wide context to signal shutdown to running handlers
 	cancel   context.CancelFunc
 	exited   chan struct{}
-	once     sync.Once
 	shutdown chan bool
+
+	once sync.Once
+
+	// Whether to set the SO_REUSEPORT socket option, allowing multiple listeners to be bound to a single address.
+	// It is only supported on certain GOOSes and when using ListenAndServe.
+	ReusePort bool
+	// Whether to set the SO_REUSEADDR socket option, allowing multiple listeners to be bound to a single address.
+	// Crucially this allows binding when an existing server is listening on `0.0.0.0` or `::`.
+	// It is only supported on certain GOOSes and when using ListenAndServe.
+	ReuseAddr bool
 }
 
 // NewServer return a new server initialized with some defaults
@@ -283,9 +285,11 @@ func (srv *Server) serveTCP(wg *sync.WaitGroup, conn net.Conn) {
 		r := &Msg{Data: srv.MsgPool.Get()}
 		if _, err := r.ReadFrom(conn); err != nil {
 			if isEOFOrClosedNetwork(err) {
+				srv.MsgPool.Put(r.Data)
 				break
 			}
 			srv.MsgInvalidFunc(r, err)
+			srv.MsgPool.Put(r.Data)
 			continue
 		}
 
@@ -311,7 +315,7 @@ func (srv *Server) serveTCP(wg *sync.WaitGroup, conn net.Conn) {
 // serveDNS serves the message it skip the message handling if the received message has the response bit set.
 func (srv *Server) serveDNS(w *response, r *Msg) {
 	r.msgPool = srv.MsgPool
-	r.Options = MsgOptionUnpackQuestion | MsgOptionUnpackHeader
+	r.Options = MsgOptionUnpackQuestion
 
 	if err := r.Unpack(); err != nil {
 		srv.MsgInvalidFunc(r, err)
@@ -331,7 +335,7 @@ func (srv *Server) serveDNS(w *response, r *Msg) {
 		r.Authoritative = false
 		r.Response = true
 		r.Zero = false
-		r.Answer, r.Ns, r.Extra, r.Pseudo, r.Stateful = nil, nil, nil, nil, nil // make as small as possible
+		r.Answer, r.Ns, r.Extra, r.Pseudo = r.Answer[:0], r.Ns[:0], r.Extra[:0], r.Pseudo[:0]
 		r.Pack()
 
 		io.Copy(w, r)

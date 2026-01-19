@@ -5,7 +5,7 @@ import (
 	"strings"
 	"sync"
 
-	"codeberg.org/miekg/dns/pool"
+	"codeberg.org/miekg/dns/pkg/pool"
 )
 
 func typeToString(t uint16) string {
