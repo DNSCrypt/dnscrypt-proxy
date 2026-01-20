@@ -8,7 +8,7 @@ TSIG, EDNS0, dynamic updates, notifies and DNSSEC validation/signing.
 
 Resource records (RRs) are native types. They are not stored in wire format, but every [Msg] holds the wire-format in its Data field.
 Everything is modelled or made to look like an RR.
-The question section holds an RR and the EDNS0 option codes are also (fake/pseudo) RRs. These EDNS0 option occupy
+The question section holds an [RR] and the [EDNS0] option codes are also (fake/pseudo) RRs. These EDNS0 option occupy
 a separate section in [Msg], the pseudo section.
 
 Basic usage pattern for creating a new resource record:
@@ -56,11 +56,11 @@ When this functions returns you will get DNS message back. A DNS message consist
   - The answer section: r.Answer.
   - The authority section: r.Ns.
   - The additional section: r.Extra.
-  - And the extra and new fifth the pseudo section: r.Pseudo, see [Msg].
+  - And the extra and new, the pseudo section: r.Pseudo, see [Msg].
 
-The latter was added to make it easier to deal with EDNS0 option codes, which become more and more prevalent.
+The latter was added to make it easier to deal with [EDNS0] option codes, which become more and more prevalent.
 
-Each of these sections contain a []RR. Basic use pattern for accessing the rdata of a TXT RR as the first RR in
+Each of these sections contain a []RR. Basic use pattern for accessing the rdata of a [TXT] [RR] as the first RR in
 the Answer section:
 
 	if t, ok := r.Answer[0].(*dns.TXT); ok {
@@ -85,7 +85,7 @@ quotations marks will be escaped. Bytes below 32 and above 127 will be converted
 # DNSSEC
 
 DNSSEC (DNS Security Extension) adds a layer of security to the DNS. It uses public key cryptography to sign
-resource records. The public keys are stored in DNSKEY records and the signatures in RRSIG records.
+resource records. The public keys are stored in [DNSKEY] records and the signatures in [RRSIG] records.
 
 Requesting DNSSEC information for a zone is done by adding the DO (DNSSEC OK) bit to a request.
 

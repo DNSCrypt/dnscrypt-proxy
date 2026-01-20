@@ -33,19 +33,19 @@ func unpackOPT(s *cryptobyte.String) ([]EDNS0, error) {
 }
 
 func packOPT(options []EDNS0, msg []byte, off int) (int, error) {
-	for _, option := range options {
-		l := option.Len()
+	for i := range options {
+		l := options[i].Len()
 		if off+l >= len(msg) {
 			return len(msg), pack.ErrBuf
 		}
-		code := RRToCode(option) // TODO(miek): Use Coder for externally supplied option code
+		code := RRToCode(options[i]) // TODO(miek): Use Coder for externally supplied option code
 		if code == CodeNone {
 			return len(msg), fmt.Errorf("unknown option code seen")
 		}
 
 		pack.Uint16(code, msg, off)
 		pack.Uint16(uint16(l-tlv), msg, off+2)
-		if /*optionoff*/ _, err := packOptionCode(option, msg, off+4); err != nil {
+		if /*optionoff*/ _, err := packOptionCode(options[i], msg, off+4); err != nil {
 			return len(msg), err
 		}
 		// TODO(miek): if l != opentionoff ? We overestimated l, but that's the length we've packed

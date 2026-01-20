@@ -19,7 +19,7 @@ import (
 
 	"codeberg.org/miekg/dns/internal/pack"
 	"codeberg.org/miekg/dns/internal/unpack"
-	"codeberg.org/miekg/dns/pool"
+	"codeberg.org/miekg/dns/pkg/pool"
 )
 
 // DNSSEC encryption algorithm codes.
@@ -229,7 +229,7 @@ func (rr *RRSIG) Sign(k crypto.Signer, rrset []RR, options *SignOption) error {
 		return ErrKey
 	}
 	if options.Pooler == nil {
-		options.Pooler = pool.NewNoop(DefaultMsgSize)
+		options.Pooler = pool.NewNoop(DefaultMsgSize * 2)
 	}
 
 	h0 := rrset[0].Header()
@@ -261,7 +261,10 @@ func (rr *RRSIG) Sign(k crypto.Signer, rrset []RR, options *SignOption) error {
 	signdata := options.Get()
 	defer options.Put(signdata)
 
-	n, _ := sigwire.pack(signdata)
+	n, err := sigwire.pack(signdata)
+	if err != nil {
+		return err
+	}
 	m := rawSignatureData(signdata[n:], rrset, rr, *options)
 	signdata = signdata[:m+n]
 
@@ -359,7 +362,7 @@ func (rr *RRSIG) Verify(k *DNSKEY, rrset []RR, options *SignOption) error {
 	}
 
 	if options.Pooler == nil {
-		options.Pooler = pool.NewNoop(MinMsgSize)
+		options.Pooler = pool.NewNoop(DefaultMsgSize * 2)
 	}
 
 	rr.Hdr.Name = rrset[0].Header().Name
@@ -379,7 +382,10 @@ func (rr *RRSIG) Verify(k *DNSKEY, rrset []RR, options *SignOption) error {
 	signeddata := options.Get()
 	defer options.Put(signeddata)
 
-	n, _ := sigwire.pack(signeddata)
+	n, err := sigwire.pack(signeddata)
+	if err != nil {
+		return err
+	}
 	m := rawSignatureData(signeddata[n:], rrset, rr, *options)
 	signeddata = signeddata[:m+n]
 
@@ -463,7 +469,9 @@ func (rr *RRSIG) sigBuf() []byte {
 
 // SignOption are options that are given to the signer and verifier.
 type SignOption struct {
-	pool.Pooler // If Pooler is set is will be used for all memory allocations.
+	// If Pooler is set is will be used for all memory allocations. If nil the default pooler will be used and
+	// the buffers size used will be DefaultMsgSize * 2 (8 KB).
+	pool.Pooler
 }
 
 // IsRRset is duplicated here, as isRRset to avoid a host of cyclic imports.
