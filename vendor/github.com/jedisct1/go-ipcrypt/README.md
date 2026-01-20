@@ -4,11 +4,12 @@ This is a Go implementation of the IP address encryption and obfuscation methods
 
 ## Overview
 
-The implementation provides three methods for IP address encryption:
+The implementation provides four methods for IP address encryption:
 
 1. **ipcrypt-deterministic**: A deterministic mode where the same input always produces the same output for a given key.
 2. **ipcrypt-nd**: A non-deterministic mode that uses an 8-byte tweak for enhanced privacy.
 3. **ipcrypt-ndx**: An extended non-deterministic mode that uses a 32-byte key and 16-byte tweak for increased security.
+4. **ipcrypt-pfx**: A prefix-preserving mode that maintains the original IP format (IPv4 or IPv6).
 
 ## Installation
 
@@ -95,6 +96,8 @@ func main() {
 #### Deterministic Mode
 - `EncryptIP(key []byte, ip net.IP) (net.IP, error)` - Encrypts an IP address deterministically
 - `DecryptIP(key []byte, encrypted net.IP) (net.IP, error)` - Decrypts an IP address deterministically
+
+#### Prefix-Preserving Mode (ipcrypt-pfx)
 - `EncryptIPPfx(ip net.IP, key []byte) (net.IP, error)` - Encrypts an IP address with prefix preservation
 - `DecryptIPPfx(encryptedIP net.IP, key []byte) (net.IP, error)` - Decrypts an IP address with prefix preservation
 

@@ -18,14 +18,13 @@ require (
 	github.com/jedisct1/go-clocksmith v0.0.0-20260103230147-eff3e038eebd
 	github.com/jedisct1/go-dnsstamps v0.0.0-20251112173516-191fc465df31
 	github.com/jedisct1/go-hpke-compact v0.0.0-20241212093903-5caa4621366f
-	github.com/jedisct1/go-ipcrypt v0.1.1
+	github.com/jedisct1/go-ipcrypt v0.1.2
 	github.com/jedisct1/go-minisign v0.0.0-20241212093149-d2f9f49435c7
 	github.com/jedisct1/go-sieve-cache v0.1.8
 	github.com/jedisct1/xsecretbox v0.0.0-20241212092125-3afc4917ac41
 	github.com/k-sone/critbitgo v1.4.0
 	github.com/kardianos/service v1.2.4
 	github.com/lifenjoiner/dhcpdns v0.0.7
-	github.com/miekg/dns v1.1.69
 	github.com/powerman/check v1.9.0
 	github.com/quic-go/quic-go v0.59.0
 	golang.org/x/crypto v0.46.0
@@ -43,10 +42,7 @@ require (
 	github.com/powerman/deepequal v0.1.0 // indirect
 	github.com/quic-go/qpack v0.6.0 // indirect
 	github.com/smartystreets/goconvey v1.8.1 // indirect
-	golang.org/x/mod v0.31.0 // indirect
-	golang.org/x/sync v0.19.0 // indirect
 	golang.org/x/text v0.33.0 // indirect
-	golang.org/x/tools v0.40.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20251213004720-97cd9d5aeac2 // indirect
 	google.golang.org/grpc v1.77.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
