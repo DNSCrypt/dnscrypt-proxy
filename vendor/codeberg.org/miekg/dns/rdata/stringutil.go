@@ -25,7 +25,7 @@ func cmToM(x uint8) string {
 	}
 
 	var s strings.Builder
-	s.WriteString(fmt.Sprintf("%d", m))
+	fmt.Fprintf(&s, "%d", m)
 	for e > 2 {
 		s.WriteString("0")
 		e--
@@ -109,7 +109,6 @@ func writeTxtByte(sb *strings.Builder, b byte) {
 }
 
 // splitN splits a string into N sized string chunks.
-// This might become an exported function once.
 func splitN(s string, n int) []string {
 	if len(s) < n {
 		return []string{s}

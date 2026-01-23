@@ -30,26 +30,19 @@ func TSIGSign(m *Msg, k TSIGSigner, options *TSIGOption) error {
 		}
 	}
 
-	if m.ps == 0 {
-		return ErrNoTSIG.Fmt(": %s", "sign")
-	}
-
 	t := hasTSIG(m)
 	if t == nil {
 		return ErrNoTSIG.Fmt(": %s", "sign")
 	}
 
-	last := len(m.Ns) + len(m.Answer) + len(m.Extra) + int(m.ps) - 1 // skip question as 0th, is the first after question
-	if last < 0 {
-		return ErrNoTSIG.Fmt(": %s", "sign")
-	}
+	last := len(m.Ns) + len(m.Answer) + len(m.Extra) // skip question as 0th, is the first after question
 	off := jump.To(last, m.Data)
 	if off == 0 {
 		return ErrNoTSIG.Fmt(": %s", "sign")
 	}
 
 	m.Data = m.Data[:off]
-	arcount := uint16(len(m.Extra) + int(m.ps-1))
+	arcount := uint16(len(m.Extra))
 	pack.Uint16(arcount, m.Data, msgArcount) // decrease additional section count, because we removed the TSIG
 
 	macbuf, err := t.mac(m, *options)
@@ -92,10 +85,6 @@ func TSIGVerify(m *Msg, k TSIGSigner, options *TSIGOption) error {
 		}
 	}
 
-	if m.ps == 0 {
-		return ErrNoTSIG.Fmt(": %s", "verify")
-	}
-
 	t := hasTSIG(m)
 	if t == nil {
 		return ErrNoTSIG.Fmt(": %s", "verify")
@@ -109,17 +98,14 @@ func TSIGVerify(m *Msg, k TSIGSigner, options *TSIGOption) error {
 		return ErrSig
 	}
 
-	last := len(m.Answer) + len(m.Ns) + len(m.Extra) + int(m.ps) - 1
-	if last < 0 {
-		return ErrNoTSIG.Fmt(": %s", "verify")
-	}
+	last := len(m.Answer) + len(m.Ns) + len(m.Extra)
 	off := jump.To(last, m.Data)
 	if off == 0 {
 		return ErrNoTSIG.Fmt(": %s", "verify")
 	}
 
 	m.Data = m.Data[:off]
-	arcount := uint16(len(m.Extra) + int(m.ps-1))
+	arcount := uint16(len(m.Extra))
 	pack.Uint16(arcount, m.Data, msgArcount) // decrease additional section count, because we removed the TSIG
 
 	// restore msg ID, as the origID is used to calculate hash, and set in m.Data.
@@ -169,10 +155,10 @@ type TSIGSigner interface {
 }
 
 func hasTSIG(m *Msg) *TSIG {
-	for i := range m.Pseudo {
-		if t, ok := m.Pseudo[i].(*TSIG); ok {
-			return t
-		}
+	lp := len(m.Pseudo)
+	if lp == 0 {
+		return nil
 	}
-	return nil
+	t, _ := m.Pseudo[lp-1].(*TSIG)
+	return t
 }

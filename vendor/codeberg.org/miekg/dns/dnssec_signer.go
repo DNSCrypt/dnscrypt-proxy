@@ -255,12 +255,14 @@ func rawSignatureData(buf []byte, rrset []RR, s *RRSIG, options SignOption) int 
 			orig := rr.Header().Name
 			// 6.2. Canonical RR Form. (4) - wildcards
 			// Wildcard, trim to s.Labels from the left and substitute '*'
+			stop := false
 			for range skip {
-				off, _ = dnsutilNext(rr.Header().Name, off)
+				off, stop = dnsutilNext(rr.Header().Name, off)
 			}
-			rr.Header().Name = "*." + rr.Header().Name[off:]
-			defer func() { rr.Header().Name = orig }()
-
+			if !stop { // if stop we jumped past
+				rr.Header().Name = "*." + rr.Header().Name[off:]
+				defer func() { rr.Header().Name = orig }()
+			}
 		}
 		canonicalize(rr)
 	}

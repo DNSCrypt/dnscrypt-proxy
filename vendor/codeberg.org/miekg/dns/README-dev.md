@@ -12,7 +12,7 @@ generated" to various other locations.
 
 Useful helper function? -> _dnsutil_.
 Useful helper function, that can help with testing (and other things) -> _dnstest_.
-Helper function -> new package in _internal/..._.
+Helper function(s) -> new package in _internal/..._.
 
 ## Go Generate
 
@@ -38,7 +38,7 @@ be capitalized, as-if it is an RR. The public API for these sub-types should mat
 Due to cyclic dependencies this creates some friction, but in the end it will be easier for end-users. It's
 important to put as much of the details in this sub-package. The top-level RR should be put in types.go.
 
-The sub-types in that RR should all capitial letters as their name, as-if they are (also) RRs. For the
+The sub-types in that RR should all capital letters as their name, as-if they are (also) RRs. For the
 in-progress DELEG RR, a _deleg_ package exists which houses most of the complexity.
 
 ## Custom types for uint8/16
@@ -67,6 +67,11 @@ For tests name them after the sub-system and the something more specific. This m
 tests for that sub-system. `TestZoneParserXXX`, `TestMsgXXX`, etc.
 
 Most tests are table driven with (optional) subtests, the main tests are usually put in a struct called
-`testcases` and while ranging over them at test is named `tc`.
+`testcases` and while ranging over them a test is named `tc`.
 
-There are also many more Example tests to aid and documenting this package.
+Preferably add a new test (case) to an _existing_ test instead of making a completely new one that just tests
+your feature. This reduces test sprawling into all kinds of files. The current tests a written in a fairly
+generic way to make this possible.
+
+There are also many more Example tests to aid in documenting this package. Consider adding one for your new
+feature.
