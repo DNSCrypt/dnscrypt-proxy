@@ -1,8 +1,9 @@
 // Package ipcrypt implements IP address encryption and obfuscation methods.
-// It provides three encryption modes:
+// It provides four encryption modes:
 //   - ipcrypt-deterministic: A deterministic mode where the same input always produces the same output
 //   - ipcrypt-nd: A non-deterministic mode that uses an 8-byte tweak
 //   - ipcrypt-ndx: An extended non-deterministic mode that uses a 32-byte key and 16-byte tweak
+//   - ipcrypt-pfx: A prefix-preserving mode that maintains the original IP format (IPv4 or IPv6)
 //
 // For non-deterministic modes, passing nil as the tweak parameter will automatically generate a random tweak.
 package ipcrypt
@@ -275,8 +276,7 @@ func EncryptIPPfx(ip net.IP, key []byte) (net.IP, error) {
 		// Prepare padded_prefix for next iteration
 		// Shift left by 1 bit and insert the next bit from ipBytes
 		paddedPrefix = shiftLeftOneBit(paddedPrefix)
-		bitToInsert := getBit(ipBytes, 127-prefixLenBits)
-		setBit(paddedPrefix, 0, bitToInsert)
+		setBit(paddedPrefix, 0, originalBit)
 	}
 
 	// Return the appropriate format
@@ -374,15 +374,15 @@ func DecryptIPPfx(encryptedIP net.IP, key []byte) (net.IP, error) {
 		// Extract the current bit from the encrypted IP
 		currentBitPos := 127 - prefixLenBits
 		encryptedBit := getBit(encryptedBytes, currentBitPos)
+		originalBit := cipherBit ^ encryptedBit
 
 		// Set the bit in the decrypted result
-		setBit(decrypted, currentBitPos, cipherBit^encryptedBit)
+		setBit(decrypted, currentBitPos, originalBit)
 
 		// Prepare padded_prefix for next iteration
 		// Shift left by 1 bit and insert the next bit from decrypted
 		paddedPrefix = shiftLeftOneBit(paddedPrefix)
-		bitToInsert := getBit(decrypted, 127-prefixLenBits)
-		setBit(paddedPrefix, 0, bitToInsert)
+		setBit(paddedPrefix, 0, originalBit)
 	}
 
 	// Return the appropriate format
@@ -428,7 +428,7 @@ func shiftLeftOneBit(data []byte) []byte {
 	// Process from least significant byte (byte 15) to most significant (byte 0)
 	for i := 15; i >= 0; i-- {
 		// Current byte shifted left by 1, with carry from previous byte
-		result[i] = ((data[i] << 1) | carry) & 0xFF
+		result[i] = (data[i] << 1) | carry
 		// Extract the bit that will be carried to the next byte
 		carry = (data[i] >> 7) & 1
 	}

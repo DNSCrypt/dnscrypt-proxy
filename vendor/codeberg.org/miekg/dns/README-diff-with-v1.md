@@ -1,5 +1,7 @@
 # Difference with github.com/miekg/dns
 
+I have ported a few utilities from dnsv1 to dnsv2, and dnsv2 is mostly a drop-in replacement. Of course YMMV.
+
 - Many functions (and new ones) are moved into _dnsutil_, and _dnstest_. This copied a lot of stuff from CoreDNS.
 - _dnshttp_ was added for help with DOH - DNS over HTTPs.
 - `RR` lost the `Type` and `Rdlength` fields, type is derived from the Go type, `Rdlength` served no function at all.

@@ -17,8 +17,7 @@ import (
 
 const maxTok = 512 // Token buffer start size, and growth size amount.
 
-// The maximum depth of $INCLUDE directives supported by the
-// ZoneParser API.
+// The maximum depth of $INCLUDE directives supported by the ZoneParser API.
 const maxIncludeDepth = 7
 
 // Tokenize a RFC 1035 zone file. The tokenizer will normalize it:
@@ -91,12 +90,12 @@ func (e *ParseError) Unwrap() error { return e.wrappedErr }
 
 type lex struct {
 	token  string // text of the token
-	err    bool   // when true, token text has lexer error
-	value  uint8  // value: zString, zBlank, etc.
-	torc   uint16 // type or class as parsed in the lexer, we only need to look this up in the grammar
-	as     uint8  // create an RR (asRR), an EDNS0 (asCode) or DSO RR (asStateful)
 	line   int    // line in the file
 	column int    // column in the file
+	torc   uint16 // type or class as parsed in the lexer, we only need to look this up in the grammar
+	err    bool   // when true, token text has lexer error
+	value  uint8  // value: zString, zBlank, etc.
+	as     uint8  // create an RR (asRR), an EDNS0 (asCode) or DSO RR (asStateful)
 }
 
 const (
@@ -209,18 +208,17 @@ type ZoneParser struct {
 
 	defttl *ttlState
 
-	h Header // rr header as we parse
-	t uint16 // type as we parse, not stored in the header
-
 	// sub is used to parse $INCLUDE files and $GENERATE directives.
 	// Next, by calling subNext, forwards the resulting RRs from this
 	// sub parser to the calling code.
 	sub *ZoneParser
 	r   io.Reader
 
-	includeDepth uint8
-
+	includeDepth       uint8
 	generateDisallowed bool
+
+	h Header // rr header as we parse
+	t uint16 // type as we parse, not stored in the header
 }
 
 // NewZoneParser returns an RFC 1035 style zone file parser that reads from r.

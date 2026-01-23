@@ -2,7 +2,6 @@ package dns
 
 import (
 	"strconv"
-	"strings"
 	"time"
 
 	"codeberg.org/miekg/dns/rdata"
@@ -979,7 +978,7 @@ type RFC3597 struct {
 }
 
 func (rr *RFC3597) String() string {
-	sb := strings.Builder{}
+	sb := builderPool.Get()
 
 	sb.WriteString(rr.Hdr.Name)
 	sb.WriteByte('\t')
