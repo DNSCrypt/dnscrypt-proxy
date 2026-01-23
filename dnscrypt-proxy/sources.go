@@ -221,17 +221,24 @@ func NewSource(
 	cacheFile string,
 	formatStr string,
 	refreshDelay time.Duration,
+	cacheTTL time.Duration,
 	prefix string,
 ) (*Source, error) {
 	if refreshDelay < DefaultPrefetchDelay {
 		refreshDelay = DefaultPrefetchDelay
 	}
+	if cacheTTL < refreshDelay {
+		cacheTTL = refreshDelay
+	}
+	if cacheTTL > 168*time.Hour {
+		cacheTTL = 168 * time.Hour
+	}
 	source := &Source{
 		name:          name,
 		urls:          []*url.URL{},
 		cacheFile:     cacheFile,
-		cacheTTL:      refreshDelay,
-		prefetchDelay: DefaultPrefetchDelay,
+		cacheTTL:      cacheTTL,
+		prefetchDelay: refreshDelay,
 		prefix:        prefix,
 	}
 	if formatStr == "v2" {

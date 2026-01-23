@@ -752,10 +752,14 @@ format = 'tsv'
 ##
 ## If the `urls` property is missing, cache files and valid signatures
 ## must already be present. This doesn't prevent these cache files from
-## expiring after `refresh_delay` hours.
-## `refreshed_delay` must be in the [24..168] interval.
-## The minimum delay of 24 hours (1 day) avoids unnecessary requests to servers.
-## The maximum delay of 168 hours (1 week) ensures cache freshness.
+## expiring after `cache_ttl` hours.
+##
+## `refresh_delay` controls how often to download updates during normal operation.
+## Must be in the [24..168] interval (1 day to 1 week).
+##
+## `cache_ttl` controls how old the cache can be at startup before requiring
+## an immediate download. Defaults to 168 hours if not set.
+## Must be in [refresh_delay..168] interval.
 
 [sources]
 

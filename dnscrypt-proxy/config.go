@@ -188,6 +188,7 @@ type SourceConfig struct {
 	CacheFile      string `toml:"cache_file"`
 	FormatStr      string `toml:"format"`
 	RefreshDelay   int    `toml:"refresh_delay"`
+	CacheTTL       int    `toml:"cache_ttl"`
 	Prefix         string
 }
 
@@ -716,6 +717,10 @@ func (config *Config) loadSource(proxy *Proxy, cfgSourceName string, cfgSource *
 		cfgSource.RefreshDelay = 72
 	}
 	cfgSource.RefreshDelay = Min(169, Max(25, cfgSource.RefreshDelay))
+	if cfgSource.CacheTTL <= 0 {
+		cfgSource.CacheTTL = 168
+	}
+	cfgSource.CacheTTL = Min(168, Max(cfgSource.RefreshDelay, cfgSource.CacheTTL))
 	source, err := NewSource(
 		cfgSourceName,
 		proxy.xTransport,
@@ -724,6 +729,7 @@ func (config *Config) loadSource(proxy *Proxy, cfgSourceName string, cfgSource *
 		cfgSource.CacheFile,
 		cfgSource.FormatStr,
 		time.Duration(cfgSource.RefreshDelay)*time.Hour,
+		time.Duration(cfgSource.CacheTTL)*time.Hour,
 		cfgSource.Prefix,
 	)
 	if err != nil {
