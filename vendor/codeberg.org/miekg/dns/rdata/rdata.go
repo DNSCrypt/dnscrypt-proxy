@@ -1,4 +1,5 @@
-// Package rdata contains the rdata elements of all the resource records.
+// Package rdata contains the rdata elements of all the resource records, each type that implements
+// [codeberg.org/miekg/dns.RR].
 package rdata
 
 import (

@@ -31,6 +31,9 @@ EDHU. This will also be done if the RR was named later than the EDNS0 option! Th
 Stateful Operations), when clashing those types will be prefixed with a 'D'. If EDNS0 and DSO clash, EDNS0
 wins. See PADDING and DPADDING as an example.
 
+This new version will not soon see a v1.0.0 release because I want to be able to still make changes. In a
+year or two (2028?) when things have stablized it will be blessed with a v1.0.0.
+
 # Porting From v1
 
 Everything from <https://github.com/miekg/dns> works. See

@@ -27,7 +27,7 @@ func Name(msgBuf []byte, off int) int {
 // Question jumps the question section that should start at msgBuf[off].
 func Question(msgBuf []byte, off int) int {
 	off = Name(msgBuf, off)
-	if off >= len(msgBuf) || off == 0 {
+	if off+4 >= len(msgBuf) || off == 0 {
 		return 0
 	}
 	return off + 4 // type + class
