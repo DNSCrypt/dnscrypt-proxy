@@ -130,8 +130,8 @@ func (rd SOA) Len() int {
 
 func (rd TXT) Len() int {
 	l := 0
-	for _, x := range rd.Txt {
-		l += len(x) + 1
+	for i := range rd.Txt {
+		l += len(rd.Txt[i]) + 1
 	}
 	return l
 }
@@ -179,17 +179,13 @@ func (rd DNAME) Len() int {
 
 func (rd A) Len() int {
 	l := 0
-	if rd.Addr.IsValid() {
-		l += net.IPv4len
-	}
+	l += net.IPv4len // Addr
 	return l
 }
 
 func (rd AAAA) Len() int {
 	l := 0
-	if rd.Addr.IsValid() {
-		l += net.IPv6len
-	}
+	l += net.IPv6len // Addr
 	return l
 }
 
@@ -368,16 +364,16 @@ func (rd HIP) Len() int {
 	l += 2 // PublicKeyLength
 	l += len(rd.Hit) / 2
 	l += base64.StdEncoding.DecodedLen(len(rd.PublicKey))
-	for _, x := range rd.RendezvousServers {
-		l += len(x) + 1
+	for i := range rd.RendezvousServers {
+		l += len(rd.RendezvousServers[i]) + 1
 	}
 	return l
 }
 
 func (rd NINFO) Len() int {
 	l := 0
-	for _, x := range rd.ZSData {
-		l += len(x) + 1
+	for i := range rd.ZSData {
+		l += len(rd.ZSData[i]) + 1
 	}
 	return l
 }
@@ -391,10 +387,8 @@ func (rd NID) Len() int {
 
 func (rd L32) Len() int {
 	l := 0
-	l += 2 // Preference
-	if rd.Locator32.IsValid() {
-		l += net.IPv4len
-	}
+	l += 2           // Preference
+	l += net.IPv4len // Locator32
 	return l
 }
 
@@ -481,16 +475,16 @@ func (rd SVCB) Len() int {
 	l := 0
 	l += 2 // Priority
 	l += len(rd.Target) + 1
-	for _, x := range rd.Value {
-		l += x.Len()
+	for i := range rd.Value {
+		l += rd.Value[i].Len()
 	}
 	return l
 }
 
 func (rd DELEG) Len() int {
 	l := 0
-	for _, x := range rd.Value {
-		l += x.Len()
+	for i := range rd.Value {
+		l += rd.Value[i].Len()
 	}
 	return l
 }

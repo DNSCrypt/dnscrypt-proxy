@@ -11,12 +11,12 @@ import (
 
 // A Client is a DNS client. It is safe to use a client from multiple goroutines.
 type Client struct {
-	*Transport // If Transport is nil it gets a [NewDefaultTransport].
+	*Transport // If Transport is nil it gets a [NewTransport].
 
 	*Transfer // If a transfer is attempted, this holds the optional signing settings.
 }
 
-// NewClient returns a client with the transport set to [NewDefaultTransport].
+// NewClient returns a client with the transport set to [NewTransport].
 func NewClient() *Client {
 	return &Client{Transport: NewTransport()}
 }
@@ -38,7 +38,7 @@ func Exchange(ctx context.Context, m *Msg, network, address string) (r *Msg, err
 //	c := new(dns.Client)
 //	resp, rtt, err := c.Exchange(ctx, m, "udp", "127.0.0.1:53")
 //
-// If client does not have a transport set [NewDefaultTransport] is set and used. Exchange does not retry a failed query,
+// If client does not have a transport set [NewTransport] is set and used. Exchange does not retry a failed query,
 // nor will it fall back to TCP in case of truncation when UDP is used.
 //
 // If the TLS config is set in the transport a (TCP) connection with TLS is attempted.

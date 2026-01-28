@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"iter"
 	"math"
 	"os"
 	"path"
@@ -148,8 +149,8 @@ func readRR(r io.Reader, file string) (RR, error) {
 
 // ZoneParser is a parser for an RFC 1035 style zone file.
 //
-// Each parsed RR in the zone is returned sequentially from Next. An
-// optional comment can be retrieved with Comment.
+// Each parsed RR in the zone is returned sequentially from [ZoneParser.Next]. An
+// optional comment can be retrieved with Comment. Also see [ZoneParser.RRs] which is an iterator.
 //
 // The directives $INCLUDE, $ORIGIN, $TTL and $GENERATE are all
 // supported. Although $INCLUDE is disabled by default.
@@ -707,6 +708,21 @@ func (zp *ZoneParser) Next() (RR, bool) {
 	// If we get here, we and the h.Rrtype is still zero, we haven't parsed anything, this
 	// is not an error, because an empty zone file is still a zone file.
 	return nil, false
+}
+
+// RRs allows ranging over the RRs from the zone currently parsed.
+func (zp *ZoneParser) RRs() iter.Seq2[RR, error] {
+	return func(yield func(RR, error) bool) {
+		for {
+			rr, ok := zp.Next()
+			if !yield(rr, zp.Err()) {
+				return
+			}
+			if !ok {
+				break
+			}
+		}
+	}
 }
 
 type zlexer struct {
