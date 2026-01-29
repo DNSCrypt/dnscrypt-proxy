@@ -61,7 +61,7 @@ func StringToKey(s string) uint16 {
 	return KeyReserved
 }
 
-var stringToKey = reverse.Int16(keyToString)
+var stringToKey = reverse.Map(keyToString)
 
 // KeyToInfo convert the key value to a Info.
 func KeyToInfo(k uint16) func() Info {

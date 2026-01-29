@@ -72,7 +72,7 @@ func StringToKey(s string) uint16 {
 	return KeyReserved
 }
 
-var stringToKey = reverse.Int16(keyToString)
+var stringToKey = reverse.Map(keyToString)
 
 // KeyToPair converts the key value to a Pair constructor function.
 func KeyToPair(k uint16) func() Pair {

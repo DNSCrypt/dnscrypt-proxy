@@ -100,8 +100,8 @@ const (
 
 	TypeTA       uint16 = 32768
 	TypeDLV      uint16 = 32769
-	TypeDELEG    uint16 = 65432 // Provisional type.
-	TypeDELEGI   uint16 = 65433 // Provisional type.
+	TypeDELEG    uint16 = 65432 // Provisional type code.
+	TypeDELEGI   uint16 = 65433 // Provisional type code.
 	TypeReserved uint16 = 65535
 )
 
@@ -120,14 +120,14 @@ const (
 	RSAMD5
 	DH
 	DSA
-	_ // Skip 4, RFC 6725, section 2.1
+	_ // Skip 4, RFC 6725, section 2.1.
 	RSASHA1
 	DSANSEC3SHA1
 	RSASHA1NSEC3SHA1
 	RSASHA256
-	_ // Skip 9, RFC 6725, section 2.1
+	_ // Skip 9, RFC 6725, section 2.1.
 	RSASHA512
-	_ // Skip 11, RFC 6725, section 2.1
+	_ // Skip 11, RFC 6725, section 2.1.
 	ECCGOST
 	ECDSAP256SHA256
 	ECDSAP384SHA384
@@ -158,7 +158,7 @@ var AlgorithmToString = map[uint8]string{
 	PRIVATEOID:       "PRIVATEOID",
 }
 
-// Different Certificate Types, see RFC 4398, Section 2.1
+// Different Certificate Types, see RFC 4398, Section 2.1.
 const (
 	CertPKIX = 1 + iota
 	CertSPKI
