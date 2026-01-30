@@ -471,7 +471,7 @@ func (rr *RFC3597) Clone() RR {
 		rr.Hdr,
 		rdata.RFC3597{
 			rr.RRType,
-			rr.Data,
+			rr.RFC3597.Data,
 		},
 	}
 }

@@ -8,12 +8,12 @@ TSIG, EDNS0, dynamic updates, notifies and DNSSEC validation/signing.
 
 Resource records (RRs) are native types. They are not stored in wire format, but every [Msg] holds the wire-format in its Data field.
 Everything is modelled or made to look like an RR.
-The question section holds an [RR] and the [EDNS0] option codes are also (fake/pseudo) RRs. These EDNS0 option occupy
+The question section holds a [RR] and the [EDNS0] option codes are also (fake/pseudo) RRs. These EDNS0 option occupy
 a separate section in [Msg], the pseudo section.
 
 Basic usage pattern for creating a new resource record:
 
-	r := &MX{Header{Name:"miek.nl.", Class: dns.ClassINET, TTL: 3600}, MX: rdata.MX{Preference: 10, Mx: "mx.miek.nl."}}
+	r := &dns.MX{Header{Name:"miek.nl.", Class: dns.ClassINET, TTL: 3600}, MX: rdata.MX{Preference: 10, Mx: "mx.miek.nl."}}
 
 Or directly from a string (which is much slower):
 

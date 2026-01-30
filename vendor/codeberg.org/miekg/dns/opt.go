@@ -1,6 +1,8 @@
 package dns
 
-func (*OPT) parse(c *zlexer, origin string) *ParseError {
+import "codeberg.org/miekg/dns/internal/dnslex"
+
+func (*OPT) parse(c *dnslex.Lexer, origin string) *ParseError {
 	return &ParseError{err: "OPT records do not have a presentation format"}
 }
 

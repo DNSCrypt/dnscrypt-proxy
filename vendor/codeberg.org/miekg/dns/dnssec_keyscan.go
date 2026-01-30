@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 
+	"codeberg.org/miekg/dns/internal/dnslex"
 	"codeberg.org/miekg/dns/internal/pack"
 )
 
@@ -154,14 +155,14 @@ func parseKey(r io.Reader, file string) (map[string]string, error) {
 	c := newKLexer(r)
 
 	for l, ok := c.Next(); ok; l, ok = c.Next() {
-		switch l.value {
+		switch l.Value {
 		case zKey:
-			k = l.token
+			k = l.Token
 		case zValue:
 			if k == "" {
 				return nil, &ParseError{file: file, err: "no private key seen", lex: l}
 			}
-			m[strings.ToLower(k)] = l.token
+			m[strings.ToLower(k)] = l.Token
 			k = ""
 		}
 	}
@@ -232,15 +233,15 @@ func (kl *klexer) readByte() (byte, bool) {
 	return c, true
 }
 
-func (kl *klexer) Next() (lex, bool) {
+func (kl *klexer) Next() (dnslex.Lex, bool) {
 	var (
-		l     lex
+		l     dnslex.Lex
 		str   strings.Builder
 		commt bool
 	)
 
 	for x, ok := kl.readByte(); ok; x, ok = kl.readByte() {
-		l.line, l.column = kl.line, kl.column
+		l.Line, l.Column = kl.line, kl.column
 
 		switch x {
 		case ':':
@@ -253,8 +254,8 @@ func (kl *klexer) Next() (lex, bool) {
 			// Next token is a space, eat it
 			kl.readByte()
 
-			l.value = zKey
-			l.token = str.String()
+			l.Value = zKey
+			l.Token = str.String()
 			return l, true
 		case ';':
 			commt = true
@@ -271,8 +272,8 @@ func (kl *klexer) Next() (lex, bool) {
 
 			kl.key = true
 
-			l.value = zValue
-			l.token = str.String()
+			l.Value = zValue
+			l.Token = str.String()
 			return l, true
 		default:
 			if commt {
@@ -285,14 +286,14 @@ func (kl *klexer) Next() (lex, bool) {
 
 	if kl.readErr != nil && kl.readErr != io.EOF {
 		// Don't return any tokens after a read error occurs.
-		return lex{value: zEOF}, false
+		return dnslex.Lex{Value: dnslex.EOF}, false
 	}
 
 	if str.Len() > 0 {
 		// Send remainder
-		l.value = zValue
-		l.token = str.String()
+		l.Value = zValue
+		l.Token = str.String()
 		return l, true
 	}
-	return lex{value: zEOF}, false
+	return dnslex.Lex{Value: dnslex.EOF}, false
 }

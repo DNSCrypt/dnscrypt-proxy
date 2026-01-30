@@ -30,7 +30,7 @@ I have ported a few utilities from dnsv1 to dnsv2, and dnsv2 is mostly a drop-in
   Pseudo section RR (EDNS0 OPT) can also be parsed from their (also unique to this library) presentation format.
 
   The `Stateful` section in the message that holds DNS Stateful Operation (DSO) records, these records are
-  also `RR`s.
+  also `RR`s. (The Stateful section was unused - this has been removed from Msg for the time being).
 
 - `New` will return an `RR`, `NewRR` is gone, `dnstest/New` will do the same, but panic on errors.
 - `Client` has a `dns.Transport` just like `http.Client`, so _all_ connection management is now external.
@@ -84,6 +84,25 @@ num := dns.NumField(mx)                                    | rdata := mx.MX
 for i := range num {                                       | rdata.Preference = 10
     fmt.Printf("%q", dns.Field(i))                         |
 }                                                          |
+```
+
+What type is this RR and as string.
+
+```
+OLD                                 | NEW
+                                    |
+hdr := rr.Header()                  | rrtype := dns.RRToType(rr)
+rrtype := hdr.Rrtype                | str := dns.TypeToString[rrtype]
+str := dns.TypeToString[rrtype]     | // or
+                                    | str = dnsutil.TypeToString(rrtype) // gives TYPEXXX for unknown types
+```
+
+Find the TTL:
+
+```
+OLD                 | NEW
+                    |
+rr.Header().Ttl     | rr.Header().TTL
 ```
 
 ## Setting EDNS0
@@ -215,6 +234,14 @@ OLD                                           | NEW
 m.SetQuestion("miek.nl.", dns.TypeDNSKEY)     |  dnsutil.SetQuestion(m, "miek.nl.", dns.TypeDNSKEY)
 ```
 
+CanonicalName has moved and been renamed.
+
+```
+OLD                            | NEW
+                               |
+canon := dns.CanonicalName(name)   | canon := dnsutil.Canonical(name)
+```
+
 ## Server
 
 Because `Msg` now carries its binary data too there is no need to do TSIG in the server it self, it can now be
@@ -240,4 +267,24 @@ func HelloServer(w dns.ResponseWriter, req *dns.Msg) {   | func HelloServer(ctx 
     }                                                    |     m.Pack()
 	w.WriteMsg(m)                                        |     io.Copy(w, m)
 }                                                        | }
+```
+
+## Zone Parser
+
+Allow includes.
+
+```
+OLD                                        | NEW
+                                           |
+ zp := dns.NewZoneParser(...)              | zp := dns.NewZoneParser(...)
+ zp.SetIncludeAllowed(true)                | // now the default
+```
+
+Disallow includes.
+
+```
+OLD                                        | NEW
+                                           |
+ zp := dns.NewZoneParser(...)              | zp := dns.NewZoneParser(...)
+ zp.SetIncludeAllowed(false)               | zp.IncludeAllowFunc = func() bool { return false }
 ```

@@ -31,6 +31,9 @@ EDHU. This will also be done if the RR was named later than the EDNS0 option! Th
 Stateful Operations), when clashing those types will be prefixed with a 'D'. If EDNS0 and DSO clash, EDNS0
 wins. See PADDING and DPADDING as an example.
 
+This new version will not soon see a v1.0.0 release because I want to be able to still make changes. In a
+year or two (2028?) when things have stablized it will be blessed with a v1.0.0.
+
 # Porting From v1
 
 Everything from <https://github.com/miekg/dns> works. See
@@ -43,7 +46,7 @@ For developers please read the
 # Goals
 
 - KISS.
-- Everything is an resource record.
+- Everything is a resource record, EDNS0 pseudo RRs included.
   - Easy way to access RR's header and resource data (rdata).
 - Small API.
   - Package _dnsutil_ contains functions that help programmers, but are not nessecarily in scope the the

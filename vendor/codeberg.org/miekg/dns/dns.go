@@ -41,8 +41,10 @@ const (
 
 // An RR represents a DNS resource record.
 type RR interface {
-	// Header returns the header of an resource record. The header contains everything up to the rdata.
+	// Header returns the header of a resource record. The header contains everything up to the rdata.
 	Header() *Header
+	// Data return the rdata of a resource record. The Data contains everything after the header.
+	Data() RDATA
 	// String returns the text representation of the resource record.
 	String() string
 	// Len is the length of the RR when encoded in wire format, this is not a perfect metric and returning
@@ -114,20 +116,25 @@ type Header struct {
 	Name  string `dns:"cdomain-name"` // Name is the owner name of the RR.
 	TTL   uint32 // TTL is the time-to-live of the RR.
 	Class uint16 // Class is the class of the RR, this is almost always [ClassINET].
-
-	// rdlength has no use for user of RRs in this library.
 }
 
 func (h *Header) Len() int        { return len(h.Name) + 1 + 10 } // +1 because miek.nl. is actually .miek.nl.
 func (h *Header) Header() *Header { return h }
+func (h *Header) Data() RDATA     { return nil }
 func (h *Header) Clone() RR       { return &Header{h.Name, h.TTL, h.Class} }
 
 // String returns the string representation of h.
-// Note that as the RR type is derived from the RR containing this header, getting the text
-// representation of just the header will show TYPE0 instead of the actual type. For correctly printing the
-// header you need the RR type to correctly print it. See [dnsutil.TypeToString] omong others.
+// Note that as the RR type is derived from the [RR] containing this header, getting the text
+// representation of just the header will show TYPE0 instead of the actual type. As this not that useful
+// the TYPE0 is not even added, leaving name, ttl and class.
+//
+// For correctly printing the header you need the RR type to correctly print it. See [codeberg.org/miekg/dns/dnsutil.TypeToString] among others.
+// For a RR to be completely printed use:
+//
+//	s := rr.Header().String() + " " + dnsutil.TypeToString(dns.RRToType(rr)) + "\t" + rr.Data().String)
 func (h *Header) String() string {
-	sb := strings.Builder{}
+	sb := builderPool.Get()
+	defer builderPool.Put(sb)
 	sb.WriteString(h.Name)
 	sb.WriteByte('\t')
 
@@ -135,9 +142,6 @@ func (h *Header) String() string {
 	sb.WriteByte('\t')
 
 	sb.WriteString(classToString(h.Class))
-	sb.WriteByte('\t')
-
-	sb.WriteString("TYPE0")
 	return sb.String()
 }
 
@@ -337,7 +341,7 @@ func (rr *RFC3597) fromRFC3597(r RR) error {
 	// We can only get here when rr was constructed with that method.
 
 	// rr.pack requires an extra allocation and a copy so we just decode Rdata manually, it's simpler anyway.
-	msg, err := hex.DecodeString(rr.Data)
+	msg, err := hex.DecodeString(rr.RFC3597.Data)
 	if err != nil {
 		return err
 	}

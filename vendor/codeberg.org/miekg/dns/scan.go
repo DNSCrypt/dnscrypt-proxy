@@ -1,10 +1,10 @@
 package dns
 
 import (
-	"bufio"
 	"fmt"
 	"io"
 	"io/fs"
+	"iter"
 	"math"
 	"os"
 	"path"
@@ -12,10 +12,9 @@ import (
 	"strconv"
 	"strings"
 
+	"codeberg.org/miekg/dns/internal/dnslex"
 	"codeberg.org/miekg/dns/rdata"
 )
-
-const maxTok = 512 // Token buffer start size, and growth size amount.
 
 // The maximum depth of $INCLUDE directives supported by the ZoneParser API.
 const maxIncludeDepth = 7
@@ -27,42 +26,28 @@ const maxIncludeDepth = 7
 // * Handle comments: ;
 // * Handle braces - anywhere.
 const (
-	// Zone file
-	zEOF = iota
-	zString
-	zBlank
-	zQuote
-	zNewline
-	zRrtpe
-	zOwner
-	zClass
-	zDirOrigin   // $ORIGIN
-	zDirTTL      // $TTL
-	zDirInclude  // $INCLUDE
-	zDirGenerate // $GENERATE
-
 	// Privatekey file
-	zValue
+	zValue = iota
 	zKey
 
-	zExpectOwnerDir      // Ownername
-	zExpectOwnerBl       // Whitespace after the ownername
-	zExpectAny           // Expect rrtype, ttl or class
-	zExpectAnyNoClass    // Expect rrtype or ttl
-	zExpectAnyNoClassBl  // The whitespace after _EXPECT_ANY_NOCLASS
-	zExpectAnyNoTTL      // Expect rrtype or class
-	zExpectAnyNoTTLBl    // Whitespace after _EXPECT_ANY_NOTTL
-	zExpectRrtype        // Expect rrtype
-	zExpectRrtypeBl      // Whitespace BEFORE rrtype
-	zExpectRdata         // The first element of the rdata
-	zExpectDirTTLBl      // Space after directive $TTL
-	zExpectDirTTL        // Directive $TTL
-	zExpectDirOriginBl   // Space after directive $ORIGIN
-	zExpectDirOrigin     // Directive $ORIGIN
-	zExpectDirIncludeBl  // Space after directive $INCLUDE
-	zExpectDirInclude    // Directive $INCLUDE
-	zExpectDirGenerate   // Directive $GENERATE
-	zExpectDirGenerateBl // Space after directive $GENERATE
+	zExpectOwnerDir      = iota // Ownername
+	zExpectOwnerBl              // Whitespace after the ownername
+	zExpectAny                  // Expect rrtype, ttl or class
+	zExpectAnyNoClass           // Expect rrtype or ttl
+	zExpectAnyNoClassBl         // The whitespace after _EXPECT_ANY_NOCLASS
+	zExpectAnyNoTTL             // Expect rrtype or class
+	zExpectAnyNoTTLBl           // Whitespace after _EXPECT_ANY_NOTTL
+	zExpectRrtype               // Expect rrtype
+	zExpectRrtypeBl             // Whitespace BEFORE rrtype
+	zExpectRdata                // The first element of the rdata
+	zExpectDirTTLBl             // Space after directive $TTL
+	zExpectDirTTL               // Directive $TTL
+	zExpectDirOriginBl          // Space after directive $ORIGIN
+	zExpectDirOrigin            // Directive $ORIGIN
+	zExpectDirIncludeBl         // Space after directive $INCLUDE
+	zExpectDirInclude           // Directive $INCLUDE
+	zExpectDirGenerate          // Directive $GENERATE
+	zExpectDirGenerateBl        // Space after directive $GENERATE
 )
 
 // ParseError is a parsing error. It contains the parse error and the location in the io.Reader
@@ -71,7 +56,7 @@ type ParseError struct {
 	file       string
 	err        string
 	wrappedErr error
-	lex        lex
+	lex        dnslex.Lex
 }
 
 func (e *ParseError) Error() (s string) {
@@ -81,22 +66,12 @@ func (e *ParseError) Error() (s string) {
 	if e.err == "" && e.wrappedErr != nil {
 		e.err = e.wrappedErr.Error()
 	}
-	s += "dns: " + e.err + ": " + strconv.QuoteToASCII(e.lex.token) + " at line: " +
-		strconv.Itoa(e.lex.line) + ":" + strconv.Itoa(e.lex.column)
+	s += "dns: " + e.err + ": " + strconv.QuoteToASCII(e.lex.Token) + " at line: " +
+		strconv.Itoa(e.lex.Line) + ":" + strconv.Itoa(e.lex.Column)
 	return
 }
 
 func (e *ParseError) Unwrap() error { return e.wrappedErr }
-
-type lex struct {
-	token  string // text of the token
-	line   int    // line in the file
-	column int    // column in the file
-	torc   uint16 // type or class as parsed in the lexer, we only need to look this up in the grammar
-	err    bool   // when true, token text has lexer error
-	value  uint8  // value: zString, zBlank, etc.
-	as     uint8  // create an RR (asRR), an EDNS0 (asCode) or DSO RR (asStateful)
-}
 
 const (
 	asRR       uint8 = iota // parse the string as an RR.
@@ -128,28 +103,46 @@ type ttlState struct {
 // In this library EDNS0 option codes have a presentation format, which you see when you print them. This
 // presentation format is also parsed back to EDNS0. In other words you can get an ENDS0 option code just from
 // a string.
+//
+// Note because this invokes the full [ZoneParser] it will be much faster to construct a new [RR] via struct
+// literals.
 func New(s string) (RR, error) {
 	if len(s) > 0 && s[len(s)-1] != '\n' { // We need a closing newline
-		return readRR(strings.NewReader(s+"\n"), "")
+		return read(strings.NewReader(s+"\n"), "")
 	}
-	return readRR(strings.NewReader(s), "")
+	return read(strings.NewReader(s), "")
 }
 
 // Read behaves like [New] but reads from an io.Reader. Note the reader must include an ending newline,
 // otherwise the parsing will fail.
-func Read(r io.Reader) (RR, error) { return readRR(r, "") }
+func Read(r io.Reader) (RR, error) { return read(r, "") }
 
-func readRR(r io.Reader, file string) (RR, error) {
+func read(r io.Reader, file string) (RR, error) {
 	zp := NewZoneParser(r, ".", file)
 	zp.SetDefaultTTL(defaultTTL)
 	rr, _ := zp.Next()
 	return rr, zp.Err()
 }
 
+// NewData parses s, but only for the rdata, i.e. when the full RR is "miek.nl. IN 3600 MX 10 mx.miek.nl.",
+// NewData must get "10 mx.miek.nl." and optionally an origin". Leading spaces are not allowed.
+func NewData(rrtype uint16, s, origin string) (RDATA, error) {
+	return readData(strings.NewReader(s), rrtype, origin)
+}
+
+// ReadData behaves like [NewData] but reads from an io.Reader.
+func ReadData(r io.Reader, rrtype uint16, origin string) (RDATA, error) {
+	return readData(r, rrtype, origin)
+}
+
+func readData(r io.Reader, rrtype uint16, origin string) (RDATA, error) {
+	return parseData(r, rrtype, origin)
+}
+
 // ZoneParser is a parser for an RFC 1035 style zone file.
 //
-// Each parsed RR in the zone is returned sequentially from Next. An
-// optional comment can be retrieved with Comment.
+// Each parsed RR in the zone is returned sequentially from [ZoneParser.Next]. An
+// optional comment can be retrieved with Comment. Also see [ZoneParser.RRs] which is an iterator.
 //
 // The directives $INCLUDE, $ORIGIN, $TTL and $GENERATE are all
 // supported. Although $INCLUDE is disabled by default.
@@ -180,7 +173,7 @@ func readRR(r io.Reader, file string) (RR, error) {
 // Callers should not assume all returned data in a RR is
 // syntactically correct, e.g. illegal base64 in RRSIGs will be returned as-is.
 type ZoneParser struct {
-	c *zlexer
+	c *dnslex.Lexer
 
 	// IncludeAllowFunc tells if and how includes are allowed.
 	IncludeAllowFunc
@@ -237,7 +230,7 @@ func NewZoneParser(r io.Reader, origin, file string) *ZoneParser {
 	}
 
 	return &ZoneParser{
-		c:                newZLexer(r),
+		c:                dnslex.New(r, StringToType, StringToCode, StringToClass),
 		IncludeAllowFunc: DefaultIncludeAllowFunc,
 		parseErr:         pe,
 		origin:           origin,
@@ -266,7 +259,7 @@ func (zp *ZoneParser) Err() error {
 	return zp.c.Err()
 }
 
-func (zp *ZoneParser) setParseError(err string, l lex) (RR, bool) {
+func (zp *ZoneParser) setParseError(err string, l dnslex.Lex) (RR, bool) {
 	zp.parseErr = &ParseError{file: zp.file, err: err, lex: l}
 	return nil, false
 }
@@ -320,12 +313,12 @@ func (zp *ZoneParser) Next() (RR, bool) {
 
 	// 6 possible beginnings of a line (_ is a space):
 	//
-	//   0. zRrtype                              -> all omitted until the rrtype
-	//   1. zOwner _ zRrtype                     -> class/ttl omitted
-	//   2. zOwner _ zString _ zRrtype           -> class omitted
-	//   3. zOwner _ zString _ zClass  _ zRrtype -> ttl/class
-	//   4. zOwner _ zClass  _ zRrtype           -> ttl omitted
-	//   5. zOwner _ zClass  _ zString _ zRrtype -> class/ttl (reversed)
+	//   0. zRrtype                                                -> all omitted until the rrtype
+	//   1. dnslex.Owner _ zRrtype                                 -> class/ttl omitted
+	//   2. dnslex.Owner _ dnslex.String _ zRrtype                 -> class omitted
+	//   3. dnslex.Owner _ dnslex.String _ dnslex.Class  _ zRrtype -> ttl/class
+	//   4. dnslex.Owner _ dnslex.Class  _ zRrtype                 -> ttl omitted
+	//   5. dnslex.Owner _ dnslex.Class  _ dnslex.String _ zRrtype -> class/ttl (reversed)
 	//
 	// After detecting these, we know the zRrtype so we can jump to functions
 	// handling the rdata for each of these types.
@@ -336,8 +329,8 @@ func (zp *ZoneParser) Next() (RR, bool) {
 
 	for l, ok := zp.c.Next(); ok; l, ok = zp.c.Next() {
 		// zlexer spotted an error already
-		if l.err {
-			return zp.setParseError(l.token, l)
+		if l.Err {
+			return zp.setParseError(l.Token, l)
 		}
 
 		switch st {
@@ -349,11 +342,11 @@ func (zp *ZoneParser) Next() (RR, bool) {
 
 			h.Class = ClassINET
 
-			switch l.value {
-			case zNewline:
+			switch l.Value {
+			case dnslex.Newline:
 				st = zExpectOwnerDir
-			case zOwner:
-				name := dnsutilAbsolute(l.token, zp.origin)
+			case dnslex.Owner:
+				name := dnsutilAbsolute(l.Token, zp.origin)
 				if name == "" {
 					return zp.setParseError("bad owner name", l)
 				}
@@ -361,27 +354,27 @@ func (zp *ZoneParser) Next() (RR, bool) {
 				h.Name = name
 
 				st = zExpectOwnerBl
-			case zDirTTL:
+			case dnslex.DirTTL:
 				st = zExpectDirTTLBl
-			case zDirOrigin:
+			case dnslex.DirOrigin:
 				st = zExpectDirOriginBl
-			case zDirInclude:
+			case dnslex.DirInclude:
 				st = zExpectDirIncludeBl
-			case zDirGenerate:
+			case dnslex.DirGenerate:
 				st = zExpectDirGenerateBl
-			case zRrtpe:
-				t = &l.torc
+			case dnslex.Rrtype:
+				t = &l.Torc
 
 				st = zExpectRdata
-			case zClass:
-				h.Class = l.torc
+			case dnslex.Class:
+				h.Class = l.Torc
 
 				st = zExpectAnyNoClassBl
-			case zBlank:
+			case dnslex.Blank:
 				// Discard, can happen when there is nothing on the
 				// line except the RR type
-			case zString:
-				ttl, ok := stringToTTL(l.token)
+			case dnslex.String:
+				ttl, ok := stringToTTL(l.Token)
 				if !ok {
 					return zp.setParseError("not a TTL", l)
 				}
@@ -397,35 +390,35 @@ func (zp *ZoneParser) Next() (RR, bool) {
 				return zp.setParseError("syntax error at beginning", l)
 			}
 		case zExpectDirIncludeBl:
-			if l.value != zBlank {
+			if l.Value != dnslex.Blank {
 				return zp.setParseError("no blank after $INCLUDE-directive", l)
 			}
 
 			st = zExpectDirInclude
 		case zExpectDirInclude:
-			if l.value != zString {
+			if l.Value != dnslex.String {
 				return zp.setParseError("expecting $INCLUDE value, not this...", l)
 			}
 
 			neworigin := zp.origin // There may be optionally a new origin set after the filename, if not use current one
-			switch l, _ := zp.c.Next(); l.value {
-			case zBlank:
+			switch l, _ := zp.c.Next(); l.Value {
+			case dnslex.Blank:
 				l, _ := zp.c.Next()
-				if l.value == zString {
-					name := dnsutilAbsolute(l.token, zp.origin)
+				if l.Value == dnslex.String {
+					name := dnsutilAbsolute(l.Token, zp.origin)
 					if name == "" {
 						return zp.setParseError("bad origin name", l)
 					}
 
 					neworigin = name
 				}
-			case zNewline, zEOF:
+			case dnslex.Newline, dnslex.EOF:
 				// Ok
 			default:
 				return zp.setParseError("garbage after $INCLUDE", l)
 			}
 
-			if !zp.IncludeAllowFunc(zp.path, l.token) {
+			if !zp.IncludeAllowFunc(zp.path, l.Token) {
 				return zp.setParseError("$INCLUDE directive not allowed", l)
 			}
 			if zp.includeDepth >= maxIncludeDepth {
@@ -433,7 +426,7 @@ func (zp *ZoneParser) Next() (RR, bool) {
 			}
 
 			// Start with the new file
-			includePath := l.token
+			includePath := l.Token
 			var r1 io.Reader
 			var e1 error
 			if zp.IncludeFS != nil {
@@ -457,12 +450,12 @@ func (zp *ZoneParser) Next() (RR, bool) {
 			}
 			if e1 != nil {
 				var as string
-				if includePath != l.token {
+				if includePath != l.Token {
 					as = fmt.Sprintf(" as `%s'", includePath)
 				}
 				zp.parseErr = &ParseError{
 					file:       zp.file,
-					wrappedErr: fmt.Errorf("failed to open `%s'%s: %w", l.token, as, e1),
+					wrappedErr: fmt.Errorf("failed to open `%s'%s: %w", l.Token, as, e1),
 					lex:        l,
 				}
 				return nil, false
@@ -474,21 +467,21 @@ func (zp *ZoneParser) Next() (RR, bool) {
 			zp.sub.IncludeFS = zp.IncludeFS
 			return zp.subNext()
 		case zExpectDirTTLBl:
-			if l.value != zBlank {
+			if l.Value != dnslex.Blank {
 				return zp.setParseError("no blank after $TTL-directive", l)
 			}
 
 			st = zExpectDirTTL
 		case zExpectDirTTL:
-			if l.value != zString {
+			if l.Value != dnslex.String {
 				return zp.setParseError("expecting $TTL value, not this...", l)
 			}
 
-			if err := slurpRemainder(zp.c); err != nil {
-				return zp.setParseError(err.err, err.lex)
+			if err := dnslex.Remainder(zp.c); err != nil {
+				return zp.setParseError(err.Err, err.Lex)
 			}
 
-			ttl, ok := stringToTTL(l.token)
+			ttl, ok := stringToTTL(l.Token)
 			if !ok {
 				return zp.setParseError("expecting $TTL value, not this...", l)
 			}
@@ -497,21 +490,21 @@ func (zp *ZoneParser) Next() (RR, bool) {
 
 			st = zExpectOwnerDir
 		case zExpectDirOriginBl:
-			if l.value != zBlank {
+			if l.Value != dnslex.Blank {
 				return zp.setParseError("no blank after $ORIGIN-directive", l)
 			}
 
 			st = zExpectDirOrigin
 		case zExpectDirOrigin:
-			if l.value != zString {
+			if l.Value != dnslex.String {
 				return zp.setParseError("expecting $ORIGIN value, not this...", l)
 			}
 
-			if err := slurpRemainder(zp.c); err != nil {
-				return zp.setParseError(err.err, err.lex)
+			if err := dnslex.Remainder(zp.c); err != nil {
+				return zp.setParseError(err.Err, err.Lex)
 			}
 
-			name := dnsutilAbsolute(l.token, zp.origin)
+			name := dnsutilAbsolute(l.Token, zp.origin)
 			if name == "" {
 				return zp.setParseError("bad origin name", l)
 			}
@@ -520,7 +513,7 @@ func (zp *ZoneParser) Next() (RR, bool) {
 
 			st = zExpectOwnerDir
 		case zExpectDirGenerateBl:
-			if l.value != zBlank {
+			if l.Value != dnslex.Blank {
 				return zp.setParseError("no blank after $GENERATE-directive", l)
 			}
 
@@ -529,33 +522,33 @@ func (zp *ZoneParser) Next() (RR, bool) {
 			if zp.generateDisallowed {
 				return zp.setParseError("nested $GENERATE directive not allowed", l)
 			}
-			if l.value != zString {
+			if l.Value != dnslex.String {
 				return zp.setParseError("expecting $GENERATE value, not this...", l)
 			}
 
 			return zp.generate(l)
 		case zExpectOwnerBl:
-			if l.value != zBlank {
+			if l.Value != dnslex.Blank {
 				return zp.setParseError("no blank after owner", l)
 			}
 
 			st = zExpectAny
 		case zExpectAny:
-			switch l.value {
-			case zRrtpe:
+			switch l.Value {
+			case dnslex.Rrtype:
 				if zp.defttl == nil {
 					return zp.setParseError("missing TTL with no previous value", l)
 				}
 
-				t = &l.torc
+				t = &l.Torc
 
 				st = zExpectRdata
-			case zClass:
-				h.Class = l.torc
+			case dnslex.Class:
+				h.Class = l.Torc
 
 				st = zExpectAnyNoClassBl
-			case zString:
-				ttl, ok := stringToTTL(l.token)
+			case dnslex.String:
+				ttl, ok := stringToTTL(l.Token)
 				if !ok {
 					return zp.setParseError("not a TTL", l)
 				}
@@ -571,34 +564,34 @@ func (zp *ZoneParser) Next() (RR, bool) {
 				return zp.setParseError("expecting RR type, TTL or class, not this...", l)
 			}
 		case zExpectAnyNoClassBl:
-			if l.value != zBlank {
+			if l.Value != dnslex.Blank {
 				return zp.setParseError("no blank before class", l)
 			}
 
 			st = zExpectAnyNoClass
 		case zExpectAnyNoTTLBl:
-			if l.value != zBlank {
+			if l.Value != dnslex.Blank {
 				return zp.setParseError("no blank before TTL", l)
 			}
 
 			st = zExpectAnyNoTTL
 		case zExpectAnyNoTTL:
-			switch l.value {
-			case zClass:
-				h.Class = l.torc
+			switch l.Value {
+			case dnslex.Class:
+				h.Class = l.Torc
 
 				st = zExpectRrtypeBl
-			case zRrtpe:
-				t = &l.torc
+			case dnslex.Rrtype:
+				t = &l.Torc
 
 				st = zExpectRdata
 			default:
 				return zp.setParseError("expecting RR type or class, not this...", l)
 			}
 		case zExpectAnyNoClass:
-			switch l.value {
-			case zString:
-				ttl, ok := stringToTTL(l.token)
+			switch l.Value {
+			case dnslex.String:
+				ttl, ok := stringToTTL(l.Token)
 				if !ok {
 					return zp.setParseError("not a TTL", l)
 				}
@@ -610,25 +603,25 @@ func (zp *ZoneParser) Next() (RR, bool) {
 				}
 
 				st = zExpectRrtypeBl
-			case zRrtpe:
-				t = &l.torc
+			case dnslex.Rrtype:
+				t = &l.Torc
 
 				st = zExpectRdata
 			default:
 				return zp.setParseError("expecting RR type or TTL, not this...", l)
 			}
 		case zExpectRrtypeBl:
-			if l.value != zBlank {
+			if l.Value != dnslex.Blank {
 				return zp.setParseError("no blank before RR type", l)
 			}
 
 			st = zExpectRrtype
 		case zExpectRrtype:
-			if l.value != zRrtpe {
+			if l.Value != dnslex.Rrtype {
 				return zp.setParseError("unknown RR type", l)
 			}
 
-			t = &l.torc
+			t = &l.Torc
 
 			st = zExpectRdata
 		case zExpectRdata:
@@ -636,7 +629,7 @@ func (zp *ZoneParser) Next() (RR, bool) {
 				rr             RR
 				parseAsRFC3597 bool
 			)
-			switch l.as {
+			switch l.As {
 			case asRR:
 				if newFn, ok := TypeToRR[*t]; ok {
 					rr = newFn()
@@ -648,7 +641,7 @@ func (zp *ZoneParser) Next() (RR, bool) {
 					// This is also true for PrivateRR types which will have the
 					// RFC3597 parsing done for them and the Unpack method called
 					// to populate the RR instead of simply deferring to Parse.
-					if zp.c.Peek().token == "\\#" {
+					if zp.c.Peek().Token == "\\#" {
 						parseAsRFC3597 = true
 					}
 				} else {
@@ -663,14 +656,14 @@ func (zp *ZoneParser) Next() (RR, bool) {
 				*rr.Header() = *h
 			}
 
-			if zp.c.Peek().token == "" {
+			if zp.c.Peek().Token == "" {
 				// This is a dynamic update rr.
-				if err := slurpRemainder(zp.c); err != nil {
-					return zp.setParseError(err.err, err.lex)
+				if err := dnslex.Remainder(zp.c); err != nil {
+					return zp.setParseError(err.Err, err.Lex)
 				}
 
 				return rr, true
-			} else if l.value == zNewline {
+			} else if l.Value == dnslex.Newline {
 				return zp.setParseError("unexpected newline", l)
 			}
 
@@ -686,7 +679,7 @@ func (zp *ZoneParser) Next() (RR, bool) {
 				// *ParseError with file set to zp.file.
 
 				// err.lex may be nil in which case we substitute our current lex token.
-				if err.lex == (lex{}) {
+				if err.lex == (dnslex.Lex{}) {
 					return zp.setParseError(err.err, l)
 				}
 
@@ -709,542 +702,19 @@ func (zp *ZoneParser) Next() (RR, bool) {
 	return nil, false
 }
 
-type zlexer struct {
-	br io.ByteReader
-
-	readErr error
-
-	line   int
-	column int
-
-	comBuf  string
-	comment string
-
-	l       lex
-	cachedL *lex
-
-	brace  int
-	quote  bool
-	space  bool
-	commt  bool
-	rrtype bool
-	owner  bool
-
-	nextL bool
-
-	eol bool // end-of-line
-}
-
-func newZLexer(r io.Reader) *zlexer {
-	br, ok := r.(io.ByteReader)
-	if !ok {
-		br = bufio.NewReaderSize(r, 1024)
-	}
-
-	return &zlexer{
-		br: br,
-
-		line: 1,
-
-		owner: true,
-	}
-}
-
-func (zl *zlexer) Err() error {
-	if zl.readErr == io.EOF {
-		return nil
-	}
-
-	return zl.readErr
-}
-
-// readByte returns the next byte from the input
-func (zl *zlexer) readByte() (byte, bool) {
-	if zl.readErr != nil {
-		return 0, false
-	}
-
-	c, err := zl.br.ReadByte()
-	if err != nil {
-		zl.readErr = err
-		return 0, false
-	}
-
-	// delay the newline handling until the next token is delivered,
-	// fixes off-by-one errors when reporting a parse error.
-	if zl.eol {
-		zl.line++
-		zl.column = 0
-		zl.eol = false
-	}
-
-	if c == '\n' {
-		zl.eol = true
-	} else {
-		zl.column++
-	}
-
-	return c, true
-}
-
-func (zl *zlexer) Peek() lex {
-	if zl.nextL {
-		return zl.l
-	}
-
-	l, ok := zl.Next()
-	if !ok {
-		return l
-	}
-
-	if zl.nextL {
-		// Cache l. Next returns zl.cachedL then zl.l.
-		zl.cachedL = &l
-	} else {
-		// In this case l == zl.l, so we just tell Next to return zl.l.
-		zl.nextL = true
-	}
-
-	return l
-}
-
-func (zl *zlexer) Next() (lex, bool) {
-	l := &zl.l
-	switch {
-	case zl.cachedL != nil:
-		l, zl.cachedL = zl.cachedL, nil
-		return *l, true
-	case zl.nextL:
-		zl.nextL = false
-		return *l, true
-	case l.err:
-		// Parsing errors should be sticky.
-		return lex{value: zEOF}, false
-	}
-
-	var (
-		str = make([]byte, maxTok) // Hold string text
-		com = make([]byte, maxTok) // Hold comment text
-
-		stri int // Offset in str (0 means empty)
-		comi int // Offset in com (0 means empty)
-
-		escape bool
-	)
-
-	if zl.comBuf != "" {
-		comi = copy(com[:], zl.comBuf)
-		zl.comBuf = ""
-	}
-
-	zl.comment = ""
-	l.as = asRR
-
-	for x, ok := zl.readByte(); ok; x, ok = zl.readByte() {
-		l.line, l.column = zl.line, zl.column
-
-		if stri >= len(str) {
-			// if buffer length is insufficient, increase it.
-			str = append(str[:], make([]byte, maxTok)...)
-		}
-		if comi >= len(com) {
-			// if buffer length is insufficient, increase it.
-			com = append(com[:], make([]byte, maxTok)...)
-		}
-
-		switch x {
-		case ' ', '\t':
-			if escape || zl.quote {
-				// Inside quotes or escaped this is legal.
-				str[stri] = x
-				stri++
-
-				escape = false
+// RRs allows ranging over the RRs from the zone currently parsed.
+func (zp *ZoneParser) RRs() iter.Seq2[RR, error] {
+	return func(yield func(RR, error) bool) {
+		for {
+			rr, ok := zp.Next()
+			if !yield(rr, zp.Err()) {
+				return
+			}
+			if !ok {
 				break
 			}
-
-			if zl.commt {
-				com[comi] = x
-				comi++
-				break
-			}
-
-			var retL lex
-			if stri == 0 {
-				// Space directly in the beginning, handled in the grammar
-			} else if zl.owner {
-				// If we have a string and it's the first, make it an owner
-				l.value = zOwner
-				l.token = string(str[:stri])
-
-				// escape $... start with a \ not a $, so this will work
-				switch strings.ToUpper(l.token) {
-				case "$TTL":
-					l.value = zDirTTL
-				case "$ORIGIN":
-					l.value = zDirOrigin
-				case "$INCLUDE":
-					l.value = zDirInclude
-				case "$GENERATE":
-					l.value = zDirGenerate
-				}
-
-				retL = *l
-			} else {
-				l.value = zString
-				l.token = string(str[:stri])
-
-				if !zl.rrtype {
-					tokenUpper := strings.ToUpper(l.token)
-					if t, ok := StringToType[tokenUpper]; ok {
-						l.value = zRrtpe
-						l.torc = t
-
-						zl.rrtype = true
-					} else if t, ok := StringToCode[tokenUpper]; ok {
-						zl.rrtype = true
-						l.as = asCode
-						l.value = zRrtpe
-						l.torc = t
-					} else if strings.HasPrefix(tokenUpper, "TYPE") {
-						t, ok := typeToInt(l.token)
-						if !ok {
-							l.token = "unknown RR type"
-							l.err = true
-							return *l, true
-						}
-
-						l.value = zRrtpe
-						l.torc = t
-
-						zl.rrtype = true
-					}
-
-					if t, ok := StringToClass[tokenUpper]; ok {
-						l.value = zClass
-						l.torc = t
-					} else if strings.HasPrefix(tokenUpper, "CLASS") {
-						t, ok := classToInt(l.token)
-						if !ok {
-							l.token = "unknown class"
-							l.err = true
-							return *l, true
-						}
-
-						l.value = zClass
-						l.torc = t
-					}
-				}
-
-				retL = *l
-			}
-
-			zl.owner = false
-
-			if !zl.space {
-				zl.space = true
-
-				l.value = zBlank
-				l.token = " "
-
-				if retL == (lex{}) {
-					return *l, true
-				}
-
-				zl.nextL = true
-			}
-
-			if retL != (lex{}) {
-				return retL, true
-			}
-		case ';':
-			if escape || zl.quote {
-				// Inside quotes or escaped this is legal.
-				str[stri] = x
-				stri++
-
-				escape = false
-				break
-			}
-
-			zl.commt = true
-			zl.comBuf = ""
-
-			if comi > 1 {
-				// A newline was previously seen inside a comment that
-				// was inside braces and we delayed adding it until now.
-				com[comi] = ' ' // convert newline to space
-				comi++
-				if comi >= len(com) {
-					l.token = "comment length insufficient for parsing"
-					l.err = true
-					return *l, true
-				}
-			}
-
-			com[comi] = ';'
-			comi++
-
-			if stri > 0 {
-				zl.comBuf = string(com[:comi])
-
-				l.value = zString
-				l.token = string(str[:stri])
-				return *l, true
-			}
-		case '\r':
-			escape = false
-
-			if zl.quote {
-				str[stri] = x
-				stri++
-			}
-
-			// discard if outside of quotes
-		case '\n':
-			escape = false
-
-			// Escaped newline
-			if zl.quote {
-				str[stri] = x
-				stri++
-				break
-			}
-
-			if zl.commt {
-				// Reset a comment
-				zl.commt = false
-				zl.rrtype = false
-
-				// If not in a brace this ends the comment AND the RR
-				if zl.brace == 0 {
-					zl.owner = true
-
-					l.value = zNewline
-					l.token = "\n"
-					zl.comment = string(com[:comi])
-					return *l, true
-				}
-
-				zl.comBuf = string(com[:comi])
-				break
-			}
-
-			if zl.brace == 0 {
-				// If there is previous text, we should output it here
-				var retL lex
-				if stri != 0 {
-					l.value = zString
-					l.token = string(str[:stri])
-
-					if !zl.rrtype {
-						tokenUpper := strings.ToUpper(l.token)
-						if t, ok := StringToType[tokenUpper]; ok {
-							zl.rrtype = true
-							l.value = zRrtpe
-							l.torc = t
-						} else if t, ok := StringToCode[tokenUpper]; ok {
-							zl.rrtype = true
-							l.as = asCode
-							l.value = zRrtpe
-							l.torc = t
-						}
-					}
-
-					retL = *l
-				}
-
-				l.value = zNewline
-				l.token = "\n"
-
-				zl.comment = zl.comBuf
-				zl.comBuf = ""
-				zl.rrtype = false
-				zl.owner = true
-
-				if retL != (lex{}) {
-					zl.nextL = true
-					return retL, true
-				}
-
-				return *l, true
-			}
-		case '\\':
-			// comments do not get escaped chars, everything is copied
-			if zl.commt {
-				com[comi] = x
-				comi++
-				break
-			}
-
-			// something already escaped must be in string
-			if escape {
-				str[stri] = x
-				stri++
-
-				escape = false
-				break
-			}
-
-			// something escaped outside of string gets added to string
-			str[stri] = x
-			stri++
-
-			escape = true
-		case '"':
-			if zl.commt {
-				com[comi] = x
-				comi++
-				break
-			}
-
-			if escape {
-				str[stri] = x
-				stri++
-
-				escape = false
-				break
-			}
-
-			zl.space = false
-
-			// send previous gathered text and the quote
-			var retL lex
-			if stri != 0 {
-				l.value = zString
-				l.token = string(str[:stri])
-
-				retL = *l
-			}
-
-			// send quote itself as separate token
-			l.value = zQuote
-			l.token = "\""
-
-			zl.quote = !zl.quote
-
-			if retL != (lex{}) {
-				zl.nextL = true
-				return retL, true
-			}
-
-			return *l, true
-		case '(', ')':
-			if zl.commt {
-				com[comi] = x
-				comi++
-				break
-			}
-
-			if escape || zl.quote {
-				// Inside quotes or escaped this is legal.
-				str[stri] = x
-				stri++
-
-				escape = false
-				break
-			}
-
-			switch x {
-			case ')':
-				zl.brace--
-
-				if zl.brace < 0 {
-					l.token = "extra closing brace"
-					l.err = true
-					return *l, true
-				}
-			case '(':
-				zl.brace++
-			}
-		default:
-			escape = false
-
-			if zl.commt {
-				com[comi] = x
-				comi++
-				break
-			}
-
-			str[stri] = x
-			stri++
-
-			zl.space = false
 		}
 	}
-
-	if zl.readErr != nil && zl.readErr != io.EOF {
-		// Don't return any tokens after a read error occurs.
-		return lex{value: zEOF}, false
-	}
-
-	var retL lex
-	if stri > 0 {
-		// Send remainder of str
-		l.value = zString
-		l.token = string(str[:stri])
-		retL = *l
-
-		if comi <= 0 {
-			return retL, true
-		}
-	}
-
-	if comi > 0 {
-		// Send remainder of com
-		l.value = zNewline
-		l.token = "\n"
-		zl.comment = string(com[:comi])
-
-		if retL != (lex{}) {
-			zl.nextL = true
-			return retL, true
-		}
-
-		return *l, true
-	}
-
-	if zl.brace != 0 {
-		l.token = "unbalanced brace"
-		l.err = true
-		return *l, true
-	}
-
-	return lex{value: zEOF}, false
-}
-
-func (zl *zlexer) Comment() string {
-	if zl.l.err {
-		return ""
-	}
-
-	return zl.comment
-}
-
-// Extract the class number from CLASSxx
-func classToInt(token string) (uint16, bool) {
-	offset := 5
-	if len(token) < offset+1 {
-		return 0, false
-	}
-	class, err := strconv.ParseUint(token[offset:], 10, 16)
-	if err != nil {
-		return 0, false
-	}
-	return uint16(class), true
-}
-
-// Extract the rr number from TYPExxx
-func typeToInt(token string) (uint16, bool) {
-	offset := 4
-	if len(token) < offset+1 {
-		return 0, false
-	}
-	typ, err := strconv.ParseUint(token[offset:], 10, 16)
-	if err != nil {
-		return 0, false
-	}
-	return uint16(typ), true
 }
 
 // stringToTTL parses things like 2w, 2m, etc, and returns the time in seconds.
@@ -1357,36 +827,19 @@ func locCheckEast(token string, longitude uint32) (uint32, bool) {
 	return longitude, false
 }
 
-// "Eat" the rest of the "line"
-func slurpRemainder(c *zlexer) *ParseError {
-	l, _ := c.Next()
-	switch l.value {
-	case zBlank:
-		l, _ = c.Next()
-		if l.value != zNewline && l.value != zEOF {
-			return &ParseError{err: "garbage after rdata", lex: l}
-		}
-	case zNewline:
-	case zEOF:
-	default:
-		return &ParseError{err: "garbage after rdata", lex: l}
-	}
-	return nil
-}
-
 // Parse a 64 bit-like ipv6 address: "0014:4fff:ff20:ee64" Used for NID and L64 record.
-func stringToNodeID(l lex) (uint64, *ParseError) {
-	if len(l.token) < 19 {
-		return 0, &ParseError{file: l.token, err: "bad NID/L64 NodeID/Locator64", lex: l}
+func stringToNodeID(l dnslex.Lex) (uint64, *ParseError) {
+	if len(l.Token) < 19 {
+		return 0, &ParseError{file: l.Token, err: "bad NID/L64 NodeID/Locator64", lex: l}
 	}
 	// There must be three colons at fixes positions, if not its a parse error
-	if l.token[4] != ':' && l.token[9] != ':' && l.token[14] != ':' {
-		return 0, &ParseError{file: l.token, err: "bad NID/L64 NodeID/Locator64", lex: l}
+	if l.Token[4] != ':' && l.Token[9] != ':' && l.Token[14] != ':' {
+		return 0, &ParseError{file: l.Token, err: "bad NID/L64 NodeID/Locator64", lex: l}
 	}
-	s := l.token[0:4] + l.token[5:9] + l.token[10:14] + l.token[15:19]
+	s := l.Token[0:4] + l.Token[5:9] + l.Token[10:14] + l.Token[15:19]
 	u, err := strconv.ParseUint(s, 16, 64)
 	if err != nil {
-		return 0, &ParseError{file: l.token, err: "bad NID/L64 NodeID/Locator64", lex: l}
+		return 0, &ParseError{file: l.Token, err: "bad NID/L64 NodeID/Locator64", lex: l}
 	}
 	return u, nil
 }
@@ -1410,18 +863,9 @@ func defaultIncludeAllowFunc(file, include string) bool {
 	return false
 }
 
-// tokens is used to gather up the remaining tokens and hand them to a custom Scan method for external RRs.
-func tokens(c *zlexer) []string {
-	tokens := []string{}
-	l, _ := c.Next()
-	for {
-		switch l.value {
-		case zBlank:
-		case zNewline, zEOF:
-			return tokens
-		default:
-			tokens = append(tokens, l.token)
-		}
-		l, _ = c.Next()
+func toParseError(err *dnslex.ScanError) *ParseError {
+	if err == nil {
+		return nil
 	}
+	return &ParseError{err: err.Err, lex: err.Lex}
 }
