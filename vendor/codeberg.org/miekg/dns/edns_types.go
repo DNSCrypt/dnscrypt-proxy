@@ -45,7 +45,8 @@ type LLQ struct {
 	LeaseLife uint32
 }
 
-func (o *LLQ) Len() int { return tlv + 18 }
+func (o *LLQ) Len() int    { return tlv + 18 }
+func (o *LLQ) Data() RDATA { return o }
 func (o *LLQ) String() string {
 	sb := sprintOptionHeader(o)
 	sprintData(sb, strconv.FormatUint(uint64(o.Version), 10), strconv.FormatUint(uint64(o.Opcode), 10),
@@ -63,7 +64,8 @@ type REPORTING struct {
 	AgentDomain string
 }
 
-func (o *REPORTING) Len() int { return tlv + len(o.AgentDomain) }
+func (o *REPORTING) Len() int    { return tlv + len(o.AgentDomain) }
+func (o *REPORTING) Data() RDATA { return o }
 func (o *REPORTING) String() string {
 	sb := sprintOptionHeader(o)
 	sprintData(sb, o.AgentDomain)
@@ -88,7 +90,8 @@ type COOKIE struct {
 	Cookie string `dns:"hex"`
 }
 
-func (o *COOKIE) Len() int { return tlv + len(o.Cookie)/2 }
+func (o *COOKIE) Len() int    { return tlv + len(o.Cookie)/2 }
+func (o *COOKIE) Data() RDATA { return o }
 
 // String outputs: "COOKIE 962d3a4c596914578386a9a1dbbebf9e" (depending on the cookie size). This is the presentation
 // format.
@@ -108,7 +111,8 @@ type NSID struct {
 	Nsid string `dns:"hex"`
 }
 
-func (o *NSID) Len() int { return tlv + len(o.Nsid)/2 }
+func (o *NSID) Len() int    { return tlv + len(o.Nsid)/2 }
+func (o *NSID) Data() RDATA { return o }
 
 // String outputs: "NSID 5573652074686520666f726365: "Use the force"
 // This is the presentation format.
@@ -134,6 +138,7 @@ type PADDING struct {
 }
 
 func (o *PADDING) Len() int       { return tlv + len(o.Padding) }
+func (o *PADDING) Data() RDATA    { return o }
 func (o *PADDING) String() string { return "" } // TODO(miek)
 
 // EXPIRE implements the EDNS0 option as described in RFC 7314.
@@ -144,7 +149,8 @@ type EXPIRE struct {
 	Expire uint32
 }
 
-func (o *EXPIRE) Len() int { return tlv + 4 }
+func (o *EXPIRE) Len() int    { return tlv + 4 }
+func (o *EXPIRE) Data() RDATA { return o }
 func (o *EXPIRE) String() string {
 	sb := sprintOptionHeader(o)
 	if o.Expire == 0 {
@@ -165,7 +171,8 @@ type DAU struct {
 	AlgCode []uint8
 }
 
-func (o *DAU) Len() int { return tlv + len(o.AlgCode) }
+func (o *DAU) Len() int    { return tlv + len(o.AlgCode) }
+func (o *DAU) Data() RDATA { return o }
 func (o *DAU) String() string {
 	sb := sprintOptionHeader(o)
 	for _, alg := range o.AlgCode {
@@ -188,7 +195,8 @@ type DHU struct {
 	AlgCode []uint8
 }
 
-func (o *DHU) Len() int { return tlv + len(o.AlgCode) }
+func (o *DHU) Len() int    { return tlv + len(o.AlgCode) }
+func (o *DHU) Data() RDATA { return o }
 func (o *DHU) String() string {
 	sb := sprintOptionHeader(o)
 	for _, alg := range o.AlgCode {
@@ -211,7 +219,8 @@ type N3U struct {
 	AlgCode []uint8
 }
 
-func (o *N3U) Len() int { return tlv + len(o.AlgCode) }
+func (o *N3U) Len() int    { return tlv + len(o.AlgCode) }
+func (o *N3U) Data() RDATA { return o }
 func (o *N3U) String() string {
 	sb := sprintOptionHeader(o)
 	for _, alg := range o.AlgCode {
@@ -247,6 +256,8 @@ func (o *TCPKEEPALIVE) Len() int {
 	return tlv + 2
 }
 
+func (o *TCPKEEPALIVE) Data() RDATA { return o }
+
 func (o *TCPKEEPALIVE) String() string {
 	sb := sprintOptionHeader(o)
 	sb.WriteString("use tcp keep-alive")
@@ -269,7 +280,8 @@ type EDE struct {
 	ExtraText string
 }
 
-func (o *EDE) Len() int { return tlv + 2 + len(o.ExtraText) }
+func (o *EDE) Len() int    { return tlv + 2 + len(o.ExtraText) }
+func (o *EDE) Data() RDATA { return o }
 
 // String outputs: "EDE 15 "Blocked": "", where ExtraText is always printed, even if it's
 // empty. This is the presentation format.
@@ -301,7 +313,8 @@ type SUBNET struct {
 	Address netip.Addr // Client IP address.
 }
 
-func (o *SUBNET) Len() int { return tlv + 2 + 2 + int((o.Netmask+7)/8) }
+func (o *SUBNET) Len() int    { return tlv + 2 + 2 + int((o.Netmask+7)/8) }
+func (o *SUBNET) Data() RDATA { return o }
 func (o *SUBNET) String() string {
 	sb := sprintOptionHeader(o)
 	switch {
@@ -328,7 +341,8 @@ type ESU struct {
 	URI string
 }
 
-func (o *ESU) Len() int { return tlv + len(o.URI) }
+func (o *ESU) Len() int    { return tlv + len(o.URI) }
+func (o *ESU) Data() RDATA { return o }
 func (o *ESU) String() string {
 	sb := sprintOptionHeader(o)
 	sb.WriteString(o.URI)
@@ -352,7 +366,8 @@ type ZONEVERSION struct {
 	Version []byte
 }
 
-func (o *ZONEVERSION) Len() int { return tlv + 2 + len(o.Version) }
+func (o *ZONEVERSION) Len() int    { return tlv + 2 + len(o.Version) }
+func (o *ZONEVERSION) Data() RDATA { return o }
 
 // Strings outputs "ZONEVERSION 4 SOA-SERIAL 1002" as the presentation format.
 func (o *ZONEVERSION) String() string {
@@ -448,7 +463,7 @@ var ExtendedErrorToString = map[uint16]string{
 }
 
 // StringToExtendedError is a map from human readable descriptions to extended error info codes.
-var StringToExtendedError = reverse.Int16(ExtendedErrorToString)
+var StringToExtendedError = reverse.Map(ExtendedErrorToString)
 
 func unpackOptionCode(option EDNS0, s *cryptobyte.String) error {
 	switch x := option.(type) {

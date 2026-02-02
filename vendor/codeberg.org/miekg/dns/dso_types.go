@@ -29,6 +29,8 @@ func (d *KEEPALIVE) String() string {
 	return fmt.Sprintf("timeout %dms, interval %dms", d.Timeout, d.Interval)
 }
 
+func (d *KEEPALIVE) Data() RDATA { return d }
+
 // RETRYDELAY, see RFC 8490, section 7.2.
 // This record must be put in the stateful section.
 type RETRYDELAY struct {
@@ -39,6 +41,8 @@ func (d *RETRYDELAY) String() string {
 	return fmt.Sprintf("delay %dms", d.Delay)
 }
 
+func (d *RETRYDELAY) Data() RDATA { return d }
+
 // DPADDING option is used to add padding, see RRC 8490 section 7.3.
 // This record must be put in the stateful section.
 type DPADDING struct {
@@ -48,6 +52,8 @@ type DPADDING struct {
 func (d *DPADDING) String() string {
 	return fmt.Sprintf("padding %s", d.Padding)
 }
+
+func (d *DPADDING) Data() RDATA { return d }
 
 /*
 TODO(miek): commented out because rdata with full blown RRs isn't supported.

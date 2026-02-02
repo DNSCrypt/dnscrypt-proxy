@@ -6,6 +6,8 @@ import (
 	"io"
 	"strconv"
 	"strings"
+
+	"codeberg.org/miekg/dns/internal/dnslex"
 )
 
 // Parse the $GENERATE statement as used in BIND9 zones.
@@ -17,8 +19,8 @@ import (
 // * type
 // * rhs (rdata)
 // But we are lazy here, only the range is parsed *all* occurrences of $ after that are interpreted.
-func (zp *ZoneParser) generate(l lex) (RR, bool) {
-	token := l.token
+func (zp *ZoneParser) generate(l dnslex.Lex) (RR, bool) {
+	token := l.Token
 	step := int64(1)
 	if i := strings.IndexByte(token, '/'); i >= 0 {
 		if i+1 == len(token) {
@@ -54,20 +56,20 @@ func (zp *ZoneParser) generate(l lex) (RR, bool) {
 
 	// _BLANK
 	l, ok = zp.c.Next()
-	if !ok || l.value != zBlank {
+	if !ok || l.Value != dnslex.Blank {
 		return zp.setParseError("garbage after $GENERATE range", l)
 	}
 
 	// Create a complete new string, which we then parse again.
 	sb := builderPool.Get()
 	for l, ok := zp.c.Next(); ok; l, ok = zp.c.Next() {
-		if l.err {
+		if l.Err {
 			return zp.setParseError("bad data in $GENERATE directive", l)
 		}
-		if l.value == zNewline {
+		if l.Value == dnslex.Newline {
 			break
 		}
-		sb.WriteString(l.token)
+		sb.WriteString(l.Token)
 	}
 
 	r := &generateReader{
@@ -105,15 +107,15 @@ type generateReader struct {
 	eof bool
 
 	file string
-	lex  *lex
+	lex  *dnslex.Lex
 }
 
 func (r *generateReader) parseError(msg string, end int) *ParseError {
 	r.eof = true // Make errors sticky.
 
 	l := *r.lex
-	l.token = r.s[r.si-1 : end]
-	l.column += r.si // l.column starts one zBLANK before r.s
+	l.Token = r.s[r.si-1 : end]
+	l.Column += r.si // l.column starts one zBLANK before r.s
 
 	return &ParseError{file: r.file, err: msg, lex: l}
 }

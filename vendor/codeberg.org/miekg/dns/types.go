@@ -4,6 +4,7 @@ import (
 	"strconv"
 	"time"
 
+	"codeberg.org/miekg/dns/internal/dnslex"
 	"codeberg.org/miekg/dns/rdata"
 )
 
@@ -236,7 +237,7 @@ func (rr *NULL) String() string {
 	return ";" + rr.Hdr.String() + rr.Null
 }
 
-func (*NULL) parse(_ *zlexer, _ string) *ParseError {
+func (*NULL) parse(_ *dnslex.Lexer, _ string) *ParseError {
 	return &ParseError{err: "NULL records do not have a presentation format"}
 }
 
@@ -250,7 +251,7 @@ type NXNAME struct {
 func (rr *NXNAME) Len() int       { return rr.Hdr.Len() }
 func (rr *NXNAME) String() string { return rr.Hdr.String() }
 
-func (*NXNAME) parse(_ *zlexer, _ string) *ParseError {
+func (*NXNAME) parse(_ *dnslex.Lexer, _ string) *ParseError {
 	return &ParseError{err: "NXNAME records do not have a presentation format"}
 }
 
@@ -977,6 +978,8 @@ type RFC3597 struct {
 	rdata.RFC3597
 }
 
+func (rr *RFC3597) Data() RDATA { return rr.RFC3597 }
+
 func (rr *RFC3597) String() string {
 	sb := builderPool.Get()
 
@@ -1294,6 +1297,7 @@ type OPT struct {
 
 // See opt.go for other methods.
 
+func (rr *OPT) Data() RDATA    { return nil }
 func (rr *OPT) String() string { return "" }
 
 func (rr *OPT) Len() int {
@@ -1385,7 +1389,7 @@ type ANY struct {
 func (rr *ANY) Len() int       { return rr.Hdr.Len() }
 func (rr *ANY) String() string { return rr.Hdr.String() }
 
-func (*ANY) parse(c *zlexer, origin string) *ParseError {
+func (*ANY) parse(c *dnslex.Lexer, origin string) *ParseError {
 	return &ParseError{err: "ANY records do not have a presentation format"}
 }
 
@@ -1397,7 +1401,7 @@ type AXFR struct {
 func (rr *AXFR) Len() int       { return rr.Hdr.Len() }
 func (rr *AXFR) String() string { return rr.Hdr.String() }
 
-func (*AXFR) parse(c *zlexer, origin string) *ParseError {
+func (*AXFR) parse(c *dnslex.Lexer, origin string) *ParseError {
 	return &ParseError{err: "AXFR records do not have a presentation format"}
 }
 
@@ -1409,7 +1413,7 @@ type IXFR struct {
 func (rr *IXFR) Len() int       { return rr.Hdr.Len() }
 func (rr *IXFR) String() string { return rr.Hdr.String() }
 
-func (*IXFR) parse(c *zlexer, origin string) *ParseError {
+func (*IXFR) parse(c *dnslex.Lexer, origin string) *ParseError {
 	return &ParseError{err: "IXFR records do not have a presentation format"}
 }
 
@@ -1453,6 +1457,6 @@ func NewTSIG(z, algorithm string, fudge uint16, timesigned ...int64) *TSIG {
 	return t
 }
 
-func (*TSIG) parse(c *zlexer, origin string) *ParseError {
+func (*TSIG) parse(c *dnslex.Lexer, origin string) *ParseError {
 	return &ParseError{err: "TSIG records do not have a presentation format"}
 }
