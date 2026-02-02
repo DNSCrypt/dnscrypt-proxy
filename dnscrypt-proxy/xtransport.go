@@ -83,6 +83,8 @@ type XTransport struct {
 	http3Probe               bool
 	tlsDisableSessionTickets bool
 	tlsPreferRSA             bool
+	tlsMinVersion            uint16
+	tlsMaxVersion            uint16
 	proxyDialer              *netproxy.Dialer
 	httpProxyFunction        func(*http.Request) (*url.URL, error)
 	tlsClientCreds           DOHClientCreds
@@ -106,6 +108,8 @@ func NewXTransport() *XTransport {
 		http3Probe:               false,
 		tlsDisableSessionTickets: false,
 		tlsPreferRSA:             false,
+		tlsMinVersion:            tls.VersionTLS13,
+		tlsMaxVersion:            tls.VersionTLS13,
 		keyLogWriter:             nil,
 	}
 	return &xTransport
@@ -327,7 +331,23 @@ func (xTransport *XTransport) rebuildTransport() {
 	if xTransport.tlsDisableSessionTickets {
 		tlsClientConfig.SessionTicketsDisabled = true
 	}
-	if xTransport.tlsPreferRSA {
+
+	// Check if TLS 1.3 is the minimum version (default is 1.3) - this takes precedence over tlsPreferRSA
+	tls13Required := xTransport.tlsMinVersion == tls.VersionTLS13
+
+	// Apply TLS version settings
+	if xTransport.tlsMinVersion > 0 {
+		tlsClientConfig.MinVersion = xTransport.tlsMinVersion
+	}
+	if xTransport.tlsMaxVersion > 0 {
+		tlsClientConfig.MaxVersion = xTransport.tlsMaxVersion
+	}
+
+	// Apply tlsPreferRSA settings only if TLS 1.3 is not required
+	if xTransport.tlsPreferRSA && tls13Required {
+		dlog.Noticef("tls_prefer_rsa is set to true but ignored because TLS 1.3 is the minimum version")
+	}
+	if xTransport.tlsPreferRSA && !tls13Required {
 		tlsClientConfig.MaxVersion = tls.VersionTLS12
 		if hasAESGCMHardwareSupport {
 			tlsClientConfig.CipherSuites = []uint16{

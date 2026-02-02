@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"net"
@@ -68,6 +69,11 @@ func configureXTransport(proxy *Proxy, config *Config) error {
 	proxy.xTransport.tlsPreferRSA = config.TLSPreferRSA
 	proxy.xTransport.http3 = config.HTTP3
 	proxy.xTransport.http3Probe = config.HTTP3Probe
+
+	// Configure TLS version
+	if err := configureTLSVersion(proxy, config); err != nil {
+		return err
+	}
 
 	// Configure bootstrap resolvers
 	if len(config.BootstrapResolvers) == 0 && len(config.BootstrapResolversLegacy) > 0 {
@@ -425,6 +431,72 @@ func configureWeeklyRanges(proxy *Proxy, config *Config) error {
 // The configureDNS64 function is now defined in config.go
 
 // The configureBrokenImplementations function is now defined in config.go
+
+// configureTLSVersion - Configures and validates TLS version settings
+func configureTLSVersion(proxy *Proxy, config *Config) error {
+	// Default TLS version is 1.3
+	defaultVersion := "1.3"
+
+	// Get effective values (use default if not set)
+	tlsMinVerStr := defaultVersion
+	if config.TLSMinVer != nil {
+		tlsMinVerStr = *config.TLSMinVer
+	}
+
+	tlsMaxVerStr := defaultVersion
+	if config.TLSMaxVer != nil {
+		tlsMaxVerStr = *config.TLSMaxVer
+	}
+
+	// Parse and validate minimum TLS version
+	tlsMinVer, err := parseTLSVersion(tlsMinVerStr)
+	if err != nil {
+		return fmt.Errorf("Invalid tls_min_ver value [%s]: %v", tlsMinVerStr, err)
+	}
+
+	// Parse and validate maximum TLS version
+	tlsMaxVer, err := parseTLSVersion(tlsMaxVerStr)
+	if err != nil {
+		return fmt.Errorf("Invalid tls_max_ver value [%s]: %v", tlsMaxVerStr, err)
+	}
+
+	// Check for explicit conflict: user set min=1.3 and max=1.2 explicitly
+	if config.TLSMinVer != nil && config.TLSMaxVer != nil {
+		if tlsMinVer > tlsMaxVer {
+			return fmt.Errorf("tls_min_ver [%s] cannot be greater than tls_max_ver [%s]", tlsMinVerStr, tlsMaxVerStr)
+		}
+	}
+
+	// Auto-adjust tls_min_ver if needed: when max is 1.2 and min was not explicitly set,
+	// automatically set min to 1.2 since that's the lowest supported version
+	if config.TLSMinVer == nil && tlsMaxVer == tls.VersionTLS12 {
+		tlsMinVer = tls.VersionTLS12
+		tlsMinVerStr = "1.2"
+		dlog.Noticef("Auto-adjusting tls_min_ver to '1.2' to match tls_max_ver")
+	}
+
+	// Final validation that min <= max
+	if tlsMinVer > tlsMaxVer {
+		return fmt.Errorf("tls_min_ver [%s] cannot be greater than tls_max_ver [%s]", tlsMinVerStr, tlsMaxVerStr)
+	}
+
+	proxy.xTransport.tlsMinVersion = tlsMinVer
+	proxy.xTransport.tlsMaxVersion = tlsMaxVer
+
+	return nil
+}
+
+// parseTLSVersion - Parses TLS version string and returns the corresponding constant
+func parseTLSVersion(version string) (uint16, error) {
+	switch version {
+	case "1.2":
+		return tls.VersionTLS12, nil
+	case "1.3":
+		return tls.VersionTLS13, nil
+	default:
+		return 0, fmt.Errorf("only '1.2' and '1.3' are supported, got [%s]", version)
+	}
+}
 
 // configureAnonymizedDNS - Configures anonymized DNS
 func configureAnonymizedDNS(proxy *Proxy, config *Config) {

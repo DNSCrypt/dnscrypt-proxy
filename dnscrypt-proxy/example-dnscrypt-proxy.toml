@@ -289,11 +289,32 @@ cert_refresh_delay = 240
 
 ## Prefer RSA certificates over ECDSA for TLS connections.
 ## When this is enabled, some servers may become impossible to use,
-## or may stop to work later as they upgrade their configuratione.
+## or may stop to work later as they upgrade their configuration.
 ## Changing this setting is generally not recommended, but it may
 ## reduce CPU usage on small routers with slow CPUs.
+## Note: This setting only applies to TLS 1.2 and is ignored when
+## tls_min_ver is set to '1.3' (the default). To use this feature,
+## you must explicitly set tls_min_ver to '1.2'.
 
 # tls_prefer_rsa = false
+
+
+## Minimum and maximum TLS versions allowed for DoH connections.
+## Only '1.2' and '1.3' are supported. Other values will be rejected.
+## tls_min_ver must be less than or equal to tls_max_ver.
+## Note: The default is TLS 1.3 only, which means tls_prefer_rsa is
+## not effective unless you explicitly enable TLS 1.2 here.
+## Setting tls_min_ver to '1.3' will override tls_prefer_rsa.
+## Smart default: If you only set tls_max_ver = '1.2', tls_min_ver will be
+## automatically adjusted to '1.2' since 1.2 is the lowest supported version.
+## Examples:
+##   tls_min_ver = '1.2' and tls_max_ver = '1.2' = Only allow TLS 1.2 (enables tls_prefer_rsa)
+##   tls_min_ver = '1.3' and tls_max_ver = '1.3' = Only allow TLS 1.3 (default, ignores tls_prefer_rsa)
+##   tls_min_ver = '1.2' and tls_max_ver = '1.3' = Allow both TLS 1.2 and 1.3 (enables tls_prefer_rsa for 1.2)
+##   tls_max_ver = '1.2' only = Auto-adjusts tls_min_ver to '1.2', equivalent to setting both to '1.2'
+
+# tls_min_ver = '1.3'
+# tls_max_ver = '1.3'
 
 
 ## Log TLS key material to a file, for debugging purposes only.

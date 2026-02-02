@@ -94,6 +94,8 @@ type Config struct {
 	TLSCipherSuite           []uint16                    `toml:"tls_cipher_suite"`
 	TLSPreferRSA             bool                        `toml:"tls_prefer_rsa"`
 	TLSKeyLogFile            string                      `toml:"tls_key_log_file"`
+	TLSMinVer                *string                     `toml:"tls_min_ver"`
+	TLSMaxVer                *string                     `toml:"tls_max_ver"`
 	NetprobeAddress          string                      `toml:"netprobe_address"`
 	NetprobeTimeout          int                         `toml:"netprobe_timeout"`
 	OfflineMode              bool                        `toml:"offline_mode"`
@@ -159,6 +161,8 @@ func newConfig() Config {
 		TLSCipherSuite:           nil,
 		TLSPreferRSA:             false,
 		TLSKeyLogFile:            "",
+		TLSMinVer:                nil,
+		TLSMaxVer:                nil,
 		NetprobeTimeout:          60,
 		OfflineMode:              false,
 		RefusedCodeInResponses:   false,
