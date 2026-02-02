@@ -45,7 +45,7 @@ func (rd LOC) String() string {
 	m := lat / dnsstring.LOCHours
 	lat = lat % dnsstring.LOCHours
 
-	sb.WriteString(fmt.Sprintf("%02d %02d %0.3f %s ", h, m, float64(lat)/1000, ns))
+	fmt.Fprintf(&sb, "%02d %02d %0.3f %s ", h, m, float64(lat)/1000, ns)
 
 	lon := rd.Longitude
 	ew := "E"
@@ -60,14 +60,14 @@ func (rd LOC) String() string {
 	m = lon / dnsstring.LOCHours
 	lon = lon % dnsstring.LOCHours
 
-	sb.WriteString(fmt.Sprintf("%02d %02d %0.3f %s ", h, m, float64(lon)/1000, ew))
+	fmt.Fprintf(&sb, "%02d %02d %0.3f %s ", h, m, float64(lon)/1000, ew)
 
 	alt := float64(rd.Altitude) / 100
 	alt -= dnsstring.LOCAltitudebase
 	if rd.Altitude%100 != 0 {
-		sb.WriteString(fmt.Sprintf("%.2fm ", alt))
+		fmt.Fprintf(&sb, "%.2fm ", alt)
 	} else {
-		sb.WriteString(fmt.Sprintf("%.0fm ", alt))
+		fmt.Fprintf(&sb, "%.0fm ", alt)
 	}
 
 	sb.WriteString(cmToM(rd.Size) + "m ")

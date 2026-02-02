@@ -8,30 +8,10 @@ TSIG, EDNS0, dynamic updates, notifies and DNSSEC validation/signing.
 
 Resource records (RRs) are native types. They are not stored in wire format, but every [Msg] holds the wire-format in its Data field.
 Everything is modelled or made to look like an RR.
-The question section holds an [RR] and the [EDNS0] option codes are also (fake/pseudo) RRs. These EDNS0 option occupy
+The question section holds a [RR] and the [EDNS0] option codes are also (fake/pseudo) RRs. These EDNS0 option occupy
 a separate section in [Msg], the pseudo section.
 
-Basic usage pattern for creating a new resource record:
-
-	r := &MX{Header{Name:"miek.nl.", Class: dns.ClassINET, TTL: 3600}, MX: rdata.MX{Preference: 10, Mx: "mx.miek.nl."}}
-
-Or directly from a string (which is much slower):
-
-	mx, err := dns.New("miek.nl. 3600 IN MX 10 mx.miek.nl.")
-
-Or when the default origin (.) and TTL (3600) and class (IN) suit you:
-
-	mx, err := dns.New("miek.nl MX 10 mx.miek.nl")
-
-Or even:
-
-	mx, err := dns.New("$ORIGIN nl.\nmiek 1H IN MX 10 mx.miek")
-
-Or with dnstest.New, if you are sure no error will occur:
-
-	mx := dnstest.New("miek.nl.  IN MX 10 mx.miek.nl.")
-
-In the DNS, messages ([Msg]) are exchanged, these messages contain RRs ([RR]) and/or RRsets ([RRset]). Use pattern for creating a message:
+In the DNS, messages ([Msg]) are exchanged, these messages contain RRs ([RR]) and/or RRsets ([RRset]). Basic pattern for creating a message:
 
 	m := new(dns.Msg)
 	m.Question = []dns.RR{mx}

@@ -90,6 +90,10 @@ func (rr *IXFR) Header() *Header       { return &rr.Hdr }
 func (rr *TSIG) Header() *Header       { return &rr.Hdr }
 
 // TypeToRR is a map of constructors for each RR type.
+// Basic usage if you have a type  code and want to create a [RR]:
+//
+//	rr := dns.TypeToRR[dns.TypeMX]()
+//	fmt.Println(rr) // "0       CLASS0  MX      0"
 var TypeToRR = map[uint16]func() RR{
 	TypeNULL:       func() RR { return new(NULL) },
 	TypeNXNAME:     func() RR { return new(NXNAME) },

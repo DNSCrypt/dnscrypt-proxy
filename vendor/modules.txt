@@ -1,8 +1,9 @@
-# codeberg.org/miekg/dns v0.6.33
+# codeberg.org/miekg/dns v0.6.40
 ## explicit; go 1.25.0
 codeberg.org/miekg/dns
 codeberg.org/miekg/dns/deleg
 codeberg.org/miekg/dns/internal/ddd
+codeberg.org/miekg/dns/internal/dnslex
 codeberg.org/miekg/dns/internal/dnsstring
 codeberg.org/miekg/dns/internal/jump
 codeberg.org/miekg/dns/internal/pack
