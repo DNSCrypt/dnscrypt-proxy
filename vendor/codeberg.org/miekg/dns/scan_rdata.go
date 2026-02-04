@@ -747,7 +747,7 @@ func parseCSYNC(rd *rdata.CSYNC, c *dnslex.Lexer, o string) *ParseError {
 	j, e := strconv.ParseUint(l.Token, 10, 32)
 	if e != nil {
 		// Serial must be a number
-		return &ParseError{err: "bad CSYNC serial", lex: l}
+		return &ParseError{err: "bad CSYNC Serial", lex: l}
 	}
 	rd.Serial = uint32(j)
 
@@ -757,7 +757,7 @@ func parseCSYNC(rd *rdata.CSYNC, c *dnslex.Lexer, o string) *ParseError {
 	j, e1 := strconv.ParseUint(l.Token, 10, 16)
 	if e1 != nil {
 		// Serial must be a number
-		return &ParseError{err: "bad CSYNC flags", lex: l}
+		return &ParseError{err: "bad CSYNC Flags", lex: l}
 	}
 	rd.Flags = uint16(j)
 
@@ -772,9 +772,12 @@ func parseCSYNC(rd *rdata.CSYNC, c *dnslex.Lexer, o string) *ParseError {
 		case dnslex.Blank:
 			// Ok
 		case dnslex.String:
-			tokenUpper := strings.ToUpper(l.Token)
-			if k, ok = StringToType[tokenUpper]; !ok {
-				if k, ok = typeToInt(l.Token); !ok {
+			k, ok = StringToType[l.Token]
+			if !ok {
+				if !strings.HasPrefix(l.Token, "TYPE") {
+					return &ParseError{err: "bad CSYNC TypeBitMap", lex: l}
+				}
+				if k, ok = dnslex.TypeToInt(l.Token); !ok {
 					return &ParseError{err: "bad CSYNC TypeBitMap", lex: l}
 				}
 			}
@@ -821,19 +824,15 @@ func parseZONEMD(rd *rdata.ZONEMD, c *dnslex.Lexer, o string) *ParseError {
 
 func parseRRSIG(rd *rdata.RRSIG, c *dnslex.Lexer, o string) *ParseError {
 	l, _ := c.Next()
-	tokenUpper := strings.ToUpper(l.Token)
-	if t, ok := StringToType[tokenUpper]; !ok {
-		if strings.HasPrefix(tokenUpper, "TYPE") {
-			t, ok = typeToInt(l.Token)
-			if !ok {
-				return &ParseError{err: "bad RRSIG Typecovered", lex: l}
-			}
-			rd.TypeCovered = t
-		} else {
+	var ok bool
+	rd.TypeCovered, ok = StringToType[l.Token]
+	if !ok {
+		if !strings.HasPrefix(l.Token, "TYPE") {
 			return &ParseError{err: "bad RRSIG Typecovered", lex: l}
 		}
-	} else {
-		rd.TypeCovered = t
+		if rd.TypeCovered, ok = dnslex.TypeToInt(l.Token); !ok {
+			return &ParseError{err: "bad RRSIG Typecovered", lex: l}
+		}
 	}
 
 	c.Next() // dnslex.Blank
@@ -844,11 +843,9 @@ func parseRRSIG(rd *rdata.RRSIG, c *dnslex.Lexer, o string) *ParseError {
 	i, e := strconv.ParseUint(l.Token, 10, 8)
 	rd.Algorithm = uint8(i) // if 0 we'll check the mnemonic in the if
 	if e != nil {
-		v, ok := StringToAlgorithm[l.Token]
-		if !ok {
+		if rd.Algorithm, ok = StringToAlgorithm[l.Token]; !ok {
 			return &ParseError{err: "bad RRSIG Algorithm", lex: l}
 		}
-		rd.Algorithm = v
 	}
 
 	c.Next() // dnslex.Blank
@@ -937,9 +934,12 @@ func parseNSEC(rd *rdata.NSEC, c *dnslex.Lexer, o string) *ParseError {
 		case dnslex.Blank:
 			// Ok
 		case dnslex.String:
-			tokenUpper := strings.ToUpper(l.Token)
-			if k, ok = StringToType[tokenUpper]; !ok {
-				if k, ok = typeToInt(l.Token); !ok {
+			k, ok = StringToType[l.Token]
+			if !ok {
+				if !strings.HasPrefix(l.Token, "TYPE") {
+					return &ParseError{err: "bad NSEC TypeBitMap", lex: l}
+				}
+				if k, ok = dnslex.TypeToInt(l.Token); !ok {
 					return &ParseError{err: "bad NSEC TypeBitMap", lex: l}
 				}
 			}
@@ -1002,9 +1002,12 @@ func parseNSEC3(rd *rdata.NSEC3, c *dnslex.Lexer, o string) *ParseError {
 		case dnslex.Blank:
 			// Ok
 		case dnslex.String:
-			tokenUpper := strings.ToUpper(l.Token)
-			if k, ok = StringToType[tokenUpper]; !ok {
-				if k, ok = typeToInt(l.Token); !ok {
+			k, ok = StringToType[l.Token]
+			if !ok {
+				if !strings.HasPrefix(l.Token, "TYPE") {
+					return &ParseError{err: "bad NSEC3 TypeBitMap", lex: l}
+				}
+				if k, ok = dnslex.TypeToInt(l.Token); !ok {
 					return &ParseError{err: "bad NSEC3 TypeBitMap", lex: l}
 				}
 			}

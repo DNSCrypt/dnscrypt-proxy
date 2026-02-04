@@ -998,7 +998,7 @@ func (rr *RFC3597) String() string {
 	return s
 }
 
-// Type implements the Typer interface. This is mandatory for this type as its Go type isn't indicitive of the
+// Type implements the Typer interface. This is mandatory for this type as its Go type isn't indicative of the
 // actual type it is carrying.
 func (rr *RFC3597) Type() uint16 { return rr.RRType }
 

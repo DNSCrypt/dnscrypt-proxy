@@ -3,7 +3,6 @@ package dnslex
 import (
 	"bufio"
 	"io"
-	"math"
 	"strconv"
 	"strings"
 )
@@ -17,17 +16,16 @@ type ScanError struct {
 
 func (e *ScanError) Error() string { return "" }
 
-const maxTok = 512 // Token buffer start size, and growth size amount.
+const tokenSize = 512 // Token buffer start size, doubles when too small.
 
 // Tokenize a RFC 1035 zone file. The tokenizer will normalize it:
 // * Add ownernames if they are left blank;
 // * Suppress sequences of spaces;
-// * Make each RR fit on one line (_NEWLINE is send as last)
-// * Handle comments: ;
+// * Make each RR fit on one line ([Newline] is send as last)
 // * Handle braces - anywhere.
 const (
 	// Zone file
-	EOF = iota
+	EOF uint8 = iota
 	String
 	Blank
 	Quote
@@ -60,15 +58,13 @@ const (
 // Lexer tokenizes the zone data, so that the grammar implemented in ZoneParser can parse RRs out of an RFC
 // 1035 styled text file.
 type Lexer struct {
-	br io.ByteReader
+	br  io.ByteReader
+	tok []byte
 
 	readErr error
 
 	line   int
 	column int
-
-	comBuf  string
-	comment string
 
 	l       Lex
 	cachedL *Lex
@@ -98,6 +94,7 @@ func New(r io.Reader, StringToType, StringToCode, StringToClass map[string]uint1
 
 	return &Lexer{
 		br:            br,
+		tok:           make([]byte, tokenSize),
 		line:          1,
 		owner:         true,
 		StringToType:  StringToType,
@@ -178,63 +175,43 @@ func (zl *Lexer) Next() (Lex, bool) {
 		return Lex{Value: EOF}, false
 	}
 
-	var (
-		str = make([]byte, maxTok) // Hold string text
-		com = make([]byte, maxTok) // Hold comment text
+	zl.tok = zl.tok[:0]
+	escape := false
 
-		stri int // Offset in str (0 means empty)
-		comi int // Offset in com (0 means empty)
-
-		escape bool
-	)
-
-	if zl.comBuf != "" {
-		comi = copy(com[:], zl.comBuf)
-		zl.comBuf = ""
-	}
-
-	zl.comment = ""
 	l.As = asRR
 
 	for x, ok := zl.readByte(); ok; x, ok = zl.readByte() {
 		l.Line, l.Column = zl.line, zl.column
 
-		if stri >= len(str) {
-			// if buffer length is insufficient, increase it.
-			str = append(str[:], make([]byte, maxTok)...)
-		}
-		if comi >= len(com) {
-			// if buffer length is insufficient, increase it.
-			com = append(com[:], make([]byte, maxTok)...)
+		if len(zl.tok) >= cap(zl.tok) {
+			cap1 := cap(zl.tok) * 2
+			buf := make([]byte, len(zl.tok), cap1)
+			copy(buf, zl.tok)
+			zl.tok = buf
 		}
 
 		switch x {
 		case ' ', '\t':
 			if escape || zl.quote {
-				// Inside quotes or escaped this is legal.
-				str[stri] = x
-				stri++
-
+				zl.tok = append(zl.tok, x)
 				escape = false
 				break
 			}
 
 			if zl.commt {
-				com[comi] = x
-				comi++
 				break
 			}
 
 			var retL Lex
-			if stri == 0 {
+			if len(zl.tok) == 0 {
 				// Space directly in the beginning, handled in the grammar
 			} else if zl.owner {
 				// If we have a string and it's the first, make it an owner
 				l.Value = Owner
-				l.Token = string(str[:stri])
+				l.Token = string(zl.tok)
 
 				// escape $... start with a \ not a $, so this will work
-				switch strings.ToUpper(l.Token) {
+				switch l.Token {
 				case "$TTL":
 					l.Value = DirTTL
 				case "$ORIGIN":
@@ -248,22 +225,22 @@ func (zl *Lexer) Next() (Lex, bool) {
 				retL = *l
 			} else {
 				l.Value = String
-				l.Token = string(str[:stri])
+				l.Token = string(zl.tok)
 
 				if !zl.rrtype {
-					tokenUpper := strings.ToUpper(l.Token)
-					if t, ok := zl.StringToType[tokenUpper]; ok {
+					if t, ok := upperLookup(l.Token, zl.StringToType); ok {
 						l.Value = Rrtype
 						l.Torc = t
 
 						zl.rrtype = true
-					} else if t, ok := zl.StringToCode[tokenUpper]; ok {
-						zl.rrtype = true
+					} else if t, ok := zl.StringToCode[l.Token]; ok {
 						l.As = asCode
 						l.Value = Rrtype
 						l.Torc = t
-					} else if strings.HasPrefix(tokenUpper, "TYPE") {
-						t, ok := typeToInt(l.Token)
+
+						zl.rrtype = true
+					} else if strings.HasPrefix(l.Token, "TYPE") {
+						t, ok := TypeToInt(l.Token)
 						if !ok {
 							l.Token = "unknown RR type"
 							l.Err = true
@@ -276,10 +253,10 @@ func (zl *Lexer) Next() (Lex, bool) {
 						zl.rrtype = true
 					}
 
-					if t, ok := zl.StringToClass[tokenUpper]; ok {
+					if t, ok := zl.StringToClass[l.Token]; ok {
 						l.Value = Class
 						l.Torc = t
-					} else if strings.HasPrefix(tokenUpper, "CLASS") {
+					} else if strings.HasPrefix(l.Token, "CLASS") {
 						t, ok := classToInt(l.Token)
 						if !ok {
 							l.Token = "unknown class"
@@ -303,57 +280,36 @@ func (zl *Lexer) Next() (Lex, bool) {
 				l.Value = Blank
 				l.Token = " "
 
-				if retL == (Lex{}) {
+				if retL.Value == EOF { // empty
 					return *l, true
 				}
 
 				zl.nextL = true
 			}
 
-			if retL != (Lex{}) {
+			if retL.Value != EOF { // not empty
 				return retL, true
 			}
 		case ';':
 			if escape || zl.quote {
 				// Inside quotes or escaped this is legal.
-				str[stri] = x
-				stri++
-
+				zl.tok = append(zl.tok, x)
 				escape = false
 				break
 			}
 
 			zl.commt = true
-			zl.comBuf = ""
 
-			if comi > 1 {
-				// A newline was previously seen inside a comment that
-				// was inside braces and we delayed adding it until now.
-				com[comi] = ' ' // convert newline to space
-				comi++
-				if comi >= len(com) {
-					l.Token = "comment length insufficient for parsing"
-					l.Err = true
-					return *l, true
-				}
-			}
-
-			com[comi] = ';'
-			comi++
-
-			if stri > 0 {
-				zl.comBuf = string(com[:comi])
-
+			if len(zl.tok) > 0 {
 				l.Value = String
-				l.Token = string(str[:stri])
+				l.Token = string(zl.tok)
 				return *l, true
 			}
 		case '\r':
 			escape = false
 
 			if zl.quote {
-				str[stri] = x
-				stri++
+				zl.tok = append(zl.tok, x)
 			}
 
 			// discard if outside of quotes
@@ -362,44 +318,37 @@ func (zl *Lexer) Next() (Lex, bool) {
 
 			// Escaped newline
 			if zl.quote {
-				str[stri] = x
-				stri++
+				zl.tok = append(zl.tok, x)
 				break
 			}
 
 			if zl.commt {
-				// Reset a comment
 				zl.commt = false
 				zl.rrtype = false
 
-				// If not in a brace this ends the comment AND the RR
 				if zl.brace == 0 {
 					zl.owner = true
 
 					l.Value = Newline
 					l.Token = "\n"
-					zl.comment = string(com[:comi])
 					return *l, true
 				}
-
-				zl.comBuf = string(com[:comi])
 				break
 			}
 
 			if zl.brace == 0 {
 				// If there is previous text, we should output it here
 				var retL Lex
-				if stri != 0 {
+				if len(zl.tok) != 0 {
 					l.Value = String
-					l.Token = string(str[:stri])
+					l.Token = string(zl.tok)
 
 					if !zl.rrtype {
-						tokenUpper := strings.ToUpper(l.Token)
-						if t, ok := zl.StringToType[tokenUpper]; ok {
+						if t, ok := upperLookup(l.Token, zl.StringToType); ok {
 							zl.rrtype = true
 							l.Value = Rrtype
 							l.Torc = t
-						} else if t, ok := zl.StringToCode[tokenUpper]; ok {
+						} else if t, ok := zl.StringToCode[l.Token]; ok {
 							zl.rrtype = true
 							l.As = asCode
 							l.Value = Rrtype
@@ -413,12 +362,10 @@ func (zl *Lexer) Next() (Lex, bool) {
 				l.Value = Newline
 				l.Token = "\n"
 
-				zl.comment = zl.comBuf
-				zl.comBuf = ""
 				zl.rrtype = false
 				zl.owner = true
 
-				if retL != (Lex{}) {
+				if retL.Value != EOF { // not empty
 					zl.nextL = true
 					return retL, true
 				}
@@ -428,36 +375,26 @@ func (zl *Lexer) Next() (Lex, bool) {
 		case '\\':
 			// comments do not get escaped chars, everything is copied
 			if zl.commt {
-				com[comi] = x
-				comi++
 				break
 			}
 
 			// something already escaped must be in string
 			if escape {
-				str[stri] = x
-				stri++
-
+				zl.tok = append(zl.tok, x)
 				escape = false
 				break
 			}
 
 			// something escaped outside of string gets added to string
-			str[stri] = x
-			stri++
-
+			zl.tok = append(zl.tok, x)
 			escape = true
 		case '"':
 			if zl.commt {
-				com[comi] = x
-				comi++
 				break
 			}
 
 			if escape {
-				str[stri] = x
-				stri++
-
+				zl.tok = append(zl.tok, x)
 				escape = false
 				break
 			}
@@ -466,9 +403,9 @@ func (zl *Lexer) Next() (Lex, bool) {
 
 			// send previous gathered text and the quote
 			var retL Lex
-			if stri != 0 {
+			if len(zl.tok) != 0 {
 				l.Value = String
-				l.Token = string(str[:stri])
+				l.Token = string(zl.tok)
 
 				retL = *l
 			}
@@ -479,7 +416,7 @@ func (zl *Lexer) Next() (Lex, bool) {
 
 			zl.quote = !zl.quote
 
-			if retL != (Lex{}) {
+			if retL.Value == String {
 				zl.nextL = true
 				return retL, true
 			}
@@ -487,16 +424,12 @@ func (zl *Lexer) Next() (Lex, bool) {
 			return *l, true
 		case '(', ')':
 			if zl.commt {
-				com[comi] = x
-				comi++
 				break
 			}
 
 			if escape || zl.quote {
 				// Inside quotes or escaped this is legal.
-				str[stri] = x
-				stri++
-
+				zl.tok = append(zl.tok, x)
 				escape = false
 				break
 			}
@@ -517,14 +450,10 @@ func (zl *Lexer) Next() (Lex, bool) {
 			escape = false
 
 			if zl.commt {
-				com[comi] = x
-				comi++
 				break
 			}
 
-			str[stri] = x
-			stri++
-
+			zl.tok = append(zl.tok, x)
 			zl.space = false
 		}
 	}
@@ -534,29 +463,10 @@ func (zl *Lexer) Next() (Lex, bool) {
 		return Lex{Value: EOF}, false
 	}
 
-	var retL Lex
-	if stri > 0 {
+	if len(zl.tok) > 0 {
 		// Send remainder of str
 		l.Value = String
-		l.Token = string(str[:stri])
-		retL = *l
-
-		if comi <= 0 {
-			return retL, true
-		}
-	}
-
-	if comi > 0 {
-		// Send remainder of com
-		l.Value = Newline
-		l.Token = "\n"
-		zl.comment = string(com[:comi])
-
-		if retL != (Lex{}) {
-			zl.nextL = true
-			return retL, true
-		}
-
+		l.Token = string(zl.tok)
 		return *l, true
 	}
 
@@ -569,71 +479,17 @@ func (zl *Lexer) Next() (Lex, bool) {
 	return Lex{Value: EOF}, false
 }
 
-func (zl *Lexer) Comment() string {
-	if zl.l.Err {
-		return ""
-	}
-
-	return zl.comment
-}
-
 // Extract the class number from CLASSxx
 func classToInt(token string) (uint16, bool) {
-	offset := 5
-	if len(token) < offset+1 {
-		return 0, false
-	}
-	class, err := strconv.ParseUint(token[offset:], 10, 16)
-	if err != nil {
-		return 0, false
-	}
-	return uint16(class), true
+	class, err := strconv.ParseUint(token[5:], 10, 16)
+	return uint16(class), err == nil
 }
 
-// Extract the rr number from TYPExxx
-func typeToInt(token string) (uint16, bool) {
-	offset := 4
-	if len(token) < offset+1 {
-		return 0, false
-	}
-	typ, err := strconv.ParseUint(token[offset:], 10, 16)
-	if err != nil {
-		return 0, false
-	}
-	return uint16(typ), true
-}
-
-// stringToTTL parses things like 2w, 2m, etc, and returns the time in seconds.
-func stringToTTL(token string) (uint32, bool) {
-	var s, i uint
-	for _, c := range token {
-		switch c {
-		case 's', 'S':
-			s += i
-			i = 0
-		case 'm', 'M':
-			s += i * 60
-			i = 0
-		case 'h', 'H':
-			s += i * 60 * 60
-			i = 0
-		case 'd', 'D':
-			s += i * 60 * 60 * 24
-			i = 0
-		case 'w', 'W':
-			s += i * 60 * 60 * 24 * 7
-			i = 0
-		case '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
-			i *= 10
-			i += uint(c) - '0'
-		default:
-			return 0, false
-		}
-	}
-	if s+i > math.MaxUint32 {
-		return 0, false
-	}
-	return uint32(s + i), true
+// Extract the rr number from TYPExxx. There is no length check, it is assumed the caller has checked the
+// prefix is at least "TYPE" (4)
+func TypeToInt(token string) (uint16, bool) {
+	typ, err := strconv.ParseUint(token[4:], 10, 16)
+	return uint16(typ), err == nil
 }
 
 // Remainer eats the rest of the "line".
@@ -667,4 +523,12 @@ func Tokens(c *Lexer) []string {
 		}
 		l, _ = c.Next()
 	}
+}
+
+func upperLookup(s string, m map[string]uint16) (uint16, bool) {
+	if t, ok := m[s]; ok {
+		return t, true
+	}
+	t, ok := m[strings.ToUpper(s)]
+	return t, ok
 }
