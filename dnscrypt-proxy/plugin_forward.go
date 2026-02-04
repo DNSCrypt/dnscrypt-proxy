@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
+	"path"
 	"strings"
 	"sync"
 
 	"codeberg.org/miekg/dns"
+	"codeberg.org/miekg/dns/dnsconf"
 	"github.com/jedisct1/dlog"
 	"github.com/lifenjoiner/dhcpdns"
 )
@@ -20,11 +22,13 @@ const (
 	Explicit SearchSequenceItemType = iota
 	Bootstrap
 	DHCP
+	Resolvconf
 )
 
 type SearchSequenceItem struct {
-	typ     SearchSequenceItemType
-	servers []string
+	typ        SearchSequenceItemType
+	servers    []string
+	resolvconf string
 }
 
 type PluginForwardEntry struct {
@@ -140,6 +144,17 @@ func (plugin *PluginForward) parseForwardFile(lines string) (bool, []PluginForwa
 				}
 				requiresDHCP = true
 			default:
+				const resolvconfPrexix = "$RESOLVCONF:"
+				if strings.HasPrefix(server, resolvconfPrexix) {
+					file := server[len(resolvconfPrexix):]
+					if len(file) == 0 {
+						dlog.Criticalf("File needs to be specified for $RESOLVCONF in line %d", 1+lineNo)
+						continue
+					}
+					sequence = append(sequence, SearchSequenceItem{typ: Resolvconf, resolvconf: path.Clean(file)})
+					dlog.Infof("Forwarding [%s] to the servers specified in '%s'", domain, file)
+					continue
+				}
 				if strings.HasPrefix(server, "$") {
 					dlog.Criticalf("Unknown keyword [%s] at line %d", server, 1+lineNo)
 					continue
@@ -293,6 +308,22 @@ func (plugin *PluginForward) Eval(pluginsState *PluginsState, msg *dns.Msg) erro
 			}
 			if len(server) == 0 {
 				dlog.Infof("DHCP didn't provide any DNS server to forward [%s]", qName)
+				continue
+			}
+		case Resolvconf:
+			resolvconf, err := dnsconf.FromFile(item.resolvconf)
+			if err != nil {
+				dlog.Warnf("Failed to open '%s' while resolving [%s]: %v", item.resolvconf, qName, err)
+				continue
+			}
+			if len(resolvconf.Servers) == 0 {
+				dlog.Warnf("No nameservers specificied in '%s' while resolving [%s]", item.resolvconf, qName)
+				continue
+			}
+			server = resolvconf.Servers[rand.Intn(len(resolvconf.Servers))]
+			server, err = normalizeIPAndOptionalPort(server, "53")
+			if err != nil {
+				dlog.Warnf("Syntax error in address '%s' while resolving [%s]: %v", item.resolvconf, qName, err)
 				continue
 			}
 		}

@@ -2,6 +2,8 @@
 ## explicit; go 1.25.0
 codeberg.org/miekg/dns
 codeberg.org/miekg/dns/deleg
+codeberg.org/miekg/dns/dnsconf
+codeberg.org/miekg/dns/dnsutil
 codeberg.org/miekg/dns/internal/ddd
 codeberg.org/miekg/dns/internal/dnslex
 codeberg.org/miekg/dns/internal/dnsstring
