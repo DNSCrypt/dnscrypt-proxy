@@ -1,6 +1,8 @@
 package main
 
 import (
+	"time"
+
 	"github.com/jedisct1/dlog"
 )
 
@@ -39,7 +41,7 @@ func (proxy *Proxy) InitHotReload() error {
 	dlog.Notice("Hot reload is enabled")
 
 	// Create a new configuration watcher
-	configWatcher := NewConfigWatcher(1000) // Check every second
+	configWatcher := NewConfigWatcher(time.Second) // Check every second
 
 	// Register plugins for config watching
 	for _, plugin := range plugins {
