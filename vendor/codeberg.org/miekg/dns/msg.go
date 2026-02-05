@@ -211,7 +211,7 @@ func (m *Msg) Pack() error {
 	// Is this compressible?
 	var compression map[string]uint16
 	if len(m.Question) > 1 || len(m.Answer) > 0 || len(m.Ns) > 0 || len(m.Extra) > 0 {
-		compression = make(map[string]uint16, len(m.Answer)+len(m.Ns)+len(m.Extra)+3) // 3 is randomly choosen, as such much rdata might be compressable...
+		compression = make(map[string]uint16, len(m.Answer)+len(m.Ns)+len(m.Extra)+3) // 3 is randomly chosen, as such much rdata might be compressable...
 	}
 
 	for i := range m.Question {

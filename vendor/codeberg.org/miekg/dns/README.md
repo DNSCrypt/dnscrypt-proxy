@@ -1,6 +1,5 @@
 [![Go Report Card](https://goreportcard.com/badge/codeberg.org/miekg/dns)](https://goreportcard.com/report/codeberg.org/miekg/dns)
 [![Go Doc](https://godoc.org/coreberg.org/miekg/dns?status.svg)](https://godoc.org/codeberg.org/miekg/dns)
-[![status-badge](https://ci.codeberg.org/api/badges/15045/status.svg)](https://ci.codeberg.org/repos/15045)
 
 # Even more alternative approach to a DNS library (version 2)
 
