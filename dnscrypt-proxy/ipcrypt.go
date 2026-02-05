@@ -15,7 +15,6 @@ import (
 type IPCryptConfig struct {
 	Key       []byte
 	Algorithm string
-	Tweak     []byte // For non-deterministic modes
 }
 
 // NewIPCryptConfig creates a new IPCryptConfig from configuration values
@@ -58,14 +57,12 @@ func NewIPCryptConfig(keyHex string, algorithm string) (*IPCryptConfig, error) {
 		if len(key) != 16 {
 			return nil, fmt.Errorf("ipcrypt-nd requires a 16-byte (32 hex chars) key, got %d bytes", len(key))
 		}
-		config.Tweak = make([]byte, 8)
 
 	case "ipcrypt-ndx":
 		// Extended non-deterministic with 16-byte tweak
 		if len(key) != 32 {
 			return nil, fmt.Errorf("ipcrypt-ndx requires a 32-byte (64 hex chars) key, got %d bytes", len(key))
 		}
-		config.Tweak = make([]byte, 16)
 
 	case "ipcrypt-pfx":
 		// Prefix-preserving encryption
@@ -96,23 +93,24 @@ func (config *IPCryptConfig) EncryptIP(ip net.IP) (string, error) {
 		return encrypted.String(), nil
 
 	case "ipcrypt-nd":
-		// Non-deterministic: generate random tweak for this encryption
-		if _, err := rand.Read(config.Tweak); err != nil {
+		// Non-deterministic with 8-byte random tweak
+		tweak := make([]byte, 8)
+		if _, err := rand.Read(tweak); err != nil {
 			return "", fmt.Errorf("failed to generate random tweak: %w", err)
 		}
-		encrypted, err := ipcrypt.EncryptIPNonDeterministic(ip.String(), config.Key, config.Tweak)
+		encrypted, err := ipcrypt.EncryptIPNonDeterministic(ip.String(), config.Key, tweak)
 		if err != nil {
 			return "", fmt.Errorf("failed to encrypt IP (nd): %w", err)
 		}
-		// Return as hex string for non-deterministic modes since they return bytes
 		return hex.EncodeToString(encrypted), nil
 
 	case "ipcrypt-ndx":
-		// Extended non-deterministic: generate random tweak
-		if _, err := rand.Read(config.Tweak); err != nil {
+		// Extended non-deterministic with 16-byte random tweak
+		tweak := make([]byte, 16)
+		if _, err := rand.Read(tweak); err != nil {
 			return "", fmt.Errorf("failed to generate random tweak: %w", err)
 		}
-		encrypted, err := ipcrypt.EncryptIPNonDeterministicX(ip.String(), config.Key, config.Tweak)
+		encrypted, err := ipcrypt.EncryptIPNonDeterministicX(ip.String(), config.Key, tweak)
 		if err != nil {
 			return "", fmt.Errorf("failed to encrypt IP (ndx): %w", err)
 		}
@@ -146,8 +144,8 @@ func (config *IPCryptConfig) EncryptIPString(ipStr string) string {
 
 	encrypted, err := config.EncryptIP(ip)
 	if err != nil {
-		dlog.Warnf("Failed to encrypt IP %s: %v", ipStr, err)
-		return ipStr
+		dlog.Warnf("Failed to encrypt IP: %v", err)
+		return "[encrypted]"
 	}
 
 	return encrypted
