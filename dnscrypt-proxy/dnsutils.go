@@ -267,8 +267,12 @@ func removeEDNS0Options(msg *dns.Msg) bool {
 	return true
 }
 
-func dddToByte(s []byte) byte {
-	return byte((s[0]-'0')*100 + (s[1]-'0')*10 + (s[2] - '0'))
+func dddToByte(s []byte) (byte, bool) {
+	n := int(s[0]-'0')*100 + int(s[1]-'0')*10 + int(s[2]-'0')
+	if n > 255 {
+		return 0, false
+	}
+	return byte(n), true
 }
 
 func PackTXTRR(s string) []byte {
@@ -282,7 +286,9 @@ func PackTXTRR(s string) []byte {
 				break
 			}
 			if i+2 < len(bs) && isDigit(bs[i]) && isDigit(bs[i+1]) && isDigit(bs[i+2]) {
-				msg = append(msg, dddToByte(bs[i:]))
+				if b, ok := dddToByte(bs[i:]); ok {
+					msg = append(msg, b)
+				}
 				i += 2
 			} else if bs[i] == 't' {
 				msg = append(msg, '\t')
