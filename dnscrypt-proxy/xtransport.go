@@ -729,6 +729,9 @@ func (xTransport *XTransport) Fetch(
 
 		// Retry with HTTP/2
 		client.Transport = xTransport.transport
+		if body != nil {
+			req.Body = io.NopCloser(bytes.NewReader(*body))
+		}
 		start = time.Now()
 		resp, err = client.Do(req)
 		rtt = time.Since(start)
