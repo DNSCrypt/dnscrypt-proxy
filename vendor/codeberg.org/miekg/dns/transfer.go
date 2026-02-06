@@ -252,7 +252,7 @@ func (c *Client) transferInIXFR(ctx context.Context, m *Msg, ch chan<- *Envelope
 				return
 			}
 			if len(r.Answer) > 2 {
-				if _, ok := r.Ns[1].(*SOA); ok {
+				if _, ok := r.Answer[1].(*SOA); ok {
 					expectSOA++
 				}
 			}
