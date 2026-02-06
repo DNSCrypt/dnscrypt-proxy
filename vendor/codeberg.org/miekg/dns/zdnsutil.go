@@ -194,9 +194,6 @@ func dnsutilStringToTime(s string) (uint32, error) {
 // but is empty the empty string is also returned.
 func dnsutilAbsolute(s, origin string) string {
 	if s == "@" {
-		if origin == "" {
-			return ""
-		}
 		return origin
 	}
 	if s == "\n" || s == "" { // this can happen when a zone is parsed, internal quirk, should not be here...

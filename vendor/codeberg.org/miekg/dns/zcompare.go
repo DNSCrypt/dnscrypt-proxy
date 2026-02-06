@@ -169,7 +169,7 @@ func compare(a, b RR) int {
 		return x.compare(b)
 	case *DELEG:
 		return x.compare(b)
-	case *DELEGI:
+	case *DELEGPARAM:
 		return x.compare(b)
 	case *DSYNC:
 		return x.compare(b)
@@ -1936,8 +1936,8 @@ func (rr *HTTPS) compare(b RR) (x int) {
 	return rr.SVCB.compare(&b.(*HTTPS).SVCB)
 }
 
-func (rr *DELEGI) compare(b RR) (x int) {
-	return rr.DELEG.compare(&b.(*DELEGI).DELEG)
+func (rr *DELEGPARAM) compare(b RR) (x int) {
+	return rr.DELEG.compare(&b.(*DELEGPARAM).DELEG)
 }
 
 func (rr *ANY) compare(b RR) (x int) {

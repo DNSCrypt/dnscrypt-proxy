@@ -19,7 +19,7 @@ func _pack(i Info, msg []byte, off int) (int, error) {
 		return x.pack(msg, off)
 	case *SERVERNAME:
 		return x.pack(msg, off)
-	case *INCLUDEDELEGI:
+	case *INCLUDEDELEGPARAM:
 		return x.pack(msg, off)
 	}
 	return 0, fmt.Errorf("dns: no deleg pack defined")
@@ -34,7 +34,7 @@ func _unpack(i Info, data *cryptobyte.String) error {
 		return x.unpack(data)
 	case *SERVERNAME:
 		return x.unpack(data)
-	case *INCLUDEDELEGI:
+	case *INCLUDEDELEGPARAM:
 		return x.unpack(data)
 	}
 	return fmt.Errorf("dns: no deleg unpack defined")
@@ -115,7 +115,7 @@ func (s *SERVERNAME) unpack(sc *cryptobyte.String) error {
 	return nil
 }
 
-func (s *INCLUDEDELEGI) pack(msg []byte, off int) (int, error) {
+func (s *INCLUDEDELEGPARAM) pack(msg []byte, off int) (int, error) {
 	off, err := packTLV(s, msg, off)
 	if err != nil {
 		return off, err
@@ -129,7 +129,7 @@ func (s *INCLUDEDELEGI) pack(msg []byte, off int) (int, error) {
 	return off, nil
 }
 
-func (s *INCLUDEDELEGI) unpack(sc *cryptobyte.String) error {
+func (s *INCLUDEDELEGPARAM) unpack(sc *cryptobyte.String) error {
 	if !sc.Empty() {
 		domain, err := unpack.Name(sc, nil)
 		if err != nil {

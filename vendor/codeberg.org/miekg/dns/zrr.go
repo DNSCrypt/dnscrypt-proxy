@@ -82,7 +82,7 @@ func (rr *RESINFO) Header() *Header    { return &rr.Hdr }
 func (rr *SVCB) Header() *Header       { return &rr.Hdr }
 func (rr *HTTPS) Header() *Header      { return &rr.Hdr }
 func (rr *DELEG) Header() *Header      { return &rr.Hdr }
-func (rr *DELEGI) Header() *Header     { return &rr.Hdr }
+func (rr *DELEGPARAM) Header() *Header { return &rr.Hdr }
 func (rr *DSYNC) Header() *Header      { return &rr.Hdr }
 func (rr *ANY) Header() *Header        { return &rr.Hdr }
 func (rr *AXFR) Header() *Header       { return &rr.Hdr }
@@ -174,7 +174,7 @@ var TypeToRR = map[uint16]func() RR{
 	TypeSVCB:       func() RR { return new(SVCB) },
 	TypeHTTPS:      func() RR { return new(HTTPS) },
 	TypeDELEG:      func() RR { return new(DELEG) },
-	TypeDELEGI:     func() RR { return new(DELEGI) },
+	TypeDELEGPARAM: func() RR { return new(DELEGPARAM) },
 	TypeDSYNC:      func() RR { return new(DSYNC) },
 	TypeANY:        func() RR { return new(ANY) },
 	TypeAXFR:       func() RR { return new(AXFR) },
@@ -343,8 +343,8 @@ func RRToType(rr RR) uint16 {
 		return TypeHTTPS
 	case *DELEG:
 		return TypeDELEG
-	case *DELEGI:
-		return TypeDELEGI
+	case *DELEGPARAM:
+		return TypeDELEGPARAM
 	case *DSYNC:
 		return TypeDSYNC
 	case *ANY:
@@ -442,7 +442,7 @@ var TypeToString = map[uint16]string{
 	TypeSVCB:       "SVCB",
 	TypeHTTPS:      "HTTPS",
 	TypeDELEG:      "DELEG",
-	TypeDELEGI:     "DELEGI",
+	TypeDELEGPARAM: "DELEGPARAM",
 	TypeDSYNC:      "DSYNC",
 	TypeANY:        "ANY",
 	TypeAXFR:       "AXFR",

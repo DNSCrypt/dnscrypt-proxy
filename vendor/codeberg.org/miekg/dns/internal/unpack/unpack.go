@@ -130,7 +130,7 @@ func Name(s *cryptobyte.String, msgBuf []byte) (string, error) {
 				return string(name), nil
 			}
 
-			if len(name)+int(c)+1 > maxNamePresentationLength {
+			if len(name)+int(c) >= maxNamePresentationLength {
 				return "", &Error{"name exceeded max wire-format octets: " + string(*s)}
 			}
 

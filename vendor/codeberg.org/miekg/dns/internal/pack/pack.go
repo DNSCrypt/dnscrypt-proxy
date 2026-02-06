@@ -210,7 +210,7 @@ func Name(s string, msg []byte, off int, compression map[string]uint16, compress
 		}
 
 		// off can already (we're in a loop) be bigger than len(msg)
-		if off+1+labelLen > lenmsg {
+		if off+labelLen >= lenmsg {
 			return lenmsg, &Error{"overflow name"}
 		}
 
@@ -231,7 +231,7 @@ func Name(s string, msg []byte, off int, compression map[string]uint16, compress
 		off += 1 + labelLen
 		begin = i + 1
 	}
-	if off+1 > lenmsg {
+	if off >= lenmsg {
 		return lenmsg, &Error{"overflow name"}
 	}
 

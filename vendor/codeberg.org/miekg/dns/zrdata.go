@@ -86,7 +86,7 @@ var TypeToRDATA = map[uint16]func(RR, RDATA){
 	TypeSVCB:       func(rr RR, rd RDATA) { rr.(*SVCB).SVCB = rd.(rdata.SVCB) },
 	TypeHTTPS:      func(rr RR, rd RDATA) { rr.(*HTTPS).SVCB.SVCB = rd.(rdata.SVCB) },
 	TypeDELEG:      func(rr RR, rd RDATA) { rr.(*DELEG).DELEG = rd.(rdata.DELEG) },
-	TypeDELEGI:     func(rr RR, rd RDATA) { rr.(*DELEGI).DELEG.DELEG = rd.(rdata.DELEG) },
+	TypeDELEGPARAM: func(rr RR, rd RDATA) { rr.(*DELEGPARAM).DELEG.DELEG = rd.(rdata.DELEG) },
 	TypeDSYNC:      func(rr RR, rd RDATA) { rr.(*DSYNC).DSYNC = rd.(rdata.DSYNC) },
 	TypeANY:        func(rr RR, rd RDATA) {},
 	TypeAXFR:       func(rr RR, rd RDATA) {},
@@ -172,7 +172,7 @@ func (rr *RESINFO) Data() RDATA    { return rr.TXT.TXT }
 func (rr *SVCB) Data() RDATA       { return rr.SVCB }
 func (rr *HTTPS) Data() RDATA      { return rr.SVCB.SVCB }
 func (rr *DELEG) Data() RDATA      { return rr.DELEG }
-func (rr *DELEGI) Data() RDATA     { return rr.DELEG.DELEG }
+func (rr *DELEGPARAM) Data() RDATA { return rr.DELEG.DELEG }
 func (rr *DSYNC) Data() RDATA      { return rr.DSYNC }
 func (rr ANY) Data() RDATA         { return nil }
 func (rr AXFR) Data() RDATA        { return nil }
@@ -790,7 +790,7 @@ func parseData(r io.Reader, rrtype uint16, o string) (RDATA, error) {
 		}
 		return rd, nil
 
-	case TypeDELEGI:
+	case TypeDELEGPARAM:
 		rd := rdata.DELEG{}
 		pe := parseDELEG(&rd, c, o)
 		if pe != nil {

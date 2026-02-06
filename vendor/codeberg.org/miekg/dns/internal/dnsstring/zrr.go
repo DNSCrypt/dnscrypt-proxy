@@ -82,7 +82,7 @@ var TypeToString = map[uint16]string{
 	TypeSVCB:       "SVCB",
 	TypeHTTPS:      "HTTPS",
 	TypeDELEG:      "DELEG",
-	TypeDELEGI:     "DELEGI",
+	TypeDELEGPARAM: "DELEGPARAM",
 	TypeDSYNC:      "DSYNC",
 	TypeANY:        "ANY",
 	TypeAXFR:       "AXFR",

@@ -54,7 +54,8 @@ func Exchange(ctx context.Context, m *Msg, network, address string) (r *Msg, err
 //   - if the message returned does not have the same ID as the message sent.
 //   - the response bit is not set on the reply.
 //
-// See [CompareName] for checking the question name the point to another possible check.
+// See [CompareName] for checking the question name the point to another possible check. See
+// [codeberg.org/miekg/dns/dnsutil.Randomize] to randomize the question name.
 func (c *Client) Exchange(ctx context.Context, m *Msg, network, address string) (r *Msg, rtt time.Duration, err error) {
 	if c.Transport == nil {
 		c.Transport = NewTransport()

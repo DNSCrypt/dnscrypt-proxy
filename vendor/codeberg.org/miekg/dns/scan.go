@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"codeberg.org/miekg/dns/internal/dnslex"
+	"codeberg.org/miekg/dns/internal/dnsstring"
 	"codeberg.org/miekg/dns/rdata"
 )
 
@@ -27,27 +28,19 @@ const maxIncludeDepth = 7
 // * Handle braces - anywhere.
 const (
 	// Privatekey file
-	zValue = iota
+	zValue uint8 = iota
 	zKey
 
-	zExpectOwnerDir      = iota // Ownername
-	zExpectOwnerBl              // Whitespace after the ownername
-	zExpectAny                  // Expect rrtype, ttl or class
-	zExpectAnyNoClass           // Expect rrtype or ttl
-	zExpectAnyNoClassBl         // The whitespace after _EXPECT_ANY_NOCLASS
-	zExpectAnyNoTTL             // Expect rrtype or class
-	zExpectAnyNoTTLBl           // Whitespace after _EXPECT_ANY_NOTTL
-	zExpectRrtype               // Expect rrtype
-	zExpectRrtypeBl             // Whitespace BEFORE rrtype
-	zExpectRdata                // The first element of the rdata
-	zExpectDirTTLBl             // Space after directive $TTL
-	zExpectDirTTL               // Directive $TTL
-	zExpectDirOriginBl          // Space after directive $ORIGIN
-	zExpectDirOrigin            // Directive $ORIGIN
-	zExpectDirIncludeBl         // Space after directive $INCLUDE
-	zExpectDirInclude           // Directive $INCLUDE
-	zExpectDirGenerate          // Directive $GENERATE
-	zExpectDirGenerateBl        // Space after directive $GENERATE
+	zExpectOwnerDir    uint8 = iota // Ownername
+	zExpectAny                      // Expect rrtype, ttl or class
+	zExpectAnyNoClass               // Expect rrtype or ttl
+	zExpectAnyNoTTL                 // Expect rrtype or class
+	zExpectRrtype                   // Expect whitespace and rrtype
+	zExpectRdata                    // The first element of the rdata
+	zExpectDirTTL                   // Directive $TTL
+	zExpectDirOrigin                // Directive $ORIGIN
+	zExpectDirInclude               // Directive $INCLUDE
+	zExpectDirGenerate              // Directive $GENERATE
 )
 
 // ParseError is a parsing error. It contains the parse error and the location in the io.Reader
@@ -108,10 +101,7 @@ type ttlState struct {
 //
 //	mx := dnstest.New("miek.nl.  IN MX 10 mx.miek.nl.")
 func New(s string) (RR, error) {
-	if len(s) > 0 && s[len(s)-1] != '\n' { // We need a closing newline
-		return read(strings.NewReader(s+"\n"), "")
-	}
-	return read(strings.NewReader(s), "")
+	return read(dnsstring.NewReader(s), "")
 }
 
 // Read behaves like [New] but reads from an io.Reader. Note the reader must include an ending newline,
@@ -269,19 +259,6 @@ func (zp *ZoneParser) setParseError(err string, l dnslex.Lex) (RR, bool) {
 	return nil, false
 }
 
-// Comment returns an optional text comment that occurred alongside the RR.
-func (zp *ZoneParser) Comment() string {
-	if zp.parseErr != nil {
-		return ""
-	}
-
-	if zp.sub != nil {
-		return zp.sub.Comment()
-	}
-
-	return zp.c.Comment()
-}
-
 func (zp *ZoneParser) subNext() (RR, bool) {
 	if rr, ok := zp.sub.Next(); ok {
 		return rr, true
@@ -316,6 +293,17 @@ func (zp *ZoneParser) Next() (RR, bool) {
 		return zp.subNext()
 	}
 
+	setTTL := func(l dnslex.Lex) (uint32, bool) {
+		ttl, ok := stringToTTL(l.Token)
+		if !ok {
+			return 0, false
+		}
+		if zp.defttl == nil || !zp.defttl.isByDirective {
+			zp.defttl = &ttlState{ttl, false}
+		}
+		return ttl, true
+	}
+
 	// 6 possible beginnings of a line (_ is a space):
 	//
 	//   0. zRrtype                                                -> all omitted until the rrtype
@@ -332,6 +320,7 @@ func (zp *ZoneParser) Next() (RR, bool) {
 	h := &zp.h
 	t := &zp.t
 
+Next:
 	for l, ok := zp.c.Next(); ok; l, ok = zp.c.Next() {
 		// zlexer spotted an error already
 		if l.Err {
@@ -358,15 +347,51 @@ func (zp *ZoneParser) Next() (RR, bool) {
 
 				h.Name = name
 
-				st = zExpectOwnerBl
+				if l, ok = zp.c.Next(); !ok {
+					break Next
+				}
+				if l.Value != dnslex.Blank {
+					return zp.setParseError("no blank after owner", l)
+				}
+
+				st = zExpectAny
 			case dnslex.DirTTL:
-				st = zExpectDirTTLBl
+				if l, ok = zp.c.Next(); !ok {
+					break Next
+				}
+				if l.Value != dnslex.Blank {
+					return zp.setParseError("no blank after $TTL-directive", l)
+				}
+
+				st = zExpectDirTTL
+
 			case dnslex.DirOrigin:
-				st = zExpectDirOriginBl
+				if l, ok = zp.c.Next(); !ok {
+					break Next
+				}
+				if l.Value != dnslex.Blank {
+					return zp.setParseError("no blank after $ORIGIN-directive", l)
+				}
+
+				st = zExpectDirOrigin
 			case dnslex.DirInclude:
-				st = zExpectDirIncludeBl
+				if l, ok = zp.c.Next(); !ok {
+					break Next
+				}
+				if l.Value != dnslex.Blank {
+					return zp.setParseError("no blank after $INCLUDE-directive", l)
+				}
+
+				st = zExpectDirInclude
 			case dnslex.DirGenerate:
-				st = zExpectDirGenerateBl
+				if l, ok = zp.c.Next(); !ok {
+					break Next
+				}
+				if l.Value != dnslex.Blank {
+					return zp.setParseError("no blank after $GENERATE-directive", l)
+				}
+
+				st = zExpectDirGenerate
 			case dnslex.Rrtype:
 				t = &l.Torc
 
@@ -374,32 +399,116 @@ func (zp *ZoneParser) Next() (RR, bool) {
 			case dnslex.Class:
 				h.Class = l.Torc
 
-				st = zExpectAnyNoClassBl
+				if l, ok = zp.c.Next(); !ok {
+					break Next
+				}
+				if l.Value != dnslex.Blank {
+					return zp.setParseError("no blank after class", l)
+				}
+
+				st = zExpectAnyNoClass
 			case dnslex.Blank:
 				// Discard, can happen when there is nothing on the
 				// line except the RR type
 			case dnslex.String:
-				ttl, ok := stringToTTL(l.Token)
-				if !ok {
+				if h.TTL, ok = setTTL(l); !ok {
 					return zp.setParseError("not a TTL", l)
 				}
-
-				h.TTL = ttl
-
-				if zp.defttl == nil || !zp.defttl.isByDirective {
-					zp.defttl = &ttlState{ttl, false}
+				if l, ok = zp.c.Next(); !ok {
+					break Next
+				}
+				if l.Value != dnslex.Blank {
+					return zp.setParseError("no blank after TTL", l)
 				}
 
-				st = zExpectAnyNoTTLBl
+				st = zExpectAnyNoTTL
 			default:
 				return zp.setParseError("syntax error at beginning", l)
 			}
-		case zExpectDirIncludeBl:
+		case zExpectRrtype:
 			if l.Value != dnslex.Blank {
-				return zp.setParseError("no blank after $INCLUDE-directive", l)
+				return zp.setParseError("no blank before RR type", l)
+			}
+			if l, ok = zp.c.Next(); !ok {
+				break Next
+			}
+			if l.Value != dnslex.Rrtype {
+				return zp.setParseError("unknown RR type", l)
+			}
+			t = &l.Torc
+
+			st = zExpectRdata
+		case zExpectRdata:
+			var (
+				rr             RR
+				parseAsRFC3597 bool
+			)
+			switch l.As {
+			case asRR:
+				if newFn, ok := TypeToRR[*t]; ok {
+					rr = newFn()
+					*rr.Header() = *h
+
+					// We may be parsing a known RR type using the RFC3597 format.
+					// If so, we handle that here in a generic way.
+					//
+					// This is also true for PrivateRR types which will have the
+					// RFC3597 parsing done for them and the Unpack method called
+					// to populate the RR instead of simply deferring to Parse.
+					if zp.c.Peek().Token == "\\#" {
+						parseAsRFC3597 = true
+					}
+				} else {
+					rr = &RFC3597{*h, rdata.RFC3597{RRType: *t}}
+				}
+			case asCode:
+				newFn, ok := CodeToRR[*t]
+				if !ok {
+					return zp.setParseError("unknown EDNS0 type", l)
+				}
+				rr = newFn()
+				*rr.Header() = *h
 			}
 
-			st = zExpectDirInclude
+			if zp.c.Peek().Token == "" {
+				// This is a dynamic update rr.
+				if err := dnslex.Discard(zp.c); err != nil {
+					return zp.setParseError(err.Err, err.Lex)
+				}
+
+				return rr, true
+			} else if l.Value == dnslex.Newline {
+				return zp.setParseError("unexpected newline", l)
+			}
+
+			parseAsRR := rr
+			if parseAsRFC3597 {
+				parseAsRR = &RFC3597{*h, rdata.RFC3597{RRType: *t}}
+			}
+
+			// This needs zparser which calls Parser for new types.
+			if err := parse(parseAsRR, zp.c, zp.origin); err != nil {
+				pe := err.(*ParseError)
+				// err is a concrete *ParseError without the file field set.
+				// The setParseError call below will construct a new
+				// *ParseError with file set to zp.file.
+
+				// err.lex may be nil in which case we substitute our current lex token.
+				if pe.lex == (dnslex.Lex{}) {
+					return zp.setParseError(pe.err, l)
+				}
+
+				return zp.setParseError(pe.err, pe.lex)
+			}
+
+			if parseAsRFC3597 {
+				err := parseAsRR.(*RFC3597).fromRFC3597(rr)
+				if err != nil {
+					return zp.setParseError(err.Error(), l)
+				}
+			}
+
+			return rr, true
 		case zExpectDirInclude:
 			if l.Value != dnslex.String {
 				return zp.setParseError("expecting $INCLUDE value, not this...", l)
@@ -471,18 +580,13 @@ func (zp *ZoneParser) Next() (RR, bool) {
 			zp.sub.IncludeAllowFunc = zp.IncludeAllowFunc
 			zp.sub.IncludeFS = zp.IncludeFS
 			return zp.subNext()
-		case zExpectDirTTLBl:
-			if l.Value != dnslex.Blank {
-				return zp.setParseError("no blank after $TTL-directive", l)
-			}
 
-			st = zExpectDirTTL
 		case zExpectDirTTL:
 			if l.Value != dnslex.String {
 				return zp.setParseError("expecting $TTL value, not this...", l)
 			}
 
-			if err := dnslex.Remainder(zp.c); err != nil {
+			if err := dnslex.Discard(zp.c); err != nil {
 				return zp.setParseError(err.Err, err.Lex)
 			}
 
@@ -494,18 +598,12 @@ func (zp *ZoneParser) Next() (RR, bool) {
 			zp.defttl = &ttlState{ttl, true}
 
 			st = zExpectOwnerDir
-		case zExpectDirOriginBl:
-			if l.Value != dnslex.Blank {
-				return zp.setParseError("no blank after $ORIGIN-directive", l)
-			}
-
-			st = zExpectDirOrigin
 		case zExpectDirOrigin:
 			if l.Value != dnslex.String {
 				return zp.setParseError("expecting $ORIGIN value, not this...", l)
 			}
 
-			if err := dnslex.Remainder(zp.c); err != nil {
+			if err := dnslex.Discard(zp.c); err != nil {
 				return zp.setParseError(err.Err, err.Lex)
 			}
 
@@ -517,12 +615,6 @@ func (zp *ZoneParser) Next() (RR, bool) {
 			zp.origin = name
 
 			st = zExpectOwnerDir
-		case zExpectDirGenerateBl:
-			if l.Value != dnslex.Blank {
-				return zp.setParseError("no blank after $GENERATE-directive", l)
-			}
-
-			st = zExpectDirGenerate
 		case zExpectDirGenerate:
 			if zp.generateDisallowed {
 				return zp.setParseError("nested $GENERATE directive not allowed", l)
@@ -532,12 +624,6 @@ func (zp *ZoneParser) Next() (RR, bool) {
 			}
 
 			return zp.generate(l)
-		case zExpectOwnerBl:
-			if l.Value != dnslex.Blank {
-				return zp.setParseError("no blank after owner", l)
-			}
-
-			st = zExpectAny
 		case zExpectAny:
 			switch l.Value {
 			case dnslex.Rrtype:
@@ -551,41 +637,35 @@ func (zp *ZoneParser) Next() (RR, bool) {
 			case dnslex.Class:
 				h.Class = l.Torc
 
-				st = zExpectAnyNoClassBl
+				if l, ok = zp.c.Next(); !ok {
+					break Next
+				}
+				if l.Value != dnslex.Blank {
+					return zp.setParseError("no blank after class", l)
+				}
+
+				st = zExpectAnyNoClass
 			case dnslex.String:
-				ttl, ok := stringToTTL(l.Token)
-				if !ok {
+				if h.TTL, ok = setTTL(l); !ok {
 					return zp.setParseError("not a TTL", l)
 				}
-
-				h.TTL = ttl
-
-				if zp.defttl == nil || !zp.defttl.isByDirective {
-					zp.defttl = &ttlState{ttl, false}
+				if l, ok = zp.c.Next(); !ok {
+					break Next
+				}
+				if l.Value != dnslex.Blank {
+					return zp.setParseError("no blank after TTL", l)
 				}
 
-				st = zExpectAnyNoTTLBl
+				st = zExpectAnyNoTTL
 			default:
 				return zp.setParseError("expecting RR type, TTL or class, not this...", l)
 			}
-		case zExpectAnyNoClassBl:
-			if l.Value != dnslex.Blank {
-				return zp.setParseError("no blank before class", l)
-			}
-
-			st = zExpectAnyNoClass
-		case zExpectAnyNoTTLBl:
-			if l.Value != dnslex.Blank {
-				return zp.setParseError("no blank before TTL", l)
-			}
-
-			st = zExpectAnyNoTTL
 		case zExpectAnyNoTTL:
 			switch l.Value {
 			case dnslex.Class:
 				h.Class = l.Torc
 
-				st = zExpectRrtypeBl
+				st = zExpectRrtype
 			case dnslex.Rrtype:
 				t = &l.Torc
 
@@ -596,18 +676,11 @@ func (zp *ZoneParser) Next() (RR, bool) {
 		case zExpectAnyNoClass:
 			switch l.Value {
 			case dnslex.String:
-				ttl, ok := stringToTTL(l.Token)
-				if !ok {
+				if h.TTL, ok = setTTL(l); !ok {
 					return zp.setParseError("not a TTL", l)
 				}
 
-				h.TTL = ttl
-
-				if zp.defttl == nil || !zp.defttl.isByDirective {
-					zp.defttl = &ttlState{ttl, false}
-				}
-
-				st = zExpectRrtypeBl
+				st = zExpectRrtype
 			case dnslex.Rrtype:
 				t = &l.Torc
 
@@ -615,90 +688,6 @@ func (zp *ZoneParser) Next() (RR, bool) {
 			default:
 				return zp.setParseError("expecting RR type or TTL, not this...", l)
 			}
-		case zExpectRrtypeBl:
-			if l.Value != dnslex.Blank {
-				return zp.setParseError("no blank before RR type", l)
-			}
-
-			st = zExpectRrtype
-		case zExpectRrtype:
-			if l.Value != dnslex.Rrtype {
-				return zp.setParseError("unknown RR type", l)
-			}
-
-			t = &l.Torc
-
-			st = zExpectRdata
-		case zExpectRdata:
-			var (
-				rr             RR
-				parseAsRFC3597 bool
-			)
-			switch l.As {
-			case asRR:
-				if newFn, ok := TypeToRR[*t]; ok {
-					rr = newFn()
-					*rr.Header() = *h
-
-					// We may be parsing a known RR type using the RFC3597 format.
-					// If so, we handle that here in a generic way.
-					//
-					// This is also true for PrivateRR types which will have the
-					// RFC3597 parsing done for them and the Unpack method called
-					// to populate the RR instead of simply deferring to Parse.
-					if zp.c.Peek().Token == "\\#" {
-						parseAsRFC3597 = true
-					}
-				} else {
-					rr = &RFC3597{*h, rdata.RFC3597{RRType: *t}}
-				}
-			case asCode:
-				newFn, ok := CodeToRR[*t]
-				if !ok {
-					return zp.setParseError("unknown EDNS0 type", l)
-				}
-				rr = newFn()
-				*rr.Header() = *h
-			}
-
-			if zp.c.Peek().Token == "" {
-				// This is a dynamic update rr.
-				if err := dnslex.Remainder(zp.c); err != nil {
-					return zp.setParseError(err.Err, err.Lex)
-				}
-
-				return rr, true
-			} else if l.Value == dnslex.Newline {
-				return zp.setParseError("unexpected newline", l)
-			}
-
-			parseAsRR := rr
-			if parseAsRFC3597 {
-				parseAsRR = &RFC3597{*h, rdata.RFC3597{RRType: *t}}
-			}
-
-			// This needs zparser which calles Parser for new types.
-			if err := parse(parseAsRR, zp.c, zp.origin); err != nil {
-				// err is a concrete *ParseError without the file field set.
-				// The setParseError call below will construct a new
-				// *ParseError with file set to zp.file.
-
-				// err.lex may be nil in which case we substitute our current lex token.
-				if err.lex == (dnslex.Lex{}) {
-					return zp.setParseError(err.err, l)
-				}
-
-				return zp.setParseError(err.err, err.lex)
-			}
-
-			if parseAsRFC3597 {
-				err := parseAsRR.(*RFC3597).fromRFC3597(rr)
-				if err != nil {
-					return zp.setParseError(err.Error(), l)
-				}
-			}
-
-			return rr, true
 		}
 	}
 
@@ -724,6 +713,21 @@ func (zp *ZoneParser) RRs() iter.Seq2[RR, error] {
 
 // stringToTTL parses things like 2w, 2m, etc, and returns the time in seconds.
 func stringToTTL(token string) (uint32, bool) {
+	switch token {
+	case "300":
+		return 300, true
+	case "1800", "30m", "30M":
+		return 1800, true
+	case "3600", "1h", "1H":
+		return 3600, true
+	case "14400":
+		return 14400, true
+	case "86400", "1d", "1D":
+		return 86400, true
+	case "604800", "1w", "1W":
+		return 604800, true
+	}
+
 	var s, i uint
 	for _, c := range token {
 		switch c {
@@ -868,7 +872,7 @@ func defaultIncludeAllowFunc(file, include string) bool {
 	return false
 }
 
-func toParseError(err *dnslex.ScanError) *ParseError {
+func toParseError(err *dnslex.ScanError) error {
 	if err == nil {
 		return nil
 	}

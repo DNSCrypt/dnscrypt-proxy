@@ -2301,10 +2301,10 @@ func (rr *HTTPS) pack(msg []byte, off int, compression map[string]uint16) (off1 
 func (rr *HTTPS) unpack(data, msgBuf []byte) (err error) {
 	return rr.SVCB.unpack(data, msgBuf)
 }
-func (rr *DELEGI) pack(msg []byte, off int, compression map[string]uint16) (off1 int, err error) {
+func (rr *DELEGPARAM) pack(msg []byte, off int, compression map[string]uint16) (off1 int, err error) {
 	return rr.DELEG.pack(msg, off, compression)
 }
-func (rr *DELEGI) unpack(data, msgBuf []byte) (err error) {
+func (rr *DELEGPARAM) unpack(data, msgBuf []byte) (err error) {
 	return rr.DELEG.unpack(data, msgBuf)
 }
 func (rr *ANY) pack(msg []byte, off int, compression map[string]uint16) (off1 int, err error) {
