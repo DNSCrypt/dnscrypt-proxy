@@ -1,6 +1,5 @@
 // Package deleg deals with all the intricacies of the DELEG RR. All the sub-types ([Info]) used in the RR are defined here.
-// As DELEG is derived from the SVCB RR so there are a lot of similarities. This implements draft version -03
-// and higher.
+// As DELEG is derived from the SVCB RR so there are a lot of similarities. This implements draft version -07 and higher.
 package deleg
 
 import (
@@ -17,12 +16,12 @@ const (
 	KeyServerIPv4 uint16 = iota + 1
 	KeyServerIPv6
 	KeyServerName
-	KeyIncludeDelegi
+	KeyIncludeDelegParam
 
 	KeyReserved uint16 = 65535
 )
 
-// Info defines a key=value pair for the DELEG/DELEGI RR type. A DELEG RR can have multiple infos appended to it.
+// Info defines a key=value pair for the DELEG/DELEGPARAM RR type. A DELEG RR can have multiple infos appended to it.
 // The numerical key code is derived from the type, see [InfoToKey].
 type Info interface {
 	String() string // String returns the string representation of the value.
@@ -43,10 +42,10 @@ func KeyToString(k uint16) string {
 }
 
 var keyToString = map[uint16]string{
-	KeyServerIPv4:    "server-ipv4",
-	KeyServerIPv6:    "server-ipv6",
-	KeyServerName:    "server-name",
-	KeyIncludeDelegi: "include-delegi",
+	KeyServerIPv4:        "server-ipv4",
+	KeyServerIPv6:        "server-ipv6",
+	KeyServerName:        "server-name",
+	KeyIncludeDelegParam: "include-delegparam",
 }
 
 // StringtoKey is the reverse of KeyToString and takes keyXXXX into account.
@@ -72,8 +71,8 @@ func KeyToInfo(k uint16) func() Info {
 		return func() Info { return new(SERVERIPV6) }
 	case KeyServerName:
 		return func() Info { return new(SERVERNAME) }
-	case KeyIncludeDelegi:
-		return func() Info { return new(INCLUDEDELEGI) }
+	case KeyIncludeDelegParam:
+		return func() Info { return new(INCLUDEDELEGPARAM) }
 	default:
 		return nil
 	}
@@ -88,8 +87,8 @@ func InfoToKey(i Info) uint16 {
 		return KeyServerIPv6
 	case *SERVERNAME:
 		return KeyServerName
-	case *INCLUDEDELEGI:
-		return KeyIncludeDelegi
+	case *INCLUDEDELEGPARAM:
+		return KeyIncludeDelegParam
 	}
 	return KeyReserved
 }
@@ -109,14 +108,14 @@ func (s *SERVERNAME) Len() int {
 	return l
 }
 
-// INCLUDEDELEGI info adds DELEGI domains to the DELEG RR.
-type INCLUDEDELEGI struct {
+// INCLUDEDELEGPARAM info adds DELEGPARAM domains to the DELEG RR.
+type INCLUDEDELEGPARAM struct {
 	Domains []string `dns:"domain-name"`
 }
 
-func (s *INCLUDEDELEGI) String() string { return strings.Join(s.Domains, ",") }
+func (s *INCLUDEDELEGPARAM) String() string { return strings.Join(s.Domains, ",") }
 
-func (s *INCLUDEDELEGI) Len() int {
+func (s *INCLUDEDELEGPARAM) Len() int {
 	l := tlv
 	for i := range s.Domains {
 		l += len(s.Domains[i]) + 1
@@ -156,7 +155,7 @@ func (s *SERVERIPV6) String() string {
 
 const tlv = 4
 
-func (s *SERVERIPV4) Clone() Info    { return &SERVERIPV4{slices.Clone(s.IPs)} }
-func (s *SERVERIPV6) Clone() Info    { return &SERVERIPV6{slices.Clone(s.IPs)} }
-func (s *SERVERNAME) Clone() Info    { return &SERVERNAME{slices.Clone(s.Hostnames)} }
-func (s *INCLUDEDELEGI) Clone() Info { return &INCLUDEDELEGI{slices.Clone(s.Domains)} }
+func (s *SERVERIPV4) Clone() Info        { return &SERVERIPV4{slices.Clone(s.IPs)} }
+func (s *SERVERIPV6) Clone() Info        { return &SERVERIPV6{slices.Clone(s.IPs)} }
+func (s *SERVERNAME) Clone() Info        { return &SERVERNAME{slices.Clone(s.Hostnames)} }
+func (s *INCLUDEDELEGPARAM) Clone() Info { return &INCLUDEDELEGPARAM{slices.Clone(s.Domains)} }

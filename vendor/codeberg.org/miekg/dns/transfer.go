@@ -145,6 +145,7 @@ func (c *Client) transferInAXFR(ctx context.Context, m *Msg, ch chan<- *Envelope
 		err := r.Unpack()
 		if err != nil {
 			ch <- &Envelope{Answer: r.Answer, Error: err}
+			return
 		}
 
 		// On first loop first be need to see a SOA RR.
@@ -162,6 +163,7 @@ func (c *Client) transferInAXFR(ctx context.Context, m *Msg, ch chan<- *Envelope
 		if c.Transfer != nil && c.TSIGSigner != nil && t != nil { // original request had tsig, so we need to check that.
 			if err := TSIGVerify(r, c.TSIGSigner, &options); err != nil {
 				ch <- &Envelope{Answer: r.Answer, Error: err}
+				return
 			}
 		}
 
@@ -207,6 +209,8 @@ func (c *Client) transferInIXFR(ctx context.Context, m *Msg, ch chan<- *Envelope
 		r.Options = MsgOptionUnpackHeader
 		conn.SetReadDeadline(time.Now().Add(c.ReadTimeout))
 		if _, err := io.Copy(r, conn); err != nil {
+			// the response writer or actual conn is closed, just return, or some other error, we may
+			// not be sure someone is still listening on this channel.
 			return
 		}
 		if err := ctx.Err(); err != nil {
@@ -233,6 +237,7 @@ func (c *Client) transferInIXFR(ctx context.Context, m *Msg, ch chan<- *Envelope
 		err := r.Unpack()
 		if err != nil {
 			ch <- &Envelope{Answer: r.Answer, Error: err}
+			return
 		}
 
 		// On first loop first be need to see a SOA RR and check that with the request serial.
@@ -245,14 +250,14 @@ func (c *Client) transferInIXFR(ctx context.Context, m *Msg, ch chan<- *Envelope
 				ch <- &Envelope{Error: ErrSOA}
 				return
 			}
-			serial := r.Answer[0].(*SOA).Serial
+			serial = r.Answer[0].(*SOA).Serial
 			// If we requested a higher serial, we are already up to date.
-			if m.Ns[0].(*SOA).Serial < serial { // TODO(miek): serial arithmetic
-				ch <- &Envelope{Answer: r.Answer}
+			if m.Ns[0].(*SOA).Serial >= serial { // TODO(miek): serial arithmetic
+				ch <- &Envelope{Answer: []RR{r.Answer[0]}}
 				return
 			}
 			if len(r.Answer) > 2 {
-				if _, ok := r.Ns[1].(*SOA); ok {
+				if _, ok := r.Answer[1].(*SOA); ok {
 					expectSOA++
 				}
 			}
@@ -261,6 +266,7 @@ func (c *Client) transferInIXFR(ctx context.Context, m *Msg, ch chan<- *Envelope
 		if c.Transfer != nil && c.TSIGSigner != nil && t != nil { // original request had tsig, so we need to check that.
 			if err := TSIGVerify(r, c.TSIGSigner, &options); err != nil {
 				ch <- &Envelope{Answer: r.Answer, Error: err}
+				return
 			}
 		}
 
@@ -272,7 +278,6 @@ func (c *Client) transferInIXFR(ctx context.Context, m *Msg, ch chan<- *Envelope
 				if s, ok := r.Answer[i].(*SOA); ok && s.Serial == serial {
 					expectSOA--
 					if expectSOA == 0 {
-						ch <- &Envelope{r.Answer, nil}
 						return
 					}
 				}

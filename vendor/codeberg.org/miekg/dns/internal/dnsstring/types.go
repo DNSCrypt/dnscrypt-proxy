@@ -98,11 +98,11 @@ const (
 	TypeMAILA uint16 = 254
 	TypeANY   uint16 = 255
 
-	TypeTA       uint16 = 32768
-	TypeDLV      uint16 = 32769
-	TypeDELEG    uint16 = 65432 // Provisional type code.
-	TypeDELEGI   uint16 = 65433 // Provisional type code.
-	TypeReserved uint16 = 65535
+	TypeTA         uint16 = 32768
+	TypeDLV        uint16 = 32769
+	TypeDELEG      uint16 = 65432 // Provisional type code.
+	TypeDELEGPARAM uint16 = 65433 // Provisional type code.
+	TypeReserved   uint16 = 65535
 )
 
 // Various constants used in the LOC RR. See RFC 1876.
