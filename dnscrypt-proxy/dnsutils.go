@@ -247,7 +247,7 @@ func addEDNS0PaddingIfNoneFound(msg *dns.Msg, unpaddedPacket []byte, paddingLen 
 		}
 	}
 	// Add padding
-	paddingRR := &dns.PADDING{Padding: strings.Repeat("00", paddingLen)}
+	paddingRR := &dns.PADDING{Padding: strings.Repeat("58", paddingLen)}
 	msg.Pseudo = append(msg.Pseudo, paddingRR)
 	if err := msg.Pack(); err != nil {
 		return nil, err
