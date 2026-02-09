@@ -211,7 +211,7 @@ func (m *Msg) Pack() error {
 	// Is this compressible?
 	var compression map[string]uint16
 	if len(m.Question) > 1 || len(m.Answer) > 0 || len(m.Ns) > 0 || len(m.Extra) > 0 {
-		compression = make(map[string]uint16, len(m.Answer)+len(m.Ns)+len(m.Extra)+3) // 3 is randomly choosen, as such much rdata might be compressable...
+		compression = make(map[string]uint16, len(m.Answer)+len(m.Ns)+len(m.Extra)+3) // 3 is randomly chosen, as such much rdata might be compressable...
 	}
 
 	for i := range m.Question {
@@ -586,7 +586,10 @@ func (m *Msg) Len() int {
 	l := MsgHeaderSize
 
 	for i := range m.Question {
-		l += m.Question[i].Len()
+		// See Header.Len() too, we always add a +1, even if the name is the root label.
+		// 4 is for the type and class
+		l += len(m.Question[i].Header().Name) + 1 + 4
+		break
 	}
 	for i := range m.Answer {
 		l += m.Answer[i].Len()
@@ -601,7 +604,9 @@ func (m *Msg) Len() int {
 		l += m.Pseudo[i].Len()
 	}
 
-	const minHeaderSize = 11 // smallest possible RR header where the name is the root label.
+	// Smallest possible RR header where the name is the root label. This should actually be 11, but we return
+	// len(name) +1 for all domain names, which is not correct for the root which is just 1.
+	const minHeaderSize = 12
 
 	if m.isPseudo() > 0 {
 		// If we find things in pseudo we get an OPT RR (fix length) plus the length of the option. OPT is always 11, 10 + "." (root label)

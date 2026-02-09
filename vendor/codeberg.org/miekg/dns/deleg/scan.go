@@ -15,7 +15,7 @@ func Parse(i Info, b, o string) error {
 		return x.parse(b)
 	case *SERVERNAME:
 		return x.parse(b, o)
-	case *INCLUDEDELEGI:
+	case *INCLUDEDELEGPARAM:
 		return x.parse(b, o)
 	}
 	return fmt.Errorf("no deleg parse defined")
@@ -84,9 +84,9 @@ func (s *SERVERNAME) parse(b, o string) error {
 	return nil
 }
 
-func (s *INCLUDEDELEGI) parse(b, o string) error {
+func (s *INCLUDEDELEGPARAM) parse(b, o string) error {
 	if len(b) == 0 {
-		return errors.New("delegincludedelegi: empty domains")
+		return errors.New("delegincludedelegparam: empty domains")
 	}
 
 	domains := make([]string, 0, strings.Count(b, ",")+1)
@@ -95,7 +95,7 @@ func (s *INCLUDEDELEGI) parse(b, o string) error {
 		e, b, _ = strings.Cut(b, ",")
 		e = dnsutilAbsolute(e, o)
 		if e == "" {
-			return errors.New("delegincludedelegi: bad domain")
+			return errors.New("delegincludedelegparam: bad domain")
 		}
 		domains = append(domains, e)
 	}

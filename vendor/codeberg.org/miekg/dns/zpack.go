@@ -168,7 +168,7 @@ func zpack(rr RR, msg []byte, off int, compression map[string]uint16) (int, erro
 		return x.pack(msg, off, compression)
 	case *DELEG:
 		return x.pack(msg, off, compression)
-	case *DELEGI:
+	case *DELEGPARAM:
 		return x.pack(msg, off, compression)
 	case *DSYNC:
 		return x.pack(msg, off, compression)
@@ -350,7 +350,7 @@ func zunpack(rr RR, data, msgBuf []byte) error {
 		return x.unpack(data, msgBuf)
 	case *DELEG:
 		return x.unpack(data, msgBuf)
-	case *DELEGI:
+	case *DELEGPARAM:
 		return x.unpack(data, msgBuf)
 	case *DSYNC:
 		return x.unpack(data, msgBuf)
