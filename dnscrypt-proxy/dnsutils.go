@@ -420,7 +420,7 @@ func _dnsExchange(
 			padding = paddedLen - qNameLen
 		}
 		if padding > 0 {
-			paddingRR := &dns.PADDING{Padding: string(make([]byte, padding))}
+			paddingRR := &dns.PADDING{Padding: strings.Repeat("00", padding)}
 			query.Pseudo = append(query.Pseudo, paddingRR)
 			if query.UDPSize == 0 {
 				query.UDPSize = uint16(MaxDNSPacketSize)
