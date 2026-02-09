@@ -247,11 +247,7 @@ func addEDNS0PaddingIfNoneFound(msg *dns.Msg, unpaddedPacket []byte, paddingLen 
 		}
 	}
 	// Add padding
-	padding := make([]byte, paddingLen)
-	for i := range padding {
-		padding[i] = 'X'
-	}
-	paddingRR := &dns.PADDING{Padding: string(padding)}
+	paddingRR := &dns.PADDING{Padding: strings.Repeat("00", paddingLen)}
 	msg.Pseudo = append(msg.Pseudo, paddingRR)
 	if err := msg.Pack(); err != nil {
 		return nil, err
@@ -420,7 +416,7 @@ func _dnsExchange(
 			padding = paddedLen - qNameLen
 		}
 		if padding > 0 {
-			paddingRR := &dns.PADDING{Padding: string(make([]byte, padding))}
+			paddingRR := &dns.PADDING{Padding: strings.Repeat("00", padding)}
 			query.Pseudo = append(query.Pseudo, paddingRR)
 			if query.UDPSize == 0 {
 				query.UDPSize = uint16(MaxDNSPacketSize)

@@ -822,7 +822,7 @@ func dohTestPacket(msgID uint16) []byte {
 	msg.Security = false
 	paddingData := make([]byte, 16)
 	_, _ = crypto_rand.Read(paddingData)
-	padding := &dns.PADDING{Padding: string(paddingData)}
+	padding := &dns.PADDING{Padding: hex.EncodeToString(paddingData)}
 	msg.Pseudo = append(msg.Pseudo, padding)
 	if err := msg.Pack(); err != nil {
 		dlog.Fatal(err)
@@ -843,7 +843,7 @@ func dohNXTestPacket(msgID uint16) []byte {
 	msg.Security = false
 	paddingData := make([]byte, 16)
 	_, _ = crypto_rand.Read(paddingData)
-	padding := &dns.PADDING{Padding: string(paddingData)}
+	padding := &dns.PADDING{Padding: hex.EncodeToString(paddingData)}
 	msg.Pseudo = append(msg.Pseudo, padding)
 	if err := msg.Pack(); err != nil {
 		dlog.Fatal(err)
