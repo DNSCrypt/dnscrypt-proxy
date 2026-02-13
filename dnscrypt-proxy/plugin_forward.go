@@ -6,8 +6,12 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
+	"time"
 
 	"codeberg.org/miekg/dns"
 	"github.com/jedisct1/dlog"
@@ -20,11 +24,14 @@ const (
 	Explicit SearchSequenceItemType = iota
 	Bootstrap
 	DHCP
+	Resolvconf
 )
 
 type SearchSequenceItem struct {
-	typ     SearchSequenceItemType
-	servers []string
+	typ        SearchSequenceItemType
+	servers    []string
+	resolvconf string
+	rcLastFail atomic.Int64 // unix timestamp of last failed resolv.conf read
 }
 
 type PluginForwardEntry struct {
@@ -140,6 +147,30 @@ func (plugin *PluginForward) parseForwardFile(lines string) (bool, []PluginForwa
 				}
 				requiresDHCP = true
 			default:
+				const resolvconfPrefix = "$RESOLVCONF:"
+				if strings.HasPrefix(server, resolvconfPrefix) {
+					file := server[len(resolvconfPrefix):]
+					if len(file) == 0 {
+						dlog.Criticalf(
+							"File needs to be specified for $RESOLVCONF in line %d",
+							1+lineNo,
+						)
+						continue
+					}
+					file = filepath.Clean(file)
+					if !filepath.IsAbs(file) {
+						dlog.Warnf(
+							"$RESOLVCONF path '%s' at line %d is not absolute; "+
+								"this may not resolve as expected", file, 1+lineNo,
+						)
+					}
+					sequence = append(sequence, SearchSequenceItem{
+						typ:        Resolvconf,
+						resolvconf: file,
+					})
+					dlog.Infof("Forwarding [%s] to the servers specified in '%s'", domain, file)
+					continue
+				}
 				if strings.HasPrefix(server, "$") {
 					dlog.Criticalf("Unknown keyword [%s] at line %d", server, 1+lineNo)
 					continue
@@ -149,8 +180,8 @@ func (plugin *PluginForward) parseForwardFile(lines string) (bool, []PluginForwa
 					continue
 				} else {
 					idxServers := -1
-					for i, item := range sequence {
-						if item.typ == Explicit {
+					for i := range sequence {
+						if sequence[i].typ == Explicit {
 							idxServers = i
 						}
 					}
@@ -271,11 +302,13 @@ func (plugin *PluginForward) Eval(pluginsState *PluginsState, msg *dns.Msg) erro
 	var err error
 	var respMsg *dns.Msg
 	tries := 4
-	for _, item := range sequence {
+	const resolvconfRetryInterval int64 = 30 // seconds
+
+	for i := range sequence {
 		var server string
-		switch item.typ {
+		switch sequence[i].typ {
 		case Explicit:
-			server = item.servers[rand.Intn(len(item.servers))]
+			server = sequence[i].servers[rand.Intn(len(sequence[i].servers))]
 		case Bootstrap:
 			server = plugin.bootstrapResolvers[rand.Intn(len(plugin.bootstrapResolvers))]
 		case DHCP:
@@ -293,6 +326,41 @@ func (plugin *PluginForward) Eval(pluginsState *PluginsState, msg *dns.Msg) erro
 			}
 			if len(server) == 0 {
 				dlog.Infof("DHCP didn't provide any DNS server to forward [%s]", qName)
+				continue
+			}
+		case Resolvconf:
+			if lastFail := sequence[i].rcLastFail.Load(); lastFail != 0 &&
+				time.Now().Unix()-lastFail < resolvconfRetryInterval {
+				continue
+			}
+			servers, warnings, err := parseResolvConf(sequence[i].resolvconf)
+			if err != nil {
+				dlog.Warnf(
+					"Failed to open '%s' while resolving [%s]: %v",
+					sequence[i].resolvconf, qName, err,
+				)
+				sequence[i].rcLastFail.Store(time.Now().Unix())
+				continue
+			}
+			if len(servers) == 0 {
+				for _, w := range warnings {
+					dlog.Warn(w)
+				}
+				dlog.Warnf(
+					"No valid nameservers in '%s' while resolving [%s]",
+					sequence[i].resolvconf, qName,
+				)
+				sequence[i].rcLastFail.Store(time.Now().Unix())
+				continue
+			}
+			sequence[i].rcLastFail.Store(0) // clear failure state on successful read
+			nameserver := servers[rand.Intn(len(servers))]
+			server, err = normalizeIPAndOptionalPort(nameserver, "53")
+			if err != nil {
+				dlog.Warnf(
+					"Syntax error in address '%s' while resolving [%s]: %v",
+					nameserver, qName, err,
+				)
 				continue
 			}
 		}
@@ -343,6 +411,36 @@ func (plugin *PluginForward) Eval(pluginsState *PluginsState, msg *dns.Msg) erro
 		return nil
 	}
 	return err
+}
+
+func parseResolvConf(filename string) (servers []string, warnings []string, err error) {
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		return nil, nil, err
+	}
+	for line := range strings.SplitSeq(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "nameserver") {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			continue
+		}
+		addr := fields[1]
+		host := addr
+		if h, _, err := net.SplitHostPort(addr); err == nil {
+			host = h
+		}
+		if net.ParseIP(host) == nil {
+			warnings = append(warnings, fmt.Sprintf(
+				"Ignoring invalid nameserver address '%s' in [%s]", addr, filename,
+			))
+			continue
+		}
+		servers = append(servers, addr)
+	}
+	return
 }
 
 func normalizeIPAndOptionalPort(addr string, defaultPort string) (string, error) {
