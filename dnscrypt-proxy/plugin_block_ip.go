@@ -3,16 +3,19 @@ package main
 import (
 	"errors"
 	"io"
+	"net"
 	"sync"
 
 	"codeberg.org/miekg/dns"
 	iradix "github.com/hashicorp/go-immutable-radix"
 	"github.com/jedisct1/dlog"
+	"github.com/k-sone/critbitgo"
 )
 
 type PluginBlockIP struct {
 	blockedPrefixes *iradix.Tree
 	blockedIPs      map[string]any
+	blockedNetworks *critbitgo.Net
 	logger          io.Writer
 	format          string
 	ipCryptConfig   *IPCryptConfig
@@ -23,6 +26,7 @@ type PluginBlockIP struct {
 	configWatcher   *ConfigWatcher
 	stagingPrefixes *iradix.Tree
 	stagingIPs      map[string]any
+	stagingNetworks *critbitgo.Net
 }
 
 func (plugin *PluginBlockIP) Name() string {
@@ -44,8 +48,9 @@ func (plugin *PluginBlockIP) Init(proxy *Proxy) error {
 
 	plugin.blockedPrefixes = iradix.New()
 	plugin.blockedIPs = make(map[string]any)
+	plugin.blockedNetworks = critbitgo.NewNet()
 
-	plugin.blockedPrefixes, err = plugin.loadRules(lines, plugin.blockedPrefixes, plugin.blockedIPs)
+	plugin.blockedPrefixes, err = plugin.loadRules(lines, plugin.blockedPrefixes, plugin.blockedIPs, plugin.blockedNetworks)
 	if err != nil {
 		return err
 	}
@@ -56,9 +61,9 @@ func (plugin *PluginBlockIP) Init(proxy *Proxy) error {
 	return nil
 }
 
-// loadRules parses and loads IP rules into the provided tree and map
-func (plugin *PluginBlockIP) loadRules(lines string, prefixes *iradix.Tree, ips map[string]any) (*iradix.Tree, error) {
-	return LoadIPRules(lines, prefixes, ips)
+// loadRules parses and loads IP rules into the provided tree, map, and network table
+func (plugin *PluginBlockIP) loadRules(lines string, prefixes *iradix.Tree, ips map[string]any, networks *critbitgo.Net) (*iradix.Tree, error) {
+	return LoadIPRules(lines, prefixes, ips, networks)
 }
 
 func (plugin *PluginBlockIP) Drop() error {
@@ -74,10 +79,11 @@ func (plugin *PluginBlockIP) PrepareReload() error {
 		// Create staging structures
 		plugin.stagingPrefixes = iradix.New()
 		plugin.stagingIPs = make(map[string]any)
+		plugin.stagingNetworks = critbitgo.NewNet()
 
 		// Load rules into staging structures
 		var err error
-		plugin.stagingPrefixes, err = plugin.loadRules(lines, plugin.stagingPrefixes, plugin.stagingIPs)
+		plugin.stagingPrefixes, err = plugin.loadRules(lines, plugin.stagingPrefixes, plugin.stagingIPs, plugin.stagingNetworks)
 		return err
 	})
 }
@@ -85,7 +91,7 @@ func (plugin *PluginBlockIP) PrepareReload() error {
 // ApplyReload atomically replaces the active rules with the staging ones
 func (plugin *PluginBlockIP) ApplyReload() error {
 	return StandardApplyReloadPattern(plugin.Name(), func() error {
-		if plugin.stagingPrefixes == nil || plugin.stagingIPs == nil {
+		if plugin.stagingPrefixes == nil || plugin.stagingIPs == nil || plugin.stagingNetworks == nil {
 			return errors.New("no staged configuration to apply")
 		}
 
@@ -93,8 +99,10 @@ func (plugin *PluginBlockIP) ApplyReload() error {
 		plugin.rwLock.Lock()
 		plugin.blockedPrefixes = plugin.stagingPrefixes
 		plugin.blockedIPs = plugin.stagingIPs
+		plugin.blockedNetworks = plugin.stagingNetworks
 		plugin.stagingPrefixes = nil
 		plugin.stagingIPs = nil
+		plugin.stagingNetworks = nil
 		plugin.rwLock.Unlock()
 
 		return nil
@@ -105,6 +113,7 @@ func (plugin *PluginBlockIP) ApplyReload() error {
 func (plugin *PluginBlockIP) CancelReload() {
 	plugin.stagingPrefixes = nil
 	plugin.stagingIPs = nil
+	plugin.stagingNetworks = nil
 }
 
 // Reload implements hot-reloading for the plugin
@@ -167,6 +176,14 @@ func (plugin *PluginBlockIP) Eval(pluginsState *PluginsState, msg *dns.Msg) erro
 			if len(match) == len(ipStr) || (ipStr[len(match)] == '.' || ipStr[len(match)] == ':') {
 				reject, reason = true, string(match)+"*"
 				break
+			}
+		}
+		if plugin.blockedNetworks.Size() > 0 {
+			if ip := net.ParseIP(ipStr); ip != nil {
+				if route, _, _ := plugin.blockedNetworks.MatchIP(ip); route != nil {
+					reject, reason = true, route.String()
+					break
+				}
 			}
 		}
 	}

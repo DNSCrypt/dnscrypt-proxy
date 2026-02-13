@@ -5,3 +5,5 @@
 #192.168.0.*
 #fe80:53:*          # IPv6 prefix example
 #81.169.145.105
+#192.168.0.0/16     # CIDR network mask
+#fe80::/10          # IPv6 CIDR network mask

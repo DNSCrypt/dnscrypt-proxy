@@ -3,16 +3,19 @@ package main
 import (
 	"errors"
 	"io"
+	"net"
 	"sync"
 
 	"codeberg.org/miekg/dns"
 	iradix "github.com/hashicorp/go-immutable-radix"
 	"github.com/jedisct1/dlog"
+	"github.com/k-sone/critbitgo"
 )
 
 type PluginAllowedIP struct {
 	allowedPrefixes *iradix.Tree
 	allowedIPs      map[string]any
+	allowedNetworks *critbitgo.Net
 	logger          io.Writer
 	format          string
 	ipCryptConfig   *IPCryptConfig
@@ -23,6 +26,7 @@ type PluginAllowedIP struct {
 	configWatcher   *ConfigWatcher
 	stagingPrefixes *iradix.Tree
 	stagingIPs      map[string]any
+	stagingNetworks *critbitgo.Net
 }
 
 func (plugin *PluginAllowedIP) Name() string {
@@ -44,8 +48,9 @@ func (plugin *PluginAllowedIP) Init(proxy *Proxy) error {
 
 	plugin.allowedPrefixes = iradix.New()
 	plugin.allowedIPs = make(map[string]any)
+	plugin.allowedNetworks = critbitgo.NewNet()
 
-	plugin.allowedPrefixes, err = plugin.loadRules(lines, plugin.allowedPrefixes, plugin.allowedIPs)
+	plugin.allowedPrefixes, err = plugin.loadRules(lines, plugin.allowedPrefixes, plugin.allowedIPs, plugin.allowedNetworks)
 	if err != nil {
 		return err
 	}
@@ -56,9 +61,9 @@ func (plugin *PluginAllowedIP) Init(proxy *Proxy) error {
 	return nil
 }
 
-// loadRules parses and loads IP rules into the provided tree and map
-func (plugin *PluginAllowedIP) loadRules(lines string, prefixes *iradix.Tree, ips map[string]any) (*iradix.Tree, error) {
-	return LoadIPRules(lines, prefixes, ips)
+// loadRules parses and loads IP rules into the provided tree, map, and network table
+func (plugin *PluginAllowedIP) loadRules(lines string, prefixes *iradix.Tree, ips map[string]any, networks *critbitgo.Net) (*iradix.Tree, error) {
+	return LoadIPRules(lines, prefixes, ips, networks)
 }
 
 func (plugin *PluginAllowedIP) Drop() error {
@@ -74,10 +79,11 @@ func (plugin *PluginAllowedIP) PrepareReload() error {
 		// Create staging structures
 		plugin.stagingPrefixes = iradix.New()
 		plugin.stagingIPs = make(map[string]any)
+		plugin.stagingNetworks = critbitgo.NewNet()
 
 		// Load rules into staging structures
 		var err error
-		plugin.stagingPrefixes, err = plugin.loadRules(lines, plugin.stagingPrefixes, plugin.stagingIPs)
+		plugin.stagingPrefixes, err = plugin.loadRules(lines, plugin.stagingPrefixes, plugin.stagingIPs, plugin.stagingNetworks)
 		return err
 	})
 }
@@ -85,7 +91,7 @@ func (plugin *PluginAllowedIP) PrepareReload() error {
 // ApplyReload atomically replaces the active rules with the staging ones
 func (plugin *PluginAllowedIP) ApplyReload() error {
 	return StandardApplyReloadPattern(plugin.Name(), func() error {
-		if plugin.stagingPrefixes == nil || plugin.stagingIPs == nil {
+		if plugin.stagingPrefixes == nil || plugin.stagingIPs == nil || plugin.stagingNetworks == nil {
 			return errors.New("no staged configuration to apply")
 		}
 
@@ -93,8 +99,10 @@ func (plugin *PluginAllowedIP) ApplyReload() error {
 		plugin.rwLock.Lock()
 		plugin.allowedPrefixes = plugin.stagingPrefixes
 		plugin.allowedIPs = plugin.stagingIPs
+		plugin.allowedNetworks = plugin.stagingNetworks
 		plugin.stagingPrefixes = nil
 		plugin.stagingIPs = nil
+		plugin.stagingNetworks = nil
 		plugin.rwLock.Unlock()
 
 		return nil
@@ -105,6 +113,7 @@ func (plugin *PluginAllowedIP) ApplyReload() error {
 func (plugin *PluginAllowedIP) CancelReload() {
 	plugin.stagingPrefixes = nil
 	plugin.stagingIPs = nil
+	plugin.stagingNetworks = nil
 }
 
 // Reload implements hot-reloading for the plugin
@@ -163,6 +172,14 @@ func (plugin *PluginAllowedIP) Eval(pluginsState *PluginsState, msg *dns.Msg) er
 			if len(match) == len(ipStr) || (ipStr[len(match)] == '.' || ipStr[len(match)] == ':') {
 				allowed, reason = true, string(match)+"*"
 				break
+			}
+		}
+		if plugin.allowedNetworks.Size() > 0 {
+			if ip := net.ParseIP(ipStr); ip != nil {
+				if route, _, _ := plugin.allowedNetworks.MatchIP(ip); route != nil {
+					allowed, reason = true, route.String()
+					break
+				}
 			}
 		}
 	}

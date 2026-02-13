@@ -16,6 +16,7 @@ import (
 
 	iradix "github.com/hashicorp/go-immutable-radix"
 	"github.com/jedisct1/dlog"
+	"github.com/k-sone/critbitgo"
 )
 
 type CryptoConstruction uint16
@@ -313,9 +314,22 @@ func ProcessConfigLines(lines string, processor func(line string, lineNo int) er
 	return nil
 }
 
-// LoadIPRules loads IP rules from text lines into radix tree and map structures
-func LoadIPRules(lines string, prefixes *iradix.Tree, ips map[string]any) (*iradix.Tree, error) {
+// LoadIPRules loads IP rules from text lines into three structures:
+//   - ips (map): exact IP addresses
+//   - prefixes (radix tree): wildcard prefix rules (e.g. "192.168.*")
+//   - networks (critbit net): CIDR network masks (e.g. "10.0.0.0/8")
+func LoadIPRules(lines string, prefixes *iradix.Tree, ips map[string]any, networks *critbitgo.Net) (*iradix.Tree, error) {
 	err := ProcessConfigLines(lines, func(line string, lineNo int) error {
+		if strings.Contains(line, "/") {
+			if networks == nil {
+				dlog.Errorf("CIDR rule [%s] at line %d but no network table provided", line, lineNo)
+				return nil
+			}
+			if err := networks.AddCIDR(line, true); err != nil {
+				dlog.Errorf("Invalid CIDR rule [%s] at line %d: %v", line, lineNo, err)
+			}
+			return nil
+		}
 		cleanLine, trailingStar, lineErr := ParseIPRule(line, lineNo)
 		if lineErr != nil {
 			dlog.Error(lineErr)
