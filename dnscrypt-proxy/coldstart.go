@@ -125,6 +125,9 @@ func addColdStartListener(
 	listenAddrStr string,
 	captivePortalHandler *CaptivePortalHandler,
 ) error {
+	if len(listenAddrStr) == 0 {
+		return nil
+	}
 	network := "udp"
 	isIPv4 := isDigit(listenAddrStr[0])
 	if isIPv4 {
