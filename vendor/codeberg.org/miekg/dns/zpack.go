@@ -8,11 +8,33 @@ import (
 
 func zpack(rr RR, msg []byte, off int, compression map[string]uint16) (int, error) {
 	switch x := rr.(type) {
+	case *DELEG:
+		return x.pack(msg, off, compression)
+	case *NSEC3:
+		return x.pack(msg, off, compression)
+	case *DNSKEY:
+		return x.pack(msg, off, compression)
+	case *DS:
+		return x.pack(msg, off, compression)
+	case *NSEC:
+		return x.pack(msg, off, compression)
+	case *RRSIG:
+		return x.pack(msg, off, compression)
+	case *AAAA:
+		return x.pack(msg, off, compression)
+	case *A:
+		return x.pack(msg, off, compression)
+	case *TXT:
+		return x.pack(msg, off, compression)
+	case *NS:
+		return x.pack(msg, off, compression)
+	case *MX:
+		return x.pack(msg, off, compression)
+	case *CNAME:
+		return x.pack(msg, off, compression)
 	case *NULL:
 		return x.pack(msg, off, compression)
 	case *NXNAME:
-		return x.pack(msg, off, compression)
-	case *CNAME:
 		return x.pack(msg, off, compression)
 	case *HINFO:
 		return x.pack(msg, off, compression)
@@ -28,8 +50,6 @@ func zpack(rr RR, msg []byte, off int, compression map[string]uint16) (int, erro
 		return x.pack(msg, off, compression)
 	case *MD:
 		return x.pack(msg, off, compression)
-	case *MX:
-		return x.pack(msg, off, compression)
 	case *AFSDB:
 		return x.pack(msg, off, compression)
 	case *X25:
@@ -38,15 +58,11 @@ func zpack(rr RR, msg []byte, off int, compression map[string]uint16) (int, erro
 		return x.pack(msg, off, compression)
 	case *RT:
 		return x.pack(msg, off, compression)
-	case *NS:
-		return x.pack(msg, off, compression)
 	case *PTR:
 		return x.pack(msg, off, compression)
 	case *RP:
 		return x.pack(msg, off, compression)
 	case *SOA:
-		return x.pack(msg, off, compression)
-	case *TXT:
 		return x.pack(msg, off, compression)
 	case *SPF:
 		return x.pack(msg, off, compression)
@@ -66,10 +82,6 @@ func zpack(rr RR, msg []byte, off int, compression map[string]uint16) (int, erro
 		return x.pack(msg, off, compression)
 	case *DNAME:
 		return x.pack(msg, off, compression)
-	case *A:
-		return x.pack(msg, off, compression)
-	case *AAAA:
-		return x.pack(msg, off, compression)
 	case *PX:
 		return x.pack(msg, off, compression)
 	case *GPOS:
@@ -78,17 +90,11 @@ func zpack(rr RR, msg []byte, off int, compression map[string]uint16) (int, erro
 		return x.pack(msg, off, compression)
 	case *SIG:
 		return x.pack(msg, off, compression)
-	case *RRSIG:
-		return x.pack(msg, off, compression)
 	case *NXT:
-		return x.pack(msg, off, compression)
-	case *NSEC:
 		return x.pack(msg, off, compression)
 	case *DLV:
 		return x.pack(msg, off, compression)
 	case *CDS:
-		return x.pack(msg, off, compression)
-	case *DS:
 		return x.pack(msg, off, compression)
 	case *KX:
 		return x.pack(msg, off, compression)
@@ -102,13 +108,9 @@ func zpack(rr RR, msg []byte, off int, compression map[string]uint16) (int, erro
 		return x.pack(msg, off, compression)
 	case *CDNSKEY:
 		return x.pack(msg, off, compression)
-	case *DNSKEY:
-		return x.pack(msg, off, compression)
 	case *RKEY:
 		return x.pack(msg, off, compression)
 	case *NSAPPTR:
-		return x.pack(msg, off, compression)
-	case *NSEC3:
 		return x.pack(msg, off, compression)
 	case *NSEC3PARAM:
 		return x.pack(msg, off, compression)
@@ -165,8 +167,6 @@ func zpack(rr RR, msg []byte, off int, compression map[string]uint16) (int, erro
 	case *SVCB:
 		return x.pack(msg, off, compression)
 	case *HTTPS:
-		return x.pack(msg, off, compression)
-	case *DELEG:
 		return x.pack(msg, off, compression)
 	case *DELEGPARAM:
 		return x.pack(msg, off, compression)
@@ -190,11 +190,33 @@ func zpack(rr RR, msg []byte, off int, compression map[string]uint16) (int, erro
 
 func zunpack(rr RR, data, msgBuf []byte) error {
 	switch x := rr.(type) {
+	case *DELEG:
+		return x.unpack(data, msgBuf)
+	case *NSEC3:
+		return x.unpack(data, msgBuf)
+	case *DNSKEY:
+		return x.unpack(data, msgBuf)
+	case *DS:
+		return x.unpack(data, msgBuf)
+	case *NSEC:
+		return x.unpack(data, msgBuf)
+	case *RRSIG:
+		return x.unpack(data, msgBuf)
+	case *AAAA:
+		return x.unpack(data, msgBuf)
+	case *A:
+		return x.unpack(data, msgBuf)
+	case *TXT:
+		return x.unpack(data, msgBuf)
+	case *NS:
+		return x.unpack(data, msgBuf)
+	case *MX:
+		return x.unpack(data, msgBuf)
+	case *CNAME:
+		return x.unpack(data, msgBuf)
 	case *NULL:
 		return x.unpack(data, msgBuf)
 	case *NXNAME:
-		return x.unpack(data, msgBuf)
-	case *CNAME:
 		return x.unpack(data, msgBuf)
 	case *HINFO:
 		return x.unpack(data, msgBuf)
@@ -210,8 +232,6 @@ func zunpack(rr RR, data, msgBuf []byte) error {
 		return x.unpack(data, msgBuf)
 	case *MD:
 		return x.unpack(data, msgBuf)
-	case *MX:
-		return x.unpack(data, msgBuf)
 	case *AFSDB:
 		return x.unpack(data, msgBuf)
 	case *X25:
@@ -220,15 +240,11 @@ func zunpack(rr RR, data, msgBuf []byte) error {
 		return x.unpack(data, msgBuf)
 	case *RT:
 		return x.unpack(data, msgBuf)
-	case *NS:
-		return x.unpack(data, msgBuf)
 	case *PTR:
 		return x.unpack(data, msgBuf)
 	case *RP:
 		return x.unpack(data, msgBuf)
 	case *SOA:
-		return x.unpack(data, msgBuf)
-	case *TXT:
 		return x.unpack(data, msgBuf)
 	case *SPF:
 		return x.unpack(data, msgBuf)
@@ -248,10 +264,6 @@ func zunpack(rr RR, data, msgBuf []byte) error {
 		return x.unpack(data, msgBuf)
 	case *DNAME:
 		return x.unpack(data, msgBuf)
-	case *A:
-		return x.unpack(data, msgBuf)
-	case *AAAA:
-		return x.unpack(data, msgBuf)
 	case *PX:
 		return x.unpack(data, msgBuf)
 	case *GPOS:
@@ -260,17 +272,11 @@ func zunpack(rr RR, data, msgBuf []byte) error {
 		return x.unpack(data, msgBuf)
 	case *SIG:
 		return x.unpack(data, msgBuf)
-	case *RRSIG:
-		return x.unpack(data, msgBuf)
 	case *NXT:
-		return x.unpack(data, msgBuf)
-	case *NSEC:
 		return x.unpack(data, msgBuf)
 	case *DLV:
 		return x.unpack(data, msgBuf)
 	case *CDS:
-		return x.unpack(data, msgBuf)
-	case *DS:
 		return x.unpack(data, msgBuf)
 	case *KX:
 		return x.unpack(data, msgBuf)
@@ -284,13 +290,9 @@ func zunpack(rr RR, data, msgBuf []byte) error {
 		return x.unpack(data, msgBuf)
 	case *CDNSKEY:
 		return x.unpack(data, msgBuf)
-	case *DNSKEY:
-		return x.unpack(data, msgBuf)
 	case *RKEY:
 		return x.unpack(data, msgBuf)
 	case *NSAPPTR:
-		return x.unpack(data, msgBuf)
-	case *NSEC3:
 		return x.unpack(data, msgBuf)
 	case *NSEC3PARAM:
 		return x.unpack(data, msgBuf)
@@ -347,8 +349,6 @@ func zunpack(rr RR, data, msgBuf []byte) error {
 	case *SVCB:
 		return x.unpack(data, msgBuf)
 	case *HTTPS:
-		return x.unpack(data, msgBuf)
-	case *DELEG:
 		return x.unpack(data, msgBuf)
 	case *DELEGPARAM:
 		return x.unpack(data, msgBuf)

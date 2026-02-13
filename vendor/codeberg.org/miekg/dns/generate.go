@@ -63,7 +63,7 @@ func (zp *ZoneParser) generate(l dnslex.Lex) (RR, bool) {
 	// Create a complete new string, which we then parse again.
 	sb := builderPool.Get()
 	for l, ok := zp.c.Next(); ok; l, ok = zp.c.Next() {
-		if l.Err {
+		if l.Value == dnslex.Error {
 			return zp.setParseError("bad data in $GENERATE directive", l)
 		}
 		if l.Value == dnslex.Newline {

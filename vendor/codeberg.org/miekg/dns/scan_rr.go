@@ -137,49 +137,40 @@ func escapedStringOffset(s string, desiredByteOffset int) (int, bool) {
 	return -1, true
 }
 
-// A remainder of the rdata with embedded spaces, return the parsed string (sans the spaces)
+// remainder returns a remainder of the rdata with embedded spaces, return the parsed string (sans the spaces)
 // or an error
-func endingToString(c *dnslex.Lexer, errstr string) (string, error) {
-	sb := builderPool.Get()
-
+func remainder(c *dnslex.Lexer, errstr string) (string, error) {
+	s := "" // usually one or two strings, just contact without strings.Builder
 	for {
 		l, _ := c.Next()
-		if l.Value == dnslex.Newline || l.Value == dnslex.EOF {
-			s := sb.String()
-			builderPool.Put(sb)
-			return s, nil
-		}
-		if l.Err {
-			builderPool.Put(sb)
-			return "", &ParseError{err: errstr, lex: l}
-		}
-
 		switch l.Value {
+		case dnslex.Newline:
+			return s, nil
+		case dnslex.EOF:
+			return s, nil
 		case dnslex.String:
-			sb.WriteString(l.Token)
+			s += l.Token
 		case dnslex.Blank:
-			continue
 		default:
-			builderPool.Put(sb)
 			return "", &ParseError{err: errstr, lex: l}
 		}
 	}
 }
 
-// A remainder of the rdata with embedded spaces, split on unquoted whitespace
+// remainderSlice returns a remainder of the rdata with embedded spaces, split on unquoted whitespace
 // and return the parsed string slice or an error
-func endingToTxtSlice(c *dnslex.Lexer, errstr string) ([]string, error) {
+func remainderSlice(c *dnslex.Lexer, errstr string) ([]string, error) {
 	l, _ := c.Next()
-	if l.Err {
+	if l.Value == dnslex.Error {
 		return nil, &ParseError{err: errstr, lex: l}
 	}
 
-	// Build the slice
+	// build the slice
 	s := make([]string, 0, 2)
 	quote := false
 	empty := false
 	for l.Value != dnslex.Newline && l.Value != dnslex.EOF {
-		if l.Err {
+		if l.Value == dnslex.Error {
 			return nil, &ParseError{err: errstr, lex: l}
 		}
 		switch l.Value {
@@ -194,11 +185,11 @@ func endingToTxtSlice(c *dnslex.Lexer, errstr string) ([]string, error) {
 				}
 				if i != -1 && p+i != len(l.Token) {
 					s = append(s, l.Token[p:p+i])
+					p += i
 				} else {
 					s = append(s, l.Token[p:])
 					break
 				}
-				p += i
 			}
 		case dnslex.Blank:
 			if quote {

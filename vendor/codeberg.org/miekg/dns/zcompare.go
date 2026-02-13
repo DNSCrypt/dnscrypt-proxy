@@ -9,11 +9,33 @@ import (
 
 func compare(a, b RR) int {
 	switch x := a.(type) {
+	case *DELEG:
+		return x.compare(b)
+	case *NSEC3:
+		return x.compare(b)
+	case *DNSKEY:
+		return x.compare(b)
+	case *DS:
+		return x.compare(b)
+	case *NSEC:
+		return x.compare(b)
+	case *RRSIG:
+		return x.compare(b)
+	case *AAAA:
+		return x.compare(b)
+	case *A:
+		return x.compare(b)
+	case *TXT:
+		return x.compare(b)
+	case *NS:
+		return x.compare(b)
+	case *MX:
+		return x.compare(b)
+	case *CNAME:
+		return x.compare(b)
 	case *NULL:
 		return x.compare(b)
 	case *NXNAME:
-		return x.compare(b)
-	case *CNAME:
 		return x.compare(b)
 	case *HINFO:
 		return x.compare(b)
@@ -29,8 +51,6 @@ func compare(a, b RR) int {
 		return x.compare(b)
 	case *MD:
 		return x.compare(b)
-	case *MX:
-		return x.compare(b)
 	case *AFSDB:
 		return x.compare(b)
 	case *X25:
@@ -39,15 +59,11 @@ func compare(a, b RR) int {
 		return x.compare(b)
 	case *RT:
 		return x.compare(b)
-	case *NS:
-		return x.compare(b)
 	case *PTR:
 		return x.compare(b)
 	case *RP:
 		return x.compare(b)
 	case *SOA:
-		return x.compare(b)
-	case *TXT:
 		return x.compare(b)
 	case *SPF:
 		return x.compare(b)
@@ -67,10 +83,6 @@ func compare(a, b RR) int {
 		return x.compare(b)
 	case *DNAME:
 		return x.compare(b)
-	case *A:
-		return x.compare(b)
-	case *AAAA:
-		return x.compare(b)
 	case *PX:
 		return x.compare(b)
 	case *GPOS:
@@ -79,17 +91,11 @@ func compare(a, b RR) int {
 		return x.compare(b)
 	case *SIG:
 		return x.compare(b)
-	case *RRSIG:
-		return x.compare(b)
 	case *NXT:
-		return x.compare(b)
-	case *NSEC:
 		return x.compare(b)
 	case *DLV:
 		return x.compare(b)
 	case *CDS:
-		return x.compare(b)
-	case *DS:
 		return x.compare(b)
 	case *KX:
 		return x.compare(b)
@@ -103,13 +109,9 @@ func compare(a, b RR) int {
 		return x.compare(b)
 	case *CDNSKEY:
 		return x.compare(b)
-	case *DNSKEY:
-		return x.compare(b)
 	case *RKEY:
 		return x.compare(b)
 	case *NSAPPTR:
-		return x.compare(b)
-	case *NSEC3:
 		return x.compare(b)
 	case *NSEC3PARAM:
 		return x.compare(b)
@@ -166,8 +168,6 @@ func compare(a, b RR) int {
 	case *SVCB:
 		return x.compare(b)
 	case *HTTPS:
-		return x.compare(b)
-	case *DELEG:
 		return x.compare(b)
 	case *DELEGPARAM:
 		return x.compare(b)

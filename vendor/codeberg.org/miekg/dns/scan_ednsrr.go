@@ -12,7 +12,7 @@ func (o *ZONEVERSION) parse(c *dnslex.Lexer, _ string) error {
 	// this parses the output: 8 SOA-SERIAL 1000000000
 	l, _ := c.Next()
 	i, err := strconv.ParseUint(l.Token, 10, 8)
-	if err != nil || l.Err {
+	if err != nil || l.Value == dnslex.Error {
 		return &ParseError{err: "bad ZONEVERSION Labels", lex: l}
 	}
 	o.Labels = uint8(i)
@@ -27,7 +27,7 @@ func (o *ZONEVERSION) parse(c *dnslex.Lexer, _ string) error {
 	c.Next()        // zBlank
 	l, _ = c.Next() // zString
 	i, err = strconv.ParseUint(l.Token, 10, 32)
-	if err != nil || l.Err {
+	if err != nil || l.Value == dnslex.Error {
 		return &ParseError{err: "bad ZONEVERSION Version", lex: l}
 	}
 	binary.BigEndian.PutUint32(o.Version, uint32(i))
@@ -38,7 +38,7 @@ func (o *EDE) parse(c *dnslex.Lexer, _ string) error {
 	// this parses the output: EDE     15 "Blocked": ""
 	l, _ := c.Next()
 	i, err := strconv.ParseUint(l.Token, 10, 16)
-	if err != nil || l.Err {
+	if err != nil || l.Value == dnslex.Error {
 		return &ParseError{err: "bad EDE InfoCode", lex: l}
 	}
 	o.InfoCode = uint16(i)
