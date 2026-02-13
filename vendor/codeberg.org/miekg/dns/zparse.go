@@ -7,11 +7,33 @@ import "codeberg.org/miekg/dns/internal/dnslex"
 
 func parse(rr RR, c *dnslex.Lexer, o string) error {
 	switch x := rr.(type) {
+	case *DELEG:
+		return x.parse(c, o)
+	case *NSEC3:
+		return x.parse(c, o)
+	case *DNSKEY:
+		return x.parse(c, o)
+	case *DS:
+		return x.parse(c, o)
+	case *NSEC:
+		return x.parse(c, o)
+	case *RRSIG:
+		return x.parse(c, o)
+	case *AAAA:
+		return x.parse(c, o)
+	case *A:
+		return x.parse(c, o)
+	case *TXT:
+		return x.parse(c, o)
+	case *NS:
+		return x.parse(c, o)
+	case *MX:
+		return x.parse(c, o)
+	case *CNAME:
+		return x.parse(c, o)
 	case *NULL:
 		return x.parse(c, o)
 	case *NXNAME:
-		return x.parse(c, o)
-	case *CNAME:
 		return x.parse(c, o)
 	case *HINFO:
 		return x.parse(c, o)
@@ -27,8 +49,6 @@ func parse(rr RR, c *dnslex.Lexer, o string) error {
 		return x.parse(c, o)
 	case *MD:
 		return x.parse(c, o)
-	case *MX:
-		return x.parse(c, o)
 	case *AFSDB:
 		return x.parse(c, o)
 	case *X25:
@@ -37,15 +57,11 @@ func parse(rr RR, c *dnslex.Lexer, o string) error {
 		return x.parse(c, o)
 	case *RT:
 		return x.parse(c, o)
-	case *NS:
-		return x.parse(c, o)
 	case *PTR:
 		return x.parse(c, o)
 	case *RP:
 		return x.parse(c, o)
 	case *SOA:
-		return x.parse(c, o)
-	case *TXT:
 		return x.parse(c, o)
 	case *SPF:
 		return x.parse(c, o)
@@ -65,10 +81,6 @@ func parse(rr RR, c *dnslex.Lexer, o string) error {
 		return x.parse(c, o)
 	case *DNAME:
 		return x.parse(c, o)
-	case *A:
-		return x.parse(c, o)
-	case *AAAA:
-		return x.parse(c, o)
 	case *PX:
 		return x.parse(c, o)
 	case *GPOS:
@@ -77,17 +89,11 @@ func parse(rr RR, c *dnslex.Lexer, o string) error {
 		return x.parse(c, o)
 	case *SIG:
 		return x.parse(c, o)
-	case *RRSIG:
-		return x.parse(c, o)
 	case *NXT:
-		return x.parse(c, o)
-	case *NSEC:
 		return x.parse(c, o)
 	case *DLV:
 		return x.parse(c, o)
 	case *CDS:
-		return x.parse(c, o)
-	case *DS:
 		return x.parse(c, o)
 	case *KX:
 		return x.parse(c, o)
@@ -101,13 +107,9 @@ func parse(rr RR, c *dnslex.Lexer, o string) error {
 		return x.parse(c, o)
 	case *CDNSKEY:
 		return x.parse(c, o)
-	case *DNSKEY:
-		return x.parse(c, o)
 	case *RKEY:
 		return x.parse(c, o)
 	case *NSAPPTR:
-		return x.parse(c, o)
-	case *NSEC3:
 		return x.parse(c, o)
 	case *NSEC3PARAM:
 		return x.parse(c, o)
@@ -164,8 +166,6 @@ func parse(rr RR, c *dnslex.Lexer, o string) error {
 	case *SVCB:
 		return x.parse(c, o)
 	case *HTTPS:
-		return x.parse(c, o)
-	case *DELEG:
 		return x.parse(c, o)
 	case *DELEGPARAM:
 		return x.parse(c, o)

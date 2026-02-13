@@ -2,9 +2,20 @@
 
 package dns
 
+func (rr *DELEG) Header() *Header      { return &rr.Hdr }
+func (rr *NSEC3) Header() *Header      { return &rr.Hdr }
+func (rr *DNSKEY) Header() *Header     { return &rr.Hdr }
+func (rr *DS) Header() *Header         { return &rr.Hdr }
+func (rr *NSEC) Header() *Header       { return &rr.Hdr }
+func (rr *RRSIG) Header() *Header      { return &rr.Hdr }
+func (rr *AAAA) Header() *Header       { return &rr.Hdr }
+func (rr *A) Header() *Header          { return &rr.Hdr }
+func (rr *TXT) Header() *Header        { return &rr.Hdr }
+func (rr *NS) Header() *Header         { return &rr.Hdr }
+func (rr *MX) Header() *Header         { return &rr.Hdr }
+func (rr *CNAME) Header() *Header      { return &rr.Hdr }
 func (rr *NULL) Header() *Header       { return &rr.Hdr }
 func (rr *NXNAME) Header() *Header     { return &rr.Hdr }
-func (rr *CNAME) Header() *Header      { return &rr.Hdr }
 func (rr *HINFO) Header() *Header      { return &rr.Hdr }
 func (rr *MB) Header() *Header         { return &rr.Hdr }
 func (rr *MG) Header() *Header         { return &rr.Hdr }
@@ -12,16 +23,13 @@ func (rr *MINFO) Header() *Header      { return &rr.Hdr }
 func (rr *MR) Header() *Header         { return &rr.Hdr }
 func (rr *MF) Header() *Header         { return &rr.Hdr }
 func (rr *MD) Header() *Header         { return &rr.Hdr }
-func (rr *MX) Header() *Header         { return &rr.Hdr }
 func (rr *AFSDB) Header() *Header      { return &rr.Hdr }
 func (rr *X25) Header() *Header        { return &rr.Hdr }
 func (rr *ISDN) Header() *Header       { return &rr.Hdr }
 func (rr *RT) Header() *Header         { return &rr.Hdr }
-func (rr *NS) Header() *Header         { return &rr.Hdr }
 func (rr *PTR) Header() *Header        { return &rr.Hdr }
 func (rr *RP) Header() *Header         { return &rr.Hdr }
 func (rr *SOA) Header() *Header        { return &rr.Hdr }
-func (rr *TXT) Header() *Header        { return &rr.Hdr }
 func (rr *SPF) Header() *Header        { return &rr.Hdr }
 func (rr *AVC) Header() *Header        { return &rr.Hdr }
 func (rr *WALLET) Header() *Header     { return &rr.Hdr }
@@ -31,28 +39,21 @@ func (rr *SRV) Header() *Header        { return &rr.Hdr }
 func (rr *NAPTR) Header() *Header      { return &rr.Hdr }
 func (rr *CERT) Header() *Header       { return &rr.Hdr }
 func (rr *DNAME) Header() *Header      { return &rr.Hdr }
-func (rr *A) Header() *Header          { return &rr.Hdr }
-func (rr *AAAA) Header() *Header       { return &rr.Hdr }
 func (rr *PX) Header() *Header         { return &rr.Hdr }
 func (rr *GPOS) Header() *Header       { return &rr.Hdr }
 func (rr *LOC) Header() *Header        { return &rr.Hdr }
 func (rr *SIG) Header() *Header        { return &rr.Hdr }
-func (rr *RRSIG) Header() *Header      { return &rr.Hdr }
 func (rr *NXT) Header() *Header        { return &rr.Hdr }
-func (rr *NSEC) Header() *Header       { return &rr.Hdr }
 func (rr *DLV) Header() *Header        { return &rr.Hdr }
 func (rr *CDS) Header() *Header        { return &rr.Hdr }
-func (rr *DS) Header() *Header         { return &rr.Hdr }
 func (rr *KX) Header() *Header         { return &rr.Hdr }
 func (rr *TA) Header() *Header         { return &rr.Hdr }
 func (rr *TALINK) Header() *Header     { return &rr.Hdr }
 func (rr *SSHFP) Header() *Header      { return &rr.Hdr }
 func (rr *KEY) Header() *Header        { return &rr.Hdr }
 func (rr *CDNSKEY) Header() *Header    { return &rr.Hdr }
-func (rr *DNSKEY) Header() *Header     { return &rr.Hdr }
 func (rr *RKEY) Header() *Header       { return &rr.Hdr }
 func (rr *NSAPPTR) Header() *Header    { return &rr.Hdr }
-func (rr *NSEC3) Header() *Header      { return &rr.Hdr }
 func (rr *NSEC3PARAM) Header() *Header { return &rr.Hdr }
 func (rr *TKEY) Header() *Header       { return &rr.Hdr }
 func (rr *RFC3597) Header() *Header    { return &rr.Hdr }
@@ -81,7 +82,6 @@ func (rr *OPT) Header() *Header        { return &rr.Hdr }
 func (rr *RESINFO) Header() *Header    { return &rr.Hdr }
 func (rr *SVCB) Header() *Header       { return &rr.Hdr }
 func (rr *HTTPS) Header() *Header      { return &rr.Hdr }
-func (rr *DELEG) Header() *Header      { return &rr.Hdr }
 func (rr *DELEGPARAM) Header() *Header { return &rr.Hdr }
 func (rr *DSYNC) Header() *Header      { return &rr.Hdr }
 func (rr *ANY) Header() *Header        { return &rr.Hdr }
@@ -95,9 +95,20 @@ func (rr *TSIG) Header() *Header       { return &rr.Hdr }
 //	rr := dns.TypeToRR[dns.TypeMX]()
 //	fmt.Println(rr) // "0       CLASS0  MX      0"
 var TypeToRR = map[uint16]func() RR{
+	TypeDELEG:      func() RR { return new(DELEG) },
+	TypeNSEC3:      func() RR { return new(NSEC3) },
+	TypeDNSKEY:     func() RR { return new(DNSKEY) },
+	TypeDS:         func() RR { return new(DS) },
+	TypeNSEC:       func() RR { return new(NSEC) },
+	TypeRRSIG:      func() RR { return new(RRSIG) },
+	TypeAAAA:       func() RR { return new(AAAA) },
+	TypeA:          func() RR { return new(A) },
+	TypeTXT:        func() RR { return new(TXT) },
+	TypeNS:         func() RR { return new(NS) },
+	TypeMX:         func() RR { return new(MX) },
+	TypeCNAME:      func() RR { return new(CNAME) },
 	TypeNULL:       func() RR { return new(NULL) },
 	TypeNXNAME:     func() RR { return new(NXNAME) },
-	TypeCNAME:      func() RR { return new(CNAME) },
 	TypeHINFO:      func() RR { return new(HINFO) },
 	TypeMB:         func() RR { return new(MB) },
 	TypeMG:         func() RR { return new(MG) },
@@ -105,16 +116,13 @@ var TypeToRR = map[uint16]func() RR{
 	TypeMR:         func() RR { return new(MR) },
 	TypeMF:         func() RR { return new(MF) },
 	TypeMD:         func() RR { return new(MD) },
-	TypeMX:         func() RR { return new(MX) },
 	TypeAFSDB:      func() RR { return new(AFSDB) },
 	TypeX25:        func() RR { return new(X25) },
 	TypeISDN:       func() RR { return new(ISDN) },
 	TypeRT:         func() RR { return new(RT) },
-	TypeNS:         func() RR { return new(NS) },
 	TypePTR:        func() RR { return new(PTR) },
 	TypeRP:         func() RR { return new(RP) },
 	TypeSOA:        func() RR { return new(SOA) },
-	TypeTXT:        func() RR { return new(TXT) },
 	TypeSPF:        func() RR { return new(SPF) },
 	TypeAVC:        func() RR { return new(AVC) },
 	TypeWALLET:     func() RR { return new(WALLET) },
@@ -124,28 +132,21 @@ var TypeToRR = map[uint16]func() RR{
 	TypeNAPTR:      func() RR { return new(NAPTR) },
 	TypeCERT:       func() RR { return new(CERT) },
 	TypeDNAME:      func() RR { return new(DNAME) },
-	TypeA:          func() RR { return new(A) },
-	TypeAAAA:       func() RR { return new(AAAA) },
 	TypePX:         func() RR { return new(PX) },
 	TypeGPOS:       func() RR { return new(GPOS) },
 	TypeLOC:        func() RR { return new(LOC) },
 	TypeSIG:        func() RR { return new(SIG) },
-	TypeRRSIG:      func() RR { return new(RRSIG) },
 	TypeNXT:        func() RR { return new(NXT) },
-	TypeNSEC:       func() RR { return new(NSEC) },
 	TypeDLV:        func() RR { return new(DLV) },
 	TypeCDS:        func() RR { return new(CDS) },
-	TypeDS:         func() RR { return new(DS) },
 	TypeKX:         func() RR { return new(KX) },
 	TypeTA:         func() RR { return new(TA) },
 	TypeTALINK:     func() RR { return new(TALINK) },
 	TypeSSHFP:      func() RR { return new(SSHFP) },
 	TypeKEY:        func() RR { return new(KEY) },
 	TypeCDNSKEY:    func() RR { return new(CDNSKEY) },
-	TypeDNSKEY:     func() RR { return new(DNSKEY) },
 	TypeRKEY:       func() RR { return new(RKEY) },
 	TypeNSAPPTR:    func() RR { return new(NSAPPTR) },
-	TypeNSEC3:      func() RR { return new(NSEC3) },
 	TypeNSEC3PARAM: func() RR { return new(NSEC3PARAM) },
 	TypeTKEY:       func() RR { return new(TKEY) },
 	TypeURI:        func() RR { return new(URI) },
@@ -173,7 +174,6 @@ var TypeToRR = map[uint16]func() RR{
 	TypeRESINFO:    func() RR { return new(RESINFO) },
 	TypeSVCB:       func() RR { return new(SVCB) },
 	TypeHTTPS:      func() RR { return new(HTTPS) },
-	TypeDELEG:      func() RR { return new(DELEG) },
 	TypeDELEGPARAM: func() RR { return new(DELEGPARAM) },
 	TypeDSYNC:      func() RR { return new(DSYNC) },
 	TypeANY:        func() RR { return new(ANY) },
@@ -185,12 +185,34 @@ var TypeToRR = map[uint16]func() RR{
 // RRToType is the reverse of TypeToRR.
 func RRToType(rr RR) uint16 {
 	switch rr.(type) {
+	case *DELEG:
+		return TypeDELEG
+	case *NSEC3:
+		return TypeNSEC3
+	case *DNSKEY:
+		return TypeDNSKEY
+	case *DS:
+		return TypeDS
+	case *NSEC:
+		return TypeNSEC
+	case *RRSIG:
+		return TypeRRSIG
+	case *AAAA:
+		return TypeAAAA
+	case *A:
+		return TypeA
+	case *TXT:
+		return TypeTXT
+	case *NS:
+		return TypeNS
+	case *MX:
+		return TypeMX
+	case *CNAME:
+		return TypeCNAME
 	case *NULL:
 		return TypeNULL
 	case *NXNAME:
 		return TypeNXNAME
-	case *CNAME:
-		return TypeCNAME
 	case *HINFO:
 		return TypeHINFO
 	case *MB:
@@ -205,8 +227,6 @@ func RRToType(rr RR) uint16 {
 		return TypeMF
 	case *MD:
 		return TypeMD
-	case *MX:
-		return TypeMX
 	case *AFSDB:
 		return TypeAFSDB
 	case *X25:
@@ -215,16 +235,12 @@ func RRToType(rr RR) uint16 {
 		return TypeISDN
 	case *RT:
 		return TypeRT
-	case *NS:
-		return TypeNS
 	case *PTR:
 		return TypePTR
 	case *RP:
 		return TypeRP
 	case *SOA:
 		return TypeSOA
-	case *TXT:
-		return TypeTXT
 	case *SPF:
 		return TypeSPF
 	case *AVC:
@@ -243,10 +259,6 @@ func RRToType(rr RR) uint16 {
 		return TypeCERT
 	case *DNAME:
 		return TypeDNAME
-	case *A:
-		return TypeA
-	case *AAAA:
-		return TypeAAAA
 	case *PX:
 		return TypePX
 	case *GPOS:
@@ -255,18 +267,12 @@ func RRToType(rr RR) uint16 {
 		return TypeLOC
 	case *SIG:
 		return TypeSIG
-	case *RRSIG:
-		return TypeRRSIG
 	case *NXT:
 		return TypeNXT
-	case *NSEC:
-		return TypeNSEC
 	case *DLV:
 		return TypeDLV
 	case *CDS:
 		return TypeCDS
-	case *DS:
-		return TypeDS
 	case *KX:
 		return TypeKX
 	case *TA:
@@ -279,14 +285,10 @@ func RRToType(rr RR) uint16 {
 		return TypeKEY
 	case *CDNSKEY:
 		return TypeCDNSKEY
-	case *DNSKEY:
-		return TypeDNSKEY
 	case *RKEY:
 		return TypeRKEY
 	case *NSAPPTR:
 		return TypeNSAPPTR
-	case *NSEC3:
-		return TypeNSEC3
 	case *NSEC3PARAM:
 		return TypeNSEC3PARAM
 	case *TKEY:
@@ -341,8 +343,6 @@ func RRToType(rr RR) uint16 {
 		return TypeSVCB
 	case *HTTPS:
 		return TypeHTTPS
-	case *DELEG:
-		return TypeDELEG
 	case *DELEGPARAM:
 		return TypeDELEGPARAM
 	case *DSYNC:
@@ -364,9 +364,20 @@ func RRToType(rr RR) uint16 {
 
 // TypeToString is a map of strings for each RR type.
 var TypeToString = map[uint16]string{
+	TypeDELEG:      "DELEG",
+	TypeNSEC3:      "NSEC3",
+	TypeDNSKEY:     "DNSKEY",
+	TypeDS:         "DS",
+	TypeNSEC:       "NSEC",
+	TypeRRSIG:      "RRSIG",
+	TypeAAAA:       "AAAA",
+	TypeA:          "A",
+	TypeTXT:        "TXT",
+	TypeNS:         "NS",
+	TypeMX:         "MX",
+	TypeCNAME:      "CNAME",
 	TypeNULL:       "NULL",
 	TypeNXNAME:     "NXNAME",
-	TypeCNAME:      "CNAME",
 	TypeHINFO:      "HINFO",
 	TypeMB:         "MB",
 	TypeMG:         "MG",
@@ -374,16 +385,13 @@ var TypeToString = map[uint16]string{
 	TypeMR:         "MR",
 	TypeMF:         "MF",
 	TypeMD:         "MD",
-	TypeMX:         "MX",
 	TypeAFSDB:      "AFSDB",
 	TypeX25:        "X25",
 	TypeISDN:       "ISDN",
 	TypeRT:         "RT",
-	TypeNS:         "NS",
 	TypePTR:        "PTR",
 	TypeRP:         "RP",
 	TypeSOA:        "SOA",
-	TypeTXT:        "TXT",
 	TypeSPF:        "SPF",
 	TypeAVC:        "AVC",
 	TypeWALLET:     "WALLET",
@@ -393,27 +401,20 @@ var TypeToString = map[uint16]string{
 	TypeNAPTR:      "NAPTR",
 	TypeCERT:       "CERT",
 	TypeDNAME:      "DNAME",
-	TypeA:          "A",
-	TypeAAAA:       "AAAA",
 	TypePX:         "PX",
 	TypeGPOS:       "GPOS",
 	TypeLOC:        "LOC",
 	TypeSIG:        "SIG",
-	TypeRRSIG:      "RRSIG",
 	TypeNXT:        "NXT",
-	TypeNSEC:       "NSEC",
 	TypeDLV:        "DLV",
 	TypeCDS:        "CDS",
-	TypeDS:         "DS",
 	TypeKX:         "KX",
 	TypeTA:         "TA",
 	TypeTALINK:     "TALINK",
 	TypeSSHFP:      "SSHFP",
 	TypeKEY:        "KEY",
 	TypeCDNSKEY:    "CDNSKEY",
-	TypeDNSKEY:     "DNSKEY",
 	TypeRKEY:       "RKEY",
-	TypeNSEC3:      "NSEC3",
 	TypeNSEC3PARAM: "NSEC3PARAM",
 	TypeTKEY:       "TKEY",
 	TypeURI:        "URI",
@@ -441,7 +442,6 @@ var TypeToString = map[uint16]string{
 	TypeRESINFO:    "RESINFO",
 	TypeSVCB:       "SVCB",
 	TypeHTTPS:      "HTTPS",
-	TypeDELEG:      "DELEG",
 	TypeDELEGPARAM: "DELEGPARAM",
 	TypeDSYNC:      "DSYNC",
 	TypeANY:        "ANY",

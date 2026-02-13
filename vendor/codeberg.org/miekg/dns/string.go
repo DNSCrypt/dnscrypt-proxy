@@ -9,21 +9,21 @@ import (
 )
 
 func typeToString(t uint16) string {
-	if t1, ok := TypeToString[uint16(t)]; ok {
+	if t1, ok := TypeToString[t]; ok {
 		return t1
 	}
 	return "TYPE" + strconv.Itoa(int(t))
 }
 
 func codeToString(t uint16) string {
-	if t1, ok := CodeToString[uint16(t)]; ok {
+	if t1, ok := CodeToString[t]; ok {
 		return t1
 	}
 	return "CODE" + strconv.Itoa(int(t))
 }
 
 func classToString(c uint16) string {
-	if s, ok := ClassToString[uint16(c)]; ok {
+	if s, ok := ClassToString[c]; ok {
 		return s
 	}
 	return "CLASS" + strconv.Itoa(int(c))

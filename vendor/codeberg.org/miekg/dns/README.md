@@ -24,12 +24,6 @@ Example programs are included _and_ benchmarked in `cmd`.
 production ready name server. Because of these we are depending on a lot more external packages - at some
 point these servers will be split off.
 
-The naming of types follows the RFCs. EDNS0 types are similarly named, for instance, DHU (DS Hash Understood).
-If there is a clash between an actual RR's and an EDNS0 one, the EDNS0 type will get an 'E' as prefix, e.g.
-EDHU. This will also be done if the RR was named later than the EDNS0 option! The same is the for DSO (DNS
-Stateful Operations), when clashing those types will be prefixed with a 'D'. If EDNS0 and DSO clash, EDNS0
-wins. See PADDING and DPADDING as an example.
-
 This new version will not soon see a v1.0.0 release because I want to be able to still make changes. In a
 year or two (2028?) when things have stablized it will be blessed with a v1.0.0.
 
@@ -61,8 +55,9 @@ For developers please read the
     - On my Dell XPS 17 (Intel) it is similar-ish (~300K/240K qps UDP/TCP).
     - On other Intel/AMD hardware it is lower (~200K (UDP) qps) - yet to understand why.
   - See `cmd/reflect` and do a `go build; make new.txt` to redo the performance test. Requires `dnsperf` to be installed.
-  - Parsing zone files goes by 440K RR/s, meaning the SE (8M RRs) zone is parsed in ~18s, for NL (6M RRs), this would be
-    ~13s. This was achieved with a PGO optimized build of `cmd/parse`.
+  - The SE zone (8M RRs) is parsed in \~18s (\~440K RR/s), the CH zones (15M RRs) is parsed in \~21s (\~ 650K
+    RRs). The main difference being that SE use algorithm 8, and CH algorithm 13 (shorter RRSIGs).
+    See `cmd/parse`, tested with M2/Asahi Linux.
 
 # Users
 

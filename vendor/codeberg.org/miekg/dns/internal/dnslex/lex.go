@@ -24,6 +24,7 @@ func (e *ScanError) Error() string { return "" }
 const (
 	// Zone file
 	EOF uint8 = iota
+	Error
 	String
 	Blank
 	Quote
@@ -39,12 +40,11 @@ const (
 
 type Lex struct {
 	Token  string // text of the token
+	Torc   uint16 // type or class as parsed in the lexer, we only need to look this up in the grammar
 	Line   int    // line in the file
 	Column int    // column in the file
-	Torc   uint16 // type or class as parsed in the lexer, we only need to look this up in the grammar
 	Value  uint8  // value: String, Blank, etc.
 	As     uint8  // create an RR (asRR), an EDNS0 (asCode) or DSO RR (asStateful)
-	Err    bool   // when true, token text has lexer error
 }
 
 const (
@@ -127,12 +127,12 @@ func (zl *Lexer) readByte() (byte, bool) {
 		zl.eol = false
 	}
 
-	zl.column++
 	if c == '\n' {
 		zl.eol = true
-		zl.column--
+		return c, true
 	}
 
+	zl.column++
 	return c, true
 }
 
@@ -149,11 +149,11 @@ func (zl *Lexer) Peek() Lex {
 	if zl.nextL {
 		// Cache l. Next returns zl.cachedL then zl.l.
 		zl.cachedL = &l
-	} else {
-		// In this case l == zl.l, so we just tell Next to return zl.l.
-		zl.nextL = true
+		return l
 	}
 
+	// In this case l == zl.l, so we just tell Next to return zl.l.
+	zl.nextL = true
 	return l
 }
 
@@ -166,14 +166,13 @@ func (zl *Lexer) Next() (Lex, bool) {
 	case zl.nextL:
 		zl.nextL = false
 		return *l, true
-	case l.Err:
+	case l.Value == Error:
 		// Parsing errors should be sticky.
 		return Lex{Value: EOF}, false
 	}
 
 	zl.tok = zl.tok[:0]
 	escape := false
-
 	l.As = asRR
 
 	for x, ok := zl.readByte(); ok; x, ok = zl.readByte() {
@@ -369,7 +368,7 @@ func (zl *Lexer) Next() (Lex, bool) {
 
 				if zl.brace < 0 {
 					l.Token = "extra closing brace"
-					l.Err = true
+					l.Value = Error
 					return *l, true
 				}
 			case '(':
@@ -398,7 +397,7 @@ func (zl *Lexer) Next() (Lex, bool) {
 
 	if zl.brace != 0 {
 		l.Token = "unbalanced brace"
-		l.Err = true
+		l.Value = Error
 		return *l, true
 	}
 
@@ -438,8 +437,8 @@ func Discard(c *Lexer) *ScanError {
 // Tokens is used to gather up the remaining tokens and hand them to a custom Scan method for external RRs.
 func Tokens(c *Lexer) []string {
 	tokens := []string{}
-	l, _ := c.Next()
 	for {
+		l, _ := c.Next()
 		switch l.Value {
 		case Blank:
 		case Newline, EOF:
@@ -447,7 +446,6 @@ func Tokens(c *Lexer) []string {
 		default:
 			tokens = append(tokens, l.Token)
 		}
-		l, _ = c.Next()
 	}
 }
 
@@ -471,11 +469,9 @@ func (zl *Lexer) typeOrCodeOrClass(l *Lex) {
 		return
 	}
 
-	if t, ok := zl.stringToCode[l.Token]; ok {
-		l.As = asCode
-		l.Value = Rrtype
+	if t, ok := zl.stringToClass[l.Token]; ok {
+		l.Value = Class
 		l.Torc = t
-		zl.rrtype = true
 		return
 	}
 
@@ -483,7 +479,7 @@ func (zl *Lexer) typeOrCodeOrClass(l *Lex) {
 		t, ok := TypeToInt(l.Token)
 		if !ok {
 			l.Token = "unknown RR type"
-			l.Err = true
+			l.Value = Error
 			return
 		}
 		l.Value = Rrtype
@@ -492,21 +488,23 @@ func (zl *Lexer) typeOrCodeOrClass(l *Lex) {
 		return
 	}
 
-	if t, ok := zl.stringToClass[l.Token]; ok {
-		l.Value = Class
-		l.Torc = t
-		return
-	}
-
 	if strings.HasPrefix(l.Token, "CLASS") {
 		t, ok := classToInt(l.Token)
 		if !ok {
 			l.Token = "unknown class"
-			l.Err = true
+			l.Value = Error
 			return
 		}
 		l.Value = Class
 		l.Torc = t
+	}
+
+	if t, ok := zl.stringToCode[l.Token]; ok {
+		l.As = asCode
+		l.Value = Rrtype
+		l.Torc = t
+		zl.rrtype = true
+		return
 	}
 }
 
