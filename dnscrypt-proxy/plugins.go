@@ -77,7 +77,7 @@ type PluginsState struct {
 	synthResponse                    *dns.Msg
 	questionMsg                      *dns.Msg
 	xTransport                       *XTransport
-	sessionData                      map[string]interface{}
+	sessionData                      map[string]any
 	action                           PluginsAction
 	timeout                          time.Duration
 	returnCode                       PluginsReturnCode
@@ -200,8 +200,8 @@ func parseBlockedQueryResponse(blockedResponse string, pluginsGlobals *PluginsGl
 		}
 
 		if len(blockedIPStrings) > 1 {
-			if strings.HasPrefix(blockedIPStrings[1], "aaaa:") {
-				ipv6Response := strings.TrimPrefix(blockedIPStrings[1], "aaaa:")
+			if after, ok := strings.CutPrefix(blockedIPStrings[1], "aaaa:"); ok {
+				ipv6Response := after
 				if strings.HasPrefix(ipv6Response, "[") {
 					ipv6Response = strings.Trim(ipv6Response, "[]")
 				}
@@ -268,7 +268,7 @@ func NewPluginsState(
 		timeout:                          proxy.timeout,
 		requestStart:                     start,
 		maxUnencryptedUDPSafePayloadSize: MaxDNSUDPSafePacketSize,
-		sessionData:                      make(map[string]interface{}),
+		sessionData:                      make(map[string]any),
 		xTransport:                       proxy.xTransport,
 	}
 }

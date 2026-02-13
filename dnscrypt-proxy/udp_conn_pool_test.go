@@ -53,7 +53,7 @@ func TestUDPConnPool_MaxConns(t *testing.T) {
 	addr, _ := net.ResolveUDPAddr("udp", "127.0.0.1:53")
 
 	var conns []*net.UDPConn
-	for i := 0; i < UDPPoolMaxConnsPerAddr+2; i++ {
+	for i := range UDPPoolMaxConnsPerAddr + 2 {
 		conn, err := pool.Get(addr)
 		if err != nil {
 			t.Fatalf("Failed to get connection %d: %v", i, err)
@@ -99,11 +99,9 @@ func TestUDPConnPool_Concurrent(t *testing.T) {
 	var wg sync.WaitGroup
 	iterations := 100
 
-	for i := 0; i < 10; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for j := 0; j < iterations; j++ {
+	for range 10 {
+		wg.Go(func() {
+			for range iterations {
 				conn, err := pool.Get(addr)
 				if err != nil {
 					t.Errorf("Failed to get connection: %v", err)
@@ -112,7 +110,7 @@ func TestUDPConnPool_Concurrent(t *testing.T) {
 				time.Sleep(time.Microsecond)
 				pool.Put(addr, conn)
 			}
-		}()
+		})
 	}
 
 	wg.Wait()

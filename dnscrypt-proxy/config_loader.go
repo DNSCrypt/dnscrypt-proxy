@@ -207,8 +207,8 @@ func configureLoadBalancing(proxy *Proxy, config *Config) {
 	case "wp2":
 		lbStrategy = LBStrategyWP2{}
 	default:
-		if strings.HasPrefix(lbStrategyStr, "p") {
-			n, err := strconv.ParseInt(strings.TrimPrefix(lbStrategyStr, "p"), 10, 32)
+		if after, ok := strings.CutPrefix(lbStrategyStr, "p"); ok {
+			n, err := strconv.ParseInt(after, 10, 32)
 			if err != nil || n <= 0 {
 				dlog.Warnf("Invalid load balancing strategy: [%s]", config.LBStrategy)
 			} else {

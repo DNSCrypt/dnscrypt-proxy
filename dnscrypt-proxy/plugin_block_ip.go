@@ -12,7 +12,7 @@ import (
 
 type PluginBlockIP struct {
 	blockedPrefixes *iradix.Tree
-	blockedIPs      map[string]interface{}
+	blockedIPs      map[string]any
 	logger          io.Writer
 	format          string
 	ipCryptConfig   *IPCryptConfig
@@ -22,7 +22,7 @@ type PluginBlockIP struct {
 	configFile      string
 	configWatcher   *ConfigWatcher
 	stagingPrefixes *iradix.Tree
-	stagingIPs      map[string]interface{}
+	stagingIPs      map[string]any
 }
 
 func (plugin *PluginBlockIP) Name() string {
@@ -43,7 +43,7 @@ func (plugin *PluginBlockIP) Init(proxy *Proxy) error {
 	}
 
 	plugin.blockedPrefixes = iradix.New()
-	plugin.blockedIPs = make(map[string]interface{})
+	plugin.blockedIPs = make(map[string]any)
 
 	plugin.blockedPrefixes, err = plugin.loadRules(lines, plugin.blockedPrefixes, plugin.blockedIPs)
 	if err != nil {
@@ -57,7 +57,7 @@ func (plugin *PluginBlockIP) Init(proxy *Proxy) error {
 }
 
 // loadRules parses and loads IP rules into the provided tree and map
-func (plugin *PluginBlockIP) loadRules(lines string, prefixes *iradix.Tree, ips map[string]interface{}) (*iradix.Tree, error) {
+func (plugin *PluginBlockIP) loadRules(lines string, prefixes *iradix.Tree, ips map[string]any) (*iradix.Tree, error) {
 	return LoadIPRules(lines, prefixes, ips)
 }
 
@@ -73,7 +73,7 @@ func (plugin *PluginBlockIP) PrepareReload() error {
 	return StandardPrepareReloadPattern(plugin.Name(), plugin.configFile, func(lines string) error {
 		// Create staging structures
 		plugin.stagingPrefixes = iradix.New()
-		plugin.stagingIPs = make(map[string]interface{})
+		plugin.stagingIPs = make(map[string]any)
 
 		// Load rules into staging structures
 		var err error

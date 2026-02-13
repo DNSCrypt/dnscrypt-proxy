@@ -36,14 +36,12 @@ func TestReloadSafeguard(t *testing.T) {
 	const numReaders = 10
 
 	// Start readers
-	for i := 0; i < numReaders; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range numReaders {
+		wg.Go(func() {
 			rs.AcquireConfigRead()
 			// Simulate read access
 			rs.ReleaseConfigRead()
-		}()
+		})
 	}
 
 	// Try to acquire write lock while readers are active

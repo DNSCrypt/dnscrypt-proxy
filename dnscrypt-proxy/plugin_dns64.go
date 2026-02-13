@@ -141,10 +141,7 @@ func (plugin *PluginDNS64) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 		if rrtype == dns.TypeCNAME {
 			synth64 = append(synth64, answer)
 		} else if rrtype == dns.TypeA {
-			ttl := initialTTL
-			if ttl > header.TTL {
-				ttl = header.TTL
-			}
+			ttl := min(initialTTL, header.TTL)
 
 			ipv4 := answer.(*dns.A).A.Addr.AsSlice()
 			if len(ipv4) == 4 {
@@ -188,7 +185,7 @@ func translateToIPv6(ipv4 net.IP, prefix *net.IPNet) net.IP {
 	copy(ipv6, prefix.IP)
 	n, _ := prefix.Mask.Size()
 	ipShift := n / 8
-	for i := 0; i < net.IPv4len; i++ {
+	for i := range net.IPv4len {
 		if ipShift+i == 8 {
 			ipShift++
 		}

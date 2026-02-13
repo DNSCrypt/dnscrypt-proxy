@@ -291,7 +291,7 @@ func (source *Source) Parse() ([]RegisteredServer, error) {
 func (source *Source) parseV2() ([]RegisteredServer, error) {
 	var registeredServers []RegisteredServer
 	var stampErrs []string
-	appendStampErr := func(format string, a ...interface{}) {
+	appendStampErr := func(format string, a ...any) {
 		stampErr := fmt.Sprintf(format, a...)
 		stampErrs = append(stampErrs, stampErr)
 		dlog.Warn(stampErr)

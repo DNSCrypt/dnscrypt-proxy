@@ -780,8 +780,8 @@ func (xTransport *XTransport) Fetch(
 							break
 						}
 						v = strings.TrimSpace(v)
-						if strings.HasPrefix(v, "h3=\":") {
-							v = strings.TrimPrefix(v, "h3=\":")
+						if after, ok := strings.CutPrefix(v, "h3=\":"); ok {
+							v = after
 							v = strings.TrimSuffix(v, "\"")
 							if xAltPort, err := strconv.ParseUint(v, 10, 16); err == nil && xAltPort <= 65535 {
 								altPort = uint16(xAltPort)

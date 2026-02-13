@@ -26,16 +26,16 @@ type PatternMatcher struct {
 	suffixes     *critbitgo.Trie
 	substrings   []string
 	patterns     []string
-	exact        map[string]interface{}
-	indirectVals map[string]interface{}
+	exact        map[string]any
+	indirectVals map[string]any
 }
 
 func NewPatternMatcher() *PatternMatcher {
 	patternMatcher := PatternMatcher{
 		prefixes:     critbitgo.NewTrie(),
 		suffixes:     critbitgo.NewTrie(),
-		exact:        make(map[string]interface{}),
-		indirectVals: make(map[string]interface{}),
+		exact:        make(map[string]any),
+		indirectVals: make(map[string]any),
 	}
 	return &patternMatcher
 }
@@ -51,7 +51,7 @@ func isGlobCandidate(str string) bool {
 	return false
 }
 
-func (patternMatcher *PatternMatcher) Add(pattern string, val interface{}, position int) error {
+func (patternMatcher *PatternMatcher) Add(pattern string, val any, position int) error {
 	// Determine pattern type based on wildcards and special characters
 	leadingStar := strings.HasPrefix(pattern, "*")
 	trailingStar := strings.HasSuffix(pattern, "*")
@@ -122,7 +122,7 @@ func (patternMatcher *PatternMatcher) Add(pattern string, val interface{}, posit
 	return nil
 }
 
-func (patternMatcher *PatternMatcher) Eval(qName string) (reject bool, reason string, val interface{}) {
+func (patternMatcher *PatternMatcher) Eval(qName string) (reject bool, reason string, val any) {
 	if len(qName) < 2 {
 		return false, "", nil
 	}

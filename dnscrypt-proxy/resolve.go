@@ -52,7 +52,7 @@ func resolveQuery(server string, qName string, qType uint16, sendClientSubnet bo
 	}
 
 	readTimeout := transport.ReadTimeout
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		msg.ID = dns.ID()
 		msg.Data = nil // Clear packed data so Exchange will re-pack with new ID
 		ctx, cancel := context.WithTimeout(context.Background(), readTimeout)
@@ -106,10 +106,10 @@ func Resolve(server string, name string, singleResolver bool) {
 			}
 			var ip string
 			for _, txt := range answer.(*dns.TXT).Txt {
-				if strings.HasPrefix(txt, "Resolver IP: ") {
-					ip = strings.TrimPrefix(txt, "Resolver IP: ")
-				} else if strings.HasPrefix(txt, "EDNS0 client subnet: ") {
-					clientSubnet = strings.TrimPrefix(txt, "EDNS0 client subnet: ")
+				if after, ok := strings.CutPrefix(txt, "Resolver IP: "); ok {
+					ip = after
+				} else if after, ok := strings.CutPrefix(txt, "EDNS0 client subnet: "); ok {
+					clientSubnet = after
 				}
 			}
 			if ip == "" {
@@ -176,7 +176,7 @@ func Resolve(server string, name string, singleResolver bool) {
 cname:
 	for once := true; once; once = false {
 		fmt.Printf("Canonical name: ")
-		for i := 0; i < 100; i++ {
+		for range 100 {
 			response, err := resolveQuery(server, cname, dns.TypeCNAME, false)
 			if err != nil {
 				break cname

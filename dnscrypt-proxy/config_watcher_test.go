@@ -75,8 +75,8 @@ func TestConfigWatcher(t *testing.T) {
 	}
 
 	// Test that rapid changes are debounced
-	for i := 0; i < 5; i++ {
-		content := []byte(fmt.Sprintf("%d content", i))
+	for i := range 5 {
+		content := fmt.Appendf(nil, "%d content", i)
 		if err := os.WriteFile(tempFile, content, 0o644); err != nil {
 			t.Fatalf("Failed to update test file in loop: %v", err)
 		}

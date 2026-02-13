@@ -115,7 +115,7 @@ func (plugin *PluginForward) parseForwardFile(lines string) (bool, []PluginForwa
 		}
 		domain = strings.ToLower(domain)
 		var sequence []SearchSequenceItem
-		for _, server := range strings.Split(serversStr, ",") {
+		for server := range strings.SplitSeq(serversStr, ",") {
 			server = strings.TrimSpace(server)
 			switch server {
 			case "$BOOTSTRAP":

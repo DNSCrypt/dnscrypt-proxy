@@ -10,6 +10,7 @@ import (
 	"math/rand"
 	"net"
 	"net/url"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -267,7 +268,7 @@ func (serversInfo *ServersInfo) refresh(proxy *Proxy) (int, error) {
 	}
 	liveServers := 0
 	var err error
-	for i := 0; i < serversCount; i++ {
+	for range serversCount {
 		err = <-errorChannel
 		if err == nil {
 			liveServers++
@@ -284,7 +285,7 @@ func (serversInfo *ServersInfo) refresh(proxy *Proxy) (int, error) {
 	innerLen := len(inner)
 	if innerLen > 1 {
 		dlog.Notice("Sorted latencies:")
-		for i := 0; i < innerLen; i++ {
+		for i := range innerLen {
 			dlog.Noticef("- %5dms %s", inner[i].initialRtt, inner[i].Name)
 		}
 	}
@@ -708,12 +709,9 @@ func fetchDNSCryptServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp
 		stamp.ServerPk = serverPk
 	}
 	knownBugs := ServerBugs{}
-	for _, buggyServerName := range proxy.serversBlockingFragments {
-		if buggyServerName == name {
-			knownBugs.fragmentsBlocked = true
-			dlog.Infof("Known bug in [%v]: fragmented questions over UDP are blocked", name)
-			break
-		}
+	if slices.Contains(proxy.serversBlockingFragments, name) {
+		knownBugs.fragmentsBlocked = true
+		dlog.Infof("Known bug in [%v]: fragmented questions over UDP are blocked", name)
 	}
 	relay, err := route(proxy, name, stamp.Proto)
 	if err != nil {
