@@ -713,8 +713,8 @@ func stringToTTL(token string) (uint32, bool) {
 	}
 
 	var s, i uint
-	for _, c := range token {
-		switch c {
+	for j := range token {
+		switch token[j] {
 		case 's', 'S':
 			s += i
 			i = 0
@@ -732,7 +732,7 @@ func stringToTTL(token string) (uint32, bool) {
 			i = 0
 		case '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
 			i *= 10
-			i += uint(c) - '0'
+			i += uint(token[j]) - '0'
 		default:
 			return 0, false
 		}

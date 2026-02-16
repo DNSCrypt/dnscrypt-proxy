@@ -158,7 +158,7 @@ func (o *EDE) pack(msg []byte, off int) (int, error) {
 func (e *REPORTING) unpack(s *cryptobyte.String) (err error) {
 	e.AgentDomain, err = unpack.Name(s, nil) // TODO: unpackNAme with nil buffer, no compression pointers..
 	if err != nil {
-		return unpack.Errorf("overflow REPORTING agent domain")
+		return unpack.Errorf("overflow REPORTING AgentDomain")
 	}
 	return nil
 }
@@ -331,4 +331,13 @@ func (o *ZONEVERSION) unpack(s *cryptobyte.String) (err error) {
 	v, err := unpack.StringAny(s, len(*s))
 	o.Version = []byte(v)
 	return err
+}
+
+func (o *ERFC3597) pack(msg []byte, off int) (int, error) {
+	return hex.Decode(msg[off:], []byte(o.Code))
+}
+
+func (o *ERFC3597) unpack(s *cryptobyte.String) error {
+	o.Code = hex.EncodeToString(*s)
+	return nil
 }

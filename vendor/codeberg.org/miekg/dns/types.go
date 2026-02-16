@@ -987,9 +987,9 @@ func (rr *RFC3597) String() string {
 	sb.WriteByte('\t')
 	sb.WriteString(strconv.FormatInt(int64(rr.Hdr.TTL), 10))
 	sb.WriteByte('\t')
-	sb.WriteString("CLASS" + strconv.Itoa(int(rr.Hdr.Class)))
+	sb.WriteString(classToString(rr.Header().Class))
 	sb.WriteByte('\t')
-	sb.WriteString("TYPE" + strconv.Itoa(int(rr.RRType)))
+	sb.WriteString(typeToString(rr.RRType))
 	sb.WriteByte('\t')
 
 	sb.WriteString(rr.RFC3597.String())

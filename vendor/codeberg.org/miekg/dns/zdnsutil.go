@@ -186,8 +186,8 @@ func dnsutilStringToTime(s string) (uint32, error) {
 	if err != nil {
 		return 0, err
 	}
-	mod := max(t.Unix()/maxSerialIncrement-1, 0)
-	return uint32(t.Unix() - mod*maxSerialIncrement), nil
+	mod := max(t/maxSerialIncrement-1, 0)
+	return uint32(t - mod*maxSerialIncrement), nil
 }
 
 // Absolute takes the name and origin and appends the origin to the name. This takes the 1035 presentation

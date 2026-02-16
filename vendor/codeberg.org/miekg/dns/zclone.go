@@ -881,7 +881,6 @@ func (rr *N3U) Clone() RR {
 func (rr *TCPKEEPALIVE) Clone() RR {
 	return &TCPKEEPALIVE{
 		rr.Timeout,
-		rr.Length,
 	}
 }
 
@@ -912,6 +911,13 @@ func (rr *ZONEVERSION) Clone() RR {
 		rr.Labels,
 		rr.Type,
 		slices.Clone(rr.Version),
+	}
+}
+
+func (rr *ERFC3597) Clone() RR {
+	return &ERFC3597{
+		rr.EDNS0Code,
+		rr.Code,
 	}
 }
 
