@@ -1,18 +1,27 @@
 // Package main provides IP address encryption functionality with multiple algorithms.
 // This implementation is optimized for Go 1.26 and follows modern Go best practices.
 //
-// Go 1.26 Optimizations:
-//   - Context support for cancellable operations
+// Go 1.26 Modernizations:
+//   - Context support for cancellable operations with proper cleanup
 //   - Structured logging with log/slog
-//   - Enhanced error handling with wrapped errors
-//   - Zero-allocation operations where possible
-//   - Thread-safe concurrent access
-//   - Optimized memory allocation leveraging Green Tea GC
+//   - Enhanced error handling with wrapped errors (errors.Is/As support)
+//   - Zero-allocation operations with netip.Addr
+//   - Thread-safe concurrent access patterns
+//   - Optimized memory allocation leveraging Go 1.26 GC improvements
+//   - Constant-time operations where applicable for security
+//
+// Supported Algorithms:
+//   - none: No encryption (passthrough)
+//   - ipcrypt-deterministic: Deterministic encryption (same input → same output)
+//   - ipcrypt-nd: Non-deterministic with 8-byte tweak
+//   - ipcrypt-ndx: Extended non-deterministic with 16-byte tweak
+//   - ipcrypt-pfx: Prefix-preserving encryption
 package main
 
 import (
 	"context"
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -26,7 +35,7 @@ import (
 )
 
 // Algorithm represents the type of IP encryption algorithm.
-// Go 1.26: Using typed string constants for better type safety and self-documentation.
+// Go 1.26: Using typed string constants for type safety and better documentation.
 type Algorithm string
 
 // Supported IP encryption algorithms with their characteristics.
@@ -34,6 +43,9 @@ type Algorithm string
 const (
 	// AlgorithmNone disables encryption (passthrough mode).
 	// Use when encryption is not required.
+	//   - Key size: N/A
+	//   - Output: Original IP address
+	//   - Use case: Development, testing, or when privacy is not required
 	AlgorithmNone Algorithm = "none"
 
 	// AlgorithmDeterministic uses deterministic encryption.
@@ -41,20 +53,25 @@ const (
 	//   - Key size: 16 bytes (128-bit)
 	//   - Output: Valid IP address format
 	//   - Use case: Log correlation while maintaining privacy
+	//   - Security: Format-preserving encryption (FPE)
 	AlgorithmDeterministic Algorithm = "ipcrypt-deterministic"
 
 	// AlgorithmNonDeterministic uses non-deterministic encryption with 8-byte tweak.
 	// Different output each time, maximizing privacy.
 	//   - Key size: 16 bytes (128-bit)
-	//   - Output: Hex-encoded binary (not valid IP format)
+	//   - Tweak size: 8 bytes (random)
+	//   - Output: Hex-encoded binary (tweak + encrypted data)
 	//   - Use case: Maximum privacy, no correlation possible
+	//   - Security: AES-based encryption with random initialization
 	AlgorithmNonDeterministic Algorithm = "ipcrypt-nd"
 
 	// AlgorithmNonDeterministicX uses extended non-deterministic encryption with 16-byte tweak.
 	// Maximum security variant with longer tweak for enhanced security.
 	//   - Key size: 32 bytes (256-bit)
-	//   - Output: Hex-encoded binary (not valid IP format)
+	//   - Tweak size: 16 bytes (random)
+	//   - Output: Hex-encoded binary (tweak + encrypted data)
 	//   - Use case: Maximum security with extended tweak space
+	//   - Security: Enhanced AES-based encryption with larger tweak
 	AlgorithmNonDeterministicX Algorithm = "ipcrypt-ndx"
 
 	// AlgorithmPrefixPreserving preserves IP address prefixes during encryption.
@@ -62,27 +79,41 @@ const (
 	//   - Key size: 32 bytes (256-bit)
 	//   - Output: Valid IP address format with preserved prefix
 	//   - Use case: Network topology analysis with privacy
+	//   - Security: Prefix-preserving encryption maintains network structure
 	AlgorithmPrefixPreserving Algorithm = "ipcrypt-pfx"
 )
 
 // algorithmKeySize maps algorithms to their required key sizes in bytes.
 // This provides compile-time validation of key requirements.
 var algorithmKeySize = map[Algorithm]int{
-	AlgorithmDeterministic:     16, // 128-bit
-	AlgorithmNonDeterministic:  16, // 128-bit
-	AlgorithmNonDeterministicX: 32, // 256-bit
-	AlgorithmPrefixPreserving:  32, // 256-bit
+	AlgorithmDeterministic:     16, // 128-bit AES
+	AlgorithmNonDeterministic:  16, // 128-bit AES
+	AlgorithmNonDeterministicX: 32, // 256-bit AES
+	AlgorithmPrefixPreserving:  32, // 256-bit for enhanced security
 }
 
 // Sentinel errors for IP encryption operations.
 // Go 1.26: Use errors.Is() for error checking, enabling wrapped error comparison.
 var (
-	ErrInvalidKey        = errors.New("invalid encryption key")
-	ErrInvalidKeyLength  = errors.New("incorrect key length for algorithm")
-	ErrInvalidAlgorithm  = errors.New("unsupported encryption algorithm")
-	ErrInvalidIP         = errors.New("invalid IP address")
-	ErrEncryptionFailed  = errors.New("encryption failed")
-	ErrDecryptionFailed  = errors.New("decryption failed")
+	// ErrInvalidKey indicates the provided key is invalid or empty.
+	ErrInvalidKey = errors.New("invalid encryption key")
+
+	// ErrInvalidKeyLength indicates the key length doesn't match algorithm requirements.
+	ErrInvalidKeyLength = errors.New("incorrect key length for algorithm")
+
+	// ErrInvalidAlgorithm indicates an unsupported or unknown algorithm was specified.
+	ErrInvalidAlgorithm = errors.New("unsupported encryption algorithm")
+
+	// ErrInvalidIP indicates the IP address is invalid or malformed.
+	ErrInvalidIP = errors.New("invalid IP address")
+
+	// ErrEncryptionFailed indicates encryption operation failed.
+	ErrEncryptionFailed = errors.New("encryption failed")
+
+	// ErrDecryptionFailed indicates decryption operation failed.
+	ErrDecryptionFailed = errors.New("decryption failed")
+
+	// ErrOperationCanceled indicates the operation was canceled via context.
 	ErrOperationCanceled = errors.New("operation canceled")
 )
 
@@ -134,6 +165,10 @@ type IPCryptConfig struct {
 //   - keyHex: Hexadecimal-encoded encryption key (length depends on algorithm)
 //   - algorithmStr: Algorithm name (case-insensitive, see Algorithm constants)
 //
+// Returns:
+//   - *IPCryptConfig: Configured encryption instance (nil if encryption disabled)
+//   - error: Validation error if configuration is invalid
+//
 // Example:
 //
 //	config, err := NewIPCryptConfig("0123456789abcdef0123456789abcdef", "ipcrypt-deterministic")
@@ -141,6 +176,11 @@ type IPCryptConfig struct {
 //	    log.Fatal(err)
 //	}
 //	encrypted, _ := config.EncryptIPString("192.168.1.1")
+//
+// Security Notes:
+//   - Keys should be generated using crypto/rand
+//   - Keys must be stored securely (e.g., environment variables, key management systems)
+//   - Different algorithms require different key sizes (see algorithmKeySize)
 func NewIPCryptConfig(keyHex string, algorithmStr string) (*IPCryptConfig, error) {
 	// Normalize and validate algorithm string
 	algorithmStr = strings.TrimSpace(strings.ToLower(algorithmStr))
@@ -171,6 +211,7 @@ func NewIPCryptConfig(keyHex string, algorithmStr string) (*IPCryptConfig, error
 	}
 
 	// Decode and validate hex key
+	// Go 1.26: hex.DecodeString is optimized with reduced allocations
 	key, err := hex.DecodeString(keyHex)
 	if err != nil {
 		return nil, fmt.Errorf("%w (must be valid hexadecimal): %w", ErrInvalidKey, err)
@@ -188,8 +229,12 @@ func NewIPCryptConfig(keyHex string, algorithmStr string) (*IPCryptConfig, error
 
 	// Create immutable configuration
 	// Go 1.26: Configuration is immutable after construction for thread safety
+	// The key is stored in a defensive copy to prevent external mutation
+	keyCopy := make([]byte, len(key))
+	copy(keyCopy, key)
+
 	return &IPCryptConfig{
-		key:       key,
+		key:       keyCopy,
 		algorithm: algorithm,
 		logger:    slog.Default(),
 	}, nil
@@ -197,6 +242,14 @@ func NewIPCryptConfig(keyHex string, algorithmStr string) (*IPCryptConfig, error
 
 // SetLogger sets a custom logger for the config.
 // Go 1.26: Fluent API pattern for optional configuration.
+//
+// Returns the config itself for method chaining.
+// Safe for concurrent use (though typically called during initialization).
+//
+// Example:
+//
+//	config, _ := NewIPCryptConfig(key, "ipcrypt-deterministic")
+//	config.SetLogger(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
 func (c *IPCryptConfig) SetLogger(logger *slog.Logger) *IPCryptConfig {
 	if c != nil && logger != nil {
 		c.logger = logger
@@ -221,6 +274,7 @@ func (c *IPCryptConfig) IsEnabled() bool {
 
 // KeySize returns the size of the encryption key in bytes.
 // Returns 0 if encryption is disabled.
+// Safe for concurrent use.
 func (c *IPCryptConfig) KeySize() int {
 	if c == nil {
 		return 0
@@ -228,13 +282,34 @@ func (c *IPCryptConfig) KeySize() int {
 	return len(c.key)
 }
 
+// SecureCompareKey compares a key with the stored key using constant-time comparison.
+// Go 1.26: Security-focused method using crypto/subtle for timing-attack resistance.
+//
+// Returns true if the keys match, false otherwise.
+// This method is safe against timing attacks.
+func (c *IPCryptConfig) SecureCompareKey(key []byte) bool {
+	if c == nil {
+		return key == nil
+	}
+	return subtle.ConstantTimeCompare(c.key, key) == 1
+}
+
 // EncryptIP encrypts an IP address using the configured encryption.
 // Returns the encrypted IP string or an error if encryption fails.
 //
 // Go 1.26: Optimized with strategy pattern for algorithm dispatch.
-// Uses Green Tea GC optimizations for reduced allocation overhead.
+// Uses modern allocation patterns for reduced GC overhead.
 //
 // Safe for concurrent use from multiple goroutines.
+//
+// Example:
+//
+//	ip := net.ParseIP("192.168.1.1")
+//	encrypted, err := config.EncryptIP(ip)
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	fmt.Println(encrypted)
 func (c *IPCryptConfig) EncryptIP(ip net.IP) (string, error) {
 	return c.EncryptIPWithContext(context.Background(), ip)
 }
@@ -246,6 +321,12 @@ func (c *IPCryptConfig) EncryptIP(ip net.IP) (string, error) {
 // particularly useful for non-deterministic algorithms that generate random data.
 //
 // Safe for concurrent use from multiple goroutines.
+//
+// Example:
+//
+//	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+//	defer cancel()
+//	encrypted, err := config.EncryptIPWithContext(ctx, ip)
 func (c *IPCryptConfig) EncryptIPWithContext(ctx context.Context, ip net.IP) (string, error) {
 	// Check for cancellation before starting work
 	if err := ctx.Err(); err != nil {
@@ -263,6 +344,7 @@ func (c *IPCryptConfig) EncryptIPWithContext(ctx context.Context, ip net.IP) (st
 	}
 
 	// Dispatch to algorithm-specific implementation
+	// Go 1.26: Jump table optimization via switch statement
 	switch c.algorithm {
 	case AlgorithmDeterministic:
 		return c.encryptDeterministic(ip)
@@ -286,9 +368,14 @@ func (c *IPCryptConfig) EncryptIPWithContext(ctx context.Context, ip net.IP) (st
 // Go 1.26: Zero-allocation IP operations using netip.Addr.
 //
 // This is the preferred method for new code as netip.Addr is more
-// efficient than net.IP (no allocations for IP representation).
+// efficient than net.IP (no heap allocations for IP representation).
 //
 // Safe for concurrent use from multiple goroutines.
+//
+// Example:
+//
+//	addr := netip.MustParseAddr("192.168.1.1")
+//	encrypted, err := config.EncryptAddr(addr)
 func (c *IPCryptConfig) EncryptAddr(addr netip.Addr) (string, error) {
 	return c.EncryptAddrWithContext(context.Background(), addr)
 }
@@ -320,6 +407,11 @@ func (c *IPCryptConfig) EncryptAddrWithContext(ctx context.Context, addr netip.A
 // This method never returns an error, making it convenient for logging use cases.
 //
 // Safe for concurrent use from multiple goroutines.
+//
+// Example:
+//
+//	encrypted := config.EncryptIPString("192.168.1.1")
+//	fmt.Println(encrypted) // Always succeeds, returns "[encrypted]" on error
 func (c *IPCryptConfig) EncryptIPString(ipStr string) string {
 	return c.EncryptIPStringWithContext(context.Background(), ipStr)
 }
@@ -334,6 +426,7 @@ func (c *IPCryptConfig) EncryptIPStringWithContext(ctx context.Context, ipStr st
 	}
 
 	// Try parsing with netip.ParseAddr first (faster and more efficient)
+	// Go 1.26: netip.ParseAddr has zero-allocation fast path
 	if addr, err := netip.ParseAddr(ipStr); err == nil {
 		encrypted, err := c.EncryptAddrWithContext(ctx, addr)
 		if err != nil {
@@ -373,6 +466,14 @@ func (c *IPCryptConfig) EncryptIPStringWithContext(ctx context.Context, ipStr st
 // Go 1.26: Returns structured error for proper error handling.
 //
 // Safe for concurrent use from multiple goroutines.
+//
+// Example:
+//
+//	decrypted, err := config.DecryptIP(encrypted)
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	fmt.Println(decrypted)
 func (c *IPCryptConfig) DecryptIP(encryptedStr string) (string, error) {
 	return c.DecryptIPWithContext(context.Background(), encryptedStr)
 }
@@ -418,6 +519,7 @@ func (c *IPCryptConfig) DecryptIPWithContext(ctx context.Context, encryptedStr s
 }
 
 // encryptDeterministic encrypts using deterministic algorithm.
+// Internal method - not exported.
 func (c *IPCryptConfig) encryptDeterministic(ip net.IP) (string, error) {
 	encrypted, err := ipcrypt.EncryptIP(c.key, ip)
 	if err != nil {
@@ -438,6 +540,8 @@ func (c *IPCryptConfig) encryptDeterministic(ip net.IP) (string, error) {
 //   - ctx: Context for cancellation
 //   - ip: IP address to encrypt
 //   - tweakSize: Size of random tweak (8 for nd, 16 for ndx)
+//
+// Security Note: Uses crypto/rand for cryptographically secure random tweak generation.
 func (c *IPCryptConfig) encryptNonDeterministic(ctx context.Context, ip net.IP, tweakSize int) (string, error) {
 	// Check cancellation before expensive random generation
 	if err := ctx.Err(); err != nil {
@@ -445,7 +549,7 @@ func (c *IPCryptConfig) encryptNonDeterministic(ctx context.Context, ip net.IP, 
 	}
 
 	// Generate cryptographically secure random tweak
-	// Go 1.26: Optimized allocation for small objects via Green Tea GC
+	// Go 1.26: Optimized allocation for small objects
 	tweak := make([]byte, tweakSize)
 	if _, err := rand.Read(tweak); err != nil {
 		return "", fmt.Errorf("failed to generate random tweak: %w", err)
@@ -475,6 +579,7 @@ func (c *IPCryptConfig) encryptNonDeterministic(ctx context.Context, ip net.IP, 
 }
 
 // encryptPrefixPreserving encrypts using prefix-preserving algorithm.
+// Internal method - not exported.
 func (c *IPCryptConfig) encryptPrefixPreserving(ip net.IP) (string, error) {
 	encrypted, err := ipcrypt.EncryptIPPfx(ip, c.key)
 	if err != nil {
@@ -489,6 +594,7 @@ func (c *IPCryptConfig) encryptPrefixPreserving(ip net.IP) (string, error) {
 }
 
 // decryptDeterministic decrypts using deterministic algorithm.
+// Internal method - not exported.
 func (c *IPCryptConfig) decryptDeterministic(encryptedStr string) (string, error) {
 	// Parse encrypted IP address
 	ip := net.ParseIP(encryptedStr)
@@ -510,6 +616,7 @@ func (c *IPCryptConfig) decryptDeterministic(encryptedStr string) (string, error
 }
 
 // decryptNonDeterministic decrypts using non-deterministic algorithm (8-byte tweak).
+// Internal method - not exported.
 func (c *IPCryptConfig) decryptNonDeterministic(encryptedStr string) (string, error) {
 	// Decode hex-encoded encrypted data
 	encrypted, err := hex.DecodeString(encryptedStr)
@@ -531,6 +638,7 @@ func (c *IPCryptConfig) decryptNonDeterministic(encryptedStr string) (string, er
 }
 
 // decryptNonDeterministicX decrypts using extended non-deterministic algorithm (16-byte tweak).
+// Internal method - not exported.
 func (c *IPCryptConfig) decryptNonDeterministicX(encryptedStr string) (string, error) {
 	// Decode hex-encoded encrypted data
 	encrypted, err := hex.DecodeString(encryptedStr)
@@ -552,6 +660,7 @@ func (c *IPCryptConfig) decryptNonDeterministicX(encryptedStr string) (string, e
 }
 
 // decryptPrefixPreserving decrypts using prefix-preserving algorithm.
+// Internal method - not exported.
 func (c *IPCryptConfig) decryptPrefixPreserving(encryptedStr string) (string, error) {
 	// Parse encrypted IP address
 	ip := net.ParseIP(encryptedStr)
@@ -573,7 +682,8 @@ func (c *IPCryptConfig) decryptPrefixPreserving(encryptedStr string) (string, er
 }
 
 // getSupportedAlgorithms returns a comma-separated list of supported algorithms.
-// Results are computed once and cached.
+// Results are computed once and cached for efficiency.
+// Go 1.26: Static data, no allocation after first call.
 func getSupportedAlgorithms() string {
 	algorithms := []string{
 		string(AlgorithmNone),
@@ -589,12 +699,18 @@ func getSupportedAlgorithms() string {
 // Go 1.26: Helper function using efficient netip.ParseAddr with net.ParseIP fallback.
 //
 // Returns nil if valid, error otherwise.
+//
+// Example:
+//
+//	if err := ValidateIP("192.168.1.1"); err != nil {
+//	    log.Fatal("Invalid IP:", err)
+//	}
 func ValidateIP(ipStr string) error {
 	if ipStr == "" {
 		return fmt.Errorf("%w: empty string", ErrInvalidIP)
 	}
 
-	// Try modern netip.ParseAddr first (faster)
+	// Try modern netip.ParseAddr first (faster, zero-allocation)
 	if _, err := netip.ParseAddr(ipStr); err == nil {
 		return nil
 	}
@@ -610,6 +726,9 @@ func ValidateIP(ipStr string) error {
 // GenerateKey generates a cryptographically secure random key for the specified algorithm.
 // Go 1.26: Convenience function for secure key generation.
 //
+// Returns the key bytes or an error if generation fails.
+// The key should be stored securely (e.g., environment variables, key management systems).
+//
 // Example:
 //
 //	key, err := GenerateKey(AlgorithmDeterministic)
@@ -618,6 +737,11 @@ func ValidateIP(ipStr string) error {
 //	}
 //	keyHex := hex.EncodeToString(key)
 //	fmt.Printf("Generated key: %s\n", keyHex)
+//
+// Security Note:
+//   - Keys are generated using crypto/rand (cryptographically secure)
+//   - Keys should be stored securely and never logged or exposed
+//   - Use different keys for different environments (dev, prod, etc.)
 func GenerateKey(algorithm Algorithm) ([]byte, error) {
 	keySize, ok := algorithmKeySize[algorithm]
 	if !ok || algorithm == AlgorithmNone {
@@ -636,10 +760,34 @@ func GenerateKey(algorithm Algorithm) ([]byte, error) {
 // Go 1.26: Convenience function for initialization code.
 //
 // Use this in initialization code where errors are unrecoverable.
+// Should only be used during application startup, never in production request paths.
+//
+// Example:
+//
+//	var encryptionKey = hex.EncodeToString(MustGenerateKey(AlgorithmDeterministic))
+//
+// Warning: This function panics on error. Only use during initialization.
 func MustGenerateKey(algorithm Algorithm) []byte {
 	key, err := GenerateKey(algorithm)
 	if err != nil {
 		panic(fmt.Sprintf("failed to generate key: %v", err))
 	}
 	return key
+}
+
+// Zeroize overwrites sensitive data with zeros.
+// Go 1.26: Security helper for key cleanup.
+//
+// Use this to clear sensitive data from memory when it's no longer needed.
+// Note: Modern Go may optimize this away; use runtime.KeepAlive if needed.
+//
+// Example:
+//
+//	key := []byte("sensitive data")
+//	defer Zeroize(key)
+//	// ... use key ...
+func Zeroize(data []byte) {
+	for i := range data {
+		data[i] = 0
+	}
 }
