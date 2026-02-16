@@ -4,7 +4,7 @@
 //
 // Go 1.26 Optimizations:
 //   - Structured logging with log/slog
-//   - Context-aware operations
+//   - Context-aware operations (via dedicated methods)
 //   - Enhanced error handling with wrapped errors
 //   - Constant-time operations for security
 //   - Buffer pool for reduced allocations
@@ -23,6 +23,7 @@ import (
 	"log/slog"
 	"sync"
 
+	"github.com/jedisct1/dlog"
 	"golang.org/x/crypto/chacha20"
 	"golang.org/x/crypto/chacha20poly1305"
 	"golang.org/x/crypto/curve25519"
@@ -104,34 +105,6 @@ func putBuffer(buf *[]byte) {
 	}
 }
 
-// CryptoConstruction represents the type of authenticated encryption.
-type CryptoConstruction uint8
-
-const (
-	// UndefinedConstruction indicates an uninitialized or invalid construction.
-	UndefinedConstruction CryptoConstruction = iota
-
-	// XSalsa20Poly1305 uses XSalsa20 stream cipher with Poly1305 MAC.
-	// Legacy construction, still widely supported.
-	XSalsa20Poly1305
-
-	// XChacha20Poly1305 uses XChaCha20 stream cipher with Poly1305 MAC.
-	// Modern construction with extended nonce space (192 bits).
-	XChacha20Poly1305
-)
-
-// String returns the string representation of the crypto construction.
-func (c CryptoConstruction) String() string {
-	switch c {
-	case XSalsa20Poly1305:
-		return "XSalsa20-Poly1305"
-	case XChacha20Poly1305:
-		return "XChaCha20-Poly1305"
-	default:
-		return "Undefined"
-	}
-}
-
 // pad applies ISO/IEC 7816-4 padding to reach minSize.
 // Go 1.26: Optimized with single allocation and explicit bounds.
 //
@@ -168,7 +141,7 @@ func unpad(packet []byte) ([]byte, error) {
 	}
 
 	// Search backwards for padding delimiter
-	// Go 1.26: Use explicit loop for clarity and constant-time properties
+	// Go 1.26: Use explicit loop for clarity
 	delimiterPos := -1
 	for i := length - 1; i >= 0; i-- {
 		if packet[i] == paddingDelimiter {
@@ -206,11 +179,66 @@ func isZeroKey(key []byte) bool {
 // ComputeSharedKey computes a shared secret key using X25519 ECDH.
 // Supports both XChacha20-Poly1305 and XSalsa20-Poly1305 constructions.
 //
-// Go 1.26: Enhanced error handling, returns error instead of panicking.
+// Go 1.26: Enhanced with proper error handling, but maintains backward compatibility
+// by logging errors and returning a valid (though potentially weak) key.
 //
 // For XChacha20-Poly1305: sharedKey = HChaCha20(X25519(sk, pk), 0)
 // For XSalsa20-Poly1305: sharedKey = X25519(sk, pk) via NaCl box.Precompute
 func ComputeSharedKey(
+	cryptoConstruction CryptoConstruction,
+	secretKey *[32]byte,
+	serverPk *[32]byte,
+	providerName *string,
+) (sharedKey [32]byte) {
+	if cryptoConstruction == XChacha20Poly1305 {
+		// XChacha20-Poly1305: HChaCha20(X25519(sk, pk), 00...00)
+		dhKey, err := curve25519.X25519(secretKey[:], serverPk[:])
+		if err != nil {
+			// Low-order point detected
+			if providerName != nil {
+				dlog.Criticalf("[%s] Weak XChaCha20 public key detected: %v", *providerName, err)
+			} else {
+				dlog.Criticalf("Weak XChaCha20 public key detected: %v", err)
+			}
+			return sharedKey // Returns zero key
+		}
+
+		// Apply HChaCha20 with zero nonce to derive final key
+		var zeroNonce [16]byte
+		subKey, err := chacha20.HChaCha20(dhKey, zeroNonce[:])
+		if err != nil {
+			dlog.Fatalf("HChaCha20 derivation failed: %v", err)
+		}
+
+		copy(sharedKey[:], subKey)
+	} else {
+		// XSalsa20-Poly1305: Use NaCl box precomputation
+		box.Precompute(&sharedKey, serverPk, secretKey)
+
+		// Validate shared key is non-zero (security check)
+		if isZeroKey(sharedKey[:]) {
+			if providerName != nil {
+				dlog.Criticalf("[%s] Weak XSalsa20 public key detected (zero shared key)", *providerName)
+			} else {
+				dlog.Critical("Weak XSalsa20 public key detected (zero shared key)")
+			}
+
+			// Generate random key as fallback to prevent protocol failure
+			// This should never happen with valid keys
+			if _, err := rand.Read(sharedKey[:]); err != nil {
+				dlog.Fatal(err)
+			}
+		}
+	}
+
+	return sharedKey
+}
+
+// ComputeSharedKeyWithError computes a shared secret key and returns an error if weak key is detected.
+// Go 1.26: Modern version that returns errors instead of logging.
+//
+// Use this for new code that needs proper error handling.
+func ComputeSharedKeyWithError(
 	cryptoConstruction CryptoConstruction,
 	secretKey *[32]byte,
 	serverPk *[32]byte,
@@ -227,7 +255,7 @@ func ComputeSharedKey(
 			if providerName != nil {
 				logMsg = fmt.Sprintf("[%s] %s", *providerName, logMsg)
 			}
-			return sharedKey, fmt.Errorf("%w: %s", ErrWeakPublicKey, logMsg)
+			return sharedKey, fmt.Errorf("%w: %s: %w", ErrWeakPublicKey, logMsg, err)
 		}
 
 		// Apply HChaCha20 with zero nonce to derive final key
@@ -250,7 +278,6 @@ func ComputeSharedKey(
 			}
 
 			// Generate random key as fallback to prevent protocol failure
-			// This should never happen with valid keys
 			if _, err := rand.Read(sharedKey[:]); err != nil {
 				return sharedKey, fmt.Errorf("%w: %w", ErrKeyGenerationFailed, err)
 			}
@@ -262,33 +289,23 @@ func ComputeSharedKey(
 	return sharedKey, nil
 }
 
-// ComputeSharedKeyCompat is a compatibility wrapper that logs errors instead of returning them.
-// Go 1.26: Provided for backward compatibility, use ComputeSharedKey for new code.
-//
-// Deprecated: Use ComputeSharedKey which returns errors properly.
-func ComputeSharedKeyCompat(
-	cryptoConstruction CryptoConstruction,
-	secretKey *[32]byte,
-	serverPk *[32]byte,
-	providerName *string,
-	logger *slog.Logger,
-) (sharedKey [32]byte) {
-	key, err := ComputeSharedKey(cryptoConstruction, secretKey, serverPk, providerName)
-	if err != nil {
-		if logger != nil {
-			logger.Error("Shared key computation failed", slog.Any("error", err))
-		}
-	}
-	return key
-}
-
 // Encrypt encrypts a DNS packet using the DNSCrypt protocol.
 // Returns the shared key, encrypted packet, client nonce, and any error.
 //
-// Go 1.26: Context-aware with better structure and error handling.
+// Go 1.26: Maintains backward compatibility while using modern internals.
 //
 // Packet structure: ClientMagic + PublicKey + ClientNonce + Tag + EncryptedData
 func (proxy *Proxy) Encrypt(
+	serverInfo *ServerInfo,
+	packet []byte,
+	proto string,
+) (sharedKey *[32]byte, encrypted []byte, clientNonce []byte, err error) {
+	return proxy.EncryptWithContext(context.Background(), serverInfo, packet, proto)
+}
+
+// EncryptWithContext encrypts a DNS packet with context support.
+// Go 1.26: Context-aware version for cancellation and timeout support.
+func (proxy *Proxy) EncryptWithContext(
 	ctx context.Context,
 	serverInfo *ServerInfo,
 	packet []byte,
@@ -359,17 +376,12 @@ func (proxy *Proxy) generateEphemeralKeys(
 	curve25519.ScalarBaseMult(&ephPk, &ephSk)
 
 	// Compute shared key using ephemeral secret
-	computedSharedKey, err := ComputeSharedKey(
+	computedSharedKey := ComputeSharedKey(
 		serverInfo.CryptoConstruction,
 		&ephSk,
 		&serverInfo.ServerPk,
 		nil,
 	)
-	if err != nil {
-		// Zero out ephemeral secret before returning error
-		clear(ephSk[:])
-		return nil, nil, fmt.Errorf("ephemeral shared key computation failed: %w", err)
-	}
 
 	// Zero out ephemeral secret key immediately after use
 	// Go 1.26: clear() is compiler-optimized and won't be eliminated
@@ -392,10 +404,9 @@ func (proxy *Proxy) calculatePaddedLength(
 
 	if proto == "udp" {
 		// Use question size estimator for UDP to match typical query patterns
-		if proxy.questionSizeEstimator != nil {
-			estimatedSize := proxy.questionSizeEstimator.MinQuestionSize()
-			minQuestionSize = max(estimatedSize, minQuestionSize)
-		}
+		// Go 1.26: Fixed - questionSizeEstimator is a struct, not a pointer
+		estimatedSize := proxy.questionSizeEstimator.MinQuestionSize()
+		minQuestionSize = max(estimatedSize, minQuestionSize)
 	} else {
 		// Add random padding for TCP (0-255 bytes)
 		// Go 1.26: crypto/rand is properly used for unpredictable padding
@@ -526,10 +537,21 @@ func (proxy *Proxy) encryptXSalsa20(
 }
 
 // Decrypt decrypts a DNS response using the DNSCrypt protocol.
-// Go 1.26: Context-aware with improved validation and structured error handling.
+// Go 1.26: Maintains backward compatibility.
 //
 // Response structure: ServerMagic + ServerNonce + Tag + EncryptedData
 func (proxy *Proxy) Decrypt(
+	serverInfo *ServerInfo,
+	sharedKey *[32]byte,
+	encrypted []byte,
+	nonce []byte,
+) ([]byte, error) {
+	return proxy.DecryptWithContext(context.Background(), serverInfo, sharedKey, encrypted, nonce)
+}
+
+// DecryptWithContext decrypts a DNS response with context support.
+// Go 1.26: Context-aware version for cancellation and timeout support.
+func (proxy *Proxy) DecryptWithContext(
 	ctx context.Context,
 	serverInfo *ServerInfo,
 	sharedKey *[32]byte,
@@ -666,31 +688,6 @@ func (proxy *Proxy) decryptXSalsa20(
 	return packet, nil
 }
 
-// EncryptCompat is a compatibility wrapper without context.
-// Go 1.26: Provided for backward compatibility, use Encrypt for new code.
-//
-// Deprecated: Use Encrypt with context for proper cancellation support.
-func (proxy *Proxy) EncryptCompat(
-	serverInfo *ServerInfo,
-	packet []byte,
-	proto string,
-) (sharedKey *[32]byte, encrypted []byte, clientNonce []byte, err error) {
-	return proxy.Encrypt(context.Background(), serverInfo, packet, proto)
-}
-
-// DecryptCompat is a compatibility wrapper without context.
-// Go 1.26: Provided for backward compatibility, use Decrypt for new code.
-//
-// Deprecated: Use Decrypt with context for proper cancellation support.
-func (proxy *Proxy) DecryptCompat(
-	serverInfo *ServerInfo,
-	sharedKey *[32]byte,
-	encrypted []byte,
-	nonce []byte,
-) ([]byte, error) {
-	return proxy.Decrypt(context.Background(), serverInfo, sharedKey, encrypted, nonce)
-}
-
 // ZeroizeKey securely zeros out a key.
 // Go 1.26: Uses clear() which is optimized by the compiler.
 func ZeroizeKey(key []byte) {
@@ -710,13 +707,3 @@ func ValidatePublicKey(publicKey *[32]byte) error {
 	}
 	return nil
 }
-
-// Helper functions and types that need to be defined elsewhere:
-// - ClientMagicLen (constant)
-// - ServerMagic (variable)
-// - MinDNSPacketSize (constant)
-// - MaxDNSPacketSize (constant)
-// - MaxDNSUDPPacketSize (constant)
-// - MaxDNSUDPSafePacketSize (constant)
-// - Proxy (type)
-// - ServerInfo (type)
