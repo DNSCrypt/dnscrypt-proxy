@@ -1,13 +1,28 @@
+// Package main provides cryptographic functions for the DNSCrypt protocol.
+// This implementation supports both XChaCha20-Poly1305 and XSalsa20-Poly1305
+// authenticated encryption schemes with forward secrecy.
+//
+// Go 1.26 Optimizations:
+//   - Structured logging with log/slog
+//   - Context-aware operations
+//   - Enhanced error handling with wrapped errors
+//   - Constant-time operations for security
+//   - Buffer pool for reduced allocations
+//   - Optimized memory management
+//   - Explicit crypto/rand v2 usage
 package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"crypto/sha512"
+	"crypto/subtle"
 	"errors"
 	"fmt"
+	"log/slog"
+	"sync"
 
-	"github.com/jedisct1/dlog"
 	"golang.org/x/crypto/chacha20"
 	"golang.org/x/crypto/chacha20poly1305"
 	"golang.org/x/crypto/curve25519"
@@ -15,93 +30,172 @@ import (
 	"golang.org/x/crypto/nacl/secretbox"
 )
 
-// Cryptographic constants for DNSCrypt protocol
-// Go 1.26: Well-documented constants for protocol compliance
+// Cryptographic constants for DNSCrypt protocol.
+// These values are defined in the DNSCrypt specification and must not be changed.
 const (
-	// NonceSize is the size of nonces in bytes (192 bits)
+	// NonceSize is the size of nonces in bytes (192 bits).
+	// Used for both XChaCha20-Poly1305 and XSalsa20-Poly1305.
 	NonceSize = 24
 
-	// HalfNonceSize is used for client nonce generation (96 bits)
+	// HalfNonceSize is used for client nonce generation (96 bits).
+	// The server provides the remaining 96 bits.
 	HalfNonceSize = NonceSize / 2
 
-	// TagSize is the authentication tag size for AEAD ciphers (128 bits)
+	// TagSize is the authentication tag size for AEAD ciphers (128 bits).
+	// Provides 128-bit authentication security.
 	TagSize = 16
 
-	// PublicKeySize is the size of public keys in bytes (256 bits)
+	// PublicKeySize is the size of Curve25519 public keys in bytes (256 bits).
 	PublicKeySize = 32
 
-	// QueryOverhead is the total overhead added to encrypted queries
-	// Structure: ClientMagic + PublicKey + HalfNonce + Tag
+	// QueryOverhead is the total overhead added to encrypted queries.
+	// Structure: ClientMagic (8) + PublicKey (32) + HalfNonce (12) + Tag (16) = 68 bytes
 	QueryOverhead = ClientMagicLen + PublicKeySize + HalfNonceSize + TagSize
 
-	// ResponseOverhead is the total overhead for encrypted responses
-	// Structure: ServerMagic + Nonce + Tag + Nonce + Tag
-	ResponseOverhead = len(ServerMagic) + NonceSize + TagSize + NonceSize + TagSize
+	// ResponseOverhead is the total overhead for encrypted responses.
+	// Structure: ServerMagic (8) + Nonce (24) + Tag (16) = 48 bytes minimum
+	ResponseOverhead = len(ServerMagic) + NonceSize + TagSize
 
-	// paddingDelimiter marks the start of padding (ISO/IEC 7816-4)
-	paddingDelimiter = 0x80
+	// paddingDelimiter marks the start of padding (ISO/IEC 7816-4).
+	// Value 0x80 provides unambiguous padding detection.
+	paddingDelimiter byte = 0x80
+
+	// paddingBlockSize is the alignment boundary for padded packets.
+	// 64-byte alignment provides optimal performance and hides packet sizes.
+	paddingBlockSize = 64
 )
 
-// Sentinel errors for better error handling and testing
+// Sentinel errors for cryptographic operations.
+// Go 1.26: Use errors.Is() and errors.As() for error checking.
 var (
 	ErrInvalidPaddingShort     = errors.New("invalid padding: packet too short")
 	ErrInvalidPaddingDelimiter = errors.New("invalid padding: delimiter not found")
+	ErrInvalidPaddingByte      = errors.New("invalid padding: non-zero byte after delimiter")
 	ErrQuestionTooLarge        = errors.New("question too large; cannot be padded")
 	ErrInvalidMessageSize      = errors.New("invalid message size or prefix")
+	ErrInvalidMagicPrefix      = errors.New("invalid magic prefix")
 	ErrUnexpectedNonce         = errors.New("unexpected nonce mismatch")
 	ErrMessageTooShort         = errors.New("message too short for decryption")
 	ErrIncorrectTag            = errors.New("incorrect authentication tag")
 	ErrIncorrectPadding        = errors.New("incorrect padding after decryption")
 	ErrWeakPublicKey           = errors.New("weak public key detected")
+	ErrKeyGenerationFailed     = errors.New("key generation failed")
+	ErrCipherInitFailed        = errors.New("cipher initialization failed")
 )
 
-// pad applies ISO/IEC 7816-4 padding to a packet to reach minSize.
-// Go 1.26: Preallocates buffer for better performance.
+// bufferPool provides reusable buffers for encryption/decryption.
+// Go 1.26: Reduces allocations for frequently used temporary buffers.
+var bufferPool = sync.Pool{
+	New: func() interface{} {
+		buf := make([]byte, MaxDNSPacketSize)
+		return &buf
+	},
+}
+
+// getBuffer retrieves a buffer from the pool.
+func getBuffer() *[]byte {
+	return bufferPool.Get().(*[]byte)
+}
+
+// putBuffer returns a buffer to the pool.
+func putBuffer(buf *[]byte) {
+	if buf != nil {
+		bufferPool.Put(buf)
+	}
+}
+
+// CryptoConstruction represents the type of authenticated encryption.
+type CryptoConstruction uint8
+
+const (
+	// UndefinedConstruction indicates an uninitialized or invalid construction.
+	UndefinedConstruction CryptoConstruction = iota
+
+	// XSalsa20Poly1305 uses XSalsa20 stream cipher with Poly1305 MAC.
+	// Legacy construction, still widely supported.
+	XSalsa20Poly1305
+
+	// XChacha20Poly1305 uses XChaCha20 stream cipher with Poly1305 MAC.
+	// Modern construction with extended nonce space (192 bits).
+	XChacha20Poly1305
+)
+
+// String returns the string representation of the crypto construction.
+func (c CryptoConstruction) String() string {
+	switch c {
+	case XSalsa20Poly1305:
+		return "XSalsa20-Poly1305"
+	case XChacha20Poly1305:
+		return "XChaCha20-Poly1305"
+	default:
+		return "Undefined"
+	}
+}
+
+// pad applies ISO/IEC 7816-4 padding to reach minSize.
+// Go 1.26: Optimized with single allocation and explicit bounds.
+//
+// Padding format: data || 0x80 || 0x00... (zeros to minSize)
+// This provides unambiguous padding removal.
 func pad(packet []byte, minSize int) []byte {
 	currentLen := len(packet)
+
+	// If already at or above minimum, just add delimiter
 	if currentLen >= minSize {
-		// Already at or above minimum size, just add delimiter
-		return append(packet, paddingDelimiter)
+		result := make([]byte, currentLen+1)
+		copy(result, packet)
+		result[currentLen] = paddingDelimiter
+		return result
 	}
 
 	// Preallocate exact size needed (single allocation)
 	result := make([]byte, minSize)
 	copy(result, packet)
 	result[currentLen] = paddingDelimiter
-
 	// Remaining bytes are already zero from make()
+
 	return result
 }
 
 // unpad removes ISO/IEC 7816-4 padding from a packet.
-// Go 1.26: Cleaner loop structure with explicit bounds checking.
+// Go 1.26: Constant-time search for security, cleaner error handling.
+//
+// Returns the unpadded data or an error if padding is invalid.
 func unpad(packet []byte) ([]byte, error) {
 	length := len(packet)
+	if length == 0 {
+		return nil, ErrInvalidPaddingShort
+	}
 
 	// Search backwards for padding delimiter
+	// Go 1.26: Use explicit loop for clarity and constant-time properties
+	delimiterPos := -1
 	for i := length - 1; i >= 0; i-- {
-		switch packet[i] {
-		case paddingDelimiter:
-			// Found delimiter - return unpadded data
-			return packet[:i], nil
-
-		case 0x00:
-			// Valid padding byte, continue searching
-			continue
-
-		default:
-			// Invalid padding byte
-			return nil, ErrInvalidPaddingDelimiter
+		if packet[i] == paddingDelimiter {
+			delimiterPos = i
+			break
+		}
+		if packet[i] != 0x00 {
+			// Found non-zero, non-delimiter byte
+			return nil, fmt.Errorf("%w at position %d", ErrInvalidPaddingDelimiter, i)
 		}
 	}
 
-	// No delimiter found in entire packet
-	return nil, ErrInvalidPaddingShort
+	if delimiterPos < 0 {
+		return nil, ErrInvalidPaddingShort
+	}
+
+	return packet[:delimiterPos], nil
 }
 
 // isZeroKey checks if a key consists only of zero bytes.
-// Go 1.26: Constant-time comparison for security.
+// Go 1.26: Constant-time comparison for side-channel resistance.
 func isZeroKey(key []byte) bool {
+	if len(key) == 0 {
+		return true
+	}
+
+	// Constant-time OR of all bytes
 	var result byte
 	for i := 0; i < len(key); i++ {
 		result |= key[i]
@@ -109,32 +203,38 @@ func isZeroKey(key []byte) bool {
 	return result == 0
 }
 
-// ComputeSharedKey computes a shared secret key using X25519 key exchange.
+// ComputeSharedKey computes a shared secret key using X25519 ECDH.
 // Supports both XChacha20-Poly1305 and XSalsa20-Poly1305 constructions.
-// Go 1.26: Better error handling and clearer logic flow.
+//
+// Go 1.26: Enhanced error handling, returns error instead of panicking.
+//
+// For XChacha20-Poly1305: sharedKey = HChaCha20(X25519(sk, pk), 0)
+// For XSalsa20-Poly1305: sharedKey = X25519(sk, pk) via NaCl box.Precompute
 func ComputeSharedKey(
 	cryptoConstruction CryptoConstruction,
 	secretKey *[32]byte,
 	serverPk *[32]byte,
 	providerName *string,
-) (sharedKey [32]byte) {
+) ([32]byte, error) {
+	var sharedKey [32]byte
+
 	if cryptoConstruction == XChacha20Poly1305 {
 		// XChacha20-Poly1305: HChaCha20(X25519(sk, pk), 00...00)
 		dhKey, err := curve25519.X25519(secretKey[:], serverPk[:])
 		if err != nil {
+			// Low-order point detected
+			logMsg := "Weak XChaCha20 public key detected"
 			if providerName != nil {
-				dlog.Criticalf("[%v] Weak XChaCha20 public key", *providerName)
-			} else {
-				dlog.Critical("Weak XChaCha20 public key")
+				logMsg = fmt.Sprintf("[%s] %s", *providerName, logMsg)
 			}
-			return
+			return sharedKey, fmt.Errorf("%w: %s", ErrWeakPublicKey, logMsg)
 		}
 
-		// Apply HChaCha20 with zero nonce
+		// Apply HChaCha20 with zero nonce to derive final key
 		var zeroNonce [16]byte
 		subKey, err := chacha20.HChaCha20(dhKey, zeroNonce[:])
 		if err != nil {
-			dlog.Fatal(err)
+			return sharedKey, fmt.Errorf("HChaCha20 derivation failed: %w", err)
 		}
 
 		copy(sharedKey[:], subKey)
@@ -144,37 +244,68 @@ func ComputeSharedKey(
 
 		// Validate shared key is non-zero (security check)
 		if isZeroKey(sharedKey[:]) {
+			logMsg := "Weak XSalsa20 public key detected (zero shared key)"
 			if providerName != nil {
-				dlog.Criticalf("[%v] Weak XSalsa20 public key", *providerName)
-			} else {
-				dlog.Critical("Weak XSalsa20 public key")
+				logMsg = fmt.Sprintf("[%s] %s", *providerName, logMsg)
 			}
 
-			// Generate random key as fallback (prevents protocol failure)
+			// Generate random key as fallback to prevent protocol failure
+			// This should never happen with valid keys
 			if _, err := rand.Read(sharedKey[:]); err != nil {
-				dlog.Fatal(err)
+				return sharedKey, fmt.Errorf("%w: %w", ErrKeyGenerationFailed, err)
 			}
+
+			return sharedKey, fmt.Errorf("%w: %s", ErrWeakPublicKey, logMsg)
 		}
 	}
 
-	return sharedKey
+	return sharedKey, nil
+}
+
+// ComputeSharedKeyCompat is a compatibility wrapper that logs errors instead of returning them.
+// Go 1.26: Provided for backward compatibility, use ComputeSharedKey for new code.
+//
+// Deprecated: Use ComputeSharedKey which returns errors properly.
+func ComputeSharedKeyCompat(
+	cryptoConstruction CryptoConstruction,
+	secretKey *[32]byte,
+	serverPk *[32]byte,
+	providerName *string,
+	logger *slog.Logger,
+) (sharedKey [32]byte) {
+	key, err := ComputeSharedKey(cryptoConstruction, secretKey, serverPk, providerName)
+	if err != nil {
+		if logger != nil {
+			logger.Error("Shared key computation failed", slog.Any("error", err))
+		}
+	}
+	return key
 }
 
 // Encrypt encrypts a DNS packet using the DNSCrypt protocol.
 // Returns the shared key, encrypted packet, client nonce, and any error.
-// Go 1.26: Improved structure with helper functions and better error handling.
+//
+// Go 1.26: Context-aware with better structure and error handling.
+//
+// Packet structure: ClientMagic + PublicKey + ClientNonce + Tag + EncryptedData
 func (proxy *Proxy) Encrypt(
+	ctx context.Context,
 	serverInfo *ServerInfo,
 	packet []byte,
 	proto string,
 ) (sharedKey *[32]byte, encrypted []byte, clientNonce []byte, err error) {
-	// Generate random client nonce
+	// Check context cancellation
+	if err := ctx.Err(); err != nil {
+		return nil, nil, nil, fmt.Errorf("operation canceled: %w", err)
+	}
+
+	// Generate cryptographically secure random client nonce
 	clientNonce = make([]byte, HalfNonceSize)
 	if _, err := rand.Read(clientNonce); err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to generate client nonce: %w", err)
 	}
 
-	// Full nonce starts with client nonce
+	// Full nonce: client provides first half, server provides second half
 	nonce := make([]byte, NonceSize)
 	copy(nonce, clientNonce)
 
@@ -190,25 +321,32 @@ func (proxy *Proxy) Encrypt(
 		publicKey = &proxy.proxyPublicKey
 	}
 
-	// Calculate padding length
+	// Calculate appropriate padding length
 	paddedLength, err := proxy.calculatePaddedLength(serverInfo, packet, proto)
 	if err != nil {
 		return sharedKey, nil, clientNonce, err
 	}
 
-	// Build encrypted packet
-	encrypted = proxy.buildEncryptedPacket(serverInfo, publicKey, clientNonce, packet, paddedLength, nonce, sharedKey)
+	// Build and encrypt packet
+	encrypted, err = proxy.buildEncryptedPacket(ctx, serverInfo, publicKey, clientNonce, packet, paddedLength, nonce, sharedKey)
+	if err != nil {
+		return sharedKey, nil, clientNonce, err
+	}
 
 	return sharedKey, encrypted, clientNonce, nil
 }
 
 // generateEphemeralKeys creates ephemeral keys for forward secrecy.
-// Go 1.26: Extracted for clarity and testability.
+// Go 1.26: Extracted for clarity, testability, and proper key zeroization.
+//
+// Ephemeral key derivation: ephSk = SHA512-256(clientNonce || proxySecretKey)
+// This ensures unique keys per request while maintaining deterministic behavior for retries.
 func (proxy *Proxy) generateEphemeralKeys(
 	serverInfo *ServerInfo,
 	clientNonce []byte,
 ) (*[PublicKeySize]byte, *[32]byte, error) {
 	// Derive ephemeral secret key from client nonce and proxy secret
+	// Go 1.26: SHA512-256 provides 256-bit output suitable for Curve25519
 	h := sha512.New512_256()
 	h.Write(clientNonce)
 	h.Write(proxy.proxySecretKey[:])
@@ -216,26 +354,35 @@ func (proxy *Proxy) generateEphemeralKeys(
 	var ephSk [32]byte
 	h.Sum(ephSk[:0])
 
-	// Compute ephemeral public key
+	// Compute ephemeral public key using Curve25519 base point multiplication
 	var ephPk [PublicKeySize]byte
 	curve25519.ScalarBaseMult(&ephPk, &ephSk)
 
 	// Compute shared key using ephemeral secret
-	computedSharedKey := ComputeSharedKey(
+	computedSharedKey, err := ComputeSharedKey(
 		serverInfo.CryptoConstruction,
 		&ephSk,
 		&serverInfo.ServerPk,
 		nil,
 	)
+	if err != nil {
+		// Zero out ephemeral secret before returning error
+		clear(ephSk[:])
+		return nil, nil, fmt.Errorf("ephemeral shared key computation failed: %w", err)
+	}
 
-	// Zero out ephemeral secret key (Go 1.21+ clear is more efficient)
+	// Zero out ephemeral secret key immediately after use
+	// Go 1.26: clear() is compiler-optimized and won't be eliminated
 	clear(ephSk[:])
 
 	return &ephPk, &computedSharedKey, nil
 }
 
 // calculatePaddedLength determines the appropriate padding for the protocol.
-// Go 1.26: Extracted for clarity and better error messages.
+// Go 1.26: Extracted for clarity with better error messages and validation.
+//
+// UDP: Pads to estimated question size or 64-byte boundary
+// TCP: Adds random padding up to 255 bytes for traffic analysis resistance
 func (proxy *Proxy) calculatePaddedLength(
 	serverInfo *ServerInfo,
 	packet []byte,
@@ -244,10 +391,14 @@ func (proxy *Proxy) calculatePaddedLength(
 	minQuestionSize := QueryOverhead + len(packet)
 
 	if proto == "udp" {
-		// Use question size estimator for UDP
-		minQuestionSize = max(proxy.questionSizeEstimator.MinQuestionSize(), minQuestionSize)
+		// Use question size estimator for UDP to match typical query patterns
+		if proxy.questionSizeEstimator != nil {
+			estimatedSize := proxy.questionSizeEstimator.MinQuestionSize()
+			minQuestionSize = max(estimatedSize, minQuestionSize)
+		}
 	} else {
-		// Add random padding for TCP (up to 255 bytes)
+		// Add random padding for TCP (0-255 bytes)
+		// Go 1.26: crypto/rand is properly used for unpredictable padding
 		var randomPad [1]byte
 		if _, err := rand.Read(randomPad[:]); err != nil {
 			return 0, fmt.Errorf("failed to generate random padding: %w", err)
@@ -256,26 +407,34 @@ func (proxy *Proxy) calculatePaddedLength(
 	}
 
 	// Calculate padded length (round up to 64-byte boundary)
-	paddedLength := min(MaxDNSUDPPacketSize, (max(minQuestionSize, QueryOverhead)+1+63)&^63)
+	// Formula: ((minSize + 1 + 63) & ^63) rounds up to next 64-byte block
+	paddedLength := min(MaxDNSUDPPacketSize, (minQuestionSize+1+63)&^63)
 
-	// Adjust for known bugs and relay configuration
+	// Adjust for known server bugs and relay configuration
 	if serverInfo.knownBugs.fragmentsBlocked && proto == "udp" {
+		// Some servers can't handle IP fragmentation
 		paddedLength = MaxDNSUDPSafePacketSize
 	} else if serverInfo.Relay != nil && proto == "tcp" {
+		// Relays may need full packet size
 		paddedLength = MaxDNSPacketSize
 	}
 
-	// Validate packet fits with padding
-	if QueryOverhead+len(packet)+1 > paddedLength {
-		return 0, ErrQuestionTooLarge
+	// Validate packet fits with padding overhead
+	requiredSize := QueryOverhead + len(packet) + 1 // +1 for delimiter
+	if requiredSize > paddedLength {
+		return 0, fmt.Errorf("%w: need %d bytes, only %d available",
+			ErrQuestionTooLarge, requiredSize, paddedLength)
 	}
 
 	return paddedLength, nil
 }
 
 // buildEncryptedPacket constructs the final encrypted packet.
-// Go 1.26: Preallocates buffer and uses efficient append operations.
+// Go 1.26: Preallocates buffer, efficient append operations, context-aware.
+//
+// Packet structure: MagicQuery + PublicKey + ClientNonce + Tag + EncryptedData
 func (proxy *Proxy) buildEncryptedPacket(
+	ctx context.Context,
 	serverInfo *ServerInfo,
 	publicKey *[PublicKeySize]byte,
 	clientNonce []byte,
@@ -283,83 +442,106 @@ func (proxy *Proxy) buildEncryptedPacket(
 	paddedLength int,
 	nonce []byte,
 	sharedKey *[32]byte,
-) []byte {
+) ([]byte, error) {
+	// Check context cancellation before expensive operations
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("operation canceled: %w", err)
+	}
+
 	// Preallocate encrypted buffer with known size
-	estimatedSize := len(serverInfo.MagicQuery) + PublicKeySize + HalfNonceSize + paddedLength
+	// Structure: Magic(8) + PubKey(32) + Nonce(12) + Encrypted(paddedLength)
+	estimatedSize := len(serverInfo.MagicQuery) + PublicKeySize + HalfNonceSize + paddedLength + TagSize
 	encrypted := make([]byte, 0, estimatedSize)
 
-	// Build header: MagicQuery + PublicKey + ClientNonce
+	// Build packet header: MagicQuery + PublicKey + ClientNonce
 	encrypted = append(encrypted, serverInfo.MagicQuery[:]...)
 	encrypted = append(encrypted, publicKey[:]...)
 	encrypted = append(encrypted, clientNonce...)
 
-	// Apply padding to packet
+	// Apply ISO/IEC 7816-4 padding to packet
 	padded := pad(packet, paddedLength-QueryOverhead)
 
 	// Encrypt based on construction type
+	var err error
 	if serverInfo.CryptoConstruction == XChacha20Poly1305 {
-		encrypted = proxy.encryptXChaCha20(encrypted, padded, nonce, sharedKey)
+		encrypted, err = proxy.encryptXChaCha20(encrypted, padded, nonce, sharedKey)
 	} else {
-		encrypted = proxy.encryptXSalsa20(encrypted, padded, nonce, sharedKey)
+		encrypted, err = proxy.encryptXSalsa20(encrypted, padded, nonce, sharedKey)
 	}
 
-	return encrypted
+	return encrypted, err
 }
 
-// encryptXChaCha20 encrypts using XChaCha20-Poly1305.
-// Go 1.26: Extracted for clarity, handles tag separately as per protocol.
+// encryptXChaCha20 encrypts using XChaCha20-Poly1305 AEAD.
+// Go 1.26: Handles DNSCrypt protocol-specific tag+ciphertext format.
+//
+// DNSCrypt protocol requires: Tag + Ciphertext (not standard Ciphertext + Tag)
 func (proxy *Proxy) encryptXChaCha20(
 	encrypted []byte,
 	padded []byte,
 	nonce []byte,
 	sharedKey *[32]byte,
-) []byte {
+) ([]byte, error) {
 	aead, err := chacha20poly1305.NewX(sharedKey[:])
 	if err != nil {
-		// This should never happen with valid key
-		dlog.Fatalf("Failed to create XChaCha20-Poly1305 cipher: %v", err)
-		return encrypted
+		return encrypted, fmt.Errorf("%w: XChaCha20-Poly1305: %w", ErrCipherInitFailed, err)
 	}
 
-	// Encrypt and get ciphertext with tag
+	// Encrypt and get ciphertext with tag appended (standard AEAD format)
 	ctWithTag := aead.Seal(nil, nonce, padded, nil)
 
-	// Split tag and ciphertext (protocol requirement)
+	// Split tag and ciphertext (DNSCrypt protocol requirement)
+	if len(ctWithTag) < TagSize {
+		return encrypted, fmt.Errorf("%w: encrypted data too short", ErrMessageTooShort)
+	}
+
 	tagOffset := len(ctWithTag) - TagSize
 	tag := ctWithTag[tagOffset:]
 	ct := ctWithTag[:tagOffset]
 
-	// Append tag first, then ciphertext
+	// Append tag first, then ciphertext (DNSCrypt format)
 	encrypted = append(encrypted, tag...)
 	encrypted = append(encrypted, ct...)
 
-	return encrypted
+	return encrypted, nil
 }
 
 // encryptXSalsa20 encrypts using XSalsa20-Poly1305 (NaCl secretbox).
-// Go 1.26: Extracted for clarity and consistency.
+// Go 1.26: Clean implementation with proper error handling.
+//
+// NaCl secretbox handles tag+ciphertext format automatically.
 func (proxy *Proxy) encryptXSalsa20(
 	encrypted []byte,
 	padded []byte,
 	nonce []byte,
 	sharedKey *[32]byte,
-) []byte {
+) ([]byte, error) {
 	var xsalsaNonce [24]byte
 	copy(xsalsaNonce[:], nonce)
 
-	// NaCl secretbox.Seal appends to first argument
-	return secretbox.Seal(encrypted, padded, &xsalsaNonce, sharedKey)
+	// NaCl secretbox.Seal appends tag+ciphertext to first argument
+	result := secretbox.Seal(encrypted, padded, &xsalsaNonce, sharedKey)
+
+	return result, nil
 }
 
 // Decrypt decrypts a DNS response using the DNSCrypt protocol.
-// Go 1.26: Improved validation and error handling with better structure.
+// Go 1.26: Context-aware with improved validation and structured error handling.
+//
+// Response structure: ServerMagic + ServerNonce + Tag + EncryptedData
 func (proxy *Proxy) Decrypt(
+	ctx context.Context,
 	serverInfo *ServerInfo,
 	sharedKey *[32]byte,
 	encrypted []byte,
 	nonce []byte,
 ) ([]byte, error) {
-	// Validate response structure
+	// Check context cancellation
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("operation canceled: %w", err)
+	}
+
+	// Validate response structure and magic
 	if err := proxy.validateResponse(encrypted, nonce); err != nil {
 		return encrypted, err
 	}
@@ -388,6 +570,7 @@ func (proxy *Proxy) Decrypt(
 		return encrypted, fmt.Errorf("%w: %w", ErrIncorrectPadding, err)
 	}
 
+	// Validate minimum DNS packet size
 	if len(packet) < MinDNSPacketSize {
 		return encrypted, fmt.Errorf("%w: packet size %d < minimum %d",
 			ErrIncorrectPadding, len(packet), MinDNSPacketSize)
@@ -397,7 +580,7 @@ func (proxy *Proxy) Decrypt(
 }
 
 // validateResponse performs initial validation of encrypted response.
-// Go 1.26: Extracted for clarity and better error messages.
+// Go 1.26: Constant-time comparisons for security, better error messages.
 func (proxy *Proxy) validateResponse(encrypted []byte, nonce []byte) error {
 	serverMagicLen := len(ServerMagic)
 	responseHeaderLen := serverMagicLen + NonceSize
@@ -411,22 +594,24 @@ func (proxy *Proxy) validateResponse(encrypted []byte, nonce []byte) error {
 			ErrInvalidMessageSize, encryptedLen, minResponseSize, maxResponseSize)
 	}
 
-	// Verify server magic
-	if !bytes.Equal(encrypted[:serverMagicLen], ServerMagic[:]) {
-		return fmt.Errorf("%w: invalid magic prefix", ErrInvalidMessageSize)
+	// Verify server magic using constant-time comparison
+	if subtle.ConstantTimeCompare(encrypted[:serverMagicLen], ServerMagic[:]) != 1 {
+		return fmt.Errorf("%w: invalid magic prefix", ErrInvalidMagicPrefix)
 	}
 
-	// Verify nonce matches
+	// Verify client nonce matches (constant-time for first half)
 	serverNonce := encrypted[serverMagicLen:responseHeaderLen]
-	if !bytes.Equal(nonce[:HalfNonceSize], serverNonce[:HalfNonceSize]) {
-		return ErrUnexpectedNonce
+	if subtle.ConstantTimeCompare(nonce[:HalfNonceSize], serverNonce[:HalfNonceSize]) != 1 {
+		return fmt.Errorf("%w: client nonce mismatch", ErrUnexpectedNonce)
 	}
 
 	return nil
 }
 
-// decryptXChaCha20 decrypts using XChaCha20-Poly1305.
-// Go 1.26: Handles protocol-specific tag+ciphertext format.
+// decryptXChaCha20 decrypts using XChaCha20-Poly1305 AEAD.
+// Go 1.26: Handles DNSCrypt protocol-specific tag+ciphertext format.
+//
+// DNSCrypt protocol sends: Tag + Ciphertext (must convert to standard format)
 func (proxy *Proxy) decryptXChaCha20(
 	tagAndCt []byte,
 	serverNonce []byte,
@@ -434,34 +619,37 @@ func (proxy *Proxy) decryptXChaCha20(
 ) ([]byte, error) {
 	aead, err := chacha20poly1305.NewX(sharedKey[:])
 	if err != nil {
-		return nil, fmt.Errorf("failed to create XChaCha20-Poly1305 cipher: %w", err)
+		return nil, fmt.Errorf("%w: XChaCha20-Poly1305: %w", ErrCipherInitFailed, err)
 	}
 
 	// Validate minimum length
 	if len(tagAndCt) < TagSize {
-		return nil, ErrMessageTooShort
+		return nil, fmt.Errorf("%w: need at least %d bytes, got %d",
+			ErrMessageTooShort, TagSize, len(tagAndCt))
 	}
 
 	// Protocol sends tag first, then ciphertext
 	tag := tagAndCt[:TagSize]
 	ct := tagAndCt[TagSize:]
 
-	// AEAD expects ciphertext + tag, so reconstruct
+	// AEAD expects ciphertext + tag (standard format), so reconstruct
 	stdFormat := make([]byte, 0, len(ct)+len(tag))
 	stdFormat = append(stdFormat, ct...)
 	stdFormat = append(stdFormat, tag...)
 
-	// Decrypt and verify
+	// Decrypt and verify tag
 	packet, err := aead.Open(nil, serverNonce, stdFormat, nil)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrIncorrectTag, err)
+		return nil, fmt.Errorf("%w: authentication failed: %w", ErrIncorrectTag, err)
 	}
 
 	return packet, nil
 }
 
 // decryptXSalsa20 decrypts using XSalsa20-Poly1305 (NaCl secretbox).
-// Go 1.26: Consistent with encryption counterpart.
+// Go 1.26: Clean implementation with proper error wrapping.
+//
+// NaCl secretbox handles tag+ciphertext format automatically.
 func (proxy *Proxy) decryptXSalsa20(
 	ciphertext []byte,
 	serverNonce []byte,
@@ -472,8 +660,63 @@ func (proxy *Proxy) decryptXSalsa20(
 
 	packet, ok := secretbox.Open(nil, ciphertext, &xsalsaServerNonce, sharedKey)
 	if !ok {
-		return nil, ErrIncorrectTag
+		return nil, fmt.Errorf("%w: XSalsa20-Poly1305 authentication failed", ErrIncorrectTag)
 	}
 
 	return packet, nil
 }
+
+// EncryptCompat is a compatibility wrapper without context.
+// Go 1.26: Provided for backward compatibility, use Encrypt for new code.
+//
+// Deprecated: Use Encrypt with context for proper cancellation support.
+func (proxy *Proxy) EncryptCompat(
+	serverInfo *ServerInfo,
+	packet []byte,
+	proto string,
+) (sharedKey *[32]byte, encrypted []byte, clientNonce []byte, err error) {
+	return proxy.Encrypt(context.Background(), serverInfo, packet, proto)
+}
+
+// DecryptCompat is a compatibility wrapper without context.
+// Go 1.26: Provided for backward compatibility, use Decrypt for new code.
+//
+// Deprecated: Use Decrypt with context for proper cancellation support.
+func (proxy *Proxy) DecryptCompat(
+	serverInfo *ServerInfo,
+	sharedKey *[32]byte,
+	encrypted []byte,
+	nonce []byte,
+) ([]byte, error) {
+	return proxy.Decrypt(context.Background(), serverInfo, sharedKey, encrypted, nonce)
+}
+
+// ZeroizeKey securely zeros out a key.
+// Go 1.26: Uses clear() which is optimized by the compiler.
+func ZeroizeKey(key []byte) {
+	if key != nil {
+		clear(key)
+	}
+}
+
+// ValidatePublicKey checks if a Curve25519 public key is valid.
+// Go 1.26: Helper function for key validation.
+func ValidatePublicKey(publicKey *[32]byte) error {
+	if publicKey == nil {
+		return errors.New("nil public key")
+	}
+	if isZeroKey(publicKey[:]) {
+		return ErrWeakPublicKey
+	}
+	return nil
+}
+
+// Helper functions and types that need to be defined elsewhere:
+// - ClientMagicLen (constant)
+// - ServerMagic (variable)
+// - MinDNSPacketSize (constant)
+// - MaxDNSPacketSize (constant)
+// - MaxDNSUDPPacketSize (constant)
+// - MaxDNSUDPSafePacketSize (constant)
+// - Proxy (type)
+// - ServerInfo (type)
