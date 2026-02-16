@@ -22,7 +22,6 @@ import (
 	"crypto/subtle"
 	"errors"
 	"fmt"
-	"log/slog"
 	"sync"
 
 	"github.com/jedisct1/dlog"
