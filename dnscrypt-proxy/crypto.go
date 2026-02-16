@@ -13,14 +13,12 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/sha512"
 	"crypto/subtle"
 	"errors"
 	"fmt"
-	"log/slog"
 	"sync"
 
 	"github.com/jedisct1/dlog"
