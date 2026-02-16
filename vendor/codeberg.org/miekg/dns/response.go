@@ -65,6 +65,8 @@ func (w *response) LocalAddr() net.Addr {
 		return sock.LocalAddr()
 	case *tls.Conn:
 		return sock.LocalAddr()
+	case *net.UnixConn:
+		return sock.LocalAddr()
 	default:
 		panic("dns: internal error: no sock 🧦 in response")
 	}
@@ -81,6 +83,8 @@ func (w *response) RemoteAddr() net.Addr {
 	case *net.TCPConn:
 		return sock.RemoteAddr()
 	case *tls.Conn:
+		return sock.RemoteAddr()
+	case *net.UnixConn:
 		return sock.RemoteAddr()
 	default:
 		panic("dns: internal error: no sock 🧦 in response")

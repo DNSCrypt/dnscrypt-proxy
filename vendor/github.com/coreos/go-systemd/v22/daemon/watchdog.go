@@ -15,6 +15,7 @@
 package daemon
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -30,8 +31,8 @@ import (
 // It returns one of the following:
 // (0, nil) - watchdog isn't enabled or we aren't the watched PID.
 // (0, err) - an error happened (e.g. error converting time).
-// (time, nil) - watchdog is enabled and we can send ping.
-//   time is delay before inactive service will be killed.
+// (time, nil) - watchdog is enabled and we can send ping.  time is delay
+// before inactive service will be killed.
 func SdWatchdogEnabled(unsetEnvironment bool) (time.Duration, error) {
 	wusec := os.Getenv("WATCHDOG_USEC")
 	wpid := os.Getenv("WATCHDOG_PID")
@@ -51,10 +52,10 @@ func SdWatchdogEnabled(unsetEnvironment bool) (time.Duration, error) {
 	}
 	s, err := strconv.Atoi(wusec)
 	if err != nil {
-		return 0, fmt.Errorf("error converting WATCHDOG_USEC: %s", err)
+		return 0, fmt.Errorf("error converting WATCHDOG_USEC: %w", err)
 	}
 	if s <= 0 {
-		return 0, fmt.Errorf("error WATCHDOG_USEC must be a positive number")
+		return 0, errors.New("error WATCHDOG_USEC must be a positive number")
 	}
 	interval := time.Duration(s) * time.Microsecond
 
@@ -63,7 +64,7 @@ func SdWatchdogEnabled(unsetEnvironment bool) (time.Duration, error) {
 	}
 	p, err := strconv.Atoi(wpid)
 	if err != nil {
-		return 0, fmt.Errorf("error converting WATCHDOG_PID: %s", err)
+		return 0, fmt.Errorf("error converting WATCHDOG_PID: %w", err)
 	}
 	if os.Getpid() != p {
 		return 0, nil

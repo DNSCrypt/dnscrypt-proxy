@@ -30,6 +30,8 @@ func (o *ESU) Header() *Header          { return &Header{Name: "."} }
 func (o *ESU) Pseudo() bool             { return true }
 func (o *ZONEVERSION) Header() *Header  { return &Header{Name: "."} }
 func (o *ZONEVERSION) Pseudo() bool     { return true }
+func (o *ERFC3597) Header() *Header     { return &Header{Name: "."} }
+func (o *ERFC3597) Pseudo() bool        { return true }
 
 // CodeToRR is a map of constructors for each EDNS0 RR type.
 var CodeToRR = map[uint16]func() EDNS0{

@@ -399,7 +399,7 @@ func (rd TKEY) String() string {
 
 func (rd RFC3597) String() string {
 	sb := builderPool.Get()
-	sprintData(&sb, strconv.Itoa(len(rd.Data)/2), rd.Data)
+	sprintData(&sb, `\#`, strconv.Itoa(len(rd.Data)/2), rd.Data)
 	s := sb.String()
 	builderPool.Put(sb)
 	return s

@@ -30,9 +30,9 @@ func AtoiUint32(s string) (uint32, error) {
 	return uint32(i), err
 }
 
-func ToTime(s string) (time.Time, error) {
+func ToTime(s string) (int64, error) {
 	if len(s) != 14 {
-		return time.Time{}, errors.New("timestamp must be exactly 14 characters")
+		return 0, errors.New("timestamp must be exactly 14 characters")
 	}
 	digit := func(b byte) int { return int(b - '0') }
 
@@ -47,8 +47,8 @@ func ToTime(s string) (time.Time, error) {
 		month < 1 || month > 12 ||
 		day < 1 || day > 31 ||
 		hour > 23 || minute > 59 || second > 59 {
-		return time.Time{}, errors.New("timestamp contains out-of-range values")
+		return 0, errors.New("timestamp contains out-of-range values")
 	}
 
-	return time.Date(year, time.Month(month), day, hour, minute, second, 0, time.UTC), nil
+	return time.Date(year, time.Month(month), day, hour, minute, second, 0, time.UTC).Unix(), nil
 }

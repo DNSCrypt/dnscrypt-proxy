@@ -1,4 +1,4 @@
-# codeberg.org/miekg/dns v0.6.49
+# codeberg.org/miekg/dns v0.6.52
 ## explicit; go 1.25.0
 codeberg.org/miekg/dns
 codeberg.org/miekg/dns/deleg
@@ -22,7 +22,9 @@ github.com/VividCortex/ewma
 # github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf
 ## explicit
 github.com/coreos/go-systemd/activation
-github.com/coreos/go-systemd/daemon
+# github.com/coreos/go-systemd/v22 v22.7.0
+## explicit; go 1.23
+github.com/coreos/go-systemd/v22/daemon
 # github.com/davecgh/go-spew v1.1.1
 ## explicit
 github.com/davecgh/go-spew/spew
