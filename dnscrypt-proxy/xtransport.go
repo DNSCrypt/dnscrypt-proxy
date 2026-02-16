@@ -1,44 +1,28 @@
-// Package main provides an advanced HTTP/HTTPS/HTTP3 transport layer with intelligent
-// DNS resolution, IP caching, and DoH/ODoH support.
-//
-// Go 1.26 Optimizations:
-//   - Structured logging with log/slog
-//   - Context-aware operations
-//   - Atomic operations for thread-safe state
-//   - sync.Map for concurrent cache access
-//   - Modern crypto/rand v2 usage
-//   - netip.Addr for zero-allocation IP operations
-//   - Enhanced error handling with wrapped errors
-//   - HTTP/3 connection pooling improvements
 package main
 
 import (
 	"bytes"
-	"math/big"
 	"compress/gzip"
 	"context"
-	"crypto/rand"
 	"crypto/sha512"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"io"
-	"log/slog"
+	"math/rand"
 	"net"
 	"net/http"
-	"net/netip"
 	"net/url"
 	"os"
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"codeberg.org/miekg/dns"
+	"github.com/jedisct1/dlog"
 	stamps "github.com/jedisct1/go-dnsstamps"
 	"github.com/quic-go/quic-go"
 	"github.com/quic-go/quic-go/http3"
@@ -47,1112 +31,612 @@ import (
 	"golang.org/x/sys/cpu"
 )
 
-
-// loggerWithNotice provides Notice level logging compatibility.
-// Go 1.26: Maps Notice to Info level in slog.
-type loggerWithNotice struct {
-	*slog.Logger
-}
-
-func (l *loggerWithNotice) Notice(msg string) {
-	if l.Logger != nil {
-		l.Logger.Info(msg)
-	}
-}
-
-func (l *loggerWithNotice) Noticef(format string, args ...any) {
-	if l.Logger != nil {
-		l.Logger.Info(fmt.Sprintf(format, args...))
-	}
-}
-
-// Hardware acceleration detection for optimal cipher suite selection.
-// Go 1.26: Leverages compile-time CPU feature detection.
 var hasAESGCMHardwareSupport = cpu.X86.HasAES && cpu.X86.HasPCLMULQDQ ||
 	cpu.ARM64.HasAES && cpu.ARM64.HasPMULL ||
 	cpu.S390X.HasAES && cpu.S390X.HasAESGCM
 
-// Transport configuration constants optimized for modern network conditions.
 const (
-	DefaultBootstrapResolver = "9.9.9.9:53"
-	DefaultKeepAlive         = 5 * time.Second
-	DefaultTimeout           = 30 * time.Second
-	ResolverReadTimeout      = 5 * time.Second
-	SystemResolverIPTTL      = 12 * time.Hour
-	MinResolverIPTTL         = 4 * time.Hour
-	ResolverIPTTLMaxJitter   = 15 * time.Minute
-	ExpiredCachedIPGraceTTL  = 15 * time.Minute
-	resolverRetryCount       = 3
+	DefaultBootstrapResolver    = "9.9.9.9:53"
+	DefaultKeepAlive            = 5 * time.Second
+	DefaultTimeout              = 30 * time.Second
+	ResolverReadTimeout         = 5 * time.Second
+	SystemResolverIPTTL         = 12 * time.Hour
+	MinResolverIPTTL            = 4 * time.Hour
+	ResolverIPTTLMaxJitter      = 15 * time.Minute
+	ExpiredCachedIPGraceTTL     = 15 * time.Minute
+	resolverRetryCount          = 3
 	resolverRetryInitialBackoff = 150 * time.Millisecond
 	resolverRetryMaxBackoff     = 1 * time.Second
-
-	// Go 1.26: Added connection pool limits
-	maxIdleConnsPerHost     = 4
-	maxConnsPerHost         = 8
 )
 
-// Sentinel errors for transport operations.
-// Go 1.26: Use errors.Is() for error checking.
-var (
-	ErrInvalidBootstrapResolver = errors.New("invalid bootstrap resolver")
-	ErrEmptyResolvers          = errors.New("empty resolvers")
-	ErrNoIPAddresses           = errors.New("no IP addresses returned")
-	ErrOnionWithoutTor         = errors.New("onion service requires Tor proxy")
-	ErrWebserverError          = errors.New("webserver returned an error")
-	ErrServiceNotReady         = errors.New("dnscrypt-proxy service not ready")
-	ErrSystemDNSNotUsable      = errors.New("system DNS not usable")
-)
-
-// CachedIPItem represents a cached DNS resolution result.
-// Go 1.26: Immutable after creation for thread safety.
 type CachedIPItem struct {
-	ips           []netip.Addr  // Go 1.26: Use netip.Addr for efficiency
-	expiration    atomic.Pointer[time.Time]
-	updatingUntil atomic.Pointer[time.Time]
+	ips           []net.IP
+	expiration    *time.Time
+	updatingUntil *time.Time
 }
 
-// IsExpired checks if the cached entry has expired.
-// Go 1.26: Thread-safe atomic read.
-func (item *CachedIPItem) IsExpired() bool {
-	exp := item.expiration.Load()
-	return exp != nil && time.Until(*exp) < 0
-}
-
-// IsUpdating checks if the cached entry is currently being updated.
-// Go 1.26: Thread-safe atomic read.
-func (item *CachedIPItem) IsUpdating() bool {
-	until := item.updatingUntil.Load()
-	return until != nil && time.Until(*until) > 0
-}
-
-// IPs returns a copy of the cached IP addresses.
-// Go 1.26: Returns netip.Addr slice for zero-allocation usage.
-func (item *CachedIPItem) IPs() []netip.Addr {
-	if item == nil || len(item.ips) == 0 {
-		return nil
-	}
-	result := make([]netip.Addr, len(item.ips))
-	copy(result, item.ips)
-	return result
-}
-
-// CachedIPs manages DNS resolution cache with thread-safe concurrent access.
-// Go 1.26: Uses sync.Map for better concurrent performance.
 type CachedIPs struct {
-	cache sync.Map // map[string]*CachedIPItem
+	sync.RWMutex
+	cache map[string]*CachedIPItem
 }
 
-// Load retrieves a cached IP item.
-func (c *CachedIPs) Load(host string) (*CachedIPItem, bool) {
-	val, ok := c.cache.Load(host)
-	if !ok {
-		return nil, false
-	}
-	return val.(*CachedIPItem), true
-}
-
-// Store saves a cached IP item.
-func (c *CachedIPs) Store(host string, item *CachedIPItem) {
-	c.cache.Store(host, item)
-}
-
-// AltSupport manages HTTP/3 Alt-Svc support cache.
-// Go 1.26: Uses sync.Map for lock-free reads.
 type AltSupport struct {
-	cache sync.Map // map[string]uint16 (port)
+	sync.RWMutex
+	cache map[string]uint16
 }
 
-// Load retrieves the Alt-Svc port for a host.
-func (a *AltSupport) Load(host string) (uint16, bool) {
-	val, ok := a.cache.Load(host)
-	if !ok {
-		return 0, false
-	}
-	return val.(uint16), true
-}
-
-// Store saves the Alt-Svc port for a host.
-func (a *AltSupport) Store(host string, port uint16) {
-	a.cache.Store(host, port)
-}
-
-// DOHClientCreds holds TLS client credentials for DoH connections.
-type DOHClientCreds struct {
-	rootCA     string
-	clientCert string
-	clientKey  string
-}
-
-// XTransport provides an advanced HTTP transport with DNS resolution,
-// IP caching, HTTP/2, HTTP/3, and DoH support.
-//
-// Go 1.26: Thread-safe for concurrent use, optimized for Green Tea GC.
-// All public methods are safe for concurrent calls from multiple goroutines.
 type XTransport struct {
-	// HTTP transports
-	transport   atomic.Pointer[http.Transport]
-	h3Transport atomic.Pointer[http3.Transport]
-
-	// Configuration (immutable after initialization)
-	keepAlive               time.Duration
-	timeout                 time.Duration
-	internalResolvers       []string
-	bootstrapResolvers      []string
-	mainProto               string
-	tlsClientCreds          DOHClientCreds
-	keyLogWriter            io.Writer
-
-	// Flags (use atomic for thread safety)
-	ignoreSystemDNS         atomic.Bool
-	internalResolverReady   atomic.Bool
-	useIPv4                 atomic.Bool
-	useIPv6                 atomic.Bool
-	http3Enabled            atomic.Bool
-	http3Probe              atomic.Bool
-	tlsDisableSessionTickets atomic.Bool
-	tlsPreferRSA            atomic.Bool
-
-	// Caches
-	cachedIPs   CachedIPs
-	altSupport  AltSupport
-
-	// Proxy support
-	proxyDialer       *netproxy.Dialer
-	httpProxyFunction func(*http.Request) (*url.URL, error)
-
-	// Logging
-	logger *slog.Logger
-
-	// Metrics (Go 1.26: atomic counters for statistics)
-	statsResolveCount   atomic.Uint64
-	statsHTTP2Count     atomic.Uint64
-	statsHTTP3Count     atomic.Uint64
-	statsCacheHitCount  atomic.Uint64
-	statsCacheMissCount atomic.Uint64
+	transport                *http.Transport
+	h3Transport              *http3.Transport
+	keepAlive                time.Duration
+	timeout                  time.Duration
+	cachedIPs                CachedIPs
+	altSupport               AltSupport
+	internalResolvers        []string
+	bootstrapResolvers       []string
+	mainProto                string
+	ignoreSystemDNS          bool
+	internalResolverReady    bool
+	useIPv4                  bool
+	useIPv6                  bool
+	http3                    bool
+	http3Probe               bool
+	tlsDisableSessionTickets bool
+	tlsPreferRSA             bool
+	proxyDialer              *netproxy.Dialer
+	httpProxyFunction        func(*http.Request) (*url.URL, error)
+	tlsClientCreds           DOHClientCreds
+	keyLogWriter             io.Writer
 }
 
-// NewXTransport creates a new XTransport with default configuration.
-// Go 1.26: Validates configuration at construction time.
-func NewXTransport() (*XTransport, error) {
+func NewXTransport() *XTransport {
 	if err := isIPAndPort(DefaultBootstrapResolver); err != nil {
-		return nil, fmt.Errorf("%w: %s", ErrInvalidBootstrapResolver, DefaultBootstrapResolver)
+		panic("DefaultBootstrapResolver does not parse")
 	}
-
-	xTransport := &XTransport{
-		keepAlive:          DefaultKeepAlive,
-		timeout:            DefaultTimeout,
-		bootstrapResolvers: []string{DefaultBootstrapResolver},
-		mainProto:          "",
-		logger:             slog.Default(),
+	xTransport := XTransport{
+		cachedIPs:                CachedIPs{cache: make(map[string]*CachedIPItem)},
+		altSupport:               AltSupport{cache: make(map[string]uint16)},
+		keepAlive:                DefaultKeepAlive,
+		timeout:                  DefaultTimeout,
+		bootstrapResolvers:       []string{DefaultBootstrapResolver},
+		mainProto:                "",
+		ignoreSystemDNS:          true,
+		useIPv4:                  true,
+		useIPv6:                  false,
+		http3Probe:               false,
+		tlsDisableSessionTickets: false,
+		tlsPreferRSA:             false,
+		keyLogWriter:             nil,
 	}
-
-	// Initialize atomic booleans
-	xTransport.ignoreSystemDNS.Store(true)
-	xTransport.useIPv4.Store(true)
-	xTransport.useIPv6.Store(false)
-	xTransport.http3Probe.Store(false)
-	xTransport.tlsDisableSessionTickets.Store(false)
-	xTransport.tlsPreferRSA.Store(false)
-	xTransport.internalResolverReady.Store(false)
-	xTransport.http3Enabled.Store(false)
-
-	return xTransport, nil
+	return &xTransport
 }
 
-// SetLogger sets a custom logger.
-// Go 1.26: Fluent API pattern.
-func (x *XTransport) SetLogger(logger *slog.Logger) *XTransport {
-	if logger != nil {
-		x.logger = logger
-	}
-	return x
+func ParseIP(ipStr string) net.IP {
+	return net.ParseIP(strings.TrimRight(strings.TrimLeft(ipStr, "["), "]"))
 }
 
-// Stats returns current transport statistics.
-// Go 1.26: Non-blocking atomic reads.
-type TransportStats struct {
-	ResolveCount   uint64
-	HTTP2Count     uint64
-	HTTP3Count     uint64
-	CacheHitCount  uint64
-	CacheMissCount uint64
-}
-
-// GetStats returns current transport statistics.
-func (x *XTransport) GetStats() TransportStats {
-	return TransportStats{
-		ResolveCount:   x.statsResolveCount.Load(),
-		HTTP2Count:     x.statsHTTP2Count.Load(),
-		HTTP3Count:     x.statsHTTP3Count.Load(),
-		CacheHitCount:  x.statsCacheHitCount.Load(),
-		CacheMissCount: x.statsCacheMissCount.Load(),
-	}
-}
-
-// ParseIP parses an IP address string, handling bracketed IPv6 addresses.
-// Go 1.26: Uses netip.ParseAddr for better performance.
-func ParseIP(ipStr string) netip.Addr {
-	// Remove brackets for IPv6
-	ipStr = strings.Trim(ipStr, "[]")
-	addr, err := netip.ParseAddr(ipStr)
-	if err != nil {
-		return netip.Addr{}
-	}
-	return addr
-}
-
-// ParseIPLegacy parses an IP address and returns net.IP for legacy compatibility.
-func ParseIPLegacy(ipStr string) net.IP {
-	ipStr = strings.Trim(ipStr, "[]")
-	return net.ParseIP(ipStr)
-}
-
-// uniqueNormalizedIPs removes duplicates and normalizes IP addresses.
-// Go 1.26: Uses netip.Addr for efficient comparison.
-func uniqueNormalizedIPs(ips []netip.Addr) []netip.Addr {
+// If ttl < 0, never expire
+// Otherwise, ttl is set to max(ttl, MinResolverIPTTL)
+func uniqueNormalizedIPs(ips []net.IP) []net.IP {
 	if len(ips) == 0 {
 		return nil
 	}
-
-	unique := make([]netip.Addr, 0, len(ips))
-	seen := make(map[netip.Addr]struct{}, len(ips))
-
-	for _, addr := range ips {
-		if !addr.IsValid() {
-			continue
-		}
-		if _, exists := seen[addr]; exists {
-			continue
-		}
-		seen[addr] = struct{}{}
-		unique = append(unique, addr)
-	}
-
-	return unique
-}
-
-// convertNetIPsToNetipAddrs converts net.IP slice to netip.Addr slice.
-// Go 1.26: Helper for transition to modern IP handling.
-func convertNetIPsToNetipAddrs(ips []net.IP) []netip.Addr {
-	if len(ips) == 0 {
-		return nil
-	}
-
-	addrs := make([]netip.Addr, 0, len(ips))
+	unique := make([]net.IP, 0, len(ips))
+	seen := make(map[string]struct{}, len(ips))
 	for _, ip := range ips {
 		if ip == nil {
 			continue
 		}
-		addr, ok := netip.AddrFromSlice(ip)
-		if ok {
-			addrs = append(addrs, addr)
+		copyIP := append(net.IP(nil), ip...)
+		key := copyIP.String()
+		if _, ok := seen[key]; ok {
+			continue
 		}
+		seen[key] = struct{}{}
+		unique = append(unique, copyIP)
 	}
-	return addrs
+	return unique
 }
 
-// saveCachedIPs stores resolved IP addresses in the cache with TTL.
-// Go 1.26: Thread-safe with atomic operations.
-func (x *XTransport) saveCachedIPs(host string, ips []netip.Addr, ttl time.Duration) {
+func (xTransport *XTransport) saveCachedIPs(host string, ips []net.IP, ttl time.Duration) {
 	normalized := uniqueNormalizedIPs(ips)
 	if len(normalized) == 0 {
 		return
 	}
-
-	item := &CachedIPItem{
-		ips: normalized,
-	}
-
-	// Set expiration if TTL is non-negative
+	item := &CachedIPItem{ips: normalized}
 	if ttl >= 0 {
 		if ttl < MinResolverIPTTL {
 			ttl = MinResolverIPTTL
 		}
-
-		// Add jitter to prevent thundering herd
-		jitterNanos, err := rand.Int(rand.Reader, big.NewInt(int64(ResolverIPTTLMaxJitter)))
-		if err == nil {
-			ttl += time.Duration(jitterNanos.Int64())
-		}
-
+		ttl += time.Duration(rand.Int63n(int64(ResolverIPTTLMaxJitter)))
 		expiration := time.Now().Add(ttl)
-		item.expiration.Store(&expiration)
+		item.expiration = &expiration
 	}
-
-	// Clear updating flag
-	item.updatingUntil.Store(nil)
-
-	x.cachedIPs.Store(host, item)
-
-	if x.logger != nil {
-		if len(normalized) == 1 {
-			x.logger.Debug("IP cached",
-				slog.String("host", host),
-				slog.String("ip", normalized[0].String()),
-				slog.Duration("ttl", ttl))
-		} else {
-			x.logger.Debug("IPs cached",
-				slog.String("host", host),
-				slog.Int("count", len(normalized)),
-				slog.String("first_ip", normalized[0].String()),
-				slog.Duration("ttl", ttl))
-		}
+	xTransport.cachedIPs.Lock()
+	item.updatingUntil = nil
+	xTransport.cachedIPs.cache[host] = item
+	xTransport.cachedIPs.Unlock()
+	if len(normalized) == 1 {
+		dlog.Debugf("[%s] cached IP [%s], valid for %v", host, normalized[0], ttl)
+	} else {
+		dlog.Debugf("[%s] cached %d IP addresses (first: %s), valid for %v", host, len(normalized), normalized[0], ttl)
 	}
 }
 
-// saveCachedIP stores a single resolved IP address.
-func (x *XTransport) saveCachedIP(host string, addr netip.Addr, ttl time.Duration) {
-	if !addr.IsValid() {
+func (xTransport *XTransport) saveCachedIP(host string, ip net.IP, ttl time.Duration) {
+	if ip == nil {
 		return
 	}
-	x.saveCachedIPs(host, []netip.Addr{addr}, ttl)
+	xTransport.saveCachedIPs(host, []net.IP{ip}, ttl)
 }
 
-// markUpdatingCachedIP marks a cache entry as currently being updated.
-// Go 1.26: Prevents concurrent duplicate resolution attempts.
-func (x *XTransport) markUpdatingCachedIP(host string) {
-	item, ok := x.cachedIPs.Load(host)
-	if !ok {
-		// Create new entry with updating flag
-		item = &CachedIPItem{}
+// Mark an entry as being updated
+func (xTransport *XTransport) markUpdatingCachedIP(host string) {
+	xTransport.cachedIPs.Lock()
+	item, ok := xTransport.cachedIPs.cache[host]
+	if ok {
+		now := time.Now()
+		until := now.Add(xTransport.timeout)
+		item.updatingUntil = &until
+		xTransport.cachedIPs.cache[host] = item
+		dlog.Debugf("[%s] IP address marked as updating", host)
 	}
-
-	until := time.Now().Add(x.timeout)
-	item.updatingUntil.Store(&until)
-	x.cachedIPs.Store(host, item)
-
-	if x.logger != nil {
-		x.logger.Debug("IP marked as updating", slog.String("host", host))
-	}
+	xTransport.cachedIPs.Unlock()
 }
 
-// loadCachedIPs retrieves cached IP addresses for a host.
-// Go 1.26: Lock-free reads with atomic operations.
-func (x *XTransport) loadCachedIPs(host string) (ips []netip.Addr, expired bool, updating bool) {
-	item, ok := x.cachedIPs.Load(host)
+func (xTransport *XTransport) loadCachedIPs(host string) (ips []net.IP, expired bool, updating bool) {
+	ips = nil
+	xTransport.cachedIPs.RLock()
+	item, ok := xTransport.cachedIPs.cache[host]
 	if !ok {
-		x.statsCacheMissCount.Add(1)
-		if x.logger != nil {
-			x.logger.Debug("IP not found in cache", slog.String("host", host))
-		}
+		xTransport.cachedIPs.RUnlock()
+		dlog.Debugf("[%s] IP address not found in the cache", host)
 		return nil, false, false
 	}
-
-	x.statsCacheHitCount.Add(1)
-	ips = item.IPs()
-	expired = item.IsExpired()
-	updating = item.IsUpdating()
-
-	if x.logger != nil {
-		if expired {
-			if updating {
-				x.logger.Debug("Cached IPs expired, being updated", slog.String("host", host))
-			} else {
-				x.logger.Debug("Cached IPs expired, not updating", slog.String("host", host))
+	if len(item.ips) > 0 {
+		ips = make([]net.IP, 0, len(item.ips))
+		for _, ip := range item.ips {
+			if ip == nil {
+				continue
 			}
+			ips = append(ips, append(net.IP(nil), ip...))
 		}
 	}
-
+	expiration := item.expiration
+	updatingUntil := item.updatingUntil
+	xTransport.cachedIPs.RUnlock()
+	if expiration != nil && time.Until(*expiration) < 0 {
+		expired = true
+		if updatingUntil != nil && time.Until(*updatingUntil) > 0 {
+			updating = true
+			dlog.Debugf("[%s] cached IP addresses are being updated", host)
+		} else {
+			dlog.Debugf("[%s] cached IP addresses expired, not being updated yet", host)
+		}
+	}
 	return ips, expired, updating
 }
 
-// rebuildTransport rebuilds the HTTP and HTTP/3 transports.
-// Go 1.26: Optimized transport configuration with modern settings.
-func (x *XTransport) rebuildTransport() error {
-	if x.logger != nil {
-		x.logger.Debug("Rebuilding transport")
+func (xTransport *XTransport) rebuildTransport() {
+	dlog.Debug("Rebuilding transport")
+	if xTransport.transport != nil {
+		xTransport.transport.CloseIdleConnections()
 	}
-
-	// Close old transport if exists
-	if oldTransport := x.transport.Load(); oldTransport != nil {
-		oldTransport.CloseIdleConnections()
-	}
-
-	timeout := x.timeout
-
-	// Create HTTP/1.1 and HTTP/2 transport
+	timeout := xTransport.timeout
 	transport := &http.Transport{
 		DisableKeepAlives:      false,
 		DisableCompression:     true,
-		MaxIdleConns:           maxIdleConnsPerHost * 2,
-		MaxIdleConnsPerHost:    maxIdleConnsPerHost,
-		MaxConnsPerHost:        maxConnsPerHost,
-		IdleConnTimeout:        x.keepAlive,
+		MaxIdleConns:           1,
+		IdleConnTimeout:        xTransport.keepAlive,
 		ResponseHeaderTimeout:  timeout,
 		ExpectContinueTimeout:  timeout,
 		MaxResponseHeaderBytes: 4096,
-		ForceAttemptHTTP2:      true, // Go 1.26: Always attempt HTTP/2
-		DialContext:            x.createDialContext(timeout),
-	}
-
-	// Set proxy if configured
-	if x.httpProxyFunction != nil {
-		transport.Proxy = x.httpProxyFunction
-	}
-
-	// Configure TLS
-	tlsConfig, err := x.configureTLS()
-	if err != nil {
-		return fmt.Errorf("TLS configuration failed: %w", err)
-	}
-	transport.TLSClientConfig = tlsConfig
-
-	// Configure HTTP/2
-	if http2Transport, err := http2.ConfigureTransports(transport); err == nil && http2Transport != nil {
-		http2Transport.ReadIdleTimeout = timeout
-		http2Transport.AllowHTTP = false
-		http2Transport.StrictMaxConcurrentStreams = true // Go 1.26: Enforce stream limits
-	}
-
-	x.transport.Store(transport)
-
-	// Configure HTTP/3 if enabled
-	if x.http3Enabled.Load() {
-		if err := x.configureHTTP3(tlsConfig); err != nil {
-			if x.logger != nil {
-				x.logger.Warn("HTTP/3 configuration failed", slog.Any("error", err))
-			}
-		}
-	}
-
-	return nil
-}
-
-// createDialContext creates a context-aware dialer function.
-// Go 1.26: Enhanced with connection tracking and error handling.
-func (x *XTransport) createDialContext(timeout time.Duration) func(context.Context, string, string) (net.Conn, error) {
-	return func(ctx context.Context, network, addrStr string) (net.Conn, error) {
-		host, port := ExtractHostAndPort(addrStr, stamps.DefaultPort)
-
-		// Format endpoint for connection
-		formatEndpoint := func(addr netip.Addr) string {
-			if !addr.IsValid() {
-				// Parse literal IP from host
-				if parsed := ParseIP(host); parsed.IsValid() {
-					if parsed.Is6() {
-						return net.JoinHostPort("["+parsed.String()+"]", strconv.Itoa(port))
+		DialContext: func(ctx context.Context, network, addrStr string) (net.Conn, error) {
+			host, port := ExtractHostAndPort(addrStr, stamps.DefaultPort)
+			formatEndpoint := func(ip net.IP) string {
+				if ip != nil {
+					if ipv4 := ip.To4(); ipv4 != nil {
+						return ipv4.String() + ":" + strconv.Itoa(port)
 					}
-					return net.JoinHostPort(parsed.String(), strconv.Itoa(port))
+					return "[" + ip.String() + "]:" + strconv.Itoa(port)
 				}
-				return net.JoinHostPort(host, strconv.Itoa(port))
-			}
-			if addr.Is6() {
-				return net.JoinHostPort("["+addr.String()+"]", strconv.Itoa(port))
-			}
-			return net.JoinHostPort(addr.String(), strconv.Itoa(port))
-		}
-
-		// Get cached IPs
-		cachedIPs, _, _ := x.loadCachedIPs(host)
-		targets := make([]string, 0, len(cachedIPs)+1)
-
-		for _, addr := range cachedIPs {
-			targets = append(targets, formatEndpoint(addr))
-		}
-
-		if len(targets) == 0 {
-			if x.logger != nil {
-				x.logger.Debug("IP not cached for dial", slog.String("host", host))
-			}
-			targets = append(targets, formatEndpoint(netip.Addr{}))
-		}
-
-		// Dial function
-		dial := func(address string) (net.Conn, error) {
-			if x.proxyDialer == nil {
-				dialer := &net.Dialer{
-					Timeout:   timeout,
-					KeepAlive: timeout,
-					// Go 1.26: DualStack is default, no need to set
+				if parsed := ParseIP(host); parsed != nil && parsed.To4() == nil {
+					return "[" + parsed.String() + "]:" + strconv.Itoa(port)
 				}
-				return dialer.DialContext(ctx, network, address)
-			}
-			return (*x.proxyDialer).Dial(network, address)
-		}
-
-		// Try each target
-		var lastErr error
-		for idx, target := range targets {
-			conn, err := dial(target)
-			if err == nil {
-				x.statsHTTP2Count.Add(1)
-				return conn, nil
+				return host + ":" + strconv.Itoa(port)
 			}
 
-			lastErr = err
-			if idx < len(targets)-1 && x.logger != nil {
-				x.logger.Debug("Dial attempt failed",
-					slog.String("target", target),
-					slog.Any("error", err))
+			cachedIPs, _, _ := xTransport.loadCachedIPs(host)
+			targets := make([]string, 0, len(cachedIPs))
+			for _, ip := range cachedIPs {
+				targets = append(targets, formatEndpoint(ip))
 			}
-		}
+			if len(targets) == 0 {
+				dlog.Debugf("[%s] IP address was not cached in DialContext", host)
+				targets = append(targets, formatEndpoint(nil))
+			}
 
-		return nil, fmt.Errorf("all dial attempts failed: %w", lastErr)
+			dial := func(address string) (net.Conn, error) {
+				if xTransport.proxyDialer == nil {
+					dialer := &net.Dialer{Timeout: timeout, KeepAlive: timeout, DualStack: true}
+					return dialer.DialContext(ctx, network, address)
+				}
+				return (*xTransport.proxyDialer).Dial(network, address)
+			}
+
+			var lastErr error
+			for idx, target := range targets {
+				conn, err := dial(target)
+				if err == nil {
+					return conn, nil
+				}
+				lastErr = err
+				if idx < len(targets)-1 {
+					dlog.Debugf("Dial attempt using [%s] failed: %v", target, err)
+				}
+			}
+			return nil, lastErr
+		},
 	}
-}
-
-// configureTLS creates TLS configuration.
-// Go 1.26: Modern TLS 1.3 defaults with fallback to TLS 1.2.
-func (x *XTransport) configureTLS() (*tls.Config, error) {
-	tlsConfig := &tls.Config{
-		MinVersion: tls.VersionTLS12,
-		// Go 1.26: TLS 1.3 is default max version
+	if xTransport.httpProxyFunction != nil {
+		transport.Proxy = xTransport.httpProxyFunction
 	}
 
-	// Key logging for debugging
-	if x.keyLogWriter != nil {
-		tlsConfig.KeyLogWriter = x.keyLogWriter
-	}
+	clientCreds := xTransport.tlsClientCreds
 
-	// Load system cert pool
+	tlsClientConfig := tls.Config{}
 	certPool, certPoolErr := x509.SystemCertPool()
 
-	// Add custom root CA if specified
-	if x.tlsClientCreds.rootCA != "" {
+	if xTransport.keyLogWriter != nil {
+		tlsClientConfig.KeyLogWriter = xTransport.keyLogWriter
+	}
+
+	if clientCreds.rootCA != "" {
 		if certPool == nil {
-			return nil, fmt.Errorf("system cert pool not available: %w", certPoolErr)
+			dlog.Fatalf("Additional CAs not supported on this platform: %v", certPoolErr)
 		}
-
-		caCert, err := os.ReadFile(x.tlsClientCreds.rootCA)
+		additionalCaCert, err := os.ReadFile(clientCreds.rootCA)
 		if err != nil {
-			return nil, fmt.Errorf("failed to read root CA: %w", err)
+			dlog.Fatalf("Unable to read rootCA file [%s]: %v", clientCreds.rootCA, err)
 		}
-
-		if !certPool.AppendCertsFromPEM(caCert) {
-			return nil, errors.New("failed to append root CA certificate")
-		}
+		certPool.AppendCertsFromPEM(additionalCaCert)
 	}
 
-	// Add Let's Encrypt ISRG Root X1 for compatibility
 	if certPool != nil {
+		// Some operating systems don't include Let's Encrypt ISRG Root X1 certificate yet
 		letsEncryptX1Cert := []byte(`-----BEGIN CERTIFICATE-----
-MIIFazCCA1OgAwIBAgIRAIIQz7DSQONZRGPgu2OCiwAwDQYJKoZIhvcNAQELBQAw
-TzELMAkGA1UEBhMCVVMxKTAnBgNVBAoTIEludGVybmV0IFNlY3VyaXR5IFJlc2Vh
-cmNoIEdyb3VwMRUwEwYDVQQDEwxJU1JHIFJvb3QgWDEwHhcNMTUwNjA0MTEwNDM4
-WhcNMzUwNjA0MTEwNDM4WjBPMQswCQYDVQQGEwJVUzEpMCcGA1UEChMgSW50ZXJu
-ZXQgU2VjdXJpdHkgUmVzZWFyY2ggR3JvdXAxFTATBgNVBAMTDElTUkcgUm9vdCBY
-MTCCAiIwDQYJKoZIhvcNAQEBBQADggIPADCCAgoCggIBAK3oJHP0FDfzm54rVygc
-h77ct984kIxuPOZXoHj3dcKi/vVqbvYATyjb3miGbESTtrFj/RQSa78f0uoxmyF+
-0TM8ukj13Xnfs7j/EvEhmkvBioZxaUpmZmyPfjxwv60pIgbz5MDmgK7iS4+3mX6U
-A5/TR5d8mUgjU+g4rk8Kb4Mu0UlXjIB0ttov0DiNewNwIRt18jA8+o+u3dpjq+sW
-T8KOEUt+zwvo/7V3LvSye0rgTBIlDHCNAymg4VMk7BPZ7hm/ELNKjD+Jo2FR3qyH
-B5T0Y3HsLuJvW5iB4YlcNHlsdu87kGJ55tukmi8mxdAQ4Q7e2RCOFvu396j3x+UC
-B5iPNgiV5+I3lg02dZ77DnKxHZu8A/lJBdiB3QW0KtZB6awBdpUKD9jf1b0SHzUv
-KBds0pjBqAlkd25HN7rOrFleaJ1/ctaJxQZBKT5ZPt0m9STJEadao0xAH0ahmbWn
-OlFuhjuefXKnEgV4We0+UXgVCwOPjdAvBbI+e0ocS3MFEvzG6uBQE3xDk3SzynTn
-jh8BCNAw1FtxNrQHusEwMFxIt4I7mKZ9YIqioymCzLq9gwQbooMDQaHWBfEbwrbw
-qHyGO0aoSCqI3Haadr8faqU9GY/rOPNk3sgrDQoo//fb4hVC1CLQJ13hef4Y53CI
-rU7m2Ys6xt0nUW7/vGT1M0NPAgMBAAGjQjBAMA4GA1UdDwEB/wQEAwIBBjAPBgNV
-HRMBAf8EBTADAQH/MB0GA1UdDgQWBBR5tFnme7bl5AFzgAiIyBpY9umbbjANBgkq
-hkiG9w0BAQsFAAOCAgEAVR9YqbyyqFDQDLHYGmkgJykIrGF1XIpu+ILlaS/V9lZL
-ubhzEFnTIZd+50xx+7LSYK05qAvqFyFWhfFQDlnrzuBZ6brJFe+GnY+EgPbk6ZGQ
-3BebYhtF8GaV0nxvwuo77x/Py9auJ/GpsMiu/X1+mvoiBOv/2X/qkSsisRcOj/KK
-NFtY2PwByVS5uCbMiogziUwthDyC3+6WVwW6LLv3xLfHTjuCvjHIInNzktHCgKQ5
-ORAzI4JMPJ+GslWYHb4phowim57iaztXOoJwTdwJx4nLCgdNbOhdjsnvzqvHu7Ur
-TkXWStAmzOVyyghqpZXjFaH3pO3JLF+l+/+sKAIuvtd7u+Nxe5AW0wdeRlN8NwdC
-jNPElpzVmbUq4JUagEiuTDkHzsxHpFKVK7q4+63SM1N95R1NbdWhscdCb+ZAJzVc
-oyi3B43njTOQ5yOf+1CceWxG1bQVs5ZufpsMljq4Ui0/1lvh+wjChP4kqKOJ2qxq
-4RgqsahDYVvTH9w7jXbyLeiNdd8XM2w9U/t7y0Ff/9yi0GE44Za4rF2LN9d11TPA
-mRGunUHBcnWEvgJBQl9nJEiU0Zsnvgc/ubhPgXRR4Xq37Z0j4r7g1SgEEzwxA57d
-emyPxgcYxn/eR44/KJ4EBs+lVDR3veyJm+kXQ99b21/+jh5Xos1AnX5iItreGCc=
------END CERTIFICATE-----`)
+ MIIFazCCA1OgAwIBAgIRAIIQz7DSQONZRGPgu2OCiwAwDQYJKoZIhvcNAQELBQAwTzELMAkGA1UEBhMCVVMxKTAnBgNVBAoTIEludGVybmV0IFNlY3VyaXR5IFJlc2VhcmNoIEdyb3VwMRUwEwYDVQQDEwxJU1JHIFJvb3QgWDEwHhcNMTUwNjA0MTEwNDM4WhcNMzUwNjA0MTEwNDM4WjBPMQswCQYDVQQGEwJVUzEpMCcGA1UEChMgSW50ZXJuZXQgU2VjdXJpdHkgUmVzZWFyY2ggR3JvdXAxFTATBgNVBAMTDElTUkcgUm9vdCBYMTCCAiIwDQYJKoZIhvcNAQEBBQADggIPADCCAgoCggIBAK3oJHP0FDfzm54rVygch77ct984kIxuPOZXoHj3dcKi/vVqbvYATyjb3miGbESTtrFj/RQSa78f0uoxmyF+0TM8ukj13Xnfs7j/EvEhmkvBioZxaUpmZmyPfjxwv60pIgbz5MDmgK7iS4+3mX6UA5/TR5d8mUgjU+g4rk8Kb4Mu0UlXjIB0ttov0DiNewNwIRt18jA8+o+u3dpjq+sWT8KOEUt+zwvo/7V3LvSye0rgTBIlDHCNAymg4VMk7BPZ7hm/ELNKjD+Jo2FR3qyHB5T0Y3HsLuJvW5iB4YlcNHlsdu87kGJ55tukmi8mxdAQ4Q7e2RCOFvu396j3x+UCB5iPNgiV5+I3lg02dZ77DnKxHZu8A/lJBdiB3QW0KtZB6awBdpUKD9jf1b0SHzUvKBds0pjBqAlkd25HN7rOrFleaJ1/ctaJxQZBKT5ZPt0m9STJEadao0xAH0ahmbWnOlFuhjuefXKnEgV4We0+UXgVCwOPjdAvBbI+e0ocS3MFEvzG6uBQE3xDk3SzynTnjh8BCNAw1FtxNrQHusEwMFxIt4I7mKZ9YIqioymCzLq9gwQbooMDQaHWBfEbwrbwqHyGO0aoSCqI3Haadr8faqU9GY/rOPNk3sgrDQoo//fb4hVC1CLQJ13hef4Y53CIrU7m2Ys6xt0nUW7/vGT1M0NPAgMBAAGjQjBAMA4GA1UdDwEB/wQEAwIBBjAPBgNVHRMBAf8EBTADAQH/MB0GA1UdDgQWBBR5tFnme7bl5AFzgAiIyBpY9umbbjANBgkqhkiG9w0BAQsFAAOCAgEAVR9YqbyyqFDQDLHYGmkgJykIrGF1XIpu+ILlaS/V9lZLubhzEFnTIZd+50xx+7LSYK05qAvqFyFWhfFQDlnrzuBZ6brJFe+GnY+EgPbk6ZGQ3BebYhtF8GaV0nxvwuo77x/Py9auJ/GpsMiu/X1+mvoiBOv/2X/qkSsisRcOj/KKNFtY2PwByVS5uCbMiogziUwthDyC3+6WVwW6LLv3xLfHTjuCvjHIInNzktHCgKQ5ORAzI4JMPJ+GslWYHb4phowim57iaztXOoJwTdwJx4nLCgdNbOhdjsnvzqvHu7UrTkXWStAmzOVyyghqpZXjFaH3pO3JLF+l+/+sKAIuvtd7u+Nxe5AW0wdeRlN8NwdCjNPElpzVmbUq4JUagEiuTDkHzsxHpFKVK7q4+63SM1N95R1NbdWhscdCb+ZAJzVcoyi3B43njTOQ5yOf+1CceWxG1bQVs5ZufpsMljq4Ui0/1lvh+wjChP4kqKOJ2qxq4RgqsahDYVvTH9w7jXbyLeiNdd8XM2w9U/t7y0Ff/9yi0GE44Za4rF2LN9d11TPAmRGunUHBcnWEvgJBQl9nJEiU0Zsnvgc/ubhPgXRR4Xq37Z0j4r7g1SgEEzwxA57demyPxgcYxn/eR44/KJ4EBs+lVDR3veyJm+kXQ99b21/+jh5Xos1AnX5iItreGCc=
+ -----END CERTIFICATE-----`)
 		certPool.AppendCertsFromPEM(letsEncryptX1Cert)
-		tlsConfig.RootCAs = certPool
+		tlsClientConfig.RootCAs = certPool
 	}
 
-	// Client certificate authentication
-	if x.tlsClientCreds.clientCert != "" {
-		cert, err := tls.LoadX509KeyPair(x.tlsClientCreds.clientCert, x.tlsClientCreds.clientKey)
+	if clientCreds.clientCert != "" {
+		cert, err := tls.LoadX509KeyPair(clientCreds.clientCert, clientCreds.clientKey)
 		if err != nil {
-			return nil, fmt.Errorf("failed to load client certificate: %w", err)
+			dlog.Fatalf(
+				"Unable to use certificate [%v] (key: [%v]): %v",
+				clientCreds.clientCert,
+				clientCreds.clientKey,
+				err,
+			)
 		}
-		tlsConfig.Certificates = []tls.Certificate{cert}
+		tlsClientConfig.Certificates = []tls.Certificate{cert}
 	}
 
-	// Session tickets
-	if x.tlsDisableSessionTickets.Load() {
-		tlsConfig.SessionTicketsDisabled = true
+	if xTransport.tlsDisableSessionTickets {
+		tlsClientConfig.SessionTicketsDisabled = true
+	}
+	if xTransport.tlsPreferRSA {
+		tlsClientConfig.MaxVersion = tls.VersionTLS12
 	}
 
-	// RSA preference (force TLS 1.2)
-	if x.tlsPreferRSA.Load() {
-		tlsConfig.MaxVersion = tls.VersionTLS12
+	// Optimized cipher suite ordering for TLS 1.2
+	if hasAESGCMHardwareSupport {
+		tlsClientConfig.CipherSuites = []uint16{
+			tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+			tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
+			tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+			tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+			tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256,
+		}
+	} else {
+		tlsClientConfig.CipherSuites = []uint16{
+			tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
+			tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256,
+			tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+			tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+			tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+		}
 	}
-
-	// Cipher suite optimization based on hardware support
-	// Go 1.26: Only needed for TLS 1.2, TLS 1.3 has better defaults
-	if x.tlsPreferRSA.Load() {
-		if hasAESGCMHardwareSupport {
-			tlsConfig.CipherSuites = []uint16{
-				tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-				tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-				tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
-				tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-				tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-				tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256,
+	transport.TLSClientConfig = &tlsClientConfig
+	if http2Transport, _ := http2.ConfigureTransports(transport); http2Transport != nil {
+		http2Transport.ReadIdleTimeout = timeout
+		http2Transport.AllowHTTP = false
+	}
+	xTransport.transport = transport
+	if xTransport.http3 {
+		dial := func(ctx context.Context, addrStr string, tlsCfg *tls.Config, cfg *quic.Config) (*quic.Conn, error) {
+			dlog.Debugf("Dialing for H3: [%v]", addrStr)
+			host, port := ExtractHostAndPort(addrStr, stamps.DefaultPort)
+			type udpTarget struct {
+				addr    string
+				network string
 			}
-		} else {
-			tlsConfig.CipherSuites = []uint16{
-				tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
-				tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256,
-				tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-				tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-				tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-				tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-			}
-		}
-	}
-
-	return tlsConfig, nil
-}
-
-// configureHTTP3 configures the HTTP/3 transport.
-// Go 1.26: Enhanced QUIC configuration with modern settings.
-func (x *XTransport) configureHTTP3(tlsConfig *tls.Config) error {
-	dial := func(ctx context.Context, addrStr string, tlsCfg *tls.Config, cfg *quic.Config) (quic.EarlyConnection, error) {
-		if x.logger != nil {
-			x.logger.Debug("Dialing HTTP/3", slog.String("addr", addrStr))
-		}
-
-		host, port := ExtractHostAndPort(addrStr, stamps.DefaultPort)
-
-		type udpTarget struct {
-			addr    string
-			network string
-		}
-
-		buildAddr := func(addr netip.Addr) udpTarget {
-			if !addr.IsValid() {
-				// Try to parse literal IP
-				parsed := ParseIP(host)
+			buildAddr := func(ip net.IP) udpTarget {
+				if ip != nil {
+					if ipv4 := ip.To4(); ipv4 != nil {
+						return udpTarget{addr: ipv4.String() + ":" + strconv.Itoa(port), network: "udp4"}
+					}
+					return udpTarget{addr: "[" + ip.String() + "]:" + strconv.Itoa(port), network: "udp6"}
+				}
 				network := "udp4"
-				addrStr := host
-
-				if parsed.IsValid() {
-					if parsed.Is4() {
-						addrStr = parsed.String()
+				addr := host
+				if parsed := ParseIP(host); parsed != nil {
+					if parsed.To4() != nil {
+						addr = parsed.String()
 					} else {
 						network = "udp6"
-						addrStr = "[" + parsed.String() + "]"
+						addr = "[" + parsed.String() + "]"
 					}
-				} else if x.useIPv6.Load() {
-					if x.useIPv4.Load() {
+				} else if xTransport.useIPv6 {
+					if xTransport.useIPv4 {
 						network = "udp"
 					} else {
 						network = "udp6"
 					}
 				}
-
-				return udpTarget{
-					addr:    net.JoinHostPort(addrStr, strconv.Itoa(port)),
-					network: network,
-				}
+				return udpTarget{addr: addr + ":" + strconv.Itoa(port), network: network}
 			}
 
-			if addr.Is4() {
-				return udpTarget{
-					addr:    net.JoinHostPort(addr.String(), strconv.Itoa(port)),
-					network: "udp4",
+			cachedIPs, _, _ := xTransport.loadCachedIPs(host)
+			targets := make([]udpTarget, 0, len(cachedIPs))
+			for _, ip := range cachedIPs {
+				targets = append(targets, buildAddr(ip))
+			}
+			if len(targets) == 0 {
+				dlog.Debugf("[%s] IP address was not cached in H3 context", host)
+				targets = append(targets, buildAddr(nil))
+			}
+
+			var lastErr error
+			for idx, target := range targets {
+				udpAddr, err := net.ResolveUDPAddr(target.network, target.addr)
+				if err != nil {
+					lastErr = err
+					if idx < len(targets)-1 {
+						dlog.Debugf("H3: failed to resolve [%s] on %s: %v", target.addr, target.network, err)
+					}
+					continue
 				}
+				udpConn, err := net.ListenUDP(target.network, nil)
+				if err != nil {
+					lastErr = err
+					if idx < len(targets)-1 {
+						dlog.Debugf("H3: failed to listen for [%s] on %s: %v", target.addr, target.network, err)
+					}
+					continue
+				}
+				tlsCfg.ServerName = host
+				conn, err := quic.DialEarly(ctx, udpConn, udpAddr, tlsCfg, cfg)
+				if err != nil {
+					udpConn.Close()
+					lastErr = err
+					if idx < len(targets)-1 {
+						dlog.Debugf("H3: dialing [%s] via %s failed: %v", target.addr, target.network, err)
+					}
+					continue
+				}
+				return conn, nil
 			}
-			return udpTarget{
-				addr:    net.JoinHostPort("["+addr.String()+"]", strconv.Itoa(port)),
-				network: "udp6",
-			}
+			return nil, lastErr
 		}
-
-		// Get cached IPs
-		cachedIPs, _, _ := x.loadCachedIPs(host)
-		targets := make([]udpTarget, 0, len(cachedIPs)+1)
-
-		for _, addr := range cachedIPs {
-			targets = append(targets, buildAddr(addr))
-		}
-
-		if len(targets) == 0 {
-			if x.logger != nil {
-				x.logger.Debug("IP not cached for HTTP/3", slog.String("host", host))
-			}
-			targets = append(targets, buildAddr(netip.Addr{}))
-		}
-
-		// Try each target
-		var lastErr error
-		for idx, target := range targets {
-			udpAddr, err := net.ResolveUDPAddr(target.network, target.addr)
-			if err != nil {
-				lastErr = err
-				if idx < len(targets)-1 && x.logger != nil {
-					x.logger.Debug("HTTP/3 resolve failed",
-						slog.String("addr", target.addr),
-						slog.String("network", target.network),
-						slog.Any("error", err))
-				}
-				continue
-			}
-
-			udpConn, err := net.ListenUDP(target.network, nil)
-			if err != nil {
-				lastErr = err
-				if idx < len(targets)-1 && x.logger != nil {
-					x.logger.Debug("HTTP/3 listen failed",
-						slog.String("addr", target.addr),
-						slog.String("network", target.network),
-						slog.Any("error", err))
-				}
-				continue
-			}
-
-			tlsCfg.ServerName = host
-			conn, err := quic.DialEarly(ctx, udpConn, udpAddr, tlsCfg, cfg)
-			if err != nil {
-				udpConn.Close()
-				lastErr = err
-				if idx < len(targets)-1 && x.logger != nil {
-					x.logger.Debug("HTTP/3 dial failed",
-						slog.String("addr", target.addr),
-						slog.String("network", target.network),
-						slog.Any("error", err))
-				}
-				continue
-			}
-
-			x.statsHTTP3Count.Add(1)
-			return conn, nil
-		}
-
-		return nil, fmt.Errorf("all HTTP/3 dial attempts failed: %w", lastErr)
+		h3Transport := &http3.Transport{DisableCompression: true, TLSClientConfig: &tlsClientConfig, Dial: dial}
+		xTransport.h3Transport = h3Transport
 	}
-
-	h3Transport := &http3.Transport{
-		DisableCompression: true,
-		TLSClientConfig:    tlsConfig,
-		Dial:               dial,
-		// Go 1.26: Add connection pooling settings
-		MaxResponseHeaderBytes: 4096,
-	}
-
-	x.h3Transport.Store(h3Transport)
-	return nil
 }
 
-// resolveUsingSystem resolves a hostname using the system resolver.
-// Go 1.26: Context-aware with proper timeout handling.
-func (x *XTransport) resolveUsingSystem(ctx context.Context, host string, returnIPv4, returnIPv6 bool) ([]netip.Addr, time.Duration, error) {
-	// Create context with timeout
-	resolveCtx, cancel := context.WithTimeout(ctx, ResolverReadTimeout)
-	defer cancel()
-
-	resolver := &net.Resolver{}
-	ips, err := resolver.LookupIP(resolveCtx, "ip", host)
-	if err != nil {
-		return nil, 0, fmt.Errorf("system resolver failed: %w", err)
+func (xTransport *XTransport) resolveUsingSystem(host string, returnIPv4, returnIPv6 bool) ([]net.IP, time.Duration, error) {
+	ipa, err := net.LookupIP(host)
+	if returnIPv4 && returnIPv6 {
+		return ipa, SystemResolverIPTTL, err
 	}
-
-	// Convert and filter by IP version
-	addrs := make([]netip.Addr, 0, len(ips))
-	for _, ip := range ips {
-		addr, ok := netip.AddrFromSlice(ip)
-		if !ok {
-			continue
+	ips := make([]net.IP, 0)
+	for _, ip := range ipa {
+		ipv4 := ip.To4()
+		if returnIPv4 && ipv4 != nil {
+			ips = append(ips, ipv4)
 		}
-
-		if returnIPv4 && addr.Is4() {
-			addrs = append(addrs, addr)
-		} else if returnIPv6 && addr.Is6() {
-			addrs = append(addrs, addr)
+		if returnIPv6 && ipv4 == nil {
+			ips = append(ips, ip)
 		}
 	}
-
-	return addrs, SystemResolverIPTTL, nil
+	return ips, SystemResolverIPTTL, err
 }
 
-// resolveUsingResolver resolves a hostname using a specific DNS resolver.
-// Go 1.26: Enhanced with proper context handling and error wrapping.
-func (x *XTransport) resolveUsingResolver(
-	ctx context.Context,
+func (xTransport *XTransport) resolveUsingResolver(
 	proto, host string,
 	resolver string,
 	returnIPv4, returnIPv6 bool,
-) ([]netip.Addr, time.Duration, error) {
-	transport := &dns.Transport{}
+) (ips []net.IP, ttl time.Duration, err error) {
+	transport := dns.NewTransport()
 	transport.ReadTimeout = ResolverReadTimeout
-	dnsClient := &dns.Client{Transport: transport}
-
-	queryTypes := make([]uint16, 0, 2)
+	dnsClient := dns.Client{Transport: transport}
+	queryType := make([]uint16, 0, 2)
 	if returnIPv4 {
-		queryTypes = append(queryTypes, dns.TypeA)
+		queryType = append(queryType, dns.TypeA)
 	}
 	if returnIPv6 {
-		queryTypes = append(queryTypes, dns.TypeAAAA)
+		queryType = append(queryType, dns.TypeAAAA)
 	}
-
-	var addrs []netip.Addr
 	var rrTTL uint32
-
-	for _, rrType := range queryTypes {
+	ctx, cancel := context.WithTimeout(context.Background(), ResolverReadTimeout)
+	defer cancel()
+	for _, rrType := range queryType {
 		msg := dns.NewMsg(fqdn(host), rrType)
 		if msg == nil {
 			continue
 		}
-
 		msg.RecursionDesired = true
 		msg.UDPSize = uint16(MaxDNSPacketSize)
 		msg.Security = true
-
-		response, _, err := dnsClient.Exchange(ctx, msg, proto, resolver)
-		if err != nil {
-			return nil, 0, fmt.Errorf("DNS exchange failed: %w", err)
-		}
-
-		for _, answer := range response.Answer {
-			if dns.RRToType(answer) == rrType {
-				var addr netip.Addr
-				switch rrType {
-				case dns.TypeA:
-					if a, ok := answer.(*dns.A); ok {
-						addr = a.A.Addr
+		var in *dns.Msg
+		if in, _, err = dnsClient.Exchange(ctx, msg, proto, resolver); err == nil {
+			for _, answer := range in.Answer {
+				if dns.RRToType(answer) == rrType {
+					switch rrType {
+					case dns.TypeA:
+						ips = append(ips, answer.(*dns.A).A.Addr.AsSlice())
+					case dns.TypeAAAA:
+						ips = append(ips, answer.(*dns.AAAA).AAAA.Addr.AsSlice())
 					}
-				case dns.TypeAAAA:
-					if aaaa, ok := answer.(*dns.AAAA); ok {
-						addr = aaaa.AAAA.Addr
-					}
-				}
-
-				if addr.IsValid() {
-					addrs = append(addrs, addr)
 					rrTTL = answer.Header().TTL
 				}
 			}
 		}
 	}
-
-	var ttl time.Duration
-	if len(addrs) > 0 {
+	if len(ips) > 0 {
 		ttl = time.Duration(rrTTL) * time.Second
 	}
-
-	return addrs, ttl, nil
+	return ips, ttl, err
 }
 
-// resolveUsingServers attempts resolution using multiple resolvers with retry logic.
-// Go 1.26: Exponential backoff with context support.
-func (x *XTransport) resolveUsingServers(
-	ctx context.Context,
+func (xTransport *XTransport) resolveUsingServers(
 	proto, host string,
 	resolvers []string,
 	returnIPv4, returnIPv6 bool,
-) ([]netip.Addr, time.Duration, error) {
+) (ips []net.IP, ttl time.Duration, err error) {
 	if len(resolvers) == 0 {
-		return nil, 0, ErrEmptyResolvers
+		return nil, 0, errors.New("Empty resolvers")
 	}
-
 	var lastErr error
 	for i, resolver := range resolvers {
 		delay := resolverRetryInitialBackoff
-
 		for attempt := 1; attempt <= resolverRetryCount; attempt++ {
-			// Check context cancellation
-			if err := ctx.Err(); err != nil {
-				return nil, 0, fmt.Errorf("resolution canceled: %w", err)
-			}
-
-			addrs, ttl, err := x.resolveUsingResolver(ctx, proto, host, resolver, returnIPv4, returnIPv6)
-			if err == nil && len(addrs) > 0 {
-				// Promote successful resolver to front
+			ips, ttl, err = xTransport.resolveUsingResolver(proto, host, resolver, returnIPv4, returnIPv6)
+			if err == nil && len(ips) > 0 {
 				if i > 0 {
-					if x.logger != nil {
-						x.logger.Info("Resolution succeeded, promoting resolver",
-							slog.String("proto", proto),
-							slog.String("resolver", resolver))
-					}
+					dlog.Infof("Resolution succeeded with resolver %s[%s]", proto, resolver)
 					resolvers[0], resolvers[i] = resolvers[i], resolvers[0]
 				}
-				return addrs, ttl, nil
+				return ips, ttl, nil
 			}
-
 			if err == nil {
-				err = ErrNoIPAddresses
+				err = errors.New("no IP addresses returned")
 			}
-
 			lastErr = err
-			if x.logger != nil {
-				x.logger.Debug("Resolver attempt failed",
-					slog.Int("attempt", attempt),
-					slog.String("host", host),
-					slog.String("resolver", resolver),
-					slog.String("proto", proto),
-					slog.Any("error", err))
-			}
-
-			// Exponential backoff
+			dlog.Debugf("Resolver attempt %d failed for [%s] using [%s] (%s): %v", attempt, host, resolver, proto, err)
 			if attempt < resolverRetryCount {
-				select {
-				case <-time.After(delay):
-				case <-ctx.Done():
-					return nil, 0, ctx.Err()
-				}
-
-				delay *= 2
-				if delay > resolverRetryMaxBackoff {
-					delay = resolverRetryMaxBackoff
+				time.Sleep(delay)
+				if delay < resolverRetryMaxBackoff {
+					delay *= 2
+					if delay > resolverRetryMaxBackoff {
+						delay = resolverRetryMaxBackoff
+					}
 				}
 			}
 		}
-
-		if x.logger != nil {
-			x.logger.Info("Unable to resolve with resolver",
-				slog.String("host", host),
-				slog.String("resolver", resolver),
-				slog.String("proto", proto),
-				slog.Any("error", lastErr))
-		}
+		dlog.Infof("Unable to resolve [%s] using resolver [%s] (%s): %v", host, resolver, proto, lastErr)
 	}
-
 	if lastErr == nil {
-		lastErr = ErrNoIPAddresses
+		lastErr = errors.New("no IP addresses returned")
 	}
-
 	return nil, 0, lastErr
 }
 
-// resolve performs DNS resolution with fallback to multiple resolver types.
-// Go 1.26: Comprehensive resolution strategy with context support.
-func (x *XTransport) resolve(ctx context.Context, host string, returnIPv4, returnIPv6 bool) ([]netip.Addr, time.Duration, error) {
-	x.statsResolveCount.Add(1)
-
+func (xTransport *XTransport) resolve(host string, returnIPv4, returnIPv6 bool) (ips []net.IP, ttl time.Duration, err error) {
 	protos := []string{"udp", "tcp"}
-	if x.mainProto == "tcp" {
+	if xTransport.mainProto == "tcp" {
 		protos = []string{"tcp", "udp"}
 	}
-
-	var addrs []netip.Addr
-	var ttl time.Duration
-	var err error
-
-	// Try internal resolvers if configured
-	if x.ignoreSystemDNS.Load() {
-		if x.internalResolverReady.Load() {
+	if xTransport.ignoreSystemDNS {
+		if xTransport.internalResolverReady {
 			for _, proto := range protos {
-				addrs, ttl, err = x.resolveUsingServers(ctx, proto, host, x.internalResolvers, returnIPv4, returnIPv6)
+				ips, ttl, err = xTransport.resolveUsingServers(proto, host, xTransport.internalResolvers, returnIPv4, returnIPv6)
 				if err == nil {
-					return addrs, ttl, nil
+					break
 				}
 			}
 		} else {
-			err = ErrServiceNotReady
-			if x.logger != nil {
-				x.logger.Notice(err.Error())
-			}
+			err = errors.New("dnscrypt-proxy service is not usable yet")
+			dlog.Notice(err)
 		}
 	} else {
-		// Try system resolver first
-		addrs, ttl, err = x.resolveUsingSystem(ctx, host, returnIPv4, returnIPv6)
+		ips, ttl, err = xTransport.resolveUsingSystem(host, returnIPv4, returnIPv6)
 		if err != nil {
-			err = ErrSystemDNSNotUsable
-			if x.logger != nil {
-				x.logger.Notice(err.Error())
-			}
-		} else {
-			return addrs, ttl, nil
+			err = errors.New("System DNS is not usable yet")
+			dlog.Notice(err)
 		}
 	}
-
-	// Fallback to bootstrap resolvers
 	if err != nil {
 		for _, proto := range protos {
-			if x.logger != nil {
-				x.logger.Notice("Using bootstrap resolvers",
-					slog.String("host", host),
-					slog.String("proto", proto))
+			if err != nil {
+				dlog.Noticef(
+					"Resolving server host [%s] using bootstrap resolvers over %s",
+					host,
+					proto,
+				)
 			}
-
-			addrs, ttl, err = x.resolveUsingServers(ctx, proto, host, x.bootstrapResolvers, returnIPv4, returnIPv6)
+			ips, ttl, err = xTransport.resolveUsingServers(proto, host, xTransport.bootstrapResolvers, returnIPv4, returnIPv6)
 			if err == nil {
-				return addrs, ttl, nil
+				break
 			}
-		}
-
-		// Last resort: try system resolver if we haven't already
-		if x.ignoreSystemDNS.Load() {
-			if x.logger != nil {
-				x.logger.Notice("Bootstrap failed, trying system resolver as last resort")
-			}
-			addrs, ttl, err = x.resolveUsingSystem(ctx, host, returnIPv4, returnIPv6)
 		}
 	}
-
-	return addrs, ttl, err
+	if err != nil && xTransport.ignoreSystemDNS {
+		dlog.Noticef("Bootstrap resolvers didn't respond - Trying with the system resolver as a last resort")
+		ips, ttl, err = xTransport.resolveUsingSystem(host, returnIPv4, returnIPv6)
+	}
+	return ips, ttl, err
 }
 
-// resolveAndUpdateCache resolves a hostname and updates the cache.
-// Go 1.26: Prevents duplicate concurrent resolutions.
-func (x *XTransport) resolveAndUpdateCache(ctx context.Context, host string) error {
-	// Skip resolution for proxied connections
-	if x.proxyDialer != nil || x.httpProxyFunction != nil {
+// If a name is not present in the cache, resolve the name and update the cache
+func (xTransport *XTransport) resolveAndUpdateCache(host string) error {
+	if xTransport.proxyDialer != nil || xTransport.httpProxyFunction != nil {
 		return nil
 	}
-
-	// Skip if host is already an IP address
-	if addr := ParseIP(host); addr.IsValid() {
+	if ParseIP(host) != nil {
 		return nil
 	}
-
-	// Check cache
-	cachedIPs, expired, updating := x.loadCachedIPs(host)
+	cachedIPs, expired, updating := xTransport.loadCachedIPs(host)
 	if len(cachedIPs) > 0 && (!expired || updating) {
 		return nil
 	}
+	xTransport.markUpdatingCachedIP(host)
 
-	// Mark as updating to prevent concurrent resolutions
-	x.markUpdatingCachedIP(host)
-
-	// Resolve
-	addrs, ttl, err := x.resolve(ctx, host, x.useIPv4.Load(), x.useIPv6.Load())
+	ips, ttl, err := xTransport.resolve(host, xTransport.useIPv4, xTransport.useIPv6)
 	if ttl < MinResolverIPTTL {
 		ttl = MinResolverIPTTL
 	}
-
-	selectedAddrs := addrs
-	// Use stale cache if resolution failed
-	if (err != nil || len(selectedAddrs) == 0) && len(cachedIPs) > 0 {
-		if x.logger != nil {
-			x.logger.Notice("Using stale cached addresses",
-				slog.String("host", host),
-				slog.Duration("grace_period", ExpiredCachedIPGraceTTL))
-		}
-		selectedAddrs = cachedIPs
+	selectedIPs := ips
+	if (err != nil || len(selectedIPs) == 0) && len(cachedIPs) > 0 {
+		dlog.Noticef("Using stale [%v] cached address for a grace period", host)
+		selectedIPs = cachedIPs
 		ttl = ExpiredCachedIPGraceTTL
 		err = nil
 	}
-
 	if err != nil {
 		return err
 	}
-
-	if len(selectedAddrs) == 0 {
-		if x.logger != nil {
-			if !x.useIPv4.Load() && x.useIPv6.Load() {
-				x.logger.Warn("No IPv6 address found", slog.String("host", host))
-			} else if x.useIPv4.Load() && !x.useIPv6.Load() {
-				x.logger.Warn("No IPv4 address found", slog.String("host", host))
-			} else {
-				x.logger.Error("No IP address found", slog.String("host", host))
-			}
+	if len(selectedIPs) == 0 {
+		if !xTransport.useIPv4 && xTransport.useIPv6 {
+			dlog.Warnf("no IPv6 address found for [%s]", host)
+		} else if xTransport.useIPv4 && !xTransport.useIPv6 {
+			dlog.Warnf("no IPv4 address found for [%s]", host)
+		} else {
+			dlog.Errorf("no IP address found for [%s]", host)
 		}
 		return nil
 	}
-
-	x.saveCachedIPs(host, selectedAddrs, ttl)
+	xTransport.saveCachedIPs(host, selectedIPs, ttl)
 	return nil
 }
 
-// Fetch performs an HTTP request with comprehensive error handling.
-// Go 1.26: Enhanced with better context support and HTTP/3 fallback.
-func (x *XTransport) Fetch(
-	ctx context.Context,
+func (xTransport *XTransport) Fetch(
 	method string,
-	reqURL *url.URL,
+	url *url.URL,
 	accept string,
 	contentType string,
 	body *[]byte,
@@ -1160,382 +644,238 @@ func (x *XTransport) Fetch(
 	compress bool,
 ) ([]byte, int, *tls.ConnectionState, time.Duration, error) {
 	if timeout <= 0 {
-		timeout = x.timeout
+		timeout = xTransport.timeout
 	}
-
-	// Create context with timeout
-	ctx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-
-	client := &http.Client{
-		Transport: x.transport.Load(),
+	client := http.Client{
+		Transport: xTransport.transport,
 		Timeout:   timeout,
 	}
-
-	host, port := ExtractHostAndPort(reqURL.Host, 443)
-
-	// HTTP/3 selection logic
+	host, port := ExtractHostAndPort(url.Host, 443)
 	hasAltSupport := false
-	if x.h3Transport.Load() != nil {
-		if x.http3Probe.Load() {
-			// Always try HTTP/3 first when probing
-			client.Transport = x.h3Transport.Load()
-			if x.logger != nil {
-				x.logger.Debug("Probing HTTP/3", slog.String("host", reqURL.Host))
-			}
+
+	if xTransport.h3Transport != nil {
+		if xTransport.http3Probe {
+			// Always try HTTP/3 first when http3_probe is enabled,
+			// without checking for Alt-Svc
+			client.Transport = xTransport.h3Transport
+			dlog.Debugf("Probing HTTP/3 transport for [%s]", url.Host)
 		} else {
-			// Use Alt-Svc cache
-			altPort, found := x.altSupport.Load(reqURL.Host)
-			hasAltSupport = found
-			if found && altPort > 0 && int(altPort) == port {
-				client.Transport = x.h3Transport.Load()
-				if x.logger != nil {
-					x.logger.Debug("Using HTTP/3 from Alt-Svc",
-						slog.String("host", reqURL.Host))
+			// Otherwise use traditional Alt-Svc detection
+			xTransport.altSupport.RLock()
+			var altPort uint16
+			altPort, hasAltSupport = xTransport.altSupport.cache[url.Host]
+			xTransport.altSupport.RUnlock()
+			if hasAltSupport && altPort > 0 { // altPort > 0 ensures we're not in the negative cache
+				if int(altPort) == port {
+					client.Transport = xTransport.h3Transport
+					dlog.Debugf("Using HTTP/3 transport for [%s]", url.Host)
 				}
 			}
 		}
 	}
-
-	// Build request headers
-	header := http.Header{
-		"User-Agent": []string{"dnscrypt-proxy"},
+	header := map[string][]string{"User-Agent": {"dnscrypt-proxy"}}
+	if len(accept) > 0 {
+		header["Accept"] = []string{accept}
 	}
-	if accept != "" {
-		header.Set("Accept", accept)
+	if len(contentType) > 0 {
+		header["Content-Type"] = []string{contentType}
 	}
-	if contentType != "" {
-		header.Set("Content-Type", contentType)
-	}
-	header.Set("Cache-Control", "max-stale")
-
-	// Add body hash for cache busting if needed
+	header["Cache-Control"] = []string{"max-stale"}
 	if body != nil {
 		h := sha512.Sum512(*body)
-		qs := reqURL.Query()
+		qs := url.Query()
 		qs.Add("body_hash", hex.EncodeToString(h[:32]))
-		newURL := *reqURL
-		newURL.RawQuery = qs.Encode()
-		reqURL = &newURL
+		url2 := *url
+		url2.RawQuery = qs.Encode()
+		url = &url2
 	}
-
-	// Check for Tor requirement
-	if x.proxyDialer == nil && strings.HasSuffix(host, ".onion") {
-		return nil, 0, nil, 0, ErrOnionWithoutTor
+	if xTransport.proxyDialer == nil && strings.HasSuffix(host, ".onion") {
+		return nil, 0, nil, 0, errors.New("Onion service is not reachable without Tor")
 	}
-
-	// Resolve and cache host
-	if err := x.resolveAndUpdateCache(ctx, host); err != nil {
-		if x.logger != nil {
-			x.logger.Error("Unable to resolve host",
-				slog.String("host", host),
-				slog.Any("error", err))
-		}
-		return nil, 0, nil, 0, fmt.Errorf("resolution failed: %w", err)
+	if err := xTransport.resolveAndUpdateCache(host); err != nil {
+		dlog.Errorf(
+			"Unable to resolve [%v] - Make sure that the system resolver works, or that `bootstrap_resolvers` has been set to resolvers that can be reached",
+			host,
+		)
+		return nil, 0, nil, 0, err
 	}
-
-	// Add compression support
 	if compress && body == nil {
-		header.Set("Accept-Encoding", "gzip")
+		header["Accept-Encoding"] = []string{"gzip"}
 	}
-
-	// Create request
 	req := &http.Request{
 		Method: method,
-		URL:    reqURL,
+		URL:    url,
 		Header: header,
 		Close:  false,
 	}
-
 	if body != nil {
 		req.ContentLength = int64(len(*body))
 		req.Body = io.NopCloser(bytes.NewReader(*body))
 	}
-
-	// Execute request
 	start := time.Now()
-	resp, err := client.Do(req.WithContext(ctx))
+	resp, err := client.Do(req)
 	rtt := time.Since(start)
 
-	// HTTP/3 fallback logic
-	if err != nil && client.Transport == x.h3Transport.Load() {
-		if x.logger != nil {
-			if x.http3Probe.Load() {
-				x.logger.Debug("HTTP/3 probe failed, falling back",
-					slog.String("host", reqURL.Host),
-					slog.Any("error", err))
-			} else {
-				x.logger.Debug("HTTP/3 connection failed, falling back",
-					slog.String("host", reqURL.Host),
-					slog.Any("error", err))
-			}
+	// Handle HTTP/3 error case - fallback to HTTP/2 when HTTP/3 fails
+	if err != nil && client.Transport == xTransport.h3Transport {
+		if xTransport.http3Probe {
+			dlog.Debugf("HTTP/3 probe failed for [%s]: [%s] - falling back to HTTP/2", url.Host, err)
+		} else {
+			dlog.Debugf("HTTP/3 connection failed for [%s]: [%s] - falling back to HTTP/2", url.Host, err)
 		}
 
-		// Add to negative cache
-		x.altSupport.Store(reqURL.Host, 0)
+		// Add server to negative cache when HTTP/3 fails
+		xTransport.altSupport.Lock()
+		xTransport.altSupport.cache[url.Host] = 0 // 0 port means HTTP/3 failed and should not be tried again
+		xTransport.altSupport.Unlock()
 
 		// Retry with HTTP/2
-		client.Transport = x.transport.Load()
+		client.Transport = xTransport.transport
 		if body != nil {
 			req.Body = io.NopCloser(bytes.NewReader(*body))
 		}
-
 		start = time.Now()
-		resp, err = client.Do(req.WithContext(ctx))
+		resp, err = client.Do(req)
 		rtt = time.Since(start)
 	}
 
-	// Handle response errors
 	if err == nil {
 		if resp == nil {
-			err = ErrWebserverError
+			err = errors.New("Webserver returned an error")
 		} else if resp.StatusCode < 200 || resp.StatusCode > 299 {
-			err = fmt.Errorf("HTTP status %d: %s", resp.StatusCode, resp.Status)
+			err = errors.New(resp.Status)
 		}
 	} else {
-		if x.logger != nil {
-			x.logger.Debug("HTTP client error, closing idle connections",
-				slog.Any("error", err))
-		}
-		if transport := x.transport.Load(); transport != nil {
-			transport.CloseIdleConnections()
-		}
+		dlog.Debugf("HTTP client error: [%v] - closing idle connections", err)
+		xTransport.transport.CloseIdleConnections()
 	}
-
 	statusCode := 503
 	if resp != nil {
 		defer resp.Body.Close()
 		statusCode = resp.StatusCode
 	}
-
 	if err != nil {
-		if x.logger != nil {
-			x.logger.Debug("Request failed",
-				slog.String("url", req.URL.String()),
-				slog.Any("error", err))
-		}
+		dlog.Debugf("[%s]: [%s]", req.URL, err)
 		return nil, statusCode, nil, rtt, err
 	}
-
-	// Process Alt-Svc header for HTTP/3
-	if x.h3Transport.Load() != nil && !hasAltSupport {
+	if xTransport.h3Transport != nil && !hasAltSupport {
+		// Check if there's entry in negative cache when using http3_probe
 		skipAltSvcParsing := false
-
-		// Check negative cache for http3_probe
-		if x.http3Probe.Load() {
-			if altPort, found := x.altSupport.Load(reqURL.Host); found && altPort == 0 {
-				if x.logger != nil {
-					x.logger.Debug("Skipping Alt-Svc (negative cache)",
-						slog.String("host", reqURL.Host))
-				}
+		if xTransport.http3Probe {
+			xTransport.altSupport.RLock()
+			altPort, inCache := xTransport.altSupport.cache[url.Host]
+			xTransport.altSupport.RUnlock()
+			// If server is in negative cache (altPort == 0), don't attempt to parse Alt-Svc header
+			if inCache && altPort == 0 {
+				dlog.Debugf("Skipping Alt-Svc parsing for [%s] - previously failed HTTP/3 probe", url.Host)
 				skipAltSvcParsing = true
 			}
 		}
 
 		if !skipAltSvcParsing {
-			if altHeaders := resp.Header["Alt-Svc"]; len(altHeaders) > 0 {
-				if x.logger != nil {
-					x.logger.Debug("Processing Alt-Svc",
-						slog.String("host", reqURL.Host),
-						slog.Any("values", altHeaders))
-				}
-
-				altPort := uint16(port)
-				for i, altHeader := range altHeaders {
-					if i >= 8 {
-						break
-					}
-					for j, part := range strings.Split(altHeader, ";") {
-						if j >= 16 {
+			if alt, found := resp.Header["Alt-Svc"]; found {
+				dlog.Debugf("Alt-Svc [%s]: [%s]", url.Host, alt)
+				altPort := uint16(port & 0xffff)
+				for i, xalt := range alt {
+					for j, v := range strings.Split(xalt, ";") {
+						if i >= 8 || j >= 16 {
 							break
 						}
-						part = strings.TrimSpace(part)
-						if after, found := strings.CutPrefix(part, `h3=":`); found {
-							portStr := strings.TrimSuffix(after, `"`)
-							if parsedPort, err := strconv.ParseUint(portStr, 10, 16); err == nil && parsedPort <= 65535 {
-								altPort = uint16(parsedPort)
-								if x.logger != nil {
-									x.logger.Debug("Found HTTP/3 support",
-										slog.String("host", reqURL.Host),
-										slog.Uint64("port", parsedPort))
-								}
+						v = strings.TrimSpace(v)
+						if after, ok := strings.CutPrefix(v, "h3=\":"); ok {
+							v = after
+							v = strings.TrimSuffix(v, "\"")
+							if xAltPort, err := strconv.ParseUint(v, 10, 16); err == nil && xAltPort <= 65535 {
+								altPort = uint16(xAltPort)
+								dlog.Debugf("Using HTTP/3 for [%s]", url.Host)
 								break
 							}
 						}
 					}
 				}
-				x.altSupport.Store(reqURL.Host, altPort)
+				xTransport.altSupport.Lock()
+				xTransport.altSupport.cache[url.Host] = altPort
+				dlog.Debugf("Caching altPort for [%v]", url.Host)
+				xTransport.altSupport.Unlock()
 			}
 		}
 	}
+	tls := resp.TLS
 
-	// Handle response body
-	tlsState := resp.TLS
 	var bodyReader io.ReadCloser = resp.Body
-
 	if compress && resp.Header.Get("Content-Encoding") == "gzip" {
-		gzReader, err := gzip.NewReader(io.LimitReader(resp.Body, MaxHTTPBodyLength))
+		bodyReader, err = gzip.NewReader(io.LimitReader(resp.Body, MaxHTTPBodyLength))
 		if err != nil {
-			return nil, statusCode, tlsState, rtt, fmt.Errorf("gzip decompression failed: %w", err)
+			return nil, statusCode, tls, rtt, err
 		}
-		defer gzReader.Close()
-		bodyReader = gzReader
+		defer bodyReader.Close()
 	}
 
-	data, err := io.ReadAll(io.LimitReader(bodyReader, MaxHTTPBodyLength))
+	bin, err := io.ReadAll(io.LimitReader(bodyReader, MaxHTTPBodyLength))
 	if err != nil {
-		return nil, statusCode, tlsState, rtt, fmt.Errorf("body read failed: %w", err)
+		return nil, statusCode, tls, rtt, err
 	}
-
-	return data, statusCode, tlsState, rtt, nil
+	return bin, statusCode, tls, rtt, err
 }
 
-// GetWithCompression performs an HTTP GET request with gzip compression.
-func (x *XTransport) GetWithCompression(
+func (xTransport *XTransport) GetWithCompression(
 	url *url.URL,
 	accept string,
 	timeout time.Duration,
 ) ([]byte, int, *tls.ConnectionState, time.Duration, error) {
-	return x.Fetch(context.Background(), "GET", url, accept, "", nil, timeout, true)
+	return xTransport.Fetch("GET", url, accept, "", nil, timeout, true)
 }
 
-// GetWithCompressionContext performs an HTTP GET request with context and compression.
-// Go 1.26: Context-aware version for cancellation support.
-func (x *XTransport) GetWithCompressionContext(
-	ctx context.Context,
+func (xTransport *XTransport) Get(
 	url *url.URL,
 	accept string,
 	timeout time.Duration,
 ) ([]byte, int, *tls.ConnectionState, time.Duration, error) {
-	return x.Fetch(ctx, "GET", url, accept, "", nil, timeout, true)
+	return xTransport.Fetch("GET", url, accept, "", nil, timeout, false)
 }
 
-// Get performs an HTTP GET request without compression.
-func (x *XTransport) Get(
-	url *url.URL,
-	accept string,
-	timeout time.Duration,
-) ([]byte, int, *tls.ConnectionState, time.Duration, error) {
-	return x.Fetch(context.Background(), "GET", url, accept, "", nil, timeout, false)
-}
-
-// GetContext performs an HTTP GET request with context support.
-// Go 1.26: Context-aware version for cancellation support.
-func (x *XTransport) GetContext(
-	ctx context.Context,
-	url *url.URL,
-	accept string,
-	timeout time.Duration,
-) ([]byte, int, *tls.ConnectionState, time.Duration, error) {
-	return x.Fetch(ctx, "GET", url, accept, "", nil, timeout, false)
-}
-
-// Post performs an HTTP POST request.
-func (x *XTransport) Post(
+func (xTransport *XTransport) Post(
 	url *url.URL,
 	accept string,
 	contentType string,
 	body *[]byte,
 	timeout time.Duration,
 ) ([]byte, int, *tls.ConnectionState, time.Duration, error) {
-	return x.Fetch(context.Background(), "POST", url, accept, contentType, body, timeout, false)
+	return xTransport.Fetch("POST", url, accept, contentType, body, timeout, false)
 }
 
-// PostContext performs an HTTP POST request with context support.
-// Go 1.26: Context-aware version for cancellation support.
-func (x *XTransport) PostContext(
-	ctx context.Context,
-	url *url.URL,
-	accept string,
-	contentType string,
-	body *[]byte,
-	timeout time.Duration,
-) ([]byte, int, *tls.ConnectionState, time.Duration, error) {
-	return x.Fetch(ctx, "POST", url, accept, contentType, body, timeout, false)
-}
-
-// dohLikeQuery performs a DoH or ODoH query.
-// Go 1.26: Unified implementation for DoH and ODoH.
-func (x *XTransport) dohLikeQuery(
-	ctx context.Context,
+func (xTransport *XTransport) dohLikeQuery(
 	dataType string,
 	useGet bool,
-	reqURL *url.URL,
+	url *url.URL,
 	body []byte,
 	timeout time.Duration,
 ) ([]byte, int, *tls.ConnectionState, time.Duration, error) {
 	if useGet {
-		// Encode body in URL for GET requests
-		qs := reqURL.Query()
+		qs := url.Query()
 		encBody := base64.RawURLEncoding.EncodeToString(body)
 		qs.Add("dns", encBody)
-		newURL := *reqURL
-		newURL.RawQuery = qs.Encode()
-		return x.Fetch(ctx, "GET", &newURL, dataType, "", nil, timeout, false)
+		url2 := *url
+		url2.RawQuery = qs.Encode()
+		return xTransport.Get(&url2, dataType, timeout)
 	}
-
-	return x.Fetch(ctx, "POST", reqURL, dataType, dataType, &body, timeout, false)
+	return xTransport.Post(url, dataType, dataType, &body, timeout)
 }
 
-// DoHQuery performs a DNS-over-HTTPS (DoH) query.
-func (x *XTransport) DoHQuery(
+func (xTransport *XTransport) DoHQuery(
 	useGet bool,
 	url *url.URL,
 	body []byte,
 	timeout time.Duration,
 ) ([]byte, int, *tls.ConnectionState, time.Duration, error) {
-	return x.dohLikeQuery(context.Background(), "application/dns-message", useGet, url, body, timeout)
+	return xTransport.dohLikeQuery("application/dns-message", useGet, url, body, timeout)
 }
 
-// DoHQueryContext performs a DoH query with context support.
-// Go 1.26: Context-aware version for cancellation support.
-func (x *XTransport) DoHQueryContext(
-	ctx context.Context,
+func (xTransport *XTransport) ObliviousDoHQuery(
 	useGet bool,
 	url *url.URL,
 	body []byte,
 	timeout time.Duration,
 ) ([]byte, int, *tls.ConnectionState, time.Duration, error) {
-	return x.dohLikeQuery(ctx, "application/dns-message", useGet, url, body, timeout)
+	return xTransport.dohLikeQuery("application/oblivious-dns-message", useGet, url, body, timeout)
 }
-
-// ObliviousDoHQuery performs an Oblivious DNS-over-HTTPS (ODoH) query.
-func (x *XTransport) ObliviousDoHQuery(
-	useGet bool,
-	url *url.URL,
-	body []byte,
-	timeout time.Duration,
-) ([]byte, int, *tls.ConnectionState, time.Duration, error) {
-	return x.dohLikeQuery(context.Background(), "application/oblivious-dns-message", useGet, url, body, timeout)
-}
-
-// ObliviousDoHQueryContext performs an ODoH query with context support.
-// Go 1.26: Context-aware version for cancellation support.
-func (x *XTransport) ObliviousDoHQueryContext(
-	ctx context.Context,
-	useGet bool,
-	url *url.URL,
-	body []byte,
-	timeout time.Duration,
-) ([]byte, int, *tls.ConnectionState, time.Duration, error) {
-	return x.dohLikeQuery(ctx, "application/oblivious-dns-message", useGet, url, body, timeout)
-}
-
-// Close cleans up transport resources.
-// Go 1.26: Proper resource cleanup.
-func (x *XTransport) Close() error {
-	if transport := x.transport.Load(); transport != nil {
-		transport.CloseIdleConnections()
-	}
-	if h3Transport := x.h3Transport.Load(); h3Transport != nil {
-		h3Transport.Close()
-	}
-	return nil
-}
-
-// Helper functions that need to be defined elsewhere in your codebase:
-// - isIPAndPort(string) error
-// - ExtractHostAndPort(string, int) (string, int)
-// - fqdn(string) string  
-// - MaxDNSPacketSize (constant)
-// - MaxHTTPBodyLength (constant)
