@@ -42,7 +42,7 @@ jobs:
             -mod=mod \
             -trimpath \
             -tags="netgo,osusergo" \
-            -ldflags="-s -w -d -funcalign=16 -linkmode=internal -compressdwarf=false" \
+            -ldflags="-s -w -d -funcalign=32 -linkmode=internal -compressdwarf=false" \
             -o dnscrypt-proxy \
             ./dnscrypt-proxy
 
