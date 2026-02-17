@@ -283,7 +283,7 @@ func (xTransport *XTransport) rebuildTransport() {
 	transport := &http.Transport{
 		DisableKeepAlives:      false,
 		DisableCompression:     true,
-		MaxIdleConns:           1,
+		MaxIdleConns:           2000,
 		IdleConnTimeout:        xTransport.keepAlive,
 		ResponseHeaderTimeout:  timeout,
 		ExpectContinueTimeout:  timeout,
