@@ -244,17 +244,17 @@ func (srv *Server) listenTCP(ln net.Listener) {
 
 	for {
 		select {
-		case <-srv.shutdown:
-			ln.Close()
-			wg.Wait() // this has a data race because we slump &wg in the server... this _only_ this on shutdown though...
-			srv.once.Do(func() { close(srv.exited) })
-			return
 		default:
 			conn, err := ln.Accept()
 			if err != nil {
 				continue
 			}
 			go srv.serveTCP(&wg, conn)
+		case <-srv.shutdown:
+			ln.Close()
+			wg.Wait() // this has a data race because we slump &wg in the server... this _only_ this on shutdown though...
+			srv.once.Do(func() { close(srv.exited) })
+			return
 		}
 	}
 }

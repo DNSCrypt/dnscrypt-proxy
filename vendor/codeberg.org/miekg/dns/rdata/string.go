@@ -4,15 +4,12 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"sync"
 
 	"codeberg.org/miekg/dns/deleg"
 	"codeberg.org/miekg/dns/internal/dnsstring"
 	"codeberg.org/miekg/dns/pkg/pool"
 	"codeberg.org/miekg/dns/svcb"
 )
-
-var builderPool = &pool.Builder{Pool: sync.Pool{New: func() any { return strings.Builder{} }}}
 
 func (rd RRSIG) String() string {
 	sb := builderPool.Get()
@@ -660,3 +657,5 @@ func (rd TSIG) String() string {
 	builderPool.Put(sb)
 	return s
 }
+
+var builderPool = pool.NewBuilder()

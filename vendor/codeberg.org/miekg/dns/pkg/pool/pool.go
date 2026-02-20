@@ -55,5 +55,10 @@ type Builder struct {
 	sync.Pool
 }
 
+// NewBuilder returns a new builder pool.
+func NewBuilder() *Builder {
+	return &Builder{Pool: sync.Pool{New: func() any { return strings.Builder{} }}}
+}
+
 func (s *Builder) Get() strings.Builder   { return s.Pool.Get().(strings.Builder) }
 func (s *Builder) Put(sb strings.Builder) { sb.Reset(); s.Pool.Put(sb) }

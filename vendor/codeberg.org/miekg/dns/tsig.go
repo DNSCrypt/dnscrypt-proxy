@@ -23,6 +23,7 @@ const (
 // (owner name of the RR), time fudge (defaults to 300 seconds, if zero).
 // When Sign is called for the first time: options.RequestMAC should be empty and options.TimersOnly should be false.
 // When this function returns options.RequestMAC will have the MAC as calculated.
+// If the Data buffer in m is empty, TSIGSign calls m.Pack().
 func TSIGSign(m *Msg, k TSIGSigner, options *TSIGOption) error {
 	if len(m.Data) == 0 {
 		if err := m.Pack(); err != nil {

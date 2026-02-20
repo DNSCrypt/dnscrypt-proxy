@@ -352,7 +352,7 @@ func (o *ESU) String() string {
 	return s
 }
 
-// The ZONEVERSION option, see RFC 9660. Only a single type (0) has been allocated, if used the SOA serial
+// The ZONEVERSION option, see RFC 9660. Only a single type (0) has been allocated, if used the [SOA] serial
 // is put in Version. Example on how to create a ZONEVERSION:
 //
 //	z := &ZONEVERSION{Labels: 8, Type: 0, Version: make([]byte, 4)}

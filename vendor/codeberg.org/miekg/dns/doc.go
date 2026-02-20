@@ -4,7 +4,7 @@ Package dns implements a full featured interface to the Domain Name System. Both
 The package allows complete control over what is sent out to the DNS. The API follows the less-is-more principle, by presenting a small, clean interface.
 
 It supports (asynchronous) querying/replying, incoming/outgoing zone transfers,
-TSIG, EDNS0, dynamic updates, notifies and DNSSEC validation/signing.
+[TSIG], EDNS0, dynamic updates, notifies and DNSSEC validation/signing.
 
 Resource records (RRs) are native types. They are not stored in wire format, but every [Msg] holds the wire-format in its Data field.
 Everything is modelled or made to look like an RR.
@@ -20,7 +20,7 @@ Or faster, with the correct header bits:
 
 	m := dns.NewMsg("miek.nl.", dns.TypeMX)
 
-The message m is now a message with the question section set to ask the MX records for the miek.nl. zone. When making an actual request:
+The message m is now a message with the question section set to ask the [MX] records for the miek.nl. zone. When making an actual request:
 
 	m.ID = dns.ID()
 	m.RecursionDesired = true
@@ -40,7 +40,7 @@ When this functions returns you will get DNS message back. A DNS message consist
 
 The latter was added to make it easier to deal with [EDNS0] option codes, which become more and more prevalent.
 
-Each of these sections contain a []RR. Basic use pattern for accessing the rdata of a [TXT] [RR] as the first RR in
+Each of these sections contain a []RR. Basic use pattern for accessing the rdata of a [TXT] [RR] as the first [RR] in
 the Answer section:
 
 	if t, ok := r.Answer[0].(*dns.TXT); ok {
@@ -81,11 +81,11 @@ Signature generation, signature verification (see [RRSIG]) and key generation ar
 # EDNS0
 
 [EDNS0] is an extension mechanism for the DNS defined in RFC 2671 and updated by RFC 6891. It defines a RR type,
-the [OPT] RR, which holds type-length-value sub-types.
+the [OPT] [RR], which holds type-length-value sub-types.
 In this package all EDNS0 options are implemented as RRs. Doing basic "EDNS0" things, like
 setting the DNSSEC OK bit (DO) or the UDP buffer size is handled for you and these can be set directly on message as shown above.
 
-The data of an [OPT] [RR] sits in the [Msg] Pseudo section consists out of a slice of EDNS0 (RFC 6891) interfaces.
+The data of an [OPT] [RR] sits in the [Msg] Pseudo section consists out of a slice of [EDNS0] (RFC 6891) interfaces.
 These are just RRs with an extra Pseudo() method.
 
 Basic use pattern for a server to check if (and which) options are set, which is similar to how to deal with RRs.
@@ -98,6 +98,8 @@ Basic use pattern for a server to check if (and which) options are set, which is
 			// access x.Family, x.Address, etc.
 		}
 	}
+
+Unknown options are dealt with and added as [ERFC3597] RRs, simular to actual unknown [RR]s are handled with [RFC3597].
 
 # Private Resource Records
 

@@ -156,7 +156,7 @@ const (
 
 // Names for things inside RRs should be RR-name (all capitals) and than snakecase the rest.
 
-// Used in ZONEMD, RFC 8976.
+// Used in [ZONEMD], RFC 8976.
 const (
 	ZONEMDSchemeSimple = 1
 
@@ -188,7 +188,7 @@ const (
 	_DE = 1 << 13 // DELEG OK
 )
 
-// Various constants used in the LOC RR. See RFC 1876.
+// Various constants used [LOC]. See RFC 1876.
 const (
 	LOCEquator       = 1 << 31 // RFC 1876, Section 2.
 	LOCPrimemeridian = 1 << 31 // RFC 1876, Section 2.
@@ -197,7 +197,7 @@ const (
 	LOCAltitudebase  = 100000
 )
 
-// Different Certificate Types, see RFC 4398, Section 2.1.
+// Certificate Types, see RFC 4398, Section 2.1.
 const (
 	CERTPkix = 1 + iota
 	CERTSpki

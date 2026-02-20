@@ -59,7 +59,7 @@ func (c *Client) TransferInWithConn(ctx context.Context, m *Msg, conn net.Conn) 
 	_, axfr := m.Question[0].(*AXFR)
 	_, ixfr := m.Question[0].(*IXFR)
 	if !axfr && !ixfr {
-		return nil, &Error{"unsupported transfer type"}
+		return nil, &Error{err: "unsupported transfer type"}
 	}
 	if ixfr {
 		if len(m.Ns) == 0 {

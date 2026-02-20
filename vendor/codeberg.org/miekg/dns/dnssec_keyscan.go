@@ -178,8 +178,8 @@ type klexer struct {
 
 	readErr error
 
-	line   int
-	column int
+	line   uint32
+	column uint16
 
 	key bool
 	eol bool // end-of-line

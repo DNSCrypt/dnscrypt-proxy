@@ -6,8 +6,6 @@ import (
 	"encoding/hex"
 	"net"
 	"net/netip"
-	"strings"
-	"sync"
 
 	"codeberg.org/miekg/dns/internal/ddd"
 	"codeberg.org/miekg/dns/pkg/pool"
@@ -212,4 +210,4 @@ func Names(s *cryptobyte.String, msgBuf []byte) ([]string, error) {
 	return names, nil
 }
 
-var builderPool = &pool.Builder{Pool: sync.Pool{New: func() any { return strings.Builder{} }}}
+var builderPool = pool.NewBuilder()

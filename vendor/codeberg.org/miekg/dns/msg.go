@@ -804,7 +804,7 @@ func (m *Msg) ReadFrom(r io.Reader) (int64, error) {
 }
 
 // RRs allows ranging over the RRs of all the sections in m. This includes the question, pseudo and stateful
-// sections.
+// sections. See [ZoneParser.RRs] also.
 func (m *Msg) RRs() iter.Seq[RR] {
 	return func(yield func(RR) bool) {
 		for {
