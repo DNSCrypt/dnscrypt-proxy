@@ -37,15 +37,11 @@ func TSIGSign(m *Msg, k TSIGSigner, options *TSIGOption) error {
 		return fmt.Errorf("%w: %s", ErrNoTSIG, "sign")
 	}
 
-	last := len(m.Ns) + len(m.Answer) + len(m.Extra) // skip question as 0th, is the first after question
-	off := jump.To(last, m.Data)
-	if off == 0 {
+	isPseudo := m.isPseudo() - 1 // should be 1 (only the tsig) or 2 (opt + tsig)
+	arcount := setArcount(m, isPseudo)
+	if arcount == -1 {
 		return fmt.Errorf("%w: %s", ErrNoTSIG, "sign")
 	}
-
-	m.Data = m.Data[:off]
-	arcount := uint16(len(m.Extra))
-	pack.Uint16(arcount, m.Data, msgArcount) // decrease additional section count, because we removed the TSIG
 
 	macbuf, err := t.mac(m, *options)
 	if err != nil {
@@ -65,7 +61,8 @@ func TSIGSign(m *Msg, k TSIGSigner, options *TSIGOption) error {
 	}
 
 	tbuf := make([]byte, t.Len())
-	if _, off, err = packRR(t, tbuf, 0, nil); err != nil {
+	_, off, err := packRR(t, tbuf, 0, nil)
+	if err != nil {
 		return err
 	}
 	tbuf = tbuf[:off]
@@ -73,7 +70,7 @@ func TSIGSign(m *Msg, k TSIGSigner, options *TSIGOption) error {
 	m.Data = append(m.Data, tbuf...)
 	options.RequestMAC = t.MAC
 
-	pack.Uint16(arcount+1, m.Data, msgArcount) // and +1 after we done for the new and improved TSIG that is added
+	pack.Uint16(uint16(arcount+1), m.Data, msgArcount) // and +1 after we done for the new and improved TSIG that is added
 	return nil
 }
 
@@ -100,15 +97,11 @@ func TSIGVerify(m *Msg, k TSIGSigner, options *TSIGOption) error {
 		return ErrSig
 	}
 
-	last := len(m.Answer) + len(m.Ns) + len(m.Extra)
-	off := jump.To(last, m.Data)
-	if off == 0 {
+	isPseudo := m.isPseudo() - 1
+	arcount := setArcount(m, isPseudo)
+	if arcount == -1 {
 		return fmt.Errorf("%w: %s", ErrNoTSIG, "verify")
 	}
-
-	m.Data = m.Data[:off]
-	arcount := uint16(len(m.Extra))
-	pack.Uint16(arcount, m.Data, msgArcount) // decrease additional section count, because we removed the TSIG
 
 	// restore msg ID, as the origID is used to calculate hash, and set in m.Data.
 	pack.Uint16(t.OrigID, m.Data, 0)
@@ -135,7 +128,7 @@ func TSIGVerify(m *Msg, k TSIGSigner, options *TSIGOption) error {
 	if uint64(t.Fudge) < fudge {
 		return ErrTime
 	}
-	pack.Uint16(arcount+1, m.Data, msgArcount) // restore arcount
+	pack.Uint16(uint16(arcount+1), m.Data, msgArcount) // restore arcount
 	options.RequestMAC = t.MAC
 	return nil
 }
@@ -163,4 +156,21 @@ func hasTSIG(m *Msg) *TSIG {
 	}
 	t, _ := m.Pseudo[lp-1].(*TSIG)
 	return t
+}
+
+func setArcount(m *Msg, isPseudo int) int {
+	last := len(m.Ns) + len(m.Answer) + len(m.Extra) + isPseudo // skip question as 0th, is the first after question
+	off := jump.To(last, m.Data)
+	if off == 0 {
+		return -1
+	}
+
+	m.Data = m.Data[:off]
+	arcount := len(m.Extra)
+	if isPseudo == 1 {
+		arcount++
+	}
+	pack.Uint16(uint16(arcount), m.Data, msgArcount) // decrease additional section count, because we removed the TSIG/SIG
+	return arcount
+
 }
