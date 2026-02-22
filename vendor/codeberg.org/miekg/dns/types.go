@@ -156,20 +156,13 @@ const (
 
 // Names for things inside RRs should be RR-name (all capitals) and than snakecase the rest.
 
-// Used in ZONEMD, RFC 8976.
+// Used in [ZONEMD], RFC 8976.
 const (
 	ZONEMDSchemeSimple = 1
 
 	ZONEMDHashSHA384 = 1
 	ZONEMDHashSHA512 = 2
 )
-
-// header is the wire format for the DNS packet header.
-type header struct {
-	ID                                 uint16
-	Bits                               uint16
-	Qdcount, Ancount, Nscount, Arcount uint16
-}
 
 const (
 	// Header.Bits
@@ -188,7 +181,7 @@ const (
 	_DE = 1 << 13 // DELEG OK
 )
 
-// Various constants used in the LOC RR. See RFC 1876.
+// Various constants used [LOC]. See RFC 1876.
 const (
 	LOCEquator       = 1 << 31 // RFC 1876, Section 2.
 	LOCPrimemeridian = 1 << 31 // RFC 1876, Section 2.
@@ -197,7 +190,7 @@ const (
 	LOCAltitudebase  = 100000
 )
 
-// Different Certificate Types, see RFC 4398, Section 2.1.
+// Certificate Types, see RFC 4398, Section 2.1.
 const (
 	CERTPkix = 1 + iota
 	CERTSpki
@@ -987,9 +980,9 @@ func (rr *RFC3597) String() string {
 	sb.WriteByte('\t')
 	sb.WriteString(strconv.FormatInt(int64(rr.Hdr.TTL), 10))
 	sb.WriteByte('\t')
-	sb.WriteString("CLASS" + strconv.Itoa(int(rr.Hdr.Class)))
+	sb.WriteString(classToString(rr.Header().Class))
 	sb.WriteByte('\t')
-	sb.WriteString("TYPE" + strconv.Itoa(int(rr.RRType)))
+	sb.WriteString(typeToString(rr.RRType))
 	sb.WriteByte('\t')
 
 	sb.WriteString(rr.RFC3597.String())
@@ -1382,6 +1375,7 @@ func (rr *DSYNC) String() string {
 // Meta RRs
 
 // ANY is a wildcard record. See RFC 1035, Section 3.2.3. ANY is named "*" there.
+// ANY is also used for dynamic updates (RFC 2136).
 type ANY struct {
 	Hdr Header
 }
@@ -1424,7 +1418,8 @@ func (*IXFR) parse(c *dnslex.Lexer, origin string) *ParseError {
 //	tsig := &dns.TSIG{Hdr: dns.Header{Name: "keyname.", Class: dns.ClassANY}, Algorithm: dns.HmacSHA512,
 //			TimeSigned: uint64(time.Now().Unix())}
 //
-// See [NewTSIG] for an easier way of doing this.
+// See [NewTSIG] for an easier way of doing this. The TSIG record MUST be the last record in the pseudo
+// section of a [Msg].
 type TSIG struct {
 	Hdr Header
 	rdata.TSIG

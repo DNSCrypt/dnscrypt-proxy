@@ -284,7 +284,7 @@ func (s *IPV4HINT) String() string {
 // Basic use pattern for creating an ech option:
 //
 //	h := &dns.HTTPS{Hdr: dns.Header{Name: ".", Class: dns.ClassINET}}
-//	e := &svcb.ECHCONFIG{ECH: []byte{0xfe, 0x08, ...}}
+//	e := &svcb.ECHCONFIG{ECH: []byte{0xFE, 0x08, ...}}
 //	h.Value = append(h.Value, e)
 type ECHCONFIG struct {
 	ECH []byte // Specifically ECHConfigList including the redundant length prefix.

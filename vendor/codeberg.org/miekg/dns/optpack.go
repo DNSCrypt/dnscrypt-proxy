@@ -22,7 +22,7 @@ func unpackOPT(s *cryptobyte.String) ([]EDNS0, error) {
 		if newFn, ok := CodeToRR[code]; ok {
 			option = newFn()
 		} else {
-			return nil, unpack.Errorf("unknown OPT code %d", code)
+			option = &ERFC3597{EDNS0Code: code}
 		}
 		if err := unpackOptionCode(option, &data); err != nil {
 			return nil, err
@@ -38,9 +38,14 @@ func packOPT(options []EDNS0, msg []byte, off int) (int, error) {
 		if off+l >= len(msg) {
 			return len(msg), pack.ErrBuf
 		}
-		code := RRToCode(options[i]) // TODO(miek): Use Coder for externally supplied option code
+		code := RRToCode(options[i])
 		if code == CodeNone {
-			return len(msg), fmt.Errorf("unknown option code seen")
+			if erfc3597, ok := options[i].(*ERFC3597); ok {
+				code = erfc3597.EDNS0Code
+			} else {
+				// really the last option
+				return len(msg), fmt.Errorf("unknown option code")
+			}
 		}
 
 		pack.Uint16(code, msg, off)

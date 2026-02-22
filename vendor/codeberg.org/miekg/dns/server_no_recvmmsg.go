@@ -21,11 +21,6 @@ func (srv *Server) listenUDP(pc net.PacketConn) {
 Read:
 	for {
 		select {
-		case <-srv.shutdown:
-			pc.Close()
-			wg.Wait()
-			srv.once.Do(func() { close(srv.exited) })
-			return
 		default:
 			r := &Msg{Data: srv.MsgPool.Get()}
 			n, _, src, err := xpc.ReadFrom(r.Data)
@@ -42,6 +37,11 @@ Read:
 				srv.serveDNS(w, r)
 				wg.Done()
 			}()
+		case <-srv.shutdown:
+			pc.Close()
+			wg.Wait()
+			srv.once.Do(func() { close(srv.exited) })
+			return
 		}
 	}
 }

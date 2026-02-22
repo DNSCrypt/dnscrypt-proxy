@@ -4,6 +4,8 @@ package dns
 
 import (
 	"fmt"
+
+	"golang.org/x/crypto/cryptobyte"
 )
 
 func zpack(rr RR, msg []byte, off int, compression map[string]uint16) (int, error) {
@@ -188,7 +190,7 @@ func zpack(rr RR, msg []byte, off int, compression map[string]uint16) (int, erro
 	return 0, fmt.Errorf("dns: no pack defined")
 }
 
-func zunpack(rr RR, data, msgBuf []byte) error {
+func zunpack(rr RR, data cryptobyte.String, msgBuf []byte) error {
 	switch x := rr.(type) {
 	case *DELEG:
 		return x.unpack(data, msgBuf)

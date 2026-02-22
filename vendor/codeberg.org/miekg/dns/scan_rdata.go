@@ -584,19 +584,19 @@ Altitude:
 				if !ok {
 					return &ParseError{err: "bad LOC Size", lex: l}
 				}
-				rd.Size = exp&0x0f | m<<4&0xf0
+				rd.Size = exp&0x0F | m<<4&0xF0
 			case 1: // HorizPre
 				exp, m, ok := stringToCm(l.Token)
 				if !ok {
 					return &ParseError{err: "bad LOC HorizPre", lex: l}
 				}
-				rd.HorizPre = exp&0x0f | m<<4&0xf0
+				rd.HorizPre = exp&0x0F | m<<4&0xF0
 			case 2: // VertPre
 				exp, m, ok := stringToCm(l.Token)
 				if !ok {
 					return &ParseError{err: "bad LOC VertPre", lex: l}
 				}
-				rd.VertPre = exp&0x0f | m<<4&0xf0
+				rd.VertPre = exp&0x0F | m<<4&0xF0
 			}
 			count++
 		case dnslex.Blank:
