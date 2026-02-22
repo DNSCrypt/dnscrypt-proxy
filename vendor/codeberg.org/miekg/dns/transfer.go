@@ -2,6 +2,7 @@ package dns
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net"
 	"time"
@@ -59,14 +60,14 @@ func (c *Client) TransferInWithConn(ctx context.Context, m *Msg, conn net.Conn) 
 	_, axfr := m.Question[0].(*AXFR)
 	_, ixfr := m.Question[0].(*IXFR)
 	if !axfr && !ixfr {
-		return nil, &Error{"unsupported transfer type"}
+		return nil, &Error{err: "unsupported transfer type"}
 	}
 	if ixfr {
 		if len(m.Ns) == 0 {
-			return nil, ErrSOA.Fmt(": empty Ns")
+			return nil, fmt.Errorf("%w: %s", ErrSOA, "empty Ns")
 		}
 		if _, ok := m.Ns[0].(*SOA); !ok {
-			return nil, ErrSOA.Fmt(": bad Ns")
+			return nil, fmt.Errorf("%w: %s", ErrSOA, "bad Ns")
 		}
 	}
 
@@ -132,12 +133,12 @@ func (c *Client) transferInAXFR(ctx context.Context, m *Msg, ch chan<- *Envelope
 		}
 
 		if m.ID != r.ID {
-			ch <- &Envelope{Error: ErrID.Fmt(": %d != %d", m.ID, r.ID)}
+			ch <- &Envelope{Error: fmt.Errorf("%w: %d != %d", ErrID, m.ID, r.ID)}
 			return
 		}
 
 		if r.Rcode != RcodeSuccess {
-			ch <- &Envelope{Error: ErrRcode.Fmt(": %s", rcodeToString(r.Rcode))}
+			ch <- &Envelope{Error: fmt.Errorf("%w: %s", ErrRcode, rcodeToString(r.Rcode))}
 			return
 		}
 
@@ -151,7 +152,7 @@ func (c *Client) transferInAXFR(ctx context.Context, m *Msg, ch chan<- *Envelope
 		// On first loop first be need to see a SOA RR.
 		if !options.TimersOnly {
 			if len(r.Answer) == 0 {
-				ch <- &Envelope{Error: ErrSOA.Fmt(": empty answer")}
+				ch <- &Envelope{Error: fmt.Errorf("%w: %s", ErrSOA, "empty answer")}
 				return
 			}
 			if _, ok := r.Answer[0].(*SOA); !ok {
@@ -224,12 +225,12 @@ func (c *Client) transferInIXFR(ctx context.Context, m *Msg, ch chan<- *Envelope
 		}
 
 		if m.ID != r.ID {
-			ch <- &Envelope{Error: ErrID.Fmt(": %d != %d", m.ID, r.ID)}
+			ch <- &Envelope{Error: fmt.Errorf("%w: %d != %d", ErrID, m.ID, r.ID)}
 			return
 		}
 
 		if r.Rcode != RcodeSuccess {
-			ch <- &Envelope{Error: ErrRcode.Fmt(": %s", rcodeToString(r.Rcode))}
+			ch <- &Envelope{Error: fmt.Errorf("%w: %s", ErrRcode, rcodeToString(r.Rcode))}
 			return
 		}
 
@@ -243,7 +244,7 @@ func (c *Client) transferInIXFR(ctx context.Context, m *Msg, ch chan<- *Envelope
 		// On first loop first be need to see a SOA RR and check that with the request serial.
 		if !options.TimersOnly {
 			if len(r.Answer) == 0 {
-				ch <- &Envelope{Error: ErrSOA.Fmt(": empty answer")}
+				ch <- &Envelope{Error: fmt.Errorf("%w: %s", ErrSOA, "empty answer")}
 				return
 			}
 			if _, ok := r.Answer[0].(*SOA); !ok {

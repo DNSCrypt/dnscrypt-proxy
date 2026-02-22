@@ -16,8 +16,8 @@ type ZONEMDOption struct {
 }
 
 // Sign "signs" an zone. When done successfully the rr's digest will be updated. ZONEMD must be a skeleton
-// (placeholder) RR, where scheme and hash are filled out. See [NewZONEMD] on how to create such a record.
-// The zone's RR must be in canonical order, but this isn't enforced by Sign, see [Sort]. As RFC 8976 specifies
+// (placeholder) [RR], where scheme and hash are filled out. See [NewZONEMD] on how to create such a record.
+// The zone's [RR]s must be in canonical order, but this isn't enforced by Sign, see [Sort]. As RFC 8976 specifies
 // that for the simple scheme (the only supported scheme) some records are excluded from the digest calculation.
 func (rr *ZONEMD) Sign(zone []RR, options *ZONEMDOption) error {
 	if rr.Scheme != ZONEMDSchemeSimple {

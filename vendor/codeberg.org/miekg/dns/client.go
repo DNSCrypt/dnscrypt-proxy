@@ -4,6 +4,7 @@ package dns
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net"
 	"time"
@@ -112,7 +113,7 @@ func (c *Client) ExchangeWithConn(ctx context.Context, m *Msg, conn net.Conn) (r
 		return r, time.Since(t), &Error{err: "response bit is not set"}
 	}
 	if r.ID != m.ID {
-		return r, time.Since(t), ErrID.Fmt(": %d != %d", r.ID, m.ID)
+		return r, time.Since(t), fmt.Errorf("%w: %d != %d", ErrID, r.ID, m.ID)
 	}
 
 	return r, time.Since(t), nil

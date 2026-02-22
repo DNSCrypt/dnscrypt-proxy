@@ -2,6 +2,7 @@ package dns
 
 import (
 	"encoding/hex"
+	"fmt"
 	"time"
 
 	"codeberg.org/miekg/dns/internal/jump"
@@ -19,10 +20,11 @@ const (
 	HmacMD5 = "hmac-md5.sig-alg.reg.int." // Deprecated: HmacMD5 is no longer supported.
 )
 
-// TSIGSign fills out the TSIG record in m. This should be a "stub" TSIG RR (see [NewTSIG]) with the algorithm, key name
+// TSIGSign fills out the TSIG record in m.Pseudo. This should be a "stub" TSIG RR (see [NewTSIG]) with the algorithm, key name
 // (owner name of the RR), time fudge (defaults to 300 seconds, if zero).
 // When Sign is called for the first time: options.RequestMAC should be empty and options.TimersOnly should be false.
 // When this function returns options.RequestMAC will have the MAC as calculated.
+// If the Data buffer in m is empty, TSIGSign calls m.Pack().
 func TSIGSign(m *Msg, k TSIGSigner, options *TSIGOption) error {
 	if len(m.Data) == 0 {
 		if err := m.Pack(); err != nil {
@@ -32,13 +34,13 @@ func TSIGSign(m *Msg, k TSIGSigner, options *TSIGOption) error {
 
 	t := hasTSIG(m)
 	if t == nil {
-		return ErrNoTSIG.Fmt(": %s", "sign")
+		return fmt.Errorf("%w: %s", ErrNoTSIG, "sign")
 	}
 
 	last := len(m.Ns) + len(m.Answer) + len(m.Extra) // skip question as 0th, is the first after question
 	off := jump.To(last, m.Data)
 	if off == 0 {
-		return ErrNoTSIG.Fmt(": %s", "sign")
+		return fmt.Errorf("%w: %s", ErrNoTSIG, "sign")
 	}
 
 	m.Data = m.Data[:off]
@@ -87,7 +89,7 @@ func TSIGVerify(m *Msg, k TSIGSigner, options *TSIGOption) error {
 
 	t := hasTSIG(m)
 	if t == nil {
-		return ErrNoTSIG.Fmt(": %s", "verify")
+		return fmt.Errorf("%w: %s", ErrNoTSIG, "verify")
 	}
 
 	// Sign unless there is a key or MAC validation error (RFC 8945 5.3.2).
@@ -101,7 +103,7 @@ func TSIGVerify(m *Msg, k TSIGSigner, options *TSIGOption) error {
 	last := len(m.Answer) + len(m.Ns) + len(m.Extra)
 	off := jump.To(last, m.Data)
 	if off == 0 {
-		return ErrNoTSIG.Fmt(": %s", "verify")
+		return fmt.Errorf("%w: %s", ErrNoTSIG, "verify")
 	}
 
 	m.Data = m.Data[:off]

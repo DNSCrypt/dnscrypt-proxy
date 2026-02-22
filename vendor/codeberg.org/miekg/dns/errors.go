@@ -1,15 +1,8 @@
 package dns
 
-import "fmt"
-
 // Error represents a DNS error.
-type Error struct{ err string }
-
-// Fmt allows to make the error more specific by concatenating a fmt-formatted string to it.
-func (e *Error) Fmt(format string, a ...any) error {
-	e1 := *e
-	e1.err += fmt.Sprintf(format, a...)
-	return &e1
+type Error struct {
+	err string
 }
 
 func (e *Error) Error() string { return "dns: " + e.err }

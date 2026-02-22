@@ -108,29 +108,31 @@ func packRR(rr RR, msg []byte, off int, compression map[string]uint16) (headerEn
 	}
 
 	rdlength := off1 - headerEnd
-	if int(uint16(rdlength)) != rdlength { // overflow
-		return headerEnd, len(msg), pack.Errorf("inconsistent rdata length")
+	if rdlength <= MaxMsgSize { // overflow
+		// The RDLENGTH field is the last field in the header and we set it here.
+		binary.BigEndian.PutUint16(msg[headerEnd-2:], uint16(rdlength))
+		return headerEnd, off1, nil
 	}
 
-	// The RDLENGTH field is the last field in the header and we set it here.
-	binary.BigEndian.PutUint16(msg[headerEnd-2:], uint16(rdlength))
-	return headerEnd, off1, nil
+	return headerEnd, len(msg), pack.Errorf("inconsistent rdata length")
 }
 
 func unpackRR(msg *cryptobyte.String, msgBuf []byte) (RR, error) {
-	h := new(Header)
+	h := &Header{}
 	typ, rdlength, err := unpackHeader(h, msg, msgBuf)
 	if err != nil {
 		return nil, err
 	}
 
-	var data []byte
-	if !msg.ReadBytes(&data, int(rdlength)) {
-		return h, unpack.ErrTruncatedMessage
+	// Directly use the existing buffer by slicing the cryptobyte.String
+	// 1. Verify sufficient bytes remain
+	if len(*msg) < int(rdlength) {
+		return nil, unpack.ErrTruncatedMessage
 	}
 
-	// Restrict msgBuf to the end of the RR (the current position of msg) so that we compute the correct offset
-	// in unpack.Name.
+	// was: msg.ReadBytes(&data, int(rdlength)), but we want to save the buffer we allocated for that.
+	data := (*msg)[:rdlength]
+	*msg = (*msg)[rdlength:]
 	msgBuf = msgBuf[:unpack.Offset(*msg, msgBuf)]
 
 	var rr RR
@@ -141,11 +143,11 @@ func unpackRR(msg *cryptobyte.String, msgBuf []byte) (RR, error) {
 		rr = &RFC3597{Hdr: *h}
 	}
 
-	if len(data) == 0 {
+	if rdlength == 0 {
 		return rr, nil
 	}
 
-	if err := zunpack(rr, data, msgBuf); err != nil {
+	if err := zunpack(rr, cryptobyte.String(data), msgBuf); err != nil {
 		return rr, err
 	}
 
@@ -188,20 +190,18 @@ func (m *Msg) Pack() error {
 		dh.Bits |= _CD
 	}
 
+	isPseudo := m.isPseudo()
 	dh.Qdcount = uint16(len(m.Question))
 	dh.Ancount = uint16(len(m.Answer))
 	dh.Nscount = uint16(len(m.Ns))
-	dh.Arcount = uint16(len(m.Extra) + m.isPseudo())
+	dh.Arcount = uint16(len(m.Extra)) + uint16(isPseudo)
 
-	// We need the uncompressed length here, because we first pack it and then compress it.
-	l := m.Len()
-	if cap(m.Data) < l {
+	if l := m.Len(); cap(m.Data) < l {
 		m.Data = make([]byte, l)
 	} else {
 		m.Data = m.Data[:l]
 	}
 
-	// Pack it in: header and then the pieces.
 	off := 0
 	var err error
 	if off, err = dh.pack(m.Data, off); err != nil {
@@ -210,8 +210,8 @@ func (m *Msg) Pack() error {
 
 	// Is this compressible?
 	var compression map[string]uint16
-	if len(m.Question) > 1 || len(m.Answer) > 0 || len(m.Ns) > 0 || len(m.Extra) > 0 {
-		compression = make(map[string]uint16, len(m.Answer)+len(m.Ns)+len(m.Extra)+3) // 3 is randomly chosen, as such much rdata might be compressable...
+	if l := len(m.Answer) + len(m.Ns) + len(m.Extra); l > 0 {
+		compression = make(map[string]uint16, l+3) // 3 is randomly chosen, as that much rdata might be compressable...
 	}
 
 	for i := range m.Question {
@@ -237,7 +237,8 @@ func (m *Msg) Pack() error {
 	}
 
 	// Add an OPT RR if we see any of these.
-	if m.isPseudo() > 0 {
+	tsigOrsig0 := false
+	if isPseudo > 0 {
 		opt := &OPT{} // hack, empty name, that gets filled if we did something
 		if m.UDPSize > MinMsgSize {
 			opt.Hdr.Name = "."
@@ -260,29 +261,28 @@ func (m *Msg) Pack() error {
 			opt.SetDelegation(true)
 		}
 		for i := range m.Pseudo {
-			if edns0, ok := m.Pseudo[i].(EDNS0); ok {
-				opt.Hdr.Name = "."
-				opt.Options = append(opt.Options, edns0)
+			opt.Hdr.Name = "."
+			switch x := m.Pseudo[i].(type) {
+			case EDNS0:
+				opt.Options = append(opt.Options, x)
+			default:
+				tsigOrsig0 = true
 			}
 		}
 		// Only pack opt if something has been put into it, otherwise we may have a TSIG/SIG0.
 		// Pack it here so we don't add it the m.Extra, as the options (only) should be available in pseudo.
 		// Also OPT may be anywhere in m.Extra, here it will be first.
-		if opt.Hdr.Name == "." {
+		if len(opt.Hdr.Name) != 0 {
 			if _, off, err = packRR(opt, m.Data, off, nil); err != nil {
 				return err
 			}
 		}
 	}
 
-	// records that really need to be last, TSIG or SGI0
-	for i := range m.Pseudo {
-		_, ok1 := m.Pseudo[i].(*TSIG)
-		_, ok2 := m.Pseudo[i].(*SIG)
-		if ok1 || ok2 {
-			if _, off, err = packRR(m.Pseudo[i], m.Data, off, compression); err != nil {
-				return err
-			}
+	// records that really need to be last, TSIG or SGI0. "Checked" above, we just assume it is the last.
+	if tsigOrsig0 {
+		if _, off, err = packRR(m.Pseudo[len(m.Pseudo)-1], m.Data, off, compression); err != nil {
+			return err
 		}
 	}
 	m.Data = m.Data[:off]
@@ -335,10 +335,10 @@ func (m *Msg) unpackQuestions(cnt uint16, msg *cryptobyte.String, msgBuf []byte)
 
 func unpackRRs(cnt uint16, msg *cryptobyte.String, msgBuf []byte) ([]RR, error) {
 	if cnt == 0 {
-		return []RR{}, nil
+		return nil, nil
 	}
 	// See unpackQuestions for why we don't pre-allocate here.
-	dst := make([]RR, 0, min(5, cnt))
+	dst := make([]RR, 0, min(3, cnt))
 	for i := 0; i < int(cnt); i++ {
 		r, err := unpackRR(msg, msgBuf)
 		if err != nil {
@@ -574,9 +574,19 @@ func (m *Msg) String() string {
 
 // isPseudo returns (1) true of we should have a pseudo section in this message, or not (0). It returns an
 // int becuse we need that number of the Extra section sizing.
-func (m *Msg) isPseudo() int {
-	if len(m.Pseudo) > 0 || m.UDPSize > MinMsgSize || m.Security || m.CompactAnswers || m.Delegation || m.Rcode > 0xF {
-		return 1
+func (m *Msg) isPseudo() uint8 {
+	if lp := len(m.Pseudo); lp > 0 || m.UDPSize > MinMsgSize || m.Security || m.CompactAnswers || m.Delegation || m.Rcode > 0xF {
+		if lp == 0 {
+			return 1 // OPT without options, 1 record
+		}
+		switch m.Pseudo[lp-1].(type) {
+		// OPT + one of these
+		case *TSIG:
+			return 2
+		case *SIG:
+			return 2
+		}
+		return 1 // OPT with options, still 1 record
 	}
 	return 0
 }
@@ -608,7 +618,9 @@ func (m *Msg) Len() int {
 	// len(name) +1 for all domain names, which is not correct for the root which is just 1.
 	const minHeaderSize = 12
 
-	if m.isPseudo() > 0 {
+	// isPseudo call is basically already done in the above loop where we get the length, only things left
+	// are the extra checks we do here. See [isPseudo] and keep in sync.
+	if len(m.Pseudo) > 0 || m.UDPSize > MinMsgSize || m.Security || m.CompactAnswers || m.Delegation || m.Rcode > 0xF {
 		// If we find things in pseudo we get an OPT RR (fix length) plus the length of the option. OPT is always 11, 10 + "." (root label)
 		l += minHeaderSize
 	}
@@ -679,7 +691,7 @@ func (m *Msg) Hijack() { m.hijacked.Store(true) }
 
 // io.Reader and io.Writer interfaces implementation.
 
-// Write writes the buffer p to the m.Data. If m's Data buffer is empty Pack() is called.
+// Write writes the buffer p to the m.Data. If m's Data buffer is empty [Msg.Pack] is called.
 func (m *Msg) Write(p []byte) (n int, err error) {
 	if len(m.Data) == 0 {
 		if err := m.Pack(); err != nil {
@@ -690,7 +702,7 @@ func (m *Msg) Write(p []byte) (n int, err error) {
 	return n, nil
 }
 
-// Read reads the data from m.Data into p. If m's Data buffer is empty Pack() is called.
+// Read reads the data from m.Data into p. If m's Data buffer is empty [Msg.Pack] is called.
 func (m *Msg) Read(p []byte) (n int, err error) {
 	// TODO(miek): pool allocation here?
 	if len(m.Data) == 0 {
@@ -804,7 +816,7 @@ func (m *Msg) ReadFrom(r io.Reader) (int64, error) {
 }
 
 // RRs allows ranging over the RRs of all the sections in m. This includes the question, pseudo and stateful
-// sections.
+// sections. See [ZoneParser.RRs] also.
 func (m *Msg) RRs() iter.Seq[RR] {
 	return func(yield func(RR) bool) {
 		for {

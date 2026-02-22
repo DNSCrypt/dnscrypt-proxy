@@ -3,7 +3,6 @@ package dns
 import (
 	"strconv"
 	"strings"
-	"sync"
 
 	"codeberg.org/miekg/dns/pkg/pool"
 )
@@ -96,4 +95,4 @@ func sprintOptionHeader(rr EDNS0) *strings.Builder {
 	return &sb
 }
 
-var builderPool = &pool.Builder{Pool: sync.Pool{New: func() any { return strings.Builder{} }}}
+var builderPool = pool.NewBuilder()
