@@ -4,7 +4,6 @@ import (
 	"crypto"
 	"fmt"
 
-	"codeberg.org/miekg/dns/internal/jump"
 	"codeberg.org/miekg/dns/internal/pack"
 	"codeberg.org/miekg/dns/internal/unpack"
 )
@@ -24,15 +23,11 @@ func SIG0Sign(m *Msg, k SIG0Signer, options *SIG0Option) error {
 		return fmt.Errorf("%w: %s", ErrNoSIG0, "sign")
 	}
 
-	last := len(m.Ns) + len(m.Answer) + len(m.Extra) // skip question as 0th, is the first after question
-	off := jump.To(last, m.Data)
-	if off == 0 {
+	isPseudo := m.isPseudo() - 1 // should be 1 (only the tsig) or 2 (opt + tsig)
+	arcount := setArcount(m, isPseudo)
+	if arcount == -1 {
 		return fmt.Errorf("%w: %s", ErrNoSIG0, "sign")
 	}
-
-	m.Data = m.Data[:off]
-	arcount := uint16(len(m.Extra))
-	pack.Uint16(arcount, m.Data, msgArcount) // decrease additional section count, because we removed the TSIG
 
 	signature, err := k.Sign(s, m.Data, *options)
 	if err != nil {
@@ -42,13 +37,14 @@ func SIG0Sign(m *Msg, k SIG0Signer, options *SIG0Option) error {
 	s.Signature = unpack.Base64(signature)
 
 	sbuf := make([]byte, s.Len())
-	if _, off, err = packRR(s, sbuf, 0, nil); err != nil {
+	_, off, err := packRR(s, sbuf, 0, nil)
+	if err != nil {
 		return err
 	}
 	sbuf = sbuf[:off]
 	m.Data = append(m.Data, sbuf...)
 
-	pack.Uint16(arcount+1, m.Data, msgArcount) // and +1 after we done for the new and improved TSIG that is added
+	pack.Uint16(uint16(arcount+1), m.Data, msgArcount) // and +1 after we done for the new and improved TSIG that is added
 	return nil
 }
 
@@ -65,19 +61,15 @@ func SIG0Verify(m *Msg, y *KEY, k SIG0Signer, options *SIG0Option) error {
 		return fmt.Errorf("%w: %s", ErrNoSIG0, "verify")
 	}
 
-	last := len(m.Answer) + len(m.Ns) + len(m.Extra)
-	off := jump.To(last, m.Data)
-	if off == 0 {
+	isPseudo := m.isPseudo() - 1
+	arcount := setArcount(m, isPseudo)
+	if arcount == -1 {
 		return fmt.Errorf("%w: %s", ErrNoSIG0, "verify")
 	}
 
-	m.Data = m.Data[:off]
-	arcount := uint16(len(m.Extra))
-	pack.Uint16(arcount, m.Data, msgArcount) // decrease additional section count, because we removed the TSIG
-
 	err := k.Verify(s, m.Data, *options)
 
-	pack.Uint16(arcount+1, m.Data, msgArcount) // restore arcount
+	pack.Uint16(uint16(arcount+1), m.Data, msgArcount) // restore arcount
 	return err
 }
 
