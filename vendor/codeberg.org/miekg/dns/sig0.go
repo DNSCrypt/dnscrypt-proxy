@@ -2,6 +2,7 @@ package dns
 
 import (
 	"crypto"
+	"fmt"
 
 	"codeberg.org/miekg/dns/internal/jump"
 	"codeberg.org/miekg/dns/internal/pack"
@@ -20,13 +21,13 @@ func SIG0Sign(m *Msg, k SIG0Signer, options *SIG0Option) error {
 
 	s := hasSIG0(m)
 	if s == nil {
-		return ErrNoSIG0.Fmt(": %s", "sign")
+		return fmt.Errorf("%w: %s", ErrNoSIG0, "sign")
 	}
 
 	last := len(m.Ns) + len(m.Answer) + len(m.Extra) // skip question as 0th, is the first after question
 	off := jump.To(last, m.Data)
 	if off == 0 {
-		return ErrNoSIG0.Fmt(": %s", "sign")
+		return fmt.Errorf("%w: %s", ErrNoSIG0, "sign")
 	}
 
 	m.Data = m.Data[:off]
@@ -61,13 +62,13 @@ func SIG0Verify(m *Msg, y *KEY, k SIG0Signer, options *SIG0Option) error {
 
 	s := hasSIG0(m)
 	if s == nil {
-		return ErrNoSIG0.Fmt(": %s", "verify")
+		return fmt.Errorf("%w: %s", ErrNoSIG0, "verify")
 	}
 
 	last := len(m.Answer) + len(m.Ns) + len(m.Extra)
 	off := jump.To(last, m.Data)
 	if off == 0 {
-		return ErrNoSIG0.Fmt(": %s", "verify")
+		return fmt.Errorf("%w: %s", ErrNoSIG0, "verify")
 	}
 
 	m.Data = m.Data[:off]

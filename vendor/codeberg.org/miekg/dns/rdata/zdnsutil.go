@@ -84,7 +84,7 @@ func dnsutilFqdn(s string) string {
 }
 
 // IsFqdn checks if a domain name is fully qualified. As this library doesn't support escapes in names, this
-// simply calls strings.HasSuffix.
+// simply calls [strings.HasSuffix].
 func dnsutilIsFqdn(s string) bool { return strings.HasSuffix(s, ".") }
 
 // Canonical returns the domain name in canonical form. A name in canonical form is lowercase and fully qualified.
@@ -186,11 +186,11 @@ func dnsutilStringToTime(s string) (uint32, error) {
 	if err != nil {
 		return 0, err
 	}
-	mod := max(t.Unix()/maxSerialIncrement-1, 0)
-	return uint32(t.Unix() - mod*maxSerialIncrement), nil
+	mod := max(t/maxSerialIncrement-1, 0)
+	return uint32(t - mod*maxSerialIncrement), nil
 }
 
-// Absolute takes the name and origin and appends the origin to the name. This takes the 1035 presentation
+// Absolute takes the name and origin and appends the origin to the name. This takes the RFC 1035 presentation
 // format into account, i.e. "@" means the origin in a name.
 // If s is not a valid domain name, the empty string is returned. If the origin is needed to be appended,
 // but is empty the empty string is also returned.

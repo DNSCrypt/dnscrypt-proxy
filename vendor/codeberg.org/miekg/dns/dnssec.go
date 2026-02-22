@@ -42,7 +42,7 @@ const (
 	ED25519
 	ED448
 	INDIRECT   uint8 = 252
-	PRIVATEDNS uint8 = 253 // Private (experimental keys)
+	PRIVATEDNS uint8 = 253 // Private (experimental keys).
 	PRIVATEOID uint8 = 254
 )
 
@@ -69,7 +69,7 @@ var AlgorithmToString = map[uint8]string{
 // AlgorithmToHash is a map of algorithm crypto hash IDs to crypto.Hash's.
 // Newer algorithm that do their own hashing (i.e. ED25519) are not present here.
 var AlgorithmToHash = map[uint8]crypto.Hash{
-	RSAMD5:           crypto.MD5, // Deprecated in RFC 6725
+	RSAMD5:           crypto.MD5, // Deprecated in RFC 6725.
 	DSA:              crypto.SHA1,
 	RSASHA1:          crypto.SHA1,
 	RSASHA1NSEC3SHA1: crypto.SHA1,
@@ -82,11 +82,11 @@ var AlgorithmToHash = map[uint8]crypto.Hash{
 // DNSSEC hashing algorithm codes.
 const (
 	_      uint8 = iota
-	SHA1         // RFC 4034
-	SHA256       // RFC 4509
-	GOST94       // RFC 5933
-	SHA384       // Experimental
-	SHA512       // Experimental
+	SHA1         // RFC 4034.
+	SHA256       // RFC 4509.
+	GOST94       // RFC 5933.
+	SHA384       // Experimental.
+	SHA512       // Experimental.
 )
 
 // HashToString is a map of hash IDs to names.

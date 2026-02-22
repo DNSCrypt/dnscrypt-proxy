@@ -60,7 +60,7 @@ func (e *ParseError) Error() (s string) {
 		e.err = e.wrappedErr.Error()
 	}
 	s += "dns: " + e.err + ": " + strconv.QuoteToASCII(e.lex.Token) + " at line: " +
-		strconv.Itoa(e.lex.Line) + ":" + strconv.Itoa(e.lex.Column)
+		strconv.Itoa(int(e.lex.Line)) + ":" + strconv.Itoa(int(e.lex.Column))
 	return
 }
 
@@ -115,8 +115,9 @@ func read(r io.Reader, file string) (RR, error) {
 	return rr, zp.Err()
 }
 
-// NewData parses s, but only for the rdata, i.e. when the full RR is "miek.nl. IN 3600 MX 10 mx.miek.nl.",
+// NewData parses s, but only for the [RDATA], i.e. when the full [RR] is "miek.nl. IN 3600 MX 10 mx.miek.nl.",
 // NewData must get "10 mx.miek.nl." and optionally an origin. Leading spaces are not allowed.
+// Examples can be found in [RDATA].
 func NewData(rrtype uint16, s string, origin ...string) (RDATA, error) {
 	return readData(strings.NewReader(s), rrtype, origin...)
 }
@@ -154,8 +155,8 @@ func readData(r io.Reader, rrtype uint16, origin ...string) (RDATA, error) {
 //		// log.Println(err)
 //	}
 //
-// Callers should not assume all returned data in a RR is
-// syntactically correct, e.g. illegal base64 in RRSIGs will be returned as-is.
+// Callers should not assume all returned data in a [RR] is
+// syntactically correct, e.g. illegal base64 in [RRSIG]s will be returned as-is.
 type ZoneParser struct {
 	h Header // rr header as we parse
 	t uint16 // type as we parse, not stored in the header
@@ -198,10 +199,9 @@ type ZoneParser struct {
 
 // NewZoneParser returns an RFC 1035 style zone file parser that reads from r.
 //
-// The string file is used in error reporting and to resolve relative
-// $INCLUDE directives. The string origin is used as the initial
-// origin, as if the file would start with an $ORIGIN directive.
-// IncludeAllowFunc is set to DefaultIncludeAllowFunc.
+// The string file is used in error reporting and to resolve relative $INCLUDE directives. The string origin
+// is used as the initial origin, as if the file would start with an $ORIGIN directive.
+// IncludeAllowFunc is set to [DefaultIncludeAllowFunc].
 func NewZoneParser(r io.Reader, origin, file string) *ZoneParser {
 	var pe *ParseError
 	if origin != "" {
@@ -267,11 +267,9 @@ func (zp *ZoneParser) subNext() (RR, bool) {
 	return zp.Next()
 }
 
-// Next advances the parser to the next RR in the zone file and
-// returns the (RR, true). It will return (nil, false) when the
-// parsing stops, either by reaching the end of the input or an
-// error. After Next returns (nil, false), the Err method will return
-// any error that occurred during parsing.
+// Next advances the parser to the next RR in the zone file and returns the ([RR], true).
+// It will return (nil, false) when the parsing stops, either by reaching the end of the input or an
+// error. After Next returns (nil, false), the Err method will return any error that occurred during parsing.
 func (zp *ZoneParser) Next() (RR, bool) {
 	if zp.parseErr != nil {
 		return nil, false
@@ -680,7 +678,7 @@ Next:
 	return nil, false
 }
 
-// RRs allows ranging over the RRs from the zone currently parsed.
+// RRs allows ranging over the RRs from the zone currently parsed. See [Msg.RRs] also.
 func (zp *ZoneParser) RRs() iter.Seq2[RR, error] {
 	return func(yield func(RR, error) bool) {
 		for {
@@ -713,8 +711,8 @@ func stringToTTL(token string) (uint32, bool) {
 	}
 
 	var s, i uint
-	for _, c := range token {
-		switch c {
+	for j := range token {
+		switch token[j] {
 		case 's', 'S':
 			s += i
 			i = 0
@@ -732,7 +730,7 @@ func stringToTTL(token string) (uint32, bool) {
 			i = 0
 		case '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
 			i *= 10
-			i += uint(c) - '0'
+			i += uint(token[j]) - '0'
 		default:
 			return 0, false
 		}

@@ -61,7 +61,7 @@ func (o *LLQ) String() string {
 //
 // This record must be put in the pseudo section.
 type REPORTING struct {
-	AgentDomain string
+	AgentDomain string `dns:"domain-name"`
 }
 
 func (o *REPORTING) Len() int    { return tlv + len(o.AgentDomain) }
@@ -246,13 +246,8 @@ func (o *N3U) String() string {
 //
 // This record must be put in the pseudo section.
 type TCPKEEPALIVE struct {
-	// Timeout is an idle timeout value for the TCP connection, specified in
-	// units of 100 milliseconds, encoded in network byte order. If set to 0,
-	// pack will return a nil slico.
+	// Timeout is an idle timeout value for the TCP connection, specified in units of 100 milliseconds
 	Timeout uint16
-	// Length is the option's length.
-	// Deprecated: this field is deprecated and is always equal to 0.
-	Length uint16
 }
 
 func (o *TCPKEEPALIVE) Len() int {
@@ -357,7 +352,7 @@ func (o *ESU) String() string {
 	return s
 }
 
-// The ZONEVERSION option, see RFC 9660. Only a single type (0) has been allocated, if used the SOA serial
+// The ZONEVERSION option, see RFC 9660. Only a single type (0) has been allocated, if used the [SOA] serial
 // is put in Version. Example on how to create a ZONEVERSION:
 //
 //	z := &ZONEVERSION{Labels: 8, Type: 0, Version: make([]byte, 4)}
@@ -394,6 +389,30 @@ func (o *ZONEVERSION) String() string {
 	}
 	s := sb.String()
 	builderPool.Put(*sb)
+	return s
+}
+
+// ERFC3597 is used to represent unknown EDNS0 options.
+type ERFC3597 struct {
+	EDNS0Code uint16 `dns:"-"`
+	Code      string `dns:"hex"`
+}
+
+func (o *ERFC3597) Len() int    { return tlv + len(o.Code)/2 }
+func (o *ERFC3597) Data() RDATA { return o }
+func (o *ERFC3597) String() string {
+	sb := builderPool.Get()
+	sb.WriteByte('.')
+	sb.WriteByte('\t')
+	sb.WriteByte('\t') // skip TTL
+	sb.WriteString(classToString(o.Header().Class))
+	sb.WriteByte('\t')
+	sb.WriteString(codeToString(o.EDNS0Code))
+	sb.WriteByte('\t')
+
+	sprintData(&sb, `\#`, strconv.Itoa(len(o.Code)/2), o.Code)
+	s := sb.String()
+	builderPool.Put(sb)
 	return s
 }
 
@@ -501,6 +520,8 @@ func unpackOptionCode(option EDNS0, s *cryptobyte.String) error {
 		return x.unpack(s)
 	case *ZONEVERSION:
 		return x.unpack(s)
+	case *ERFC3597:
+		return x.unpack(s)
 	}
 	if x, ok := option.(Packer); ok {
 		msg := []byte(*s)
@@ -538,6 +559,8 @@ func packOptionCode(option EDNS0, msg []byte, off int) (int, error) {
 	case *ESU:
 		return x.pack(msg, off)
 	case *ZONEVERSION:
+		return x.pack(msg, off)
+	case *ERFC3597:
 		return x.pack(msg, off)
 	}
 	if x, ok := option.(Packer); ok {
