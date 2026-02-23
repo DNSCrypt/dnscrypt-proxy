@@ -63,9 +63,9 @@ For developers please read the
     - On my Dell XPS 17 (Intel) it is similar-ish (~300K/240K qps UDP/TCP).
     - On other Intel/AMD hardware it is lower (~200K (UDP) qps) - yet to understand why.
   - See `cmd/reflect` and do a `go build; make new.txt` to redo the performance test. Requires `dnsperf` to be installed.
-  - The SE zone (8M RRs) is parsed in \~15s (\~530K RR/s), the CH zones (15M RRs) is parsed in \~19s (\~750K
-    RRs). The main difference being that SE use algorithm 8, and CH algorithm 13 (shorter RRSIGs).
-    See `cmd/parse`, tested with M2/Asahi Linux and on Intel hardware.
+  - The SE zone (8M RRs) is parsed in \~11s (\~730K RR/s), the CH zones (15M RRs) is parsed in \~14s (\~1M RR/s).
+    The main difference being that SE use algorithm 8, and CH algorithm 13 (shorter RRSIGs).
+    See `cmd/parse`, tested with M2/Asahi Linux.
 
 # Users
 

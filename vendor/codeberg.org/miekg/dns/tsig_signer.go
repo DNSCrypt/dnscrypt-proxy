@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"crypto/sha512"
 	"encoding/hex"
+	"fmt"
 	"hash"
 
 	"codeberg.org/miekg/dns/internal/pack"
@@ -21,7 +22,7 @@ func (h HmacTSIG) Key() []byte { return h.Secret }
 func (h HmacTSIG) Sign(t *TSIG, p []byte, options TSIGOption) ([]byte, error) {
 	secret := h.Key()
 	if secret == nil {
-		return nil, ErrKey.Fmt(": HMAC sign")
+		return nil, fmt.Errorf("%w: %s", ErrKey, "HMAC sign")
 	}
 
 	var hs hash.Hash
@@ -37,7 +38,7 @@ func (h HmacTSIG) Sign(t *TSIG, p []byte, options TSIGOption) ([]byte, error) {
 	case HmacSHA512:
 		hs = hmac.New(sha512.New, secret)
 	default:
-		return nil, ErrKeyAlg.Fmt(": HMAC sign")
+		return nil, fmt.Errorf("%w: %s", ErrKeyAlg, "HMAC sign")
 	}
 	hs.Write(p)
 	return hs.Sum(nil), nil
@@ -53,7 +54,7 @@ func (h HmacTSIG) Verify(t *TSIG, p []byte, options TSIGOption) error {
 		return err
 	}
 	if !hmac.Equal(buf, mac) {
-		return ErrSig.Fmt(": HMAC verify")
+		return fmt.Errorf("%w: %s", ErrSig, "HMAC verify")
 	}
 	return nil
 }

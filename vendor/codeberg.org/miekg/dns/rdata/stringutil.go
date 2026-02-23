@@ -13,8 +13,8 @@ import (
 // cmToM takes a cm value expressed in RFC 1876 SIZE mantissa/exponent
 // format and returns a string in m (two decimals for the cm).
 func cmToM(x uint8) string {
-	m := x & 0xf0 >> 4
-	e := x & 0x0f
+	m := x & 0xF0 >> 4
+	e := x & 0x0F
 
 	if e < 2 {
 		if e == 1 {

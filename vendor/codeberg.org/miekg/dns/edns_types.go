@@ -23,10 +23,10 @@ const (
 	CodeN3U          uint16 = 0x7    // NSEC3 Hash Understood.
 	CodeSUBNET       uint16 = 0x8    // Client-subnet, see RFC 7871.
 	CodeEXPIRE       uint16 = 0x9    // Expire, RFC 7314.
-	CodeCOOKIE       uint16 = 0xa    // Cookie, RFC 7873.
-	CodeTCPKEEPALIVE uint16 = 0xb    // TCP keep alive (see RFC 7828).
-	CodePADDING      uint16 = 0xc    // Padding (see RFC 7830).
-	CodeEDE          uint16 = 0xf    // Extended DNS errors (see RFC 8914).
+	CodeCOOKIE       uint16 = 0xA    // Cookie, RFC 7873.
+	CodeTCPKEEPALIVE uint16 = 0xB    // TCP keep alive (see RFC 7828).
+	CodePADDING      uint16 = 0xC    // Padding (see RFC 7830).
+	CodeEDE          uint16 = 0xF    // Extended DNS errors (see RFC 8914).
 	CodeREPORTING    uint16 = 0x12   // EDNS0 reporting (see RFC 9567).
 	CodeZONEVERSION  uint16 = 0x13   // Zone version (see RFC 9660).
 	CodeLOCALSTART   uint16 = 0xFDE9 // Beginning of range reserved for local/experimental use (see RFC 6891).

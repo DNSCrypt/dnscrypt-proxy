@@ -7,6 +7,10 @@
 //	 mx := &dns.MX{Hdr: dns.Header{Name: "miek.nl.", Class: dns.ClassINET, TTL: 3600},
 //			       MX: rdata.MX{Preference: 10, Mx: "mx.miek.nl."}}
 //	 fmt.Printf("%s %s\t%s", mx.Header(), dnsutil.TypeToString(dns.RRToType(mx)), mx.Data())
+//
+// Creating new rdata from a string can be done via [codeberg.org/miekg/dns.NewData]. See
+// [codeberg.org/miekg/dns.TypeToRDATA] for construction functions to set the rdata in an
+// [codeberg.org/miekg/dns.RR].
 package rdata
 
 import (
