@@ -207,7 +207,7 @@ func (m *Msg) Pack() error {
 	counts := uint64(len(m.Question)<<48) |
 		uint64(len(m.Answer)<<32) |
 		uint64(len(m.Ns)<<16) |
-		uint64(len(m.Extra)+int(isPseudo))
+		uint64(len(m.Extra)+isPseudo)
 
 	off, err = pack.Uint64(counts, m.Data, off)
 	if err != nil {
@@ -413,7 +413,7 @@ Rest:
 
 	// Check for the OPT RR and remove it entirely, unpack the OPT for option codes and put those in the Pseudo
 	// section. We will only check one OPT, any others will be left in Extra.
-	for i := 0; i < len(m.Extra); i++ {
+	for i := len(m.Extra) - 1; i >= 0; i-- {
 		if opt, ok := m.Extra[i].(*OPT); ok {
 			m.Security = opt.Security()
 			m.CompactAnswers = opt.CompactAnswers()
@@ -424,8 +424,8 @@ Rest:
 			m.UDPSize = max(opt.UDPSize(), MinMsgSize)
 
 			m.Pseudo = make([]RR, len(opt.Options), len(opt.Options)+1) // +1 for tsig/sig zero, avoid 2x in a append
-			for i := range opt.Options {
-				m.Pseudo[i] = RR(opt.Options[i])
+			for j := range opt.Options {
+				m.Pseudo[j] = RR(opt.Options[j])
 			}
 			m.Extra[i] = m.Extra[len(m.Extra)-1] // opt's place taken with last rr
 			m.Extra = m.Extra[:len(m.Extra)-1]   // remove the OPT RR
@@ -435,15 +435,15 @@ Rest:
 	}
 
 	// Check for m.Extra TSIG and SIG(0) and move them to pseudo. This MUST be the the last RR in the extra section.
-	for i := 0; i < len(m.Extra); i++ {
-		_, ok1 := m.Extra[i].(*TSIG)
-		_, ok2 := m.Extra[i].(*SIG)
-		if ok1 || ok2 {
+Extra:
+	for i := len(m.Extra) - 1; i >= 0; i-- {
+		switch m.Extra[i].(type) {
+		case *TSIG, *SIG:
 			m.Pseudo = append(m.Pseudo, m.Extra[i])
 			m.Extra[i] = m.Extra[len(m.Extra)-1] // sig/tsig's place taken with last rr
 			m.Extra = m.Extra[:len(m.Extra)-1]   // remove the sig/tsig RR
 
-			break
+			break Extra
 		}
 	}
 
@@ -584,23 +584,27 @@ func (m *Msg) String() string {
 	return s
 }
 
-// isPseudo returns (1) true of we should have a pseudo section in this message, or not (0). It returns an
+// isPseudo returns (1 or 2) if we should have a pseudo section in this message, or not (0). It returns an
 // int becuse we need that number of the Extra section sizing.
-func (m *Msg) isPseudo() uint8 {
-	if lp := len(m.Pseudo); lp > 0 || m.UDPSize > MinMsgSize || m.Security || m.CompactAnswers || m.Delegation || m.Rcode > 0xF {
-		if lp == 0 {
-			return 1 // OPT without options, 1 record
-		}
-		switch m.Pseudo[lp-1].(type) {
-		// OPT + one of these
-		case *TSIG:
-			return 2
-		case *SIG:
-			return 2
-		}
-		return 1 // OPT with options, still 1 record
+func (m *Msg) isPseudo() int {
+	n := 0
+	if m.UDPSize > MinMsgSize || m.Security || m.CompactAnswers || m.Delegation || m.Rcode > 0xF {
+		n = 1
 	}
-	return 0
+	lp := len(m.Pseudo)
+	if lp > 0 {
+		switch m.Pseudo[lp-1].(type) {
+		case *TSIG:
+			n++
+		case *SIG:
+			n++
+		default:
+			if n == 0 { // not any of the message options are set
+				n = 1
+			}
+		}
+	}
+	return n
 }
 
 // Len returns the message length when in uncompressed wire format.
@@ -634,6 +638,8 @@ func (m *Msg) Len() int {
 	// are the extra checks we do here. See [isPseudo] and keep in sync.
 	if len(m.Pseudo) > 0 || m.UDPSize > MinMsgSize || m.Security || m.CompactAnswers || m.Delegation || m.Rcode > 0xF {
 		// If we find things in pseudo we get an OPT RR (fix length) plus the length of the option. OPT is always 11, 10 + "." (root label)
+		// In case of only a TSIG/SIG0 we overestimate, but because of speed we don't want to the full
+		// i.Pseudo check.
 		l += minHeaderSize
 	}
 
