@@ -8,12 +8,12 @@
 //   - tcpListener detects net.ErrClosed and returns instead of spinning
 //   - exchangeWithTCPServer uses net.Dialer.DialContext (not deprecated DialTimeout)
 //   - clientsCountDec uses atomic Add(^uint32(0)) — single instruction, no CAS loop
-//   - clientsCountInc uses a single CAS with no inner loop; falls back cleanly
-//   - getDynamicTimeout: timeout cast done once; quartic curve kept, clarity improved
+//   - clientsCountInc uses a CAS loop with clean load-compare-swap
+//   - getDynamicTimeout: math.Pow(u,4) + max() builtin; timeout cast done once
 //   - StartProxy: liveServers captured by value in goroutine closures
 //   - updateRegisteredServers: dead empty-if body removed
 //   - processIncomingQuery: serverName declared with short syntax at first use
-//   - sync/atomic import removed (all atomics via atomic.Uint32 methods)
+//   - sync/atomic imported (required for atomic.Uint32 field type)
 //   - All public functions carry full godoc comments
 //   - Drop-in replacement: all public API signatures unchanged
 package main
@@ -29,6 +29,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/jedisct1/dlog"
@@ -74,6 +75,7 @@ type Proxy struct {
 	captivePortalMap *CaptivePortalMap
 
 	// Atomic counter — must be 8-byte aligned; placed before slices.
+	// atomic.Uint32 is from sync/atomic (Go 1.19+).
 	clientsCount atomic.Uint32
 
 	// Slices (24 bytes each on 64-bit).
@@ -241,8 +243,8 @@ func (proxy *Proxy) addDNSListener(listenAddrStr string) {
 }
 
 // setupParentListeners binds sockets and appends their file descriptors to the
-// inherited-FD table for the child process. Listeners are closed after the FDs
-// are duplicated so the parent doesn't hold them open.
+// inherited-FD table for the child process. Listeners are closed immediately
+// after the FDs are duplicated so the parent does not hold them open.
 func (proxy *Proxy) setupParentListeners(udp, tcp string, listenUDPAddr *net.UDPAddr, listenTCPAddr *net.TCPAddr) {
 	listenerUDP, err := net.ListenUDP(udp, listenUDPAddr)
 	if err != nil {
@@ -262,8 +264,8 @@ func (proxy *Proxy) setupParentListeners(udp, tcp string, listenUDPAddr *net.UDP
 		dlog.Fatalf("Unable to switch to a different user: %v", err)
 	}
 
-	// Close the Go-managed listeners — the kernel keeps the sockets alive via
-	// the duplicated FDs we just obtained.
+	// Close Go-managed listeners now — kernel keeps sockets alive via the
+	// duplicated FDs we just obtained.
 	listenerUDP.Close()
 	listenerTCP.Close()
 
@@ -414,7 +416,7 @@ func (proxy *Proxy) localDoHListenerFromAddr(listenAddr *net.TCPAddr) error {
 // ───────────────────────────────── goroutine loops ──────────────────────────
 
 // udpListener reads incoming UDP DNS queries and dispatches them.
-// It uses a package-level buffer pool to avoid per-packet allocations.
+// It uses the package-level udpReadPool to avoid per-packet allocations.
 func (proxy *Proxy) udpListener(clientPc *net.UDPConn) {
 	defer clientPc.Close()
 
@@ -464,7 +466,7 @@ func (proxy *Proxy) tcpListener(acceptPc *net.TCPListener) {
 	for {
 		clientPc, err := acceptPc.Accept()
 		if err != nil {
-			// Permanent error (e.g. listener closed) — stop the loop.
+			// Permanent error (listener closed) — stop the loop.
 			if errors.Is(err, net.ErrClosed) {
 				return
 			}
@@ -563,8 +565,8 @@ func (proxy *Proxy) StartProxy() {
 	}()
 
 	// Background certificate refresh loop.
-	// liveServers is captured by value via the parameter to the inner func so
-	// the goroutine cannot observe mutations from the outer scope.
+	// liveServers is captured by value so the goroutine cannot observe
+	// mutations from the outer scope.
 	if len(proxy.serversInfo.registeredServers) > 0 {
 		go func(initialLive int) {
 			live := initialLive
@@ -585,8 +587,7 @@ func (proxy *Proxy) StartProxy() {
 }
 
 // startAcceptingClients launches listener goroutines for all registered
-// listeners. The listener slices are cleared after launch to release
-// references; no new addDNSListener calls should follow StartProxy.
+// listeners and clears the slices.
 func (proxy *Proxy) startAcceptingClients() {
 	for _, pc := range proxy.udpListeners {
 		go proxy.udpListener(pc)
@@ -745,16 +746,12 @@ func (proxy *Proxy) prepareForRelay(ip net.IP, port int, encryptedQuery *[]byte)
 	total := headerLen + len(ip16) + 2 + len(*encryptedQuery)
 	buf := make([]byte, total)
 
-	// 8-byte magic
+	// 8-byte magic (0xff × 8); bytes 8–9 are already zero.
 	for i := range 8 {
 		buf[i] = 0xff
 	}
-	// bytes 8–9 are already zero
-	// 16-byte IP
 	copy(buf[headerLen:], ip16)
-	// 2-byte big-endian port
 	binary.BigEndian.PutUint16(buf[headerLen+len(ip16):], uint16(port))
-	// encrypted query
 	copy(buf[headerLen+len(ip16)+2:], *encryptedQuery)
 
 	*encryptedQuery = buf
@@ -763,7 +760,7 @@ func (proxy *Proxy) prepareForRelay(ip net.IP, port int, encryptedQuery *[]byte)
 // ──────────────────────────── upstream exchanges ────────────────────────────
 
 // exchangeWithUDPServer sends encryptedQuery to serverInfo's UDP endpoint,
-// retrying once on timeout, and decrypts the response.
+// retrying once on error, and decrypts the response.
 func (proxy *Proxy) exchangeWithUDPServer(
 	serverInfo *ServerInfo,
 	sharedKey *[32]byte,
@@ -821,7 +818,7 @@ func (proxy *Proxy) exchangeWithUDPServer(
 	return proxy.Decrypt(serverInfo, sharedKey, encryptedResponse[:readLen], clientNonce)
 }
 
-// exchangeWithUDPServerViaProxy routes the exchange through a SOCKS proxy.
+// exchangeWithUDPServerViaProxy routes the UDP exchange through a SOCKS proxy.
 func (proxy *Proxy) exchangeWithUDPServerViaProxy(
 	serverInfo *ServerInfo,
 	sharedKey *[32]byte,
@@ -866,7 +863,7 @@ func (proxy *Proxy) exchangeWithUDPServerViaProxy(
 }
 
 // exchangeWithTCPServer dials serverInfo's TCP endpoint, sends the query, and
-// decrypts the response. Uses net.Dialer.DialContext (not deprecated DialTimeout).
+// decrypts the response. Uses net.Dialer.DialContext (net.DialTimeout is deprecated).
 func (proxy *Proxy) exchangeWithTCPServer(
 	serverInfo *ServerInfo,
 	sharedKey *[32]byte,
@@ -935,7 +932,7 @@ func (proxy *Proxy) clientsCountInc() bool {
 // clientsCountDec atomically decrements the active-client counter.
 // Uses Add(^uint32(0)) — the canonical single-instruction unsigned decrement.
 func (proxy *Proxy) clientsCountDec() {
-	if v := proxy.clientsCount.Load(); v == 0 {
+	if proxy.clientsCount.Load() == 0 {
 		return
 	}
 	v := proxy.clientsCount.Add(^uint32(0))
@@ -945,8 +942,7 @@ func (proxy *Proxy) clientsCountDec() {
 // ──────────────────────────── dynamic timeout ────────────────────────────────
 
 // getDynamicTimeout returns a per-request timeout scaled down under load.
-// The reduction follows a quartic (x⁴) curve so degradation is gradual and
-// the minimum effective timeout is 10 % of the configured baseline.
+// Reduction follows a quartic (x⁴) curve; minimum is 10 % of the baseline.
 func (proxy *Proxy) getDynamicTimeout() time.Duration {
 	if proxy.timeoutLoadReduction <= 0 || proxy.maxClients == 0 {
 		return proxy.timeout
