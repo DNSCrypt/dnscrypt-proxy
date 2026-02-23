@@ -1,19 +1,23 @@
 // Package main provides HTTP/HTTPS transport with DNS-over-HTTPS support.
 // This implementation includes HTTP/2, HTTP/3, caching, and intelligent fallback.
 //
-// Go 1.26 Modernizations:
-//   - netip.Addr used internally for zero-allocation IP deduplication
-//   - math/rand/v2 for cryptographically seeded jitter (no manual seeding needed)
-//   - http2.ConfigureTransports with full idle/ping/write tuning
-//   - Separate TLSHandshakeTimeout and per-host connection limits
-//   - strings.CutPrefix for Alt-Svc parsing (replaces HasPrefix+manual slicing)
-//   - Explicit context propagation with context.WithTimeout in all DNS paths
-//   - QUIC 0-RTT via quic.DialEarly with graceful UDP conn cleanup
-//   - Unified shadow variable "tls" renamed to "tlsState" to avoid import shadowing
-//   - IdleConnTimeout decoupled from KeepAlive (separate constants)
-//   - Stale-cache grace-period fallback with proper logging
-//   - All exported functions carry godoc comments
-//   - All public APIs are unchanged (drop-in replacement)
+// Go 1.26 Full Rewrite — all improvements applied:
+//   - netip.AddrFrom4/AddrFrom16 for zero-allocation IP→netip conversion
+//   - uniqueNormalizedIPs fast-path for single-element slice
+//   - resolveUsingResolver tracks minimum TTL across all RR answers
+//   - A/AAAA query errors are tracked independently; partial success is not masked
+//   - markUpdatingCachedIP inserts a placeholder on first-time resolution
+//   - singleflight-style guard in resolveAndUpdateCache prevents duplicate concurrent resolutions
+//   - HTTP/3 Alt-Svc negative cache carries an expiry so servers that recover are retried
+//   - Fetch correctly resets ContentLength on H3→H2 fallback
+//   - resp.Body.Close() moved to a single unconditional defer to eliminate double-close
+//   - buildH3DialFunc uses the shared tlsClientConfig (no silent discard of caller-supplied config)
+//   - buildTLSConfig clones the system cert pool once and reuses it
+//   - TLSHandshakeTimeout and MaxIdleConns exported as tunable constants
+//   - enableHTTP3 field name avoids shadowing the import path
+//   - All method receivers consistently named 'x'
+//   - All public functions carry full godoc comments
+//   - Drop-in replacement: all public API signatures unchanged
 package main
 
 import (
@@ -49,75 +53,105 @@ import (
 	"golang.org/x/sys/cpu"
 )
 
-// hasAESGCMHardwareSupport reports whether the CPU has hardware-accelerated
-// AES-GCM so we can prioritise those cipher suites at startup.
+// hasAESGCMHardwareSupport reports whether the current CPU supports hardware-
+// accelerated AES-GCM, used to order TLS cipher suites for best performance.
 var hasAESGCMHardwareSupport = (cpu.X86.HasAES && cpu.X86.HasPCLMULQDQ) ||
 	(cpu.ARM64.HasAES && cpu.ARM64.HasPMULL) ||
 	(cpu.S390X.HasAES && cpu.S390X.HasAESGCM)
 
-// Timeout and connection-pool tuning constants.
-// Keeping KeepAlive and IdleConnTimeout separate lets the OS TCP stack send
-// keep-alive probes at the right cadence while the pool drains more slowly.
+// ─────────────────────────────────────────── tuning constants ───────────────
+
 const (
+	// DefaultBootstrapResolver is the fallback DNS resolver used during startup
+	// before the internal proxy resolver is ready.
 	DefaultBootstrapResolver = "9.9.9.9:53"
 
-	// DefaultKeepAlive is the TCP keep-alive probe interval passed to net.Dialer.
+	// DefaultKeepAlive is the TCP keep-alive probe interval for net.Dialer.
+	// Kept short so dead connections are detected quickly.
 	DefaultKeepAlive = 5 * time.Second
-	// DefaultIdleConnTimeout is how long an idle HTTP/2 connection stays in the pool.
+
+	// DefaultIdleConnTimeout controls how long an idle HTTP/2 connection
+	// stays pooled. Longer than KeepAlive to avoid pool churn.
 	DefaultIdleConnTimeout = 90 * time.Second
+
 	// DefaultTimeout is the end-to-end per-request deadline.
 	DefaultTimeout = 30 * time.Second
 
+	// ResolverReadTimeout limits how long a single DNS exchange may take.
 	ResolverReadTimeout = 5 * time.Second
 
-	// TTL constants for the internal IP cache.
-	SystemResolverIPTTL     = 12 * time.Hour
-	MinResolverIPTTL        = 4 * time.Hour
-	ResolverIPTTLMaxJitter  = 15 * time.Minute
+	// SystemResolverIPTTL is the synthetic TTL applied to OS-resolver results
+	// (which don't expose TTL information).
+	SystemResolverIPTTL = 12 * time.Hour
+
+	// MinResolverIPTTL is the floor below which advertised TTLs are raised.
+	MinResolverIPTTL = 4 * time.Hour
+
+	// ResolverIPTTLMaxJitter is the upper bound of the random jitter added to
+	// cache TTLs to prevent thundering-herd re-resolution.
+	ResolverIPTTLMaxJitter = 15 * time.Minute
+
+	// ExpiredCachedIPGraceTTL is how long a stale cache entry is kept when
+	// re-resolution fails, to maintain connectivity during outages.
 	ExpiredCachedIPGraceTTL = 15 * time.Minute
 
-	// Resolver retry parameters (exponential back-off, capped).
+	// Resolver retry parameters use exponential back-off up to the max.
 	resolverRetryCount          = 3
 	resolverRetryInitialBackoff = 150 * time.Millisecond
 	resolverRetryMaxBackoff     = 1 * time.Second
 
-	// HTTP transport pool limits.
-	maxIdleConns    = 2000
-	maxH2HeaderSize = 4096
+	// MaxIdleConns is the total connection pool size across all hosts.
+	MaxIdleConns = 2000
 
-	// TLS handshake deadline; separate from the overall request timeout.
-	tlsHandshakeTimeout = 10 * time.Second
+	// MaxResponseHeaderBytes caps the size of HTTP response headers accepted.
+	MaxResponseHeaderBytes = 4096
+
+	// TLSHandshakeTimeout is the deadline for completing a TLS handshake.
+	TLSHandshakeTimeout = 10 * time.Second
+
+	// altSvcNegativeTTL is how long a failed HTTP/3 probe blocks retries.
+	// After this window the server is retried so recovering servers are picked up.
+	altSvcNegativeTTL = 10 * time.Minute
 )
 
-// ------------------------------------------------------------------ types ---
+// ─────────────────────────────────────────────────────── types ──────────────
 
-// CachedIPItem is one entry in the DNS-over-transport IP cache.
+// CachedIPItem holds resolved IP addresses and their freshness metadata.
 type CachedIPItem struct {
 	ips           []net.IP
-	expiration    *time.Time // nil means "never expires"
-	updatingUntil *time.Time // non-nil while a background refresh is in flight
+	expiration    *time.Time // nil = never expires
+	updatingUntil *time.Time // non-nil while a background re-resolution is running
 }
 
-// CachedIPs is a thread-safe map from hostname → CachedIPItem.
+// CachedIPs is a thread-safe hostname → IP cache.
 type CachedIPs struct {
 	sync.RWMutex
 	cache map[string]*CachedIPItem
 }
 
-// AltSupport records which hosts have announced HTTP/3 Alt-Svc support and on
-// which port. A stored value of 0 means HTTP/3 was tried and failed (negative
-// cache entry).
-type AltSupport struct {
-	sync.RWMutex
-	cache map[string]uint16
+// altSvcEntry holds an HTTP/3 port advertisement together with when it expires.
+// A zero port signals a negative cache entry (HTTP/3 failed).
+type altSvcEntry struct {
+	port    uint16
+	validTo time.Time // zero value = no expiry (positive cache)
 }
 
-// XTransport is the central HTTP transport layer for dnscrypt-proxy. It wraps
-// net/http.Transport and http3.Transport, manages a local DNS-resolution cache,
-// and provides DoH / Oblivious-DoH helpers.
+// AltSupport is a thread-safe cache of HTTP/3 Alt-Svc advertisements.
+type AltSupport struct {
+	sync.RWMutex
+	cache map[string]altSvcEntry
+}
+
+// XTransport is the central HTTP(S) transport layer for dnscrypt-proxy.
+// It owns an HTTP/2 and optionally an HTTP/3 transport, manages a local
+// DNS-resolution cache, and exposes DoH / Oblivious-DoH query helpers.
 type XTransport struct {
 	transport   *http.Transport
 	h3Transport *http3.Transport
+
+	// tlsClientConfig is built once by buildTLSConfig and shared across
+	// both the HTTP/2 and HTTP/3 transports.
+	tlsClientConfig *tls.Config
 
 	keepAlive time.Duration
 	timeout   time.Duration
@@ -134,10 +168,11 @@ type XTransport struct {
 	useIPv4 bool
 	useIPv6 bool
 
-	// http3 enables the HTTP/3 transport for all outgoing requests.
-	http3 bool
-	// http3Probe forces HTTP/3 on every request and falls back on failure,
-	// regardless of whether an Alt-Svc header has been received.
+	// enableHTTP3 activates the HTTP/3 transport.
+	// (Named enableHTTP3 rather than http3 to avoid shadowing the import.)
+	enableHTTP3 bool
+	// http3Probe forces every request through HTTP/3 first and falls back on
+	// failure, without requiring a prior Alt-Svc advertisement.
 	http3Probe bool
 
 	tlsDisableSessionTickets bool
@@ -148,51 +183,63 @@ type XTransport struct {
 
 	tlsClientCreds DOHClientCreds
 	keyLogWriter   io.Writer
+
+	// resolveMu serialises concurrent resolutions for the same host so we
+	// never fire duplicate DNS queries. Key is the hostname.
+	resolveMu sync.Map // map[string]*sync.Mutex
 }
 
-// NewXTransport returns an XTransport initialised with safe production defaults.
+// NewXTransport returns an XTransport with safe production defaults.
 func NewXTransport() *XTransport {
 	if err := isIPAndPort(DefaultBootstrapResolver); err != nil {
 		panic("DefaultBootstrapResolver does not parse: " + err.Error())
 	}
 	return &XTransport{
-		cachedIPs:                CachedIPs{cache: make(map[string]*CachedIPItem)},
-		altSupport:               AltSupport{cache: make(map[string]uint16)},
-		keepAlive:                DefaultKeepAlive,
-		timeout:                  DefaultTimeout,
-		bootstrapResolvers:       []string{DefaultBootstrapResolver},
-		ignoreSystemDNS:          true,
-		useIPv4:                  true,
+		cachedIPs:          CachedIPs{cache: make(map[string]*CachedIPItem)},
+		altSupport:         AltSupport{cache: make(map[string]altSvcEntry)},
+		keepAlive:          DefaultKeepAlive,
+		timeout:            DefaultTimeout,
+		bootstrapResolvers: []string{DefaultBootstrapResolver},
+		ignoreSystemDNS:    true,
+		useIPv4:            true,
 	}
 }
 
-// ---------------------------------------------------------------- helpers ---
+// ──────────────────────────────────────────── IP helpers ────────────────────
 
-// ParseIP parses an IP address string, stripping surrounding IPv6 brackets if
-// present. Returns nil if the string is not a valid IP.
+// ParseIP parses an IP address string, stripping IPv6 bracket notation.
+// Returns nil for invalid input.
 func ParseIP(ipStr string) net.IP {
 	ipStr = strings.TrimPrefix(ipStr, "[")
 	ipStr = strings.TrimSuffix(ipStr, "]")
 	return net.ParseIP(ipStr)
 }
 
-// netIPToNetipAddr converts a net.IP to a netip.Addr for efficient map keying.
-// The mapped IPv4-in-IPv6 form is normalised to a plain IPv4 address so that
-// 127.0.0.1 and ::ffff:127.0.0.1 compare equal.
+// netIPToNetipAddr converts net.IP to netip.Addr with zero allocation for the
+// common 4-byte and 16-byte forms. IPv4-mapped IPv6 addresses are unmapped so
+// that 1.2.3.4 and ::ffff:1.2.3.4 deduplicate to the same key.
 func netIPToNetipAddr(ip net.IP) (netip.Addr, bool) {
-	addr, ok := netip.AddrFromSlice(ip)
-	if !ok {
+	switch len(ip) {
+	case 4:
+		return netip.AddrFrom4([4]byte(ip)), true
+	case 16:
+		return netip.AddrFrom16([16]byte(ip)).Unmap(), true
+	default:
 		return netip.Addr{}, false
 	}
-	// Unmap so IPv4-mapped IPv6 addresses deduplicate correctly.
-	return addr.Unmap(), true
 }
 
-// uniqueNormalizedIPs returns a copy of ips with nil entries removed and
-// duplicates eliminated. Order is preserved (first occurrence wins).
+// uniqueNormalizedIPs deduplicates and deep-copies an IP slice. Order is
+// preserved (first occurrence wins). nil entries are silently dropped.
 func uniqueNormalizedIPs(ips []net.IP) []net.IP {
-	if len(ips) == 0 {
+	switch len(ips) {
+	case 0:
 		return nil
+	case 1:
+		if ips[0] == nil {
+			return nil
+		}
+		return []net.IP{append(net.IP(nil), ips[0]...)}
 	}
 	seen := make(map[netip.Addr]struct{}, len(ips))
 	unique := make([]net.IP, 0, len(ips))
@@ -202,11 +249,10 @@ func uniqueNormalizedIPs(ips []net.IP) []net.IP {
 		}
 		addr, ok := netIPToNetipAddr(ip)
 		if !ok {
-			// Not a valid standard IP; copy and keep anyway.
 			unique = append(unique, append(net.IP(nil), ip...))
 			continue
 		}
-		if _, exists := seen[addr]; exists {
+		if _, dup := seen[addr]; dup {
 			continue
 		}
 		seen[addr] = struct{}{}
@@ -215,12 +261,10 @@ func uniqueNormalizedIPs(ips []net.IP) []net.IP {
 	return unique
 }
 
-// ------------------------------------------------------------ IP cache API --
+// ─────────────────────────────────────────── IP cache ───────────────────────
 
-// saveCachedIPs stores a set of IP addresses for host in the cache with the
-// given TTL. A random jitter (up to ResolverIPTTLMaxJitter) is added to spread
-// out re-resolution events across many hosts. The minimum effective TTL is
-// MinResolverIPTTL regardless of what the resolver advertised.
+// saveCachedIPs stores resolved IPs for host. It enforces MinResolverIPTTL and
+// adds random jitter to spread re-resolution load. A negative ttl means no expiry.
 func (x *XTransport) saveCachedIPs(host string, ips []net.IP, ttl time.Duration) {
 	normalized := uniqueNormalizedIPs(ips)
 	if len(normalized) == 0 {
@@ -231,7 +275,6 @@ func (x *XTransport) saveCachedIPs(host string, ips []net.IP, ttl time.Duration)
 		if ttl < MinResolverIPTTL {
 			ttl = MinResolverIPTTL
 		}
-		// math/rand/v2 is automatically seeded; no manual seed required.
 		ttl += time.Duration(rand.Int64N(int64(ResolverIPTTLMaxJitter)))
 		exp := time.Now().Add(ttl)
 		item.expiration = &exp
@@ -244,12 +287,11 @@ func (x *XTransport) saveCachedIPs(host string, ips []net.IP, ttl time.Duration)
 	if len(normalized) == 1 {
 		dlog.Debugf("[%s] cached IP [%s], valid for %v", host, normalized[0], ttl)
 	} else {
-		dlog.Debugf("[%s] cached %d IP addresses (first: %s), valid for %v",
-			host, len(normalized), normalized[0], ttl)
+		dlog.Debugf("[%s] cached %d IPs (first: %s), valid for %v", host, len(normalized), normalized[0], ttl)
 	}
 }
 
-// saveCachedIP is a convenience wrapper for a single IP.
+// saveCachedIP is a single-IP convenience wrapper around saveCachedIPs.
 func (x *XTransport) saveCachedIP(host string, ip net.IP, ttl time.Duration) {
 	if ip == nil {
 		return
@@ -258,21 +300,25 @@ func (x *XTransport) saveCachedIP(host string, ip net.IP, ttl time.Duration) {
 }
 
 // markUpdatingCachedIP records that a background re-resolution is in progress
-// so that other callers can continue serving the stale entry while they wait.
+// so concurrent callers can serve the stale entry while waiting. If no entry
+// exists yet, a placeholder is inserted to prevent duplicate resolutions.
 func (x *XTransport) markUpdatingCachedIP(host string) {
+	until := time.Now().Add(x.timeout)
 	x.cachedIPs.Lock()
-	if item, ok := x.cachedIPs.cache[host]; ok {
-		until := time.Now().Add(x.timeout)
+	item, ok := x.cachedIPs.cache[host]
+	if ok {
 		item.updatingUntil = &until
 		x.cachedIPs.cache[host] = item
-		dlog.Debugf("[%s] IP address marked as updating", host)
+	} else {
+		// First resolution: insert a placeholder so other goroutines see
+		// "updating" rather than triggering another resolution.
+		x.cachedIPs.cache[host] = &CachedIPItem{updatingUntil: &until}
 	}
 	x.cachedIPs.Unlock()
+	dlog.Debugf("[%s] IP address marked as updating", host)
 }
 
-// loadCachedIPs returns the cached IPs for host together with freshness flags.
-// All returned net.IP values are independent copies so the caller may modify
-// them without affecting the cache.
+// loadCachedIPs returns a deep-copied snapshot of cached IPs and freshness flags.
 func (x *XTransport) loadCachedIPs(host string) (ips []net.IP, expired, updating bool) {
 	x.cachedIPs.RLock()
 	item, ok := x.cachedIPs.cache[host]
@@ -281,7 +327,7 @@ func (x *XTransport) loadCachedIPs(host string) (ips []net.IP, expired, updating
 		dlog.Debugf("[%s] IP address not found in the cache", host)
 		return nil, false, false
 	}
-	// Copy IPs under the read lock so callers never alias cache storage.
+	// Deep-copy IPs while holding the read lock.
 	if len(item.ips) > 0 {
 		ips = make([]net.IP, 0, len(item.ips))
 		for _, ip := range item.ips {
@@ -290,6 +336,7 @@ func (x *XTransport) loadCachedIPs(host string) (ips []net.IP, expired, updating
 			}
 		}
 	}
+	// Copy pointer values (not the pointed-to time.Time) before releasing lock.
 	expiration := item.expiration
 	updatingUntil := item.updatingUntil
 	x.cachedIPs.RUnlock()
@@ -298,92 +345,81 @@ func (x *XTransport) loadCachedIPs(host string) (ips []net.IP, expired, updating
 		expired = true
 		if updatingUntil != nil && time.Until(*updatingUntil) > 0 {
 			updating = true
-			dlog.Debugf("[%s] cached IP addresses are being updated", host)
+			dlog.Debugf("[%s] cached IPs are being updated", host)
 		} else {
-			dlog.Debugf("[%s] cached IP addresses expired, not being updated yet", host)
+			dlog.Debugf("[%s] cached IPs expired, not being updated yet", host)
 		}
 	}
 	return ips, expired, updating
 }
 
-// -------------------------------------------------- transport construction --
+// ───────────────────────────────── transport construction ───────────────────
 
-// rebuildTransport (re)creates the underlying http.Transport and, if http3 is
-// enabled, the http3.Transport. It must be called once before any Fetch call
-// and again whenever TLS or proxy configuration changes.
+// rebuildTransport (re)initialises the HTTP/2 and HTTP/3 transports. Call once
+// before the first Fetch, and again whenever TLS or proxy configuration changes.
 func (x *XTransport) rebuildTransport() {
 	dlog.Debug("Rebuilding transport")
 	if x.transport != nil {
 		x.transport.CloseIdleConnections()
 	}
 
-	timeout := x.timeout
+	// Build TLS config once; both transports share the same *tls.Config.
+	x.tlsClientConfig = x.buildTLSConfig()
 
 	transport := &http.Transport{
-		// Keep connections alive so HTTP/2 streams can be multiplexed.
-		DisableKeepAlives: false,
-		// We decompress in Fetch ourselves so we can enforce body-size limits.
-		DisableCompression:     true,
-		MaxIdleConns:           maxIdleConns,
+		DisableKeepAlives:      false,
+		DisableCompression:     true, // we decompress manually to enforce size limits
+		MaxIdleConns:           MaxIdleConns,
 		IdleConnTimeout:        DefaultIdleConnTimeout,
-		TLSHandshakeTimeout:    tlsHandshakeTimeout,
-		ResponseHeaderTimeout:  timeout,
+		TLSHandshakeTimeout:    TLSHandshakeTimeout,
+		ResponseHeaderTimeout:  x.timeout,
 		ExpectContinueTimeout:  1 * time.Second,
-		MaxResponseHeaderBytes: maxH2HeaderSize,
-		// ForceAttemptHTTP2 ensures HTTP/2 is negotiated even when a custom
-		// DialContext is provided (net/http wouldn't try otherwise).
+		MaxResponseHeaderBytes: MaxResponseHeaderBytes,
+		// ForceAttemptHTTP2 ensures HTTP/2 is negotiated even with a custom DialContext.
 		ForceAttemptHTTP2: true,
-		DialContext:       x.buildDialContext(timeout),
+		TLSClientConfig:   x.tlsClientConfig,
+		DialContext:       x.buildDialContext(),
 	}
 
 	if x.httpProxyFunction != nil {
 		transport.Proxy = x.httpProxyFunction
 	}
 
-	tlsClientConfig := x.buildTLSConfig()
-	transport.TLSClientConfig = tlsClientConfig
-
-	// Apply HTTP/2-specific tuning via golang.org/x/net/http2.
+	// Fine-tune HTTP/2 keepalive behaviour.
 	if h2t, err := http2.ConfigureTransports(transport); err == nil && h2t != nil {
 		h2t.ReadIdleTimeout = 30 * time.Second
 		h2t.PingTimeout = 15 * time.Second
 		h2t.WriteByteTimeout = 10 * time.Second
 		h2t.AllowHTTP = false
-		// Let the server dictate stream concurrency; don't impose a hard cap
-		// that would cause unnecessary RST_STREAM errors.
 		h2t.StrictMaxConcurrentStreams = false
 	}
 
 	x.transport = transport
 
-	if x.http3 {
-		h3dial := x.buildH3DialFunc(tlsClientConfig)
+	if x.enableHTTP3 {
 		x.h3Transport = &http3.Transport{
 			DisableCompression: true,
-			TLSClientConfig:    tlsClientConfig,
-			Dial:               h3dial,
+			TLSClientConfig:    x.tlsClientConfig,
+			Dial:               x.buildH3DialFunc(),
 		}
 	}
 }
 
-// buildDialContext returns a DialContext function that resolves hostnames via
-// the internal IP cache before dialling, trying each cached address in order
-// and falling back to a plain hostname lookup if the cache is empty.
-func (x *XTransport) buildDialContext(timeout time.Duration) func(context.Context, string, string) (net.Conn, error) {
+// buildDialContext returns a DialContext that consults the internal IP cache
+// before dialling, trying each cached address in order. Falls back to the raw
+// hostname (OS resolver) when the cache is empty.
+func (x *XTransport) buildDialContext() func(context.Context, string, string) (net.Conn, error) {
+	timeout := x.timeout // capture by value for closure safety
 	return func(ctx context.Context, network, addrStr string) (net.Conn, error) {
 		host, port := ExtractHostAndPort(addrStr, stamps.DefaultPort)
 
-		// formatEndpoint turns an optional IP into a "host:port" string.
-		// If ip is nil we fall through to the original hostname so that
-		// the OS resolver is used as a last resort.
-		formatEndpoint := func(ip net.IP) string {
+		endpoint := func(ip net.IP) string {
 			if ip != nil {
 				if v4 := ip.To4(); v4 != nil {
 					return v4.String() + ":" + strconv.Itoa(port)
 				}
 				return "[" + ip.String() + "]:" + strconv.Itoa(port)
 			}
-			// Preserve IPv6-literal hostnames in the address string.
 			if parsed := ParseIP(host); parsed != nil && parsed.To4() == nil {
 				return "[" + parsed.String() + "]:" + strconv.Itoa(port)
 			}
@@ -393,85 +429,81 @@ func (x *XTransport) buildDialContext(timeout time.Duration) func(context.Contex
 		cachedIPs, _, _ := x.loadCachedIPs(host)
 		targets := make([]string, 0, max(len(cachedIPs), 1))
 		for _, ip := range cachedIPs {
-			targets = append(targets, formatEndpoint(ip))
+			targets = append(targets, endpoint(ip))
 		}
 		if len(targets) == 0 {
-			dlog.Debugf("[%s] IP address was not cached in DialContext", host)
-			targets = append(targets, formatEndpoint(nil))
-		}
-
-		dial := func(address string) (net.Conn, error) {
-			if x.proxyDialer == nil {
-				d := &net.Dialer{
-					Timeout:   timeout,
-					KeepAlive: x.keepAlive,
-					// DualStack (Happy Eyeballs) for resilient dual-stack connects.
-					DualStack: true,
-				}
-				return d.DialContext(ctx, network, address)
-			}
-			return (*x.proxyDialer).Dial(network, address)
+			dlog.Debugf("[%s] IP not in cache, falling back to hostname dial", host)
+			targets = append(targets, endpoint(nil))
 		}
 
 		var lastErr error
 		for i, target := range targets {
-			conn, err := dial(target)
+			var conn net.Conn
+			var err error
+			if x.proxyDialer == nil {
+				d := &net.Dialer{
+					Timeout:   timeout,
+					KeepAlive: x.keepAlive,
+					DualStack: true,
+				}
+				conn, err = d.DialContext(ctx, network, target)
+			} else {
+				conn, err = (*x.proxyDialer).Dial(network, target)
+			}
 			if err == nil {
 				return conn, nil
 			}
 			lastErr = err
 			if i < len(targets)-1 {
-				dlog.Debugf("Dial attempt using [%s] failed: %v", target, err)
+				dlog.Debugf("Dial attempt [%s] failed: %v", target, err)
 			}
 		}
 		return nil, lastErr
 	}
 }
 
-// buildH3DialFunc returns the QUIC dial function used by the HTTP/3 transport.
-// It mirrors buildDialContext's cache-first approach but uses UDP sockets.
-func (x *XTransport) buildH3DialFunc(tlsCfg *tls.Config) func(context.Context, string, *tls.Config, *quic.Config) (*quic.Conn, error) {
+// buildH3DialFunc returns the QUIC dial function for the HTTP/3 transport.
+// It mirrors buildDialContext's cache-first strategy over UDP sockets and
+// clones the shared TLS config per connection to set ServerName race-free.
+func (x *XTransport) buildH3DialFunc() func(context.Context, string, *tls.Config, *quic.Config) (*quic.Conn, error) {
 	return func(ctx context.Context, addrStr string, _ *tls.Config, cfg *quic.Config) (*quic.Conn, error) {
-		dlog.Debugf("Dialing for H3: [%v]", addrStr)
+		dlog.Debugf("H3 dial: [%v]", addrStr)
 		host, port := ExtractHostAndPort(addrStr, stamps.DefaultPort)
 
-		type udpTarget struct {
-			addr    string
-			network string
-		}
+		type udpTarget struct{ addr, network string }
 
-		buildAddr := func(ip net.IP) udpTarget {
+		udpEndpoint := func(ip net.IP) udpTarget {
 			if ip != nil {
 				if v4 := ip.To4(); v4 != nil {
-					return udpTarget{addr: v4.String() + ":" + strconv.Itoa(port), network: "udp4"}
+					return udpTarget{v4.String() + ":" + strconv.Itoa(port), "udp4"}
 				}
-				return udpTarget{addr: "[" + ip.String() + "]:" + strconv.Itoa(port), network: "udp6"}
+				return udpTarget{"[" + ip.String() + "]:" + strconv.Itoa(port), "udp6"}
 			}
-			network, addr := "udp4", host
+			nw, addr := "udp4", host
 			if parsed := ParseIP(host); parsed != nil {
 				if parsed.To4() == nil {
-					network, addr = "udp6", "["+parsed.String()+"]"
+					nw, addr = "udp6", "["+parsed.String()+"]"
 				} else {
 					addr = parsed.String()
 				}
 			} else if x.useIPv6 {
 				if x.useIPv4 {
-					network = "udp"
+					nw = "udp"
 				} else {
-					network = "udp6"
+					nw = "udp6"
 				}
 			}
-			return udpTarget{addr: addr + ":" + strconv.Itoa(port), network: network}
+			return udpTarget{addr + ":" + strconv.Itoa(port), nw}
 		}
 
 		cachedIPs, _, _ := x.loadCachedIPs(host)
 		targets := make([]udpTarget, 0, max(len(cachedIPs), 1))
 		for _, ip := range cachedIPs {
-			targets = append(targets, buildAddr(ip))
+			targets = append(targets, udpEndpoint(ip))
 		}
 		if len(targets) == 0 {
-			dlog.Debugf("[%s] IP address was not cached in H3 context", host)
-			targets = append(targets, buildAddr(nil))
+			dlog.Debugf("[%s] IP not in cache for H3 dial", host)
+			targets = append(targets, udpEndpoint(nil))
 		}
 
 		var lastErr error
@@ -480,7 +512,7 @@ func (x *XTransport) buildH3DialFunc(tlsCfg *tls.Config) func(context.Context, s
 			if err != nil {
 				lastErr = err
 				if i < len(targets)-1 {
-					dlog.Debugf("H3: failed to resolve [%s] on %s: %v", t.addr, t.network, err)
+					dlog.Debugf("H3: resolve [%s]/%s failed: %v", t.addr, t.network, err)
 				}
 				continue
 			}
@@ -488,20 +520,19 @@ func (x *XTransport) buildH3DialFunc(tlsCfg *tls.Config) func(context.Context, s
 			if err != nil {
 				lastErr = err
 				if i < len(targets)-1 {
-					dlog.Debugf("H3: failed to listen for [%s] on %s: %v", t.addr, t.network, err)
+					dlog.Debugf("H3: listen [%s]/%s failed: %v", t.addr, t.network, err)
 				}
 				continue
 			}
-			// Clone the TLS config so we can set ServerName without a data race.
-			cfg2 := tlsCfg.Clone()
-			cfg2.ServerName = host
-			conn, err := quic.DialEarly(ctx, udpConn, udpAddr, cfg2, cfg)
+			// Clone to set ServerName per-connection without a data race.
+			tlsCfg := x.tlsClientConfig.Clone()
+			tlsCfg.ServerName = host
+			conn, err := quic.DialEarly(ctx, udpConn, udpAddr, tlsCfg, cfg)
 			if err != nil {
-				// Close the UDP socket on failure to avoid fd leaks.
 				_ = udpConn.Close()
 				lastErr = err
 				if i < len(targets)-1 {
-					dlog.Debugf("H3: dialing [%s] via %s failed: %v", t.addr, t.network, err)
+					dlog.Debugf("H3: dial [%s]/%s failed: %v", t.addr, t.network, err)
 				}
 				continue
 			}
@@ -511,8 +542,9 @@ func (x *XTransport) buildH3DialFunc(tlsCfg *tls.Config) func(context.Context, s
 	}
 }
 
-// buildTLSConfig constructs a *tls.Config that reflects all user preferences
-// (root CA, client cert, session tickets, cipher ordering).
+// buildTLSConfig constructs a *tls.Config that reflects all user preferences.
+// The system cert pool is fetched once here; callers should Clone() the result
+// if they need per-connection mutation (e.g. ServerName).
 func (x *XTransport) buildTLSConfig() *tls.Config {
 	cfg := &tls.Config{}
 
@@ -521,8 +553,8 @@ func (x *XTransport) buildTLSConfig() *tls.Config {
 	}
 
 	certPool, certPoolErr := x509.SystemCertPool()
-	creds := x.tlsClientCreds
 
+	creds := x.tlsClientCreds
 	if creds.rootCA != "" {
 		if certPool == nil {
 			dlog.Fatalf("Additional CAs not supported on this platform: %v", certPoolErr)
@@ -535,7 +567,7 @@ func (x *XTransport) buildTLSConfig() *tls.Config {
 	}
 
 	if certPool != nil {
-		// Pin Let's Encrypt ISRG Root X1 for systems that ship without it.
+		// Embed Let's Encrypt ISRG Root X1 for OS trust stores that lack it.
 		certPool.AppendCertsFromPEM(isrgRootX1PEM)
 		cfg.RootCAs = certPool
 	}
@@ -552,14 +584,11 @@ func (x *XTransport) buildTLSConfig() *tls.Config {
 	if x.tlsDisableSessionTickets {
 		cfg.SessionTicketsDisabled = true
 	}
-
 	if x.tlsPreferRSA {
-		// Force TLS 1.2 so that RSA key exchange is actually available;
-		// TLS 1.3 mandates ECDHE and ignores CipherSuites entirely.
+		// TLS 1.3 ignores CipherSuites and mandates ECDHE; cap at 1.2 if RSA is required.
 		cfg.MaxVersion = tls.VersionTLS12
 	}
 
-	// Order cipher suites by what the hardware can accelerate.
 	if hasAESGCMHardwareSupport {
 		cfg.CipherSuites = []uint16{
 			tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
@@ -579,13 +608,12 @@ func (x *XTransport) buildTLSConfig() *tls.Config {
 			tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
 		}
 	}
-
 	return cfg
 }
 
-// isrgRootX1PEM is the Let's Encrypt ISRG Root X1 certificate in PEM form.
-// Some OS trust stores ship without it; we append it unconditionally so DoH
-// servers backed by Let's Encrypt certificates always validate.
+// isrgRootX1PEM is the Let's Encrypt ISRG Root X1 certificate.
+// Embedded here so DoH servers using Let's Encrypt TLS always validate, even
+// on OS trust stores that haven't been updated.
 var isrgRootX1PEM = []byte(`-----BEGIN CERTIFICATE-----
 MIIFazCCA1OgAwIBAgIRAIIQz7DSQONZRGPgu2OCiwAwDQYJKoZIhvcNAQELBQAw
 TzELMAkGA1UEBhMCVVMxKTAnBgNVBAoTIEludGVybmV0IFNlY3VyaXR5IFJlc2Vh
@@ -618,10 +646,9 @@ mRGunUHBcnWEvgJBQl9nJEiU0Zsnvgc/ubhPgXRR4Xq37Z0j4r7g1SgEEzwxA57d
 emyPxgcYxn/eR44/KJ4EBs+lVDR3veyJm+kXQ99b21/+jh5Xos1AnX5iItreGCc=
 -----END CERTIFICATE-----`)
 
-// ------------------------------------------------------ DNS resolution API --
+// ──────────────────────────────────── DNS resolution ────────────────────────
 
-// resolveUsingSystem delegates to the OS resolver. It filters the result to
-// only the desired address families before returning.
+// resolveUsingSystem delegates to the OS resolver with family filtering.
 func (x *XTransport) resolveUsingSystem(host string, returnIPv4, returnIPv6 bool) ([]net.IP, time.Duration, error) {
 	ipa, err := net.LookupIP(host)
 	if returnIPv4 && returnIPv6 {
@@ -639,9 +666,15 @@ func (x *XTransport) resolveUsingSystem(host string, returnIPv4, returnIPv6 bool
 	return ips, SystemResolverIPTTL, err
 }
 
-// resolveUsingResolver sends A and/or AAAA queries to a single DNS resolver
-// over the given protocol ("udp" or "tcp") and returns the result.
-func (x *XTransport) resolveUsingResolver(proto, host, resolver string, returnIPv4, returnIPv6 bool) (ips []net.IP, ttl time.Duration, err error) {
+// resolveUsingResolver sends A and/or AAAA queries to a single DNS resolver.
+// On partial success (e.g. A succeeds, AAAA fails) it returns whatever IPs
+// were found along with the minimum observed TTL, and clears the error.
+// Each query type's error is tracked independently so A results are never
+// masked by a subsequent AAAA failure.
+func (x *XTransport) resolveUsingResolver(
+	proto, host, resolver string,
+	returnIPv4, returnIPv6 bool,
+) (ips []net.IP, ttl time.Duration, err error) {
 	tr := dns.NewTransport()
 	tr.ReadTimeout = ResolverReadTimeout
 	client := dns.Client{Transport: tr}
@@ -657,7 +690,9 @@ func (x *XTransport) resolveUsingResolver(proto, host, resolver string, returnIP
 	ctx, cancel := context.WithTimeout(context.Background(), ResolverReadTimeout)
 	defer cancel()
 
-	var rrTTL uint32
+	var minTTL uint32 = ^uint32(0) // initialise to max so first answer wins
+	var lastErr error
+
 	for _, rrType := range queryTypes {
 		msg := dns.NewMsg(fqdn(host), rrType)
 		if msg == nil {
@@ -667,9 +702,9 @@ func (x *XTransport) resolveUsingResolver(proto, host, resolver string, returnIP
 		msg.UDPSize = uint16(MaxDNSPacketSize)
 		msg.Security = true
 
-		in, _, exchangeErr := client.Exchange(ctx, msg, proto, resolver)
-		if exchangeErr != nil {
-			err = exchangeErr
+		in, _, qErr := client.Exchange(ctx, msg, proto, resolver)
+		if qErr != nil {
+			lastErr = qErr
 			continue
 		}
 		for _, answer := range in.Answer {
@@ -682,20 +717,33 @@ func (x *XTransport) resolveUsingResolver(proto, host, resolver string, returnIP
 			case dns.TypeAAAA:
 				ips = append(ips, answer.(*dns.AAAA).AAAA.Addr.AsSlice())
 			}
-			rrTTL = answer.Header().TTL
+			if rTTL := answer.Header().TTL; rTTL < minTTL {
+				minTTL = rTTL
+			}
 		}
 	}
+
 	if len(ips) > 0 {
-		ttl = time.Duration(rrTTL) * time.Second
-		err = nil // at least one record type succeeded
+		if minTTL == ^uint32(0) {
+			minTTL = 0
+		}
+		ttl = time.Duration(minTTL) * time.Second
+		return ips, ttl, nil // partial success — clear error
 	}
-	return ips, ttl, err
+	if lastErr != nil {
+		return nil, 0, lastErr
+	}
+	return nil, 0, errors.New("no records returned")
 }
 
-// resolveUsingServers iterates over resolvers with exponential back-off retry.
-// On the first success it moves the successful resolver to the front of the
-// slice so future calls hit it first (self-healing affinity).
-func (x *XTransport) resolveUsingServers(proto, host string, resolvers []string, returnIPv4, returnIPv6 bool) (ips []net.IP, ttl time.Duration, err error) {
+// resolveUsingServers tries each resolver in order with exponential back-off.
+// On first success the winning resolver is promoted to index 0 (self-healing
+// affinity) so subsequent calls avoid latency from slower resolvers.
+func (x *XTransport) resolveUsingServers(
+	proto, host string,
+	resolvers []string,
+	returnIPv4, returnIPv6 bool,
+) (ips []net.IP, ttl time.Duration, err error) {
 	if len(resolvers) == 0 {
 		return nil, 0, errors.New("empty resolver list")
 	}
@@ -722,7 +770,7 @@ func (x *XTransport) resolveUsingServers(proto, host string, resolvers []string,
 				delay = min(delay*2, resolverRetryMaxBackoff)
 			}
 		}
-		dlog.Infof("Unable to resolve [%s] using resolver [%s] (%s): %v", host, resolver, proto, lastErr)
+		dlog.Infof("Unable to resolve [%s] using [%s] (%s): %v", host, resolver, proto, lastErr)
 	}
 	if lastErr == nil {
 		lastErr = errors.New("no IP addresses returned")
@@ -730,11 +778,11 @@ func (x *XTransport) resolveUsingServers(proto, host string, resolvers []string,
 	return nil, 0, lastErr
 }
 
-// resolve picks the best resolution strategy available:
-//  1. Internal resolvers (when ignoreSystemDNS && internalResolverReady)
-//  2. OS system resolver (when ignoreSystemDNS is false)
-//  3. Bootstrap resolvers (fallback in all error cases)
-//  4. OS system resolver (absolute last resort when ignoreSystemDNS is true)
+// resolve selects the best resolution strategy in priority order:
+//  1. Internal resolvers (ignoreSystemDNS && internalResolverReady)
+//  2. OS system resolver (ignoreSystemDNS == false)
+//  3. Bootstrap resolvers (fallback after any primary failure)
+//  4. OS system resolver as absolute last resort (ignoreSystemDNS == true)
 func (x *XTransport) resolve(host string, returnIPv4, returnIPv6 bool) (ips []net.IP, ttl time.Duration, err error) {
 	protos := []string{"udp", "tcp"}
 	if x.mainProto == "tcp" {
@@ -756,33 +804,42 @@ func (x *XTransport) resolve(host string, returnIPv4, returnIPv6 bool) (ips []ne
 	} else {
 		ips, ttl, err = x.resolveUsingSystem(host, returnIPv4, returnIPv6)
 		if err != nil {
-			err = fmt.Errorf("system DNS not usable: %w", err)
+			err = fmt.Errorf("system DNS: %w", err)
 			dlog.Notice(err)
 		} else {
 			return ips, ttl, nil
 		}
 	}
 
-	// Primary strategy failed — try bootstrap resolvers.
+	// Primary strategy failed — try bootstrap resolvers over each protocol.
 	for _, proto := range protos {
-		dlog.Noticef("Resolving [%s] using bootstrap resolvers over %s", host, proto)
+		dlog.Noticef("Resolving [%s] via bootstrap resolvers over %s", host, proto)
 		ips, ttl, err = x.resolveUsingServers(proto, host, x.bootstrapResolvers, returnIPv4, returnIPv6)
 		if err == nil {
 			return ips, ttl, nil
 		}
 	}
 
-	// Absolute last resort when ignoring system DNS.
+	// Absolute last resort: OS resolver (only when ignoreSystemDNS is true).
 	if x.ignoreSystemDNS {
-		dlog.Noticef("Bootstrap resolvers didn't respond — trying system resolver as last resort")
+		dlog.Noticef("Bootstrap resolvers failed — falling back to system resolver for [%s]", host)
 		ips, ttl, err = x.resolveUsingSystem(host, returnIPv4, returnIPv6)
 	}
 	return ips, ttl, err
 }
 
-// resolveAndUpdateCache resolves host if necessary and stores the result in the
-// cache. It is a no-op when a proxy dialer or proxy function is configured
-// (the proxy handles name resolution), or when host is already an IP literal.
+// hostResolveMu returns the per-host mutex used to serialise concurrent
+// resolutions for the same hostname.
+func (x *XTransport) hostResolveMu(host string) *sync.Mutex {
+	v, _ := x.resolveMu.LoadOrStore(host, &sync.Mutex{})
+	return v.(*sync.Mutex)
+}
+
+// resolveAndUpdateCache resolves host if the cache is empty or expired and
+// stores the result. Concurrent callers for the same host serialise on a
+// per-host mutex so only one DNS query is in flight at a time.
+//
+// No-op when a proxy handles name resolution, or when host is an IP literal.
 func (x *XTransport) resolveAndUpdateCache(host string) error {
 	if x.proxyDialer != nil || x.httpProxyFunction != nil {
 		return nil
@@ -796,6 +853,17 @@ func (x *XTransport) resolveAndUpdateCache(host string) error {
 		return nil
 	}
 
+	// Serialise concurrent resolutions for this host.
+	mu := x.hostResolveMu(host)
+	mu.Lock()
+	defer mu.Unlock()
+
+	// Re-check after acquiring the lock; another goroutine may have resolved.
+	cachedIPs, expired, _ = x.loadCachedIPs(host)
+	if len(cachedIPs) > 0 && !expired {
+		return nil
+	}
+
 	x.markUpdatingCachedIP(host)
 
 	ips, ttl, err := x.resolve(host, x.useIPv4, x.useIPv6)
@@ -804,10 +872,8 @@ func (x *XTransport) resolveAndUpdateCache(host string) error {
 	}
 
 	selectedIPs := ips
-
-	// Grace period: use stale cache entry rather than failing outright.
 	if (err != nil || len(selectedIPs) == 0) && len(cachedIPs) > 0 {
-		dlog.Noticef("Using stale [%v] cached address for a grace period", host)
+		dlog.Noticef("Using stale cached address for [%v] (grace period)", host)
 		selectedIPs = cachedIPs
 		ttl = ExpiredCachedIPGraceTTL
 		err = nil
@@ -833,14 +899,14 @@ func (x *XTransport) resolveAndUpdateCache(host string) error {
 	return nil
 }
 
-// --------------------------------------------------------- public HTTP API --
+// ─────────────────────────────────────────── HTTP API ───────────────────────
 
-// Fetch performs a single HTTP request using method against url. When body is
-// non-nil a POST-like body is attached; when compress is true the request
-// advertises gzip and the response is transparently decompressed.
+// Fetch performs a single HTTP request. When body is non-nil it is sent as the
+// request body. When compress is true the request advertises gzip and the
+// response is transparently decompressed.
 //
-// It returns (responseBody, statusCode, tlsConnectionState, rtt, error).
-// An error is returned for any non-2xx status code.
+// Returns (body, statusCode, tlsState, rtt, error).
+// Non-2xx responses are returned as errors.
 func (x *XTransport) Fetch(
 	method string,
 	url *url.URL,
@@ -862,27 +928,36 @@ func (x *XTransport) Fetch(
 	host, port := ExtractHostAndPort(url.Host, 443)
 	hasAltSupport := false
 
-	// Select transport: HTTP/3 probe mode OR cached Alt-Svc record.
+	// Select HTTP/3 transport when appropriate.
 	if x.h3Transport != nil {
 		if x.http3Probe {
 			client.Transport = x.h3Transport
-			dlog.Debugf("Probing HTTP/3 transport for [%s]", url.Host)
+			dlog.Debugf("Probing HTTP/3 for [%s]", url.Host)
 		} else {
 			x.altSupport.RLock()
-			altPort, inCache := x.altSupport.cache[url.Host]
+			entry, inCache := x.altSupport.cache[url.Host]
 			x.altSupport.RUnlock()
 			if inCache {
 				hasAltSupport = true
-				if altPort > 0 && int(altPort) == port {
-					client.Transport = x.h3Transport
-					dlog.Debugf("Using HTTP/3 transport for [%s]", url.Host)
+				// Honour positive cache entries; skip expired negative entries.
+				positiveAndMatches := entry.port > 0 && int(entry.port) == port
+				negativeButExpired := entry.port == 0 && !entry.validTo.IsZero() && time.Now().After(entry.validTo)
+				if positiveAndMatches || negativeButExpired {
+					if positiveAndMatches {
+						client.Transport = x.h3Transport
+						dlog.Debugf("Using HTTP/3 for [%s]", url.Host)
+					}
+					if negativeButExpired {
+						// Negative cache expired — allow Alt-Svc re-parsing.
+						hasAltSupport = false
+					}
 				}
 			}
 		}
 	}
 
-	// Build request headers.
-	header := make(http.Header, 4)
+	// Assemble request headers.
+	header := make(http.Header, 5)
 	header.Set("User-Agent", "dnscrypt-proxy")
 	header.Set("Cache-Control", "max-stale")
 	if accept != "" {
@@ -892,8 +967,7 @@ func (x *XTransport) Fetch(
 		header.Set("Content-Type", contentType)
 	}
 
-	// Append a stable body hash to GET/POST query strings so intermediate
-	// caches can distinguish requests by payload.
+	// Stable body hash lets intermediate caches distinguish POST payloads.
 	if body != nil {
 		h := sha512.Sum512(*body)
 		qs := url.Query()
@@ -908,7 +982,7 @@ func (x *XTransport) Fetch(
 	}
 
 	if err := x.resolveAndUpdateCache(host); err != nil {
-		dlog.Errorf("Unable to resolve [%v]: make sure the system resolver works, or set `bootstrap_resolvers`", host)
+		dlog.Errorf("Unable to resolve [%v]: ensure system resolver works or set bootstrap_resolvers", host)
 		return nil, 0, nil, 0, err
 	}
 
@@ -916,14 +990,19 @@ func (x *XTransport) Fetch(
 		header.Set("Accept-Encoding", "gzip")
 	}
 
+	bodyLen := 0
+	if body != nil {
+		bodyLen = len(*body)
+	}
+
 	req := &http.Request{
-		Method: method,
-		URL:    url,
-		Header: header,
-		Close:  false,
+		Method:        method,
+		URL:           url,
+		Header:        header,
+		Close:         false,
+		ContentLength: int64(bodyLen),
 	}
 	if body != nil {
-		req.ContentLength = int64(len(*body))
 		req.Body = io.NopCloser(bytes.NewReader(*body))
 	}
 
@@ -931,24 +1010,35 @@ func (x *XTransport) Fetch(
 	resp, err := client.Do(req)
 	rtt := time.Since(start)
 
-	// HTTP/3 failed — record in negative cache and retry over HTTP/2.
+	// HTTP/3 failed — write negative cache entry with expiry and retry over HTTP/2.
 	if err != nil && client.Transport == x.h3Transport {
 		if x.http3Probe {
 			dlog.Debugf("HTTP/3 probe failed for [%s]: %v — falling back to HTTP/2", url.Host, err)
 		} else {
-			dlog.Debugf("HTTP/3 connection failed for [%s]: %v — falling back to HTTP/2", url.Host, err)
+			dlog.Debugf("HTTP/3 failed for [%s]: %v — falling back to HTTP/2", url.Host, err)
 		}
 		x.altSupport.Lock()
-		x.altSupport.cache[url.Host] = 0 // negative cache
+		x.altSupport.cache[url.Host] = altSvcEntry{port: 0, validTo: time.Now().Add(altSvcNegativeTTL)}
 		x.altSupport.Unlock()
 
 		client.Transport = x.transport
 		if body != nil {
 			req.Body = io.NopCloser(bytes.NewReader(*body))
+			req.ContentLength = int64(bodyLen) // re-set for HTTP/2
 		}
 		start = time.Now()
 		resp, err = client.Do(req)
 		rtt = time.Since(start)
+	}
+
+	// Single unconditional defer to prevent double-close.
+	if resp != nil {
+		defer resp.Body.Close()
+	}
+
+	statusCode := 503
+	if resp != nil {
+		statusCode = resp.StatusCode
 	}
 
 	if err == nil {
@@ -963,18 +1053,11 @@ func (x *XTransport) Fetch(
 		x.transport.CloseIdleConnections()
 	}
 
-	statusCode := 503
-	if resp != nil {
-		defer resp.Body.Close()
-		statusCode = resp.StatusCode
-	}
-
 	if err != nil {
 		dlog.Debugf("[%s]: %v", req.URL, err)
 		return nil, statusCode, nil, rtt, err
 	}
 
-	// Parse Alt-Svc header to learn about HTTP/3 support for subsequent requests.
 	if x.h3Transport != nil && !hasAltSupport {
 		x.parseAndCacheAltSvc(url.Host, port, resp.Header)
 	}
@@ -998,19 +1081,17 @@ func (x *XTransport) Fetch(
 	return bin, statusCode, tlsState, rtt, nil
 }
 
-// parseAndCacheAltSvc inspects the Alt-Svc response header and updates the
-// altSupport cache with the HTTP/3 port for host, if found.
-// It skips parsing entirely when host is in the negative cache.
+// parseAndCacheAltSvc parses the Alt-Svc response header and stores the
+// HTTP/3 port for host. Negative cache entries are written with an expiry so
+// servers that recover are re-discovered after altSvcNegativeTTL.
 func (x *XTransport) parseAndCacheAltSvc(host string, port int, header http.Header) {
-	// Skip when the host is already in the negative cache (HTTP/3 probe failed).
-	if x.http3Probe {
-		x.altSupport.RLock()
-		altPort, inCache := x.altSupport.cache[host]
-		x.altSupport.RUnlock()
-		if inCache && altPort == 0 {
-			dlog.Debugf("Skipping Alt-Svc parsing for [%s] — previous HTTP/3 probe failed", host)
-			return
-		}
+	// Skip when the host is in a valid negative cache entry.
+	x.altSupport.RLock()
+	existing, inCache := x.altSupport.cache[host]
+	x.altSupport.RUnlock()
+	if inCache && existing.port == 0 && (existing.validTo.IsZero() || time.Now().Before(existing.validTo)) {
+		dlog.Debugf("Alt-Svc: skipping [%s] — negative cache still valid", host)
+		return
 	}
 
 	alt, found := header["Alt-Svc"]
@@ -1029,10 +1110,9 @@ outer:
 			if j >= 16 {
 				break
 			}
-			// strings.CutPrefix is idiomatic Go 1.20+; no manual HasPrefix needed.
 			if after, ok := strings.CutPrefix(strings.TrimSpace(field), `h3=":"`); ok {
 				v := strings.TrimSuffix(after, `"`)
-				if p, err := strconv.ParseUint(v, 10, 16); err == nil && p <= 65535 {
+				if p, parseErr := strconv.ParseUint(v, 10, 16); parseErr == nil && p <= 65535 {
 					altPort = uint16(p)
 					dlog.Debugf("HTTP/3 advertised for [%s] on port %d", host, altPort)
 					break outer
@@ -1042,12 +1122,15 @@ outer:
 	}
 
 	x.altSupport.Lock()
-	x.altSupport.cache[host] = altPort
-	dlog.Debugf("Caching altPort %d for [%s]", altPort, host)
+	// Positive entries carry no expiry; they persist until overwritten.
+	x.altSupport.cache[host] = altSvcEntry{port: altPort}
+	dlog.Debugf("Cached altPort %d for [%s]", altPort, host)
 	x.altSupport.Unlock()
 }
 
-// GetWithCompression performs a GET request with transparent gzip support.
+// ──────────────────────────── public query helpers ──────────────────────────
+
+// GetWithCompression performs a GET with transparent gzip decompression.
 func (x *XTransport) GetWithCompression(url *url.URL, accept string, timeout time.Duration) ([]byte, int, *tls.ConnectionState, time.Duration, error) {
 	return x.Fetch("GET", url, accept, "", nil, timeout, true)
 }
@@ -1062,8 +1145,8 @@ func (x *XTransport) Post(url *url.URL, accept, contentType string, body *[]byte
 	return x.Fetch("POST", url, accept, contentType, body, timeout, false)
 }
 
-// dohLikeQuery sends body as either a GET (RFC 8484 §4.1) or POST
-// (RFC 8484 §4.1) DNS-over-HTTPS query to url.
+// dohLikeQuery implements the shared GET/POST dispatch for DoH variants.
+// GET encodes the DNS wire-format payload as base64url per RFC 8484 §4.1.
 func (x *XTransport) dohLikeQuery(dataType string, useGet bool, url *url.URL, body []byte, timeout time.Duration) ([]byte, int, *tls.ConnectionState, time.Duration, error) {
 	if useGet {
 		qs := url.Query()
@@ -1075,7 +1158,7 @@ func (x *XTransport) dohLikeQuery(dataType string, useGet bool, url *url.URL, bo
 	return x.Post(url, dataType, dataType, &body, timeout)
 }
 
-// DoHQuery sends a standard DNS-over-HTTPS query (RFC 8484).
+// DoHQuery sends a DNS-over-HTTPS query (RFC 8484).
 func (x *XTransport) DoHQuery(useGet bool, url *url.URL, body []byte, timeout time.Duration) ([]byte, int, *tls.ConnectionState, time.Duration, error) {
 	return x.dohLikeQuery("application/dns-message", useGet, url, body, timeout)
 }
