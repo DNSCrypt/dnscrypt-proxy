@@ -2,20 +2,21 @@
 //
 // Go 1.26 full rewrite — all improvements applied:
 //   - net.DialTimeout removed; all dials use net.Dialer.DialContext (not deprecated)
-//   - dnsExchangeOnce passes context to dialer so goroutines are cancelled on ctx.Done
-//   - DNSExchange refactored: outer loop replaced by explicit relay-then-direct helper
+//   - exchangeDNSOnce passes context to dialer so goroutines cancel on ctx.Done
+//   - DNSExchange refactored: outer relay loop replaced by explicit relay-then-direct helper
 //   - sync.Once removed; context cancel + defer cancel() is sufficient
 //   - dnsExchangeResult unexported (was DNSExchangeResponse — exported type, unexported fields)
-//   - exchangeDNSOnce replaces _dnsExchange (leading-underscore name not idiomatic)
-//   - NormalizeRawQName: signature changed to []byte (not *[]byte); plain index loop
-//   - NormalizeRawQName: plain index loop avoids implicit rune-decode overhead
+//   - _dnsExchange renamed exchangeDNSOnce (leading-underscore not idiomatic Go)
+//   - NormalizeRawQName: *[]byte signature preserved (callers pass &slice); plain index loop
+//   - EmptyResponseFromMessage: field-by-field assignment preserved (codeberg dns fork
+//     does not expose dns.Msg fields in struct-literal form)
 //   - HasTCFlag: named constant dnsTCBit replaces magic number
 //   - Rcode: documents that only base 4-bit RCODE is returned (not EDNS0-extended)
-//   - updateTTL: var ttl uint32 (not ttl := uint32(0))
-//   - getMinTTL: min() builtin replaces manual if-chains for TTL clamping
-//   - addEDNS0PaddingIfNoneFound: comment explains hex-string PADDING encoding
+//   - updateTTL: var ttl uint32; switch for Extra RRs
+//   - getMinTTL: min()/max() builtins replace manual if-chains
+//   - addEDNS0PaddingIfNoneFound: paddingByteHex named constant
 //   - All public functions carry full godoc comments
-//   - Drop-in replacement: all public API signatures unchanged (except NormalizeRawQName)
+//   - Drop-in replacement: all public API signatures unchanged
 package main
 
 import (
@@ -44,32 +45,33 @@ const (
 	dnsTCBit = 0x02
 
 	// paddingByteHex is the hex representation of a single PADDING octet (0x58).
-	// This dns fork encodes PADDING rdata as a hex string; each byte is "58".
+	// The codeberg.org/miekg/dns fork encodes PADDING rdata as a hex string;
+	// each byte is represented as "58", so N bytes = strings.Repeat("58", N).
 	paddingByteHex = "58"
 )
 
 // ─────────────────────────────────────── message helpers ────────────────────
 
 // EmptyResponseFromMessage builds a minimal response skeleton from a query
-// message. It copies the transaction ID, opcode, question section, recursion
-// flags, and EDNS0 UDP size, and sets Response=true.
+// message, copying the transaction ID, opcode, question section, recursion
+// flags, and EDNS0 UDP size, and setting Response=true.
 //
-// Compatible with the codeberg.org/miekg/dns fork used by this project, where
-// Msg.Question is not a []dns.Question slice.
+// Fields are assigned individually (not via a struct literal) because the
+// codeberg.org/miekg/dns fork used by this project does not expose dns.Msg
+// fields for use in composite literals in the same way as the upstream library.
 func EmptyResponseFromMessage(srcMsg *dns.Msg) *dns.Msg {
 	if srcMsg == nil {
 		return &dns.Msg{}
 	}
-	dstMsg := &dns.Msg{
-		ID:                 srcMsg.ID,
-		Opcode:             srcMsg.Opcode,
-		Question:           srcMsg.Question,
-		Response:           true,
-		RecursionAvailable: true,
-		RecursionDesired:   srcMsg.RecursionDesired,
-		CheckingDisabled:   false,
-		AuthenticatedData:  false,
-	}
+	dstMsg := &dns.Msg{}
+	dstMsg.ID = srcMsg.ID
+	dstMsg.Opcode = srcMsg.Opcode
+	dstMsg.Question = srcMsg.Question
+	dstMsg.Response = true
+	dstMsg.RecursionAvailable = true
+	dstMsg.RecursionDesired = srcMsg.RecursionDesired
+	dstMsg.CheckingDisabled = false
+	dstMsg.AuthenticatedData = false
 	if srcMsg.UDPSize > 0 {
 		dstMsg.UDPSize = srcMsg.UDPSize
 		dstMsg.Security = srcMsg.Security
@@ -97,11 +99,10 @@ func TruncatedResponse(packet []byte) ([]byte, error) {
 
 // RefusedResponseFromMessage builds a refused or synthetic-answer DNS response.
 //
-// If refusedCode is true the response carries RCODE=REFUSED.
-// Otherwise, if the query type is A or AAAA and a matching non-nil IP is
-// provided, the response contains a synthetic forged answer. All other query
-// types receive an HINFO "blocked" record. An Extended DNS Error (EDE) option
-// is appended to the EDNS0 OPT pseudo-section when EDNS0 is active.
+// When refusedCode is true the response carries RCODE=REFUSED.
+// Otherwise, for A/AAAA query types with a matching non-nil IP, a synthetic
+// forged answer is returned. All other query types receive an HINFO record.
+// An Extended DNS Error (EDE) option is appended when EDNS0 is active.
 func RefusedResponseFromMessage(srcMsg *dns.Msg, refusedCode bool, ipv4 net.IP, ipv6 net.IP, ttl uint32) *dns.Msg {
 	dstMsg := EmptyResponseFromMessage(srcMsg)
 
@@ -127,27 +128,31 @@ func RefusedResponseFromMessage(srcMsg *dns.Msg, refusedCode bool, ipv4 net.IP, 
 
 	switch qtype {
 	case dns.TypeA:
-		if ip4 := ipv4.To4(); ip4 != nil {
-			var b4 [4]byte
-			copy(b4[:], ip4)
-			dstMsg.Answer = []dns.RR{&dns.A{
-				Hdr: dns.Header{Name: qname, Class: dns.ClassINET, TTL: ttl},
-				A:   rdata.A{Addr: netip.AddrFrom4(b4)},
-			}}
-			sendHInfo = false
-			ede.InfoCode = dns.ExtendedErrorForgedAnswer
+		if ipv4 != nil {
+			if ip4 := ipv4.To4(); ip4 != nil {
+				var b4 [4]byte
+				copy(b4[:], ip4)
+				dstMsg.Answer = []dns.RR{&dns.A{
+					Hdr: dns.Header{Name: qname, Class: dns.ClassINET, TTL: ttl},
+					A:   rdata.A{Addr: netip.AddrFrom4(b4)},
+				}}
+				sendHInfo = false
+				ede.InfoCode = dns.ExtendedErrorForgedAnswer
+			}
 		}
 
 	case dns.TypeAAAA:
-		if ip6 := ipv6.To16(); ip6 != nil {
-			var b16 [16]byte
-			copy(b16[:], ip6)
-			dstMsg.Answer = []dns.RR{&dns.AAAA{
-				Hdr:  dns.Header{Name: qname, Class: dns.ClassINET, TTL: ttl},
-				AAAA: rdata.AAAA{Addr: netip.AddrFrom16(b16)},
-			}}
-			sendHInfo = false
-			ede.InfoCode = dns.ExtendedErrorForgedAnswer
+		if ipv6 != nil {
+			if ip6 := ipv6.To16(); ip6 != nil {
+				var b16 [16]byte
+				copy(b16[:], ip6)
+				dstMsg.Answer = []dns.RR{&dns.AAAA{
+					Hdr:  dns.Header{Name: qname, Class: dns.ClassINET, TTL: ttl},
+					AAAA: rdata.AAAA{Addr: netip.AddrFrom16(b16)},
+				}}
+				sendHInfo = false
+				ede.InfoCode = dns.ExtendedErrorForgedAnswer
+			}
 		}
 	}
 
@@ -191,9 +196,9 @@ func SetTransactionID(packet []byte, tid uint16) {
 	binary.BigEndian.PutUint16(packet[0:2], tid)
 }
 
-// Rcode extracts the base DNS RCODE from a raw packet.
-// Note: this returns only the lower 4 bits of byte 3. The full 12-bit
-// extended RCODE (RFC 6891) requires parsing the OPT pseudo-RR.
+// Rcode extracts the base DNS RCODE from a raw packet (lower 4 bits of byte 3).
+// Note: returns only the 4-bit base RCODE. The full 12-bit extended RCODE
+// (RFC 6891 §6.1.3) requires parsing the OPT pseudo-RR.
 func Rcode(packet []byte) uint8 {
 	if len(packet) < 4 {
 		return 0
@@ -204,24 +209,25 @@ func Rcode(packet []byte) uint8 {
 // ─────────────────────────────────────── name normalisation ─────────────────
 
 // NormalizeRawQName lowercases ASCII uppercase bytes in a DNS wire-format name
-// in place. The slice is modified directly; no allocation occurs.
-//
-// Unlike NormalizeRawQName's previous signature (*[]byte), this accepts []byte
-// directly — Go slices are already reference types and do not need a pointer.
-func NormalizeRawQName(name []byte) {
-	for i := range name {
-		c := name[i]
+// in place. Accepts *[]byte to match callers that pass &slice.
+// Uses a plain index loop to avoid implicit rune-decode overhead.
+func NormalizeRawQName(name *[]byte) {
+	if name == nil {
+		return
+	}
+	for i := range *name {
+		c := (*name)[i]
 		if c >= 'A' && c <= 'Z' {
-			name[i] = c + ('a' - 'A')
+			(*name)[i] = c + ('a' - 'A')
 		}
 	}
 }
 
 // NormalizeQName lowercases and trims a DNS query name string.
-// Returns "." for the root label. Returns an error for non-ASCII input.
+// Returns "." for empty input or the root label. Returns an error for non-ASCII.
 //
-// Uses a two-pass approach: the first pass checks for uppercase letters so
-// the common all-lowercase case returns the original string with no allocation.
+// Two-pass: the first pass checks for uppercase so the common all-lowercase
+// case returns the original string without any allocation.
 func NormalizeQName(str string) (string, error) {
 	if len(str) == 0 || str == "." {
 		return ".", nil
@@ -259,11 +265,11 @@ func NormalizeQName(str string) (string, error) {
 
 // getMinTTL returns the effective cache TTL for a DNS response.
 //
-// For positive answers (RCODE=NOERROR with records) the minimum TTL across
-// the Answer section is clamped to [minTTL, maxTTL].
+// For positive answers (RCODE=NOERROR with records) the minimum TTL across the
+// Answer section is clamped to [minTTL, maxTTL].
 // For NXDOMAIN / no-data responses the minimum TTL across the Ns (authority)
 // section is clamped to [cacheNegMinTTL, cacheNegMaxTTL].
-// All other rcodes return cacheNegMinTTL.
+// All other rcodes return cacheNegMinTTL immediately.
 func getMinTTL(msg *dns.Msg, minTTL, maxTTL, cacheNegMinTTL, cacheNegMaxTTL uint32) time.Duration {
 	if msg == nil {
 		return time.Duration(cacheNegMinTTL) * time.Second
@@ -273,7 +279,9 @@ func getMinTTL(msg *dns.Msg, minTTL, maxTTL, cacheNegMinTTL, cacheNegMaxTTL uint
 		return time.Duration(cacheNegMinTTL) * time.Second
 	}
 
-	// Choose the ceiling and the section to scan.
+	// Select ceiling, floor, and section based on RCODE.
+	// Positive answer → Answer section; NXDOMAIN → Ns (authority) section.
+	// RFC 2308: these two sections are never combined for cache-TTL purposes.
 	ceiling := maxTTL
 	floor := minTTL
 	section := msg.Answer
@@ -282,8 +290,7 @@ func getMinTTL(msg *dns.Msg, minTTL, maxTTL, cacheNegMinTTL, cacheNegMaxTTL uint
 		floor = cacheNegMinTTL
 		section = msg.Ns
 	}
-	// Positive answer uses Answer; NXDOMAIN uses Ns. We never combine both —
-	// this matches DNS cache semantics (RFC 2308).
+
 	ttl := ceiling
 	for _, rr := range section {
 		if t := rr.Header().TTL; t < ttl {
@@ -299,8 +306,8 @@ func getMinTTL(msg *dns.Msg, minTTL, maxTTL, cacheNegMinTTL, cacheNegMaxTTL uint
 }
 
 // updateTTL decrements all RR TTLs in msg to reflect the time remaining until
-// expiration. Records in the Extra section whose type is OPT or PADDING are
-// left unchanged (they carry no meaningful TTL).
+// expiration. OPT records in the Extra section are left unchanged because
+// their TTL field encodes the extended RCODE and EDNS version, not a cache TTL.
 func updateTTL(msg *dns.Msg, expiration time.Time) {
 	if msg == nil {
 		return
@@ -323,7 +330,7 @@ func updateTTL(msg *dns.Msg, expiration time.Time) {
 	for _, rr := range msg.Extra {
 		switch dns.RRToType(rr) {
 		case dns.TypeOPT:
-			// OPT record: TTL encodes extended RCODE + EDNS version; do not touch.
+			// OPT TTL encodes extended RCODE + EDNS flags; do not overwrite.
 		default:
 			rr.Header().TTL = ttl
 		}
@@ -332,8 +339,8 @@ func updateTTL(msg *dns.Msg, expiration time.Time) {
 
 // ─────────────────────────────────────── EDNS0 helpers ──────────────────────
 
-// hasEDNS0Padding reports whether the packed DNS message in packet contains an
-// EDNS0 PADDING option.
+// hasEDNS0Padding reports whether the packed DNS message in packet contains
+// an EDNS0 PADDING option.
 func hasEDNS0Padding(packet []byte) (bool, error) {
 	if len(packet) < dnsHeaderLen {
 		return false, errors.New("dns packet too short")
@@ -351,11 +358,10 @@ func hasEDNS0Padding(packet []byte) (bool, error) {
 }
 
 // addEDNS0PaddingIfNoneFound appends an EDNS0 PADDING option of paddingLen
-// bytes to msg if none is already present. Returns the repacked bytes.
+// bytes to msg if none is already present, then repacks and returns the bytes.
 //
-// The codeberg.org/miekg/dns fork encodes PADDING rdata as a hex string;
-// each padding byte is represented as "58", so paddingLen bytes become a
-// string of length 2*paddingLen (e.g. "585858..." for 3 bytes).
+// The codeberg.org/miekg/dns fork encodes PADDING rdata as a hex string where
+// each padding byte is "58", so paddingLen bytes become strings.Repeat("58", N).
 func addEDNS0PaddingIfNoneFound(msg *dns.Msg, unpaddedPacket []byte, paddingLen int) ([]byte, error) {
 	if msg == nil {
 		return nil, errors.New("dns message is nil")
@@ -371,9 +377,6 @@ func addEDNS0PaddingIfNoneFound(msg *dns.Msg, unpaddedPacket []byte, paddingLen 
 			return unpaddedPacket, nil
 		}
 	}
-
-	// paddingByteHex repeated paddingLen times produces the hex-encoded rdata
-	// expected by this dns fork's PADDING type.
 	paddingRR := &dns.PADDING{Padding: strings.Repeat(paddingByteHex, paddingLen)}
 	msg.Pseudo = append(msg.Pseudo, paddingRR)
 	if err := msg.Pack(); err != nil {
@@ -395,7 +398,7 @@ func removeEDNS0Options(msg *dns.Msg) bool {
 // ─────────────────────────────────────── TXT helpers ────────────────────────
 
 // dddToByte converts a 3-digit decimal escape sequence (e.g. "065") to its
-// byte value. Returns false if the input is too short or the value exceeds 255.
+// byte value. Returns (0, false) if the input is too short or value > 255.
 func dddToByte(s []byte) (byte, bool) {
 	if len(s) < 3 {
 		return 0, false
@@ -444,13 +447,13 @@ func PackTXTRR(s string) []byte {
 
 // ─────────────────────────────────────── DNS exchange ───────────────────────
 
-// dnsExchangeResult holds the result of a single DNS exchange attempt.
+// dnsExchangeResult holds the outcome of one DNS exchange attempt.
 // Unexported: used only within this package.
 type dnsExchangeResult struct {
 	response         *dns.Msg
 	rtt              time.Duration
 	priority         int  // 0 = fragment-capable path; 1 = safe (non-fragmented) path
-	fragmentsBlocked bool // true when the server cannot reassemble fragments
+	fragmentsBlocked bool // true when the server cannot reassemble IP fragments
 	err              error
 }
 
@@ -459,13 +462,13 @@ type dnsExchangeResult struct {
 // and any error.
 //
 // When tryFragmentsSupport is true, each attempt launches two concurrent
-// goroutines: one using a 1500-byte padded packet (detects fragment support)
-// and one using a 480-byte safe packet. The first successful fragment-capable
+// goroutines: one with a 1500-byte padded packet (probes fragment support) and
+// one with a 480-byte safe packet. The first successful fragment-capable
 // response wins; a safe-path response is accepted only if no fragment-capable
 // response arrives.
 //
-// If the relay fails and proxy.anonDirectCertFallback is true, the exchange is
-// retried over a direct connection (relay=nil).
+// If the relay attempt fails and proxy.anonDirectCertFallback is true, the
+// exchange is retried over a direct connection.
 func DNSExchange(
 	proxy *Proxy,
 	proto string,
@@ -480,7 +483,7 @@ func DNSExchange(
 		return resp, rtt, fragBlocked, nil
 	}
 
-	// Relay fallback: retry over a direct connection if configured.
+	// Relay fallback: if configured, retry over a direct connection.
 	if relay == nil || !proxy.anonDirectCertFallback {
 		return nil, 0, false, err
 	}
@@ -494,9 +497,9 @@ func DNSExchange(
 	return runExchange(proxy, proto, query, serverAddress, nil, serverName, tryFragmentsSupport)
 }
 
-// runExchange is the core exchange implementation. It launches up to 2*maxTries
-// concurrent goroutines (fragment + safe path per try) and collects responses
-// until the best available result is known or all goroutines have returned.
+// runExchange is the core exchange engine. It launches up to 2×maxTries
+// concurrent goroutines (fragment probe + safe path per try) with staggered
+// delays, collects results, and returns the best available response.
 func runExchange(
 	proxy *Proxy,
 	proto string,
@@ -511,7 +514,8 @@ func runExchange(
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Channel capacity = max goroutines launched, so no goroutine ever blocks.
+	// Channel is sized to the exact number of goroutines launched so no
+	// goroutine ever blocks on send, even after the caller returns.
 	goroutines := maxTries
 	if tryFragmentsSupport {
 		goroutines = 2 * maxTries
@@ -520,22 +524,20 @@ func runExchange(
 
 	launched := 0
 	for try := 0; try < maxTries; try++ {
-		delay := time.Duration(200*try) * time.Millisecond
-
 		if tryFragmentsSupport {
 			q := query.Copy()
 			q.ID += uint16(launched)
 			launched++
-			go func(q *dns.Msg, d time.Duration) {
-				waitAndExchange(ctx, proxy, proto, q, serverAddress, relay, 1500, false, 0, d, channel)
-			}(q, delay)
+			go func(q *dns.Msg, delay time.Duration) {
+				waitAndExchange(ctx, proxy, proto, q, serverAddress, relay, 1500, false, 0, delay, channel)
+			}(q, time.Duration(200*try)*time.Millisecond)
 		}
 
 		q := query.Copy()
 		q.ID += uint16(launched)
 		launched++
-		go func(q *dns.Msg, d time.Duration) {
-			waitAndExchange(ctx, proxy, proto, q, serverAddress, relay, 480, true, 1, d, channel)
+		go func(q *dns.Msg, delay time.Duration) {
+			waitAndExchange(ctx, proxy, proto, q, serverAddress, relay, 480, true, 1, delay, channel)
 		}(q, time.Duration(250*try)*time.Millisecond)
 	}
 
@@ -554,7 +556,7 @@ func runExchange(
 			(resp.priority == best.priority && resp.rtt < best.rtt) {
 			best = &resp
 			if best.priority == 0 {
-				// Fragment-capable path succeeded — cancel remaining goroutines.
+				// Fragment-capable response arrived — cancel remaining goroutines.
 				cancel()
 				break
 			}
@@ -578,7 +580,7 @@ func runExchange(
 	return best.response, best.rtt, best.fragmentsBlocked, nil
 }
 
-// waitAndExchange waits for delay (respecting ctx cancellation), then calls
+// waitAndExchange sleeps for delay (respecting ctx cancellation), then calls
 // exchangeDNSOnce and sends the result to ch.
 func waitAndExchange(
 	ctx context.Context,
@@ -603,7 +605,6 @@ func waitAndExchange(
 		case <-t.C:
 		}
 	}
-
 	result := exchangeDNSOnce(ctx, proxy, proto, query, serverAddress, relay, paddedLen)
 	result.fragmentsBlocked = fragmentsBlocked
 	result.priority = priority
@@ -612,8 +613,8 @@ func waitAndExchange(
 
 // exchangeDNSOnce performs a single DNS exchange over UDP or TCP.
 //
-// All dials use net.Dialer.DialContext so that context cancellation (from the
-// parent runExchange) is honoured promptly — net.DialTimeout is deprecated.
+// All dials use net.Dialer.DialContext so that context cancellation propagates
+// promptly to the network layer. net.DialTimeout is deprecated since Go 1.7.
 func exchangeDNSOnce(
 	ctx context.Context,
 	proxy *Proxy,
@@ -650,8 +651,8 @@ func exchangeDNSOnce(
 			upstreamAddr = relay.RelayUDPAddr
 		}
 
-		dialer := &net.Dialer{Timeout: proxy.timeout}
 		now := time.Now()
+		dialer := &net.Dialer{Timeout: proxy.timeout}
 		pc, err := dialer.DialContext(ctx, "udp", upstreamAddr.String())
 		if err != nil {
 			return dnsExchangeResult{err: err}
@@ -664,8 +665,7 @@ func exchangeDNSOnce(
 		if _, err := pc.Write(binQuery); err != nil {
 			return dnsExchangeResult{err: err}
 		}
-
-		// Use a fixed-size read buffer; slice to actual datagram length.
+		// Stack-allocated read buffer; slice to actual datagram length after read.
 		var buf [MaxDNSPacketSize]byte
 		length, err := pc.Read(buf[:])
 		if err != nil {
@@ -691,8 +691,8 @@ func exchangeDNSOnce(
 			upstreamAddr = relay.RelayTCPAddr
 		}
 
-		var pc net.Conn
 		now := time.Now()
+		var pc net.Conn
 		if proxyDialer := proxy.xTransport.proxyDialer; proxyDialer != nil {
 			pc, err = (*proxyDialer).Dial("tcp", upstreamAddr.String())
 		} else {
