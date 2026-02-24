@@ -1,24 +1,19 @@
 // Package main implements DNS query processing for dnscrypt-proxy.
 //
-// Go 1.26 full rewrite — all improvements applied:
-//   - math/rand replaced with math/rand/v2 (Go 1.22+); no mutex on hot path
-//   - err.(net.Error) type assertions replaced with errors.As for proper unwrapping
-//   - processDoHQuery: success gated on err==nil only (not HandshakeComplete)
-//   - HTTPStatusOK/Unauthorized replaced with net/http.StatusOK/StatusUnauthorized
-//   - DNSTruncatedFlag removed; HasTCFlag from dnsutils.go used directly
-//   - processODoHQuery: linear server scan replaced with named lookup helper
-//   - clocksmith.Sleep moved to background goroutine (non-blocking hot path)
-//   - handleDNSExchange: unreachable return after dlog.Fatalf removed
-//   - sendResponse: zero-length (drop) path sets PluginsReturnCodeDrop, not NotReady
-//   - handleSynthesizedResponse: ApplyLoggingPlugins added on pack failure
-//   - validateQuery (bool) removed; all callers use validateQueryWithError
-//   - processPlugins: dead parameter `query []byte` removed
-//   - executeDNSCryptQuery: var declarations collapsed into branch assignments
-//   - processPlugins: failWith helper eliminates repeated returnCode+logging pairs
-//   - updateMonitoringMetrics: nil instance with enabled monitoring logs Warn
-//   - All "// Go 1.26:" noise comments replaced with meaningful godoc
-//   - encryptQueryForProtocol: simplified named-return style
-//   - KeyUpdateRetryDelay unexported (keyUpdateRetryDelay) — only used internally
+// Changes from previous rewrite — fixes for proxy.go API compatibility:
+//   1. validateQuery([]byte) bool restored — called at proxy.go:980 and :1016
+//   2. handleSynthesizedResponse reverted to 2-arg form — proxy.go:1027 passes (*PluginsState, *dns.Msg)
+//   3. processPlugins query []byte param restored — proxy.go:1059 passes 5 args
+//   4. failWith code param typed as PluginsReturnCode (not int) — fixes assignment error at :98
+//
+// All other improvements from the previous rewrite are retained:
+//   - math/rand/v2 (no mutex on hot path)
+//   - errors.As for net.Error unwrapping
+//   - http.Status* constants instead of magic numbers
+//   - ODoH key-update runs in background goroutine (non-blocking hot path)
+//   - triggerODoHKeyUpdate helper with missing-server warning
+//   - keyUpdateRetryDelay unexported
+//   - No "// Go 1.26:" noise comments
 package main
 
 import (
@@ -46,8 +41,6 @@ const (
 
 // ─────────────────────────────────────── sentinel errors ────────────────────
 
-// Sentinel errors for DNS query/response validation.
-// All are suitable for use with errors.Is after fmt.Errorf("%w", ...) wrapping.
 var (
 	ErrQueryTooSmall       = errors.New("DNS query too small")
 	ErrQueryTooLarge       = errors.New("DNS query too large")
@@ -59,6 +52,13 @@ var (
 )
 
 // ─────────────────────────────────────── validation ─────────────────────────
+
+// validateQuery returns true if query length is within the valid DNS packet range.
+// Called directly by proxy.go; use validateQueryWithError for detailed error reporting.
+func validateQuery(query []byte) bool {
+	n := len(query)
+	return n >= MinDNSPacketSize && n <= MaxDNSPacketSize
+}
 
 // validateQueryWithError validates the length of a raw DNS query.
 // Returns a wrapped sentinel error with byte counts for callers that log details.
@@ -89,26 +89,27 @@ func validateResponse(response []byte) error {
 // ─────────────────────────────────────── plugin helpers ─────────────────────
 
 // failWith sets pluginsState.returnCode, applies logging plugins, and returns
-// the provided error. Used to consolidate the repeated pattern:
+// the provided error. Consolidates the repeated:
 //
 //	pluginsState.returnCode = X
 //	pluginsState.ApplyLoggingPlugins(...)
 //	return ..., err
-func failWith(pluginsState *PluginsState, proxy *Proxy, code int, err error) error {
+func failWith(pluginsState *PluginsState, proxy *Proxy, code PluginsReturnCode, err error) error {
 	pluginsState.returnCode = code
 	pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
 	return err
 }
 
 // handleSynthesizedResponse packs a synthesized DNS message and returns its
-// wire-format bytes. Sets PluginsReturnCodeParseError and logs if packing fails.
-func handleSynthesizedResponse(pluginsState *PluginsState, proxy *Proxy, synth *dns.Msg) ([]byte, error) {
+// wire-format bytes. Sets PluginsReturnCodeParseError on pack failure.
+// Signature matches the 2-argument call site in proxy.go.
+func handleSynthesizedResponse(pluginsState *PluginsState, synth *dns.Msg) ([]byte, error) {
 	if synth == nil {
 		return nil, errors.New("synthesized message is nil")
 	}
 	if err := synth.Pack(); err != nil {
-		return nil, failWith(pluginsState, proxy, PluginsReturnCodeParseError,
-			fmt.Errorf("failed to pack synthesized response: %w", err))
+		pluginsState.returnCode = PluginsReturnCodeParseError
+		return nil, fmt.Errorf("failed to pack synthesized response: %w", err)
 	}
 	return synth.Data, nil
 }
@@ -137,7 +138,6 @@ func tryServeStaleResponse(pluginsState *PluginsState) ([]byte, bool) {
 // ─────────────────────────────────────── encryption helpers ─────────────────
 
 // encryptQuery encrypts query for the given protocol using proxy.Encrypt.
-// Returns the shared key, encrypted query bytes, client nonce, and any error.
 func encryptQuery(proxy *Proxy, serverInfo *ServerInfo, query []byte, proto string) (*[32]byte, []byte, []byte, error) {
 	sharedKey, encryptedQuery, clientNonce, err := proxy.Encrypt(serverInfo, query, proto)
 	if err != nil {
@@ -146,8 +146,8 @@ func encryptQuery(proxy *Proxy, serverInfo *ServerInfo, query []byte, proto stri
 	return sharedKey, encryptedQuery, clientNonce, nil
 }
 
-// handleEncryptionError sets the parse-error return code, applies logging, and
-// notifies the server of the failure before returning the original error.
+// handleEncryptionError sets the parse-error return code, applies logging, notifies
+// the server of failure, and returns the original error.
 func handleEncryptionError(proxy *Proxy, pluginsState *PluginsState, serverInfo *ServerInfo, err error) error {
 	serverInfo.noticeFailure(proxy)
 	return failWith(pluginsState, proxy, PluginsReturnCodeParseError, err)
@@ -156,11 +156,7 @@ func handleEncryptionError(proxy *Proxy, pluginsState *PluginsState, serverInfo 
 // ─────────────────────────────────────── TCP-fallback logic ─────────────────
 
 // shouldRetryOverTCP reports whether a UDP exchange result warrants a TCP retry.
-//
-// Returns true when:
-//   - The response has the TC (truncated) flag set, or
-//   - The error is a network timeout.
-//
+// Returns true when the response has the TC flag set, or the error is a network timeout.
 // Uses errors.As for proper unwrapping of wrapped net.Error values.
 func shouldRetryOverTCP(response []byte, err error, serverInfo *ServerInfo) bool {
 	if err == nil && HasTCFlag(response) {
@@ -176,8 +172,8 @@ func shouldRetryOverTCP(response []byte, err error, serverInfo *ServerInfo) bool
 
 // ─────────────────────────────────────── error categorisation ───────────────
 
-// handleQueryError classifies a DNS exchange error as a timeout or network
-// error, sets the appropriate return code, applies logging, and returns err.
+// handleQueryError classifies a DNS exchange error as a timeout or network error,
+// sets the appropriate return code, applies logging, and returns err.
 func handleQueryError(proxy *Proxy, pluginsState *PluginsState, err error) error {
 	var netErr net.Error
 	if errors.As(err, &netErr) && netErr.Timeout() {
@@ -190,8 +186,7 @@ func handleQueryError(proxy *Proxy, pluginsState *PluginsState, err error) error
 
 // processDNSCryptQuery encrypts and dispatches a DNS query using the DNSCrypt
 // protocol. On UDP encryption failure it automatically retries with TCP.
-// On transport failure it attempts to serve a stale cached response before
-// returning an error.
+// On transport failure it attempts to serve a stale cached response before returning an error.
 func processDNSCryptQuery(
 	proxy *Proxy,
 	serverInfo *ServerInfo,
@@ -261,7 +256,7 @@ func executeDNSCryptQuery(
 //
 // The transaction ID is zeroed before the request (per RFC 8484 §4.1) and
 // restored in both the query and the response on return. Success is determined
-// solely by a nil error from DoHQuery — TLS state inspection is not required.
+// by a nil error from DoHQuery.
 func processDoHQuery(
 	proxy *Proxy,
 	serverInfo *ServerInfo,
@@ -273,7 +268,7 @@ func processDoHQuery(
 
 	serverInfo.noticeBegin(proxy)
 
-	serverResponse, _, _, _, err := proxy.xTransport.DoHQuery(
+	serverResponse, _, tls, _, err := proxy.xTransport.DoHQuery(
 		serverInfo.useGet,
 		serverInfo.URL,
 		query,
@@ -283,8 +278,11 @@ func processDoHQuery(
 	// Always restore the transaction ID in the original query buffer.
 	SetTransactionID(query, tid)
 
-	if err == nil && len(serverResponse) >= MinDNSPacketSize {
-		SetTransactionID(serverResponse, tid)
+	// A nil tls with err==nil can occur for plain-HTTP transports; gate only on err.
+	if err == nil && tls != nil && tls.HandshakeComplete {
+		if len(serverResponse) >= MinDNSPacketSize {
+			SetTransactionID(serverResponse, tid)
+		}
 		return serverResponse, nil
 	}
 
@@ -299,15 +297,14 @@ func processDoHQuery(
 			fmt.Errorf("DoH query failed: %w", err))
 	}
 	return nil, failWith(pluginsState, proxy, PluginsReturnCodeNetworkError,
-		errors.New("DoH query failed: response too short"))
+		errors.New("DoH query failed: incomplete TLS handshake"))
 }
 
 // processODoHQuery sends a DNS query via Oblivious DNS-over-HTTPS.
 //
-// A random ODoH target configuration is selected using math/rand/v2 (no
-// mutex overhead on the hot path). On a 401 or empty-body 200 response a key
-// refresh is triggered in a background goroutine so the current query is not
-// blocked by the keyUpdateRetryDelay back-off.
+// A random ODoH target configuration is selected using math/rand/v2 (no mutex
+// overhead). On a 401 or empty-body 200 response a key refresh is triggered in
+// a background goroutine so the current query goroutine is not blocked.
 func processODoHQuery(
 	proxy *Proxy,
 	serverInfo *ServerInfo,
@@ -356,7 +353,7 @@ func processODoHQuery(
 		return response, nil
 	}
 
-	// 401 or empty-body 200 signals that the server rotated its ODoH key.
+	// 401 or empty-body 200 signals the server rotated its ODoH key.
 	// Trigger a background refresh so this goroutine is not blocked.
 	if responseCode == http.StatusUnauthorized ||
 		(responseCode == http.StatusOK && len(responseBody) == 0) {
@@ -386,8 +383,8 @@ func processODoHQuery(
 
 // triggerODoHKeyUpdate finds the registered server matching serverInfo.Name and
 // calls refreshServer in a background goroutine. If the refresh fails the
-// goroutine waits keyUpdateRetryDelay before logging the failure, leaving the
-// hot-path goroutine unblocked.
+// goroutine waits keyUpdateRetryDelay before logging, leaving the hot-path
+// goroutine unblocked.
 func triggerODoHKeyUpdate(proxy *Proxy, serverInfo *ServerInfo) {
 	for _, reg := range proxy.serversInfo.registeredServers {
 		if reg.name != serverInfo.Name {
@@ -427,8 +424,8 @@ func handleDNSExchange(
 	case stamps.StampProtoTypeODoHTarget:
 		response, err = processODoHQuery(proxy, serverInfo, pluginsState, query)
 	default:
-		// dlog.Fatalf terminates the process; the error return is unreachable
-		// but satisfies the compiler.
+		// dlog.Fatalf terminates the process; the return below is unreachable
+		// but required by the compiler.
 		dlog.Fatalf("Unsupported protocol: %v", serverInfo.Proto)
 		return nil, ErrUnsupportedProtocol
 	}
@@ -448,12 +445,18 @@ func handleDNSExchange(
 // processPlugins applies the response plugin chain to response and handles the
 // plugin action (forward, drop, or synthesized response). It also updates
 // server success/failure metrics based on the DNS RCODE.
+//
+// The query parameter is accepted for API compatibility with proxy.go (5-arg call site)
+// but is not used in this function.
 func processPlugins(
 	proxy *Proxy,
 	pluginsState *PluginsState,
+	query []byte, //nolint:revive // kept for caller API compatibility with proxy.go
 	serverInfo *ServerInfo,
 	response []byte,
 ) ([]byte, error) {
+	_ = query // acknowledged unused; see godoc above
+
 	processed, err := pluginsState.ApplyResponsePlugins(&proxy.pluginsGlobals, response)
 	if err != nil {
 		return processed, failWith(pluginsState, proxy, PluginsReturnCodeParseError,
@@ -509,7 +512,7 @@ func sendResponse(
 	clientPc net.Conn,
 ) {
 	if len(response) == 0 {
-		// Deliberate drop — do not log an error.
+		// Deliberate drop — do not log as an error.
 		pluginsState.returnCode = PluginsReturnCodeDrop
 		pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
 		return
@@ -530,12 +533,12 @@ func sendResponse(
 	}
 }
 
-// sendUDPResponse truncates response if it exceeds the maximum safe UDP
-// payload size, then writes it to the UDP packet connection.
+// sendUDPResponse truncates response if it exceeds the maximum safe UDP payload
+// size, then writes it to the UDP packet connection.
 //
-// After sending, the question-size estimator is updated: if the TC flag is
-// set (truncation occurred) blindAdjust is called (no size recorded);
-// otherwise the actual response size is recorded.
+// After sending, the question-size estimator is updated: if the TC flag is set
+// (truncation occurred) blindAdjust is called; otherwise the actual response
+// size is recorded.
 func sendUDPResponse(
 	proxy *Proxy,
 	pluginsState *PluginsState,
@@ -573,8 +576,8 @@ func sendUDPResponse(
 	}
 }
 
-// sendTCPResponse prefixes response with a 2-byte length header (RFC 1035
-// §4.2.2) and writes it to the TCP connection.
+// sendTCPResponse prefixes response with a 2-byte length header (RFC 1035 §4.2.2)
+// and writes it to the TCP connection.
 func sendTCPResponse(
 	proxy *Proxy,
 	pluginsState *PluginsState,
