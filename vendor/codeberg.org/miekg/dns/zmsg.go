@@ -1177,6 +1177,21 @@ func (rr *NSAPPTR) unpack(s cryptobyte.String, msgBuf []byte) (err error) {
 }
 
 func (rr *NSEC3) pack(msg []byte, off int, compression map[string]uint16) (off1 int, err error) {
+	off, err = packNSEC(rr.TypeBitMap, msg, off)
+	if err != nil {
+		return off, err
+	}
+	// Only pack salt if value is not "-", i.e. empty
+	if rr.Salt != "-" {
+		off, err = pack.StringHex(rr.Salt, msg, off)
+		if err != nil {
+			return off, err
+		}
+	}
+	off, err = pack.StringBase32(rr.NextDomain, msg, off)
+	if err != nil {
+		return off, err
+	}
 	off, err = pack.Uint8(rr.Hash, msg, off)
 	if err != nil {
 		return off, err
@@ -1193,22 +1208,7 @@ func (rr *NSEC3) pack(msg []byte, off int, compression map[string]uint16) (off1 
 	if err != nil {
 		return off, err
 	}
-	// Only pack salt if value is not "-", i.e. empty
-	if rr.Salt != "-" {
-		off, err = pack.StringHex(rr.Salt, msg, off)
-		if err != nil {
-			return off, err
-		}
-	}
 	off, err = pack.Uint8(rr.HashLength, msg, off)
-	if err != nil {
-		return off, err
-	}
-	off, err = pack.StringBase32(rr.NextDomain, msg, off)
-	if err != nil {
-		return off, err
-	}
-	off, err = packNSEC(rr.TypeBitMap, msg, off)
 	if err != nil {
 		return off, err
 	}
@@ -1216,6 +1216,18 @@ func (rr *NSEC3) pack(msg []byte, off int, compression map[string]uint16) (off1 
 }
 
 func (rr *NSEC3) unpack(s cryptobyte.String, msgBuf []byte) (err error) {
+	rr.TypeBitMap, err = unpackNSEC(&s)
+	if err != nil {
+		return err
+	}
+	rr.Salt, err = unpack.StringHex(&s, int(rr.SaltLength))
+	if err != nil {
+		return err
+	}
+	rr.NextDomain, err = unpack.StringBase32(&s, int(rr.HashLength))
+	if err != nil {
+		return err
+	}
 	if !s.ReadUint8(&rr.Hash) {
 		return unpack.ErrOverflow
 	}
@@ -1228,20 +1240,8 @@ func (rr *NSEC3) unpack(s cryptobyte.String, msgBuf []byte) (err error) {
 	if !s.ReadUint8(&rr.SaltLength) {
 		return unpack.ErrOverflow
 	}
-	rr.Salt, err = unpack.StringHex(&s, int(rr.SaltLength))
-	if err != nil {
-		return err
-	}
 	if !s.ReadUint8(&rr.HashLength) {
 		return unpack.ErrOverflow
-	}
-	rr.NextDomain, err = unpack.StringBase32(&s, int(rr.HashLength))
-	if err != nil {
-		return err
-	}
-	rr.TypeBitMap, err = unpackNSEC(&s)
-	if err != nil {
-		return err
 	}
 	if !s.Empty() {
 		return unpack.Errorf("trailing record data: %s", "NSEC3")

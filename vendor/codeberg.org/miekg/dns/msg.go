@@ -204,9 +204,9 @@ func (m *Msg) Pack() error {
 	}
 
 	isPseudo := m.isPseudo()
-	counts := uint64(len(m.Question)<<48) |
-		uint64(len(m.Answer)<<32) |
-		uint64(len(m.Ns)<<16) |
+	counts := uint64(len(m.Question))<<48 |
+		uint64(len(m.Answer))<<32 |
+		uint64(len(m.Ns))<<16 |
 		uint64(len(m.Extra)+isPseudo)
 
 	off, err = pack.Uint64(counts, m.Data, off)
@@ -220,12 +220,12 @@ func (m *Msg) Pack() error {
 		compression = make(map[string]uint16, l+3) // 3 is randomly chosen, as that much rdata might be compressable...
 	}
 
-	for i := range m.Question {
-		if off, err = packQuestion(m.Question[i], m.Data, off, compression); err != nil {
+	if len(m.Question) > 0 {
+		if off, err = packQuestion(m.Question[0], m.Data, off, compression); err != nil {
 			return err
 		}
-		break // allow only one
 	}
+
 	for i := range m.Answer {
 		if _, off, err = packRR(m.Answer[i], m.Data, off, compression); err != nil {
 			return err
@@ -779,33 +779,30 @@ func (m *Msg) ReadFrom(r io.Reader) (int64, error) {
 // sections. See [ZoneParser.RRs] also.
 func (m *Msg) RRs() iter.Seq[RR] {
 	return func(yield func(RR) bool) {
-		for {
-			for i := range m.Question {
-				if !yield(m.Question[i]) {
-					return
-				}
+		for i := range m.Question {
+			if !yield(m.Question[i]) {
+				return
 			}
-			for i := range m.Answer {
-				if !yield(m.Answer[i]) {
-					return
-				}
+		}
+		for i := range m.Answer {
+			if !yield(m.Answer[i]) {
+				return
 			}
-			for i := range m.Ns {
-				if !yield(m.Ns[i]) {
-					return
-				}
+		}
+		for i := range m.Ns {
+			if !yield(m.Ns[i]) {
+				return
 			}
-			for i := range m.Extra {
-				if !yield(m.Extra[i]) {
-					return
-				}
+		}
+		for i := range m.Extra {
+			if !yield(m.Extra[i]) {
+				return
 			}
-			for i := range m.Pseudo {
-				if !yield(m.Pseudo[i]) {
-					return
-				}
+		}
+		for i := range m.Pseudo {
+			if !yield(m.Pseudo[i]) {
+				return
 			}
-			break
 		}
 	}
 }

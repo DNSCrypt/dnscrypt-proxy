@@ -92,8 +92,11 @@ func (zp *ZoneParser) generate(l dnslex.Lex) (RR, bool) {
 }
 
 type generateReader struct {
-	s  string
-	si uint16
+	lex    *dnslex.Lex
+	s      string
+	si     uint16
+	escape bool
+	eof    bool
 
 	cur   int64
 	start int64
@@ -102,12 +105,7 @@ type generateReader struct {
 
 	mod bytes.Buffer
 
-	escape bool
-
-	eof bool
-
 	file string
-	lex  *dnslex.Lex
 }
 
 func (r *generateReader) parseError(msg string, end uint16) *ParseError {

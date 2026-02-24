@@ -145,6 +145,9 @@ func (zl *Lexer) readByte() (byte, bool) {
 	return c, true
 }
 
+// Blank consumes the next token and returns false if the token was not a blacnk
+func (zl *Lexer) Blank() bool { l, _ := zl.Next(); return l.Value == Blank }
+
 func (zl *Lexer) Peek() Lex {
 	if zl.Key(kNextL) {
 		return zl.l
