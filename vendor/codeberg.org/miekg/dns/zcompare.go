@@ -9,7 +9,11 @@ import (
 
 func compare(a, b RR) int {
 	switch x := a.(type) {
+	case *TSIG:
+		return x.compare(b)
 	case *DELEG:
+		return x.compare(b)
+	case *OPT:
 		return x.compare(b)
 	case *NSEC3:
 		return x.compare(b)
@@ -161,8 +165,6 @@ func compare(a, b RR) int {
 		return x.compare(b)
 	case *ZONEMD:
 		return x.compare(b)
-	case *OPT:
-		return x.compare(b)
 	case *RESINFO:
 		return x.compare(b)
 	case *SVCB:
@@ -178,8 +180,6 @@ func compare(a, b RR) int {
 	case *AXFR:
 		return x.compare(b)
 	case *IXFR:
-		return x.compare(b)
-	case *TSIG:
 		return x.compare(b)
 	}
 	if x, ok := a.(Comparer); ok {
