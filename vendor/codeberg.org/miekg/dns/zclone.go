@@ -424,14 +424,14 @@ func (rr *NSEC3) Clone() RR {
 	return &NSEC3{
 		rr.Hdr,
 		rdata.NSEC3{
+			slices.Clone(rr.TypeBitMap),
+			rr.Salt,
+			rr.NextDomain,
 			rr.Hash,
 			rr.Flags,
 			rr.Iterations,
 			rr.SaltLength,
-			rr.Salt,
 			rr.HashLength,
-			rr.NextDomain,
-			slices.Clone(rr.TypeBitMap),
 		},
 	}
 }

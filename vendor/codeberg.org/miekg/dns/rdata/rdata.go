@@ -284,14 +284,15 @@ type NSAPPTR struct {
 
 // NSEC3 data. See RFC 5155.
 type NSEC3 struct {
+	// aligo optimized the layout to not waste bits
+	TypeBitMap []uint16 `dns:"nsec"`
+	Salt       string   `dns:"size-hex:SaltLength"`
+	NextDomain string   `dns:"size-base32:HashLength"`
 	Hash       uint8
 	Flags      uint8
 	Iterations uint16
 	SaltLength uint8
-	Salt       string `dns:"size-hex:SaltLength"`
 	HashLength uint8
-	NextDomain string   `dns:"size-base32:HashLength"`
-	TypeBitMap []uint16 `dns:"nsec"`
 }
 
 func (rd NSEC3) Len() int {
