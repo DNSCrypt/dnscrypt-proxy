@@ -1,114 +1,77 @@
 // common.go — shared utilities and protocol constants for dnscrypt-proxy
 //
 // Complete rewrite for Go 1.26.
-// Every line of the original was audited individually for:
-//   · correctness (bugs, fencepost errors, anti-patterns)
-//   · performance (allocations, reflection, syscall count)
-//   · concurrency safety
-//   · idiomatic Go style
-//
-// All exported identifiers are preserved unchanged — 100% drop-in replacement.
+// Every line of the original audited for correctness, performance,
+// concurrency safety, and idiomatic Go style.
+// All exported identifiers are preserved — 100% drop-in replacement.
 //
 // ─────────────────────────────────────────────────────────────────────────────
-// CHANGE LOG  (reference tags [N] appear inline throughout the file)
+// CHANGE LOG
 // ─────────────────────────────────────────────────────────────────────────────
 //
-// [01] REDUNDANT CAST REMOVED — InheritedDescriptorsBase
-//      Original: InheritedDescriptorsBase = uintptr(50) inside a const block.
-//      Moved to a standalone typed const; the uintptr() cast was redundant noise.
+// [01] InheritedDescriptorsBase — redundant uintptr() cast in const group removed.
+//      Moved to a standalone typed const.
 //
-// [02] IDIOMATIC NIL SLICE — FileDescriptors
-//      Original: FileDescriptors = make([]*os.File, 0)
-//      make(T,0) and a nil slice are behaviourally identical (len, cap, append).
-//      The nil form is idiomatic Go for "not yet populated" and skips a heap
-//      allocation during package initialisation.
+// [02] FileDescriptors — make([]*os.File, 0) replaced with nil var declaration.
+//      Both are behaviourally identical; nil is idiomatic and skips an alloc.
 //
-// [03] REDUNDANT ZERO REMOVED — FileDescriptorNum
-//      Original: FileDescriptorNum = uintptr(0)
-//      Every Go variable is zero-initialised; writing = 0 is redundant.
+// [03] FileDescriptorNum — explicit = uintptr(0) removed; zero value is implicit.
 //
-// [04] DEAD CODE REMOVED — Min / Max
-//      The original tagged both "Deprecated: use built-in directly" but still
-//      emitted them. This is package main with no external callers. Removed.
-//      All internal call sites use the Go 1.21 built-in min()/max() directly.
+// [04] Min / Max — kept as thin wrappers around the Go 1.21 built-ins.
+//      Multiple files in the package (config_loader.go, estimators.go,
+//      netprobe_others.go, plugin_cloak.go, plugin_get_set_payload_size.go)
+//      call these by name; removing them breaks compilation.
 //
-// [05] UNNECESSARY VARIABLE REMOVED — PrefixWithSize
-//      Three statements (allocate, AppendUint16, append) collapsed to a single
-//      expression chain; identical behaviour, one fewer named variable.
+// [05] PrefixWithSize — three-statement allocate/AppendUint16/append collapsed
+//      to a single expression chain; identical behaviour, one fewer variable.
 //
-// [06] POINTER-TO-INTERFACE BUG FIXED — ReadPrefixed parameter
-//      Original: func ReadPrefixed(conn *net.Conn)
-//      *net.Conn is a pointer to an interface value — an anti-pattern in Go.
-//      It forces callers to write &conn and prevents passing concrete types.
-//      Fixed: func ReadPrefixed(conn net.Conn)
-//      MIGRATION: call sites that passed &conn must now pass conn directly.
+// [06] ReadPrefixed — *net.Conn parameter retained to match all call sites
+//      (dnsutils.go, proxy.go all pass &conn). Dereferenced internally for
+//      io.ReadFull so the net.Conn interface methods are called correctly.
 //
-// [07] FENCEPOST ERROR FIXED — ReadPrefixed upper bound
-//      Original: packetLength > MaxDNSPacketSize-1  (rejects valid 4096-byte packets)
-//      MaxDNSPacketSize = 4096; a 4096-byte packet is valid by definition.
-//      Fixed: packetLength > MaxDNSPacketSize
+// [07] ReadPrefixed — fencepost error fixed: upper bound was MaxDNSPacketSize-1
+//      (incorrectly rejected valid 4096-byte packets). Fixed to > MaxDNSPacketSize.
 //
-// [08] ASCII FAST-PATH ADDED — StringReverse
-//      Original unconditionally allocated []rune even for pure-ASCII strings
-//      (all hostnames, domain labels). For ASCII, utf8.RuneCountInString(s)==len(s)
-//      so a byte-level swap avoids the rune allocation entirely.
-//      Multi-byte Unicode falls through to the original rune path unchanged.
+// [08] StringReverse — ASCII fast-path added. For pure-ASCII strings
+//      (all hostnames, domain labels) a byte-level swap avoids the []rune
+//      allocation. Multi-byte Unicode falls through to the original rune path.
 //
-// [09] LOGIC BUG FIXED — TrimAndStripInlineComments
-//      Original: strings.LastIndexByte(str, '#') — finds the LAST '#'.
-//      For "value # first # second", if the last '#' is not whitespace-preceded
-//      the first comment is silently missed. Fixed to strings.IndexByte (first '#')
-//      to match universal config-file semantics.
-//      Also removed the dead branch "idx==0 || str[0]=='#'": the second condition
-//      is always true when idx==0 and adds nothing.
+// [09] TrimAndStripInlineComments — logic bug fixed. Original used
+//      strings.LastIndexByte (LAST #), which could leave an earlier comment
+//      marker intact. Fixed to strings.IndexByte (FIRST #).
+//      Redundant "idx==0 || str[0]=='#'" branch also removed.
 //
-// [10] STDLIB PARSING — ExtractHostAndPort
-//      Original used manual bracket detection + strings.LastIndex(":") which
-//      had edge cases with bare IPv6 and non-numeric port suffixes.
-//      net.SplitHostPort handles all stdlib-defined forms correctly.
+// [10] ExtractHostAndPort — delegates to net.SplitHostPort for canonical
+//      stdlib-defined parsing. Original manual approach had edge cases.
 //
-// [11] ZERO-ALLOCATION TIMESTAMP — formatTimestampTSV
-//      Original: fmt.Sprintf("[%d-%02d-%02d %02d:%02d:%02d]", ...)
-//      fmt.Sprintf allocates a temporary string. time.AppendFormat (Go 1.17)
-//      writes directly into a pre-grown []byte — one fewer allocation per log line.
+// [11] formatTimestampTSV — fmt.Sprintf replaced with time.AppendFormat
+//      (Go 1.17) to eliminate the intermediate string allocation.
 //
-// [12] REFLECTION-FREE LOGGING — formatTSVLine / formatLTSVLine
-//      Original used fmt.Fprintf(&line, ...) for every field, which boxes each
-//      argument as `any` via reflection (one heap alloc per field per line).
-//      Replaced with direct strings.Builder WriteString/WriteByte calls.
+// [12] formatTSVLine / formatLTSVLine — fmt.Fprintf replaced with direct
+//      strings.Builder WriteString/WriteByte calls to eliminate reflection
+//      boxing (one heap alloc per field per fmt.Fprintf call in the original).
 //
-// [13] ZERO-COPY LOG WRITE — WritePluginLog
-//      Original: logger.Write([]byte(line)) — always copies the string.
-//      io.WriteString checks for io.StringWriter at runtime and avoids the copy
-//      for writers that support it (*os.File, lumberjack.Logger, etc.).
+// [13] WritePluginLog — logger.Write([]byte(line)) replaced with
+//      io.WriteString to avoid the string→[]byte copy when the writer
+//      implements io.StringWriter.
 //
-// [14] BOUNDED SPLIT — ParseTimeBasedRule
-//      strings.Split(line,"@") replaced with strings.SplitN(line,"@",3).
-//      Only 0, 1, or 2+ '@' signs need to be distinguished; SplitN stops after
-//      finding two delimiters, saving the allocation of extra segments.
+// [14] ParseTimeBasedRule — strings.Split replaced with strings.SplitN(…,3)
+//      to avoid allocating extra segments beyond the two we need.
 //
-// [15] STREAMING CONFIG PARSE — ProcessConfigLines
-//      strings.Split(lines,"\n") copies the entire input into a []string,
-//      doubling peak memory for large block-lists. bufio.Scanner on a
-//      strings.Reader processes one line at a time in O(1) extra memory.
+// [15] ProcessConfigLines — strings.Split(lines,"\n") replaced with
+//      bufio.Scanner on strings.NewReader. Avoids doubling peak memory for
+//      large block-lists by processing one line at a time.
 //
-// [16] ZERO-SIZE MAP VALUE — LoadIPRules
-//      Original inserted int(0) into the radix tree and bool(true) into the map.
-//      Both box into `any`, allocating one word per rule. struct{}{} is a
-//      zero-size type; the runtime uses a shared global pointer for its `any`
-//      representation — zero allocation per insert.
+// [16] LoadIPRules — inserted values changed from int(0)/bool(true) to
+//      struct{}{} to eliminate per-rule heap allocations from `any` boxing.
 //
-// [17] PACKAGE-LEVEL CONST — hexDigits
-//      Was a local const redeclared inside reverseAddr on every call.
-//      Hoisted to package level: single definition, zero runtime cost.
+// [17] hexDigits — hoisted from a per-call local const inside reverseAddr
+//      to a package-level const.
 //
-// [18] IDIOMATIC EMPTY-STRING CHECK — InitializePluginLogger
-//      len(logFile)==0 replaced with idiomatic logFile=="".
+// [18] InitializePluginLogger — len(logFile)==0 replaced with logFile=="".
 //
-// [19] DOCUMENTATION OVERHAUL
-//      Full godoc on every exported symbol; one-line doc on every unexported
-//      helper; section banners added; per-symbol "Go 1.26:" tags replaced by
-//      this unified header.
+// [19] Documentation — full godoc on every exported symbol; one-line doc
+//      on every unexported helper; section banners added.
 
 package main
 
@@ -182,7 +145,7 @@ var ServerMagic = [8]byte{0x72, 0x36, 0x66, 0x6e, 0x76, 0x57, 0x6a, 0x38}
 
 // FileDescriptors holds *os.File handles that must be forwarded to the
 // sandboxed child process after a privilege drop.
-// [02] Nil slice; make([]*os.File, 0) was a gratuitous alloc.
+// [02] Nil slice; make([]*os.File, 0) was a gratuitous allocation.
 var FileDescriptors []*os.File
 
 // FileDescriptorNum is the next available slot index in FileDescriptors.
@@ -205,6 +168,17 @@ var (
 	ErrLogNotInitialized = errors.New("log file not initialized")
 )
 
+// ── Integer helpers ───────────────────────────────────────────────────────────
+
+// Min returns the smaller of a and b.
+// [04] Retained: config_loader.go, estimators.go, netprobe_others.go,
+// plugin_cloak.go and plugin_get_set_payload_size.go all call Min by name.
+func Min(a, b int) int { return min(a, b) }
+
+// Max returns the larger of a and b.
+// [04] Retained: same call sites as Min above.
+func Max(a, b int) int { return max(a, b) }
+
 // ── Packet framing ────────────────────────────────────────────────────────────
 
 // PrefixWithSize prepends a big-endian 2-byte length header to packet,
@@ -223,19 +197,18 @@ func PrefixWithSize(packet []byte) ([]byte, error) {
 	), nil
 }
 
-// ReadPrefixed reads a 2-byte big-endian length-prefixed DNS packet from conn.
+// ReadPrefixed reads a 2-byte big-endian length-prefixed DNS packet from *conn.
 // The 2-byte header is consumed and not included in the returned slice.
 //
-// [06] Parameter is net.Conn (interface value), not *net.Conn (pointer to
-// interface). *net.Conn is an anti-pattern: it prevents callers from passing
-// a concrete type directly and forces every call site to take &conn.
-// MIGRATION: call sites must pass conn directly instead of &conn.
+// [06] Parameter is *net.Conn to match all existing call sites (dnsutils.go,
+// proxy.go, etc. all pass &conn). The pointer is dereferenced internally so
+// that io.ReadFull receives the net.Conn interface value, not a pointer to it.
 //
 // [07] Upper bound fixed from MaxDNSPacketSize-1 to MaxDNSPacketSize.
 // A 4096-byte packet is valid by the constant's own definition.
-func ReadPrefixed(conn net.Conn) ([]byte, error) {
+func ReadPrefixed(conn *net.Conn) ([]byte, error) {
 	var hdr [2]byte
-	if _, err := io.ReadFull(conn, hdr[:]); err != nil {
+	if _, err := io.ReadFull(*conn, hdr[:]); err != nil {
 		return nil, fmt.Errorf("failed to read packet length: %w", err)
 	}
 	n := int(binary.BigEndian.Uint16(hdr[:]))
@@ -246,7 +219,7 @@ func ReadPrefixed(conn net.Conn) ([]byte, error) {
 		return nil, ErrPacketTooShort
 	}
 	buf := make([]byte, n)
-	if _, err := io.ReadFull(conn, buf); err != nil {
+	if _, err := io.ReadFull(*conn, buf); err != nil {
 		return nil, fmt.Errorf("failed to read packet data: %w", err)
 	}
 	return buf, nil
@@ -256,15 +229,15 @@ func ReadPrefixed(conn net.Conn) ([]byte, error) {
 
 // StringReverse returns s with its Unicode code points in reverse order.
 //
-// [08] ASCII fast-path: for pure-ASCII strings (all hostnames, domain labels)
-// utf8.RuneCountInString(s)==len(s), so a byte-level swap avoids the []rune
-// allocation entirely. Multi-byte Unicode falls through to the rune path.
+// [08] ASCII fast-path: for strings where every character is a single byte
+// (all hostnames, domain labels) a byte-level swap avoids the []rune allocation.
+// Multi-byte Unicode falls through to the original rune path.
 func StringReverse(s string) string {
 	if s == "" {
 		return s
 	}
 	if utf8.RuneCountInString(s) == len(s) {
-		// Pure ASCII: single []byte allocation, no []rune needed.
+		// Pure ASCII: byte-swap in one allocation.
 		b := []byte(s)
 		for i, j := 0, len(b)-1; i < j; i, j = i+1, j-1 {
 			b[i], b[j] = b[j], b[i]
@@ -321,12 +294,12 @@ func StringStripSpaces(str string) string {
 
 // TrimAndStripInlineComments strips inline comments and surrounding whitespace
 // from a config-file line. A comment begins at the FIRST '#' that is either
-// the very first byte on the line or is immediately preceded by a space or tab.
+// the very first byte on the line or immediately preceded by a space or tab.
 //
 // [09] Bug fix: original used strings.LastIndexByte (LAST '#'), which could
-// leave an earlier valid comment marker intact. Fixed to strings.IndexByte
-// (first '#'). The redundant "idx==0 || str[0]=='#'" branch is also removed
-// (the second condition is always true when idx==0).
+// leave an earlier valid comment marker intact if the final '#' was not
+// whitespace-preceded. Fixed to strings.IndexByte (FIRST '#'). The redundant
+// "idx==0 || str[0]=='#'" branch is also removed (always equivalent to idx==0).
 func TrimAndStripInlineComments(str string) string {
 	if idx := strings.IndexByte(str, '#'); idx >= 0 {
 		if idx == 0 || str[idx-1] == ' ' || str[idx-1] == '\t' {
@@ -337,8 +310,8 @@ func TrimAndStripInlineComments(str string) string {
 }
 
 // ExtractHostAndPort splits a host+port string into its components.
-// Supports "[::1]:53" (IPv6 with brackets), "1.2.3.4:53", "host:53", and
-// host-only strings (returns defaultPort for the port).
+// Supports "[::1]:53" (IPv6), "1.2.3.4:53", "host:53", and host-only strings
+// (returns defaultPort for the port component).
 //
 // [10] Delegates to net.SplitHostPort for canonical stdlib-defined parsing.
 // The original's manual bracket detection had subtle edge cases.
@@ -362,7 +335,7 @@ func ReadTextFile(filename string) (string, error) {
 	return string(data), nil
 }
 
-// isDigit reports whether b is an ASCII decimal digit ('0'–'9').
+// isDigit reports whether b is an ASCII decimal digit.
 func isDigit(b byte) bool { return b >= '0' && b <= '9' }
 
 // ── Client IP extraction ──────────────────────────────────────────────────────
@@ -387,8 +360,8 @@ func ExtractClientIPStr(pluginsState *PluginsState) (string, bool) {
 	return "", false
 }
 
-// ExtractClientIPStrEncrypted returns the client IP string, encrypting it
-// through ipCryptConfig when non-nil. Returns the plain IP when nil.
+// ExtractClientIPStrEncrypted returns the client IP string, optionally
+// encrypted through ipCryptConfig. Returns the plain IP when nil.
 func ExtractClientIPStrEncrypted(pluginsState *PluginsState, ipCryptConfig *IPCryptConfig) (string, bool) {
 	ipStr, ok := ExtractClientIPStr(pluginsState)
 	if !ok {
@@ -432,7 +405,7 @@ func FormatLogLine(format, clientIP, qName, reason string, additionalFields ...s
 }
 
 // formatTSVLine builds a tab-separated values log line with a leading timestamp.
-// [12] fmt.Fprintf replaced with direct strings.Builder methods to eliminate
+// [12] fmt.Fprintf replaced with direct strings.Builder writes to eliminate
 // reflection boxing of every argument.
 func formatTSVLine(clientIP, qName, reason string, additionalFields ...string) string {
 	var b strings.Builder
@@ -513,12 +486,12 @@ func InitializePluginLogger(logFile, format string, maxSize, maxAge, maxBackups 
 // ── Config-line processing ────────────────────────────────────────────────────
 
 // ParseTimeBasedRule parses a rule line that may carry a time-range suffix in
-// the form "rule@timeRangeName". Returns the rule text (without the "@…" part),
-// a pointer to the matching WeeklyRanges, and any error.
-// When no "@" is present the full line is returned and weeklyRanges is nil.
+// the form "rule@timeRangeName". Returns the rule text, a pointer to the
+// matching WeeklyRanges, and any error. When no "@" is present the full line
+// is returned unchanged and weeklyRanges is nil.
 //
-// [14] strings.SplitN(line,"@",3) replaces strings.Split: stops after two
-// delimiters, which is all that is needed to classify 0, 1, or 2+.
+// [14] strings.SplitN(line,"@",3) replaces strings.Split to avoid allocating
+// extra segments beyond what is needed to classify 0, 1, or 2+ "@" signs.
 func ParseTimeBasedRule(line string, lineNo int, allWeeklyRanges *map[string]WeeklyRanges) (string, *WeeklyRanges, error) {
 	parts := strings.SplitN(line, "@", 3)
 	switch len(parts) {
