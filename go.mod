@@ -29,7 +29,7 @@ require (
 	github.com/lifenjoiner/dhcpdns v0.0.7
 	github.com/powerman/check v1.9.0
 	github.com/quic-go/quic-go v0.59.0
-	golang.org/x/crypto v0.48.1-0.20260213
+	golang.org/x/crypto v0.48.0
 	golang.org/x/net v0.51.0
 	golang.org/x/sys v0.41.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
