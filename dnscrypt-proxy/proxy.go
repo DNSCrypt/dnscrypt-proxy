@@ -1174,11 +1174,12 @@ func (proxy *Proxy) processIncomingQuery(
 	}
 
 	if len(response) < MinDNSPacketSize || len(response) > MaxDNSPacketSize {
-		code := PluginsReturnCodeParseError
+		// Explicit typed assignment avoids inference as plain int. [FIX-01]
 		if len(response) == 0 {
-			code = PluginsReturnCodeNotReady
+			pluginsState.returnCode = PluginsReturnCodeNotReady
+		} else {
+			pluginsState.returnCode = PluginsReturnCodeParseError
 		}
-		pluginsState.returnCode = code
 		pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
 		if serverInfo != nil {
 			serverInfo.noticeFailure(proxy)
