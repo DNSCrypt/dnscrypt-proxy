@@ -128,6 +128,20 @@ type CachedResponses struct {
 
 var cachedResponses CachedResponses
 
+// CacheStats returns the live entry count and capacity of the sieve cache.
+// Returns (0, 0) if the cache has not yet been successfully initialised.
+//
+// External files (e.g. monitoring_ui.go) must call this instead of accessing
+// cachedResponses.cache directly — the field is now atomic.Pointer[T] and
+// cannot be compared to nil or have methods called on it without Load(). [C01]
+func (cr *CachedResponses) CacheStats() (entries, capacity int) {
+	if c := cr.cache.Load(); c != nil {
+		return c.Len(), c.Capacity()
+	}
+	return 0, 0
+}
+
+
 // ── Hash pool ─────────────────────────────────────────────────────────────────
 
 // cacheKeyHashPool recycles SHA-512/256 hash objects across goroutines. [C12]
