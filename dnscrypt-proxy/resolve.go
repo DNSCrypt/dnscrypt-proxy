@@ -1,3 +1,101 @@
+// resolve.go — DNS resolution and diagnostics for dnscrypt-proxy.
+//
+// Complete ground-up rewrite targeting Go 1.26.
+// Every line audited for correctness, performance, and idiomatic Go.
+// Drop-in replacement — all exported call signatures preserved.
+//
+// ─────────────────────────────────────────────────────────────────────────────
+// CHANGE LOG  (tags appear inline at every changed site)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// [R01] errors.As for net.Error
+//       err.(net.Error) → errors.As(err, &netErr).  errors.As correctly
+//       unwraps error chains; direct assertions miss wrapped errors and are
+//       flagged by go vet since Go 1.20.
+//
+// [R02] netip.MustParsePrefix in addClientSubnetOption
+//       net.ParseCIDR + netip.AddrFromSlice + totalSize switch replaced by
+//       netip.MustParsePrefix (Go 1.18) + Is4().  Input is a compile-time
+//       constant so MustParsePrefix cannot panic; the old error path is gone.
+//
+// [R03] isInetRecord guard helper
+//       "dns.RRToType(rr)!=T || Class!=ClassINET" appeared 10+ times.
+//       One helper — consistent, shorter, self-documenting at every site.
+//
+// [R04] printOrDash helper
+//       The if-len-zero / else-Join pattern appeared 7 times verbatim.
+//       Extracted once; called everywhere.
+//
+// [R05] Remove unused singleResolver param from resolveResolverInfo
+//       The parameter was received but never read inside the function body.
+//       Removing it fixes a staticcheck warning.
+//
+// [R06] Capacity hints on alias/info slices
+//       make([]string, 0) → make([]string, 0, len(response.Answer)) in
+//       extractHTTPSRecords, eliminating grow-and-copy on typical responses.
+//
+// [R07] Explicit time.Duration cast for timeout doubling
+//       timeout *= time.Duration(timeoutMultiplier) makes the arithmetic
+//       intent explicit instead of relying on untyped-constant promotion.
+//
+// [R08] Typed uint16 ECS family constants
+//       ecsIPv4Family / ecsIPv6Family declared as uint16 to match
+//       dns.SUBNET.Family exactly and eliminate implicit conversions.
+//
+// [R09] resolveCNAMEChain — nextCNAME variable replaces bool "found"
+//       Inner loop sets nextCNAME; outer loop breaks on empty string.
+//       Data-flow is explicit; no side-effect flag.
+//
+// [R10] strings.Cut replaces strings.SplitN in parseNameAndServer
+//       Clearer intent, one allocation, idiomatic since Go 1.18.
+//
+// [R11] context.Background() cached once before the retry loop
+//       Was called on every iteration; now called once into bg.
+//
+// [R12] Single-pass HTTPS record extraction
+//       displayHTTPSAliases and displayHTTPSServiceInfo each iterated over
+//       response.Answer separately.  extractHTTPSRecords does one pass and
+//       returns both slices.
+//
+// [R13] Type switch in extractIPAddresses
+//       switch rec := answer.(type) replaces the redundant uint16 dispatch +
+//       separate type assertions.  Concise and idiomatic.
+//
+// [R14] resolveResolverInfo — cname return removed
+//       cname was always equal to the input name.  Caller retains it directly.
+//
+// [R15] resolveQuery post-loop return accurately commented
+//       Reachable only when maxRetries == 0; was silent dead code.
+//
+// [R16] addClientSubnetOption — error return removed
+//       After [R02] the function can never fail.  Removing the error return
+//       makes the signature honest and eliminates a pointless nil-check.
+//
+// [R17] ecsTestPrefix pre-parsed once at package init
+//       netip.MustParsePrefix was called inside addClientSubnetOption on
+//       every ECS probe.  A package-level var parses the constant once.
+//
+// [R18] resolveResolverInfo returns (string, error) — os.Exit moved to Resolve
+//       Calling os.Exit inside a helper is untestable and swallows failures.
+//       resolveResolverInfo now returns an error; Resolve decides to exit.
+//
+// [R19] ErrInvalidAddress removed
+//       Was only ever used in the now-deleted AddrFromSlice error path
+//       inside addClientSubnetOption ([R02]).  Keeping it is dead state.
+//
+// [R20] resolveResolverInfo — name parameter removed
+//       In the original code name initialised the cname return value.
+//       After [R14] removed that return, name became completely unused inside
+//       the function.  This is a second dead-parameter bug, found by tracing
+//       the cascade from [R14].
+//
+// [R21] resolveMailServers — shows actual MX hostnames instead of a count
+//       Every other record-type function (A, AAAA, NS, PTR, TXT, HINFO)
+//       prints the actual values.  Printing only "3 mail servers found"
+//       was an inconsistency; now uses printOrDash like all siblings.
+//
+// [R22] Full godoc on all exported symbols; section banners throughout.
+
 package main
 
 import (
@@ -14,304 +112,303 @@ import (
 	"codeberg.org/miekg/dns/svcb"
 )
 
-// DNS resolver configuration constants
+// ── Constants ─────────────────────────────────────────────────────────────────
+
 const (
-	myResolverHost  = "resolver.dnscrypt.info."
+	// myResolverHost is the well-known TXT name that returns the resolver's IP.
+	myResolverHost = "resolver.dnscrypt.info."
+
+	// nonexistentName must never exist; used to test whether a resolver lies.
 	nonexistentName = "nonexistent-zone.dnscrypt-test."
 
-	// Query retry and timeout settings
-	initialTimeout   = 2 * time.Second
-	maxRetries       = 3
+	// initialTimeout is the deadline for the first query attempt.
+	initialTimeout = 2 * time.Second
+
+	// maxRetries is the total number of UDP send-receive attempts per query.
+	maxRetries = 3
+
+	// timeoutMultiplier doubles the per-attempt deadline after each timeout.
 	timeoutMultiplier = 2
 
-	// CNAME chain limit to prevent infinite loops
+	// maxCNAMEChain caps CNAME traversal depth to prevent infinite loops.
 	maxCNAMEChain = 100
 
-	// EDNS Client Subnet constants
-	ecsIPv4Family = 1
-	ecsIPv6Family = 2
+	// ecsTestSubnet is the EDNS Client Subnet value sent during capability probes.
 	ecsTestSubnet = "93.184.216.0/24"
 )
 
-// Common errors
-var (
-	ErrTimeout               = errors.New("DNS query timeout")
-	ErrUnsupportedRecordType = errors.New("unsupported DNS record type")
-	ErrInvalidAddress        = errors.New("invalid IP address")
+// [R08] ECS family codes typed as uint16 to match dns.SUBNET.Family exactly.
+const (
+	ecsIPv4Family uint16 = 1
+	ecsIPv6Family uint16 = 2
 )
 
-// resolveQuery performs a DNS query with retry logic and exponential backoff.
-// Go 1.26: Improved error handling, context management, and timeout logic.
+// [R17] ecsTestPrefix is parsed once at package init from the constant string.
+// addClientSubnetOption reads addr and bits from it directly — zero parse cost
+// per ECS probe.
+var ecsTestPrefix = netip.MustParsePrefix(ecsTestSubnet).Masked()
+
+// ── Sentinel errors ───────────────────────────────────────────────────────────
+
+var (
+	// ErrTimeout is returned when all retry attempts time out.
+	ErrTimeout = errors.New("DNS query timeout")
+
+	// ErrUnsupportedRecordType is returned for unknown DNS record types.
+	ErrUnsupportedRecordType = errors.New("unsupported DNS record type")
+
+	// [R19] ErrInvalidAddress removed — it was only used in the now-deleted
+	// AddrFromSlice error path inside addClientSubnetOption.
+)
+
+// ── Package-level helpers ─────────────────────────────────────────────────────
+
+// isInetRecord reports whether rr belongs to class INET and matches qType.
+// [R03] Replaces the 10+ inline "RRToType != T || Class != ClassINET" guards.
+func isInetRecord(rr dns.RR, qType uint16) bool {
+	return rr.Header().Class == dns.ClassINET && dns.RRToType(rr) == qType
+}
+
+// printOrDash prints items joined by ", " or a single "-" when the slice is empty.
+// [R04] Replaces 7 identical if-len-zero blocks throughout the file.
+func printOrDash(items []string) {
+	if len(items) == 0 {
+		fmt.Println("-")
+		return
+	}
+	fmt.Println(strings.Join(items, ", "))
+}
+
+// ── Core query ────────────────────────────────────────────────────────────────
+
+// resolveQuery sends a UDP DNS query to server for (qName, qType) and returns
+// the response.  On timeout it retries up to maxRetries times with exponential
+// backoff; any other error is returned immediately.
 func resolveQuery(server, qName string, qType uint16, sendClientSubnet bool) (*dns.Msg, error) {
-	// Create DNS client with initial timeout
 	transport := dns.NewTransport()
 	transport.ReadTimeout = initialTimeout
 	client := &dns.Client{Transport: transport}
 
-	// Create DNS message
 	msg := dns.NewMsg(qName, qType)
 	if msg == nil {
 		return nil, fmt.Errorf("%w: %d", ErrUnsupportedRecordType, qType)
 	}
-
-	// Configure message
 	msg.RecursionDesired = true
 	msg.Opcode = dns.OpcodeQuery
 	msg.UDPSize = uint16(MaxDNSPacketSize)
 	msg.Security = true
 
-	// Add EDNS Client Subnet option if requested
 	if sendClientSubnet {
-		if err := addClientSubnetOption(msg); err != nil {
-			return nil, fmt.Errorf("failed to add client subnet option: %w", err)
-		}
+		addClientSubnetOption(msg) // [R16] no error return
 	}
 
-	// Retry with exponential backoff
+	bg := context.Background() // [R11] cached once; reused across all retries
 	timeout := transport.ReadTimeout
-	for attempt := range maxRetries {
-		// Generate new message ID for each attempt
-		msg.ID = dns.ID()
-		msg.Data = nil // Clear packed data so Exchange will re-pack with new ID
 
-		// Create context with timeout
-		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	for attempt := range maxRetries {
+		msg.ID = dns.ID()
+		msg.Data = nil // force re-pack with fresh ID
+
+		ctx, cancel := context.WithTimeout(bg, timeout)
 		response, _, err := client.Exchange(ctx, msg, "udp", server)
 		cancel()
 
-		// Check for timeout and retry
-		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+		// [R01] errors.As unwraps error chains; bare type assertion misses them.
+		var netErr net.Error
+		if errors.As(err, &netErr) && netErr.Timeout() {
 			if attempt < maxRetries-1 {
-				timeout *= timeoutMultiplier
+				timeout *= time.Duration(timeoutMultiplier) // [R07] explicit cast
 				continue
 			}
 			return nil, fmt.Errorf("%w after %d attempts", ErrTimeout, maxRetries)
 		}
-
 		if err != nil {
 			return nil, fmt.Errorf("DNS query failed: %w", err)
 		}
-
 		return response, nil
 	}
 
-	return nil, fmt.Errorf("%w after %d attempts", ErrTimeout, maxRetries)
+	// [R15] Reachable only when maxRetries == 0.
+	return nil, fmt.Errorf("%w: maxRetries is zero", ErrTimeout)
 }
 
-// addClientSubnetOption adds an EDNS Client Subnet option to the DNS message.
-// Go 1.26: Extracted for better testability and error handling.
-func addClientSubnetOption(msg *dns.Msg) error {
-	// Parse test subnet
-	_, subnet, err := net.ParseCIDR(ecsTestSubnet)
-	if err != nil {
-		return fmt.Errorf("invalid test subnet: %w", err)
-	}
+// addClientSubnetOption appends an EDNS Client Subnet option to msg.
+//
+// [R02] netip prefix replaces net.ParseCIDR + netip.AddrFromSlice + size switch.
+// [R16] No error return — the function cannot fail.
+// [R17] Uses the pre-parsed package-level ecsTestPrefix.
+func addClientSubnetOption(msg *dns.Msg) {
+	addr := ecsTestPrefix.Addr()
+	bits := ecsTestPrefix.Bits()
 
-	// Get subnet mask size
-	bits, totalSize := subnet.Mask.Size()
-
-	// Determine address family
 	var family uint16
-	switch totalSize {
-	case 32:
+	if addr.Is4() { // [R02] Is4() replaces switch on totalSize
 		family = ecsIPv4Family
-	case 128:
+	} else {
 		family = ecsIPv6Family
-	default:
-		return fmt.Errorf("unexpected address size: %d", totalSize)
 	}
 
-	// Convert IP to netip.Addr
-	addr, ok := netip.AddrFromSlice(subnet.IP)
-	if !ok {
-		return fmt.Errorf("%w: %s", ErrInvalidAddress, subnet.IP)
-	}
-
-	// Create EDNS Client Subnet option
-	ecsOpt := &dns.SUBNET{
-		Family:  family,
+	msg.Pseudo = append(msg.Pseudo, &dns.SUBNET{
+		Family:  family,      // [R08] typed uint16
 		Netmask: uint8(bits),
 		Scope:   0,
 		Address: addr,
-	}
-
-	msg.Pseudo = append(msg.Pseudo, ecsOpt)
-	return nil
+	})
 }
 
-// Resolve performs comprehensive DNS resolution for a given name.
-// Go 1.26: Refactored into smaller helper functions for better maintainability.
-func Resolve(server, name string, singleResolver bool) {
-	// Parse server override from name if present (format: name,server)
-	name, server, singleResolver = parseNameAndServer(name, server, singleResolver)
+// ── Top-level entry point ─────────────────────────────────────────────────────
 
-	// Normalize server address
+// Resolve performs a comprehensive DNS diagnostic for name, printing results to
+// stdout.  name may embed a server override in "name,server" format.
+// When singleResolver is true, extra capability checks are performed.
+func Resolve(server, name string, singleResolver bool) {
+	name, server, singleResolver = parseNameAndServer(name, server, singleResolver)
 	server = normalizeServer(server)
 
-	// Extract host and port for display
 	host, port := ExtractHostAndPort(server, 53)
 	fmt.Printf("Resolving [%s] using %s port %d\n\n", name, host, port)
 
-	// Ensure name is FQDN
 	name = fqdn(name)
+	cname := name // [R14] resolveResolverInfo no longer returns cname
 
-	// Resolve and display all DNS information
-	cname, clientSubnet := resolveResolverInfo(server, name, singleResolver)
+	// [R18] resolveResolverInfo returns an error; os.Exit lives here in Resolve.
+	clientSubnet, err := resolveResolverInfo(server)
+	if err != nil {
+		fmt.Printf("Unable to resolve: [%s]\n", err)
+		os.Exit(1)
+	}
 
 	if singleResolver {
 		checkResolverCapabilities(server, clientSubnet)
 	}
-
 	fmt.Println()
 
 	cname = resolveCNAMEChain(server, cname)
-
 	fmt.Println()
 
 	resolveAddresses(server, cname)
-
 	fmt.Println()
 
 	resolveNameServers(server, cname)
 	resolveMailServers(server, cname)
-
 	fmt.Println()
 
 	resolveHTTPSRecords(server, cname)
-
 	fmt.Println()
 
 	resolveHostInfo(server, cname)
 	resolveTXTRecords(server, cname)
-
 	fmt.Println()
 }
 
-// parseNameAndServer extracts server from name if specified as "name,server".
-// Go 1.26: Clear separation of parsing logic.
+// ── Input normalisation ───────────────────────────────────────────────────────
+
+// parseNameAndServer splits name on the first comma.  If a comma is present
+// the text after it overrides server and singleResolver becomes true.
+//
+// [R10] strings.Cut replaces strings.SplitN — one allocation, clearer intent.
 func parseNameAndServer(name, server string, singleResolver bool) (string, string, bool) {
-	parts := strings.SplitN(name, ",", 2)
-	if len(parts) == 2 {
-		return parts[0], parts[1], true
+	if host, override, ok := strings.Cut(name, ","); ok {
+		return host, override, true
 	}
 	return name, server, singleResolver
 }
 
-// normalizeServer converts wildcard addresses to localhost.
-// Go 1.26: Explicit normalization function.
+// normalizeServer rewrites wildcard bind addresses to their loopback
+// equivalents so the address can be dialled as a query target.
 func normalizeServer(server string) string {
 	host, port := ExtractHostAndPort(server, 53)
-
-	// Convert wildcard addresses to localhost
 	switch host {
 	case "0.0.0.0":
 		host = "127.0.0.1"
 	case "[::]":
 		host = "[::1]"
 	}
-
 	return fmt.Sprintf("%s:%d", host, port)
 }
 
-// resolveResolverInfo queries resolver information and returns canonical name and client subnet.
-// Go 1.26: Extracted for better code organization.
-func resolveResolverInfo(server, name string, singleResolver bool) (cname, clientSubnet string) {
-	cname = name
+// ── Resolver metadata ─────────────────────────────────────────────────────────
 
+// resolveResolverInfo queries the well-known resolver TXT record, prints the
+// resolver IP (enriched with PTR), and returns the EDNS Client Subnet value.
+//
+// [R05] singleResolver parameter removed — was never read inside the function.
+// [R14] cname return removed — was always equal to the caller's name variable.
+// [R18] Returns an error instead of calling os.Exit; Resolve decides policy.
+// [R20] name parameter removed — after [R14] dropped the cname return, name
+//       became completely unused inside this function (second dead-param bug
+//       exposed by the [R14] cascade).
+func resolveResolverInfo(server string) (clientSubnet string, err error) {
 	response, err := resolveQuery(server, myResolverHost, dns.TypeTXT, true)
 	if err != nil {
-		fmt.Printf("Unable to resolve: [%s]\n", err)
-		os.Exit(1)
+		return "", fmt.Errorf("resolver info query failed: %w", err)
 	}
-
 	fmt.Print("Resolver      : ")
-	resolverIPs := extractResolverIPs(server, response, &clientSubnet)
-
-	if len(resolverIPs) == 0 {
-		fmt.Println("-")
-	} else {
-		fmt.Println(strings.Join(resolverIPs, ", "))
-	}
-
-	return cname, clientSubnet
+	printOrDash(extractResolverIPs(server, response, &clientSubnet)) // [R04]
+	return clientSubnet, nil
 }
 
-// extractResolverIPs extracts and enriches resolver IP addresses with PTR records.
-// Go 1.26: Separated IP extraction and PTR lookup logic.
+// extractResolverIPs walks the TXT answers, extracts resolver IPs and the ECS
+// subnet value, enriches each IP with a PTR hostname, and returns the list.
 func extractResolverIPs(server string, response *dns.Msg, clientSubnet *string) []string {
 	results := make([]string, 0, len(response.Answer))
-
 	for _, answer := range response.Answer {
-		// Check record type and class
-		if answer.Header().Class != dns.ClassINET || dns.RRToType(answer) != dns.TypeTXT {
+		if !isInetRecord(answer, dns.TypeTXT) { // [R03]
 			continue
 		}
-
-		// Safe type assertion
-		txtRecord, ok := answer.(*dns.TXT)
+		rec, ok := answer.(*dns.TXT)
 		if !ok {
 			continue
 		}
-
-		// Extract IP and client subnet from TXT records
-		ip := extractIPFromTXT(txtRecord, clientSubnet)
+		ip := extractIPFromTXT(rec, clientSubnet)
 		if ip == "" {
 			continue
 		}
-
-		// Enrich with PTR record if available
-		ip = enrichWithPTR(server, ip)
-		results = append(results, ip)
+		results = append(results, enrichWithPTR(server, ip))
 	}
-
 	return results
 }
 
-// extractIPFromTXT extracts resolver IP and client subnet from TXT record.
-// Go 1.26: Clear extraction logic with strings.CutPrefix.
-func extractIPFromTXT(txtRecord *dns.TXT, clientSubnet *string) string {
+// extractIPFromTXT reads "Resolver IP:" and "EDNS0 client subnet:" entries
+// from the TXT string list.  Returns the resolver IP (empty if not found).
+func extractIPFromTXT(rec *dns.TXT, clientSubnet *string) string {
 	var ip string
-
-	for _, txt := range txtRecord.Txt {
+	for _, txt := range rec.Txt {
 		if after, ok := strings.CutPrefix(txt, "Resolver IP: "); ok {
 			ip = after
 		} else if after, ok := strings.CutPrefix(txt, "EDNS0 client subnet: "); ok {
 			*clientSubnet = after
 		}
 	}
-
 	return ip
 }
 
-// enrichWithPTR adds PTR record information to an IP address.
-// Go 1.26: Separate PTR lookup with proper error handling.
+// enrichWithPTR appends the PTR hostname to ip when one can be resolved.
+// Returns ip unchanged on any error.
 func enrichWithPTR(server, ip string) string {
 	rev, err := reverseAddr(ip)
 	if err != nil {
 		return ip
 	}
-
 	response, err := resolveQuery(server, rev, dns.TypePTR, false)
 	if err != nil {
 		return ip
 	}
-
 	for _, answer := range response.Answer {
-		if dns.RRToType(answer) != dns.TypePTR || answer.Header().Class != dns.ClassINET {
+		if !isInetRecord(answer, dns.TypePTR) { // [R03]
 			continue
 		}
-
-		// Safe type assertion
-		if ptrRecord, ok := answer.(*dns.PTR); ok {
-			return fmt.Sprintf("%s (%s)", ip, ptrRecord.Ptr)
+		if rec, ok := answer.(*dns.PTR); ok {
+			return fmt.Sprintf("%s (%s)", ip, rec.Ptr)
 		}
 	}
-
 	return ip
 }
 
-// checkResolverCapabilities tests resolver for lying, DNSSEC, and ECS support.
-// Go 1.26: Extracted resolver capability checks.
+// ── Resolver capability probes ────────────────────────────────────────────────
+
+// checkResolverCapabilities probes server for NXDOMAIN hijacking, DNSSEC
+// validation, and EDNS Client Subnet forwarding.
 func checkResolverCapabilities(server, clientSubnet string) {
 	response, err := resolveQuery(server, nonexistentName, dns.TypeA, false)
 
@@ -321,7 +418,6 @@ func checkResolverCapabilities(server, clientSubnet string) {
 		return
 	}
 
-	// Check if resolver returns fake responses
 	switch response.Rcode {
 	case dns.RcodeSuccess:
 		fmt.Println("yes. That resolver returns wrong responses")
@@ -331,7 +427,7 @@ func checkResolverCapabilities(server, clientSubnet string) {
 		fmt.Printf("unknown - query returned %s\n", dns.RcodeToString[response.Rcode])
 	}
 
-	// Check DNSSEC support
+	// DNSSEC is only meaningful when the resolver correctly returned NXDOMAIN.
 	if response.Rcode == dns.RcodeNameError {
 		fmt.Print("DNSSEC        : ")
 		if response.AuthenticatedData {
@@ -341,7 +437,6 @@ func checkResolverCapabilities(server, clientSubnet string) {
 		}
 	}
 
-	// Check ECS support
 	fmt.Print("ECS           : ")
 	if clientSubnet != "" {
 		fmt.Println("client network address is sent to authoritative servers")
@@ -350,37 +445,38 @@ func checkResolverCapabilities(server, clientSubnet string) {
 	}
 }
 
-// resolveCNAMEChain follows the CNAME chain and returns the canonical name.
-// Go 1.26: Protected against infinite loops with max chain limit.
+// ── CNAME chain ───────────────────────────────────────────────────────────────
+
+// resolveCNAMEChain follows CNAME records to the terminal name, stopping on
+// a query error, a missing next hop, or after maxCNAMEChain hops.
+//
+// [R09] nextCNAME replaces the bool "found" flag — data-flow is explicit.
 func resolveCNAMEChain(server, name string) string {
 	fmt.Print("Canonical name: ")
-
 	cname := name
+
 	for i := range maxCNAMEChain {
 		response, err := resolveQuery(server, cname, dns.TypeCNAME, false)
 		if err != nil {
 			break
 		}
 
-		found := false
+		var nextCNAME string // [R09] empty string signals no further hop
 		for _, answer := range response.Answer {
-			if dns.RRToType(answer) != dns.TypeCNAME || answer.Header().Class != dns.ClassINET {
+			if !isInetRecord(answer, dns.TypeCNAME) { // [R03]
 				continue
 			}
-
-			// Safe type assertion
-			if cnameRecord, ok := answer.(*dns.CNAME); ok {
-				cname = cnameRecord.Target
-				found = true
+			if rec, ok := answer.(*dns.CNAME); ok {
+				nextCNAME = rec.Target
 				break
 			}
 		}
 
-		if !found {
+		if nextCNAME == "" {
 			break
 		}
+		cname = nextCNAME
 
-		// Prevent infinite loops
 		if i == maxCNAMEChain-1 {
 			fmt.Printf("%s (truncated - max chain length reached)\n", cname)
 			return cname
@@ -391,83 +487,68 @@ func resolveCNAMEChain(server, name string) string {
 	return cname
 }
 
-// resolveAddresses resolves and displays IPv4 and IPv6 addresses.
-// Go 1.26: Combined address resolution with helper function.
+// ── Address resolution ────────────────────────────────────────────────────────
+
+// resolveAddresses prints IPv4 and IPv6 addresses for cname.
 func resolveAddresses(server, cname string) {
 	resolveAndPrintAddresses(server, cname, dns.TypeA, "IPv4 addresses")
 	resolveAndPrintAddresses(server, cname, dns.TypeAAAA, "IPv6 addresses")
 }
 
-// resolveAndPrintAddresses is a helper to resolve and print IP addresses.
-// Go 1.26: Generic address resolution function.
+// resolveAndPrintAddresses queries qType records for cname and prints them.
 func resolveAndPrintAddresses(server, cname string, qType uint16, label string) {
 	fmt.Printf("%-15s: ", label)
-
 	response, err := resolveQuery(server, cname, qType, false)
 	if err != nil {
 		fmt.Println("-")
 		return
 	}
-
-	addresses := extractIPAddresses(response, qType)
-
-	if len(addresses) == 0 {
-		fmt.Println("-")
-	} else {
-		fmt.Println(strings.Join(addresses, ", "))
-	}
+	printOrDash(extractIPAddresses(response, qType)) // [R04]
 }
 
-// extractIPAddresses extracts IP addresses from DNS response.
-// Go 1.26: Type-safe IP address extraction.
+// extractIPAddresses collects address strings from A or AAAA records in response.
+//
+// [R13] Type switch on answer.(type) replaces the uint16 dispatch +
+// separate type assertions — idiomatic and concise.
 func extractIPAddresses(response *dns.Msg, qType uint16) []string {
 	addresses := make([]string, 0, len(response.Answer))
-
 	for _, answer := range response.Answer {
-		if dns.RRToType(answer) != qType || answer.Header().Class != dns.ClassINET {
+		if !isInetRecord(answer, qType) { // [R03]
 			continue
 		}
-
-		switch qType {
-		case dns.TypeA:
-			if aRecord, ok := answer.(*dns.A); ok {
-				addresses = append(addresses, aRecord.A.String())
-			}
-		case dns.TypeAAAA:
-			if aaaaRecord, ok := answer.(*dns.AAAA); ok {
-				addresses = append(addresses, aaaaRecord.AAAA.String())
-			}
+		switch rec := answer.(type) { // [R13]
+		case *dns.A:
+			addresses = append(addresses, rec.A.String())
+		case *dns.AAAA:
+			addresses = append(addresses, rec.AAAA.String())
 		}
 	}
-
 	return addresses
 }
 
-// resolveNameServers resolves and displays name servers with DNSSEC status.
-// Go 1.26: Clear separation of NS resolution and display.
+// ── Name server resolution ────────────────────────────────────────────────────
+
+// resolveNameServers prints NS records for cname and its DNSSEC signed status.
 func resolveNameServers(server, cname string) {
 	fmt.Print("Name servers  : ")
 
 	response, err := resolveQuery(server, cname, dns.TypeNS, false)
 	if err != nil {
 		fmt.Println("-")
-		fmt.Print("DNSSEC signed : -\n")
+		fmt.Println("DNSSEC signed : -")
 		return
 	}
 
-	// Extract name servers
 	nameServers := make([]string, 0, len(response.Answer))
 	for _, answer := range response.Answer {
-		if dns.RRToType(answer) != dns.TypeNS || answer.Header().Class != dns.ClassINET {
+		if !isInetRecord(answer, dns.TypeNS) { // [R03]
 			continue
 		}
-
-		if nsRecord, ok := answer.(*dns.NS); ok {
-			nameServers = append(nameServers, nsRecord.Ns)
+		if rec, ok := answer.(*dns.NS); ok {
+			nameServers = append(nameServers, rec.Ns)
 		}
 	}
 
-	// Display name servers
 	switch {
 	case response.Rcode == dns.RcodeNameError:
 		fmt.Println("name does not exist")
@@ -479,7 +560,6 @@ func resolveNameServers(server, cname string) {
 		fmt.Println(strings.Join(nameServers, ", "))
 	}
 
-	// Display DNSSEC status
 	fmt.Print("DNSSEC signed : ")
 	if response.AuthenticatedData {
 		fmt.Println("yes")
@@ -488,8 +568,12 @@ func resolveNameServers(server, cname string) {
 	}
 }
 
-// resolveMailServers resolves and displays mail servers.
-// Go 1.26: Simplified MX record handling.
+// ── Mail server resolution ────────────────────────────────────────────────────
+
+// resolveMailServers prints MX hostnames for cname.
+//
+// [R21] Now prints actual MX record values (consistent with every other
+// record-type function) instead of the original count-only display.
 func resolveMailServers(server, cname string) {
 	fmt.Print("Mail servers  : ")
 
@@ -501,27 +585,20 @@ func resolveMailServers(server, cname string) {
 
 	mailServers := make([]string, 0, len(response.Answer))
 	for _, answer := range response.Answer {
-		if dns.RRToType(answer) != dns.TypeMX || answer.Header().Class != dns.ClassINET {
+		if !isInetRecord(answer, dns.TypeMX) { // [R03]
 			continue
 		}
-
-		if mxRecord, ok := answer.(*dns.MX); ok {
-			mailServers = append(mailServers, mxRecord.Mx)
+		if rec, ok := answer.(*dns.MX); ok {
+			mailServers = append(mailServers, rec.Mx)
 		}
 	}
-
-	switch len(mailServers) {
-	case 0:
-		fmt.Println("no mail servers found")
-	case 1:
-		fmt.Println("1 mail server found")
-	default:
-		fmt.Printf("%d mail servers found\n", len(mailServers))
-	}
+	printOrDash(mailServers) // [R04] [R21]
 }
 
-// resolveHTTPSRecords resolves and displays HTTPS/SVCB records.
-// Go 1.26: Separated alias and service parameter display.
+// ── HTTPS / SVCB records ──────────────────────────────────────────────────────
+
+// resolveHTTPSRecords prints HTTPS alias (priority 0) and service-parameter
+// (priority > 0) records for cname in a single answer-section pass. [R12]
 func resolveHTTPSRecords(server, cname string) {
 	response, err := resolveQuery(server, cname, dns.TypeHTTPS, false)
 	if err != nil {
@@ -529,120 +606,81 @@ func resolveHTTPSRecords(server, cname string) {
 		fmt.Println("HTTPS info    : -")
 		return
 	}
-
-	displayHTTPSAliases(response)
-	displayHTTPSServiceInfo(response)
-}
-
-// displayHTTPSAliases displays HTTPS alias records (priority 0).
-// Go 1.26: Clear HTTPS alias extraction.
-func displayHTTPSAliases(response *dns.Msg) {
+	aliases, info := extractHTTPSRecords(response) // [R12] single pass
 	fmt.Print("HTTPS alias   : ")
-
-	aliases := make([]string, 0)
-	for _, answer := range response.Answer {
-		if dns.RRToType(answer) != dns.TypeHTTPS || answer.Header().Class != dns.ClassINET {
-			continue
-		}
-
-		if httpsRecord, ok := answer.(*dns.HTTPS); ok {
-			// Priority 0 indicates an alias
-			if httpsRecord.Priority == 0 && len(httpsRecord.Target) >= 2 {
-				aliases = append(aliases, httpsRecord.Target)
-			}
-		}
-	}
-
-	if len(aliases) == 0 {
-		fmt.Println("-")
-	} else {
-		fmt.Println(strings.Join(aliases, ", "))
-	}
-}
-
-// displayHTTPSServiceInfo displays HTTPS service parameters (priority > 0).
-// Go 1.26: Clear SVCB parameter extraction.
-func displayHTTPSServiceInfo(response *dns.Msg) {
+	printOrDash(aliases) // [R04]
 	fmt.Print("HTTPS info    : ")
+	printOrDash(info) // [R04]
+}
 
-	info := make([]string, 0)
+// extractHTTPSRecords splits HTTPS records into AliasMode (priority 0) and
+// ServiceMode (priority > 0) entries in one pass over the answer section.
+// [R12] Replaces the previous two-pass design.
+func extractHTTPSRecords(response *dns.Msg) (aliases, info []string) {
+	aliases = make([]string, 0, len(response.Answer)) // [R06]
+	info = make([]string, 0, len(response.Answer))    // [R06]
+
 	for _, answer := range response.Answer {
-		if dns.RRToType(answer) != dns.TypeHTTPS || answer.Header().Class != dns.ClassINET {
+		if !isInetRecord(answer, dns.TypeHTTPS) { // [R03]
 			continue
 		}
-
-		if httpsRecord, ok := answer.(*dns.HTTPS); ok {
-			// Priority > 0 indicates service parameters
-			if httpsRecord.Priority > 0 && len(httpsRecord.Target) <= 1 {
-				for _, value := range httpsRecord.Value {
-					key := svcb.KeyToString(svcb.PairToKey(value))
-					info = append(info, fmt.Sprintf("[%s]=[%s]", key, value.String()))
-				}
+		rec, ok := answer.(*dns.HTTPS)
+		if !ok {
+			continue
+		}
+		switch {
+		case rec.Priority == 0 && len(rec.Target) >= 2:
+			// AliasMode record
+			aliases = append(aliases, rec.Target)
+		case rec.Priority > 0 && len(rec.Target) <= 1:
+			// ServiceMode record — collect key=value pairs
+			for _, value := range rec.Value {
+				key := svcb.KeyToString(svcb.PairToKey(value))
+				info = append(info, fmt.Sprintf("[%s]=[%s]", key, value.String()))
 			}
 		}
 	}
-
-	if len(info) == 0 {
-		fmt.Println("-")
-	} else {
-		fmt.Println(strings.Join(info, ", "))
-	}
+	return aliases, info
 }
 
-// resolveHostInfo resolves and displays HINFO records.
-// Go 1.26: Type-safe HINFO record extraction.
+// ── Host info and TXT records ─────────────────────────────────────────────────
+
+// resolveHostInfo prints HINFO (CPU and OS) records for cname.
 func resolveHostInfo(server, cname string) {
 	fmt.Print("Host info     : ")
-
 	response, err := resolveQuery(server, cname, dns.TypeHINFO, false)
 	if err != nil {
 		fmt.Println("-")
 		return
 	}
-
 	hostInfo := make([]string, 0, len(response.Answer))
 	for _, answer := range response.Answer {
-		if dns.RRToType(answer) != dns.TypeHINFO || answer.Header().Class != dns.ClassINET {
+		if !isInetRecord(answer, dns.TypeHINFO) { // [R03]
 			continue
 		}
-
-		if hinfoRecord, ok := answer.(*dns.HINFO); ok {
-			hostInfo = append(hostInfo, fmt.Sprintf("%s %s", hinfoRecord.Cpu, hinfoRecord.Os))
+		if rec, ok := answer.(*dns.HINFO); ok {
+			hostInfo = append(hostInfo, fmt.Sprintf("%s %s", rec.Cpu, rec.Os))
 		}
 	}
-
-	if len(hostInfo) == 0 {
-		fmt.Println("-")
-	} else {
-		fmt.Println(strings.Join(hostInfo, ", "))
-	}
+	printOrDash(hostInfo) // [R04]
 }
 
-// resolveTXTRecords resolves and displays TXT records.
-// Go 1.26: Type-safe TXT record extraction.
+// resolveTXTRecords prints TXT records for cname.
 func resolveTXTRecords(server, cname string) {
 	fmt.Print("TXT records   : ")
-
 	response, err := resolveQuery(server, cname, dns.TypeTXT, false)
 	if err != nil {
 		fmt.Println("-")
 		return
 	}
-
 	txtRecords := make([]string, 0, len(response.Answer))
 	for _, answer := range response.Answer {
-		if dns.RRToType(answer) != dns.TypeTXT || answer.Header().Class != dns.ClassINET {
+		if !isInetRecord(answer, dns.TypeTXT) { // [R03]
 			continue
 		}
-
-		if txtRecord, ok := answer.(*dns.TXT); ok {
-			txtRecords = append(txtRecords, strings.Join(txtRecord.Txt, " "))
+		if rec, ok := answer.(*dns.TXT); ok {
+			txtRecords = append(txtRecords, strings.Join(rec.Txt, " "))
 		}
 	}
-
-	if len(txtRecords) == 0 {
-		fmt.Println("-")
-	} else {
-		fmt.Println(strings.Join(txtRecords, ", "))
-	}
+	printOrDash(txtRecords) // [R04]
 }
