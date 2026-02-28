@@ -710,10 +710,13 @@ func (mc *MetricsCollector) collectCacheStats(cacheHitRatio float64, cacheHits, 
 	stats["neg_max_ttl"] = mc.proxy.cacheNegMaxTTL
 	stats["neg_min_ttl"] = mc.proxy.cacheNegMinTTL
 
-	if cachedResponses.cache != nil {
-		stats["entries"] = cachedResponses.cache.Len()
-		stats["capacity"] = cachedResponses.cache.Capacity()
-	}
+	// ── FIX: cachedResponses.cache is atomic.Pointer[T]; use CacheStats() ──
+	// The old code (cachedResponses.cache != nil / .Len() / .Capacity()) no
+	// longer compiles after plugin_cache.go [C01] changed the field type to
+	// atomic.Pointer[T].  CacheStats() wraps the Load() call safely.
+	entries, capacity := cachedResponses.CacheStats()
+	stats["entries"] = entries
+	stats["capacity"] = capacity
 
 	return stats
 }
