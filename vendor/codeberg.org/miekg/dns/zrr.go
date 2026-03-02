@@ -2,7 +2,9 @@
 
 package dns
 
+func (rr *TSIG) Header() *Header       { return &rr.Hdr }
 func (rr *DELEG) Header() *Header      { return &rr.Hdr }
+func (rr *OPT) Header() *Header        { return &rr.Hdr }
 func (rr *NSEC3) Header() *Header      { return &rr.Hdr }
 func (rr *DNSKEY) Header() *Header     { return &rr.Hdr }
 func (rr *DS) Header() *Header         { return &rr.Hdr }
@@ -78,7 +80,6 @@ func (rr *NIMLOC) Header() *Header     { return &rr.Hdr }
 func (rr *OPENPGPKEY) Header() *Header { return &rr.Hdr }
 func (rr *CSYNC) Header() *Header      { return &rr.Hdr }
 func (rr *ZONEMD) Header() *Header     { return &rr.Hdr }
-func (rr *OPT) Header() *Header        { return &rr.Hdr }
 func (rr *RESINFO) Header() *Header    { return &rr.Hdr }
 func (rr *SVCB) Header() *Header       { return &rr.Hdr }
 func (rr *HTTPS) Header() *Header      { return &rr.Hdr }
@@ -87,7 +88,6 @@ func (rr *DSYNC) Header() *Header      { return &rr.Hdr }
 func (rr *ANY) Header() *Header        { return &rr.Hdr }
 func (rr *AXFR) Header() *Header       { return &rr.Hdr }
 func (rr *IXFR) Header() *Header       { return &rr.Hdr }
-func (rr *TSIG) Header() *Header       { return &rr.Hdr }
 
 // TypeToRR is a map of constructors for each RR type.
 // Basic usage if you have a type  code and want to create a [RR]:
@@ -95,7 +95,9 @@ func (rr *TSIG) Header() *Header       { return &rr.Hdr }
 //	rr := dns.TypeToRR[dns.TypeMX]()
 //	fmt.Println(rr) // "0       CLASS0  MX      0"
 var TypeToRR = map[uint16]func() RR{
+	TypeTSIG:       func() RR { return new(TSIG) },
 	TypeDELEG:      func() RR { return new(DELEG) },
+	TypeOPT:        func() RR { return new(OPT) },
 	TypeNSEC3:      func() RR { return new(NSEC3) },
 	TypeDNSKEY:     func() RR { return new(DNSKEY) },
 	TypeDS:         func() RR { return new(DS) },
@@ -170,7 +172,6 @@ var TypeToRR = map[uint16]func() RR{
 	TypeOPENPGPKEY: func() RR { return new(OPENPGPKEY) },
 	TypeCSYNC:      func() RR { return new(CSYNC) },
 	TypeZONEMD:     func() RR { return new(ZONEMD) },
-	TypeOPT:        func() RR { return new(OPT) },
 	TypeRESINFO:    func() RR { return new(RESINFO) },
 	TypeSVCB:       func() RR { return new(SVCB) },
 	TypeHTTPS:      func() RR { return new(HTTPS) },
@@ -179,14 +180,17 @@ var TypeToRR = map[uint16]func() RR{
 	TypeANY:        func() RR { return new(ANY) },
 	TypeAXFR:       func() RR { return new(AXFR) },
 	TypeIXFR:       func() RR { return new(IXFR) },
-	TypeTSIG:       func() RR { return new(TSIG) },
 }
 
 // RRToType is the reverse of TypeToRR.
 func RRToType(rr RR) uint16 {
 	switch rr.(type) {
+	case *TSIG:
+		return TypeTSIG
 	case *DELEG:
 		return TypeDELEG
+	case *OPT:
+		return TypeOPT
 	case *NSEC3:
 		return TypeNSEC3
 	case *DNSKEY:
@@ -335,8 +339,6 @@ func RRToType(rr RR) uint16 {
 		return TypeCSYNC
 	case *ZONEMD:
 		return TypeZONEMD
-	case *OPT:
-		return TypeOPT
 	case *RESINFO:
 		return TypeRESINFO
 	case *SVCB:
@@ -353,8 +355,6 @@ func RRToType(rr RR) uint16 {
 		return TypeAXFR
 	case *IXFR:
 		return TypeIXFR
-	case *TSIG:
-		return TypeTSIG
 	}
 	if x, ok := rr.(Typer); ok {
 		return x.Type()
@@ -365,7 +365,9 @@ func RRToType(rr RR) uint16 {
 // TypeToString is a map of strings for each RR type.
 // See [codeberg.org/miekg/dns/dnsutil.TypeToString] for a function that works better when the type is unknown.
 var TypeToString = map[uint16]string{
+	TypeTSIG:       "TSIG",
 	TypeDELEG:      "DELEG",
+	TypeOPT:        "OPT",
 	TypeNSEC3:      "NSEC3",
 	TypeDNSKEY:     "DNSKEY",
 	TypeDS:         "DS",
@@ -439,7 +441,6 @@ var TypeToString = map[uint16]string{
 	TypeOPENPGPKEY: "OPENPGPKEY",
 	TypeCSYNC:      "CSYNC",
 	TypeZONEMD:     "ZONEMD",
-	TypeOPT:        "OPT",
 	TypeRESINFO:    "RESINFO",
 	TypeSVCB:       "SVCB",
 	TypeHTTPS:      "HTTPS",
@@ -448,6 +449,5 @@ var TypeToString = map[uint16]string{
 	TypeANY:        "ANY",
 	TypeAXFR:       "AXFR",
 	TypeIXFR:       "IXFR",
-	TypeTSIG:       "TSIG",
 	TypeNSAPPTR:    "NSAP-PTR",
 }

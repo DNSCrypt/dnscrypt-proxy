@@ -87,13 +87,16 @@ func (zp *ZoneParser) generate(l dnslex.Lex) (RR, bool) {
 	zp.sub = NewZoneParser(r, zp.origin, zp.file)
 	zp.sub.includeDepth, zp.sub.IncludeAllowFunc = zp.includeDepth, zp.IncludeAllowFunc
 	zp.sub.generateDisallowed = true
-	zp.sub.SetDefaultTTL(defaultTTL)
+	zp.sub.SetDefaultTTL(3600)
 	return zp.subNext()
 }
 
 type generateReader struct {
-	s  string
-	si uint16
+	lex    *dnslex.Lex
+	s      string
+	si     uint16
+	escape bool
+	eof    bool
 
 	cur   int64
 	start int64
@@ -102,12 +105,7 @@ type generateReader struct {
 
 	mod bytes.Buffer
 
-	escape bool
-
-	eof bool
-
 	file string
-	lex  *dnslex.Lex
 }
 
 func (r *generateReader) parseError(msg string, end uint16) *ParseError {

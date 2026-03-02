@@ -10,7 +10,11 @@ import (
 
 func zpack(rr RR, msg []byte, off int, compression map[string]uint16) (int, error) {
 	switch x := rr.(type) {
+	case *TSIG:
+		return x.pack(msg, off, compression)
 	case *DELEG:
+		return x.pack(msg, off, compression)
+	case *OPT:
 		return x.pack(msg, off, compression)
 	case *NSEC3:
 		return x.pack(msg, off, compression)
@@ -162,8 +166,6 @@ func zpack(rr RR, msg []byte, off int, compression map[string]uint16) (int, erro
 		return x.pack(msg, off, compression)
 	case *ZONEMD:
 		return x.pack(msg, off, compression)
-	case *OPT:
-		return x.pack(msg, off, compression)
 	case *RESINFO:
 		return x.pack(msg, off, compression)
 	case *SVCB:
@@ -179,8 +181,6 @@ func zpack(rr RR, msg []byte, off int, compression map[string]uint16) (int, erro
 	case *AXFR:
 		return x.pack(msg, off, compression)
 	case *IXFR:
-		return x.pack(msg, off, compression)
-	case *TSIG:
 		return x.pack(msg, off, compression)
 	}
 	// if here, we don't have the RR in our pkg, check if it does Packer.
@@ -192,7 +192,11 @@ func zpack(rr RR, msg []byte, off int, compression map[string]uint16) (int, erro
 
 func zunpack(rr RR, data cryptobyte.String, msgBuf []byte) error {
 	switch x := rr.(type) {
+	case *TSIG:
+		return x.unpack(data, msgBuf)
 	case *DELEG:
+		return x.unpack(data, msgBuf)
+	case *OPT:
 		return x.unpack(data, msgBuf)
 	case *NSEC3:
 		return x.unpack(data, msgBuf)
@@ -344,8 +348,6 @@ func zunpack(rr RR, data cryptobyte.String, msgBuf []byte) error {
 		return x.unpack(data, msgBuf)
 	case *ZONEMD:
 		return x.unpack(data, msgBuf)
-	case *OPT:
-		return x.unpack(data, msgBuf)
 	case *RESINFO:
 		return x.unpack(data, msgBuf)
 	case *SVCB:
@@ -361,8 +363,6 @@ func zunpack(rr RR, data cryptobyte.String, msgBuf []byte) error {
 	case *AXFR:
 		return x.unpack(data, msgBuf)
 	case *IXFR:
-		return x.unpack(data, msgBuf)
-	case *TSIG:
 		return x.unpack(data, msgBuf)
 	}
 	// if here, we don't have the RR in our pkg, check if it does Packer.
