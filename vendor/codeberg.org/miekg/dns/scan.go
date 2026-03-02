@@ -110,7 +110,7 @@ func Read(r io.Reader) (RR, error) { return read(r, "") }
 
 func read(r io.Reader, file string) (RR, error) {
 	zp := NewZoneParser(r, ".", file)
-	zp.SetDefaultTTL(defaultTTL)
+	zp.SetDefaultTTL(3600)
 	rr, _ := zp.Next()
 	return rr, zp.Err()
 }

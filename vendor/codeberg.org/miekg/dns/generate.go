@@ -87,7 +87,7 @@ func (zp *ZoneParser) generate(l dnslex.Lex) (RR, bool) {
 	zp.sub = NewZoneParser(r, zp.origin, zp.file)
 	zp.sub.includeDepth, zp.sub.IncludeAllowFunc = zp.includeDepth, zp.IncludeAllowFunc
 	zp.sub.generateDisallowed = true
-	zp.sub.SetDefaultTTL(defaultTTL)
+	zp.sub.SetDefaultTTL(3600)
 	return zp.subNext()
 }
 

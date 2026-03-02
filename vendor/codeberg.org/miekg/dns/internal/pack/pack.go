@@ -149,12 +149,12 @@ func A(a netip.Addr, msg []byte, off int) (int, error) {
 	if off+net.IPv4len > len(msg) {
 		return len(msg), &Error{"overflow a"}
 	}
-	if !a.Is4() && !a.Is4In6() {
-		return len(msg), &Error{"invalid a"}
-	}
 	val := a.As4()
-	_ = msg[off+3]
-	copy(msg[off:off+net.IPv4len], val[:])
+	_ = msg[off+net.IPv4len-1]
+	msg[off] = val[0]
+	msg[off+1] = val[1]
+	msg[off+2] = val[2]
+	msg[off+3] = val[3]
 	return off + net.IPv4len, nil
 }
 
@@ -163,8 +163,23 @@ func AAAA(aaaa netip.Addr, msg []byte, off int) (int, error) {
 		return len(msg), &Error{"overflow aaaa"}
 	}
 	val := aaaa.As16()
-	_ = msg[off+15]
-	copy(msg[off:off+net.IPv6len], val[:])
+	_ = msg[off+net.IPv6len-1]
+	msg[off] = val[0]
+	msg[off+1] = val[1]
+	msg[off+2] = val[2]
+	msg[off+3] = val[3]
+	msg[off+4] = val[4]
+	msg[off+5] = val[5]
+	msg[off+6] = val[6]
+	msg[off+7] = val[7]
+	msg[off+8] = val[8]
+	msg[off+9] = val[9]
+	msg[off+10] = val[10]
+	msg[off+11] = val[11]
+	msg[off+12] = val[12]
+	msg[off+13] = val[13]
+	msg[off+14] = val[14]
+	msg[off+15] = val[15]
 	return off + net.IPv6len, nil
 }
 

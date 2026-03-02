@@ -58,9 +58,9 @@ For developers please read the
   - Many helper/debug functions are moved into _internal_ packages, making the top-level much, much cleaner.
 - Fast.
   - recvmmsg(2) and TCP pipeling suppport.
-  - The `cmd/reflect` server does ~400K/330K qps UDP/TCP respectively on the right hardware.
+  - The `cmd/reflect` server does ~420K/340K qps UDP/TCP respectively on the right hardware.
     - Since a46996c I can get ~400K (UDP) qps on my laptop (M2/Asahi Linux), also see 1766e44, 86b53fe and 06e5e0f.
-    - On my Dell XPS 17 (Intel) it is similar-ish (~300K/240K qps UDP/TCP).
+    - On my Dell XPS 17 (Intel) it is similar-ish (~310K/250K qps UDP/TCP).
     - On other Intel/AMD hardware it is lower (~200K (UDP) qps) - yet to understand why.
   - See `cmd/reflect` and do a `go build; make new.txt` to redo the performance test. Requires `dnsperf` to be installed.
   - The SE zone (8M RRs) is parsed in \~11s (\~730K RR/s), the CH zones (15M RRs) is parsed in \~14s (\~1M RR/s).
@@ -78,6 +78,7 @@ A not-so-up-to-date-list-that-may-be-actually-current:
   [ODOH](https://developers.cloudflare.com/1.1.1.1/encryption/oblivious-dns-over-https/).
 - [DNSControl](https://dnscontrol.org/) - DNSControl is an opinionated platform for seamlessly managing your DNS configuration across any number of DNS hosts,
   both in the cloud or in your own infrastructure.
+- [Gonemaster](https://codeberg.org/pawal/gonemaster) - Gonemaster is a Go implementation of the DNS test framework Zonemaster engine and CLI.
 
 Send pull request if you want to be listed here.
 
@@ -216,6 +217,7 @@ _all of them_ and _then some_
 - 9567 - DNS Error Reporting
 - 9606 - DNS Resolver Information
 - 9660 - Zone version
+- 9715 - IP Fragmentation Avoidance in DNS over UDP
 - 9859 - DSYNC RR
 - draft-ietf-compact-denial - CO bit
 - draft-ietf-deleg - DELEG RR

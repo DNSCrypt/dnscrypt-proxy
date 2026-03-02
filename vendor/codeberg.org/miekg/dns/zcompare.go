@@ -1125,27 +1125,6 @@ func (rr *NSAPPTR) compare(b RR) (x int) {
 }
 
 func (rr *NSEC3) compare(b RR) (x int) {
-	x = slices.Compare(rr.TypeBitMap, b.(*NSEC3).TypeBitMap)
-	if x != 0 {
-		if x < 0 {
-			return -1
-		}
-		return 1
-	}
-	x = comparehex(rr.Salt, b.(*NSEC3).Salt)
-	if x != 0 {
-		if x < 0 {
-			return -1
-		}
-		return 1
-	}
-	x = comparebase32(rr.NextDomain, b.(*NSEC3).NextDomain)
-	if x != 0 {
-		if x < 0 {
-			return -1
-		}
-		return 1
-	}
 	x = int(rr.Hash) - int(b.(*NSEC3).Hash)
 	if x != 0 {
 		if x < 0 {
@@ -1174,7 +1153,28 @@ func (rr *NSEC3) compare(b RR) (x int) {
 		}
 		return 1
 	}
+	x = comparehex(rr.Salt, b.(*NSEC3).Salt)
+	if x != 0 {
+		if x < 0 {
+			return -1
+		}
+		return 1
+	}
 	x = int(rr.HashLength) - int(b.(*NSEC3).HashLength)
+	if x != 0 {
+		if x < 0 {
+			return -1
+		}
+		return 1
+	}
+	x = comparebase32(rr.NextDomain, b.(*NSEC3).NextDomain)
+	if x != 0 {
+		if x < 0 {
+			return -1
+		}
+		return 1
+	}
+	x = slices.Compare(rr.TypeBitMap, b.(*NSEC3).TypeBitMap)
 	if x != 0 {
 		if x < 0 {
 			return -1
