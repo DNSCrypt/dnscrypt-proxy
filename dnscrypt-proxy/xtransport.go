@@ -34,8 +34,6 @@
 //  Go 1.24
 //  • tls.X25519MLKEM768            hybrid PQ KEM: X25519 + ML-KEM-768
 //  • tls.CurvePreferences          post-quantum-first curve list
-//  • net/http.HTTP2Config           standard-library H2 config (PingTimeout,
-//                                   WriteByteTimeout, StrictMaxConcurrentReqs)
 //  • Swiss Tables                  ~30 % faster map lookups (automatic)
 //  • strings.SplitSeq              parseAndCacheAltSvc: zero-alloc ";" parse
 //
@@ -429,7 +427,7 @@ func (x *XTransport) CachedHosts() iter.Seq[string] {
 
 // ── Transport construction ──────────────────────────────────────────────────────
 
-// rebuildTransport — HTTP2Config (Go 1.24) on Transport + x/net/http2 tuning.
+// rebuildTransport — x/net/http2.ConfigureTransports for H2 keepalive tuning.
 func (x *XTransport) rebuildTransport() {
 	dlog.Debug("Rebuilding transport")
 	if x.transport != nil {
@@ -448,14 +446,7 @@ func (x *XTransport) rebuildTransport() {
 		MaxResponseHeaderBytes: MaxResponseHeaderBytes,
 		WriteBufferSize:        32 * 1024,
 		ReadBufferSize:         32 * 1024,
-		ForceAttemptHTTP2: true,
-		// HTTP2Config (Go 1.24): standard-library H2 config; applied before
-		// x/net/http2.ConfigureTransports which layers additional settings on top.
-		HTTP2Config: &http.HTTP2Config{
-			PingTimeout:                   15 * time.Second,
-			WriteByteTimeout:              10 * time.Second,
-			StrictMaxConcurrentRequests:   false,
-		},
+		ForceAttemptHTTP2:      true,
 		TLSClientConfig:        x.tlsClientConfig,
 		DialContext:            x.buildDialContext(),
 	}
