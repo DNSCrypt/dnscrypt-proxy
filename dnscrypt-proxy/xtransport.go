@@ -29,8 +29,8 @@
 //                                     O(1) pointer comparison vs O(n) string cmp
 //  • iter.Seq[string]                CachedHosts() push-iterator, no alloc
 //  • maps.All(m) iter.Seq2[K,V]      IP cache live-set pass in PurgeExpiredCache
-//  • sync.Map.All() iter.Seq2        PurgeExpiredCache iterates resolveMu
-//                                     with the Go 1.23 iterator (replaces Range)
+//  • sync.Map.Range + unique.Handle  PurgeExpiredCache iterates resolveMu
+//                                     with O(1)-keyed Range; Delete is safe
 //
 //  Go 1.24
 //  • tls.X25519MLKEM768              hybrid post-quantum KEM (FIPS 203 /
@@ -226,7 +226,6 @@ func ParseIP(ipStr string) net.IP {
 	return net.ParseIP(ipStr)
 }
 
-// netIPToNetipAddr — Go 1.20 [4]byte/[16]byte avoids AddrFromSlice copy.
 func netIPToNetipAddr(ip net.IP) (netip.Addr, bool) {
 	switch len(ip) {
 	case 4:
@@ -239,7 +238,6 @@ func netIPToNetipAddr(ip net.IP) (netip.Addr, bool) {
 	}
 }
 
-// uniqueNormalizedIPs — bytes.Clone for net.IP ([]byte), 0/1-elem fast paths.
 func uniqueNormalizedIPs(ips []net.IP) []net.IP {
 	switch len(ips) {
 	case 0:
@@ -276,7 +274,6 @@ func uniqueNormalizedIPs(ips []net.IP) []net.IP {
 
 // ── IP cache ────────────────────────────────────────────────────────────────────
 
-// saveCachedIPs — rand.Int64N (Go 1.22) lock-free jitter. max() (Go 1.21) floor.
 func (x *XTransport) saveCachedIPs(host string, ips []net.IP, ttl time.Duration) {
 	normalized := uniqueNormalizedIPs(ips)
 	if len(normalized) == 0 {
@@ -312,7 +309,6 @@ func (x *XTransport) saveCachedIP(host string, ip net.IP, ttl time.Duration) {
 	}
 }
 
-// markUpdatingCachedIP — placeholder for unseen hosts (prevents duplicate queries).
 func (x *XTransport) markUpdatingCachedIP(host string) {
 	until := time.Now().Add(x.timeout)
 	x.cachedIPs.Lock()
@@ -326,33 +322,20 @@ func (x *XTransport) markUpdatingCachedIP(host string) {
 	dlog.Debugf("[%s] IP address marked as updating", host)
 }
 
-// loadCachedIPs — bytes.Clone (Go 1.20) precise for net.IP. Pre-sized output.
 func (x *XTransport) loadCachedIPs(host string) (ips []net.IP, expired, updating bool) {
 	x.cachedIPs.RLock()
 	item, ok := x.cachedIPs.cache[host]
 	x.cachedIPs.RUnlock()
-	if !ok || item == nil {
-		return nil, false, false
-	}
+	if !ok || item == nil { return nil, false, false }
 	now := time.Now()
-	if item.updatingUntil != nil && now.Before(*item.updatingUntil) {
-		updating = true
-	}
-	if item.expiration != nil && now.After(*item.expiration) {
-		expired = true
-	}
-	if len(item.ips) == 0 {
-		return nil, expired, updating
-	}
+	if item.updatingUntil != nil && now.Before(*item.updatingUntil) { updating = true }
+	if item.expiration != nil && now.After(*item.expiration) { expired = true }
+	if len(item.ips) == 0 { return nil, expired, updating }
 	out := make([]net.IP, 0, len(item.ips))
-	for _, ip := range item.ips {
-		out = append(out, bytes.Clone(ip))
-	}
+	for _, ip := range item.ips { out = append(out, bytes.Clone(ip)) }
 	return out, expired, updating
 }
 
-// PurgeExpiredCache — maps.DeleteFunc (Go 1.21) + maps.All (Go 1.23) for IP cache;
-// sync.Map.All (Go 1.23) with unique.Handle[string] assertion for resolveMu.
 func (x *XTransport) PurgeExpiredCache() (ipsPurged, altSvcPurged, muPurged int) {
 	now := time.Now()
 	grace := now.Add(-ExpiredCachedIPGraceTTL)
@@ -387,16 +370,17 @@ func (x *XTransport) PurgeExpiredCache() (ipsPurged, altSvcPurged, muPurged int)
 	x.altSupport.Unlock()
 
 	// ── Per-host resolution mutexes ───────────────────────────────────────────
-	// sync.Map.All (Go 1.23) returns an iter.Seq2[any, any]. Keys were stored as
-	// unique.Handle[string] by hostResolveMu; extract the string with .Value().
-	// Deletion during All iteration is safe: All is backed by sync.Map.Range.
-	for key, _ := range x.resolveMu.All() {
+	// sync.Map.Range: safe concurrent iteration; Delete during Range is documented.
+	// Keys were stored as unique.Handle[string] by hostResolveMu (Go 1.23);
+	// extract the host string with h.Value() for the live-set lookup.
+	x.resolveMu.Range(func(key, _ any) bool {
 		h := key.(unique.Handle[string])
 		if _, ok := live[h.Value()]; !ok {
 			x.resolveMu.Delete(key)
 			muPurged++
 		}
-	}
+		return true
+	})
 
 	if ipsPurged > 0 || altSvcPurged > 0 || muPurged > 0 {
 		dlog.Debugf("PurgeExpiredCache: %d IP, %d Alt-Svc, %d mutex entries removed",
@@ -405,9 +389,6 @@ func (x *XTransport) PurgeExpiredCache() (ipsPurged, altSvcPurged, muPurged int)
 	return ipsPurged, altSvcPurged, muPurged
 }
 
-// ResetCache wipes all three caches atomically.
-// clear() builtin (Go 1.21): single-call map empty, retains backing allocation.
-// sync.Map.Range+Delete: documented safe concurrent deletion.
 func (x *XTransport) ResetCache() {
 	// clear() builtin (Go 1.21) empties a map in a single runtime call,
 	// preserving the backing allocation so subsequent inserts avoid rehash.
@@ -428,15 +409,12 @@ func (x *XTransport) ResetCache() {
 	dlog.Debug("ResetCache: all IP, Alt-Svc, and mutex cache entries cleared")
 }
 
-// CachedHosts — Go 1.23 iter.Seq[string] push-iterator. RLock held.
 func (x *XTransport) CachedHosts() iter.Seq[string] {
 	return func(yield func(string) bool) {
 		x.cachedIPs.RLock()
 		defer x.cachedIPs.RUnlock()
 		for host := range x.cachedIPs.cache {
-			if !yield(host) {
-				return
-			}
+			if !yield(host) { return }
 		}
 	}
 }
@@ -444,7 +422,6 @@ func (x *XTransport) CachedHosts() iter.Seq[string] {
 
 // ── Transport construction ──────────────────────────────────────────────────────
 
-// rebuildTransport — WriteBufferSize/ReadBufferSize 32 KiB. MaxIdleConnsPerHost=MaxIdleConns.
 func (x *XTransport) rebuildTransport() {
 	dlog.Debug("Rebuilding transport")
 	if x.transport != nil {
@@ -492,7 +469,6 @@ func (x *XTransport) rebuildTransport() {
 	}
 }
 
-// buildDialContext — DualStack absent (Go 1.16). dialNet explicit. portStr+Dialer once.
 func (x *XTransport) buildDialContext() func(context.Context, string, string) (net.Conn, error) {
 	timeout, keepAlive := x.timeout, x.keepAlive
 	useIPv4, useIPv6 := x.useIPv4, x.useIPv6
@@ -662,20 +638,16 @@ mRGunUHBcnWEvgJBQl9nJEiU0Zsnvgc/ubhPgXRR4Xq37Z0j4r7g1SgEEzwxA57d
 emyPxgcYxn/eR44/KJ4EBs+lVDR3veyJm+kXQ99b21/+jh5Xos1AnX5iItreGCc=
 -----END CERTIFICATE-----`)
 
-// buildTLSConfig — tls.X25519MLKEM768 (Go 1.24) post-quantum KEM first.
 func (x *XTransport) buildTLSConfig() *tls.Config {
 	cfg := &tls.Config{}
-
 	if x.keyLogWriter != nil {
 		cfg.KeyLogWriter = x.keyLogWriter
 	}
-
 	certPool, certPoolErr := x509.SystemCertPool()
 	creds := x.tlsClientCreds
-
 	if creds.rootCA != "" {
 		if certPool == nil {
-			dlog.Fatalf("Custom root CA not supported on this platform: %v", certPoolErr)
+			dlog.Fatalf("Custom root CA not supported: %v", certPoolErr)
 		}
 		pem, err := os.ReadFile(creds.rootCA)
 		if err != nil {
@@ -684,13 +656,9 @@ func (x *XTransport) buildTLSConfig() *tls.Config {
 		certPool.AppendCertsFromPEM(pem)
 	}
 	if certPool != nil {
-		// Embed ISRG Root X1 so DoH servers with Let's Encrypt certificates
-		// validate correctly even on OS trust stores built before ISRG Root X1
-		// was widely distributed (older Android, Windows Server editions, etc.).
 		certPool.AppendCertsFromPEM(isrgRootX1PEM)
 		cfg.RootCAs = certPool
 	}
-
 	if creds.clientCert != "" {
 		cert, err := tls.LoadX509KeyPair(creds.clientCert, creds.clientKey)
 		if err != nil {
@@ -699,16 +667,18 @@ func (x *XTransport) buildTLSConfig() *tls.Config {
 		}
 		cfg.Certificates = []tls.Certificate{cert}
 	}
-
 	if x.tlsDisableSessionTickets {
 		cfg.SessionTicketsDisabled = true
 	}
 	if x.tlsPreferRSA {
-		// Restrict to TLS 1.2 max to force RSA cipher suites.
 		cfg.MaxVersion = tls.VersionTLS12
 	}
-
-	// Prefer hardware-accelerated ciphers when available.
+	cfg.CurvePreferences = []tls.CurveID{
+		tls.X25519MLKEM768,
+		tls.X25519,
+		tls.CurveP256,
+		tls.CurveP384,
+	}
 	if hasAESGCMHardwareSupport {
 		cfg.CipherSuites = []uint16{
 			tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
@@ -734,33 +704,37 @@ func (x *XTransport) buildTLSConfig() *tls.Config {
 
 // ── DNS resolution ──────────────────────────────────────────────────────────────
 
-// resolveUsingSystem — net.Resolver{PreferGo:true}: ctx-aware on all platforms.
 func (x *XTransport) resolveUsingSystem(host string, returnIPv4, returnIPv6 bool) ([]net.IP, time.Duration, error) {
-	all, err := net.LookupIP(host)
-	if err != nil && len(all) == 0 {
+	r := &net.Resolver{PreferGo: true}
+	ctx, cancel := context.WithTimeout(context.Background(), SystemResolverTimeout)
+	defer cancel()
+	addrs, err := r.LookupIPAddr(ctx, host)
+	if err != nil && len(addrs) == 0 {
 		return nil, SystemResolverIPTTL, err
 	}
 	if returnIPv4 && returnIPv6 {
-		return all, SystemResolverIPTTL, err
+		ips := make([]net.IP, 0, len(addrs))
+		for _, a := range addrs {
+			ips = append(ips, a.IP)
+		}
+		return ips, SystemResolverIPTTL, err
 	}
-	ips := make([]net.IP, 0, len(all))
-	for _, ip := range all {
-		v4 := ip.To4()
+	out := make([]net.IP, 0, len(addrs))
+	for _, a := range addrs {
+		v4 := a.IP.To4()
 		switch {
 		case returnIPv4 && v4 != nil:
-			ips = append(ips, v4)
+			out = append(out, v4)
 		case returnIPv6 && v4 == nil:
-			ips = append(ips, ip)
+			out = append(out, a.IP)
 		}
 	}
-	if len(ips) == 0 {
-		// Return nil, not []net.IP{}, so len(ips)==0 is always the correct test.
+	if len(out) == 0 {
 		return nil, SystemResolverIPTTL, err
 	}
-	return ips, SystemResolverIPTTL, err
+	return out, SystemResolverIPTTL, err
 }
 
-// resolveUsingResolver — [2]uint16 stack-alloc + per-type context + errNoIPRecords sentinel.
 func (x *XTransport) resolveUsingResolver(
 	proto, host, resolver string,
 	returnIPv4, returnIPv6 bool,
@@ -824,25 +798,22 @@ func (x *XTransport) resolveUsingResolver(
 	return nil, 0, errNoIPRecords
 }
 
-// resolveUsingServers — range-over-int (Go 1.22) + min() (Go 1.21) + errors.Join (Go 1.20).
 func (x *XTransport) resolveUsingServers(
 	proto, host string,
 	resolvers []string,
 	returnIPv4, returnIPv6 bool,
 ) (ips []net.IP, ttl time.Duration, err error) {
 	if len(resolvers) == 0 {
-		return nil, 0, errors.New("empty resolver list")
+		return nil, 0, errEmptyResolvers
 	}
-	var lastErr error
+	var errs []error
 	for i, resolver := range resolvers {
 		delay := resolverRetryInitialBackoff
-		for attempt := 1; attempt <= resolverRetryCount; attempt++ {
+		for attempt := range resolverRetryCount {
 			ips, ttl, err = x.resolveUsingResolver(proto, host, resolver, returnIPv4, returnIPv6)
 			if err == nil && len(ips) > 0 {
 				if i > 0 {
-					// Promote the winning resolver to the front.
-					dlog.Infof("Resolution succeeded via %s[%s]; promoting to first",
-						proto, resolver)
+					dlog.Infof("Resolution succeeded via %s[%s]; promoting to first", proto, resolver)
 					resolvers[0], resolvers[i] = resolvers[i], resolvers[0]
 				}
 				return ips, ttl, nil
@@ -850,22 +821,17 @@ func (x *XTransport) resolveUsingServers(
 			if err == nil {
 				err = errors.New("no IP addresses returned")
 			}
-			lastErr = err
-			dlog.Debugf("Resolver attempt %d/%d failed for [%s] via [%s] (%s): %v",
-				attempt, resolverRetryCount, host, resolver, proto, err)
-			if attempt < resolverRetryCount {
+			errs = append(errs, fmt.Errorf("%s[%s] attempt %d: %w", proto, resolver, attempt+1, err))
+			dlog.Debugf("Resolver attempt %d/%d for [%s] via [%s] (%s): %v",
+				attempt+1, resolverRetryCount, host, resolver, proto, err)
+			if attempt < resolverRetryCount-1 {
 				time.Sleep(delay)
-				// min() builtin (Go 1.21) replaces hand-rolled ternary.
 				delay = min(delay*2, resolverRetryMaxBackoff)
 			}
 		}
-		dlog.Infof("Unable to resolve [%s] using [%s] (%s): %v",
-			host, resolver, proto, lastErr)
+		dlog.Infof("Unable to resolve [%s] using [%s] (%s)", host, resolver, proto)
 	}
-	if lastErr == nil {
-		lastErr = errors.New("no IP addresses returned")
-	}
-	return nil, 0, lastErr
+	return nil, 0, errors.Join(errs...)
 }
 
 func (x *XTransport) resolve(host string, returnIPv4, returnIPv6 bool) ([]net.IP, time.Duration, error) {
@@ -922,7 +888,6 @@ func (x *XTransport) resolve(host string, returnIPv4, returnIPv6 bool) ([]net.IP
 	return ips, ttl, err
 }
 
-// hostResolveMu — unique.Make (Go 1.23) interns host for O(1) sync.Map key comparison.
 func (x *XTransport) hostResolveMu(host string) *sync.Mutex {
 	// unique.Make (Go 1.23) interns the host string so the sync.Map key is a
 	// pointer-equality comparison (O(1)) rather than a byte-by-byte string
@@ -932,7 +897,6 @@ func (x *XTransport) hostResolveMu(host string) *sync.Mutex {
 	return v.(*sync.Mutex)
 }
 
-// resolveAndUpdateCache — double-checked locking; max() TTL floor (Go 1.21).
 func (x *XTransport) resolveAndUpdateCache(host string) error {
 	if x.proxyDialer != nil || x.httpProxyFunction != nil {
 		return nil // proxy resolves names itself; nothing to do
@@ -999,7 +963,6 @@ func (x *XTransport) resolveAndUpdateCache(host string) error {
 
 // ── HTTP fetch engine ───────────────────────────────────────────────────────────
 
-// Fetch — sentinel errors + http.NewRequestWithContext + sha512.Sum512_256.
 func (x *XTransport) Fetch(
 	method string,
 	url *url.URL,
@@ -1012,45 +975,29 @@ func (x *XTransport) Fetch(
 	if timeout <= 0 {
 		timeout = x.timeout
 	}
-
-	client := http.Client{
-		Transport: x.transport,
-		Timeout:   timeout,
-	}
-
+	client := http.Client{Transport: x.transport, Timeout: timeout}
 	host, port := ExtractHostAndPort(url.Host, 443)
 	hasAltSupport := false
-
-	// ── Select transport ───────────────────────────────────────────────────────
 	if x.h3Transport != nil {
 		if x.http3Probe {
-			// Always probe H3, ignoring the Alt-Svc cache.
 			client.Transport = x.h3Transport
-			dlog.Debugf("Probing HTTP/3 for [%s]", url.Host)
 		} else {
 			x.altSupport.RLock()
 			entry, inCache := x.altSupport.cache[url.Host]
 			x.altSupport.RUnlock()
 			if inCache {
 				hasAltSupport = true
-				negativeExpired := entry.port == 0 &&
-					!entry.validTo.IsZero() &&
+				negativeExpired := entry.port == 0 && !entry.validTo.IsZero() &&
 					time.Now().After(entry.validTo)
 				switch {
 				case entry.port > 0 && int(entry.port) == port:
 					client.Transport = x.h3Transport
-					dlog.Debugf("Using HTTP/3 for [%s]", url.Host)
 				case negativeExpired:
-					// Timed negative entry has expired; allow Alt-Svc re-parsing.
 					hasAltSupport = false
 				}
 			}
 		}
 	}
-
-	// ── Build request headers ──────────────────────────────────────────────────
-	// Capacity 5 covers the common case (User-Agent, Cache-Control, Accept,
-	// Content-Type, Accept-Encoding) without ever needing to grow.
 	header := make(http.Header, 5)
 	header.Set("User-Agent", "dnscrypt-proxy")
 	header.Set("Cache-Control", "max-stale")
@@ -1060,22 +1007,16 @@ func (x *XTransport) Fetch(
 	if contentType != "" {
 		header.Set("Content-Type", contentType)
 	}
-
-	// Append a SHA-512/256 body hash to the query string so upstream caches
-	// correctly distinguish requests with different payloads.
 	if body != nil {
-		h := sha512.Sum512(*body)
+		h := sha512.Sum512_256(*body)
 		qs := url.Query()
-		qs.Add("body_hash", hex.EncodeToString(h[:32]))
+		qs.Add("body_hash", hex.EncodeToString(h[:]))
 		u2 := *url
 		u2.RawQuery = qs.Encode()
 		url = &u2
 	}
-
-	// ── Pre-flight checks ──────────────────────────────────────────────────────
 	if x.proxyDialer == nil && strings.HasSuffix(host, ".onion") {
-		return nil, 0, nil, 0,
-			errors.New("onion service requires a configured Tor proxy")
+		return nil, 0, nil, 0, errNoTorProxy
 	}
 	if err := x.resolveAndUpdateCache(host); err != nil {
 		dlog.Errorf("Unable to resolve [%s]: check bootstrap_resolvers or system resolver", host)
@@ -1084,69 +1025,50 @@ func (x *XTransport) Fetch(
 	if compress && body == nil {
 		header.Set("Accept-Encoding", "gzip")
 	}
-
-	// ── Build the request ──────────────────────────────────────────────────────
 	bodyLen := 0
 	if body != nil {
 		bodyLen = len(*body)
 	}
-	req := &http.Request{
-		Method:        method,
-		URL:           url,
-		Header:        header,
-		Close:         false,
-		ContentLength: int64(bodyLen),
-	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	var reqBody io.Reader
 	if body != nil {
-		req.Body = io.NopCloser(bytes.NewReader(*body))
+		reqBody = bytes.NewReader(*body)
 	}
-
-	// ── Execute ────────────────────────────────────────────────────────────────
+	req, err := http.NewRequestWithContext(ctx, method, url.String(), reqBody)
+	if err != nil {
+		return nil, 0, nil, 0, err
+	}
+	req.Header = header
+	req.ContentLength = int64(bodyLen)
 	start := time.Now()
 	resp, err := client.Do(req)
 	rtt := time.Since(start)
-
-	// HTTP/3 failed — record a timed negative entry and fall back to HTTP/2.
 	if err != nil && client.Transport == x.h3Transport {
 		dlog.Debugf("HTTP/3 failed for [%s]: %v — retrying over HTTP/2", url.Host, err)
 		x.altSupport.Lock()
-		x.altSupport.cache[url.Host] = altSvcEntry{
-			port:    0,
-			validTo: time.Now().Add(altSvcNegativeTTL),
-		}
+		x.altSupport.cache[url.Host] = altSvcEntry{port: 0, validTo: time.Now().Add(altSvcNegativeTTL)}
 		x.altSupport.Unlock()
-
 		client.Transport = x.transport
 		if body != nil {
 			req.Body = io.NopCloser(bytes.NewReader(*body))
-			// MUST reset ContentLength; net/http requires it after body reassignment.
 			req.ContentLength = int64(bodyLen)
 		}
 		start = time.Now()
 		resp, err = client.Do(req)
 		rtt = time.Since(start)
 	}
-
-	// Single unconditional defer placed immediately after the nil guard.
-	// This is the only close call for resp.Body on every code path, eliminating
-	// any double-close or missed-close risk.
 	if resp != nil {
 		defer resp.Body.Close()
 	}
-
-	// Determine status code before any early-exit so callers always receive it.
 	statusCode := 503
 	if resp != nil {
 		statusCode = resp.StatusCode
 	}
-
-	// ── Validate response ──────────────────────────────────────────────────────
 	if err == nil {
 		switch {
 		case resp == nil:
-			// Guard against nil resp BEFORE accessing resp.StatusCode (which
-			// would panic). This case comes first in the switch intentionally.
-			err = errors.New("server returned an empty response")
+			err = errEmptyResponse
 		case resp.StatusCode < 200 || resp.StatusCode > 299:
 			err = errors.New(resp.Status)
 		}
@@ -1154,21 +1076,14 @@ func (x *XTransport) Fetch(
 		dlog.Debugf("HTTP error [%s]: %v — closing idle connections", url.Host, err)
 		x.transport.CloseIdleConnections()
 	}
-
 	if err != nil {
 		dlog.Debugf("[%s]: %v", req.URL, err)
 		return nil, statusCode, nil, rtt, err
 	}
-
-	// Parse Alt-Svc for future H3 upgrades, but only when we don't already
-	// have a current Alt-Svc entry for this host.
 	if x.h3Transport != nil && !hasAltSupport {
 		x.parseAndCacheAltSvc(url.Host, port, resp.Header)
 	}
-
 	tlsState := resp.TLS
-
-	// ── Read and optionally decompress the body ────────────────────────────────
 	var bodyReader io.ReadCloser = resp.Body
 	if compress && resp.Header.Get("Content-Encoding") == "gzip" {
 		gr, grErr := gzip.NewReader(io.LimitReader(resp.Body, MaxHTTPBodyLength))
@@ -1178,7 +1093,6 @@ func (x *XTransport) Fetch(
 		defer gr.Close()
 		bodyReader = gr
 	}
-
 	bin, err := io.ReadAll(io.LimitReader(bodyReader, MaxHTTPBodyLength))
 	if err != nil {
 		return nil, statusCode, tlsState, rtt, err
@@ -1186,7 +1100,6 @@ func (x *XTransport) Fetch(
 	return bin, statusCode, tlsState, rtt, nil
 }
 
-// parseAndCacheAltSvc — strings.CutPrefix (Go 1.20).
 func (x *XTransport) parseAndCacheAltSvc(host string, port int, header http.Header) {
 	// Honour an active negative entry — skip parsing entirely.
 	x.altSupport.RLock()
