@@ -78,6 +78,7 @@ A not-so-up-to-date-list-that-may-be-actually-current:
   [ODOH](https://developers.cloudflare.com/1.1.1.1/encryption/oblivious-dns-over-https/).
 - [DNSControl](https://dnscontrol.org/) - DNSControl is an opinionated platform for seamlessly managing your DNS configuration across any number of DNS hosts,
   both in the cloud or in your own infrastructure.
+- [Gonemaster](https://codeberg.org/pawal/gonemaster) - Gonemaster is a Go implementation of the DNS test framework Zonemaster engine and CLI.
 
 Send pull request if you want to be listed here.
 
@@ -216,6 +217,7 @@ _all of them_ and _then some_
 - 9567 - DNS Error Reporting
 - 9606 - DNS Resolver Information
 - 9660 - Zone version
+- 9715 - IP Fragmentation Avoidance in DNS over UDP
 - 9859 - DSYNC RR
 - draft-ietf-compact-denial - CO bit
 - draft-ietf-deleg - DELEG RR

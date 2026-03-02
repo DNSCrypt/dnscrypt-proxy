@@ -25,8 +25,9 @@ import (
 //go:generate go run clone_generate.go
 
 const (
-	// DefaultMsgSize is the standard default for messages larger than 512 bytes.
-	DefaultMsgSize = 4096
+	// DefaultMsgSize is the standard default for messages larger than 512 bytes. This limit is the
+	// recommendation from RFC 9715.
+	DefaultMsgSize = 1400
 	// MinMsgSize is the minimal size of a DNS message.
 	MinMsgSize = 512
 	// MaxMsgSize is the largest possible DNS message.
@@ -35,8 +36,6 @@ const (
 	MsgHeaderSize = 12
 	// MaxSerialIncrement is the maximum difference between two serial numbers. See RFC 1982.
 	MaxSerialIncrement = math.MaxUint32 / 2 // 2147483647
-
-	defaultTTL = 3600 // Default internal TTL.
 )
 
 // An RR represents a DNS resource record.
@@ -95,7 +94,9 @@ type Packer interface {
 
 // Parser is used for custom RR types that are parsed from their text presentation.
 type Parser interface {
-	// Scan gets the current origin and a slice of all non-blank tokens left on the current line.
+	// Parse gets the current origin and a slice of tokens left on the current line. The tokens contains all
+	// non-blank works and quotes left on the current line, i.e. if your have "this" and "that" tokens will
+	// contain: " this " " that "
 	Parse(tokens []string, origin string) error
 }
 

@@ -7,7 +7,11 @@ import "codeberg.org/miekg/dns/internal/dnslex"
 
 func parse(rr RR, c *dnslex.Lexer, o string) error {
 	switch x := rr.(type) {
+	case *TSIG:
+		return x.parse(c, o)
 	case *DELEG:
+		return x.parse(c, o)
+	case *OPT:
 		return x.parse(c, o)
 	case *NSEC3:
 		return x.parse(c, o)
@@ -159,8 +163,6 @@ func parse(rr RR, c *dnslex.Lexer, o string) error {
 		return x.parse(c, o)
 	case *ZONEMD:
 		return x.parse(c, o)
-	case *OPT:
-		return x.parse(c, o)
 	case *RESINFO:
 		return x.parse(c, o)
 	case *SVCB:
@@ -176,8 +178,6 @@ func parse(rr RR, c *dnslex.Lexer, o string) error {
 	case *AXFR:
 		return x.parse(c, o)
 	case *IXFR:
-		return x.parse(c, o)
-	case *TSIG:
 		return x.parse(c, o)
 	case *ZONEVERSION:
 		return x.parse(c, o)
