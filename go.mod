@@ -11,7 +11,6 @@ require (
 	github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf
 	github.com/coreos/go-systemd/v22 v22.7.0
 	github.com/dchest/safefile v0.0.0-20151022103144-855e8d98f185
-	golang.org/x/net/http2@latest
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/gorilla/websocket v1.5.3
 	github.com/hashicorp/go-immutable-radix v1.3.1
@@ -45,9 +44,6 @@ require (
 	github.com/powerman/deepequal v0.1.0 // indirect
 	github.com/quic-go/qpack v0.6.0 // indirect
 	github.com/smartystreets/goconvey v1.8.1 // indirect
-	github.com/valyala/bytebufferpool v1.0.0 // indirect
-	github.com/valyala/fasthttp v1.34.0 // indirect
-	github.com/valyala/fastrand v1.0.0 // indirect
 	golang.org/x/text v0.34.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260203192932-546029d2fa20 // indirect
 	google.golang.org/grpc v1.78.0 // indirect
