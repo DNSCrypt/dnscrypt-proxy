@@ -106,7 +106,7 @@ import (
 	stamps "github.com/jedisct1/go-dnsstamps"
 	"github.com/quic-go/quic-go"
 	"github.com/quic-go/quic-go/http3"
-	"golang.org/x/net/http2"
+	"github.com/dgrr/http2"
 	netproxy "golang.org/x/net/proxy"
 	"golang.org/x/sys/cpu"
 )
