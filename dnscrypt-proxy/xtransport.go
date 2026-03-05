@@ -149,6 +149,13 @@ var (
 	errSystemResolverTimeout = errors.New("system resolver timed out")
 )
 
+// gzipReaderPool heavily reduces GC pressure by recycling expensive gzip.Reader structures.
+var gzipReaderPool = sync.Pool{
+	New: func() any {
+		return new(gzip.Reader)
+	},
+}
+
 type CachedIPItem struct {
 	ips           []net.IP
 	expiration    *time.Time
@@ -204,6 +211,9 @@ type XTransport struct {
 	keyLogWriter   io.Writer
 
 	resolveMu sync.Map
+
+	// Pre-allocated static headers to avoid map instantiation per-request
+	baseHeaders http.Header 
 }
 
 
@@ -213,6 +223,11 @@ func NewXTransport() *XTransport {
 	if err := isIPAndPort(DefaultBootstrapResolver); err != nil {
 		panic("DefaultBootstrapResolver is not a valid IP:port — " + err.Error())
 	}
+
+	baseHeaders := make(http.Header, 5)
+	baseHeaders.Set("User-Agent", "dnscrypt-proxy")
+	baseHeaders.Set("Cache-Control", "max-stale")
+
 	return &XTransport{
 		cachedIPs:          CachedIPs{cache: make(map[string]*CachedIPItem)},
 		altSupport:         AltSupport{cache: make(map[string]altSvcEntry)},
@@ -221,6 +236,7 @@ func NewXTransport() *XTransport {
 		bootstrapResolvers: []string{DefaultBootstrapResolver},
 		ignoreSystemDNS:    true,
 		useIPv4:            true,
+		baseHeaders:        baseHeaders,
 	}
 }
 
@@ -483,6 +499,18 @@ func (x *XTransport) rebuildTransport() {
 func (x *XTransport) buildDialContext() func(context.Context, string, string) (net.Conn, error) {
 	timeout, keepAlive := x.timeout, x.keepAlive
 	useIPv4, useIPv6 := x.useIPv4, x.useIPv6
+
+	// Create dialer once to avoid repeated struct allocations on the hot path
+	d := &net.Dialer{
+		Timeout: timeout,
+		KeepAliveConfig: net.KeepAliveConfig{
+			Enable:   true,
+			Idle:     keepAlive,
+			Interval: max(keepAlive/3, time.Second),
+			Count:    3,
+		},
+	}
+
 	return func(ctx context.Context, network, addrStr string) (net.Conn, error) {
 		host, port := ExtractHostAndPort(addrStr, stamps.DefaultPort)
 		portStr := strconv.Itoa(port)
@@ -514,18 +542,7 @@ func (x *XTransport) buildDialContext() func(context.Context, string, string) (n
 		case useIPv6 && !useIPv4:
 			dialNet = "tcp6"
 		}
-		// net.KeepAliveConfig (Go 1.23): granular TCP keepalive parameters.
-		// DoH connections may idle for minutes; detecting dead links quickly
-		// prevents stalled DNS queries from blocking for the full dial timeout.
-		d := &net.Dialer{
-			Timeout: timeout,
-			KeepAliveConfig: net.KeepAliveConfig{
-				Enable:   true,
-				Idle:     keepAlive,
-				Interval: max(keepAlive/3, time.Second),
-				Count:    3,
-			},
-		}
+
 		var lastErr error
 		for i, target := range targets {
 			var conn net.Conn
@@ -1097,9 +1114,11 @@ func (x *XTransport) Fetch(
 			}
 		}
 	}
-	header := make(http.Header, 5)
-	header.Set("User-Agent", "dnscrypt-proxy")
-	header.Set("Cache-Control", "max-stale")
+
+	// Fast map clone using Go's internal highly-optimized runtime map cloning,
+	// drastically outperforming `make` + manual `Set` per request.
+	header := x.baseHeaders.Clone()
+
 	if accept != "" {
 		header.Set("Accept", accept)
 	}
@@ -1188,11 +1207,18 @@ func (x *XTransport) Fetch(
 	tlsState := resp.TLS
 	var bodyReader io.ReadCloser = resp.Body
 	if compress && resp.Header.Get("Content-Encoding") == "gzip" {
-		gr, grErr := gzip.NewReader(io.LimitReader(resp.Body, MaxHTTPBodyLength))
+		gr := gzipReaderPool.Get().(*gzip.Reader)
+		grErr := gr.Reset(io.LimitReader(resp.Body, MaxHTTPBodyLength))
 		if grErr != nil {
+			gzipReaderPool.Put(gr)
 			return nil, statusCode, tlsState, rtt, grErr
 		}
-		defer gr.Close()
+
+		// Ensure the reader is closed and recycled into the sync.Pool
+		defer func() {
+			gr.Close()
+			gzipReaderPool.Put(gr)
+		}()
 		bodyReader = gr
 	}
 	bin, err := io.ReadAll(io.LimitReader(bodyReader, MaxHTTPBodyLength))
