@@ -246,34 +246,37 @@ func netIPToNetipAddr(ip net.IP) (netip.Addr, bool) {
 }
 
 func uniqueNormalizedIPs(ips []net.IP) []net.IP {
-	switch len(ips) {
-	case 0:
+	if len(ips) == 0 { return nil }
+	if len(ips) == 1 {
+		if ips[0] != nil { return []net.IP{bytes.Clone(ips[0])} }
 		return nil
-	case 1:
-		if ips[0] == nil {
-			return nil
-		}
-		// Deep-copy the single element and return immediately.
-		return []net.IP{bytes.Clone(ips[0])} // bytes.Clone (Go 1.20): net.IP is []byte
 	}
 
-	seen := make(map[netip.Addr]struct{}, len(ips))
+	// For small DNS responses (1-4 IPs), an O(N^2) loop over a stack 
+	// array completely out-performs the overhead of map allocation.
+	var seenBuf [8]netip.Addr 
+	seen := seenBuf[:0]
 	out := make([]net.IP, 0, len(ips))
+
 	for _, ip := range ips {
-		if ip == nil {
-			continue
-		}
+		if ip == nil { continue }
 		addr, ok := netIPToNetipAddr(ip)
-		if !ok {
-			// Non-standard length — include without deduplication.
-			out = append(out, bytes.Clone(ip))  // bytes.Clone: precise for []byte
+		if !ok { // Non-standard length
+			out = append(out, bytes.Clone(ip))
 			continue
 		}
-		if _, dup := seen[addr]; dup {
-			continue
+
+		isDup := false
+		for _, s := range seen {
+			if s == addr {
+				isDup = true
+				break
+			}
 		}
-		seen[addr] = struct{}{}
-		out = append(out, bytes.Clone(ip))  // bytes.Clone: precise for []byte
+		if !isDup {
+			seen = append(seen, addr)
+			out = append(out, bytes.Clone(ip))
+		}
 	}
 	return out
 }
@@ -590,6 +593,12 @@ func (x *XTransport) buildH3DialFunc() func(context.Context, string, *tls.Config
 		}
 
 		var lastErr error
+
+		// Clone the shared config once before the loop so ServerName can be set without racing
+		// and without incurring deep-copy penalties for each target evaluation.
+		tlsCfg := x.tlsClientConfig.Clone()
+		tlsCfg.ServerName = host
+
 		for i, t := range targets {
 			udpAddr, err := net.ResolveUDPAddr(t.network, t.addr)
 			if err != nil {
@@ -607,9 +616,7 @@ func (x *XTransport) buildH3DialFunc() func(context.Context, string, *tls.Config
 				}
 				continue
 			}
-			// Clone the shared config so ServerName can be set without racing.
-			tlsCfg := x.tlsClientConfig.Clone()
-			tlsCfg.ServerName = host
+
 			conn, err := quic.DialEarly(ctx, udpConn, udpAddr, tlsCfg, cfg)
 			if err != nil {
 				_ = udpConn.Close()
@@ -974,11 +981,13 @@ func (x *XTransport) resolve(host string, returnIPv4, returnIPv6 bool) ([]net.IP
 }
 
 func (x *XTransport) hostResolveMu(host string) *sync.Mutex {
-	// unique.Make (Go 1.23) interns the host string so the sync.Map key is a
-	// pointer-equality comparison (O(1)) rather than a byte-by-byte string
-	// comparison (O(n)). Two unique.Make calls with identical strings return the
-	// same Handle, guaranteeing correct LoadOrStore deduplication.
-	v, _ := x.resolveMu.LoadOrStore(unique.Make(host), &sync.Mutex{})
+	k := unique.Make(host)
+	// Fast-path: O(1) read, zero allocations
+	if v, ok := x.resolveMu.Load(k); ok {
+		return v.(*sync.Mutex)
+	}
+	// Slow-path: allocate and store
+	v, _ := x.resolveMu.LoadOrStore(k, new(sync.Mutex))
 	return v.(*sync.Mutex)
 }
 
