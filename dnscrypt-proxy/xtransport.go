@@ -358,9 +358,11 @@ func (x *XTransport) PurgeExpiredCache() (ipsPurged, altSvcPurged, muPurged int)
 		return item.expiration != nil && item.expiration.Before(grace)
 	})
 	ipsPurged = before - len(x.cachedIPs.cache)
-	// maps.All (Go 1.23) builds the live-host set in one idiomatic pass.
+
+	// Build a live-host set directly from the post-purge map while holding the lock.
+	// This avoids any ambiguity around iter.Seq2 ranging forms and is allocation-minimal.
 	live := make(map[string]struct{}, len(x.cachedIPs.cache))
-	for host := range maps.All(x.cachedIPs.cache) {
+	for host := range x.cachedIPs.cache {
 		live[host] = struct{}{}
 	}
 	x.cachedIPs.Unlock()
@@ -622,6 +624,9 @@ func (x *XTransport) buildH3DialFunc() func(context.Context, string, *tls.Config
 		return nil, lastErr
 	}
 }
+
+
+// ── TLS configuration ───────────────────────────────────────────────────────────
 
 var isrgRootX1PEM = []byte(`-----BEGIN CERTIFICATE-----
 MIIFazCCA1OgAwIBAgIRAIIQz7DSQONZRGPgu2OCiwAwDQYJKoZIhvcNAQELBQAw
@@ -1057,7 +1062,10 @@ func (x *XTransport) Fetch(
 	if timeout <= 0 {
 		timeout = x.timeout
 	}
-	client := http.Client{Transport: x.transport, Timeout: timeout}
+
+	// Rely on per-request context deadlines; avoids the extra timer and duplicated cancellation.
+	client := http.Client{Transport: x.transport}
+
 	host, port := ExtractHostAndPort(url.Host, 443)
 	hasAltSupport := false
 	if x.h3Transport != nil {
@@ -1152,6 +1160,9 @@ func (x *XTransport) Fetch(
 		case resp == nil:
 			err = errEmptyResponse
 		case resp.StatusCode < 200 || resp.StatusCode > 299:
+			// Drain a small amount so the underlying connection can be reused.
+			// (Especially helpful for H2 keep-alives when servers send a body on errors.)
+			_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 32*1024))
 			err = errors.New(resp.Status)
 		}
 	} else {
@@ -1183,11 +1194,12 @@ func (x *XTransport) Fetch(
 }
 
 func (x *XTransport) parseAndCacheAltSvc(host string, port int, header http.Header) {
+	now := time.Now()
 	x.altSupport.RLock()
 	existing, inCache := x.altSupport.cache[host]
 	x.altSupport.RUnlock()
 	if inCache && existing.port == 0 &&
-		(existing.validTo.IsZero() || time.Now().Before(existing.validTo)) {
+		(existing.validTo.IsZero() || now.Before(existing.validTo)) {
 		dlog.Debugf("Alt-Svc: negative cache still valid for [%s]; skipping", host)
 		return
 	}
