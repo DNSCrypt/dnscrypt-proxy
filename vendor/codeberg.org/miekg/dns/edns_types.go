@@ -61,7 +61,7 @@ func (o *LLQ) String() string {
 //
 // This record must be put in the pseudo section.
 type REPORTING struct {
-	AgentDomain string `dns:"domain-name"`
+	AgentDomain string `dns:"name"`
 }
 
 func (o *REPORTING) Len() int    { return tlv + len(o.AgentDomain) }

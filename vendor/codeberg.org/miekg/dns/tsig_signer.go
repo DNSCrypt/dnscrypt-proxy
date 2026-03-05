@@ -148,11 +148,11 @@ func (tw *timerWireFmt) pack(buf []byte) (int, error) {
 // RFC 2845, section 3.4.2. TSIG Variables.
 type tsigWireFmt struct {
 	// from Header
-	Name  string `dns:"domain-name"`
+	Name  string `dns:"name"`
 	Class uint16
 	TTL   uint32
 	// Rdata of the TSIG
-	Algorithm  string `dns:"domain-name"`
+	Algorithm  string `dns:"name"`
 	TimeSigned uint64 `dns:"uint48"`
 	Fudge      uint16
 	// MACSize, MAC and OrigId excluded

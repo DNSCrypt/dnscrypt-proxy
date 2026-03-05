@@ -5,7 +5,7 @@ go 1.26.0
 exclude google.golang.org/genproto v0.0.0-20230410155749-daa745c078e1
 
 require (
-	codeberg.org/miekg/dns v0.6.65
+	codeberg.org/miekg/dns v0.6.66
 	github.com/BurntSushi/toml v1.6.0
 	github.com/VividCortex/ewma v1.2.0
 	github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf
@@ -34,11 +34,9 @@ require (
 )
 
 require (
-	github.com/andybalholm/brotli v1.0.4 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/hashicorp/go-syslog v1.0.0 // indirect
 	github.com/hashicorp/golang-lru v1.0.2 // indirect
-	github.com/klauspost/compress v1.15.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/powerman/deepequal v0.1.0 // indirect
