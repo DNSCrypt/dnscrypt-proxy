@@ -95,7 +95,7 @@ func InfoToKey(i Info) uint16 {
 
 // SERVERNAME info add nameserver hosts names to the DELEG RR.
 type SERVERNAME struct {
-	Hostnames []string `dns:"domain-name"`
+	Hostnames []string `dns:"name"`
 }
 
 func (s *SERVERNAME) String() string { return strings.Join(s.Hostnames, ",") }
@@ -110,7 +110,7 @@ func (s *SERVERNAME) Len() int {
 
 // INCLUDEDELEGPARAM info adds DELEGPARAM domains to the DELEG RR.
 type INCLUDEDELEGPARAM struct {
-	Domains []string `dns:"domain-name"`
+	Domains []string `dns:"name"`
 }
 
 func (s *INCLUDEDELEGPARAM) String() string { return strings.Join(s.Domains, ",") }

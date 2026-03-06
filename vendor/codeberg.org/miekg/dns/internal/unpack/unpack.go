@@ -1,6 +1,7 @@
 package unpack
 
 import (
+	"bytes"
 	"encoding/base32"
 	"encoding/base64"
 	"encoding/hex"
@@ -129,13 +130,96 @@ func Name(s *cryptobyte.String, msgBuf []byte) (string, error) {
 			}
 
 			if len(name)+int(c) >= maxNamePresentationLength {
-				return "", &Error{"name exceeded max wire-format octets: " + string(*s)}
+				return "", &Error{"name exceeded max wire-format octets"}
 			}
 
 			ln := len(name)
 			name = name[:ln+int(c)+1]          // extend slice
 			cs.CopyBytes(name[ln : ln+int(c)]) // copy label into correct place
 			name[ln+int(c)] = '.'
+
+		case 0xC0: // pointer
+			if msgBuf == nil {
+				return "", &Error{"pointer in uncompressable name"}
+			}
+			var c1 byte
+			if !cs.ReadUint8(&c1) {
+				return "", &Error{"overflow name"}
+			}
+			// If this is the first pointer we've seen, we need to advance s to our current position.
+			if !ptrs {
+				*s = cs
+			}
+			// The pointer should always point backwards to an earlier part of the message. Technically it could work pointing
+			// forwards, but we choose not to support that as RFC 1035 specifically refers to a "prior
+			// occurrence".
+			off := uint16(c&^0xC0)<<8 | uint16(c1)
+			if int(off) >= Offset(cs, msgBuf)-2 {
+				return "", &Error{"pointer not to prior occurrence of name"}
+			}
+			// Jump to the offset in msgBuf. We carry msgBuf around with us solely for this line.
+			cs = msgBuf[off:]
+			ptrs = true
+
+		default: // 0x80 and 0x40 are reserved
+			return "", &Error{"reserved domain name label type"}
+		}
+	}
+}
+
+// MName unpacks a name in a cryptobyte.String, while also taking care of escaped dots (\.).
+func MName(s *cryptobyte.String, msgBuf []byte) (string, error) {
+	name := make([]byte, 0, maxNamePresentationLength*2) // everything can be escaped...
+	var ptrs bool
+
+	// If we never see a pointer, we need to ensure that we advance s to our final position.
+	cs := *s
+
+	var c byte
+	for {
+		if !cs.ReadUint8(&c) {
+			return "", &Error{"overflow name"}
+		}
+		switch c & 0xC0 {
+		case 0x00: // literal string
+			if c == 0 { // If we see a zero-length label (root label), this is the end of the name.
+				if !ptrs {
+					*s = cs
+				}
+				if len(name) == 0 {
+					return ".", nil
+				}
+				return string(name), nil
+			}
+
+			if len(name)+int(c) >= maxNamePresentationLength {
+				return "", &Error{"name exceeded max wire-format octets: " + string(*s)}
+			}
+
+			ln := len(name)
+			name = name[:ln+int(c)+1]          // extend slice
+			cs.CopyBytes(name[ln : ln+int(c)]) // copy label into correct place
+
+			// if this names contains dots, it's embedded and should be escaped.
+			dots := bytes.Count(name[ln:], []byte{'.'})
+			if dots == 0 {
+				name[ln+int(c)] = '.'
+				break
+			}
+
+			// Add the backslash at the right point. We walk the name from the back by creating juts enough
+			// room to add (mutiple) '\' is we see a dot. We copy the current character to the back while
+			// keeping track of the dots we saw.
+			name = name[:ln+int(c)+dots+1]
+			dot := 0
+			for k := ln + int(c); k > ln; k-- {
+				name[k+dots-dot] = name[k]
+				if name[k] == '.' {
+					dot++
+					name[k+dots-dot] = '\\'
+				}
+			}
+			name[ln+int(c)+dots] = '.'
 
 		case 0xC0: // pointer
 			if msgBuf == nil {

@@ -115,7 +115,7 @@ type RRset []RR
 // Header is the header in a DNS resource record. It implements the RR interface, as a header is the RR
 // without any data.
 type Header struct {
-	Name  string `dns:"cdomain-name"` // Name is the owner name of the RR.
+	Name  string `dns:"cname"` // Name is the owner name of the RR.
 	TTL   uint32 // TTL is the time-to-live of the RR.
 	Class uint16 // Class is the class of the RR, this is almost always [ClassINET].
 }

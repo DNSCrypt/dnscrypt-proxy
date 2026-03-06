@@ -1,0 +1,5 @@
+cmd/atomdns/man/*.7 linguist-generated=true
+cmd/atomdns/man/*.1 linguist-generated=true
+cmd/atomdns/man/*.5 linguist-generated=true
+z*.go linguist-generated=true
+**/z*.go linguist-generated=true
