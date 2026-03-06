@@ -271,6 +271,8 @@ type DNSKEY struct {
 	Protocol  uint8
 	Algorithm uint8
 	PublicKey string `dns:"base64"`
+	// Tag is 0, once KeyTag is called for this key this is filed with the actual key tag.
+	Tag uint16 `dns:"-"`
 }
 
 // RKEY data. See https://www.iana.org/assignments/dns-parameters/RKEY/rkey-completed-template.

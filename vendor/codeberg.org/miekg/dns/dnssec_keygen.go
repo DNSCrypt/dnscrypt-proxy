@@ -14,7 +14,7 @@ import (
 
 // Generate generates a DNSKEY of the given bit size. The public part is put inside the DNSKEY record.
 // The Algorithm in the key must be set as this will define what kind of DNSKEY will be generated.
-// The ECDSA algorithms imply a fixed keysize, in that case bits should be set to the size of the algorithm.
+// Some algorithms imply a fixed key size, in that case bits should be set to the size of the algorithm.
 func (k *DNSKEY) Generate(bits int) (crypto.PrivateKey, error) {
 	switch k.Algorithm {
 	case RSASHA1, RSASHA256, RSASHA1NSEC3SHA1:

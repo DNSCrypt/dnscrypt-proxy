@@ -395,6 +395,7 @@ func (rr *DNSKEY) Clone() RR {
 			rr.Protocol,
 			rr.Algorithm,
 			rr.PublicKey,
+			rr.Tag,
 		},
 	}
 }
