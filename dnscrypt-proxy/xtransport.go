@@ -3,30 +3,29 @@
 // Ground-up rewrite. Public API 100% unchanged — drop-in replacement.
 // Fully modernized for Go 1.26+ with zero-allocation hot-paths.
 //
-// ── Go version improvements ───────────────────────────────────────────────────
+// ── Go 1.26 language & stdlib features used ───────────────────────────────────
 //
-//  Go 1.26
-//  • new(expr) builtin             alloc-and-init in one step
-//  • errors.AsType[E]              reflection-free error inspection
-//  • tls.SecP256r1MLKEM768         hybrid PQ KEM: P-256 + ML-KEM-768
-//  • tls.SecP384r1MLKEM1024        hybrid PQ KEM: P-384 + ML-KEM-1024
-//  • io.ReadAll faster             2× faster, 50% less memory in Fetch
-//  • Green Tea GC                  optimized memory allocation patterns
-//  • net.Dialer.DialTCP context    context-aware specific dial methods
-//  • HTTP2Config.StrictMaxConcurrentRequests  controls h2 stream limits
+//  • new(expr)                     alloc-and-init in one step (saveCachedIPs, markUpdatingCachedIP)
+//  • errors.AsType[E]              type-safe, reflection-free error inspection (resolveAndUpdateCache)
+//  • tls.SecP256r1MLKEM768         hybrid post-quantum KEM: P-256 + ML-KEM-768
+//  • tls.SecP384r1MLKEM1024        hybrid post-quantum KEM: P-384 + ML-KEM-1024
+//  • io.ReadAll ~2× faster         50% less intermediate memory in Fetch
+//  • Green Tea GC default          10–40% lower GC overhead; allocation patterns optimized
+//  • net.Dialer.DialTCP            context-aware specific dial methods
+//  • http.HTTP2Config               native HTTP/2 configuration without x/net import
 //
-//  Go 1.25
+// ── Go 1.25 ───────────────────────────────────────────────────────────────────
 //  • sync.WaitGroup.Go             parallel A+AAAA resolution
 //
-//  Go 1.24
+// ── Go 1.24 ───────────────────────────────────────────────────────────────────
 //  • strings.SplitSeq              iterator-based string splitting
 //  • unique.Make                   interned string handles for zero-alloc map lookups
 //  • net.KeepAliveConfig           fine-grained TCP keep-alive control
 //
-//  Go 1.23
+// ── Go 1.23 ───────────────────────────────────────────────────────────────────
 //  • maps.DeleteFunc               in-place filtered map deletion
 //
-//  Go 1.21
+// ── Go 1.21 ───────────────────────────────────────────────────────────────────
 //  • context.WithTimeoutCause      propagates timeout root-cause
 //
 // ── Performance & Efficiency ──────────────────────────────────────────────────
@@ -49,14 +48,14 @@
 //
 // ── HTTP/2 Optimizations ──────────────────────────────────────────────────────
 //
-//  • ReadIdleTimeout / PingTimeout   detects dead h2 connections via PING frames
+//  • http.HTTP2Config                Go 1.26 native h2 config struct
+//  • StrictMaxConcurrentRequests     opens new conn when stream limit reached
+//  • ReadIdleTimeout / PingTimeout   PING probe to detect dead h2 connections
 //  • WriteByteTimeout                detects unresponsive write paths
-//  • StrictMaxConcurrentStreams=false allows opening new h2 conns past stream limit
-//  • HTTP2Config integration         Go 1.26 native h2 config (no x/net import needed)
-//  • Connection prewarming           background TLS+h2 handshake to warm pool
 //  • TLS session resumption cache    avoids full TLS handshake on reconnect
-//  • ForceAttemptHTTP2               ensures h2 upgrade without explicit config
-//  • 32 KiB read/write buffers       larger I/O buffers reduce syscall overhead
+//  • Connection prewarming           background TLS+h2 handshake to warm pool
+//  • ForceAttemptHTTP2               ensures h2 upgrade transparently
+//  • 32 KiB read/write buffers       reduces syscall overhead
 //
 package main
 
@@ -123,28 +122,31 @@ const (
 	altSvcNegativeTTL           = 10 * time.Minute
 )
 
-// DNS lookup speed constants
+// DNS lookup speed constants.
 const (
-	// specRefreshRatio is the fraction of TTL at which speculative background
-	// refresh kicks in (75% = refresh when 3/4 of TTL has elapsed).
+	// specRefreshRatio triggers speculative background refresh when this
+	// fraction of TTL has elapsed (75%).
 	specRefreshRatio = 0.75
 
-	// maxConcurrentRefreshes limits the number of background IP refresh
-	// goroutines to prevent thundering herd effects.
+	// maxConcurrentRefreshes caps background refresh goroutines to prevent
+	// thundering herd effects.
 	maxConcurrentRefreshes = 4
 
-	// dialRaceStagger is the delay between staggered connection attempts
+	// dialRaceStagger is the interval between staggered connection attempts
 	// per RFC 8305 Section 5 (Happy Eyeballs v2).
 	dialRaceStagger = 250 * time.Millisecond
+)
 
+// HTTP/2 tuning constants.
+const (
 	// h2ReadIdleTimeout is the idle duration before an HTTP/2 PING probe
 	// is sent to detect dead connections.
 	h2ReadIdleTimeout = 30 * time.Second
 
-	// h2PingTimeout is the deadline for the peer to respond to the PING.
+	// h2PingTimeout is the deadline for the peer to respond to a PING.
 	h2PingTimeout = 15 * time.Second
 
-	// h2WriteByteTimeout detects unresponsive write paths on HTTP/2 connections.
+	// h2WriteByteTimeout detects unresponsive write paths on h2 connections.
 	h2WriteByteTimeout = 10 * time.Second
 )
 
@@ -166,7 +168,7 @@ var gzipReaderPool = sync.Pool{
 	},
 }
 
-// refreshSemaphore limits the number of concurrent speculative background refresh goroutines.
+// refreshSemaphore limits concurrent speculative background refresh goroutines.
 var refreshSemaphore = make(chan struct{}, maxConcurrentRefreshes)
 
 type CachedIPItem struct {
@@ -234,7 +236,7 @@ type XTransport struct {
 	refreshRunning sync.Map
 
 	// tlsSessionCache enables TLS session resumption across connections,
-	// avoiding a full TLS 1.3 handshake on reconnect.
+	// avoiding a full TLS 1.3 handshake on reconnect (saves one RTT).
 	tlsSessionCache tls.ClientSessionCache
 }
 
@@ -294,7 +296,7 @@ func uniqueNormalizedIPs(ips []net.IP) []net.IP {
 		return nil
 	}
 
-	// For small DNS responses (1-4 IPs), an O(N²) loop over a stack
+	// For small DNS responses (1–4 IPs), an O(N²) loop over a stack
 	// array completely out-performs the overhead of map allocation.
 	var seenBuf [8]netip.Addr
 	seen := seenBuf[:0]
@@ -342,13 +344,14 @@ func (x *XTransport) saveCachedIPs(host string, ips []net.IP, ttl time.Duration)
 		return
 	}
 
-	// Shuffle IPs on save to distribute load across resolved addresses
+	// Shuffle on save to distribute load across resolved addresses.
 	shuffleIPs(normalized)
 
 	item := &CachedIPItem{ips: normalized}
 	if ttl >= 0 {
 		ttl = max(ttl, MinResolverIPTTL)
 		ttl += time.Duration(rand.Int64N(int64(ResolverIPTTLMaxJitter)))
+		// Go 1.26: new(expr) — alloc-and-init a *time.Time in one step.
 		item.expiration = new(time.Now().Add(ttl))
 	}
 
@@ -374,6 +377,7 @@ func (x *XTransport) saveCachedIP(host string, ip net.IP, ttl time.Duration) {
 func (x *XTransport) markUpdatingCachedIP(host string) {
 	x.cachedIPs.Lock()
 	if item, ok := x.cachedIPs.cache[host]; ok {
+		// Go 1.26: new(expr)
 		item.updatingUntil = new(time.Now().Add(x.timeout))
 	} else {
 		x.cachedIPs.cache[host] = &CachedIPItem{updatingUntil: new(time.Now().Add(x.timeout))}
@@ -406,8 +410,8 @@ func (x *XTransport) loadCachedIPs(host string) (ips []net.IP, expired, updating
 	return out, expired, updating
 }
 
-// shouldSpecRefresh returns true if the cached entry is past the speculative
-// refresh threshold (75% of TTL elapsed) but not yet fully expired.
+// shouldSpecRefresh returns true if the cached entry has passed the speculative
+// refresh threshold (75% of TTL elapsed) but is not yet fully expired.
 func (x *XTransport) shouldSpecRefresh(host string) bool {
 	x.cachedIPs.RLock()
 	item, ok := x.cachedIPs.cache[host]
@@ -417,17 +421,15 @@ func (x *XTransport) shouldSpecRefresh(host string) bool {
 	}
 	now := time.Now()
 	if now.After(*item.expiration) {
-		return false // already expired — not speculative
+		return false // already expired
 	}
 	if item.updatingUntil != nil && now.Before(*item.updatingUntil) {
-		return false // already updating
+		return false // already being updated
 	}
-	// Compute the speculative threshold from the TTL midpoint.
-	// Since we don't store the original creation time, estimate from
-	// expiration minus MinResolverIPTTL as an approximation.
-	ttlEstimate := time.Until(*item.expiration) + MinResolverIPTTL
+	remaining := time.Until(*item.expiration)
+	ttlEstimate := remaining + MinResolverIPTTL
 	threshold := time.Duration(float64(ttlEstimate) * specRefreshRatio)
-	return time.Until(*item.expiration) < (ttlEstimate - threshold)
+	return remaining < (ttlEstimate - threshold)
 }
 
 // triggerSpeculativeRefresh fires a non-blocking background goroutine to
@@ -435,7 +437,7 @@ func (x *XTransport) shouldSpecRefresh(host string) bool {
 // and deduplicated per host.
 func (x *XTransport) triggerSpeculativeRefresh(host string) {
 	if _, loaded := x.refreshRunning.LoadOrStore(host, struct{}{}); loaded {
-		return // already refreshing this host
+		return
 	}
 	select {
 	case refreshSemaphore <- struct{}{}:
@@ -478,7 +480,6 @@ func (x *XTransport) PurgeExpiredCache() (ipsPurged, altSvcPurged, muPurged int)
 	})
 	ipsPurged = before - len(x.cachedIPs.cache)
 
-	// Build a live-host set directly from the post-purge map while holding the lock.
 	live := make(map[string]struct{}, len(x.cachedIPs.cache))
 	for host := range x.cachedIPs.cache {
 		live[host] = struct{}{}
@@ -567,9 +568,10 @@ func (x *XTransport) rebuildTransport() {
 		TLSClientConfig:        x.tlsClientConfig,
 		DialContext:            x.buildDialContext(),
 
-		// Go 1.26: native HTTP2Config — controls h2 behavior without x/net/http2 import.
-		// StrictMaxConcurrentRequests=false allows opening new TCP connections when
-		// the peer's MAX_CONCURRENT_STREAMS limit is reached, instead of queuing.
+		// Go 1.26: http.HTTP2Config — native h2 config on the Transport.
+		// StrictMaxConcurrentRequests=false allows opening new TCP connections
+		// when the peer's MAX_CONCURRENT_STREAMS limit is reached, preventing
+		// head-of-line blocking under high concurrency.
 		HTTP2: &http.HTTP2Config{
 			StrictMaxConcurrentRequests: false,
 		},
@@ -578,7 +580,7 @@ func (x *XTransport) rebuildTransport() {
 		transport.Proxy = x.httpProxyFunction
 	}
 
-	// Configure HTTP/2 via x/net/http2 for settings not yet in std.
+	// Configure HTTP/2 via x/net/http2 for fine-grained settings.
 	// ReadIdleTimeout sends PINGs on idle connections to detect dead peers;
 	// PingTimeout closes the connection if no PONG arrives;
 	// WriteByteTimeout detects unresponsive write paths.
@@ -609,9 +611,8 @@ func (x *XTransport) rebuildTransport() {
 }
 
 // prewarmConnection fires a background goroutine that establishes a TLS+HTTP/2
-// connection to the given host before the first real request arrives. This
-// eliminates the cold-start latency of DNS resolution + TCP + TLS handshake
-// from the user-visible critical path.
+// connection to the given host before the first real request, eliminating the
+// cold-start latency of DNS + TCP + TLS from the user-visible critical path.
 func (x *XTransport) prewarmConnection(host string) {
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), TLSHandshakeTimeout)
@@ -628,7 +629,7 @@ func (x *XTransport) prewarmConnection(host string) {
 
 // dialRace implements RFC 8305 Happy Eyeballs-style staggered connection racing.
 // It launches TCP dial attempts with a configurable delay between them, returning
-// the first successful connection and cancelling all others.
+// the first successful connection and cancelling all remaining in-flight dials.
 func dialRace(
 	ctx context.Context,
 	d *net.Dialer,
@@ -660,7 +661,6 @@ func dialRace(
 
 	for i, target := range targets {
 		i, target := i, target
-		// Stagger launches by dialRaceStagger (250 ms per RFC 8305 §5)
 		if i > 0 {
 			timer := time.NewTimer(dialRaceStagger * time.Duration(i))
 			select {
@@ -697,9 +697,9 @@ func dialRace(
 			collected++
 			if r.err == nil && firstConn == nil {
 				firstConn = r.conn
-				raceCancel() // cancel remaining dials
+				raceCancel()
 			} else if r.conn != nil {
-				_ = r.conn.Close() // close losing connection
+				_ = r.conn.Close()
 			}
 			if r.err != nil {
 				lastErr = r.err
@@ -723,6 +723,7 @@ func (x *XTransport) buildDialContext() func(context.Context, string, string) (n
 	useIPv4, useIPv6 := x.useIPv4, x.useIPv6
 
 	// Create dialer once to avoid repeated struct allocations on the hot path.
+	// Go 1.24: net.KeepAliveConfig for fine-grained TCP keep-alive control.
 	d := &net.Dialer{
 		Timeout: timeout,
 		KeepAliveConfig: net.KeepAliveConfig{
@@ -750,12 +751,12 @@ func (x *XTransport) buildDialContext() func(context.Context, string, string) (n
 		}
 		cachedIPs, expired, _ := x.loadCachedIPs(host)
 
-		// Trigger speculative background refresh if approaching TTL expiry
+		// Trigger speculative background refresh if approaching TTL expiry.
 		if !expired && len(cachedIPs) > 0 && x.shouldSpecRefresh(host) {
 			x.triggerSpeculativeRefresh(host)
 		}
 
-		// Shuffle cached IPs for load distribution across resolved addresses
+		// Shuffle cached IPs for load distribution.
 		if len(cachedIPs) > 1 {
 			shuffleIPs(cachedIPs)
 		}
@@ -776,7 +777,7 @@ func (x *XTransport) buildDialContext() func(context.Context, string, string) (n
 			dialNet = "tcp6"
 		}
 
-		// Use staggered connection racing when multiple IPs are available
+		// Use staggered connection racing when multiple IPs are available.
 		if len(targets) > 1 && x.proxyDialer == nil {
 			return dialRace(ctx, d, dialNet, targets, nil)
 		}
@@ -836,7 +837,7 @@ func (x *XTransport) buildH3DialFunc() func(context.Context, string, *tls.Config
 
 		cachedIPs, _, _ := x.loadCachedIPs(host)
 
-		// Shuffle for load distribution
+		// Shuffle for load distribution.
 		if len(cachedIPs) > 1 {
 			shuffleIPs(cachedIPs)
 		}
@@ -852,7 +853,7 @@ func (x *XTransport) buildH3DialFunc() func(context.Context, string, *tls.Config
 
 		var lastErr error
 
-		// Clone the shared config once before the loop
+		// Clone the shared config once before the loop.
 		tlsCfg := x.tlsClientConfig.Clone()
 		tlsCfg.ServerName = host
 
@@ -931,8 +932,8 @@ func (x *XTransport) buildTLSConfig() *tls.Config {
 		cfg.KeyLogWriter = x.keyLogWriter
 	}
 
-	// TLS session resumption: reuse previous TLS session tickets to avoid
-	// a full handshake on reconnect — saves one full RTT per new connection.
+	// TLS session resumption: reuse previous session tickets to avoid a full
+	// handshake on reconnect — saves one full RTT per new connection.
 	cfg.ClientSessionCache = x.tlsSessionCache
 
 	certPool, certPoolErr := x509.SystemCertPool()
@@ -967,8 +968,8 @@ func (x *XTransport) buildTLSConfig() *tls.Config {
 	}
 
 	// Go 1.26: SecP256r1MLKEM768 and SecP384r1MLKEM1024 post-quantum hybrid
-	// key exchanges are now enabled by default. We list them explicitly to
-	// control preference order and ensure post-quantum security.
+	// key exchanges are enabled by default. We list them explicitly to control
+	// preference order and ensure post-quantum security.
 	cfg.CurvePreferences = []tls.CurveID{
 		tls.X25519MLKEM768,
 		tls.SecP256r1MLKEM768,
@@ -1076,7 +1077,8 @@ func (x *XTransport) resolveRRType(
 
 // resolveUsingResolver resolves a host using a single DNS resolver.
 // When both IPv4 and IPv6 are requested, A and AAAA queries fire concurrently
-// via sync.WaitGroup.Go (Go 1.25+) for parallel dual-stack resolution.
+// via sync.WaitGroup.Go (Go 1.25+) for parallel dual-stack resolution per
+// RFC 8305 Section 3.
 func (x *XTransport) resolveUsingResolver(
 	proto, host, resolver string,
 	returnIPv4, returnIPv6 bool,
@@ -1109,7 +1111,7 @@ func (x *XTransport) resolveUsingResolver(
 		return rips, time.Duration(rttl) * time.Second, nil
 	}
 
-	// Parallel A + AAAA resolution via sync.WaitGroup.Go (Go 1.25)
+	// Go 1.25: sync.WaitGroup.Go — parallel A + AAAA resolution.
 	type rrResult struct {
 		ips    []net.IP
 		minTTL uint32
@@ -1167,7 +1169,7 @@ func (x *XTransport) resolveUsingServers(
 		for attempt := range resolverRetryCount {
 			ips, ttl, err = x.resolveUsingResolver(proto, host, resolver, returnIPv4, returnIPv6)
 			if err == nil && len(ips) > 0 {
-				// Adaptive resolver promotion: swap fastest to first
+				// Adaptive resolver promotion: swap fastest to first.
 				if i > 0 {
 					dlog.Infof("Resolution succeeded via %s[%s]; promoting to first", proto, resolver)
 					resolvers[0], resolvers[i] = resolvers[i], resolvers[0]
@@ -1242,12 +1244,13 @@ func (x *XTransport) resolve(host string, returnIPv4, returnIPv6 bool) ([]net.IP
 }
 
 func (x *XTransport) hostResolveMu(host string) *sync.Mutex {
+	// Go 1.24: unique.Make — interned string handles for zero-alloc map lookups.
 	k := unique.Make(host)
-	// Fast-path: O(1) read, zero allocations
+	// Fast-path: O(1) read, zero allocations.
 	if v, ok := x.resolveMu.Load(k); ok {
 		return v.(*sync.Mutex)
 	}
-	// Slow-path: allocate and store
+	// Slow-path: allocate and store.
 	v, _ := x.resolveMu.LoadOrStore(k, new(sync.Mutex))
 	return v.(*sync.Mutex)
 }
@@ -1278,7 +1281,7 @@ func (x *XTransport) resolveAndUpdateCache(host string) error {
 
 	ips, ttl, resolveErr := x.resolve(host, x.useIPv4, x.useIPv6)
 
-	// Go 1.26: errors.AsType[E] — reflection-free, type-safe error unwrapping
+	// Go 1.26: errors.AsType[E] — type-safe, reflection-free error unwrapping.
 	if resolveErr != nil {
 		if dnsErr, ok := errors.AsType[*net.DNSError](resolveErr); ok {
 			dlog.Debugf("[%s] DNS error: name=%s notFound=%v temp=%v",
@@ -1358,7 +1361,7 @@ func (x *XTransport) Fetch(
 		}
 	}
 
-	// Fast map clone using Go's highly-optimized internal map cloning
+	// Fast map clone using Go's highly-optimized internal map cloning.
 	header := x.baseHeaders.Clone()
 
 	if accept != "" {
@@ -1468,7 +1471,7 @@ func (x *XTransport) Fetch(
 		}()
 		bodyReader = gr
 	}
-	// Go 1.26: io.ReadAll is ~2× faster with ~50% less intermediate memory
+	// Go 1.26: io.ReadAll is ~2× faster with ~50% less intermediate memory.
 	bin, err := io.ReadAll(io.LimitReader(bodyReader, MaxHTTPBodyLength))
 	if err != nil {
 		return nil, statusCode, tlsState, rtt, err
@@ -1501,6 +1504,7 @@ outer:
 			break
 		}
 		j := 0
+		// Go 1.24: strings.SplitSeq — iterator-based string splitting.
 		for field := range strings.SplitSeq(entry, ";") {
 			if j >= 16 {
 				break
