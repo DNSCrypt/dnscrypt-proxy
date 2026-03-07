@@ -16,6 +16,8 @@ jobs:
         uses: actions/setup-go@v6.1.0
         with:
           go-version: '1.26.1'
+          env:
+          GOTOOLCHAIN: local
 
       - name: Build Optimized Binary
         env:
