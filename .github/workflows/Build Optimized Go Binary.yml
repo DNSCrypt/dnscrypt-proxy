@@ -12,10 +12,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
-      - name: Setup Go 1.26.0
+      - name: Setup Go 1.26.1
         uses: actions/setup-go@v6.1.0
         with:
-          go-version: '1.26.0'
+          go-version: '1.26.1'
 
       - name: Build Optimized Binary
         env:
