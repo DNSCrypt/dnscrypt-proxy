@@ -16,8 +16,9 @@ jobs:
         uses: actions/setup-go@v6.1.0
         with:
           go-version: '1.26.1'
-          env:
-          GOTOOLCHAIN: 'check-latest'
+  
+      - name: Set GOTOOLCHAIN
+        run: echo "GOTOOLCHAIN=local" >> $GITHUB_ENV
 
       - name: Build Optimized Binary
         env:
