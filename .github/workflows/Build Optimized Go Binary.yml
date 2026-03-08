@@ -22,7 +22,7 @@ jobs:
           CGO_ENABLED: 0
           GOOS: linux
           GOARCH: amd64
-          GOEXPERIMENT: "greenteagc,jsonv2,nodwarf5,simd"
+          GOEXPERIMENT: "greenteagc,jsonv2,nodwarf5,simd,NewInliner"
           GOGC: "2000"
           GOAMD64: v3
           GODEBUG: "thp=1,netdns=go,gctrace=0,madvdontneed=1,tls13=1,asyncpreemptoff=1"
