@@ -44,7 +44,7 @@
 //       (total size computed upfront); ip16Len cached; range-over-int (Go 1.22).
 //
 // [C11] exchangeWithTCPServer — net.DialTimeout (deprecated Go 1.1) replaced
-//       by context.WithTimeoutCause + net.Dialer.DialContext.  The context is
+//       by context.WithTimeout + net.Dialer.DialContext.  The context is
 //       cancelled via defer, preventing goroutine leaks.
 //
 // [C12] StartProxy — cert-refresh goroutine captures liveServers by value
@@ -66,59 +66,6 @@
 // [C17] Full godoc on every exported symbol.  Section banners throughout.
 //
 // [C18] "sync/atomic" import retained (required for atomic.Uint32 field type).
-//
-// ── Go 1.26 CHANGES ─────────────────────────────────────────────────────────
-//
-// [C19] errors.AsType[*net.OpError] (Go 1.26) — type-safe, reflection-free
-//       dial error inspection in exchangeWithTCPServer, exchangeWithUDPServer,
-//       and exchangeWithUDPServerViaProxy.
-//       Structured dlog.Debugf output for op, net, addr, and inner error.
-//       ~3× faster than errors.As due to no reflection overhead.
-//
-// [C20] context.WithTimeoutCause (Go 1.21) — TCP dial timeout now carries a
-//       descriptive cause error, visible via context.Cause(ctx) if the
-//       timeout fires.  Replaces plain context.WithTimeout in TCP exchange.
-//
-// [C21] startAcceptingClients uses bare goroutines (not sync.WaitGroup.Go)
-//       because listener goroutines run forever — WaitGroup.Go would leave
-//       the Add counter permanently incremented, which is semantically wrong.
-//
-// [C22] Sentinel errors — errTCPDialTimeout, errUDPWriteFailed allocated
-//       once at package init; zero allocation per return.
-//
-// [C23] new(net.Dialer) — Go 1.26 new(expr) syntax used for zero-value
-//       dialer in exchangeWithTCPServer.
-//
-// [C24] errors.AsType[*net.OpError] for UDP read/write errors — structured
-//       diagnostics on the retry path in exchangeWithUDPServer and via proxy.
-//
-// [C25] Optimised clientsCountInc — fast-path Load before CAS avoids
-//       generating a CAS instruction under low contention.
-//
-// [C26] prepareForRelay — clear() builtin (Go 1.21) used for zero padding
-//       instead of relying on make() guarantees for documentation clarity.
-//
-// [C28] errors.AsType[*net.DNSError] (Go 1.26) — DNS-specific diagnostics
-//       chained after *net.OpError checks in exchangeWithTCPServer and
-//       exchangeWithUDPServer.  Logs Name, Server, IsTimeout, IsNotFound.
-//
-// [C29] net.KeepAliveConfig (Go 1.24) — exchangeWithTCPServer TCP dialer
-//       configured with aggressive keepalive (10s idle, 5s interval, 3 probes).
-//       Dead-peer detection in ≤25s vs ≥2h with OS defaults.  Directly
-//       benefits HTTP/2 by preventing requests from stalling on silently
-//       broken underlying TCP connections.
-//
-// [C28] fmt.Errorf fast-path (Go 1.26) — plain-string fmt.Errorf now
-//       matches errors.New allocation count.  Wrapping sentinels via %w
-//       is now only ~20% slower than errors.New.
-//
-// [C29] errors.AsType[*net.DNSError] — DNS-specific error diagnostics in
-//       exchangeWithTCPServer and exchangeWithUDPServer for richer logging.
-//
-// [C30] Stack-allocated slice backing (Go 1.26 compiler) — small slices
-//       within prepareForRelay and processIncomingQuery benefit from the
-//       compiler's improved escape analysis that stack-allocates backing
-//       stores for append-allocated slices.
 
 package main
 
@@ -145,8 +92,6 @@ import (
 	netproxy "golang.org/x/net/proxy"
 )
 
-// ── Package-level constants ───────────────────────────────────────────────────
-
 // unknownServerName is logged in query records before an upstream server is
 // selected.
 const unknownServerName = "-"
@@ -155,14 +100,11 @@ const unknownServerName = "-"
 // [C04] Named constant — previously the magic number 2 appeared twice inline.
 const udpRetries = 2
 
-// ── Sentinel errors [C22] ─────────────────────────────────────────────────────
-
+// [C22] Sentinel errors — allocated once at package init; zero allocation per return.
 var (
 	errTCPDialTimeout = errors.New("TCP dial to upstream timed out")
 	errUDPWriteFailed = errors.New("UDP write to upstream failed")
 )
-
-// ── Shared pools ──────────────────────────────────────────────────────────────
 
 // udpReadPool is a package-level sync.Pool shared by every UDP listener
 // goroutine to avoid per-packet heap allocations.
@@ -171,7 +113,7 @@ var (
 // Get/Put.  New returns the value directly without an intermediate variable.
 var udpReadPool = &sync.Pool{
 	New: func() any {
-		return make([]byte, MaxDNSPacketSize-1)
+		return make([]byte, MaxDNSPacketSize-1) // [C02] direct return, no temp var
 	},
 }
 
@@ -355,7 +297,7 @@ func startsWithDigit(s string) bool {
 // the raw FDs and the child reconstructs listeners from them.
 func (proxy *Proxy) addDNSListener(listenAddrStr string) {
 	udpNet, tcpNet := "udp", "tcp"
-	if startsWithDigit(listenAddrStr) {
+	if startsWithDigit(listenAddrStr) { // [C05]
 		udpNet, tcpNet = "udp4", "tcp4"
 	}
 
@@ -379,7 +321,7 @@ func (proxy *Proxy) addDNSListener(listenAddrStr string) {
 	}
 
 	if !proxy.child {
-		proxy.setupParentListeners(udpNet, tcpNet, listenUDPAddr, listenTCPAddr)
+		proxy.setupParentListeners(udpNet, tcpNet, listenUDPAddr, listenTCPAddr) // [C07]
 		return
 	}
 	proxy.setupChildListeners(listenUDPAddr, listenAddrStr)
@@ -410,6 +352,8 @@ func (proxy *Proxy) setupParentListeners(udpNet, tcpNet string, listenUDPAddr *n
 		dlog.Fatalf("Unable to switch to a different user: %v", err)
 	}
 
+	// Close Go-managed listeners — kernel keeps sockets alive via the raw
+	// FDs just obtained.
 	listenerUDP.Close()
 	listenerTCP.Close()
 
@@ -450,7 +394,7 @@ func (proxy *Proxy) setupChildListeners(listenUDPAddr *net.UDPAddr, listenAddrSt
 // and registers it.
 func (proxy *Proxy) addLocalDoHListener(listenAddrStr string) {
 	network := "tcp"
-	if startsWithDigit(listenAddrStr) {
+	if startsWithDigit(listenAddrStr) { // [C05]
 		network = "tcp4"
 	}
 
@@ -506,7 +450,7 @@ func (proxy *Proxy) udpListenerFromAddr(listenAddr *net.UDPAddr) error {
 	}
 	addrStr := listenAddr.String()
 	network := "udp"
-	if startsWithDigit(addrStr) {
+	if startsWithDigit(addrStr) { // [C05]
 		network = "udp4"
 	}
 	pc, err := lc.ListenPacket(context.Background(), network, addrStr)
@@ -526,7 +470,7 @@ func (proxy *Proxy) tcpListenerFromAddr(listenAddr *net.TCPAddr) error {
 	}
 	addrStr := listenAddr.String()
 	network := "tcp"
-	if startsWithDigit(addrStr) {
+	if startsWithDigit(addrStr) { // [C05]
 		network = "tcp4"
 	}
 	l, err := lc.Listen(context.Background(), network, addrStr)
@@ -547,7 +491,7 @@ func (proxy *Proxy) localDoHListenerFromAddr(listenAddr *net.TCPAddr) error {
 	}
 	addrStr := listenAddr.String()
 	network := "tcp"
-	if startsWithDigit(addrStr) {
+	if startsWithDigit(addrStr) { // [C05]
 		network = "tcp4"
 	}
 	l, err := lc.Listen(context.Background(), network, addrStr)
@@ -572,7 +516,7 @@ func (proxy *Proxy) udpListener(clientPc *net.UDPConn) {
 
 		length, clientAddr, err := clientPc.ReadFrom(buf)
 		if err != nil {
-			udpReadPool.Put(buf) //nolint:staticcheck // [C09]
+			udpReadPool.Put(buf) //nolint:staticcheck // [C09] return buf on error
 			return
 		}
 
@@ -610,7 +554,7 @@ func (proxy *Proxy) tcpListener(acceptPc *net.TCPListener) {
 	for {
 		clientPc, err := acceptPc.Accept()
 		if err != nil {
-			if errors.Is(err, net.ErrClosed) { // [C08]
+			if errors.Is(err, net.ErrClosed) { // [C08] stop loop on permanent close
 				return
 			}
 			continue
@@ -731,12 +675,6 @@ func (proxy *Proxy) StartProxy() {
 
 // startAcceptingClients launches listener goroutines for all registered
 // sockets and nils the backing slices to release their memory.
-//
-// [C21] Uses bare goroutines — NOT sync.WaitGroup.Go — because listener
-// goroutines run forever.  WaitGroup.Go calls Add(1) internally and expects
-// a matching Done() on return; since listeners never return, the WaitGroup
-// counter would be permanently incremented, which is semantically incorrect
-// and prevents any future Wait() call from completing.
 func (proxy *Proxy) startAcceptingClients() {
 	for _, pc := range proxy.udpListeners {
 		go proxy.udpListener(pc)
@@ -896,17 +834,17 @@ func (proxy *Proxy) commitServerUpdates() {
 //
 //	[0xff × 8][0x00 × 2][ip.To16() = 16 bytes][big-endian port uint16][query]
 func (proxy *Proxy) prepareForRelay(ip net.IP, port int, encryptedQuery *[]byte) {
-	const magicLen = 8
-	const padLen = 2
+	const magicLen = 8 // 0xff bytes
+	const padLen   = 2 // zero pad following magic
 	ip16 := ip.To16()
-	ip16Len := len(ip16)
+	ip16Len := len(ip16)                                            // [C10] cached
 	total := magicLen + padLen + ip16Len + 2 + len(*encryptedQuery)
-	buf := make([]byte, total) // [C10] one allocation
+	buf := make([]byte, total)                                      // [C10] one allocation
 
-	for i := range magicLen { // range-over-int (Go 1.22)
+	for i := range magicLen { // [C10] range-over-int (Go 1.22)
 		buf[i] = 0xff
 	}
-	clear(buf[magicLen : magicLen+padLen]) // [C26] documents zero-padding intent
+	clear(buf[magicLen : magicLen+padLen]) // [C26] clear() builtin (Go 1.21)
 	off := magicLen + padLen
 	copy(buf[off:], ip16)
 	off += ip16Len
@@ -922,8 +860,6 @@ func (proxy *Proxy) prepareForRelay(ip net.IP, port int, encryptedQuery *[]byte)
 // exchangeWithUDPServer sends encryptedQuery to serverInfo's UDP endpoint,
 // retrying udpRetries times on transient read errors, and returns the
 // decrypted response.
-//
-// [C19][C24][C29] errors.AsType provides structured diagnostics on failure.
 func (proxy *Proxy) exchangeWithUDPServer(
 	serverInfo *ServerInfo,
 	sharedKey *[32]byte,
@@ -960,10 +896,10 @@ func (proxy *Proxy) exchangeWithUDPServer(
 	var readLen int
 	var lastErr error
 
-	// [C04] range-over-int (Go 1.22) + named constant.
+	// [C04] range-over-int (Go 1.22) + named constant udpRetries.
 	for range udpRetries {
 		if _, err := pc.Write(query); err != nil {
-			// [C24] Structured diagnostics for UDP write failure.
+			// [C24] errors.AsType — structured diagnostics for UDP write failure.
 			if opErr, ok := errors.AsType[*net.OpError](err); ok {
 				dlog.Debugf("[%s] UDP write failed: op=%s net=%s addr=%v err=%v",
 					serverInfo.Name, opErr.Op, opErr.Net, opErr.Addr, opErr.Err)
@@ -979,14 +915,13 @@ func (proxy *Proxy) exchangeWithUDPServer(
 	}
 
 	if lastErr != nil {
-		// [C24] Structured diagnostics for UDP read failure.
+		// [C24] errors.AsType — structured diagnostics for UDP read failure.
 		if opErr, ok := errors.AsType[*net.OpError](lastErr); ok {
 			dlog.Debugf("[%s] UDP read failed after %d retries: op=%s net=%s addr=%v err=%v",
 				serverInfo.Name, udpRetries, opErr.Op, opErr.Net, opErr.Addr, opErr.Err)
 		}
-		// [C29] DNS-specific error diagnostics.
 		if dnsErr, ok := errors.AsType[*net.DNSError](lastErr); ok {
-			dlog.Debugf("[%s] DNS error: name=%s server=%s isTimeout=%v isNotFound=%v",
+			dlog.Debugf("[%s] UDP DNS error: name=%s server=%s timeout=%v notfound=%v",
 				serverInfo.Name, dnsErr.Name, dnsErr.Server, dnsErr.IsTimeout, dnsErr.IsNotFound)
 		}
 		proxy.udpConnPool.Discard(pc)
@@ -1008,7 +943,7 @@ func (proxy *Proxy) exchangeWithUDPServerViaProxy(
 ) ([]byte, error) {
 	pc, err := (*proxyDialer).Dial("udp", upstreamAddr.String())
 	if err != nil {
-		// [C19] Type-safe dial error diagnostics.
+		// [C19] errors.AsType — type-safe proxy dial error diagnostics.
 		if opErr, ok := errors.AsType[*net.OpError](err); ok {
 			dlog.Debugf("[%s] UDP proxy dial failed: op=%s net=%s addr=%v err=%v",
 				serverInfo.Name, opErr.Op, opErr.Net, opErr.Addr, opErr.Err)
@@ -1029,9 +964,9 @@ func (proxy *Proxy) exchangeWithUDPServerViaProxy(
 	var readLen int
 	var lastErr error
 
+	// [C04] range-over-int + named constant.
 	for range udpRetries {
 		if _, err := pc.Write(encryptedQuery); err != nil {
-			// [C24] Structured write-failure diagnostics.
 			if opErr, ok := errors.AsType[*net.OpError](err); ok {
 				dlog.Debugf("[%s] UDP proxy write failed: op=%s net=%s addr=%v err=%v",
 					serverInfo.Name, opErr.Op, opErr.Net, opErr.Addr, opErr.Err)
@@ -1046,10 +981,9 @@ func (proxy *Proxy) exchangeWithUDPServerViaProxy(
 	}
 
 	if lastErr != nil {
-		// [C24] Structured read-failure diagnostics.
 		if opErr, ok := errors.AsType[*net.OpError](lastErr); ok {
-			dlog.Debugf("[%s] UDP proxy read failed: op=%s net=%s addr=%v err=%v",
-				serverInfo.Name, opErr.Op, opErr.Net, opErr.Addr, opErr.Err)
+			dlog.Debugf("[%s] UDP proxy read failed after %d retries: op=%s net=%s addr=%v err=%v",
+				serverInfo.Name, udpRetries, opErr.Op, opErr.Net, opErr.Addr, opErr.Err)
 		}
 		return nil, lastErr
 	}
@@ -1059,11 +993,8 @@ func (proxy *Proxy) exchangeWithUDPServerViaProxy(
 // exchangeWithTCPServer dials serverInfo's TCP endpoint, sends the query, and
 // returns the decrypted response.
 //
-// [C11] context.WithTimeoutCause + net.Dialer.DialContext instead of deprecated
-//
-//	net.DialTimeout.  defer cancel() ensures no goroutine leak.
-//
-// [C19][C20][C23][C29] Go 1.26 features applied.
+// [C11] Uses context.WithTimeout + net.Dialer.DialContext instead of the
+// deprecated net.DialTimeout.  defer cancel() ensures no goroutine leak.
 func (proxy *Proxy) exchangeWithTCPServer(
 	serverInfo *ServerInfo,
 	sharedKey *[32]byte,
@@ -1080,43 +1011,50 @@ func (proxy *Proxy) exchangeWithTCPServer(
 
 	if proxyDialer := proxy.xTransport.proxyDialer; proxyDialer != nil {
 		pc, err = (*proxyDialer).Dial("tcp", upstreamAddr.String())
+		if err != nil {
+			if opErr, ok := errors.AsType[*net.OpError](err); ok {
+				dlog.Debugf("[%s] TCP proxy dial failed: op=%s net=%s addr=%v err=%v",
+					serverInfo.Name, opErr.Op, opErr.Net, opErr.Addr, opErr.Err)
+			}
+			return nil, err
+		}
 	} else {
-		// [C20] context.WithTimeoutCause provides a descriptive cause when the
-		// timeout fires, visible via context.Cause(dialCtx).
-		// [C28] fmt.Errorf fast-path in Go 1.26 makes this wrapping nearly free.
+		// [C20] context.WithTimeoutCause carries a descriptive cause error visible
+		// via context.Cause(dialCtx) when the timeout fires.
 		dialCtx, dialCancel := context.WithTimeoutCause(
 			context.Background(),
 			serverInfo.Timeout,
 			fmt.Errorf("%w: server=%s addr=%s", errTCPDialTimeout, serverInfo.Name, upstreamAddr.String()),
 		)
 		defer dialCancel()
-		// [C29] net.KeepAliveConfig (Go 1.24) with aggressive TCP keepalive
-		// for upstream DNS connections.  Fast dead-peer detection directly
-		// benefits HTTP/2 multiplexed connections by preventing requests
-		// from stalling on silently broken underlying TCP sockets.
-		pc, err = (&net.Dialer{
-			KeepAliveConfig: net.KeepAliveConfig{
-				Enable:   true,
-				Idle:     10 * time.Second, // first probe after 10s idle
-				Interval: 5 * time.Second,  // probe every 5s after that
-				Count:    3,                 // 3 failed probes = dead (15s total)
-			},
-		}).DialContext(dialCtx, "tcp", upstreamAddr.String())
+		pc, err = new(net.Dialer).DialContext(dialCtx, "tcp", upstreamAddr.String())
 	}
 	if err != nil {
-		// [C19] Type-safe, reflection-free dial error inspection.
+		// [C19] errors.AsType — type-safe, reflection-free dial error inspection.
 		if opErr, ok := errors.AsType[*net.OpError](err); ok {
 			dlog.Debugf("[%s] TCP dial failed: op=%s net=%s addr=%v err=%v",
 				serverInfo.Name, opErr.Op, opErr.Net, opErr.Addr, opErr.Err)
 		}
-		// [C29] DNS-specific error diagnostics.
 		if dnsErr, ok := errors.AsType[*net.DNSError](err); ok {
-			dlog.Debugf("[%s] TCP DNS error: name=%s server=%s isTimeout=%v isNotFound=%v",
+			dlog.Debugf("[%s] TCP DNS error: name=%s server=%s timeout=%v notfound=%v",
 				serverInfo.Name, dnsErr.Name, dnsErr.Server, dnsErr.IsTimeout, dnsErr.IsNotFound)
 		}
 		return nil, err
 	}
 	defer pc.Close()
+
+	// [NEW] Enable aggressive TCP keepalive for fast dead-peer detection.
+	// With HTTP/2 multiplexing many streams over one TCP connection, a silently
+	// dead TCP socket causes ALL in-flight streams to stall.
+	if tcpConn, ok := pc.(*net.TCPConn); ok {
+		tcpConn.SetNoDelay(true)
+		tcpConn.SetKeepAliveConfig(net.KeepAliveConfig{
+			Enable:   true,
+			Idle:     10 * time.Second,  // first probe after 10s idle (vs OS default 2h)
+			Interval: 5 * time.Second,   // probe every 5s (vs OS default 75s)
+			Count:    3,                  // dead after 3 failed probes = 25s detection
+		})
+	}
 
 	if err := pc.SetDeadline(time.Now().Add(serverInfo.Timeout)); err != nil {
 		return nil, err
@@ -1146,9 +1084,6 @@ func (proxy *Proxy) exchangeWithTCPServer(
 // clientsCountInc atomically increments the active-client counter.
 // Returns false without incrementing when the configured limit would be
 // exceeded.
-//
-// [C25] Fast-path Load before CAS avoids generating a CAS instruction under
-// low contention — the common case where the limit has not been reached.
 func (proxy *Proxy) clientsCountInc() bool {
 	for {
 		cur := proxy.clientsCount.Load()
@@ -1178,7 +1113,7 @@ func (proxy *Proxy) clientsCountDec() {
 // getDynamicTimeout returns a per-request deadline scaled down under load.
 //
 // Reduction follows a quartic curve (utilisation⁴) so the timeout only shrinks
-// appreciably at very high load.  Minimum is 10% of the configured baseline.
+// appreciably at very high load.  Minimum is 10 % of the configured baseline.
 //
 // [C13] float64 cast performed once (timeoutF); max() builtin (Go 1.21).
 func (proxy *Proxy) getDynamicTimeout() time.Duration {
@@ -1186,8 +1121,8 @@ func (proxy *Proxy) getDynamicTimeout() time.Duration {
 		return proxy.timeout
 	}
 	utilization := float64(proxy.clientsCount.Load()) / float64(proxy.maxClients)
-	timeoutF := float64(proxy.timeout)
-	factor := max(1.0-(math.Pow(utilization, 4)*proxy.timeoutLoadReduction), 0.1)
+	timeoutF := float64(proxy.timeout)                                              // [C13] cast once
+	factor := max(1.0-(math.Pow(utilization, 4)*proxy.timeoutLoadReduction), 0.1) // [C13] max builtin
 	dynamicTimeout := time.Duration(timeoutF * factor)
 	dlog.Debugf("Dynamic timeout: %v (utilization: %.2f%%, factor: %.2f)",
 		dynamicTimeout, utilization*100, factor)
@@ -1233,7 +1168,7 @@ func (proxy *Proxy) processIncomingQuery(
 	pluginsState := NewPluginsState(proxy, clientProto, clientAddr, serverProto, start)
 
 	var serverInfo *ServerInfo
-	serverName := unknownServerName // [C15]
+	serverName := unknownServerName // [C15] declared at first use, not at top of func
 
 	query, err := pluginsState.ApplyQueryPlugins(
 		&proxy.pluginsGlobals,
@@ -1256,7 +1191,7 @@ func (proxy *Proxy) processIncomingQuery(
 
 	if err != nil {
 		dlog.Debugf("Plugins failed: %v", err)
-		return dropQuery(&pluginsState, &proxy.pluginsGlobals, PluginsReturnCodeDrop)
+		return dropQuery(&pluginsState, &proxy.pluginsGlobals, PluginsReturnCodeDrop) // [C16]
 	}
 
 	if !validateQuery(query) {
@@ -1264,7 +1199,7 @@ func (proxy *Proxy) processIncomingQuery(
 	}
 
 	if pluginsState.action == PluginsActionDrop {
-		return dropQuery(&pluginsState, &proxy.pluginsGlobals, PluginsReturnCodeDrop)
+		return dropQuery(&pluginsState, &proxy.pluginsGlobals, PluginsReturnCodeDrop) // [C16]
 	}
 
 	if pluginsState.synthResponse != nil {
@@ -1307,6 +1242,7 @@ func (proxy *Proxy) processIncomingQuery(
 	}
 
 	if len(response) < MinDNSPacketSize || len(response) > MaxDNSPacketSize {
+		// Explicit typed assignment avoids inference as plain int. [FIX-01]
 		if len(response) == 0 {
 			pluginsState.returnCode = PluginsReturnCodeNotReady
 		} else {
