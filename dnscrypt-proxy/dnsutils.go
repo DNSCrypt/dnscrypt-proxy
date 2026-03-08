@@ -1,35 +1,23 @@
 // Package main provides DNS utility functions for the DNSCrypt proxy.
 //
-// Go 1.26 modernised rewrite — all improvements applied:
+// Go 1.26 full rewrite — modernized with latest language features:
 //
-//   - net.DialTimeout removed; all dials use net.Dialer.DialContext
-//   - exchangeDNSOnce passes context to dialer for cancellation propagation
-//   - DNSExchange refactored: outer relay loop replaced by explicit relay-then-direct helper
-//   - dnsExchangeResult unexported (was DNSExchangeResponse)
-//   - _dnsExchange renamed exchangeDNSOnce (leading-underscore not idiomatic Go)
-//   - NormalizeRawQName: *[]byte signature preserved; plain index loop
-//   - EmptyResponseFromMessage: field-by-field assignment (codeberg dns fork compat)
-//   - HasTCFlag: named constant dnsTCBit replaces magic number
-//   - updateTTL: explicit OPT-section handling via switch
-//   - getMinTTL: min()/max() builtins replace manual if-chains
-//   - addEDNS0PaddingIfNoneFound: paddingByteHex named constant
-//
-//   Go 1.26 features used:
-//   - errors.AsType[E]      reflection-free, type-safe error unwrapping
-//   - new(expr) builtin     alloc-and-init pointer in one step
-//   - Dialer.DialUDP        context-aware, netip.AddrPort — zero-parse dial
-//   - Green Tea GC          allocation patterns optimised for new default GC
-//   - sync.WaitGroup.Go     (Go 1.25) launch-and-track goroutines
-//
-//   Performance improvements:
-//   - Stack-allocated [MaxDNSPacketSize]byte read buffers (zero heap alloc per UDP)
-//   - Shared net.Dialer per exchangeDNSOnce — no per-call struct instantiation
-//   - Pre-sized channel buffers — goroutines never block on send
-//   - Two-pass NormalizeQName — zero alloc on common all-lowercase path
-//   - Binary search-free dddToByte — pure arithmetic, no branching
-//   - Sentinel errors — package-init allocated, zero alloc per return
-//
-//   Drop-in replacement: all 20 public+private function signatures unchanged.
+//   - errors.AsType[E] (Go 1.26): type-safe error unwrapping in exchangeDNSOnce
+//   - new(expr) (Go 1.26): pointer-from-expression where applicable
+//   - net.Dialer.DialContext: all dials are context-aware (net.DialTimeout removed)
+//   - sync.WaitGroup.Go (Go 1.25): cleaner goroutine management in runExchange
+//   - range over int (Go 1.22): for try := range maxTries
+//   - min()/max() builtins (Go 1.21): TTL clamping without manual if-chains
+//   - context.WithTimeoutCause (Go 1.21): timeout-cause propagation for DNS dials
+//   - Named constants: dnsHeaderLen, dnsTCBit, paddingByteHex, exchangeMaxTries,
+//     fragmentProbeSize, safePacketSize replace magic numbers
+//   - Sentinel errors: errPacketTooShort, errNilMessage, errUnreachable allocated once
+//   - Shared net.Dialer: single allocation reused across UDP and TCP paths
+//   - Stack-allocated read buffer: [MaxDNSPacketSize]byte avoids heap allocation
+//   - Wrapped unpack errors: include server address for actionable logging
+//   - Type-safe dial diagnostics: errors.AsType[*net.OpError] for structured logging
+//   - Full godoc comments on all exported types and functions
+//   - Drop-in replacement: all public API signatures unchanged
 package main
 
 import (
@@ -64,17 +52,27 @@ const (
 	// each byte is represented as "58", so N bytes = strings.Repeat("58", N).
 	paddingByteHex = "58"
 
-	// exchangeMaxTries is the number of staggered attempts per DNS exchange.
+	// exchangeMaxTries is the maximum number of DNS exchange attempts
+	// per query, covering both fragment-probe and safe-path goroutines.
 	exchangeMaxTries = 3
 
-	// fragmentProbeSize is the padded packet length for fragment-support probes.
+	// fragmentProbeSize is the padded packet size (bytes) used to test
+	// whether the upstream server can reassemble IP fragments (MTU ~1500).
 	fragmentProbeSize = 1500
 
-	// safePacketSize is the padded packet length for the non-fragmented path.
+	// safePacketSize is the padded packet size (bytes) used for the
+	// conservative non-fragmented path, well under any common MTU.
 	safePacketSize = 480
+
+	// fragmentProbeDelay is the inter-attempt delay for fragment probes.
+	fragmentProbeDelay = 200 * time.Millisecond
+
+	// safePathDelay is the inter-attempt delay for safe-path queries.
+	safePathDelay = 250 * time.Millisecond
 )
 
-// Package-level sentinel errors — allocated once at init; zero alloc per return.
+// ─────────────────────────────────────── sentinel errors ────────────────────
+
 var (
 	errPacketTooShort = errors.New("dns packet too short")
 	errNilMessage     = errors.New("dns message is nil")
@@ -509,7 +507,6 @@ func DNSExchange(
 		return resp, rtt, fragBlocked, nil
 	}
 
-	// Relay fallback: if configured, retry over a direct connection.
 	if relay == nil || !proxy.anonDirectCertFallback {
 		return nil, 0, false, err
 	}
@@ -523,10 +520,12 @@ func DNSExchange(
 	return runExchange(proxy, proto, query, serverAddress, nil, serverName, tryFragmentsSupport)
 }
 
-// runExchange is the core exchange engine. It launches up to 2×exchangeMaxTries
-// concurrent goroutines (fragment probe + safe path per try) with staggered
-// delays, collects results via sync.WaitGroup.Go (Go 1.25+), and returns the
-// best available response.
+// runExchange is the core exchange engine. It launches up to
+// 2×exchangeMaxTries concurrent goroutines (fragment probe + safe path per try)
+// with staggered delays, collects results, and returns the best available
+// response.
+//
+// Uses sync.WaitGroup.Go (Go 1.25+) for cleaner goroutine lifecycle management.
 func runExchange(
 	proxy *Proxy,
 	proto string,
@@ -539,15 +538,12 @@ func runExchange(
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Channel is sized to the exact number of goroutines launched so no
-	// goroutine ever blocks on send, even after the caller returns.
 	goroutines := exchangeMaxTries
 	if tryFragmentsSupport {
 		goroutines = 2 * exchangeMaxTries
 	}
 	channel := make(chan dnsExchangeResult, goroutines)
 
-	// Use sync.WaitGroup.Go (Go 1.25+) for cleaner goroutine lifecycle management.
 	var wg sync.WaitGroup
 	launched := 0
 
@@ -556,7 +552,7 @@ func runExchange(
 			q := query.Copy()
 			q.ID += uint16(launched)
 			launched++
-			delay := time.Duration(200*try) * time.Millisecond
+			delay := time.Duration(try) * fragmentProbeDelay
 			wg.Go(func() {
 				waitAndExchange(ctx, proxy, proto, q, serverAddress, relay, fragmentProbeSize, false, 0, delay, channel)
 			})
@@ -565,13 +561,14 @@ func runExchange(
 		q := query.Copy()
 		q.ID += uint16(launched)
 		launched++
-		delay := time.Duration(250*try) * time.Millisecond
+		delay := time.Duration(try) * safePathDelay
 		wg.Go(func() {
 			waitAndExchange(ctx, proxy, proto, q, serverAddress, relay, safePacketSize, true, 1, delay, channel)
 		})
 	}
 
-	// Close channel after all goroutines complete to allow safe range below.
+	// Collect results in a separate goroutine so wg.Wait doesn't block
+	// the result-reading loop below.
 	go func() {
 		wg.Wait()
 		close(channel)
@@ -589,10 +586,8 @@ func runExchange(
 		}
 		if best == nil || resp.priority < best.priority ||
 			(resp.priority == best.priority && resp.rtt < best.rtt) {
-			r := resp // copy to heap
-			best = &r
+			best = &resp
 			if best.priority == 0 {
-				// Fragment-capable response arrived — cancel remaining goroutines.
 				cancel()
 				break
 			}
@@ -650,9 +645,8 @@ func waitAndExchange(
 // exchangeDNSOnce performs a single DNS exchange over UDP or TCP.
 //
 // All dials use net.Dialer.DialContext so that context cancellation propagates
-// promptly to the network layer.
-//
-// Go 1.26: uses errors.AsType for type-safe error inspection on dial failures.
+// promptly to the network layer. Uses errors.AsType[*net.OpError] (Go 1.26)
+// for type-safe, reflection-free dial error diagnostics.
 func exchangeDNSOnce(
 	ctx context.Context,
 	proxy *Proxy,
@@ -662,11 +656,9 @@ func exchangeDNSOnce(
 	relay *DNSCryptRelay,
 	paddedLen int,
 ) dnsExchangeResult {
+	dialer := &net.Dialer{Timeout: proxy.timeout}
 	var packet []byte
 	var rtt time.Duration
-
-	// Shared dialer — avoids per-call struct instantiation.
-	dialer := &net.Dialer{Timeout: proxy.timeout}
 
 	if proto == "udp" {
 		qNameLen := len(query.Question[0].Header().Name)
@@ -695,10 +687,8 @@ func exchangeDNSOnce(
 		now := time.Now()
 		pc, err := dialer.DialContext(ctx, "udp", upstreamAddr.String())
 		if err != nil {
-			// Go 1.26: type-safe error inspection for DNS-specific errors.
 			if opErr, ok := errors.AsType[*net.OpError](err); ok {
-				dlog.Debugf("UDP dial failed: op=%s net=%s addr=%v err=%v",
-					opErr.Op, opErr.Net, opErr.Addr, opErr.Err)
+				dlog.Debugf("UDP dial failed: op=%s net=%s addr=%v err=%v", opErr.Op, opErr.Net, opErr.Addr, opErr.Err)
 			}
 			return dnsExchangeResult{err: err}
 		}
@@ -710,7 +700,6 @@ func exchangeDNSOnce(
 		if _, err := pc.Write(binQuery); err != nil {
 			return dnsExchangeResult{err: err}
 		}
-		// Stack-allocated read buffer; slice to actual datagram length after read.
 		var buf [MaxDNSPacketSize]byte
 		length, err := pc.Read(buf[:])
 		if err != nil {
@@ -745,8 +734,7 @@ func exchangeDNSOnce(
 		}
 		if err != nil {
 			if opErr, ok := errors.AsType[*net.OpError](err); ok {
-				dlog.Debugf("TCP dial failed: op=%s net=%s addr=%v err=%v",
-					opErr.Op, opErr.Net, opErr.Addr, opErr.Err)
+				dlog.Debugf("TCP dial failed: op=%s net=%s addr=%v err=%v", opErr.Op, opErr.Net, opErr.Addr, opErr.Err)
 			}
 			return dnsExchangeResult{err: err}
 		}
