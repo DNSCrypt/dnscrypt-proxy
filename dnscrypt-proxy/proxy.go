@@ -98,6 +98,16 @@
 // [C26] prepareForRelay — clear() builtin (Go 1.21) used for zero padding
 //       instead of relying on make() guarantees for documentation clarity.
 //
+// [C28] errors.AsType[*net.DNSError] (Go 1.26) — DNS-specific diagnostics
+//       chained after *net.OpError checks in exchangeWithTCPServer and
+//       exchangeWithUDPServer.  Logs Name, Server, IsTimeout, IsNotFound.
+//
+// [C29] net.KeepAliveConfig (Go 1.24) — exchangeWithTCPServer TCP dialer
+//       configured with aggressive keepalive (10s idle, 5s interval, 3 probes).
+//       Dead-peer detection in ≤25s vs ≥2h with OS defaults.  Directly
+//       benefits HTTP/2 by preventing requests from stalling on silently
+//       broken underlying TCP connections.
+//
 // [C28] fmt.Errorf fast-path (Go 1.26) — plain-string fmt.Errorf now
 //       matches errors.New allocation count.  Wrapping sentinels via %w
 //       is now only ~20% slower than errors.New.
@@ -1080,7 +1090,18 @@ func (proxy *Proxy) exchangeWithTCPServer(
 			fmt.Errorf("%w: server=%s addr=%s", errTCPDialTimeout, serverInfo.Name, upstreamAddr.String()),
 		)
 		defer dialCancel()
-		pc, err = new(net.Dialer).DialContext(dialCtx, "tcp", upstreamAddr.String()) // [C23]
+		// [C29] net.KeepAliveConfig (Go 1.24) with aggressive TCP keepalive
+		// for upstream DNS connections.  Fast dead-peer detection directly
+		// benefits HTTP/2 multiplexed connections by preventing requests
+		// from stalling on silently broken underlying TCP sockets.
+		pc, err = (&net.Dialer{
+			KeepAliveConfig: net.KeepAliveConfig{
+				Enable:   true,
+				Idle:     10 * time.Second, // first probe after 10s idle
+				Interval: 5 * time.Second,  // probe every 5s after that
+				Count:    3,                 // 3 failed probes = dead (15s total)
+			},
+		}).DialContext(dialCtx, "tcp", upstreamAddr.String())
 	}
 	if err != nil {
 		// [C19] Type-safe, reflection-free dial error inspection.
