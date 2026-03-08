@@ -82,6 +82,21 @@ const (
 	MaxResponseHeaderBytes      = 4096
 	TLSHandshakeTimeout         = 10 * time.Second
 	altSvcNegativeTTL           = 10 * time.Minute
+
+	// ── HTTP/2 tuning — maximized for low-latency DNS-over-HTTPS ────────────
+	// Source: go.dev/src/net/http/http.go (HTTP2Config struct)
+	// Source: go.googlesource.com/net/+/master/http2/config.go (valid ranges)
+	h2MaxConcurrentStreams      = 1000               // max concurrent h2 streams (default ~100)
+	h2MaxReadFrameSize          = 16 * 1024 * 1024   // 16 MiB — max SETTINGS_MAX_FRAME_SIZE (RFC 7540 §4.2)
+	h2MaxDecoderHeaderTableSize = 4*1024*1024 - 1     // ~4 MiB — max HPACK decode table
+	h2MaxEncoderHeaderTableSize = 4*1024*1024 - 1     // ~4 MiB — max HPACK encode table
+	h2MaxReceiveBufferPerConn   = 4*1024*1024 - 1     // ~4 MiB — max connection-level flow control window
+	h2MaxReceiveBufferPerStream = 4*1024*1024 - 1     // ~4 MiB — max stream-level flow control window
+	h2SendPingTimeout           = 15 * time.Second    // PING after idle to detect dead connections
+	h2PingTimeout               = 15 * time.Second    // max wait for PONG before teardown
+	h2WriteByteTimeout          = 10 * time.Second    // detect stalled write paths
+	h2TLSSessionCacheSize       = 512                 // LRU session cache — saves 1 TLS 1.3 RTT
+	h2ReadWriteBufferSize       = 32 * 1024           // 32 KiB I/O buffers
 )
 
 // Package-level sentinel errors — allocated once at init; zero alloc on every return
@@ -95,10 +110,9 @@ var (
 	errSystemResolverTimeout = errors.New("system resolver timed out")
 )
 
-
-// tlsSessionCache is a shared TLS session ticket cache.
-// Saves one full TLS 1.3 RTT on reconnect by presenting cached session tickets.
+// tlsSessionCache saves one full TLS 1.3 RTT on reconnect by presenting cached session tickets.
 var tlsSessionCache = tls.NewLRUClientSessionCache(h2TLSSessionCacheSize)
+
 // gzipReaderPool heavily reduces GC pressure by recycling expensive gzip.Reader structures.
 var gzipReaderPool = sync.Pool{
 	New: func() any {
@@ -410,65 +424,19 @@ func (x *XTransport) rebuildTransport() {
 	x.tlsClientConfig = x.buildTLSConfig()
 
 	// Native HTTP/2 configuration via http.HTTP2Config (Go 1.24+).
-	// Every tunable knob is set to the maximum valid value per the Go docs
-	// for low-latency DNS-over-HTTPS workloads.
-	//
-	// Field documentation: go.dev/src/net/http/http.go lines 236-297
-	// Internal mapping: go.googlesource.com/net/+/master/http2/config.go
+	// Every knob is set to the maximum valid value for low-latency DoH.
 	h2Cfg := &http.HTTP2Config{
-		// MaxConcurrentStreams: number of concurrent streams the peer may open.
-		// DNS queries are tiny and short-lived — 1000 streams per connection
-		// avoids the overhead of additional TCP+TLS handshakes.
-		// Default is ~100; we set 1000 for aggressive multiplexing.
-		MaxConcurrentStreams: h2MaxConcurrentStreams,
-
-		// MaxReadFrameSize: SETTINGS_MAX_FRAME_SIZE we advertise to the peer.
-		// Valid range: 16 KiB to 16 MiB (RFC 7540 §4.2). Setting to 16 MiB
-		// means the peer can send the largest possible frames, reducing the
-		// ratio of frame headers to payload bytes.
-		MaxReadFrameSize: h2MaxReadFrameSize,
-
-		// MaxDecoderHeaderTableSize: SETTINGS_HEADER_TABLE_SIZE sent to peer.
-		// Valid: < 4 MiB. A ~4 MiB table lets the peer use a much larger HPACK
-		// dynamic table, significantly improving header compression for
-		// repeated DoH queries with identical headers.
-		MaxDecoderHeaderTableSize: h2MaxDecoderHeaderTableSize,
-
-		// MaxEncoderHeaderTableSize: caps our own HPACK encoding table.
-		// Symmetric with decoder for bidirectional compression benefit.
-		MaxEncoderHeaderTableSize: h2MaxEncoderHeaderTableSize,
-
-		// MaxReceiveBufferPerConnection: connection-level flow control window.
-		// Valid: 64 KiB to < 4 MiB. Set to ~4 MiB — accommodates large bursts
-		// of concurrent DNS responses without triggering WINDOW_UPDATE RTTs.
-		MaxReceiveBufferPerConnection: h2MaxReceiveBufferPerConn,
-
-		// MaxReceiveBufferPerStream: stream-level flow control window.
-		// Valid: < 4 MiB. Matches connection buffer so no individual stream
-		// is artificially throttled below the connection-level limit.
-		MaxReceiveBufferPerStream: h2MaxReceiveBufferPerStream,
-
-		// SendPingTimeout: after 15s of no frames received, send an HTTP/2
-		// PING to detect dead connections before the next real request
-		// hits a silently broken h2 connection.
-		SendPingTimeout: h2SendPingTimeout,
-
-		// PingTimeout: if PONG doesn't arrive within 15s, tear down the
-		// connection. The next request will establish a fresh one.
-		PingTimeout: h2PingTimeout,
-
-		// WriteByteTimeout: if no bytes can be written for 10s, the write
-		// path is stalled — close the connection.
-		WriteByteTimeout: h2WriteByteTimeout,
-
-		// PermitProhibitedCipherSuites: false (default). Our buildTLSConfig
-		// already selects only strong AEAD cipher suites, so we don't need
-		// to relax the HTTP/2 cipher requirements.
-
-		// CountError: wired to dlog for HTTP/2 framing error observability.
-		// errType is lowercase alphanumeric + underscores.
+		MaxConcurrentStreams:        h2MaxConcurrentStreams,        // 1000 streams per conn
+		MaxReadFrameSize:            h2MaxReadFrameSize,            // 16 MiB max frame
+		MaxDecoderHeaderTableSize:   h2MaxDecoderHeaderTableSize,   // ~4 MiB HPACK decode
+		MaxEncoderHeaderTableSize:   h2MaxEncoderHeaderTableSize,   // ~4 MiB HPACK encode
+		MaxReceiveBufferPerConnection: h2MaxReceiveBufferPerConn,   // ~4 MiB conn flow control
+		MaxReceiveBufferPerStream:   h2MaxReceiveBufferPerStream,   // ~4 MiB stream flow control
+		SendPingTimeout:             h2SendPingTimeout,             // 15s idle → PING
+		PingTimeout:                 h2PingTimeout,                 // 15s PONG deadline
+		WriteByteTimeout:            h2WriteByteTimeout,            // 10s stall detection
 		CountError: func(errType string) {
-			dlog.Debugf("HTTP/2 transport error: %s", errType)
+			dlog.Debugf("HTTP/2 error: %s", errType)
 		},
 	}
 
@@ -487,19 +455,15 @@ func (x *XTransport) rebuildTransport() {
 		ForceAttemptHTTP2:      true,
 		TLSClientConfig:        x.tlsClientConfig,
 		DialContext:            x.buildDialContext(),
-
-		// Native HTTP/2 config — replaces http2.ConfigureTransports entirely.
-		// No x/net/http2 import needed for configuration.
-		HTTP2: h2Cfg,
+		HTTP2:                  h2Cfg,
 	}
 	if x.httpProxyFunction != nil {
 		transport.Proxy = x.httpProxyFunction
 	}
 	x.transport = transport
 
-	// Reset prewarm state so next Fetch() triggers a background handshake.
+	// Reset prewarm state so next Fetch() triggers a background handshake
 	x.prewarmed = sync.Once{}
-
 	if x.http3 {
 		if x.h3Transport != nil {
 			x.h3Transport.Close()
@@ -512,10 +476,8 @@ func (x *XTransport) rebuildTransport() {
 	}
 }
 
-
 // prewarmConnection establishes a background TCP+TLS+HTTP/2 connection to the
-// target host before the first real request arrives, eliminating cold-start
-// latency from the user-visible critical path.
+// target host, eliminating cold-start latency from the user-visible path.
 func (x *XTransport) prewarmConnection(hostPort string) {
 	x.prewarmed.Do(func() {
 		go func() {
@@ -745,8 +707,7 @@ func (x *XTransport) buildTLSConfig() *tls.Config {
 	if x.tlsDisableSessionTickets {
 		cfg.SessionTicketsDisabled = true
 	}
-	// Shared TLS session cache — saves one full TLS 1.3 RTT on reconnect
-	// by presenting cached session tickets to previously-visited DoH servers.
+	// Shared TLS session cache — saves 1 TLS 1.3 RTT on reconnect
 	cfg.ClientSessionCache = tlsSessionCache
 
 	if x.tlsPreferRSA {
@@ -1111,7 +1072,7 @@ func (x *XTransport) Fetch(
 
 	host, port := ExtractHostAndPort(url.Host, 443)
 
-	// Prewarm: establish TLS+HTTP/2 connection in background on first Fetch
+	// Prewarm: establish TLS+HTTP/2 in background on first Fetch
 	x.prewarmConnection(host + ":" + strconv.Itoa(port))
 
 	hasAltSupport := false
