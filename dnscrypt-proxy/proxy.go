@@ -98,10 +98,6 @@
 // [C26] prepareForRelay — clear() builtin (Go 1.21) used for zero padding
 //       instead of relying on make() guarantees for documentation clarity.
 //
-// [C27] runtime/secret (Go 1.26 experimental) — proxySecretKey generation
-//       wrapped in secret.Do() for forward secrecy.  Registers/stack are
-//       wiped on exit, preventing key material lingering in memory.
-//
 // [C28] fmt.Errorf fast-path (Go 1.26) — plain-string fmt.Errorf now
 //       matches errors.New allocation count.  Wrapping sentinels via %w
 //       is now only ~20% slower than errors.New.
@@ -127,7 +123,6 @@ import (
 	"net"
 	"os"
 	"runtime"
-	"runtime/secret" // [C27] Go 1.26 experimental — forward secrecy
 	"strings"
 	"sync"
 	"sync/atomic" // [C18] required for atomic.Uint32 field type
@@ -646,15 +641,10 @@ func (proxy *Proxy) tcpListener(acceptPc *net.TCPListener) {
 func (proxy *Proxy) StartProxy() {
 	proxy.questionSizeEstimator = NewQuestionSizeEstimator()
 
-	// [C27] runtime/secret wraps key generation so registers and stack
-	// frames containing the secret key material are wiped on return.
-	// This provides forward secrecy even if a core dump occurs later.
-	secret.Do(func() {
-		if _, err := rand.Read(proxy.proxySecretKey[:]); err != nil {
-			dlog.Fatal(err)
-		}
-		curve25519.ScalarBaseMult(&proxy.proxyPublicKey, &proxy.proxySecretKey)
-	})
+	if _, err := rand.Read(proxy.proxySecretKey[:]); err != nil {
+		dlog.Fatal(err)
+	}
+	curve25519.ScalarBaseMult(&proxy.proxyPublicKey, &proxy.proxySecretKey)
 
 	if proxy.monitoringUI.Enabled {
 		dlog.Noticef("Initializing monitoring UI")
