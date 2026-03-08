@@ -3,60 +3,24 @@
 // Ground-up rewrite. Public API 100% unchanged — drop-in replacement.
 // Fully modernized for Go 1.26+ with zero-allocation hot-paths.
 //
-// ── Go 1.26 language & stdlib features used ───────────────────────────────────
+// ── Go version improvements ───────────────────────────────────────────────────
 //
-//  • new(expr)                     alloc-and-init in one step (saveCachedIPs, markUpdatingCachedIP)
-//  • errors.AsType[E]              type-safe, reflection-free error inspection (resolveAndUpdateCache)
-//  • tls.SecP256r1MLKEM768         hybrid post-quantum KEM: P-256 + ML-KEM-768
-//  • tls.SecP384r1MLKEM1024        hybrid post-quantum KEM: P-384 + ML-KEM-1024
-//  • io.ReadAll ~2× faster         50% less intermediate memory in Fetch
-//  • Green Tea GC default          10–40% lower GC overhead; allocation patterns optimized
-//  • net.Dialer.DialTCP            context-aware specific dial methods
-//  • http.HTTP2Config               native HTTP/2 configuration without x/net import
+//  Go 1.26
+//  • tls.SecP256r1MLKEM768         hybrid PQ KEM: P-256 + ML-KEM-768
+//  • tls.SecP384r1MLKEM1024        hybrid PQ KEM: P-384 + ML-KEM-1024
+//  • new(expr) builtin             alloc-and-init in one step
+//  • errors.AsType[E]              reflection-free error inspection
+//  • io.ReadAll faster             2× faster, 50% less memory in Fetch
+//  • Green Tea GC                  optimized memory allocation patterns
 //
-// ── Go 1.25 ───────────────────────────────────────────────────────────────────
-//  • sync.WaitGroup.Go             parallel A+AAAA resolution
-//
-// ── Go 1.24 ───────────────────────────────────────────────────────────────────
-//  • strings.SplitSeq              iterator-based string splitting
-//  • unique.Make                   interned string handles for zero-alloc map lookups
-//  • net.KeepAliveConfig           fine-grained TCP keep-alive control
-//
-// ── Go 1.23 ───────────────────────────────────────────────────────────────────
-//  • maps.DeleteFunc               in-place filtered map deletion
-//
-// ── Go 1.21 ───────────────────────────────────────────────────────────────────
-//  • context.WithTimeoutCause      propagates timeout root-cause
-//
-// ── Performance & Efficiency ──────────────────────────────────────────────────
-//
-//  • sync.Pool for gzip.Reader     prevents 32 KiB alloc per compressed response
+//  Performance & Efficiency Upgrades Applied:
+//  • sync.Pool for gzip.Reader     prevents 32KB allocation per compressed response
 //  • Pre-allocated HTTP Headers    map.Clone() bypasses expensive map inserts
 //  • Stack-allocated IP dedup      [8]netip.Addr eliminates heap maps on hot-path
 //  • Mutex fast-path Load          stops sync.Mutex heap escape in sync.Map
 //  • Keep-Alive drain recovery     recycles connections on HTTP non-2xx errors
 //  • Hoisted TLS Cloning           prevents massive deep-copies in UDP dial loops
 //  • Shared net.Dialer             avoids re-instantiating struct in dial closures
-//
-// ── DNS Lookup Speed ──────────────────────────────────────────────────────────
-//
-//  • Speculative background refresh  pre-fetches IPs at 75% TTL expiry
-//  • Fisher-Yates IP shuffling       distributes load across all resolved IPs
-//  • Staggered connection racing     RFC 8305 Happy Eyeballs-style dial racing
-//  • Adaptive resolver promotion     fastest resolver auto-promoted to first
-//  • Parallel A+AAAA resolution      concurrent dual-stack DNS via WaitGroup.Go
-//
-// ── HTTP/2 Optimizations ──────────────────────────────────────────────────────
-//
-//  • http.HTTP2Config                Go 1.26 native h2 config struct
-//  • StrictMaxConcurrentRequests     opens new conn when stream limit reached
-//  • ReadIdleTimeout / PingTimeout   PING probe to detect dead h2 connections
-//  • WriteByteTimeout                detects unresponsive write paths
-//  • TLS session resumption cache    avoids full TLS handshake on reconnect
-//  • Connection prewarming           background TLS+h2 handshake to warm pool
-//  • ForceAttemptHTTP2               ensures h2 upgrade transparently
-//  • 32 KiB read/write buffers       reduces syscall overhead
-//
 package main
 
 import (
@@ -82,7 +46,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 	"unique"
 
@@ -91,7 +54,6 @@ import (
 	stamps "github.com/jedisct1/go-dnsstamps"
 	"github.com/quic-go/quic-go"
 	"github.com/quic-go/quic-go/http3"
-	"golang.org/x/net/http2"
 	netproxy "golang.org/x/net/proxy"
 	"golang.org/x/sys/cpu"
 )
@@ -122,35 +84,7 @@ const (
 	altSvcNegativeTTL           = 10 * time.Minute
 )
 
-// DNS lookup speed constants.
-const (
-	// specRefreshRatio triggers speculative background refresh when this
-	// fraction of TTL has elapsed (75%).
-	specRefreshRatio = 0.75
-
-	// maxConcurrentRefreshes caps background refresh goroutines to prevent
-	// thundering herd effects.
-	maxConcurrentRefreshes = 4
-
-	// dialRaceStagger is the interval between staggered connection attempts
-	// per RFC 8305 Section 5 (Happy Eyeballs v2).
-	dialRaceStagger = 250 * time.Millisecond
-)
-
-// HTTP/2 tuning constants.
-const (
-	// h2ReadIdleTimeout is the idle duration before an HTTP/2 PING probe
-	// is sent to detect dead connections.
-	h2ReadIdleTimeout = 30 * time.Second
-
-	// h2PingTimeout is the deadline for the peer to respond to a PING.
-	h2PingTimeout = 15 * time.Second
-
-	// h2WriteByteTimeout detects unresponsive write paths on h2 connections.
-	h2WriteByteTimeout = 10 * time.Second
-)
-
-// Package-level sentinel errors — allocated once at init; zero alloc on every return.
+// Package-level sentinel errors — allocated once at init; zero alloc on every return
 var (
 	errEmptyResponse         = errors.New("server returned an empty response")
 	errNoTorProxy            = errors.New("onion service requires a configured Tor proxy")
@@ -161,15 +95,16 @@ var (
 	errSystemResolverTimeout = errors.New("system resolver timed out")
 )
 
+
+// tlsSessionCache is a shared TLS session ticket cache.
+// Saves one full TLS 1.3 RTT on reconnect by presenting cached session tickets.
+var tlsSessionCache = tls.NewLRUClientSessionCache(h2TLSSessionCacheSize)
 // gzipReaderPool heavily reduces GC pressure by recycling expensive gzip.Reader structures.
 var gzipReaderPool = sync.Pool{
 	New: func() any {
 		return new(gzip.Reader)
 	},
 }
-
-// refreshSemaphore limits concurrent speculative background refresh goroutines.
-var refreshSemaphore = make(chan struct{}, maxConcurrentRefreshes)
 
 type CachedIPItem struct {
 	ips           []net.IP
@@ -226,23 +161,15 @@ type XTransport struct {
 
 	resolveMu sync.Map
 
-	// Pre-allocated static headers to avoid map instantiation per-request.
+	// Pre-allocated static headers to avoid map instantiation per-request
 	baseHeaders http.Header
 
-	// prewarmOnce ensures connection prewarming only happens once per rebuild.
-	prewarmOnce sync.Once
-
-	// refreshRunning tracks active speculative refreshes to prevent duplicates.
-	refreshRunning sync.Map
-
-	// tlsSessionCache enables TLS session resumption across connections,
-	// avoiding a full TLS 1.3 handshake on reconnect (saves one RTT).
-	tlsSessionCache tls.ClientSessionCache
+	// prewarmed tracks whether the first h2 connection has been prewarmed
+	prewarmed sync.Once
 }
 
 // ── Constructor ─────────────────────────────────────────────────────────────────
 
-// NewXTransport returns a fully initialized XTransport with sensible defaults.
 func NewXTransport() *XTransport {
 	if err := isIPAndPort(DefaultBootstrapResolver); err != nil {
 		panic("DefaultBootstrapResolver is not a valid IP:port — " + err.Error())
@@ -261,13 +188,11 @@ func NewXTransport() *XTransport {
 		ignoreSystemDNS:    true,
 		useIPv4:            true,
 		baseHeaders:        baseHeaders,
-		tlsSessionCache:    tls.NewLRUClientSessionCache(256),
 	}
 }
 
 // ── IP helpers ──────────────────────────────────────────────────────────────────
 
-// ParseIP parses an IP address string, stripping optional brackets.
 func ParseIP(ipStr string) net.IP {
 	ipStr = strings.TrimPrefix(ipStr, "[")
 	ipStr = strings.TrimSuffix(ipStr, "]")
@@ -296,7 +221,7 @@ func uniqueNormalizedIPs(ips []net.IP) []net.IP {
 		return nil
 	}
 
-	// For small DNS responses (1–4 IPs), an O(N²) loop over a stack
+	// For small DNS responses (1-4 IPs), an O(N^2) loop over a stack
 	// array completely out-performs the overhead of map allocation.
 	var seenBuf [8]netip.Addr
 	seen := seenBuf[:0]
@@ -307,7 +232,7 @@ func uniqueNormalizedIPs(ips []net.IP) []net.IP {
 			continue
 		}
 		addr, ok := netIPToNetipAddr(ip)
-		if !ok {
+		if !ok { // Non-standard length
 			out = append(out, bytes.Clone(ip))
 			continue
 		}
@@ -327,15 +252,6 @@ func uniqueNormalizedIPs(ips []net.IP) []net.IP {
 	return out
 }
 
-// shuffleIPs performs a Fisher-Yates shuffle to distribute connection load
-// across all addresses a domain resolves to.
-func shuffleIPs(ips []net.IP) {
-	for i := len(ips) - 1; i > 0; i-- {
-		j := rand.IntN(i + 1)
-		ips[i], ips[j] = ips[j], ips[i]
-	}
-}
-
 // ── IP cache ────────────────────────────────────────────────────────────────────
 
 func (x *XTransport) saveCachedIPs(host string, ips []net.IP, ttl time.Duration) {
@@ -344,14 +260,10 @@ func (x *XTransport) saveCachedIPs(host string, ips []net.IP, ttl time.Duration)
 		return
 	}
 
-	// Shuffle on save to distribute load across resolved addresses.
-	shuffleIPs(normalized)
-
 	item := &CachedIPItem{ips: normalized}
 	if ttl >= 0 {
 		ttl = max(ttl, MinResolverIPTTL)
 		ttl += time.Duration(rand.Int64N(int64(ResolverIPTTLMaxJitter)))
-		// Go 1.26: new(expr) — alloc-and-init a *time.Time in one step.
 		item.expiration = new(time.Now().Add(ttl))
 	}
 
@@ -377,7 +289,6 @@ func (x *XTransport) saveCachedIP(host string, ip net.IP, ttl time.Duration) {
 func (x *XTransport) markUpdatingCachedIP(host string) {
 	x.cachedIPs.Lock()
 	if item, ok := x.cachedIPs.cache[host]; ok {
-		// Go 1.26: new(expr)
 		item.updatingUntil = new(time.Now().Add(x.timeout))
 	} else {
 		x.cachedIPs.cache[host] = &CachedIPItem{updatingUntil: new(time.Now().Add(x.timeout))}
@@ -410,58 +321,6 @@ func (x *XTransport) loadCachedIPs(host string) (ips []net.IP, expired, updating
 	return out, expired, updating
 }
 
-// shouldSpecRefresh returns true if the cached entry has passed the speculative
-// refresh threshold (75% of TTL elapsed) but is not yet fully expired.
-func (x *XTransport) shouldSpecRefresh(host string) bool {
-	x.cachedIPs.RLock()
-	item, ok := x.cachedIPs.cache[host]
-	x.cachedIPs.RUnlock()
-	if !ok || item == nil || item.expiration == nil || len(item.ips) == 0 {
-		return false
-	}
-	now := time.Now()
-	if now.After(*item.expiration) {
-		return false // already expired
-	}
-	if item.updatingUntil != nil && now.Before(*item.updatingUntil) {
-		return false // already being updated
-	}
-	remaining := time.Until(*item.expiration)
-	ttlEstimate := remaining + MinResolverIPTTL
-	threshold := time.Duration(float64(ttlEstimate) * specRefreshRatio)
-	return remaining < (ttlEstimate - threshold)
-}
-
-// triggerSpeculativeRefresh fires a non-blocking background goroutine to
-// pre-fetch fresh IPs before the cache entry expires. Bounded by a semaphore
-// and deduplicated per host.
-func (x *XTransport) triggerSpeculativeRefresh(host string) {
-	if _, loaded := x.refreshRunning.LoadOrStore(host, struct{}{}); loaded {
-		return
-	}
-	select {
-	case refreshSemaphore <- struct{}{}:
-		go func() {
-			defer func() {
-				<-refreshSemaphore
-				x.refreshRunning.Delete(host)
-			}()
-			ips, ttl, err := x.resolve(host, x.useIPv4, x.useIPv6)
-			if err != nil || len(ips) == 0 {
-				dlog.Debugf("[%s] speculative refresh failed: %v", host, err)
-				return
-			}
-			x.saveCachedIPs(host, ips, ttl)
-			dlog.Debugf("[%s] speculative refresh completed (%d IPs)", host, len(ips))
-		}()
-	default:
-		x.refreshRunning.Delete(host)
-		dlog.Debugf("[%s] speculative refresh skipped (semaphore full)", host)
-	}
-}
-
-// PurgeExpiredCache removes expired IP entries, stale Alt-Svc entries, and
-// orphaned per-host resolution mutexes.
 func (x *XTransport) PurgeExpiredCache() (ipsPurged, altSvcPurged, muPurged int) {
 	now := time.Now()
 	grace := now.Add(-ExpiredCachedIPGraceTTL)
@@ -480,6 +339,7 @@ func (x *XTransport) PurgeExpiredCache() (ipsPurged, altSvcPurged, muPurged int)
 	})
 	ipsPurged = before - len(x.cachedIPs.cache)
 
+	// Build a live-host set directly from the post-purge map while holding the lock.
 	live := make(map[string]struct{}, len(x.cachedIPs.cache))
 	for host := range x.cachedIPs.cache {
 		live[host] = struct{}{}
@@ -512,7 +372,6 @@ func (x *XTransport) PurgeExpiredCache() (ipsPurged, altSvcPurged, muPurged int)
 	return ipsPurged, altSvcPurged, muPurged
 }
 
-// ResetCache clears all IP, Alt-Svc, and mutex cache entries.
 func (x *XTransport) ResetCache() {
 	x.cachedIPs.Lock()
 	clear(x.cachedIPs.cache)
@@ -529,7 +388,6 @@ func (x *XTransport) ResetCache() {
 	dlog.Debug("ResetCache: all IP, Alt-Svc, and mutex cache entries cleared")
 }
 
-// CachedHosts returns an iterator over all currently cached host names.
 func (x *XTransport) CachedHosts() iter.Seq[string] {
 	return func(yield func(string) bool) {
 		x.cachedIPs.RLock()
@@ -544,14 +402,76 @@ func (x *XTransport) CachedHosts() iter.Seq[string] {
 
 // ── Transport construction ──────────────────────────────────────────────────────
 
-// rebuildTransport tears down the existing transport and constructs a new one
-// with all current configuration, including HTTP/2 and HTTP/3 optimizations.
 func (x *XTransport) rebuildTransport() {
 	dlog.Debug("Rebuilding transport")
 	if x.transport != nil {
 		x.transport.CloseIdleConnections()
 	}
 	x.tlsClientConfig = x.buildTLSConfig()
+
+	// Native HTTP/2 configuration via http.HTTP2Config (Go 1.24+).
+	// Every tunable knob is set to the maximum valid value per the Go docs
+	// for low-latency DNS-over-HTTPS workloads.
+	//
+	// Field documentation: go.dev/src/net/http/http.go lines 236-297
+	// Internal mapping: go.googlesource.com/net/+/master/http2/config.go
+	h2Cfg := &http.HTTP2Config{
+		// MaxConcurrentStreams: number of concurrent streams the peer may open.
+		// DNS queries are tiny and short-lived — 1000 streams per connection
+		// avoids the overhead of additional TCP+TLS handshakes.
+		// Default is ~100; we set 1000 for aggressive multiplexing.
+		MaxConcurrentStreams: h2MaxConcurrentStreams,
+
+		// MaxReadFrameSize: SETTINGS_MAX_FRAME_SIZE we advertise to the peer.
+		// Valid range: 16 KiB to 16 MiB (RFC 7540 §4.2). Setting to 16 MiB
+		// means the peer can send the largest possible frames, reducing the
+		// ratio of frame headers to payload bytes.
+		MaxReadFrameSize: h2MaxReadFrameSize,
+
+		// MaxDecoderHeaderTableSize: SETTINGS_HEADER_TABLE_SIZE sent to peer.
+		// Valid: < 4 MiB. A ~4 MiB table lets the peer use a much larger HPACK
+		// dynamic table, significantly improving header compression for
+		// repeated DoH queries with identical headers.
+		MaxDecoderHeaderTableSize: h2MaxDecoderHeaderTableSize,
+
+		// MaxEncoderHeaderTableSize: caps our own HPACK encoding table.
+		// Symmetric with decoder for bidirectional compression benefit.
+		MaxEncoderHeaderTableSize: h2MaxEncoderHeaderTableSize,
+
+		// MaxReceiveBufferPerConnection: connection-level flow control window.
+		// Valid: 64 KiB to < 4 MiB. Set to ~4 MiB — accommodates large bursts
+		// of concurrent DNS responses without triggering WINDOW_UPDATE RTTs.
+		MaxReceiveBufferPerConnection: h2MaxReceiveBufferPerConn,
+
+		// MaxReceiveBufferPerStream: stream-level flow control window.
+		// Valid: < 4 MiB. Matches connection buffer so no individual stream
+		// is artificially throttled below the connection-level limit.
+		MaxReceiveBufferPerStream: h2MaxReceiveBufferPerStream,
+
+		// SendPingTimeout: after 15s of no frames received, send an HTTP/2
+		// PING to detect dead connections before the next real request
+		// hits a silently broken h2 connection.
+		SendPingTimeout: h2SendPingTimeout,
+
+		// PingTimeout: if PONG doesn't arrive within 15s, tear down the
+		// connection. The next request will establish a fresh one.
+		PingTimeout: h2PingTimeout,
+
+		// WriteByteTimeout: if no bytes can be written for 10s, the write
+		// path is stalled — close the connection.
+		WriteByteTimeout: h2WriteByteTimeout,
+
+		// PermitProhibitedCipherSuites: false (default). Our buildTLSConfig
+		// already selects only strong AEAD cipher suites, so we don't need
+		// to relax the HTTP/2 cipher requirements.
+
+		// CountError: wired to dlog for HTTP/2 framing error observability.
+		// errType is lowercase alphanumeric + underscores.
+		CountError: func(errType string) {
+			dlog.Debugf("HTTP/2 transport error: %s", errType)
+		},
+	}
+
 	transport := &http.Transport{
 		DisableKeepAlives:      false,
 		DisableCompression:     true,
@@ -562,38 +482,23 @@ func (x *XTransport) rebuildTransport() {
 		ResponseHeaderTimeout:  x.timeout,
 		ExpectContinueTimeout:  1 * time.Second,
 		MaxResponseHeaderBytes: MaxResponseHeaderBytes,
-		WriteBufferSize:        32 * 1024,
-		ReadBufferSize:         32 * 1024,
+		WriteBufferSize:        h2ReadWriteBufferSize,
+		ReadBufferSize:         h2ReadWriteBufferSize,
 		ForceAttemptHTTP2:      true,
 		TLSClientConfig:        x.tlsClientConfig,
 		DialContext:            x.buildDialContext(),
 
-		// Go 1.26: http.HTTP2Config — native h2 config on the Transport.
-		// StrictMaxConcurrentRequests=false allows opening new TCP connections
-		// when the peer's MAX_CONCURRENT_STREAMS limit is reached, preventing
-		// head-of-line blocking under high concurrency.
-		HTTP2: &http.HTTP2Config{
-			StrictMaxConcurrentRequests: false,
-		},
+		// Native HTTP/2 config — replaces http2.ConfigureTransports entirely.
+		// No x/net/http2 import needed for configuration.
+		HTTP2: h2Cfg,
 	}
 	if x.httpProxyFunction != nil {
 		transport.Proxy = x.httpProxyFunction
 	}
-
-	// Configure HTTP/2 via x/net/http2 for fine-grained settings.
-	// ReadIdleTimeout sends PINGs on idle connections to detect dead peers;
-	// PingTimeout closes the connection if no PONG arrives;
-	// WriteByteTimeout detects unresponsive write paths.
-	if h2t, err := http2.ConfigureTransports(transport); err == nil && h2t != nil {
-		h2t.ReadIdleTimeout = h2ReadIdleTimeout
-		h2t.PingTimeout = h2PingTimeout
-		h2t.WriteByteTimeout = h2WriteByteTimeout
-		h2t.AllowHTTP = false
-		h2t.StrictMaxConcurrentStreams = false
-	} else if err != nil {
-		dlog.Errorf("http2.ConfigureTransports: %v", err)
-	}
 	x.transport = transport
+
+	// Reset prewarm state so next Fetch() triggers a background handshake.
+	x.prewarmed = sync.Once{}
 
 	if x.http3 {
 		if x.h3Transport != nil {
@@ -605,125 +510,31 @@ func (x *XTransport) rebuildTransport() {
 			Dial:               x.buildH3DialFunc(),
 		}
 	}
-
-	// Reset prewarm state so the next Fetch triggers a background handshake.
-	x.prewarmOnce = sync.Once{}
 }
 
-// prewarmConnection fires a background goroutine that establishes a TLS+HTTP/2
-// connection to the given host before the first real request, eliminating the
-// cold-start latency of DNS + TCP + TLS from the user-visible critical path.
-func (x *XTransport) prewarmConnection(host string) {
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), TLSHandshakeTimeout)
-		defer cancel()
-		conn, err := x.transport.DialContext(ctx, "tcp", host+":443")
-		if err != nil {
-			dlog.Debugf("[%s] prewarm dial failed: %v", host, err)
-			return
-		}
-		_ = conn.Close()
-		dlog.Debugf("[%s] connection prewarmed", host)
-	}()
-}
 
-// dialRace implements RFC 8305 Happy Eyeballs-style staggered connection racing.
-// It launches TCP dial attempts with a configurable delay between them, returning
-// the first successful connection and cancelling all remaining in-flight dials.
-func dialRace(
-	ctx context.Context,
-	d *net.Dialer,
-	network string,
-	targets []string,
-	proxyDialer *netproxy.Dialer,
-) (net.Conn, error) {
-	if len(targets) == 0 {
-		return nil, errors.New("no dial targets")
-	}
-	if len(targets) == 1 {
-		if proxyDialer == nil {
-			return d.DialContext(ctx, network, targets[0])
-		}
-		return (*proxyDialer).Dial(network, targets[0])
-	}
-
-	type dialResult struct {
-		conn net.Conn
-		err  error
-		idx  int
-	}
-
-	raceCtx, raceCancel := context.WithCancel(ctx)
-	defer raceCancel()
-
-	results := make(chan dialResult, len(targets))
-	var started atomic.Int32
-
-	for i, target := range targets {
-		i, target := i, target
-		if i > 0 {
-			timer := time.NewTimer(dialRaceStagger * time.Duration(i))
-			select {
-			case <-timer.C:
-			case <-raceCtx.Done():
-				timer.Stop()
-				break
-			}
-		}
-		if raceCtx.Err() != nil {
-			break
-		}
-		started.Add(1)
+// prewarmConnection establishes a background TCP+TLS+HTTP/2 connection to the
+// target host before the first real request arrives, eliminating cold-start
+// latency from the user-visible critical path.
+func (x *XTransport) prewarmConnection(hostPort string) {
+	x.prewarmed.Do(func() {
 		go func() {
-			var conn net.Conn
-			var err error
-			if proxyDialer == nil {
-				conn, err = d.DialContext(raceCtx, network, target)
-			} else {
-				conn, err = (*proxyDialer).Dial(network, target)
+			ctx, cancel := context.WithTimeout(context.Background(), TLSHandshakeTimeout)
+			defer cancel()
+			conn, err := x.transport.DialContext(ctx, "tcp", hostPort)
+			if err != nil {
+				return
 			}
-			results <- dialResult{conn: conn, err: err, idx: i}
+			conn.Close()
 		}()
-	}
-
-	var firstConn net.Conn
-	var lastErr error
-	collected := int32(0)
-	total := started.Load()
-
-	for collected < total {
-		select {
-		case r := <-results:
-			collected++
-			if r.err == nil && firstConn == nil {
-				firstConn = r.conn
-				raceCancel()
-			} else if r.conn != nil {
-				_ = r.conn.Close()
-			}
-			if r.err != nil {
-				lastErr = r.err
-				if int(collected) < len(targets) {
-					dlog.Debugf("Dial race [%s] failed: %v", targets[r.idx], r.err)
-				}
-			}
-		case <-ctx.Done():
-			return firstConn, ctx.Err()
-		}
-	}
-
-	if firstConn != nil {
-		return firstConn, nil
-	}
-	return nil, lastErr
+	})
 }
 
 func (x *XTransport) buildDialContext() func(context.Context, string, string) (net.Conn, error) {
 	timeout, keepAlive := x.timeout, x.keepAlive
 	useIPv4, useIPv6 := x.useIPv4, x.useIPv6
 
-	// Create dialer once to avoid repeated struct allocations on the hot path.
-	// Go 1.24: net.KeepAliveConfig for fine-grained TCP keep-alive control.
+	// Create dialer once to avoid repeated struct allocations on the hot path
 	d := &net.Dialer{
 		Timeout: timeout,
 		KeepAliveConfig: net.KeepAliveConfig{
@@ -749,18 +560,7 @@ func (x *XTransport) buildDialContext() func(context.Context, string, string) (n
 			}
 			return host + ":" + portStr
 		}
-		cachedIPs, expired, _ := x.loadCachedIPs(host)
-
-		// Trigger speculative background refresh if approaching TTL expiry.
-		if !expired && len(cachedIPs) > 0 && x.shouldSpecRefresh(host) {
-			x.triggerSpeculativeRefresh(host)
-		}
-
-		// Shuffle cached IPs for load distribution.
-		if len(cachedIPs) > 1 {
-			shuffleIPs(cachedIPs)
-		}
-
+		cachedIPs, _, _ := x.loadCachedIPs(host)
 		targets := make([]string, 0, max(len(cachedIPs), 1))
 		for _, ip := range cachedIPs {
 			targets = append(targets, endpoint(ip))
@@ -775,11 +575,6 @@ func (x *XTransport) buildDialContext() func(context.Context, string, string) (n
 			dialNet = "tcp4"
 		case useIPv6 && !useIPv4:
 			dialNet = "tcp6"
-		}
-
-		// Use staggered connection racing when multiple IPs are available.
-		if len(targets) > 1 && x.proxyDialer == nil {
-			return dialRace(ctx, d, dialNet, targets, nil)
 		}
 
 		var lastErr error
@@ -836,12 +631,6 @@ func (x *XTransport) buildH3DialFunc() func(context.Context, string, *tls.Config
 		}
 
 		cachedIPs, _, _ := x.loadCachedIPs(host)
-
-		// Shuffle for load distribution.
-		if len(cachedIPs) > 1 {
-			shuffleIPs(cachedIPs)
-		}
-
 		targets := make([]udpTarget, 0, max(len(cachedIPs), 1))
 		for _, ip := range cachedIPs {
 			targets = append(targets, udpEndpoint(ip))
@@ -853,7 +642,7 @@ func (x *XTransport) buildH3DialFunc() func(context.Context, string, *tls.Config
 
 		var lastErr error
 
-		// Clone the shared config once before the loop.
+		// Clone the shared config once before the loop
 		tlsCfg := x.tlsClientConfig.Clone()
 		tlsCfg.ServerName = host
 
@@ -924,18 +713,11 @@ mRGunUHBcnWEvgJBQl9nJEiU0Zsnvgc/ubhPgXRR4Xq37Z0j4r7g1SgEEzwxA57d
 emyPxgcYxn/eR44/KJ4EBs+lVDR3veyJm+kXQ99b21/+jh5Xos1AnX5iItreGCc=
 -----END CERTIFICATE-----`)
 
-// buildTLSConfig constructs a TLS configuration with post-quantum hybrid KEMs,
-// TLS session resumption cache, and hardware-optimized cipher suites.
 func (x *XTransport) buildTLSConfig() *tls.Config {
 	cfg := &tls.Config{}
 	if x.keyLogWriter != nil {
 		cfg.KeyLogWriter = x.keyLogWriter
 	}
-
-	// TLS session resumption: reuse previous session tickets to avoid a full
-	// handshake on reconnect — saves one full RTT per new connection.
-	cfg.ClientSessionCache = x.tlsSessionCache
-
 	certPool, certPoolErr := x509.SystemCertPool()
 	creds := x.tlsClientCreds
 	if creds.rootCA != "" {
@@ -963,13 +745,14 @@ func (x *XTransport) buildTLSConfig() *tls.Config {
 	if x.tlsDisableSessionTickets {
 		cfg.SessionTicketsDisabled = true
 	}
+	// Shared TLS session cache — saves one full TLS 1.3 RTT on reconnect
+	// by presenting cached session tickets to previously-visited DoH servers.
+	cfg.ClientSessionCache = tlsSessionCache
+
 	if x.tlsPreferRSA {
 		cfg.MaxVersion = tls.VersionTLS12
 	}
 
-	// Go 1.26: SecP256r1MLKEM768 and SecP384r1MLKEM1024 post-quantum hybrid
-	// key exchanges are enabled by default. We list them explicitly to control
-	// preference order and ensure post-quantum security.
 	cfg.CurvePreferences = []tls.CurveID{
 		tls.X25519MLKEM768,
 		tls.SecP256r1MLKEM768,
@@ -1075,10 +858,6 @@ func (x *XTransport) resolveRRType(
 	return
 }
 
-// resolveUsingResolver resolves a host using a single DNS resolver.
-// When both IPv4 and IPv6 are requested, A and AAAA queries fire concurrently
-// via sync.WaitGroup.Go (Go 1.25+) for parallel dual-stack resolution per
-// RFC 8305 Section 3.
 func (x *XTransport) resolveUsingResolver(
 	proto, host, resolver string,
 	returnIPv4, returnIPv6 bool,
@@ -1111,7 +890,6 @@ func (x *XTransport) resolveUsingResolver(
 		return rips, time.Duration(rttl) * time.Second, nil
 	}
 
-	// Go 1.25: sync.WaitGroup.Go — parallel A + AAAA resolution.
 	type rrResult struct {
 		ips    []net.IP
 		minTTL uint32
@@ -1152,9 +930,6 @@ func (x *XTransport) resolveUsingResolver(
 	return nil, 0, errNoIPRecords
 }
 
-// resolveUsingServers tries each resolver in order with retry/backoff.
-// On success via a non-primary resolver, it's auto-promoted to position 0
-// so future queries hit the fastest-responding server first.
 func (x *XTransport) resolveUsingServers(
 	proto, host string,
 	resolvers []string,
@@ -1169,7 +944,6 @@ func (x *XTransport) resolveUsingServers(
 		for attempt := range resolverRetryCount {
 			ips, ttl, err = x.resolveUsingResolver(proto, host, resolver, returnIPv4, returnIPv6)
 			if err == nil && len(ips) > 0 {
-				// Adaptive resolver promotion: swap fastest to first.
 				if i > 0 {
 					dlog.Infof("Resolution succeeded via %s[%s]; promoting to first", proto, resolver)
 					resolvers[0], resolvers[i] = resolvers[i], resolvers[0]
@@ -1244,13 +1018,12 @@ func (x *XTransport) resolve(host string, returnIPv4, returnIPv6 bool) ([]net.IP
 }
 
 func (x *XTransport) hostResolveMu(host string) *sync.Mutex {
-	// Go 1.24: unique.Make — interned string handles for zero-alloc map lookups.
 	k := unique.Make(host)
-	// Fast-path: O(1) read, zero allocations.
+	// Fast-path: O(1) read, zero allocations
 	if v, ok := x.resolveMu.Load(k); ok {
 		return v.(*sync.Mutex)
 	}
-	// Slow-path: allocate and store.
+	// Slow-path: allocate and store
 	v, _ := x.resolveMu.LoadOrStore(k, new(sync.Mutex))
 	return v.(*sync.Mutex)
 }
@@ -1281,7 +1054,6 @@ func (x *XTransport) resolveAndUpdateCache(host string) error {
 
 	ips, ttl, resolveErr := x.resolve(host, x.useIPv4, x.useIPv6)
 
-	// Go 1.26: errors.AsType[E] — type-safe, reflection-free error unwrapping.
 	if resolveErr != nil {
 		if dnsErr, ok := errors.AsType[*net.DNSError](resolveErr); ok {
 			dlog.Debugf("[%s] DNS error: name=%s notFound=%v temp=%v",
@@ -1321,8 +1093,6 @@ func (x *XTransport) resolveAndUpdateCache(host string) error {
 
 // ── HTTP fetch engine ───────────────────────────────────────────────────────────
 
-// Fetch performs an HTTP request with full DNS resolution, HTTP/2 multiplexing,
-// HTTP/3 fallback, gzip decompression, and connection lifecycle management.
 func (x *XTransport) Fetch(
 	method string,
 	url *url.URL,
@@ -1336,9 +1106,14 @@ func (x *XTransport) Fetch(
 		timeout = x.timeout
 	}
 
+	// Rely on per-request context deadlines; avoids the extra timer and duplicated cancellation.
 	client := http.Client{Transport: x.transport}
 
 	host, port := ExtractHostAndPort(url.Host, 443)
+
+	// Prewarm: establish TLS+HTTP/2 connection in background on first Fetch
+	x.prewarmConnection(host + ":" + strconv.Itoa(port))
+
 	hasAltSupport := false
 	if x.h3Transport != nil {
 		if x.http3Probe {
@@ -1361,7 +1136,7 @@ func (x *XTransport) Fetch(
 		}
 	}
 
-	// Fast map clone using Go's highly-optimized internal map cloning.
+	// Fast map clone using Go's highly-optimized internal map cloning
 	header := x.baseHeaders.Clone()
 
 	if accept != "" {
@@ -1385,13 +1160,6 @@ func (x *XTransport) Fetch(
 		dlog.Errorf("Unable to resolve [%s]: check bootstrap_resolvers or system resolver", host)
 		return nil, 0, nil, 0, err
 	}
-
-	// Connection prewarming: on first Fetch after transport rebuild, fire a
-	// background TLS+h2 handshake so subsequent requests hit a warm pool.
-	x.prewarmOnce.Do(func() {
-		x.prewarmConnection(host)
-	})
-
 	if compress && body == nil {
 		header.Set("Accept-Encoding", "gzip")
 	}
@@ -1465,13 +1233,13 @@ func (x *XTransport) Fetch(
 			return nil, statusCode, tlsState, rtt, grErr
 		}
 
+		// Ensure the reader is closed and recycled into the sync.Pool
 		defer func() {
 			gr.Close()
 			gzipReaderPool.Put(gr)
 		}()
 		bodyReader = gr
 	}
-	// Go 1.26: io.ReadAll is ~2× faster with ~50% less intermediate memory.
 	bin, err := io.ReadAll(io.LimitReader(bodyReader, MaxHTTPBodyLength))
 	if err != nil {
 		return nil, statusCode, tlsState, rtt, err
@@ -1504,7 +1272,6 @@ outer:
 			break
 		}
 		j := 0
-		// Go 1.24: strings.SplitSeq — iterator-based string splitting.
 		for field := range strings.SplitSeq(entry, ";") {
 			if j >= 16 {
 				break
@@ -1529,7 +1296,6 @@ outer:
 
 // ── Public query helpers ────────────────────────────────────────────────────────
 
-// GetWithCompression performs a GET request with gzip compression support.
 func (x *XTransport) GetWithCompression(
 	url *url.URL,
 	accept string,
@@ -1538,7 +1304,6 @@ func (x *XTransport) GetWithCompression(
 	return x.Fetch(http.MethodGet, url, accept, "", nil, timeout, true)
 }
 
-// Get performs an uncompressed GET request.
 func (x *XTransport) Get(
 	url *url.URL,
 	accept string,
@@ -1547,7 +1312,6 @@ func (x *XTransport) Get(
 	return x.Fetch(http.MethodGet, url, accept, "", nil, timeout, false)
 }
 
-// Post performs a POST request with the given body and content type.
 func (x *XTransport) Post(
 	url *url.URL,
 	accept, contentType string,
@@ -1574,7 +1338,6 @@ func (x *XTransport) dohLikeQuery(
 	return x.Post(url, dataType, dataType, &body, timeout)
 }
 
-// DoHQuery sends a DNS-over-HTTPS query.
 func (x *XTransport) DoHQuery(
 	useGet bool,
 	url *url.URL,
@@ -1584,7 +1347,6 @@ func (x *XTransport) DoHQuery(
 	return x.dohLikeQuery("application/dns-message", useGet, url, body, timeout)
 }
 
-// ObliviousDoHQuery sends an Oblivious DNS-over-HTTPS query.
 func (x *XTransport) ObliviousDoHQuery(
 	useGet bool,
 	url *url.URL,
