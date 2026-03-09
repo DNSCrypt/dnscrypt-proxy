@@ -14,10 +14,9 @@ var (
 	ErrKeyAlg  = &Error{err: "bad key algorithm"} // ErrKeyAlg indicates that the algorithm in the key is not valid.
 	ErrKey     = &Error{err: "bad key"}
 	ErrKeySize = &Error{err: "bad key size"}
+	ErrRcode   = &Error{err: "bad rcode"}
+	ErrTime    = &Error{err: "bad time"} // ErrTime indicates a timing error in TSIG authentication.
 	ErrNoTSIG  = &Error{err: "no TSIG signature"}
 	ErrNoSIG0  = &Error{err: "no SIG(0) signature"}
-	ErrRcode   = &Error{err: "bad rcode"}
-	ErrRRset   = &Error{err: "bad rrset"}
-	ErrSOA     = &Error{err: "no SOA"}   // ErrSOA indicates that no SOA RR was seen when doing zone transfers.
-	ErrTime    = &Error{err: "bad time"} // ErrTime indicates a timing error in TSIG authentication.
+	ErrSOA     = &Error{err: "no SOA"} // ErrSOA indicates that no SOA RR was seen when doing zone transfers.
 )

@@ -95,7 +95,7 @@ func (rr *MB) unpack(s cryptobyte.String, msgBuf []byte) (err error) {
 }
 
 func (rr *MG) pack(msg []byte, off int, compression map[string]uint16) (off1 int, err error) {
-	off, err = pack.Name(rr.Mg, msg, off, compression, true)
+	off, err = pack.MName(rr.Mg, msg, off)
 	if err != nil {
 		return off, err
 	}
@@ -103,7 +103,7 @@ func (rr *MG) pack(msg []byte, off int, compression map[string]uint16) (off1 int
 }
 
 func (rr *MG) unpack(s cryptobyte.String, msgBuf []byte) (err error) {
-	rr.Mg, err = unpack.Name(&s, msgBuf)
+	rr.Mg, err = unpack.MName(&s, msgBuf)
 	if err != nil {
 		return err
 	}
@@ -114,11 +114,11 @@ func (rr *MG) unpack(s cryptobyte.String, msgBuf []byte) (err error) {
 }
 
 func (rr *MINFO) pack(msg []byte, off int, compression map[string]uint16) (off1 int, err error) {
-	off, err = pack.Name(rr.Rmail, msg, off, compression, true)
+	off, err = pack.MName(rr.Rmail, msg, off)
 	if err != nil {
 		return off, err
 	}
-	off, err = pack.Name(rr.Email, msg, off, compression, true)
+	off, err = pack.MName(rr.Email, msg, off)
 	if err != nil {
 		return off, err
 	}
@@ -126,11 +126,11 @@ func (rr *MINFO) pack(msg []byte, off int, compression map[string]uint16) (off1 
 }
 
 func (rr *MINFO) unpack(s cryptobyte.String, msgBuf []byte) (err error) {
-	rr.Rmail, err = unpack.Name(&s, msgBuf)
+	rr.Rmail, err = unpack.MName(&s, msgBuf)
 	if err != nil {
 		return err
 	}
-	rr.Email, err = unpack.Name(&s, msgBuf)
+	rr.Email, err = unpack.MName(&s, msgBuf)
 	if err != nil {
 		return err
 	}
@@ -141,7 +141,7 @@ func (rr *MINFO) unpack(s cryptobyte.String, msgBuf []byte) (err error) {
 }
 
 func (rr *MR) pack(msg []byte, off int, compression map[string]uint16) (off1 int, err error) {
-	off, err = pack.Name(rr.Mr, msg, off, compression, true)
+	off, err = pack.MName(rr.Mr, msg, off)
 	if err != nil {
 		return off, err
 	}
@@ -149,7 +149,7 @@ func (rr *MR) pack(msg []byte, off int, compression map[string]uint16) (off1 int
 }
 
 func (rr *MR) unpack(s cryptobyte.String, msgBuf []byte) (err error) {
-	rr.Mr, err = unpack.Name(&s, msgBuf)
+	rr.Mr, err = unpack.MName(&s, msgBuf)
 	if err != nil {
 		return err
 	}
@@ -360,7 +360,7 @@ func (rr *PTR) unpack(s cryptobyte.String, msgBuf []byte) (err error) {
 }
 
 func (rr *RP) pack(msg []byte, off int, compression map[string]uint16) (off1 int, err error) {
-	off, err = pack.Name(rr.Mbox, msg, off, compression, false)
+	off, err = pack.MName(rr.Mbox, msg, off)
 	if err != nil {
 		return off, err
 	}
@@ -372,7 +372,7 @@ func (rr *RP) pack(msg []byte, off int, compression map[string]uint16) (off1 int
 }
 
 func (rr *RP) unpack(s cryptobyte.String, msgBuf []byte) (err error) {
-	rr.Mbox, err = unpack.Name(&s, msgBuf)
+	rr.Mbox, err = unpack.MName(&s, msgBuf)
 	if err != nil {
 		return err
 	}
@@ -391,7 +391,7 @@ func (rr *SOA) pack(msg []byte, off int, compression map[string]uint16) (off1 in
 	if err != nil {
 		return off, err
 	}
-	off, err = pack.Name(rr.Mbox, msg, off, compression, true)
+	off, err = pack.MName(rr.Mbox, msg, off)
 	if err != nil {
 		return off, err
 	}
@@ -423,7 +423,7 @@ func (rr *SOA) unpack(s cryptobyte.String, msgBuf []byte) (err error) {
 	if err != nil {
 		return err
 	}
-	rr.Mbox, err = unpack.Name(&s, msgBuf)
+	rr.Mbox, err = unpack.MName(&s, msgBuf)
 	if err != nil {
 		return err
 	}

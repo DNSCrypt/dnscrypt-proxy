@@ -14,23 +14,26 @@ import (
 // ENDS0 option codes.
 const (
 	CodeNone         uint16 = 0x0
-	CodeLLQ          uint16 = 0x1    // Long lived queries: http://tools.ietf.org/html/draft-sekar-dns-llq-01.
-	CodeUL           uint16 = 0x2    // Update lease draft: http://files.dns-sd.org/draft-sekar-dns-ul.txt.
-	CodeNSID         uint16 = 0x3    // Nsid (see RFC 5001).
-	CodeESU          uint16 = 0x4    // ENUM Source-URI draft: https://datatracker.ietf.org/doc/html/draft-kaplan-enum-source-uri-00.
-	CodeDAU          uint16 = 0x5    // DNSSEC Algorithm Understood.
-	CodeDHU          uint16 = 0x6    // DS Hash Understood.
-	CodeN3U          uint16 = 0x7    // NSEC3 Hash Understood.
-	CodeSUBNET       uint16 = 0x8    // Client-subnet, see RFC 7871.
-	CodeEXPIRE       uint16 = 0x9    // Expire, RFC 7314.
-	CodeCOOKIE       uint16 = 0xA    // Cookie, RFC 7873.
-	CodeTCPKEEPALIVE uint16 = 0xB    // TCP keep alive (see RFC 7828).
-	CodePADDING      uint16 = 0xC    // Padding (see RFC 7830).
-	CodeEDE          uint16 = 0xF    // Extended DNS errors (see RFC 8914).
-	CodeREPORTING    uint16 = 0x12   // EDNS0 reporting (see RFC 9567).
-	CodeZONEVERSION  uint16 = 0x13   // Zone version (see RFC 9660).
-	CodeLOCALSTART   uint16 = 0xFDE9 // Beginning of range reserved for local/experimental use (see RFC 6891).
-	CodeLOCALEND     uint16 = 0xFFFE // End of range reserved for local/experimental use (see RFC 6891).
+	CodeLLQ          uint16 = 0x1  // Long lived queries: http://tools.ietf.org/html/draft-sekar-dns-llq-01.
+	CodeUL           uint16 = 0x2  // Update lease draft: http://files.dns-sd.org/draft-sekar-dns-ul.txt.
+	CodeNSID         uint16 = 0x3  // Nsid (see RFC 5001).
+	CodeESU          uint16 = 0x4  // ENUM Source-URI draft: https://datatracker.ietf.org/doc/html/draft-kaplan-enum-source-uri-00.
+	CodeDAU          uint16 = 0x5  // DNSSEC Algorithm Understood.
+	CodeDHU          uint16 = 0x6  // DS Hash Understood.
+	CodeN3U          uint16 = 0x7  // NSEC3 Hash Understood.
+	CodeSUBNET       uint16 = 0x8  // Client-subnet, see RFC 7871.
+	CodeEXPIRE       uint16 = 0x9  // Expire, RFC 7314.
+	CodeCOOKIE       uint16 = 0xA  // Cookie, RFC 7873.
+	CodeTCPKEEPALIVE uint16 = 0xB  // TCP keep alive (see RFC 7828).
+	CodePADDING      uint16 = 0xC  // Padding (see RFC 7830).
+	CodeEDE          uint16 = 0xF  // Extended DNS errors (see RFC 8914).
+	CodeREPORTING    uint16 = 0x12 // EDNS0 reporting (see RFC 9567).
+	CodeZONEVERSION  uint16 = 0x13 // Zone version (see RFC 9660).
+	CodeMQQUERY      uint16 = 0x14 // MQTYPE-Query (see ietf-dnssd-multi-qtypes-14).
+	CodeMQRESPONSE   uint16 = 0x15 // MQTYPE-Response (see ietf-dnssd-multi-qtypes-14).
+
+	CodeLOCALSTART uint16 = 0xFDE9 // Beginning of range reserved for local/experimental use (see RFC 6891).
+	CodeLOCALEND   uint16 = 0xFFFE // End of range reserved for local/experimental use (see RFC 6891).
 )
 
 // LLQ stands for Long Lived Queries: http://tools.ietf.org/html/draft-sekar-dns-llq-01
@@ -61,7 +64,7 @@ func (o *LLQ) String() string {
 //
 // This record must be put in the pseudo section.
 type REPORTING struct {
-	AgentDomain string `dns:"domain-name"`
+	AgentDomain string `dns:"name"`
 }
 
 func (o *REPORTING) Len() int    { return tlv + len(o.AgentDomain) }
@@ -390,6 +393,28 @@ func (o *ZONEVERSION) String() string {
 	s := sb.String()
 	builderPool.Put(*sb)
 	return s
+}
+
+type MQQUERY struct {
+	Types []uint16
+}
+
+func (o *MQQUERY) Len() int    { return tlv + len(o.Types)*2 }
+func (o *MQQUERY) Data() RDATA { return o }
+func (o *MQQUERY) String() string {
+	// TODO(miekg)
+	return ""
+}
+
+type MQRESPONSE struct {
+	Types []uint16
+}
+
+func (o *MQRESPONSE) Len() int    { return tlv + len(o.Types)*2 }
+func (o *MQRESPONSE) Data() RDATA { return o }
+func (o *MQRESPONSE) String() string {
+	// TODO(miekg)
+	return ""
 }
 
 // ERFC3597 is used to represent unknown EDNS0 options.

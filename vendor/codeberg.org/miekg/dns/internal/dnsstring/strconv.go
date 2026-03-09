@@ -2,6 +2,7 @@ package dnsstring
 
 import (
 	"errors"
+	"fmt"
 	"strconv"
 	"time"
 )
@@ -30,6 +31,11 @@ func AtoiUint32(s string) (uint32, error) {
 	return uint32(i), err
 }
 
+func AtoiUint64(s string) (uint64, error) {
+	i, err := strconv.ParseUint(s, 10, 64)
+	return i, err
+}
+
 func ToTime(s string) (int64, error) {
 	if len(s) != 14 {
 		return 0, errors.New("timestamp must be exactly 14 characters")
@@ -51,4 +57,18 @@ func ToTime(s string) (int64, error) {
 	}
 
 	return time.Date(year, time.Month(month), day, hour, minute, second, 0, time.UTC).Unix(), nil
+}
+
+// Parse a 64 bit-like ipv6 address: "0014:4fff:ff20:ee64" Used for NID and L64 record.
+func ToNodeID(s string) (uint64, error) {
+	if len(s) < 19 {
+		return 0, fmt.Errorf("bad NID")
+	}
+	// There must be three colons at fixes positions, if not its a parse error
+	if s[4] != ':' && s[9] != ':' && s[14] != ':' {
+		return 0, fmt.Errorf("bad NID")
+	}
+	s = s[0:4] + s[5:9] + s[10:14] + s[15:19]
+	u, err := strconv.ParseUint(s, 16, 64)
+	return u, err
 }

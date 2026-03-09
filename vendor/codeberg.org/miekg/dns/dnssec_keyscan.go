@@ -39,7 +39,7 @@ func (k *DNSKEY) readPrivate(q io.Reader, file string) (crypto.PrivateKey, error
 	if m["private-key-format"] != "v1.2" && m["private-key-format"] != "v1.3" {
 		return nil, fmt.Errorf("private-key-format v1.2 or v.1.3 not found")
 	}
-	// TODO(mg): check if the pubkey matches the private key
+
 	algostr, _, _ := strings.Cut(m["algorithm"], " ")
 	algo, err := strconv.ParseUint(algostr, 10, 8)
 	if err != nil {

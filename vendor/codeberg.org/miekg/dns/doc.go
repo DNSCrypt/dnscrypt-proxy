@@ -56,7 +56,7 @@ Or if you sent an NSID EDNS0 option:
 # Domain Name and TXT Character String Representations
 
 Domain names are converted to presentation form as-is, there is no conversion of unprintable characters, i.e.
-\DDD are left as-is.
+\DDD and \. are left as-is. The only exception is the SOA's Mbox where \. is detected and encoded.
 
 TXT character strings are converted to presentation form both when unpacked and when converted to strings.
 Tabs, carriage returns and line feeds will be converted to \t, \r and \n respectively. Back slashes and
