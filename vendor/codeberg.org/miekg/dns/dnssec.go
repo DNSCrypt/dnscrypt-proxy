@@ -106,12 +106,13 @@ const (
 	FlagDELEG  = 1 << 14
 )
 
-// KeyTag calculates the keytag (or key-id) of the DNSKEY.
+// KeyTag returns the keytag (or key-id) of the DNSKEY. If k.Tag is not zero, that value is returned instead,
+// otherwise the tag is calculated, set and returned.
 func (k *DNSKEY) KeyTag() uint16 {
-	if k == nil {
-		return 0
+	if k.Tag > 0 {
+		return k.Tag
 	}
-	var keytag int
+	keytag := 0
 	switch k.Algorithm {
 	case RSAMD5:
 		// This algorithm has been deprecated, but keep this key-tag calculation.
@@ -123,13 +124,8 @@ func (k *DNSKEY) KeyTag() uint16 {
 			keytag = int(x)
 		}
 	default:
-		keywire := new(dnskeyWireFmt)
-		keywire.Flags = k.Flags
-		keywire.Protocol = k.Protocol
-		keywire.Algorithm = k.Algorithm
-		keywire.PublicKey = k.PublicKey
-		wire := make([]byte, DefaultMsgSize)
-		n, err := keywire.pack(wire)
+		wire := make([]byte, defaultBufSize/2)
+		n, err := k.pack(wire, 0, nil)
 		if err != nil {
 			return 0
 		}
@@ -144,7 +140,8 @@ func (k *DNSKEY) KeyTag() uint16 {
 		keytag += keytag >> 16 & 0xFFFF
 		keytag &= 0xFFFF
 	}
-	return uint16(keytag)
+	k.Tag = uint16(keytag)
+	return k.Tag
 }
 
 // ToDS converts a DNSKEY record to a DS record.
@@ -160,13 +157,8 @@ func (k *DNSKEY) ToDS(h uint8) *DS {
 	ds.DigestType = h
 	ds.KeyTag = k.KeyTag()
 
-	keywire := new(dnskeyWireFmt)
-	keywire.Flags = k.Flags
-	keywire.Protocol = k.Protocol
-	keywire.Algorithm = k.Algorithm
-	keywire.PublicKey = k.PublicKey
-	wire := make([]byte, DefaultMsgSize)
-	n, err := keywire.pack(wire)
+	wire := make([]byte, defaultBufSize/2)
+	n, err := k.pack(wire, 0, nil)
 	if err != nil {
 		return nil
 	}
@@ -229,7 +221,7 @@ func (rr *RRSIG) Sign(k crypto.Signer, rrset []RR, options *SignOption) error {
 		return ErrKey
 	}
 	if options.Pooler == nil {
-		options.Pooler = pool.NewNoop(DefaultMsgSize * 2)
+		options.Pooler = pool.NewNoop(defaultBufSize)
 	}
 
 	h0 := rrset[0].Header()
@@ -246,26 +238,17 @@ func (rr *RRSIG) Sign(k crypto.Signer, rrset []RR, options *SignOption) error {
 	if strings.HasPrefix(h0.Name, "*.") {
 		rr.Labels-- // wildcard, remove from label count
 	}
-
-	sigwire := new(rrsigWireFmt)
-	sigwire.TypeCovered = rr.TypeCovered
-	sigwire.Algorithm = rr.Algorithm
-	sigwire.Labels = rr.Labels
-	sigwire.OrigTTL = rr.OrigTTL
-	sigwire.Expiration = rr.Expiration
-	sigwire.Inception = rr.Inception
-	sigwire.KeyTag = rr.KeyTag
-	sigwire.SignerName = rr.SignerName
+	rr.Signature = ""
 
 	// Create the desired binary blob
 	signdata := options.Get()
 	defer options.Put(signdata)
 
-	n, err := sigwire.pack(signdata)
+	n, err := rr.pack(signdata, 0, nil)
 	if err != nil {
 		return err
 	}
-	m := rawSignatureData(signdata[n:], rrset, rr, *options)
+	m := rawSignatureData(signdata[n:], rrset, rr)
 	signdata = signdata[:m+n]
 
 	var h hash.Hash
@@ -335,18 +318,15 @@ func sign(k crypto.Signer, hashed []byte, hash crypto.Hash, alg uint8) ([]byte, 
 	}
 }
 
-// Verify validates an RRSet with the signature and key. This is only the
-// cryptographic test, the signature validity period must be checked separately.
+// Verify validates an RRSet with the signature and key. This is only the cryptographic test, the signature
+// validity period must be checked separately. The rrset is not checked for actually being an rrset. See
+// [codeberg.org/miekg/dns/dnsutil.IsRRset], and neither is checked if the RRSIG's TypeCovered matches the
+// type in rrset.
+//
 // This function copies the rdata of some RRs (to lowercase domain names) for the validation to work.
 // It also checks that the Zone Key bit (RFC 4034 2.1.1) is set on the DNSKEY
-// and that the Protocol field is set to 3 (RFC 4034 2.1.2). Options can not be nil.
+// and that the Protocol field is set to 3 (RFC 4034 2.1.2). Options can not be nil
 func (rr *RRSIG) Verify(k *DNSKEY, rrset []RR, options *SignOption) error {
-	if !isRRset(rrset) {
-		return ErrRRset
-	}
-	if RRToType(rrset[0]) != rr.TypeCovered {
-		return ErrRRset
-	}
 	if rr.KeyTag != k.KeyTag() || rr.Hdr.Class != k.Hdr.Class || rr.Algorithm != k.Algorithm {
 		return ErrKey
 	}
@@ -362,34 +342,29 @@ func (rr *RRSIG) Verify(k *DNSKEY, rrset []RR, options *SignOption) error {
 	}
 
 	if options.Pooler == nil {
-		options.Pooler = pool.NewNoop(DefaultMsgSize * 2)
+		options.Pooler = pool.NewNoop(defaultBufSize)
 	}
 
 	rr.Hdr.Name = rrset[0].Header().Name
 
-	// RFC 4035 5.3.2.  Reconstructing the Signed Data
-	// Copy the sig, except the rrsig data
-	sigwire := new(rrsigWireFmt)
-	sigwire.TypeCovered = rr.TypeCovered
-	sigwire.Algorithm = rr.Algorithm
-	sigwire.Labels = rr.Labels
-	sigwire.OrigTTL = rr.OrigTTL
-	sigwire.Expiration = rr.Expiration
-	sigwire.Inception = rr.Inception
-	sigwire.KeyTag = rr.KeyTag
-	sigwire.SignerName = rr.SignerName
-	// Create the desired binary blob
 	signeddata := options.Get()
 	defer options.Put(signeddata)
 
-	n, err := sigwire.pack(signeddata)
+	// RFC 4035 5.3.2. Reconstructing the Signed Data
+	// Remove signature to get correct wiredata, and then set it again
+	signature := rr.Signature
+	rr.Signature = ""
+	n, err := rr.pack(signeddata, 0, nil)
 	if err != nil {
 		return err
 	}
-	m := rawSignatureData(signeddata[n:], rrset, rr, *options)
+
+	rr.Signature = signature
+
+	m := rawSignatureData(signeddata[n:], rrset, rr)
 	signeddata = signeddata[:m+n]
 
-	sigbuf := rr.sigBuf()
+	sigbuf, _ := pack.Base64([]byte(rr.Signature))
 
 	var h hash.Hash
 	hash, ok := AlgorithmToHash[rr.Algorithm]
@@ -458,35 +433,11 @@ func (rr *RRSIG) ValidPeriod(t time.Time) bool {
 	return ti <= utc && utc <= te
 }
 
-// Return the signatures base64 encoding sigdata as a byte slice.
-func (rr *RRSIG) sigBuf() []byte {
-	sigbuf, err := pack.Base64([]byte(rr.Signature))
-	if err != nil {
-		return nil
-	}
-	return sigbuf
-}
-
 // SignOption are options that are given to the signer and verifier.
 type SignOption struct {
 	// If Pooler is set is will be used for all memory allocations. If nil the default pooler will be used and
-	// the buffers size used will be DefaultMsgSize * 2 (8 KB).
+	// the buffers size used will be defaultBufSize
 	pool.Pooler
 }
 
-// IsRRset is duplicated here, as isRRset to avoid a host of cyclic imports.
-func isRRset(rrset []RR) bool {
-	if len(rrset) == 0 {
-		return false
-	}
-	base := rrset[0].Header()
-	basetype := RRToType(rrset[0])
-	for _, rr := range rrset[1:] {
-		h := rr.Header()
-		htype := RRToType(rr)
-		if htype != basetype || h.Class != base.Class || h.Name != base.Name {
-			return false
-		}
-	}
-	return true
-}
+const defaultBufSize = 8192

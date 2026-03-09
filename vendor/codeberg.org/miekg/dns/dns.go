@@ -23,6 +23,8 @@ import (
 //go:generate go run dnstest_generate.go
 //go:generate go run compare_generate.go
 //go:generate go run clone_generate.go
+//go:generate go run rdata_generate.go
+//go:generate go run scan_generate.go
 
 const (
 	// DefaultMsgSize is the standard default for messages larger than 512 bytes. This limit is the
@@ -115,7 +117,7 @@ type RRset []RR
 // Header is the header in a DNS resource record. It implements the RR interface, as a header is the RR
 // without any data.
 type Header struct {
-	Name  string `dns:"cdomain-name"` // Name is the owner name of the RR.
+	Name  string `dns:"cname"` // Name is the owner name of the RR.
 	TTL   uint32 // TTL is the time-to-live of the RR.
 	Class uint16 // Class is the class of the RR, this is almost always [ClassINET].
 }
