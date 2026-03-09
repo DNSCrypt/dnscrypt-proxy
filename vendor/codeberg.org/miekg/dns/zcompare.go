@@ -1490,13 +1490,6 @@ func (rr *NID) compare(b RR) (x int) {
 		}
 		return 1
 	}
-	x = int(rr.NodeID) - int(b.(*NID).NodeID)
-	if x != 0 {
-		if x < 0 {
-			return -1
-		}
-		return 1
-	}
 	return 0
 }
 
@@ -1520,13 +1513,6 @@ func (rr *L32) compare(b RR) (x int) {
 
 func (rr *L64) compare(b RR) (x int) {
 	x = int(rr.Preference) - int(b.(*L64).Preference)
-	if x != 0 {
-		if x < 0 {
-			return -1
-		}
-		return 1
-	}
-	x = int(rr.Locator64) - int(b.(*L64).Locator64)
 	if x != 0 {
 		if x < 0 {
 			return -1

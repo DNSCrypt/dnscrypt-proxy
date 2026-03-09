@@ -174,7 +174,7 @@ func (k *DNSKEY) publicKeyED25519() ed25519.PublicKey {
 }
 
 // Return the raw signature data.
-func rawSignatureData(buf []byte, rrset []RR, s *RRSIG, options SignOption) int {
+func rawSignatureData(buf []byte, rrset []RR, s *RRSIG) int {
 	off := 0
 	for _, rr := range rrset {
 		rr.Header().TTL = s.OrigTTL

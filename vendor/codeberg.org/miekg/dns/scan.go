@@ -784,23 +784,6 @@ func locCheckEast(token string, longitude uint32) (uint32, bool) {
 	return longitude, false
 }
 
-// Parse a 64 bit-like ipv6 address: "0014:4fff:ff20:ee64" Used for NID and L64 record.
-func stringToNodeID(l dnslex.Lex) (uint64, error) {
-	if len(l.Token) < 19 {
-		return 0, &ParseError{file: l.Token, err: "bad NID/L64 NodeID/Locator64", lex: l}
-	}
-	// There must be three colons at fixes positions, if not its a parse error
-	if l.Token[4] != ':' && l.Token[9] != ':' && l.Token[14] != ':' {
-		return 0, &ParseError{file: l.Token, err: "bad NID/L64 NodeID/Locator64", lex: l}
-	}
-	s := l.Token[0:4] + l.Token[5:9] + l.Token[10:14] + l.Token[15:19]
-	u, err := strconv.ParseUint(s, 16, 64)
-	if err != nil {
-		return 0, &ParseError{file: l.Token, err: "bad NID/L64 NodeID/Locator64", lex: l}
-	}
-	return u, nil
-}
-
 // IncludeAllowFunc is a function that gets the full path of the original parsed file name and the included
 // file path and returns true if the include is allowed.
 type IncludeAllowFunc func(file, include string) bool

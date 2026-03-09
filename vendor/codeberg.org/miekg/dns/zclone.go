@@ -915,6 +915,18 @@ func (rr *ZONEVERSION) Clone() RR {
 	}
 }
 
+func (rr *MQQUERY) Clone() RR {
+	return &MQQUERY{
+		slices.Clone(rr.Types),
+	}
+}
+
+func (rr *MQRESPONSE) Clone() RR {
+	return &MQRESPONSE{
+		slices.Clone(rr.Types),
+	}
+}
+
 func (rr *ERFC3597) Clone() RR {
 	return &ERFC3597{
 		rr.EDNS0Code,

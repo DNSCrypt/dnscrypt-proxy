@@ -380,7 +380,7 @@ type NINFO struct {
 // NID data. See RFC 6742.
 type NID struct {
 	Preference uint16
-	NodeID     uint64
+	NodeID     uint64 `dns:"node"`
 }
 
 // L32 data, See RFC 6742.
@@ -392,7 +392,7 @@ type L32 struct {
 // L64 data, See RFC 6742.
 type L64 struct {
 	Preference uint16
-	Locator64  uint64
+	Locator64  uint64 `dns:"node"`
 }
 
 // LP data. See RFC 6742.
