@@ -926,6 +926,21 @@ func (proxy *Proxy) exchangeWithUDPServerViaProxy(
 	}
 	defer pc.Close()
 
+	// --- HTTP/2 TCP OPTIMIZATIONS ---
+	if tcpConn, ok := pc.(*net.TCPConn); ok {
+		// Disable Nagle's algorithm for latency-sensitive DNS/HTTP2 queries
+		_ = tcpConn.SetNoDelay(true)
+
+		// Aggressive KeepAlive for fast dead-peer detection (Go 1.24+)
+		_ = tcpConn.SetKeepAliveConfig(net.KeepAliveConfig{
+			Enable:   true,
+			Idle:     10 * time.Second,
+			Interval: 5 * time.Second,
+			Count:    3,
+		})
+	}
+	// --------------------------------
+
 	if err := pc.SetDeadline(time.Now().Add(serverInfo.Timeout)); err != nil {
 		return nil, err
 	}
@@ -987,6 +1002,21 @@ func (proxy *Proxy) exchangeWithTCPServer(
 		return nil, err
 	}
 	defer pc.Close()
+
+	// --- HTTP/2 TCP OPTIMIZATIONS ---
+	if tcpConn, ok := pc.(*net.TCPConn); ok {
+		// Disable Nagle's algorithm for latency-sensitive DNS/HTTP2 queries
+		_ = tcpConn.SetNoDelay(true)
+
+		// Aggressive KeepAlive for fast dead-peer detection (Go 1.24+)
+		_ = tcpConn.SetKeepAliveConfig(net.KeepAliveConfig{
+			Enable:   true,
+			Idle:     10 * time.Second,
+			Interval: 5 * time.Second,
+			Count:    3,
+		})
+	}
+	// --------------------------------
 
 	if err := pc.SetDeadline(time.Now().Add(serverInfo.Timeout)); err != nil {
 		return nil, err
