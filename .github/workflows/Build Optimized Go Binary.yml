@@ -47,7 +47,7 @@ jobs:
             ./dnscrypt-proxy
 
       - name: Upload Artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@main
         with:
           name: dnscrypt-proxy-linux-amd64
           path: dnscrypt-proxy
