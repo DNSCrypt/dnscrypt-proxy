@@ -101,10 +101,6 @@ const (
 	TLSHandshakeTimeout         = 10 * time.Second
 	altSvcNegativeTTL           = 10 * time.Minute
 
-	// DNS / HTTP limits
-	MaxDNSPacketSize    = 4096 // EDNS0 buffer size
-	MaxHTTPBodyLength   = 65535 // Maximum DNS‑over‑HTTPS message size
-
 	// ── HTTP/2 tuning – maximised for low‑latency DoH ────────────────────────
 	h2MaxConcurrentStreams        = 1000
 	h2MaxReadFrameSize            = 16 * 1024 * 1024          // 16 MiB
@@ -204,7 +200,7 @@ type XTransport struct {
 	proxyDialer       *netproxy.Dialer
 	httpProxyFunction func(*http.Request) (*url.URL, error)
 
-	tlsClientCreds DOHClientCreds
+	tlsClientCreds DOHClientCreds // defined in serversInfo.go
 	keyLogWriter   io.Writer
 
 	// Per‑host resolution mutexes (singleflight style)
@@ -215,13 +211,6 @@ type XTransport struct {
 
 	// Per‑host connection prewarmer
 	prewarmed hostPrewarmer
-}
-
-// DOHClientCreds – placeholder; actual definition expected from caller.
-type DOHClientCreds struct {
-	rootCA     string
-	clientCert string
-	clientKey  string
 }
 
 // ── Constructor ───────────────────────────────────────────────────────────────
@@ -785,6 +774,15 @@ func (x *XTransport) buildTLSConfig() *tls.Config {
 }
 
 // ── DNS resolution ────────────────────────────────────────────────────────────
+
+// fqdn ensures the hostname ends with a dot.
+func fqdn(host string) string {
+	if !strings.HasSuffix(host, ".") {
+		return host + "."
+	}
+	return host
+}
+
 func (x *XTransport) resolveUsingSystem(host string, returnIPv4, returnIPv6 bool) ([]net.IP, time.Duration, error) {
 	r := &net.Resolver{PreferGo: true}
 	ctx, cancel := context.WithTimeoutCause(context.Background(), SystemResolverTimeout, errSystemResolverTimeout)
@@ -820,27 +818,29 @@ func (x *XTransport) resolveRRType(
 	proto, host, resolver string,
 	rrType uint16,
 ) (ips []net.IP, minTTL uint32, err error) {
-	tr := &dns.Transport{
-		Dialer: &net.Dialer{Timeout: ResolverReadTimeout},
-	}
-	client := dns.Client{Transport: tr, Net: proto}
+	tr := dns.NewTransport()
+	tr.ReadTimeout = ResolverReadTimeout
+	client := dns.Client{Transport: tr}
 
 	ctx, cancel := context.WithTimeoutCause(context.Background(), ResolverReadTimeout, errDNSQueryTimeout)
 	defer cancel()
 
-	msg := new(dns.Msg)
-	msg.SetQuestion(dns.Fqdn(host), rrType)
+	msg := dns.NewMsg(fqdn(host), rrType)
+	if msg == nil {
+		return nil, noTTL, fmt.Errorf("dns.NewMsg returned nil for [%s] type %d", host, rrType)
+	}
 	msg.RecursionDesired = true
-	msg.SetEdns0(MaxDNSPacketSize, true)
+	msg.UDPSize = uint16(MaxDNSPacketSize) // defined in common.go
+	msg.Security = true
 
-	in, _, err := client.ExchangeContext(ctx, msg, resolver)
+	in, _, err := client.Exchange(ctx, msg, proto, resolver)
 	if err != nil {
 		return nil, noTTL, err
 	}
 
 	minTTL = noTTL
 	for _, answer := range in.Answer {
-		if answer.Header().Rrtype != rrType {
+		if dns.RRToType(answer) != rrType {
 			continue
 		}
 		switch rrType {
@@ -1221,7 +1221,7 @@ func (x *XTransport) Fetch(
 	var bodyReader io.ReadCloser = resp.Body
 	if compress && resp.Header.Get("Content-Encoding") == "gzip" {
 		gr := gzipReaderPool.Get().(*gzip.Reader)
-		grErr := gr.Reset(io.LimitReader(resp.Body, MaxHTTPBodyLength))
+		grErr := gr.Reset(io.LimitReader(resp.Body, MaxHTTPBodyLength)) // defined in common.go
 		if grErr != nil {
 			gzipReaderPool.Put(gr)
 			return nil, statusCode, tlsState, rtt, grErr
