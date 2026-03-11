@@ -774,15 +774,6 @@ func (x *XTransport) buildTLSConfig() *tls.Config {
 }
 
 // ── DNS resolution ────────────────────────────────────────────────────────────
-
-// fqdn ensures the hostname ends with a dot.
-func fqdn(host string) string {
-	if !strings.HasSuffix(host, ".") {
-		return host + "."
-	}
-	return host
-}
-
 func (x *XTransport) resolveUsingSystem(host string, returnIPv4, returnIPv6 bool) ([]net.IP, time.Duration, error) {
 	r := &net.Resolver{PreferGo: true}
 	ctx, cancel := context.WithTimeoutCause(context.Background(), SystemResolverTimeout, errSystemResolverTimeout)
@@ -825,7 +816,7 @@ func (x *XTransport) resolveRRType(
 	ctx, cancel := context.WithTimeoutCause(context.Background(), ResolverReadTimeout, errDNSQueryTimeout)
 	defer cancel()
 
-	msg := dns.NewMsg(fqdn(host), rrType)
+	msg := dns.NewMsg(fqdn(host), rrType) // fqdn is defined in common.go
 	if msg == nil {
 		return nil, noTTL, fmt.Errorf("dns.NewMsg returned nil for [%s] type %d", host, rrType)
 	}
