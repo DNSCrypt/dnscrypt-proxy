@@ -44,6 +44,7 @@
 // • sync.Pool for gzip.Reader recycling (reduces allocations)
 // • maps.DeleteFunc for lock‑free cache purging
 // • io.ReadAll (Go 1.26 optimized version – 2× faster, 50% less memory)
+// • responseBodyPool (sync.Pool[*bytes.Buffer]) — reuses read buffers across DoH/ODoH responses
 //
 // ── Performance Enhancements ──────────────────────────────────────────────────
 // • Per‑host connection prewarming (eliminates cold‑start TLS+HTTP/2 RTT)
@@ -168,6 +169,39 @@ var tlsSessionCache = tls.NewLRUClientSessionCache(h2TLSSessionCacheSize)
 // ── gzip.Reader pool – eliminates 32 KB allocations per compressed response ───
 var gzipReaderPool = sync.Pool{
 	New: func() any { return new(gzip.Reader) },
+}
+
+// ── Response body read buffer pool ────────────────────────────────────────────
+// Reuses []byte backing buffers across DoH/ODoH response reads. DNS responses
+// are almost always <4 KiB; the 64 KiB cap prevents large one-off payloads from
+// permanently inflating pool entries and wasting memory.
+//
+// bytes.Buffer is pooled (not raw []byte) so ReadFrom can grow without an
+// extra copy. A fresh bytes.Clone of the live slice is returned so the pool
+// buffer is immediately available for the next request.
+const responsePoolMaxSize = 64 * 1024 // 64 KiB — buffers larger than this are not returned to pool
+
+var responseBodyPool = sync.Pool{
+	New: func() any { return new(bytes.Buffer) },
+}
+
+// readLimitedBody reads at most maxBytes from r using a pooled bytes.Buffer.
+// Returns a freshly cloned minimal []byte; the pool buffer is reused after return.
+func readLimitedBody(r io.Reader, maxBytes int64) ([]byte, error) {
+	buf := responseBodyPool.Get().(*bytes.Buffer)
+	buf.Reset()
+	_, err := buf.ReadFrom(io.LimitReader(r, maxBytes))
+	if err != nil {
+		if buf.Cap() <= responsePoolMaxSize {
+			responseBodyPool.Put(buf)
+		}
+		return nil, err
+	}
+	result := bytes.Clone(buf.Bytes()) // minimal allocation — only live data
+	if buf.Cap() <= responsePoolMaxSize {
+		responseBodyPool.Put(buf)
+	}
+	return result, nil
 }
 
 // ── Cache types ───────────────────────────────────────────────────────────────
@@ -1315,7 +1349,7 @@ func (x *XTransport) Fetch(
 		}()
 		bodyReader = gr
 	}
-	bin, err := io.ReadAll(io.LimitReader(bodyReader, MaxHTTPBodyLength))
+	bin, err := readLimitedBody(bodyReader, MaxHTTPBodyLength)
 	if err != nil {
 		return nil, statusCode, tlsState, rtt, err
 	}
