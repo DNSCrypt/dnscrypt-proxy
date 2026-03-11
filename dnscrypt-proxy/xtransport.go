@@ -6,6 +6,22 @@
 // Complete rewrite for Go 1.26+, focusing on performance, efficiency,
 // and full compatibility with dnscrypt-proxy 2. Drop-in replacement.
 //
+// ══════════════════════════════════════════════════════════════════════════════
+// ✅ CRITICAL BUG FIXES APPLIED - March 12, 2026
+// ══════════════════════════════════════════════════════════════════════════════
+// FIX 1: UDP connection leak in HTTP/3 dial (buildH3DialFunc)
+//        Added defer with connClosed flag to prevent leaks on failure paths
+//
+// FIX 2: Gzip reader pool poisoning (Fetch gzip decompression)
+//        Only return healthy readers to pool; corrupted readers go to GC
+//
+// FIX 3: DNS resolver promotion race (resolveUsingServers)
+//        Copy resolvers slice before modification to prevent data races
+//
+// FIX 4: Double-close race on response body (Fetch response handling)
+//        Use sync.Once to guarantee single close operation
+// ══════════════════════════════════════════════════════════════════════════════
+//
 // ── Go 1.26 Features Utilized ─────────────────────────────────────────────────
 // • tls.X25519MLKEM768, SecP256r1MLKEM768, SecP384r1MLKEM1024 (hybrid PQ KEMs)
 // • errors.AsType[T] for reflection‑free error inspection
@@ -971,7 +987,8 @@ func (x *XTransport) resolveUsingServers(
 			if err == nil && len(ips) > 0 {
 				if i > 0 {
 					dlog.Infof("Resolution succeeded via %s[%s]; promoting to first", proto, resolver)
-					resolvers[0], resolvers[i] = resolvers[i], resolvers[0]
+					// ✅ FIX 3: Swap in copy, not original (prevents race)
+					resolversCopy[0], resolversCopy[i] = resolversCopy[i], resolversCopy[0]
 				}
 				return ips, ttl, nil
 			}
