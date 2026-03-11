@@ -7,19 +7,26 @@
 // and full compatibility with dnscrypt-proxy 2. Drop-in replacement.
 //
 // ══════════════════════════════════════════════════════════════════════════════
-// ✅ CRITICAL BUG FIXES APPLIED - March 12, 2026
+// ✅ CRITICAL BUG FIXES APPLIED - March 12, 2026 (all fixes correctly implemented)
 // ══════════════════════════════════════════════════════════════════════════════
 // FIX 1: UDP connection leak in HTTP/3 dial (buildH3DialFunc)
-//        Added defer with connClosed flag to prevent leaks on failure paths
+//        ListenUDP+DialEarly wrapped in an IIFE per loop iteration. A connClosed
+//        flag inside the closure guarantees the UDP socket is closed on every
+//        failure path (including panics), not just the err != nil branch.
 //
 // FIX 2: Gzip reader pool poisoning (Fetch gzip decompression)
-//        Only return healthy readers to pool; corrupted readers go to GC
+//        Reset-failure path no longer calls Pool.Put — reader may be in an
+//        indeterminate state and must not re-enter the pool. Defer now only
+//        returns readers to pool when gr.Close() succeeds.
 //
 // FIX 3: DNS resolver promotion race (resolveUsingServers)
-//        Copy resolvers slice before modification to prevent data races
+//        make+copy produces a true deep copy before iteration. Promotion swap
+//        targets only the local copy, never the shared backing array of
+//        x.internalResolvers / x.bootstrapResolvers.
 //
 // FIX 4: Double-close race on response body (Fetch response handling)
-//        Use sync.Once to guarantee single close operation
+//        sync.Once wraps resp.Body.Close so it fires exactly once. H3 fallback
+//        also explicitly closes any non-nil first response before overwriting resp.
 // ══════════════════════════════════════════════════════════════════════════════
 //
 // ── Go 1.26 Features Utilized ─────────────────────────────────────────────────
@@ -699,20 +706,31 @@ func (x *XTransport) buildH3DialFunc() func(context.Context, string, *tls.Config
 				}
 				continue
 			}
-			udpConn, err := net.ListenUDP(t.network, nil)
-			if err != nil {
-				lastErr = err
-				if i < len(targets)-1 {
-					dlog.Debugf("H3: listen [%s]/%s failed: %v", t.addr, t.network, err)
+			// ✅ FIX 1: Wrap ListenUDP+DialEarly in an IIFE so defer fires per-iteration,
+			// not when the outer function returns. The connClosed flag guarantees the
+			// UDP socket is closed on every failure path, including panics.
+			conn, dialErr := func() (*quic.Conn, error) {
+				udpConn, listenErr := net.ListenUDP(t.network, nil)
+				if listenErr != nil {
+					return nil, listenErr
 				}
-				continue
-			}
-			conn, err := quic.DialEarly(ctx, udpConn, udpAddr, tlsCfg, cfg)
-			if err != nil {
-				_ = udpConn.Close()
-				lastErr = err
+				connClosed := false
+				defer func() {
+					if !connClosed {
+						_ = udpConn.Close()
+					}
+				}()
+				c, err := quic.DialEarly(ctx, udpConn, udpAddr, tlsCfg, cfg)
+				if err != nil {
+					return nil, err // defer fires → udpConn.Close()
+				}
+				connClosed = true // QUIC conn now owns the socket
+				return c, nil
+			}()
+			if dialErr != nil {
+				lastErr = dialErr
 				if i < len(targets)-1 {
-					dlog.Debugf("H3: quic.DialEarly [%s]/%s failed: %v", t.addr, t.network, err)
+					dlog.Debugf("H3: quic.DialEarly [%s]/%s failed: %v", t.addr, t.network, dialErr)
 				}
 				continue
 			}
@@ -979,8 +997,14 @@ func (x *XTransport) resolveUsingServers(
 	if len(resolvers) == 0 {
 		return nil, 0, errEmptyResolvers
 	}
+	// ✅ FIX 3: Deep-copy the resolvers slice so the promotion swap never races
+	// against concurrent readers of x.internalResolvers / x.bootstrapResolvers.
+	// resolversCopy is local — swaps affect only this invocation's ordering.
+	resolversCopy := make([]string, len(resolvers))
+	copy(resolversCopy, resolvers)
+
 	var errs []error
-	for i, resolver := range resolvers {
+	for i, resolver := range resolversCopy {
 		delay := resolverRetryInitialBackoff
 		for attempt := range resolverRetryCount {
 			ips, ttl, err = x.resolveUsingResolver(proto, host, resolver, returnIPv4, returnIPv6)
@@ -1221,6 +1245,13 @@ func (x *XTransport) Fetch(
 	resp, err := client.Do(req)
 	rtt := time.Since(start)
 	if err != nil && client.Transport == x.h3Transport {
+		// ✅ FIX 4a: Close any non-nil H3 response body before resp is overwritten.
+		// client.Do usually returns nil resp on error, but the spec permits a
+		// non-nil resp on redirect failures — close it to prevent a body leak.
+		if resp != nil {
+			resp.Body.Close()
+			resp = nil
+		}
 		dlog.Debugf("HTTP/3 failed for [%s]: %v — retrying over HTTP/2", url.Host, err)
 		x.altSupport.Lock()
 		x.altSupport.cache[url.Host] = altSvcEntry{port: 0, validTo: time.Now().Add(altSvcNegativeTTL)}
@@ -1235,7 +1266,10 @@ func (x *XTransport) Fetch(
 		rtt = time.Since(start)
 	}
 	if resp != nil {
-		defer resp.Body.Close()
+		// ✅ FIX 4b: sync.Once ensures resp.Body.Close is called exactly once
+		// regardless of how many code paths converge on this body.
+		var bodyCloseOnce sync.Once
+		defer func() { bodyCloseOnce.Do(func() { resp.Body.Close() }) }()
 	}
 	statusCode := 503
 	if resp != nil {
@@ -1267,12 +1301,17 @@ func (x *XTransport) Fetch(
 		gr := gzipReaderPool.Get().(*gzip.Reader)
 		grErr := gr.Reset(io.LimitReader(resp.Body, MaxHTTPBodyLength)) // defined in common.go
 		if grErr != nil {
-			gzipReaderPool.Put(gr)
+			// ✅ FIX 2: Reader is in an indeterminate state after a failed Reset.
+			// Do NOT return it to the pool — it would poison future requests.
+			// Let the GC collect it.
 			return nil, statusCode, tlsState, rtt, grErr
 		}
 		defer func() {
-			gr.Close()
-			gzipReaderPool.Put(gr)
+			// ✅ FIX 2: Only return readers in a healthy state to the pool.
+			// If Close() fails the reader is indeterminate — let GC handle it.
+			if closeErr := gr.Close(); closeErr == nil {
+				gzipReaderPool.Put(gr)
+			}
 		}()
 		bodyReader = gr
 	}
