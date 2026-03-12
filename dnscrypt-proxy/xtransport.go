@@ -61,12 +61,6 @@
 // • Pre‑allocated base headers cloned per request (avoids repeated map allocation)
 // • gzip.Reader pool to prevent 32 KB allocations per compressed response
 // • Alt‑Svc parsing using SplitSeq and bounded loops (prevents runaway parsing)
-// • Alt‑Svc ma= TTL enforced — positive entries expire per server directive
-// • prewarmConnection via HEAD request (warms full H2 SETTINGS, not just TCP+TLS)
-// • QUIC 0‑RTT session resumption (Allow0RTT=true) — cuts H3 reconnect to 0-RTT
-// • QUIC ActiveConnectionIDLimit=5 — prevents migration stall on IP change
-// • GetBody on POST requests — enables body replay on H3→H2 fallback
-// • StrictMaxConcurrentStreams — prevents burst‑induced extra TLS connections
 //
 // ── Compatibility ─────────────────────────────────────────────────────────────
 // Public API unchanged: XTransport, NewXTransport, Fetch, Get, Post,
@@ -564,7 +558,6 @@ func (x *XTransport) rebuildTransport() {
 		CountError: func(errType string) {
 			dlog.Debugf("HTTP/2 error: %s", errType)
 		},
-		StrictMaxConcurrentStreams: true,
 	}
 
 	transport := &http.Transport{
@@ -596,21 +589,10 @@ func (x *XTransport) rebuildTransport() {
 		if x.h3Transport != nil {
 			x.h3Transport.Close()
 		}
-		// quicCfg tunes QUIC connection behaviour:
-		//  • ActiveConnectionIDLimit=5 allows up to 5 connection IDs so QUIC
-		//    migration (IP change) completes without stalling.
-		//  • DialEarly (used in buildH3DialFunc) already enables 0-RTT session
-		//    resumption via TLS 1.3; quicCfg.Allow0RTT opts in on the client side.
-		quicCfg := &quic.Config{
-			MaxIncomingStreams:        -1, // server-push streams disabled; client-side only
-			Allow0RTT:                true,
-		}
 		x.h3Transport = &http3.Transport{
 			DisableCompression: true,
 			TLSClientConfig:    x.tlsClientConfig,
-			Dial: func(ctx context.Context, addrStr string, tlsCfg *tls.Config, _ *quic.Config) (*quic.Conn, error) {
-				return x.buildH3DialFunc()(ctx, addrStr, tlsCfg, quicCfg)
-			},
+			Dial:               x.buildH3DialFunc(),
 		}
 	}
 }
@@ -618,27 +600,15 @@ func (x *XTransport) rebuildTransport() {
 func (x *XTransport) prewarmConnection(hostPort string) {
 	x.prewarmed.do(hostPort, func() {
 		go func() {
-			// Issue a HEAD request rather than a raw TCP dial so the full HTTP/2
-			// SETTINGS exchange completes. A raw dial only warms TCP+TLS; the first
-			// real DoH query would still wait for the H2 SETTINGS frame from the server.
-			// HEAD is cheap (no body) and forces the H2 handshake to complete.
 			ctx, cancel := context.WithTimeout(context.Background(), h2TLSHandshakeTimeout)
 			defer cancel()
-			scheme := "https"
-			preReq, err := http.NewRequestWithContext(ctx, http.MethodHead,
-				scheme+"://"+hostPort+"/", nil)
+			conn, err := x.transport.DialContext(ctx, "tcp", hostPort)
 			if err != nil {
-				dlog.Debugf("Prewarm: failed to build HEAD request for %s: %v", hostPort, err)
+				dlog.Debugf("Prewarm failed for %s: %v", hostPort, err)
 				return
 			}
-			resp, err := x.transport.RoundTrip(preReq)
-			if err != nil {
-				dlog.Debugf("Prewarm HEAD failed for %s: %v", hostPort, err)
-				return
-			}
-			_, _ = io.Copy(io.Discard, resp.Body)
-			resp.Body.Close()
-			dlog.Debugf("Prewarmed H2 connection to %s (status %d)", hostPort, resp.StatusCode)
+			conn.Close()
+			dlog.Debugf("Prewarmed connection to %s", hostPort)
 		}()
 	})
 }
@@ -1300,14 +1270,6 @@ func (x *XTransport) Fetch(
 		reqBody = bytes.NewReader(*body)
 	}
 	req, err := http.NewRequestWithContext(ctx, method, url.String(), reqBody)
-	// GetBody allows the HTTP transport to replay the request body on redirects
-	// and on H3→H2 fallback retries. Without it, POST retries silently drop the body.
-	if body != nil {
-		bodySnapshot := *body // capture value before any mutation
-		req.GetBody = func() (io.ReadCloser, error) {
-			return io.NopCloser(bytes.NewReader(bodySnapshot)), nil
-		}
-	}
 	if err != nil {
 		return nil, 0, nil, 0, err
 	}
@@ -1435,30 +1397,9 @@ outer:
 		}
 	}
 
-	// Parse ma= (max-age) from the matched Alt-Svc entry to honour server-directed TTL.
-	// If ma= is absent or zero, default to 24 h so the entry eventually expires.
-	var maSecs int64
-	for _, entry := range alt {
-		for field := range strings.SplitSeq(entry, ";") {
-			if after, ok := strings.CutPrefix(strings.TrimSpace(field), "ma="); ok {
-				if v, err := strconv.ParseInt(strings.TrimSpace(after), 10, 64); err == nil && v > 0 {
-					maSecs = v
-				}
-			}
-		}
-		if maSecs > 0 {
-			break
-		}
-	}
-	const defaultAltSvcTTL = 24 * 60 * 60 // 24 h in seconds
-	if maSecs == 0 {
-		maSecs = defaultAltSvcTTL
-	}
-	validTo := now.Add(time.Duration(maSecs) * time.Second)
-
 	x.altSupport.Lock()
-	x.altSupport.cache[host] = altSvcEntry{port: altPort, validTo: validTo}
-	dlog.Debugf("Alt‑Svc: cached port %d for [%s], TTL %ds (expires %s)", altPort, host, maSecs, validTo.Format(time.RFC3339))
+	x.altSupport.cache[host] = altSvcEntry{port: altPort}
+	dlog.Debugf("Alt‑Svc: cached port %d for [%s]", altPort, host)
 	x.altSupport.Unlock()
 }
 

@@ -9,8 +9,6 @@
 //      instead of duplicating Pack logic inline.
 //   4. sendResponse: removed redundant validateResponse call — handleDNSExchange
 //      already validates every non-synthetic response before returning.
-//   5. processDoHQuery: RFC 8467 EDNS0 padding — pads queries to nearest 128-byte
-//      block before sending over DoH, preventing size-based domain inference.
 //
 // Retained from previous revision:
 //   - math/rand/v2 (lock-free on hot path)
@@ -275,45 +273,12 @@ func processDoHQuery(
 	tid := TransactionID(query)
 	SetTransactionID(query, 0)
 
-	// RFC 8467: pad DNS queries to the nearest 128-byte block before sending over DoH.
-	// This prevents upstream observers from inferring the query domain from packet size.
-	const edns0PadBlock = 128
-	var paddedQuery []byte
-	if msg := new(dns.Msg); msg.Unpack(query) == nil {
-		opt := msg.IsEdns0()
-		if opt == nil {
-			opt = &dns.OPT{Hdr: dns.RR_Header{Name: ".", Rrtype: dns.TypeOPT, Class: 4096}}
-			msg.Extra = append(msg.Extra, opt)
-		}
-		// Remove any existing padding option before recalculating.
-		for i, o := range opt.Option {
-			if _, ok := o.(*dns.EDNS0PADDING); ok {
-				opt.Option = append(opt.Option[:i], opt.Option[i+1:]...)
-				break
-			}
-		}
-		unpadded, _ := msg.Pack()
-		padLen := edns0PadBlock - (len(unpadded) % edns0PadBlock)
-		if padLen == edns0PadBlock {
-			padLen = 0
-		}
-		if padLen > 0 {
-			opt.Option = append(opt.Option, &dns.EDNS0PADDING{Padding: make([]byte, padLen)})
-			if packed, err := msg.Pack(); err == nil {
-				paddedQuery = packed
-			}
-		}
-	}
-	if paddedQuery == nil {
-		paddedQuery = query
-	}
-
 	serverInfo.noticeBegin(proxy)
 
 	serverResponse, _, tls, _, err := proxy.xTransport.DoHQuery(
 		serverInfo.useGet,
 		serverInfo.URL,
-		paddedQuery,
+		query,
 		proxy.timeout,
 	)
 
