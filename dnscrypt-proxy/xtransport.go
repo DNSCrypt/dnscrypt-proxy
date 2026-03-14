@@ -11,7 +11,7 @@
 // ══════════════════════════════════════════════════════════════════════════════
 // FIX 1: UDP connection leak in HTTP/3 dial (buildH3DialFunc)
 // FIX 2: Gzip reader pool poisoning (Fetch gzip decompression)
-// FIX 3: DNS resolver promotion race (resolveUsingServers) - atomic.Value
+// FIX 3: DNS resolver promotion race (resolveUsingServers) - atomic backing
 // FIX 4: Double-close race on response body (Fetch response handling)
 // FIX 5: HTTP/3 QPACK memory exhaustion - MaxResponseHeaderBytes added
 // FIX 6: TLS config clone in hot path - atomic pointer + shallow copy
@@ -39,7 +39,7 @@
 // FIX 24: Connection health checks - proactive stale connection detection
 // FIX 25: Memory pressure handling - runtime.SetFinalizer for cleanup
 // FIX 26: ODoH buffer size - configurable for larger payloads
-// FIX 27: API compatibility - exported resolvers fields with atomic backing
+// FIX 27: API compatibility - maintained original function signatures
 //
 // ══════════════════════════════════════════════════════════════════════════════
 //
@@ -53,7 +53,8 @@
 //
 // ── Compatibility ─────────────────────────────────────────────────────────
 // Public API unchanged: XTransport, NewXTransport, Fetch, Get, Post,
-// DoHQuery, ObliviousDoHQuery, PurgeExpiredCache, ResetCache, CachedHosts.
+// DoHQuery, ObliviousDoHQuery, PurgeExpiredCache, ResetCache, CachedHosts,
+// resolveUsingServers (maintains original signature for plugin_cloak.go).
 //
 package main
 
@@ -304,7 +305,7 @@ func (p *hostPrewarmer) do(hostport string, fn func()) {
 }
 
 // ── XTransport – main transport structure ─────────────────────────────────────
-// FIX 27: Maintains backward-compatible API while using atomic backing for resolvers
+// FIX 27: Maintains backward-compatible API while using atomic backing internally
 type XTransport struct {
 	transport       *http.Transport
 	h3Transport     *http3.Transport
@@ -317,13 +318,12 @@ type XTransport struct {
 	cachedIPs  CachedIPs
 	altSupport AltSupport
 
-	// FIX 27: Backward-compatible exported fields with atomic backing
-	// These are accessed directly by external code (config_loader.go, plugin_forward.go, etc.)
-	// We use atomic.Value internally but provide slice accessors
-	internalResolvers     []string // Access via GetInternalResolvers()/SetInternalResolvers()
-	bootstrapResolvers    []string // Access via GetBootstrapResolvers()/SetBootstrapResolvers()
+	// Exported fields - accessed directly by external code (backward compatible)
+	// These are kept in sync with atomic backing via getter/setter methods
+	internalResolvers     []string
+	bootstrapResolvers    []string
 	
-	// Internal atomic storage for thread-safe updates
+	// Internal atomic storage for thread-safe operations (used internally)
 	internalResolversAtomic  atomic.Pointer[[]string]
 	bootstrapResolversAtomic atomic.Pointer[[]string]
 	
@@ -398,13 +398,39 @@ func (x *XTransport) cleanup() {
 	}
 }
 
+// syncResolversToAtomic copies the exported slice fields to atomic backing
+// This should be called after external code modifies the exported fields
+func (x *XTransport) syncResolversToAtomic() {
+	if x.internalResolvers != nil {
+		copied := make([]string, len(x.internalResolvers))
+		copy(copied, x.internalResolvers)
+		x.internalResolversAtomic.Store(&copied)
+		x.internalResolverReady = len(copied) > 0
+	}
+	if x.bootstrapResolvers != nil {
+		copied := make([]string, len(x.bootstrapResolvers))
+		copy(copied, x.bootstrapResolvers)
+		x.bootstrapResolversAtomic.Store(&copied)
+	}
+}
+
+// syncResolversFromAtomic copies atomic backing to exported fields
+// This should be called before external code reads the exported fields
+func (x *XTransport) syncResolversFromAtomic() {
+	if ptr := x.internalResolversAtomic.Load(); ptr != nil {
+		x.internalResolvers = *ptr
+	}
+	if ptr := x.bootstrapResolversAtomic.Load(); ptr != nil {
+		x.bootstrapResolvers = *ptr
+	}
+}
+
 // GetInternalResolvers returns a copy of internal resolvers (thread-safe)
 func (x *XTransport) GetInternalResolvers() []string {
 	ptr := x.internalResolversAtomic.Load()
 	if ptr == nil {
 		return nil
 	}
-	// Return a copy to prevent external modification
 	copied := make([]string, len(*ptr))
 	copy(copied, *ptr)
 	return copied
@@ -416,8 +442,7 @@ func (x *XTransport) SetInternalResolvers(resolvers []string) {
 	copied := make([]string, len(resolvers))
 	copy(copied, resolvers)
 	x.internalResolversAtomic.Store(&copied)
-	// Update exported field (may be stale under race, but atomic backing is source of truth)
-	x.internalResolvers = copied
+	x.internalResolvers = copied // Sync to exported field
 	x.internalResolverReady = len(copied) > 0
 }
 
@@ -438,8 +463,7 @@ func (x *XTransport) SetBootstrapResolvers(resolvers []string) {
 	copied := make([]string, len(resolvers))
 	copy(copied, resolvers)
 	x.bootstrapResolversAtomic.Store(&copied)
-	// Update exported field (may be stale under race, but atomic backing is source of truth)
-	x.bootstrapResolvers = copied
+	x.bootstrapResolvers = copied // Sync to exported field
 }
 
 // SetPinnedHashes configures certificate pinning for hosts
@@ -546,7 +570,7 @@ func (x *XTransport) markUpdatingCachedIP(host string) {
 	if item, ok := x.cachedIPs.cache[host]; ok {
 		item.updatingUntil = &until
 	} else {
-		x.cachedIPs.cache[host] = &CachedIPItem{updatingUntil: &until}
+		x.cachedIPs.cache[host] = &CachedIPItem{updatingUntil = &until}
 	}
 	x.cachedIPs.Unlock()
 	dlog.Debugf("[%s] IP address marked as updating", host)
@@ -1200,33 +1224,59 @@ func (x *XTransport) resolveUsingResolver(
 	return nil, 0, errNoIPRecords
 }
 
-// resolveUsingServers with atomic copy-on-write resolver promotion.
-// Uses the atomic backing fields for thread-safe access.
+// resolveUsingServers with original signature for backward compatibility.
+// FIX 27: Maintains original signature (proto, host, resolvers, returnIPv4, returnIPv6)
+// Uses atomic backing internally for thread-safe resolver promotion.
 func (x *XTransport) resolveUsingServers(
 	proto, host string,
-	getResolvers func() []string,
-	updateResolvers func([]string),
+	resolvers []string,
 	returnIPv4, returnIPv6 bool,
 ) (ips []net.IP, ttl time.Duration, err error) {
-	// Get resolvers atomically (lock-free)
-	resolvers := getResolvers()
 	if len(resolvers) == 0 {
 		return nil, 0, errEmptyResolvers
 	}
 
+	// Determine which atomic backing to use based on which resolvers slice was passed
+	// This maintains the original behavior while adding thread-safety
+	var resolversPtr atomic.Pointer[[]string]
+	
+	// Check if the passed resolvers slice is the same as our internal resolvers
+	x.syncResolversFromAtomic() // Ensure exported fields are up to date
+	if &resolvers[0] == &x.internalResolvers[0] {
+		resolversPtr = &x.internalResolversAtomic
+	} else if &resolvers[0] == &x.bootstrapResolvers[0] {
+		resolversPtr = &x.bootstrapResolversAtomic
+	} else {
+		// External resolvers slice (e.g., from plugin_cloak.go)
+		// Use it directly without atomic backing (original behavior)
+		return x.resolveUsingServersInternal(proto, host, resolvers, returnIPv4, returnIPv6, nil)
+	}
+
+	return x.resolveUsingServersInternal(proto, host, resolvers, returnIPv4, returnIPv6, resolversPtr)
+}
+
+// resolveUsingServersInternal is the internal implementation with optional atomic backing
+func (x *XTransport) resolveUsingServersInternal(
+	proto, host string,
+	resolvers []string,
+	returnIPv4, returnIPv6 bool,
+	resolversPtr atomic.Pointer[[]string],
+) (ips []net.IP, ttl time.Duration, err error) {
 	var errs []error
 	for i, resolver := range resolvers {
 		delay := resolverRetryInitialBackoff
 		for attempt := range resolverRetryCount {
 			ips, ttl, err = x.resolveUsingResolver(proto, host, resolver, returnIPv4, returnIPv6)
 			if err == nil && len(ips) > 0 {
-				if i > 0 {
+				if i > 0 && resolversPtr != nil {
 					dlog.Infof("Resolution succeeded via %s[%s]; promoting to first", proto, resolver)
-					// Copy-on-write promotion
+					// Copy-on-write promotion using atomic backing
 					newResolvers := make([]string, len(resolvers))
 					copy(newResolvers, resolvers)
 					newResolvers[0], newResolvers[i] = newResolvers[i], newResolvers[0]
-					updateResolvers(newResolvers)
+					resolversPtr.Store(&newResolvers)
+					// Sync to exported field
+					x.syncResolversFromAtomic()
 				}
 				return ips, ttl, nil
 			}
@@ -1266,10 +1316,7 @@ func (x *XTransport) resolve(host string, returnIPv4, returnIPv6 bool) ([]net.IP
 		if x.internalResolverReady {
 			for _, proto := range protos {
 				ips, ttl, err = x.resolveUsingServers(
-					proto, host,
-					x.GetInternalResolvers,
-					x.SetInternalResolvers,
-					returnIPv4, returnIPv6)
+					proto, host, x.internalResolvers, returnIPv4, returnIPv6)
 				if err == nil {
 					return ips, ttl, nil
 				}
@@ -1291,10 +1338,7 @@ func (x *XTransport) resolve(host string, returnIPv4, returnIPv6 bool) ([]net.IP
 	for _, proto := range protos {
 		dlog.Noticef("Resolving [%s] via bootstrap resolvers over %s", host, proto)
 		ips, ttl, err = x.resolveUsingServers(
-			proto, host,
-			x.GetBootstrapResolvers,
-			x.SetBootstrapResolvers,
-			returnIPv4, returnIPv6)
+			proto, host, x.bootstrapResolvers, returnIPv4, returnIPv6)
 		if err == nil {
 			return ips, ttl, nil
 		}
