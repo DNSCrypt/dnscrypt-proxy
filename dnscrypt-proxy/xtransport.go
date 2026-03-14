@@ -568,7 +568,7 @@ func (x *XTransport) markUpdatingCachedIP(host string) {
 	until := time.Now().Add(x.timeout)
 	x.cachedIPs.Lock()
 	if item, ok := x.cachedIPs.cache[host]; ok {
-		item.updatingUntil = &until
+		item.updatingUntil: &until
 	} else {
 		x.cachedIPs.cache[host] = &CachedIPItem{updatingUntil = &until}
 	}
