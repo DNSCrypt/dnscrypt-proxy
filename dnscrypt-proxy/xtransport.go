@@ -40,6 +40,7 @@
 // FIX 25: Memory pressure handling - runtime.SetFinalizer for cleanup
 // FIX 26: ODoH buffer size - configurable for larger payloads
 // FIX 27: API compatibility - maintained original function signatures
+// FIX 28: Syntax error - fixed struct literal (colon not equals)
 //
 // ══════════════════════════════════════════════════════════════════════════════
 //
@@ -305,7 +306,6 @@ func (p *hostPrewarmer) do(hostport string, fn func()) {
 }
 
 // ── XTransport – main transport structure ─────────────────────────────────────
-// FIX 27: Maintains backward-compatible API while using atomic backing internally
 type XTransport struct {
 	transport       *http.Transport
 	h3Transport     *http3.Transport
@@ -319,7 +319,6 @@ type XTransport struct {
 	altSupport AltSupport
 
 	// Exported fields - accessed directly by external code (backward compatible)
-	// These are kept in sync with atomic backing via getter/setter methods
 	internalResolvers     []string
 	bootstrapResolvers    []string
 	
@@ -399,7 +398,6 @@ func (x *XTransport) cleanup() {
 }
 
 // syncResolversToAtomic copies the exported slice fields to atomic backing
-// This should be called after external code modifies the exported fields
 func (x *XTransport) syncResolversToAtomic() {
 	if x.internalResolvers != nil {
 		copied := make([]string, len(x.internalResolvers))
@@ -415,7 +413,6 @@ func (x *XTransport) syncResolversToAtomic() {
 }
 
 // syncResolversFromAtomic copies atomic backing to exported fields
-// This should be called before external code reads the exported fields
 func (x *XTransport) syncResolversFromAtomic() {
 	if ptr := x.internalResolversAtomic.Load(); ptr != nil {
 		x.internalResolvers = *ptr
@@ -437,12 +434,11 @@ func (x *XTransport) GetInternalResolvers() []string {
 }
 
 // SetInternalResolvers updates internal resolvers atomically (copy-on-write)
-// Also updates the exported field for backward compatibility
 func (x *XTransport) SetInternalResolvers(resolvers []string) {
 	copied := make([]string, len(resolvers))
 	copy(copied, resolvers)
 	x.internalResolversAtomic.Store(&copied)
-	x.internalResolvers = copied // Sync to exported field
+	x.internalResolvers = copied
 	x.internalResolverReady = len(copied) > 0
 }
 
@@ -458,12 +454,11 @@ func (x *XTransport) GetBootstrapResolvers() []string {
 }
 
 // SetBootstrapResolvers updates bootstrap resolvers atomically (copy-on-write)
-// Also updates the exported field for backward compatibility
 func (x *XTransport) SetBootstrapResolvers(resolvers []string) {
 	copied := make([]string, len(resolvers))
 	copy(copied, resolvers)
 	x.bootstrapResolversAtomic.Store(&copied)
-	x.bootstrapResolvers = copied // Sync to exported field
+	x.bootstrapResolvers = copied
 }
 
 // SetPinnedHashes configures certificate pinning for hosts
@@ -568,9 +563,10 @@ func (x *XTransport) markUpdatingCachedIP(host string) {
 	until := time.Now().Add(x.timeout)
 	x.cachedIPs.Lock()
 	if item, ok := x.cachedIPs.cache[host]; ok {
-		item.updatingUntil: &until
+		item.updatingUntil = &until
 	} else {
-		x.cachedIPs.cache[host] = &CachedIPItem{updatingUntil = &until}
+		// FIX 28: Use colon (not equals) in struct literal
+		x.cachedIPs.cache[host] = &CachedIPItem{updatingUntil: &until}
 	}
 	x.cachedIPs.Unlock()
 	dlog.Debugf("[%s] IP address marked as updating", host)
@@ -1225,8 +1221,6 @@ func (x *XTransport) resolveUsingResolver(
 }
 
 // resolveUsingServers with original signature for backward compatibility.
-// FIX 27: Maintains original signature (proto, host, resolvers, returnIPv4, returnIPv6)
-// Uses atomic backing internally for thread-safe resolver promotion.
 func (x *XTransport) resolveUsingServers(
 	proto, host string,
 	resolvers []string,
@@ -1237,18 +1231,16 @@ func (x *XTransport) resolveUsingServers(
 	}
 
 	// Determine which atomic backing to use based on which resolvers slice was passed
-	// This maintains the original behavior while adding thread-safety
 	var resolversPtr atomic.Pointer[[]string]
 	
 	// Check if the passed resolvers slice is the same as our internal resolvers
-	x.syncResolversFromAtomic() // Ensure exported fields are up to date
-	if &resolvers[0] == &x.internalResolvers[0] {
+	x.syncResolversFromAtomic()
+	if len(resolvers) > 0 && len(x.internalResolvers) > 0 && &resolvers[0] == &x.internalResolvers[0] {
 		resolversPtr = &x.internalResolversAtomic
-	} else if &resolvers[0] == &x.bootstrapResolvers[0] {
+	} else if len(resolvers) > 0 && len(x.bootstrapResolvers) > 0 && &resolvers[0] == &x.bootstrapResolvers[0] {
 		resolversPtr = &x.bootstrapResolversAtomic
 	} else {
 		// External resolvers slice (e.g., from plugin_cloak.go)
-		// Use it directly without atomic backing (original behavior)
 		return x.resolveUsingServersInternal(proto, host, resolvers, returnIPv4, returnIPv6, nil)
 	}
 
@@ -1270,12 +1262,10 @@ func (x *XTransport) resolveUsingServersInternal(
 			if err == nil && len(ips) > 0 {
 				if i > 0 && resolversPtr != nil {
 					dlog.Infof("Resolution succeeded via %s[%s]; promoting to first", proto, resolver)
-					// Copy-on-write promotion using atomic backing
 					newResolvers := make([]string, len(resolvers))
 					copy(newResolvers, resolvers)
 					newResolvers[0], newResolvers[i] = newResolvers[i], newResolvers[0]
 					resolversPtr.Store(&newResolvers)
-					// Sync to exported field
 					x.syncResolversFromAtomic()
 				}
 				return ips, ttl, nil
