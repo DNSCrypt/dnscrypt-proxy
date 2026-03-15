@@ -241,22 +241,17 @@ errDNSQueryTimeout       = errors.New("DNS query timed out")
 errSystemResolverTimeout = errors.New("system resolver timed out")
 )
 
-
-// ── pprof / profiling ─────────────────────────────────────────────────────────
-// Set pprofListen to a non-empty address (e.g. "localhost:6060") to enable the
-// live pprof HTTP endpoint. To disable entirely, set to "" (zero overhead).
-// Remove this block and the _ "net/http/pprof" import to excise from binary.
+// ── pprof profiling endpoint ──────────────────────────────────────────────────
 const pprofListen = "localhost:6060"
-
 
 func init() {
 	if pprofListen == "" {
 		return
 	}
 	go func() {
-		dlog.Noticef("pprof HTTP endpoint listening on http://%s/debug/pprof/", pprofListen)
+		dlog.Noticef("pprof listening on http://%s/debug/pprof/", pprofListen)
 		if err := http.ListenAndServe(pprofListen, nil); err != nil {
-			dlog.Errorf("pprof listener failed: %v", err)
+			dlog.Errorf("pprof listener: %v", err)
 		}
 	}()
 }
