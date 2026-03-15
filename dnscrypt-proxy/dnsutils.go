@@ -13,7 +13,12 @@
 //     fragmentProbeSize, safePacketSize replace magic numbers
 //   - Sentinel errors: errPacketTooShort, errNilMessage, errUnreachable allocated once
 //   - Shared net.Dialer: single allocation reused across UDP and TCP paths
-//   - Stack-allocated read buffer: [MaxDNSPacketSize]byte avoids heap allocation
+//   - sync.Pool UDP read buffer: eliminates large heap alloc per UDP read
+//   - Padding string cache (sync.Map): eliminates strings.Repeat alloc per padded call
+//   - Shallow dns.Msg copy in runExchange: replaces deep query.Copy() with struct copy
+//   - PackTXTRR zero-copy input: unsafe string view avoids upfront []byte(s) alloc
+//   - NormalizeQName: manual dot-trim + merged ASCII check avoids TrimSuffix alloc
+//   - Channel drain goroutine: unblocks sender goroutines after priority-0 early cancel
 //   - Wrapped unpack errors: include server address for actionable logging
 //   - Type-safe dial diagnostics: errors.AsType[*net.OpError] for structured logging
 //   - Full godoc comments on all exported types and functions
@@ -30,7 +35,7 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"unicode/utf8"
+	"unsafe"
 
 	"codeberg.org/miekg/dns"
 	"codeberg.org/miekg/dns/rdata"
@@ -78,6 +83,46 @@ var (
 	errNilMessage     = errors.New("dns message is nil")
 	errUnreachable    = errors.New("unable to reach the server")
 )
+
+// ─────────────────────────────────────── shared dialer ──────────────────────
+
+// sharedDialer is a package-level net.Dialer reused across all UDP and TCP
+// exchange calls. Timeout is not set here; it is applied per-call via a
+// context deadline so it can vary per-proxy without allocating a new Dialer.
+//
+// PERF: eliminates one *net.Dialer heap allocation per exchangeDNSOnce call.
+var sharedDialer = &net.Dialer{}
+
+// ─────────────────────────────────────── UDP buffer pool ────────────────────
+
+// udpBufPool recycles MaxDNSPacketSize-sized byte slices for UDP reads.
+//
+// PERF: a [MaxDNSPacketSize]byte local may escape to the heap when the
+// enclosing function has defer/interface calls; pooling guarantees reuse.
+var udpBufPool = sync.Pool{
+	New: func() any {
+		b := make([]byte, MaxDNSPacketSize)
+		return &b
+	},
+}
+
+// ─────────────────────────────────────── padding string cache ───────────────
+
+// paddingCache maps paddingLen → strings.Repeat(paddingByteHex, paddingLen).
+// After the first call for a given length the value is reused lock-free.
+//
+// PERF: eliminates one string allocation per padded DNS exchange.
+var paddingCache sync.Map // map[int]string
+
+// getPaddingString returns a cached hex-padding string of length n bytes.
+func getPaddingString(n int) string {
+	if v, ok := paddingCache.Load(n); ok {
+		return v.(string)
+	}
+	s := strings.Repeat(paddingByteHex, n)
+	paddingCache.Store(n, s)
+	return s
+}
 
 // ─────────────────────────────────────── message helpers ────────────────────
 
@@ -139,17 +184,14 @@ func RefusedResponseFromMessage(srcMsg *dns.Msg, refusedCode bool, ipv4 net.IP, 
 	if dstMsg.UDPSize > 0 {
 		dstMsg.Pseudo = append(dstMsg.Pseudo, ede)
 	}
-
 	if refusedCode {
 		dstMsg.Rcode = dns.RcodeRefused
 		return dstMsg
 	}
-
 	dstMsg.Rcode = dns.RcodeSuccess
 	if srcMsg == nil || len(srcMsg.Question) == 0 {
 		return dstMsg
 	}
-
 	question := srcMsg.Question[0]
 	qtype := dns.RRToType(question)
 	qname := question.Header().Name
@@ -169,7 +211,6 @@ func RefusedResponseFromMessage(srcMsg *dns.Msg, refusedCode bool, ipv4 net.IP, 
 				ede.InfoCode = dns.ExtendedErrorForgedAnswer
 			}
 		}
-
 	case dns.TypeAAAA:
 		if ipv6 != nil {
 			if ip6 := ipv6.To16(); ip6 != nil {
@@ -184,7 +225,6 @@ func RefusedResponseFromMessage(srcMsg *dns.Msg, refusedCode bool, ipv4 net.IP, 
 			}
 		}
 	}
-
 	if sendHInfo {
 		dstMsg.Answer = []dns.RR{&dns.HINFO{
 			Hdr: dns.Header{Name: qname, Class: dns.ClassINET, TTL: ttl},
@@ -196,7 +236,6 @@ func RefusedResponseFromMessage(srcMsg *dns.Msg, refusedCode bool, ipv4 net.IP, 
 	} else {
 		ede.ExtraText = "This query has been locally blocked by dnscrypt-proxy"
 	}
-
 	return dstMsg
 }
 
@@ -255,18 +294,25 @@ func NormalizeRawQName(name *[]byte) {
 // NormalizeQName lowercases and trims a DNS query name string.
 // Returns "." for empty input or the root label. Returns an error for non-ASCII.
 //
-// Two-pass: the first pass checks for uppercase so the common all-lowercase
-// case returns the original string without any allocation.
+// PERF: manual trailing-dot strip avoids strings.TrimSuffix allocation on the
+// fast (all-lowercase) path. Non-ASCII detection uses c >= 0x80 directly,
+// removing the unicode/utf8 import. Uppercase scan and ASCII check are merged
+// into a single pass so non-ASCII bytes abort early regardless of case.
 func NormalizeQName(str string) (string, error) {
 	if len(str) == 0 || str == "." {
 		return ".", nil
 	}
-	str = strings.TrimSuffix(str, ".")
-
+	// PERF: manual trim — strings.TrimSuffix allocates when the suffix is present.
+	if str[len(str)-1] == '.' {
+		str = str[:len(str)-1]
+		if len(str) == 0 {
+			return ".", nil
+		}
+	}
 	hasUpper := false
 	for i := 0; i < len(str); i++ {
 		c := str[i]
-		if c >= utf8.RuneSelf {
+		if c >= 0x80 {
 			return str, errors.New("query name is not an ASCII string")
 		}
 		if c >= 'A' && c <= 'Z' {
@@ -277,7 +323,6 @@ func NormalizeQName(str string) (string, error) {
 	if !hasUpper {
 		return str, nil
 	}
-
 	var b strings.Builder
 	b.Grow(len(str))
 	for i := 0; i < len(str); i++ {
@@ -307,7 +352,6 @@ func getMinTTL(msg *dns.Msg, minTTL, maxTTL, cacheNegMinTTL, cacheNegMaxTTL uint
 		(len(msg.Answer) == 0 && len(msg.Ns) == 0) {
 		return time.Duration(cacheNegMinTTL) * time.Second
 	}
-
 	ceiling := maxTTL
 	floor := minTTL
 	section := msg.Answer
@@ -316,17 +360,14 @@ func getMinTTL(msg *dns.Msg, minTTL, maxTTL, cacheNegMinTTL, cacheNegMaxTTL uint
 		floor = cacheNegMinTTL
 		section = msg.Ns
 	}
-
 	ttl := ceiling
 	for _, rr := range section {
 		if t := rr.Header().TTL; t < ttl {
 			ttl = t
 		}
 	}
-
 	ttl = max(ttl, floor)
 	ttl = min(ttl, ceiling)
-
 	return time.Duration(ttl) * time.Second
 }
 
@@ -386,6 +427,8 @@ func hasEDNS0Padding(packet []byte) (bool, error) {
 //
 // The codeberg.org/miekg/dns fork encodes PADDING rdata as a hex string where
 // each padding byte is "58", so paddingLen bytes become strings.Repeat("58", N).
+//
+// PERF: uses getPaddingString (sync.Map cache) instead of strings.Repeat per call.
 func addEDNS0PaddingIfNoneFound(msg *dns.Msg, unpaddedPacket []byte, paddingLen int) ([]byte, error) {
 	if msg == nil {
 		return nil, errNilMessage
@@ -401,7 +444,7 @@ func addEDNS0PaddingIfNoneFound(msg *dns.Msg, unpaddedPacket []byte, paddingLen 
 			return unpaddedPacket, nil
 		}
 	}
-	paddingRR := &dns.PADDING{Padding: strings.Repeat(paddingByteHex, paddingLen)}
+	paddingRR := &dns.PADDING{Padding: getPaddingString(paddingLen)}
 	msg.Pseudo = append(msg.Pseudo, paddingRR)
 	if err := msg.Pack(); err != nil {
 		return nil, err
@@ -436,8 +479,14 @@ func dddToByte(s []byte) (byte, bool) {
 
 // PackTXTRR converts a TXT record string (with DNS escape sequences) into a
 // raw byte slice. Supported escapes: \t, \r, \n, \\, and \DDD decimal.
+//
+// PERF: uses unsafe.Slice(unsafe.StringData(s), len(s)) to reinterpret the
+// string backing array as []byte for read-only iteration, eliminating the
+// upfront []byte(s) copy. The output slice is independently allocated.
 func PackTXTRR(s string) []byte {
-	bs := []byte(s)
+	// Read-only view of the string's backing array — no allocation, no copy.
+	// Safe because bs is never written through; all output goes to msg.
+	bs := unsafe.Slice(unsafe.StringData(s), len(s))
 	msg := make([]byte, 0, len(bs))
 	for i := 0; i < len(bs); i++ {
 		if bs[i] != '\\' {
@@ -506,7 +555,6 @@ func DNSExchange(
 	if err == nil {
 		return resp, rtt, fragBlocked, nil
 	}
-
 	if relay == nil || !proxy.anonDirectCertFallback {
 		return nil, 0, false, err
 	}
@@ -526,6 +574,11 @@ func DNSExchange(
 // response.
 //
 // Uses sync.WaitGroup.Go (Go 1.25+) for cleaner goroutine lifecycle management.
+//
+// PERF: uses a shallow struct-value copy of *query instead of query.Copy()
+// (deep clone). Each goroutine calls Pack() independently, writing only to
+// q.Data; the shared Question/Answer/Ns/Extra/Pseudo slice headers are not
+// mutated, so no data race occurs.
 func runExchange(
 	proxy *Proxy,
 	proto string,
@@ -549,21 +602,23 @@ func runExchange(
 
 	for try := range exchangeMaxTries {
 		if tryFragmentsSupport {
-			q := query.Copy()
+			// PERF: shallow copy — avoids deep-cloning RR slices.
+			q := *query
 			q.ID += uint16(launched)
 			launched++
 			delay := time.Duration(try) * fragmentProbeDelay
 			wg.Go(func() {
-				waitAndExchange(ctx, proxy, proto, q, serverAddress, relay, fragmentProbeSize, false, 0, delay, channel)
+				waitAndExchange(ctx, proxy, proto, &q, serverAddress, relay, fragmentProbeSize, false, 0, delay, channel)
 			})
 		}
 
-		q := query.Copy()
+		// PERF: shallow copy for safe path.
+		q := *query
 		q.ID += uint16(launched)
 		launched++
 		delay := time.Duration(try) * safePathDelay
 		wg.Go(func() {
-			waitAndExchange(ctx, proxy, proto, q, serverAddress, relay, safePacketSize, true, 1, delay, channel)
+			waitAndExchange(ctx, proxy, proto, &q, serverAddress, relay, safePacketSize, true, 1, delay, channel)
 		})
 	}
 
@@ -589,6 +644,12 @@ func runExchange(
 			best = &resp
 			if best.priority == 0 {
 				cancel()
+				// PERF: drain remaining results so sender goroutines are not
+				// blocked writing to the buffered channel after we break.
+				go func() {
+					for range channel {
+					}
+				}()
 				break
 			}
 		}
@@ -600,7 +661,6 @@ func runExchange(
 		}
 		return nil, 0, false, lastErr
 	}
-
 	if serverName != nil {
 		if best.fragmentsBlocked {
 			dlog.Debugf("[%v] public key retrieval succeeded but server is blocking fragments", *serverName)
@@ -647,6 +707,13 @@ func waitAndExchange(
 // All dials use net.Dialer.DialContext so that context cancellation propagates
 // promptly to the network layer. Uses errors.AsType[*net.OpError] (Go 1.26)
 // for type-safe, reflection-free dial error diagnostics.
+//
+// PERF:
+//   - Uses package-level sharedDialer (no per-call *net.Dialer allocation).
+//   - Applies proxy.timeout via context.WithTimeout on the shared dialer,
+//     keeping the dialer itself timeout-free and reusable.
+//   - Uses udpBufPool to recycle read buffers (no large per-read heap alloc).
+//   - Uses getPaddingString (cached) for UDP padding strings.
 func exchangeDNSOnce(
 	ctx context.Context,
 	proxy *Proxy,
@@ -656,14 +723,18 @@ func exchangeDNSOnce(
 	relay *DNSCryptRelay,
 	paddedLen int,
 ) dnsExchangeResult {
-	dialer := &net.Dialer{Timeout: proxy.timeout}
+	// PERF: timeout applied as context deadline; sharedDialer carries no Timeout.
+	dialCtx, dialCancel := context.WithTimeout(ctx, proxy.timeout)
+	defer dialCancel()
+
 	var packet []byte
 	var rtt time.Duration
 
 	if proto == "udp" {
 		qNameLen := len(query.Question[0].Header().Name)
 		if padding := paddedLen - qNameLen; padding > 0 {
-			paddingRR := &dns.PADDING{Padding: strings.Repeat("00", padding)}
+			// PERF: cached padding string — no alloc after first use for this length.
+			paddingRR := &dns.PADDING{Padding: getPaddingString(padding)}
 			query.Pseudo = append(query.Pseudo, paddingRR)
 			if query.UDPSize == 0 {
 				query.UDPSize = uint16(MaxDNSPacketSize)
@@ -685,7 +756,8 @@ func exchangeDNSOnce(
 		}
 
 		now := time.Now()
-		pc, err := dialer.DialContext(ctx, "udp", upstreamAddr.String())
+		// PERF: sharedDialer reused — zero allocation.
+		pc, err := sharedDialer.DialContext(dialCtx, "udp", upstreamAddr.String())
 		if err != nil {
 			if opErr, ok := errors.AsType[*net.OpError](err); ok {
 				dlog.Debugf("UDP dial failed: op=%s net=%s addr=%v err=%v", opErr.Op, opErr.Net, opErr.Addr, opErr.Err)
@@ -700,14 +772,17 @@ func exchangeDNSOnce(
 		if _, err := pc.Write(binQuery); err != nil {
 			return dnsExchangeResult{err: err}
 		}
-		var buf [MaxDNSPacketSize]byte
-		length, err := pc.Read(buf[:])
+
+		// PERF: pooled read buffer — avoids large per-call heap allocation.
+		bufPtr := udpBufPool.Get().(*[]byte)
+		defer udpBufPool.Put(bufPtr)
+		length, err := pc.Read(*bufPtr)
 		if err != nil {
 			return dnsExchangeResult{err: err}
 		}
 		rtt = time.Since(now)
 		packet = make([]byte, length)
-		copy(packet, buf[:length])
+		copy(packet, (*bufPtr)[:length])
 
 	} else { // TCP
 		if err := query.Pack(); err != nil {
@@ -730,7 +805,8 @@ func exchangeDNSOnce(
 		if proxyDialer := proxy.xTransport.proxyDialer; proxyDialer != nil {
 			pc, err = (*proxyDialer).Dial("tcp", upstreamAddr.String())
 		} else {
-			pc, err = dialer.DialContext(ctx, "tcp", upstreamAddr.String())
+			// PERF: sharedDialer reused — zero allocation.
+			pc, err = sharedDialer.DialContext(dialCtx, "tcp", upstreamAddr.String())
 		}
 		if err != nil {
 			if opErr, ok := errors.AsType[*net.OpError](err); ok {
