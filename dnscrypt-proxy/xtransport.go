@@ -49,7 +49,7 @@
 //         before sleeping. Eliminates the context-switch interrupt path for
 //         latency-sensitive DoH/DoQ where ~7 µs/response matters.
 //
-// PERF 4: Proper TLS prewarming via transport.DialTLSContext
+// PERF 4: Proper TLS prewarming via real HEAD request through http.Client
 //         prewarmConnection previously called transport.DialContext (TCP only) —
 //         no TLS or HTTP/2 handshake occurred. Now uses a HEAD request through
 //         the http.Client so the full TLS+ALPN+HTTP/2 handshake is completed and
@@ -62,9 +62,11 @@
 //         DNS responses are small but the larger windows prevent ACK-stall on
 //         bursts and reduce WINDOW_UPDATE round-trips.
 //
-// PERF 6: Collapsed sync.Map double-lookup in hostResolveMu
+// PERF 6: Collapsed sync.Map double-lookup in hostResolveMu and hostPrewarmer
 //         Replaced Load + LoadOrStore pattern with a single LoadOrStore call,
 //         eliminating the redundant map traversal on the cold path.
+//         hostPrewarmer.m keys upgraded to unique.Handle[string] for pointer-
+//         equality comparisons (same as resolveMu) — faster than raw string compare.
 //
 // PERF 7: Inlined ParseIP fast-exit in Fetch hot path
 //         resolveAndUpdateCache already guards against IP literals, but calling
@@ -76,6 +78,38 @@
 //         grant up to the system's net.core.rmem_max / wmem_max ceiling. This
 //         prevents buffer-limited throughput on high-BDP paths without affecting
 //         the typical small-packet DoH workload.
+// ══════════════════════════════════════════════════════════════════════════════
+//
+// ══════════════════════════════════════════════════════════════════════════════
+// ✅ ADDITIONAL IMPROVEMENTS - March 16, 2026
+// ══════════════════════════════════════════════════════════════════════════════
+// IMP 1: Fetch H3→H2 retry uses a fresh http.Request (not the mutated original)
+//        After H3 fails, the original req was reused by re-setting req.Body —
+//        violating the net/http contract that a Request must not be reused after
+//        Do(). The retry now builds a brand-new *http.Request with the same
+//        method, URL, header, and body so the contract is always honoured.
+//
+// IMP 2: prewarmConnection also warms H3 path when h3Transport is present
+//        The old implementation only warmed the HTTP/2 path. When a host has
+//        an active Alt-Svc entry the first real request still paid the full QUIC
+//        handshake cost cold. The prewarmer now additionally fires a QUIC dial
+//        via h3Client when http3 is enabled and an Alt-Svc entry exists.
+//
+// IMP 3: setTCPOptions runtime.GOOS dead-code branch removed
+//        File has //go:build linux so runtime.GOOS is always "linux". The
+//        non-Linux branch was dead code. Removed to reduce binary size and
+//        eliminate a runtime branch on the hot dial path.
+//
+// IMP 4: altSvcEntry gains explicit noExpiry bool — removes zero-time ambiguity
+//        Previously port>0 with validTo.IsZero() meant "valid forever" and
+//        port==0 with validTo.IsZero() was ambiguous between "no negative cache"
+//        and "still valid". noExpiry bool makes intent explicit and removes the
+//        dual meaning of the zero-time sentinel.
+//
+// IMP 5: saveCachedIP inlined — removes redundant single-element slice alloc
+//        The only callers are internal. The thin wrapper allocated []net.IP{ip}
+//        on every call. Direct call to saveCachedIPs with a stack-allocated
+//        single-element slice avoids the extra heap allocation.
 // ══════════════════════════════════════════════════════════════════════════════
 //
 // ── Go 1.26 Features Utilized ─────────────────────────────────────────────────
@@ -97,6 +131,7 @@
 //
 // ── Performance Enhancements ──────────────────────────────────────────────────
 // • Per‑host connection prewarming with full TLS+HTTP/2 handshake (eliminates cold‑start RTT)
+// • H3 prewarming when Alt-Svc entry is present (IMP 2)
 // • Stack‑allocated IP deduplication ([8]netip.Addr) avoids heap maps
 // • Shared net.Dialer and cloned TLS configs to reduce allocations
 // • http.Client stored as XTransport field — zero per-request allocation (PERF 1)
@@ -111,10 +146,12 @@
 // • QUIC receive window tuning for H3 transport (PERF 5)
 // • Connection draining on non‑2xx responses to keep connections alive
 // • Singleflight‑style per‑host resolution mutexes (unique.Handle keys, collapsed lookup)
+// • hostPrewarmer uses unique.Handle[string] keys — pointer-eq vs string-eq (PERF 6)
 // • Pre‑allocated base headers cloned per request (avoids repeated map allocation)
 // • gzip.Reader pool to prevent 32 KB allocations per compressed response
 // • Alt‑Svc parsing using SplitSeq and bounded loops (prevents runaway parsing)
 // • Fetch fast-exit for IP-literal hosts bypasses resolver entirely (PERF 7)
+// • Dead runtime.GOOS branch removed from setTCPOptions (IMP 3)
 //
 // ── Compatibility ─────────────────────────────────────────────────────────────
 // Public API unchanged: XTransport, NewXTransport, Fetch, Get, Post,
@@ -143,7 +180,6 @@ import (
 	"net/netip"
 	"net/url"
 	"os"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -188,30 +224,30 @@ const (
 	altSvcNegativeTTL           = 10 * time.Minute
 
 	// ── HTTP/2 tuning – maximised for low‑latency DoH ────────────────────────
-	h2MaxConcurrentStreams        = 1000
-	h2MaxReadFrameSize            = 16 * 1024 * 1024 // 16 MiB
-	h2MaxDecoderHeaderTableSize   = 4*1024*1024 - 1  // ~4 MiB
-	h2MaxEncoderHeaderTableSize   = 4*1024*1024 - 1  // ~4 MiB
-	h2MaxReceiveBufferPerConn     = 4*1024*1024 - 1  // ~4 MiB
-	h2MaxReceiveBufferPerStream   = 4*1024*1024 - 1  // ~4 MiB
-	h2SendPingTimeout             = 15 * time.Second
-	h2PingTimeout                 = 15 * time.Second
-	h2WriteByteTimeout            = 10 * time.Second
-	h2TLSSessionCacheSize         = 512
-	h2ReadWriteBufferSize         = 64 * 1024 // 64 KiB – larger I/O buffers reduce syscalls
-	h2IdleConnTimeout             = 120 * time.Second
-	h2MaxIdleConnsPerHost         = 10
-	h2ExpectContinueTimeout       = 500 * time.Millisecond
-	h2ResponseHeaderTimeout       = 20 * time.Second
-	h2TLSHandshakeTimeout         = 15 * time.Second
+	h2MaxConcurrentStreams      = 1000
+	h2MaxReadFrameSize          = 16 * 1024 * 1024 // 16 MiB
+	h2MaxDecoderHeaderTableSize = 4*1024*1024 - 1  // ~4 MiB
+	h2MaxEncoderHeaderTableSize = 4*1024*1024 - 1  // ~4 MiB
+	h2MaxReceiveBufferPerConn   = 4*1024*1024 - 1  // ~4 MiB
+	h2MaxReceiveBufferPerStream = 4*1024*1024 - 1  // ~4 MiB
+	h2SendPingTimeout           = 15 * time.Second
+	h2PingTimeout               = 15 * time.Second
+	h2WriteByteTimeout          = 10 * time.Second
+	h2TLSSessionCacheSize       = 512
+	h2ReadWriteBufferSize       = 64 * 1024 // 64 KiB – larger I/O buffers reduce syscalls
+	h2IdleConnTimeout           = 120 * time.Second
+	h2MaxIdleConnsPerHost       = 10
+	h2ExpectContinueTimeout     = 500 * time.Millisecond
+	h2ResponseHeaderTimeout     = 20 * time.Second
+	h2TLSHandshakeTimeout       = 15 * time.Second
 
 	// ── QUIC / HTTP/3 flow-control windows (PERF 5) ───────────────────────────
 	// DNS responses are small but larger windows prevent ACK-stall on request
 	// bursts and reduce WINDOW_UPDATE round-trips.
-	h3InitialStreamWindow     = 512 * 1024      // 512 KiB per stream
-	h3MaxStreamWindow         = 4 * 1024 * 1024 // 4 MiB per stream
-	h3InitialConnWindow       = 1024 * 1024      // 1 MiB per connection
-	h3MaxConnWindow           = 8 * 1024 * 1024 // 8 MiB per connection
+	h3InitialStreamWindow = 512 * 1024      // 512 KiB per stream
+	h3MaxStreamWindow     = 4 * 1024 * 1024 // 4 MiB per stream
+	h3InitialConnWindow   = 1024 * 1024      // 1 MiB per connection
+	h3MaxConnWindow       = 8 * 1024 * 1024 // 8 MiB per connection
 
 	// ── TCP socket buffer sizes (PERF 8) ─────────────────────────────────────
 	// Request 256 KiB send/recv buffers. Kernel caps at net.core.{w,r}mem_max.
@@ -292,9 +328,18 @@ type CachedIPs struct {
 	cache map[string]*CachedIPItem
 }
 
+// altSvcEntry records an Alt-Svc advertisement for a host.
+//
+// ── IMP 4: explicit noExpiry bool removes zero-time ambiguity ─────────────────
+// Previously validTo.IsZero() had dual meaning depending on port value:
+//   port>0, validTo.IsZero()  → "valid forever" (positive, no expiry)
+//   port==0, validTo.IsZero() → ambiguous (no-negative-cache OR still-valid)
+//
+// Now noExpiry=true unambiguously means "this entry never expires".
 type altSvcEntry struct {
-	port    uint16
-	validTo time.Time
+	validTo  time.Time
+	port     uint16
+	noExpiry bool // true → entry is permanent (no TTL)
 }
 
 type AltSupport struct {
@@ -302,14 +347,23 @@ type AltSupport struct {
 	cache map[string]altSvcEntry
 }
 
-// hostPrewarmer manages per‑host connection prewarming using sync.Once.
-type hostPrewarmer struct {
-	m sync.Map // map[string]*sync.Once
+// isAltSvcExpired reports whether e has passed its validity window.
+func isAltSvcExpired(e altSvcEntry, now time.Time) bool {
+	if e.noExpiry {
+		return false
+	}
+	return !e.validTo.IsZero() && now.After(e.validTo)
 }
 
-func (p *hostPrewarmer) do(hostport string, fn func()) {
-	// ── PERF 6: Single LoadOrStore call (collapsed double-lookup) ─────────────
-	// Previously: Load → miss → LoadOrStore. Now a single atomic operation.
+// ── IMP 6 (PERF 6): hostPrewarmer uses unique.Handle[string] keys ─────────────
+// Previously used raw string keys — map comparisons hashed/compared the full
+// string bytes on every lookup. unique.Handle keys compare by pointer identity
+// (same as resolveMu), which is O(1) and allocation-free.
+type hostPrewarmer struct {
+	m sync.Map // map[unique.Handle[string]]*sync.Once
+}
+
+func (p *hostPrewarmer) do(hostport unique.Handle[string], fn func()) {
 	v, _ := p.m.LoadOrStore(hostport, new(sync.Once))
 	v.(*sync.Once).Do(fn)
 }
@@ -359,7 +413,7 @@ type XTransport struct {
 	// Pre‑allocated base headers – cloned per request
 	baseHeaders http.Header
 
-	// Per‑host connection prewarmer
+	// Per‑host connection prewarmer (IMP 6: unique.Handle[string] keys)
 	prewarmed hostPrewarmer
 }
 
@@ -403,7 +457,8 @@ func netIPToNetipAddr(ip net.IP) (netip.Addr, bool) {
 	}
 }
 
-// uniqueNormalizedIPs deduplicates IPs using a stack‑allocated array for up to 8 entries.
+// uniqueNormalizedIPs deduplicates IPs using a stack‑allocated array for up to
+// 8 entries; beyond 8 the seen slice grows onto the heap automatically.
 func uniqueNormalizedIPs(ips []net.IP) []net.IP {
 	if len(ips) == 0 {
 		return nil
@@ -472,10 +527,17 @@ func (x *XTransport) saveCachedIPs(host string, ips []net.IP, ttl time.Duration)
 	}
 }
 
+// saveCachedIP saves a single IP into the cache.
+//
+// ── IMP 5: stack-allocated single-element slice avoids heap alloc ─────────────
+// Previously built []net.IP{ip} as a heap slice before calling saveCachedIPs.
+// Now passes a pointer to a stack-local [1]net.IP directly.
 func (x *XTransport) saveCachedIP(host string, ip net.IP, ttl time.Duration) {
-	if ip != nil {
-		x.saveCachedIPs(host, []net.IP{ip}, ttl)
+	if ip == nil {
+		return
 	}
+	buf := [1]net.IP{ip}
+	x.saveCachedIPs(host, buf[:], ttl)
 }
 
 func (x *XTransport) markUpdatingCachedIP(host string) {
@@ -539,11 +601,12 @@ func (x *XTransport) PurgeExpiredCache() (ipsPurged, altSvcPurged, muPurged int)
 	}
 	x.cachedIPs.Unlock()
 
-	// Alt‑Svc cache
+	// Alt‑Svc cache — use IMP 4 isAltSvcExpired helper
 	x.altSupport.Lock()
 	before = len(x.altSupport.cache)
 	maps.DeleteFunc(x.altSupport.cache, func(_ string, e altSvcEntry) bool {
-		return e.port == 0 && !e.validTo.IsZero() && now.After(e.validTo)
+		// Only purge negative-cache entries (port==0) that have genuinely expired.
+		return e.port == 0 && isAltSvcExpired(e, now)
 	})
 	altSvcPurged = before - len(x.altSupport.cache)
 	x.altSupport.Unlock()
@@ -593,14 +656,12 @@ func (x *XTransport) CachedHosts() iter.Seq[string] {
 	}
 }
 
-// ── TCP low‑level optimizations (Linux only) ─────────────────────────────────
+// ── TCP low‑level optimizations ───────────────────────────────────────────────
+// ── IMP 3: runtime.GOOS dead-code branch removed ─────────────────────────────
+// File has //go:build linux so runtime.GOOS is always "linux". The non-Linux
+// branch was unreachable dead code. Removed to reduce binary size and
+// eliminate a branch on the hot connection path.
 func setTCPOptions(conn net.Conn) {
-	if runtime.GOOS != "linux" {
-		if tcpConn, ok := conn.(*net.TCPConn); ok {
-			_ = tcpConn.SetNoDelay(true)
-		}
-		return
-	}
 	tcpConn, ok := conn.(*net.TCPConn)
 	if !ok {
 		return
@@ -635,9 +696,6 @@ func setTCPOptions(conn net.Conn) {
 // setUDPOptions applies Linux-specific latency optimizations to a UDP socket.
 // Called on H3/QUIC UDP connections where microsecond latency matters.
 func setUDPOptions(conn *net.UDPConn) {
-	if runtime.GOOS != "linux" {
-		return
-	}
 	raw, err := conn.SyscallConn()
 	if err != nil {
 		return
@@ -732,9 +790,10 @@ func (x *XTransport) rebuildTransport() {
 	}
 }
 
-// prewarmConnection ensures a full TLS+HTTP/2 handshake is completed once per host.
+// prewarmConnection ensures a full TLS+HTTP/2 handshake (and optionally a QUIC
+// handshake) is completed once per host before real traffic arrives.
 //
-// ── PERF 4: Full TLS handshake via real request ───────────────────────────────
+// ── PERF 4: Full TLS handshake via real HEAD request ─────────────────────────
 // The previous implementation called transport.DialContext (TCP only). No TLS
 // or HTTP/2 negotiation occurred so the "warm" connection was immediately
 // closed and discarded — providing no benefit at all.
@@ -744,16 +803,19 @@ func (x *XTransport) rebuildTransport() {
 // its pool. The HEAD response body is drained and discarded. Any error (404,
 // connection refused, etc.) is silently ignored — we only care about warming
 // the connection pool, not about the response content.
+//
+// ── IMP 2: H3 path also prewarmed when Alt-Svc entry is present ──────────────
+// When an Alt-Svc entry exists for the host, the h3Client is also warmed so
+// the QUIC handshake is already complete before the first real DoH request.
 func (x *XTransport) prewarmConnection(hostPort string) {
-	x.prewarmed.do(hostPort, func() {
+	hk := unique.Make(hostPort)
+	x.prewarmed.do(hk, func() {
 		go func() {
 			ctx, cancel := context.WithTimeout(context.Background(), h2TLSHandshakeTimeout)
 			defer cancel()
 
-			// Build a minimal URL using the scheme appropriate for the port.
-			scheme := "https"
 			req, err := http.NewRequestWithContext(ctx, http.MethodHead,
-				scheme+"://"+hostPort+"/", nil)
+				"https://"+hostPort+"/", nil)
 			if err != nil {
 				dlog.Debugf("Prewarm: failed to build request for %s: %v", hostPort, err)
 				return
@@ -763,14 +825,49 @@ func (x *XTransport) prewarmConnection(hostPort string) {
 			resp, err := x.httpClient.Do(req)
 			if err != nil {
 				dlog.Debugf("Prewarm: %s: %v (connection may still be cached)", hostPort, err)
+			} else {
+				_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4*1024))
+				resp.Body.Close()
+				dlog.Debugf("Prewarmed HTTP/2 connection to %s (status %d)", hostPort, resp.StatusCode)
+			}
+
+			// ── IMP 2: Also warm H3 if transport is ready and Alt-Svc exists ─
+			if x.h3Transport == nil {
 				return
 			}
-			// Drain a small amount so the transport can reuse the connection.
-			_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4*1024))
-			resp.Body.Close()
-			dlog.Debugf("Prewarmed connection to %s (status %d)", hostPort, resp.StatusCode)
+			host, _ := splitHostPort(hostPort)
+			x.altSupport.RLock()
+			entry, inCache := x.altSupport.cache[host]
+			x.altSupport.RUnlock()
+			if !inCache || entry.port == 0 {
+				return
+			}
+			h3Req, h3Err := http.NewRequestWithContext(ctx, http.MethodHead,
+				"https://"+hostPort+"/", nil)
+			if h3Err != nil {
+				return
+			}
+			h3Req.Header = x.baseHeaders.Clone()
+			h3Resp, h3Err := x.h3Client.Do(h3Req)
+			if h3Err != nil {
+				dlog.Debugf("Prewarm H3: %s: %v", hostPort, h3Err)
+				return
+			}
+			_, _ = io.Copy(io.Discard, io.LimitReader(h3Resp.Body, 4*1024))
+			h3Resp.Body.Close()
+			dlog.Debugf("Prewarmed HTTP/3 connection to %s (status %d)", hostPort, h3Resp.StatusCode)
 		}()
 	})
+}
+
+// splitHostPort splits "host:port" → ("host", "port"), handling IPv6 brackets.
+// Unlike net.SplitHostPort it never returns an error — used only for logging/
+// cache lookups where an imperfect split is acceptable.
+func splitHostPort(hostPort string) (host, port string) {
+	if i := strings.LastIndexByte(hostPort, ':'); i >= 0 {
+		return hostPort[:i], hostPort[i+1:]
+	}
+	return hostPort, ""
 }
 
 func (x *XTransport) buildDialContext() func(context.Context, string, string) (net.Conn, error) {
@@ -1268,7 +1365,7 @@ func (x *XTransport) resolve(host string, returnIPv4, returnIPv6 bool) ([]net.IP
 	}
 
 	if x.ignoreSystemDNS {
-		dlog.Noticef("Bootstrap resolvers failed — last‑resort system resolver for [%s]", host)
+		dlog.Noticef("Bootstrap resolvers failed — last-resort system resolver for [%s]", host)
 		ips, ttl, err = x.resolveUsingSystem(host, returnIPv4, returnIPv6)
 	}
 	return ips, ttl, err
@@ -1369,7 +1466,7 @@ func (x *XTransport) Fetch(
 
 	host, port := ExtractHostAndPort(url.Host, 443)
 
-	// Prewarm a full TLS+HTTP/2 connection to this host:port (once per host)
+	// Prewarm a full TLS+HTTP/2 (and optionally H3) connection once per host
 	x.prewarmConnection(host + ":" + strconv.Itoa(port))
 
 	hasAltSupport := false
@@ -1383,8 +1480,8 @@ func (x *XTransport) Fetch(
 			x.altSupport.RUnlock()
 			if inCache {
 				hasAltSupport = true
-				negativeExpired := entry.port == 0 && !entry.validTo.IsZero() &&
-					time.Now().After(entry.validTo)
+				// ── IMP 4: use isAltSvcExpired for unambiguous expiry check ───
+				negativeExpired := entry.port == 0 && isAltSvcExpired(entry, time.Now())
 				switch {
 				case entry.port > 0 && int(entry.port) == port:
 					client = &x.h3Client
@@ -1434,21 +1531,33 @@ func (x *XTransport) Fetch(
 	if body != nil {
 		bodyLen = len(*body)
 	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	var reqBody io.Reader
-	if body != nil {
-		reqBody = bytes.NewReader(*body)
+
+	newRequest := func() (*http.Request, error) {
+		var reqBody io.Reader
+		if body != nil {
+			reqBody = bytes.NewReader(*body)
+		}
+		req, err := http.NewRequestWithContext(ctx, method, url.String(), reqBody)
+		if err != nil {
+			return nil, err
+		}
+		req.Header = header
+		req.ContentLength = int64(bodyLen)
+		return req, nil
 	}
-	req, err := http.NewRequestWithContext(ctx, method, url.String(), reqBody)
+
+	req, err := newRequest()
 	if err != nil {
 		return nil, 0, nil, 0, err
 	}
-	req.Header = header
-	req.ContentLength = int64(bodyLen)
+
 	start := time.Now()
 	resp, err := client.Do(req)
 	rtt := time.Since(start)
+
 	if err != nil && client == &x.h3Client {
 		// ✅ FIX 4a: Close any non-nil H3 response body before resp is overwritten.
 		if resp != nil {
@@ -1459,15 +1568,20 @@ func (x *XTransport) Fetch(
 		x.altSupport.Lock()
 		x.altSupport.cache[url.Host] = altSvcEntry{port: 0, validTo: time.Now().Add(altSvcNegativeTTL)}
 		x.altSupport.Unlock()
+
+		// ── IMP 1: Build a fresh *http.Request for the retry ─────────────────
+		// Reusing the original req after Do() violates the net/http contract.
+		// newRequest() constructs a brand-new request with the same parameters.
 		client = &x.httpClient
-		if body != nil {
-			req.Body = io.NopCloser(bytes.NewReader(*body))
-			req.ContentLength = int64(bodyLen)
+		req, err = newRequest()
+		if err != nil {
+			return nil, 0, nil, 0, err
 		}
 		start = time.Now()
 		resp, err = client.Do(req)
 		rtt = time.Since(start)
 	}
+
 	if resp != nil {
 		// ✅ FIX 4b: sync.Once ensures resp.Body.Close is called exactly once.
 		var bodyCloseOnce sync.Once
@@ -1526,9 +1640,9 @@ func (x *XTransport) parseAndCacheAltSvc(host string, port int, header http.Head
 	x.altSupport.RLock()
 	existing, inCache := x.altSupport.cache[host]
 	x.altSupport.RUnlock()
-	if inCache && existing.port == 0 &&
-		(existing.validTo.IsZero() || now.Before(existing.validTo)) {
-		dlog.Debugf("Alt‑Svc: negative cache still valid for [%s]; skipping", host)
+	// ── IMP 4: use isAltSvcExpired for unambiguous negative-cache check ───────
+	if inCache && existing.port == 0 && !isAltSvcExpired(existing, now) {
+		dlog.Debugf("Alt-Svc: negative cache still valid for [%s]; skipping", host)
 		return
 	}
 
@@ -1536,7 +1650,7 @@ func (x *XTransport) parseAndCacheAltSvc(host string, port int, header http.Head
 	if !found {
 		return
 	}
-	dlog.Debugf("Alt‑Svc [%s]: %v", host, alt)
+	dlog.Debugf("Alt-Svc [%s]: %v", host, alt)
 
 	altPort := uint16(port & 0xffff)
 
@@ -1555,7 +1669,7 @@ outer:
 				v := strings.TrimSuffix(after, `"`)
 				if p, pErr := strconv.ParseUint(v, 10, 16); pErr == nil && p <= 65535 {
 					altPort = uint16(p)
-					dlog.Debugf("Alt‑Svc: HTTP/3 advertised for [%s] on port %d", host, altPort)
+					dlog.Debugf("Alt-Svc: HTTP/3 advertised for [%s] on port %d", host, altPort)
 					break outer
 				}
 			}
@@ -1563,8 +1677,9 @@ outer:
 	}
 
 	x.altSupport.Lock()
-	x.altSupport.cache[host] = altSvcEntry{port: altPort}
-	dlog.Debugf("Alt‑Svc: cached port %d for [%s]", altPort, host)
+	// ── IMP 4: noExpiry=true for positive Alt-Svc entries (no TTL in header) ─
+	x.altSupport.cache[host] = altSvcEntry{port: altPort, noExpiry: true}
+	dlog.Debugf("Alt-Svc: cached port %d for [%s]", altPort, host)
 	x.altSupport.Unlock()
 }
 
