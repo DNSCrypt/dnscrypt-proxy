@@ -110,40 +110,6 @@
 //        The only callers are internal. The thin wrapper allocated []net.IP{ip}
 //        on every call. Direct call to saveCachedIPs with a stack-allocated
 //        single-element slice avoids the extra heap allocation.
-
-// ══════════════════════════════════════════════════════════════════════════════
-// ✅ DOQ TRANSPORT — RFC 9250 — March 21, 2026
-// ══════════════════════════════════════════════════════════════════════════════
-// DOQ 1: Native DNS-over-QUIC transport — no HTTP overhead
-//   Each DNS query is a 2-byte-length-prefixed DNS wire message on a new
-//   bidirectional QUIC stream. One persistent QUIC connection per host
-//   multiplexes all concurrent queries. ALPN: "doq", default port: 853.
-//
-// DOQ 2: Persistent per-host connection pool with automatic reconnect
-//   doqConnEntry holds one *quic.Conn per host:port under a sync.Mutex.
-//   Stale detection via conn.Context().Done(). Retry-once on transport errors.
-//   Pool drained in rebuildTransport() alongside the H3 transport.
-//
-// DOQ 3: Separate QUIC config tuned for tiny DNS payloads (<512 bytes typical)
-//   Flow-control windows 8× tighter than H3 (64 KiB stream / 1 MiB conn).
-//   MaxIdleTimeout = 2 min; server closing first triggers transparent reconnect.
-//
-// DOQ 4: SO_BUSY_POLL + SO_RCVBUF/SO_SNDBUF via setUDPOptions() — same
-//   µs-latency optimizations applied to H3 UDP sockets, now also on DoQ.
-//
-// DOQ 5: PQ-TLS 1.3 with shared tlsSessionCache — 0-RTT on reconnect
-//   Reuses buildTLSConfig() with NextProtos overridden to ["doq"].
-//   quic.DialEarly enables QUIC 0-RTT on resumed sessions.
-//
-// DOQ 6: DNS message ID zeroed per RFC 9250 §4.2.1
-//   RFC 9250 requires the 2-byte DNS message ID to be 0x0000 in all queries.
-//   QUIC stream identity replaces ID-based matching. The query is copied to a
-//   fresh slice so the caller's buffer is never mutated. Receivers MUST accept
-//   any ID value, so responses are returned as-is.
-//
-// DOQ 7: resolveAndUpdateCache / loadCachedIPs reused for IP resolution
-//   ParseIP fast-exit for IP-literal hostPort (PERF-7 pattern).
-// ══════════════════════════════════════════════════════════════════════════════
 // ══════════════════════════════════════════════════════════════════════════════
 //
 // ── Go 1.26 Features Utilized ─────────────────────────────────────────────────
@@ -296,25 +262,6 @@ const (
 	// 50 µs of kernel busy-polling before sleeping. Eliminates the interrupt
 	// context-switch on the receive path for latency-sensitive DoH/DoQ.
 	udpBusyPollMicros = 50 // µs
-
-	// ── DNS-over-QUIC (RFC 9250) ─────────────────────────────────────────────
-	doqALPN        = "doq" // RFC 9250 §8.1 — ALPN negotiation token
-	doqDefaultPort = 853   // RFC 9250 §4.2 — default UDP port
-
-	// QUIC flow-control windows — DNS responses are almost always <512 bytes.
-	// Tighter than H3 (PERF 5) to avoid wasting kernel memory on idle connections.
-	doqInitialStreamWindow = 64 * 1024   // 64 KiB per stream
-	doqMaxStreamWindow     = 256 * 1024  // 256 KiB per stream
-	doqInitialConnWindow   = 128 * 1024  // 128 KiB per connection
-	doqMaxConnWindow       = 1024 * 1024 // 1 MiB per connection
-
-	// 2 minutes: survives inter-query idle gaps; server closes earlier → reconnect.
-	doqMaxIdleTimeout = 2 * time.Minute
-
-	// RFC 9250 §8.3 application error codes — sent in CloseWithError /
-	// CancelRead / CancelWrite frames to signal clean vs. hard closure.
-	doqErrNoError       = quic.ApplicationErrorCode(0x0) // DOQ_NO_ERROR
-	doqErrInternalError = quic.ApplicationErrorCode(0x1) // DOQ_INTERNAL_ERROR
 )
 
 // ── Package‑level sentinel errors (zero‑allocation returns) ──────────────────
@@ -326,10 +273,6 @@ var (
 	errServiceNotReady       = errors.New("dnscrypt-proxy service is not ready yet")
 	errDNSQueryTimeout       = errors.New("DNS query timed out")
 	errSystemResolverTimeout = errors.New("system resolver timed out")
-
-	errDoQDisabled  = errors.New("DoQ transport is not enabled")
-	errDoQShortRead = errors.New("DoQ: short read on response length prefix")
-	errDoQOversize  = errors.New("DoQ: query exceeds 65535-byte wire limit")
 )
 
 // ── Global TLS session cache – saves one full TLS 1.3 RTT on reconnect ───────
@@ -425,23 +368,6 @@ func (p *hostPrewarmer) do(hostport unique.Handle[string], fn func()) {
 	v.(*sync.Once).Do(fn)
 }
 
-
-// doqConnEntry holds a single persistent QUIC connection to one DoQ host:port.
-//
-// All concurrent DoQ queries to the same server share one QUIC connection —
-// each on its own bidirectional QUIC stream (RFC 9250 §4.2). The sync.Mutex
-// serialises the initial dial and any reconnect without blocking concurrent
-// stream opens on an already-live connection.
-//
-// Liveness: quic-go cancels conn.Context() when the connection is closed by
-// either side. getOrDialDoQ reads conn.Context().Done() with a non-blocking
-// select to detect stale entries before attempting to open a new stream,
-// avoiding a guaranteed-fail attempt on a dead connection.
-type doqConnEntry struct {
-	mu   sync.Mutex
-	conn *quic.Conn // nil = not yet dialed or after invalidation
-}
-
 // ── XTransport – main transport structure ─────────────────────────────────────
 type XTransport struct {
 	transport       *http.Transport
@@ -489,10 +415,6 @@ type XTransport struct {
 
 	// Per‑host connection prewarmer (IMP 6: unique.Handle[string] keys)
 	prewarmed hostPrewarmer
-
-	// DNS-over-QUIC (RFC 9250) — active when doq == true.
-	doq      bool
-	doqConns sync.Map // map[unique.Handle[string]]*doqConnEntry
 }
 
 // ── Constructor ───────────────────────────────────────────────────────────────
@@ -797,23 +719,6 @@ func (x *XTransport) rebuildTransport() {
 	dlog.Debug("Rebuilding transport")
 	if x.transport != nil {
 		x.transport.CloseIdleConnections()
-	}
-
-	// Drain the DoQ connection pool so every connection receives a clean
-	// QUIC CONNECTION_CLOSE before the new transport config takes effect.
-	if x.doq {
-		x.doqConns.Range(func(key, val any) bool {
-			if entry, ok := val.(*doqConnEntry); ok {
-				entry.mu.Lock()
-				if entry.conn != nil {
-					_ = entry.conn.CloseWithError(doqErrNoError, "transport rebuilt")
-					entry.conn = nil
-				}
-				entry.mu.Unlock()
-			}
-			x.doqConns.Delete(key)
-			return true
-		})
 	}
 	x.tlsClientConfig = x.buildTLSConfig()
 
@@ -1125,286 +1030,6 @@ func (x *XTransport) buildH3DialFunc() func(context.Context, string, *tls.Config
 		return nil, lastErr
 	}
 }
-
-// ── DNS-over-QUIC (RFC 9250) transport ───────────────────────────────────────
-
-// buildDoQConfig returns a *quic.Config tuned for small DNS payloads.
-// Tighter flow-control windows than H3 (PERF 5): DNS messages are almost
-// always <512 bytes, so 64 KiB stream / 1 MiB connection windows are ample
-// and avoid wasting kernel memory on idle DoQ connections.
-func buildDoQConfig() *quic.Config {
-	return &quic.Config{
-		InitialStreamReceiveWindow:     doqInitialStreamWindow,
-		MaxStreamReceiveWindow:         doqMaxStreamWindow,
-		InitialConnectionReceiveWindow: doqInitialConnWindow,
-		MaxConnectionReceiveWindow:     doqMaxConnWindow,
-		MaxIdleTimeout:                 doqMaxIdleTimeout,
-	}
-}
-
-// dialDoQConn dials a fresh QUIC connection to hostPort with ALPN "doq".
-//
-// Mirrors buildH3DialFunc exactly: resolves cached IPs, creates a UDP socket
-// per target, applies setUDPOptions (SO_BUSY_POLL + buffer sizing — DOQ 4),
-// uses quic.DialEarly for 0-RTT on session resumption (DOQ 5). TLS config is
-// cloned from x.tlsClientConfig with NextProtos = ["doq"] (DOQ 5).
-//
-// The IIFE pattern (FIX 1 in buildH3DialFunc) is reused so defer fires
-// per-iteration — the UDP socket is closed on every failure path.
-func (x *XTransport) dialDoQConn(ctx context.Context, hostPort string) (*quic.Conn, error) {
-	host, port := ExtractHostAndPort(hostPort, doqDefaultPort)
-	portStr := strconv.Itoa(port)
-
-	tlsCfg := x.tlsClientConfig.Clone()
-	tlsCfg.NextProtos = []string{doqALPN} // DOQ 5: override H2/H3 ALPN
-	tlsCfg.ServerName = host
-
-	quicCfg := buildDoQConfig()
-
-	type udpTarget struct{ addr, network string }
-
-	udpEndpoint := func(ip net.IP) udpTarget {
-		if ip != nil {
-			if v4 := ip.To4(); v4 != nil {
-				return udpTarget{v4.String() + ":" + portStr, "udp4"}
-			}
-			return udpTarget{"[" + ip.String() + "]:" + portStr, "udp6"}
-		}
-		nw := "udp4"
-		if x.useIPv6 {
-			if x.useIPv4 {
-				nw = "udp"
-			} else {
-				nw = "udp6"
-			}
-		}
-		return udpTarget{host + ":" + portStr, nw}
-	}
-
-	cachedIPs, _, _ := x.loadCachedIPs(host)
-	targets := make([]udpTarget, 0, max(len(cachedIPs), 1))
-	for _, ip := range cachedIPs {
-		targets = append(targets, udpEndpoint(ip))
-	}
-	if len(targets) == 0 {
-		dlog.Debugf("[%s] DoQ: no cached IP; falling back to hostname dial", host)
-		targets = append(targets, udpEndpoint(nil))
-	}
-
-	var lastErr error
-	for i, t := range targets {
-		udpAddr, err := net.ResolveUDPAddr(t.network, t.addr)
-		if err != nil {
-			lastErr = err
-			if i < len(targets)-1 {
-				dlog.Debugf("DoQ: resolve [%s]/%s failed: %v", t.addr, t.network, err)
-			}
-			continue
-		}
-
-		// IIFE: mirrors FIX-1 from buildH3DialFunc — defer fires per-iteration.
-		conn, dialErr := func() (*quic.Conn, error) {
-			udpConn, listenErr := net.ListenUDP(t.network, nil)
-			if listenErr != nil {
-				return nil, listenErr
-			}
-			setUDPOptions(udpConn) // SO_BUSY_POLL + SO_RCVBUF/SO_SNDBUF — DOQ 4
-
-			connClosed := false
-			defer func() {
-				if !connClosed {
-					_ = udpConn.Close()
-				}
-			}()
-
-			c, err := quic.DialEarly(ctx, udpConn, udpAddr, tlsCfg, quicCfg)
-			if err != nil {
-				return nil, err
-			}
-			connClosed = true // QUIC conn now owns the UDP socket
-			return c, nil
-		}()
-
-		if dialErr != nil {
-			lastErr = dialErr
-			if i < len(targets)-1 {
-				dlog.Debugf("DoQ: quic.DialEarly [%s]/%s failed: %v", t.addr, t.network, dialErr)
-			}
-			continue
-		}
-
-		dlog.Debugf("DoQ: connection to [%s] established (0-RTT: %v)",
-			t.addr, conn.ConnectionState().Used0RTT)
-		return conn, nil
-	}
-	return nil, lastErr
-}
-
-// getOrDialDoQ returns the live pooled QUIC connection for hostPort, dialing a
-// new one if the pool is empty or the stored connection is stale.
-//
-// Uses LoadOrStore for lock-free pool-entry creation (PERF-6 pattern).
-// Stale detection: a non-blocking select on conn.Context().Done() catches
-// peer-closed connections before any stream open is attempted.
-func (x *XTransport) getOrDialDoQ(ctx context.Context, hostPort string) (*quic.Conn, error) {
-	hk := unique.Make(hostPort)
-	v, _ := x.doqConns.LoadOrStore(hk, new(doqConnEntry))
-	entry := v.(*doqConnEntry)
-
-	entry.mu.Lock()
-	defer entry.mu.Unlock()
-
-	if entry.conn != nil {
-		select {
-		case <-entry.conn.Context().Done():
-			// Connection was closed by us or the server — discard and redial.
-			dlog.Debugf("DoQ: stale connection to [%s]; redialing", hostPort)
-			entry.conn = nil
-		default:
-			return entry.conn, nil // healthy
-		}
-	}
-
-	conn, err := x.dialDoQConn(ctx, hostPort)
-	if err != nil {
-		return nil, err
-	}
-	entry.conn = conn
-	return conn, nil
-}
-
-// invalidateDoQConn closes and evicts badConn from the pool.
-//
-// The pointer-equality guard (entry.conn == badConn) is the critical safety
-// gate: if a concurrent goroutine already redialed successfully, entry.conn
-// points to the NEW connection and must not be evicted by a late-arriving
-// error from the old one.
-func (x *XTransport) invalidateDoQConn(hostPort string, badConn *quic.Conn) {
-	hk := unique.Make(hostPort)
-	v, ok := x.doqConns.Load(hk)
-	if !ok {
-		return
-	}
-	entry := v.(*doqConnEntry)
-	entry.mu.Lock()
-	defer entry.mu.Unlock()
-	if entry.conn == badConn {
-		_ = entry.conn.CloseWithError(doqErrInternalError, "stream error")
-		entry.conn = nil
-		dlog.Debugf("DoQ: invalidated connection to [%s]", hostPort)
-	}
-}
-
-// doqExchange opens one bidirectional QUIC stream, writes the length-prefixed
-// DNS query, closes the send direction, reads the response, and returns it.
-//
-// Wire format (RFC 9250 §4.2.1):
-//   write → [ 2-byte big-endian length ][ DNS wire message ]  then Close()
-//   read  ← [ 2-byte big-endian length ][ DNS wire message ]
-//
-// ── DOQ 6: DNS message ID forced to 0x0000 ───────────────────────────────────
-// RFC 9250 §4.2.1: "The DNS Message ID MUST be set to zero." QUIC stream
-// identity replaces ID-based matching. The query is copied to a fresh heap
-// slice so the caller's buffer is never mutated. Responses are returned as-is
-// (receivers MUST accept any ID value — RFC §4.2.1 note).
-//
-// stream.CancelRead is called only on write/close error paths to send a
-// QUIC STOP_SENDING frame (DOQ_NO_ERROR), cleanly aborting the half-open stream.
-func (x *XTransport) doqExchange(
-	ctx context.Context,
-	conn *quic.Conn,
-	query []byte,
-) ([]byte, *tls.ConnectionState, error) {
-	n := len(query)
-	if n > 65535 {
-		return nil, nil, errDoQOversize
-	}
-
-	stream, err := conn.OpenStreamSync(ctx)
-	if err != nil {
-		return nil, nil, fmt.Errorf("DoQ open stream: %w", err)
-	}
-
-	// Build wire frame: [2-byte big-endian length][zero-ID DNS wire message].
-	// One allocation, one Write call — minimises syscall overhead (DOQ 6).
-	frame := make([]byte, 2+n)
-	frame[0] = byte(n >> 8)
-	frame[1] = byte(n)
-	copy(frame[2:], query)
-	frame[2] = 0x00 // DNS message ID high byte → 0  (RFC 9250 §4.2.1)
-	frame[3] = 0x00 // DNS message ID low byte  → 0  (RFC 9250 §4.2.1)
-
-	if _, err := stream.Write(frame); err != nil {
-		stream.CancelRead(quic.StreamErrorCode(doqErrNoError)) // FIXED: void return
-		return nil, nil, fmt.Errorf("DoQ write query: %w", err)
-	}
-	// Close send direction: signals to the server that the full query has
-	// been received (RFC 9250 §4.2 — "MUST indicate end of request").
-	if err := stream.Close(); err != nil {
-		stream.CancelRead(quic.StreamErrorCode(doqErrNoError)) // FIXED: void return
-		return nil, nil, fmt.Errorf("DoQ close send side: %w", err)
-	}
-
-	// Read 2-byte big-endian response length prefix.
-	var lenBuf [2]byte
-	if _, err := io.ReadFull(stream, lenBuf[:]); err != nil {
-		return nil, nil, fmt.Errorf("DoQ read length prefix: %w", err)
-	}
-	respLen := uint16(lenBuf[0])<<8 | uint16(lenBuf[1])
-	if respLen == 0 {
-		return nil, nil, errEmptyResponse
-	}
-
-	// Read exactly respLen bytes of DNS wire response.
-	resp := make([]byte, respLen)
-	if _, err := io.ReadFull(stream, resp); err != nil {
-		return nil, nil, fmt.Errorf("DoQ read response (%d B): %w", respLen, err)
-	}
-
-	cs := conn.ConnectionState().TLS
-	return resp, &cs, nil
-}
-
-// doqRoundTrip is the internal retry wrapper around doqExchange.
-//
-// On any non-context transport failure the bad connection is invalidated and
-// exactly one retry is performed on a fresh connection. Context cancellation
-// and deadline exceeded are propagated immediately — they reflect the caller's
-// intent and are never retryable.
-func (x *XTransport) doqRoundTrip(
-	ctx context.Context,
-	hostPort string,
-	body []byte,
-) (resp []byte, tlsState *tls.ConnectionState, rtt time.Duration, err error) {
-	start := time.Now()
-
-	for attempt := range 2 {
-		var conn *quic.Conn
-		conn, err = x.getOrDialDoQ(ctx, hostPort)
-		if err != nil {
-			return nil, nil, time.Since(start),
-				fmt.Errorf("DoQ dial [%s] (attempt %d): %w", hostPort, attempt+1, err)
-		}
-
-		resp, tlsState, err = x.doqExchange(ctx, conn, body)
-		if err == nil {
-			return resp, tlsState, time.Since(start), nil
-		}
-
-		// Never retry on context errors — caller timed out or was cancelled.
-		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-			return nil, nil, time.Since(start), err
-		}
-
-		if attempt == 0 {
-			dlog.Debugf("DoQ [%s] attempt 1 failed: %v — invalidating, retrying", hostPort, err)
-			x.invalidateDoQConn(hostPort, conn)
-		}
-	}
-	return nil, nil, time.Since(start),
-		fmt.Errorf("DoQ [%s]: all attempts failed: %w", hostPort, err)
-}
-
 
 // ── TLS configuration ─────────────────────────────────────────────────────────
 var isrgRootX1PEM = []byte(`-----BEGIN CERTIFICATE-----
@@ -2117,53 +1742,4 @@ func (x *XTransport) ObliviousDoHQuery(
 	timeout time.Duration,
 ) ([]byte, int, *tls.ConnectionState, time.Duration, error) {
 	return x.dohLikeQuery("application/oblivious-dns-message", useGet, url, body, timeout)
-}
-
-// DoQQuery sends a DNS query over DNS-over-QUIC (RFC 9250) and returns the
-// raw DNS wire response. A persistent QUIC connection per host is maintained
-// in doqConns and transparently reconnected on failure (DOQ 2).
-//
-// Return signature mirrors DoHQuery for caller symmetry:
-//   []byte               — DNS wire response; nil on error
-//   int                  — 200 on success, 503 on transport failure, 0 if disabled
-//   *tls.ConnectionState — TLS state of the underlying QUIC connection
-//   time.Duration        — wall-clock round-trip (dial + stream exchange)
-//   error                — nil on success
-//
-// hostPort must be "host:port" (e.g., "dns.adguard.com:853"). Omitted port
-// defaults to doqDefaultPort (853). Caller must set x.doq = true.
-//
-// ── DOQ 1: no HTTP overhead — raw QUIC streams carry DNS wire messages ────────
-// ── DOQ 2: persistent connection reused across calls, reconnects transparently ─
-// ── DOQ 7: resolveAndUpdateCache + ParseIP fast-exit for IP-literal hosts ──────
-func (x *XTransport) DoQQuery(
-	hostPort string,
-	body []byte,
-	timeout time.Duration,
-) ([]byte, int, *tls.ConnectionState, time.Duration, error) {
-	if !x.doq {
-		return nil, 0, nil, 0, errDoQDisabled
-	}
-	if timeout <= 0 {
-		timeout = x.timeout
-	}
-
-	host, _ := splitHostPort(hostPort)
-
-	// ── DOQ 7: resolve via shared cache; fast-exit for IP literals (PERF-7) ──
-	if ParseIP(host) == nil {
-		if err := x.resolveAndUpdateCache(host); err != nil {
-			dlog.Errorf("DoQ: unable to resolve [%s]: %v", host, err)
-			return nil, 503, nil, 0, err
-		}
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	resp, tlsState, rtt, err := x.doqRoundTrip(ctx, hostPort, body)
-	if err != nil {
-		return nil, 503, tlsState, rtt, err
-	}
-	return resp, 200, tlsState, rtt, nil
 }
