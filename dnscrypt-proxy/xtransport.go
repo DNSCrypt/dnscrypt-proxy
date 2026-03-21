@@ -1335,13 +1335,13 @@ func (x *XTransport) doqExchange(
 	frame[3] = 0x00 // DNS message ID low byte  → 0  (RFC 9250 §4.2.1)
 
 	if _, err := stream.Write(frame); err != nil {
-		_ = stream.CancelRead(quic.StreamErrorCode(doqErrNoError))
+		stream.CancelRead(quic.StreamErrorCode(doqErrNoError)) // FIXED: void return
 		return nil, nil, fmt.Errorf("DoQ write query: %w", err)
 	}
 	// Close send direction: signals to the server that the full query has
 	// been received (RFC 9250 §4.2 — "MUST indicate end of request").
 	if err := stream.Close(); err != nil {
-		_ = stream.CancelRead(quic.StreamErrorCode(doqErrNoError))
+		stream.CancelRead(quic.StreamErrorCode(doqErrNoError)) // FIXED: void return
 		return nil, nil, fmt.Errorf("DoQ close send side: %w", err)
 	}
 
