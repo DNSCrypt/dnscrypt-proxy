@@ -112,58 +112,6 @@
 //        single-element slice avoids the extra heap allocation.
 // ══════════════════════════════════════════════════════════════════════════════
 //
-// ══════════════════════════════════════════════════════════════════════════════
-// ✅ OBFUSCATION FEATURES - March 21, 2026
-// ══════════════════════════════════════════════════════════════════════════════
-// OBF 1: TLS ClientHello padding
-//        Pads TLS ClientHello to a fixed bucket size (512-byte buckets up to
-//        4 KiB) via a custom tls.Config.EncryptedClientHelloConfigList stub.
-//        Normalises the fingerprint visible to passive DPI observers.
-//
-// OBF 2: HTTP header randomisation
-//        Non-semantic headers (Accept-Language, Cache-Control variants,
-//        DNT, Upgrade-Insecure-Requests) are injected with randomised but
-//        plausible browser-like values on each request, making per-request
-//        fingerprinting harder.  The real functional headers (Accept,
-//        Content-Type, User-Agent) are preserved unchanged.
-//
-// OBF 3: Jittered request pacing (traffic shaping)
-//        An optional inter-request jitter interval (0–obfuscationJitterMax)
-//        can be enabled via XTransport.obfuscationJitter. When non-zero,
-//        each Fetch call sleeps for a random duration before dialling, making
-//        timing-based traffic correlation harder without adding more than a
-//        few milliseconds of median latency.
-//
-// OBF 4: Byte-stuffing wrapper (ObfuscatedConn)
-//        Wraps every TCP connection with an XOR-key stream derived from a
-//        random 4-byte nonce exchanged in a 6-byte prologue (2-byte magic +
-//        4-byte nonce). The nonce is generated fresh per connection using
-//        crypto/rand.  XOR of the wire stream breaks simple pattern-match
-//        DPI while adding zero copy overhead beyond the prologue write.
-//        Enabled only when XTransport.obfuscateWire == true; disabled by
-//        default so existing deployments are unaffected.
-//
-// OBF 5: SNI concealment (ECH / ESNI shim)
-//        When obfuscateSNI is set to a non-empty string the TLS ServerName
-//        in the ClientHello is replaced with that value (e.g. a benign CDN
-//        domain).  The real host is still reachable because the inner TLS
-//        record carries the correct certificate.  This is a lightweight
-//        stand-in for full ECH; pair with an ECH-capable resolver for full
-//        protection.
-//
-// OBF 6: DNS query padding (RFC 7830 / RFC 8467)
-//        Outgoing DNS messages are padded to the nearest multiple of
-//        obfuscationDNSPadBlock (default 128 bytes) using the EDNS0 padding
-//        option (OPT RR, option code 12).  Normalises query-length
-//        fingerprints visible to on-path observers.
-//
-// OBF 7: User-Agent spoofing pool
-//        Fetch randomly selects a User-Agent string from a curated pool of
-//        realistic browser UA strings instead of always sending
-//        "dnscrypt-proxy".  The pool is seeded at init time and selected
-//        per-request via a lock-free atomic index.
-// ══════════════════════════════════════════════════════════════════════════════
-//
 // ── Go 1.26 Features Utilized ─────────────────────────────────────────────────
 // • tls.X25519MLKEM768, SecP256r1MLKEM768, SecP384r1MLKEM1024 (hybrid PQ KEMs)
 // • errors.AsType[T] for reflection‑free error inspection
@@ -216,19 +164,17 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
-	"crypto/rand"
 	"crypto/sha512"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
-	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
 	"iter"
 	"maps"
-	mathrand "math/rand/v2"
+	"math/rand/v2"
 	"net"
 	"net/http"
 	"net/netip"
@@ -237,7 +183,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 	"unique"
 
@@ -297,36 +242,26 @@ const (
 	h2TLSHandshakeTimeout       = 15 * time.Second
 
 	// ── QUIC / HTTP/3 flow-control windows (PERF 5) ───────────────────────────
+	// DNS responses are small but larger windows prevent ACK-stall on request
+	// bursts and reduce WINDOW_UPDATE round-trips.
 	h3InitialStreamWindow = 512 * 1024      // 512 KiB per stream
 	h3MaxStreamWindow     = 4 * 1024 * 1024 // 4 MiB per stream
-	h3InitialConnWindow   = 1024 * 1024     // 1 MiB per connection
+	h3InitialConnWindow   = 1024 * 1024      // 1 MiB per connection
 	h3MaxConnWindow       = 8 * 1024 * 1024 // 8 MiB per connection
 
 	// ── TCP socket buffer sizes (PERF 8) ─────────────────────────────────────
+	// Request 256 KiB send/recv buffers. Kernel caps at net.core.{w,r}mem_max.
 	tcpSocketBufSize = 256 * 1024 // 256 KiB
 
 	// ── TCP_NOTSENT_LOWAT value (PERF 2) ─────────────────────────────────────
+	// 16 KiB: enough slack to keep writes non-blocking while preventing
+	// excessive kernel-side buffering that inflates write latency.
 	tcpNotSentLowat = 16 * 1024 // 16 KiB
 
 	// ── SO_BUSY_POLL value for H3 UDP sockets (PERF 3) ───────────────────────
+	// 50 µs of kernel busy-polling before sleeping. Eliminates the interrupt
+	// context-switch on the receive path for latency-sensitive DoH/DoQ.
 	udpBusyPollMicros = 50 // µs
-
-	// ── Obfuscation constants (OBF 1–7) ──────────────────────────────────────
-	// OBF 1: TLS padding bucket size — ClientHello padded to nearest multiple.
-	obfuscationTLSPadBucket = 512
-
-	// OBF 3: Maximum per-request jitter when obfuscationJitter is enabled.
-	obfuscationJitterMax = 8 * time.Millisecond
-
-	// OBF 4: Wire-obfuscation prologue: 2-byte magic + 4-byte nonce = 6 bytes.
-	obfWireMagic0 byte = 0xAB
-	obfWireMagic1 byte = 0xCD
-
-	// OBF 6: Default DNS padding block size (RFC 8467 §4.1 recommends 128 B).
-	obfuscationDNSPadBlock = 128
-
-	// OBF 7: Number of User-Agent strings in the spoofing pool.
-	obfUAPoolSize = 8
 )
 
 // ── Package‑level sentinel errors (zero‑allocation returns) ──────────────────
@@ -349,204 +284,17 @@ var gzipReaderPool = sync.Pool{
 }
 
 // ── Response body read buffer pool ────────────────────────────────────────────
-const responsePoolMaxSize = 64 * 1024 // 64 KiB
+// Reuses []byte backing buffers across DoH/ODoH response reads. DNS responses
+// are almost always <4 KiB; the 64 KiB cap prevents large one-off payloads from
+// permanently inflating pool entries and wasting memory.
+//
+// bytes.Buffer is pooled (not raw []byte) so ReadFrom can grow without an
+// extra copy. A fresh bytes.Clone of the live slice is returned so the pool
+// buffer is immediately available for the next request.
+const responsePoolMaxSize = 64 * 1024 // 64 KiB — buffers larger than this are not returned to pool
 
 var responseBodyPool = sync.Pool{
 	New: func() any { return new(bytes.Buffer) },
-}
-
-// ── OBF 7: User-Agent spoofing pool ──────────────────────────────────────────
-// A curated set of realistic browser User-Agent strings. Selected per-request
-// via an atomic round-robin counter so no mutex is required on the hot path.
-var (
-	obfUserAgentPool = [obfUAPoolSize]string{
-		"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-		"Mozilla/5.0 (Macintosh; Intel Mac OS X 14_4_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-		"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-		"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:125.0) Gecko/20100101 Firefox/125.0",
-		"Mozilla/5.0 (Macintosh; Intel Mac OS X 14.4; rv:125.0) Gecko/20100101 Firefox/125.0",
-		"Mozilla/5.0 (Macintosh; Intel Mac OS X 14_4_1) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4.1 Safari/605.1.15",
-		"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 Edg/124.0.0.0",
-		"Mozilla/5.0 (X11; Linux x86_64; rv:125.0) Gecko/20100101 Firefox/125.0",
-	}
-	// atomic counter — incremented on every Fetch(); no lock needed.
-	obfUACounter atomic.Uint64
-)
-
-// obfPickUserAgent returns a UA string from the pool via round-robin.
-func obfPickUserAgent() string {
-	idx := obfUACounter.Add(1) % obfUAPoolSize
-	return obfUserAgentPool[idx]
-}
-
-// ── OBF 2: Randomised decorative HTTP headers ─────────────────────────────────
-// These header pools mimic real browser request variation without affecting
-// any functional semantics. Values are selected at random per-request.
-var (
-	obfAcceptLanguagePool = []string{
-		"en-US,en;q=0.9",
-		"en-GB,en;q=0.9",
-		"en-AU,en;q=0.8,en-US;q=0.6",
-		"en-US,en;q=0.8",
-		"en;q=0.9",
-	}
-	obfDNTPool    = []string{"1", "0", ""} // empty → header omitted
-	obfUIRPool    = []string{"1", ""}      // Upgrade-Insecure-Requests; empty → omitted
-	obfSECPool    = []string{"?1", "?0"}   // Sec-Fetch-Mode etc. rough stand-in
-)
-
-// obfInjectDecorativeHeaders adds browser-like decorative headers to h.
-// Called once per Fetch() on the cloned header map.
-func obfInjectDecorativeHeaders(h http.Header) {
-	h.Set("Accept-Language", obfAcceptLanguagePool[mathrand.IntN(len(obfAcceptLanguagePool))])
-	if dnt := obfDNTPool[mathrand.IntN(len(obfDNTPool))]; dnt != "" {
-		h.Set("DNT", dnt)
-	}
-	if uir := obfUIRPool[mathrand.IntN(len(obfUIRPool))]; uir != "" {
-		h.Set("Upgrade-Insecure-Requests", uir)
-	}
-	// Sec-GPC — Global Privacy Control, present in Firefox/Brave.
-	if mathrand.IntN(2) == 0 {
-		h.Set("Sec-GPC", obfSECPool[mathrand.IntN(len(obfSECPool))])
-	}
-}
-
-// ── OBF 4: ObfuscatedConn — per-connection XOR byte-stuffing wrapper ─────────
-//
-// Wire format (client-initiated):
-//   [0xAB][0xCD][nonce0][nonce1][nonce2][nonce3]  ← 6-byte prologue (plaintext)
-//   followed by XOR-stream payload using nonce as the repeating key.
-//
-// The nonce is written by the client on Connect and echoed back by a
-// cooperative server. For one-sided obfuscation (client → server only)
-// set obfuscateWireClientOnly = true; the server side is left as-is.
-//
-// This is NOT encryption — it is traffic obfuscation only. Combine with
-// TLS for actual confidentiality.
-
-type ObfuscatedConn struct {
-	net.Conn
-	nonce     [4]byte
-	readOff   int
-	writeOff  int
-}
-
-// newObfuscatedConn wraps conn, writes the 6-byte prologue, and returns the
-// wrapped connection. The caller must not use conn directly after this call.
-func newObfuscatedConn(conn net.Conn) (*ObfuscatedConn, error) {
-	var nonce [4]byte
-	if _, err := io.ReadFull(rand.Reader, nonce[:]); err != nil {
-		return nil, fmt.Errorf("obf: nonce generation failed: %w", err)
-	}
-	prologue := [6]byte{obfWireMagic0, obfWireMagic1, nonce[0], nonce[1], nonce[2], nonce[3]}
-	if _, err := conn.Write(prologue[:]); err != nil {
-		return nil, fmt.Errorf("obf: prologue write failed: %w", err)
-	}
-	return &ObfuscatedConn{Conn: conn, nonce: nonce}, nil
-}
-
-func (c *ObfuscatedConn) Write(b []byte) (int, error) {
-	buf := make([]byte, len(b))
-	for i, v := range b {
-		buf[i] = v ^ c.nonce[c.writeOff%4]
-		c.writeOff++
-	}
-	return c.Conn.Write(buf)
-}
-
-func (c *ObfuscatedConn) Read(b []byte) (int, error) {
-	n, err := c.Conn.Read(b)
-	for i := 0; i < n; i++ {
-		b[i] ^= c.nonce[c.readOff%4]
-		c.readOff++
-	}
-	return n, err
-}
-
-// ── OBF 6: DNS query padding (RFC 7830 / RFC 8467) ───────────────────────────
-//
-// Pads msg to the nearest obfuscationDNSPadBlock boundary using the EDNS0
-// OPT padding option (option code 12, RFC 7830).  If msg already has an OPT
-// RR the padding option is appended; otherwise a new OPT RR is inserted.
-// The function is a no-op when padBlock <= 0 or the message is nil.
-
-// obfPadDNSMessage pads a dns.Msg in place and returns the wire bytes.
-func obfPadDNSMessage(msg *dns.Msg, padBlock int) ([]byte, error) {
-	if msg == nil || padBlock <= 0 {
-		return msg.Pack()
-	}
-
-	// Estimate current wire size without padding to know how much to add.
-	raw, err := msg.Pack()
-	if err != nil {
-		return nil, err
-	}
-	currentLen := len(raw)
-	padNeeded := padBlock - (currentLen % padBlock)
-	if padNeeded == padBlock {
-		padNeeded = 0 // already aligned
-	}
-	if padNeeded == 0 {
-		return raw, nil
-	}
-
-	// Inject or extend EDNS0 OPT RR with padding option code 12.
-	opt := msg.IsEdns0()
-	if opt == nil {
-		msg.SetEdns0(uint16(MaxDNSPacketSize), false)
-		opt = msg.IsEdns0()
-	}
-
-	// Build raw padding option: 2-byte code + 2-byte length + padNeeded zero bytes.
-	padPayload := make([]byte, 4+padNeeded)
-	binary.BigEndian.PutUint16(padPayload[0:2], 12) // EDNS0 option code: padding
-	binary.BigEndian.PutUint16(padPayload[2:4], uint16(padNeeded))
-	// padPayload[4:] remains zero — RFC 8467 §4.1.
-
-	opt.Option = append(opt.Option, &dns.EDNS0_LOCAL{
-		Code: 12,
-		Data: padPayload[4:],
-	})
-
-	return msg.Pack()
-}
-
-// ── OBF 1: TLS ClientHello size normalisation ─────────────────────────────────
-//
-// Returns a tls.Config clone with a synthetic EncryptedClientHelloConfigList
-// blob of exactly the right length to pad the ClientHello to the next
-// obfuscationTLSPadBucket boundary.  When ECH is properly supported by the
-// server the blob is ignored; when unsupported the handshake falls back
-// gracefully per RFC 8744.
-//
-// NOTE: This is a best-effort size-normalisation shim, not real ECH. Use a
-// genuine ECH-enabled TLS stack for full protection against SNI enumeration.
-
-func obfPadTLSConfig(base *tls.Config, targetHostLen int) *tls.Config {
-	cfg := base.Clone()
-
-	// Rough estimate of a minimal ClientHello with the given SNI length:
-	// 5 (record hdr) + 4 (hs hdr) + 2 (version) + 32 (random) +
-	// 1 (sess ID len) + 32 (sess ID) + 2 (cipher suites len) + N*2 (suites) +
-	// 1 (compression) + 2 (extensions len) + SNI ext (~15+hostLen).
-	baseEst := 5 + 4 + 2 + 32 + 1 + 32 + 2 + 14 + 1 + 2 + 15 + targetHostLen
-	bucket := obfuscationTLSPadBucket
-	padTarget := ((baseEst / bucket) + 1) * bucket
-	padLen := padTarget - baseEst
-	if padLen < 0 {
-		padLen = 0
-	}
-
-	// A synthetic ECH config list of the desired padding length.
-	// The TLS stack will attempt to use it; if the server doesn't support ECH
-	// it falls back normally. We intentionally set it to random bytes so it
-	// acts purely as padding.
-	if padLen > 0 {
-		blob := make([]byte, padLen)
-		_, _ = rand.Read(blob)
-		cfg.EncryptedClientHelloConfigList = blob
-	}
-	return cfg
 }
 
 // readLimitedBody reads at most maxBytes from r using a pooled bytes.Buffer.
@@ -583,6 +331,11 @@ type CachedIPs struct {
 // altSvcEntry records an Alt-Svc advertisement for a host.
 //
 // ── IMP 4: explicit noExpiry bool removes zero-time ambiguity ─────────────────
+// Previously validTo.IsZero() had dual meaning depending on port value:
+//   port>0, validTo.IsZero()  → "valid forever" (positive, no expiry)
+//   port==0, validTo.IsZero() → ambiguous (no-negative-cache OR still-valid)
+//
+// Now noExpiry=true unambiguously means "this entry never expires".
 type altSvcEntry struct {
 	validTo  time.Time
 	port     uint16
@@ -603,6 +356,9 @@ func isAltSvcExpired(e altSvcEntry, now time.Time) bool {
 }
 
 // ── IMP 6 (PERF 6): hostPrewarmer uses unique.Handle[string] keys ─────────────
+// Previously used raw string keys — map comparisons hashed/compared the full
+// string bytes on every lookup. unique.Handle keys compare by pointer identity
+// (same as resolveMu), which is O(1) and allocation-free.
 type hostPrewarmer struct {
 	m sync.Map // map[unique.Handle[string]]*sync.Once
 }
@@ -619,6 +375,9 @@ type XTransport struct {
 	tlsClientConfig *tls.Config
 
 	// ── PERF 1: Cached http.Client instances – zero per-request allocation ────
+	// httpClient wraps transport; h3Client wraps h3Transport.
+	// Both are rebuilt in rebuildTransport() and selected in Fetch().
+	// http.Client is safe for concurrent use (documented in net/http).
 	httpClient http.Client
 	h3Client   http.Client
 
@@ -656,31 +415,6 @@ type XTransport struct {
 
 	// Per‑host connection prewarmer (IMP 6: unique.Handle[string] keys)
 	prewarmed hostPrewarmer
-
-	// ── Obfuscation fields (OBF 1–7) ─────────────────────────────────────────
-	// obfuscateHeaders: inject randomised decorative HTTP headers (OBF 2).
-	obfuscateHeaders bool
-
-	// obfuscationJitter: when > 0, each Fetch sleeps a random [0,jitter) before
-	// dialling to decorrelate timing (OBF 3).
-	obfuscationJitter time.Duration
-
-	// obfuscateWire: wrap every TCP connection in ObfuscatedConn (OBF 4).
-	obfuscateWire bool
-
-	// obfuscateSNI: when non-empty, replace TLS ServerName with this value
-	// in each outgoing ClientHello (OBF 5).
-	obfuscateSNI string
-
-	// obfuscateDNSPad: pad outgoing DNS queries to this block size (OBF 6).
-	// Set to 0 to disable.  Default is obfuscationDNSPadBlock (128 bytes).
-	obfuscateDNSPad int
-
-	// obfuscateSpoofUA: use the UA spoofing pool instead of "dnscrypt-proxy" (OBF 7).
-	obfuscateSpoofUA bool
-
-	// obfuscateTLSPad: normalise ClientHello size to bucket boundaries (OBF 1).
-	obfuscateTLSPad bool
 }
 
 // ── Constructor ───────────────────────────────────────────────────────────────
@@ -702,7 +436,6 @@ func NewXTransport() *XTransport {
 		ignoreSystemDNS:    true,
 		useIPv4:            true,
 		baseHeaders:        baseHeaders,
-		obfuscateDNSPad:    obfuscationDNSPadBlock,
 	}
 }
 
@@ -736,18 +469,21 @@ func uniqueNormalizedIPs(ips []net.IP) []net.IP {
 		}
 		return nil
 	}
+
 	var seenBuf [8]netip.Addr
 	seen := seenBuf[:0]
 	out := make([]net.IP, 0, len(ips))
+
 	for _, ip := range ips {
 		if ip == nil {
 			continue
 		}
 		addr, ok := netIPToNetipAddr(ip)
-		if !ok {
+		if !ok { // non‑standard length – keep as is
 			out = append(out, bytes.Clone(ip))
 			continue
 		}
+
 		isDup := false
 		for _, s := range seen {
 			if s == addr {
@@ -769,13 +505,15 @@ func (x *XTransport) saveCachedIPs(host string, ips []net.IP, ttl time.Duration)
 	if len(normalized) == 0 {
 		return
 	}
+
 	item := &CachedIPItem{ips: normalized}
 	if ttl >= 0 {
 		ttl = max(ttl, MinResolverIPTTL)
-		ttl += time.Duration(mathrand.Int64N(int64(ResolverIPTTLMaxJitter)))
+		ttl += time.Duration(rand.Int64N(int64(ResolverIPTTLMaxJitter)))
 		exp := time.Now().Add(ttl)
 		item.expiration = &exp
 	}
+
 	x.cachedIPs.Lock()
 	item.updatingUntil = nil
 	x.cachedIPs.cache[host] = item
@@ -792,6 +530,8 @@ func (x *XTransport) saveCachedIPs(host string, ips []net.IP, ttl time.Duration)
 // saveCachedIP saves a single IP into the cache.
 //
 // ── IMP 5: stack-allocated single-element slice avoids heap alloc ─────────────
+// Previously built []net.IP{ip} as a heap slice before calling saveCachedIPs.
+// Now passes a pointer to a stack-local [1]net.IP directly.
 func (x *XTransport) saveCachedIP(host string, ip net.IP, ttl time.Duration) {
 	if ip == nil {
 		return
@@ -840,6 +580,7 @@ func (x *XTransport) PurgeExpiredCache() (ipsPurged, altSvcPurged, muPurged int)
 	now := time.Now()
 	grace := now.Add(-ExpiredCachedIPGraceTTL)
 
+	// IP cache
 	x.cachedIPs.Lock()
 	before := len(x.cachedIPs.cache)
 	maps.DeleteFunc(x.cachedIPs.cache, func(_ string, item *CachedIPItem) bool {
@@ -853,20 +594,24 @@ func (x *XTransport) PurgeExpiredCache() (ipsPurged, altSvcPurged, muPurged int)
 	})
 	ipsPurged = before - len(x.cachedIPs.cache)
 
+	// Build live set for later mutex cleanup
 	live := make(map[string]struct{}, len(x.cachedIPs.cache))
 	for host := range x.cachedIPs.cache {
 		live[host] = struct{}{}
 	}
 	x.cachedIPs.Unlock()
 
+	// Alt‑Svc cache — use IMP 4 isAltSvcExpired helper
 	x.altSupport.Lock()
 	before = len(x.altSupport.cache)
 	maps.DeleteFunc(x.altSupport.cache, func(_ string, e altSvcEntry) bool {
+		// Only purge negative-cache entries (port==0) that have genuinely expired.
 		return e.port == 0 && isAltSvcExpired(e, now)
 	})
 	altSvcPurged = before - len(x.altSupport.cache)
 	x.altSupport.Unlock()
 
+	// Clean up resolveMu entries for hosts no longer in cache
 	x.resolveMu.Range(func(key, _ any) bool {
 		h := key.(unique.Handle[string])
 		if _, ok := live[h.Value()]; !ok {
@@ -912,6 +657,10 @@ func (x *XTransport) CachedHosts() iter.Seq[string] {
 }
 
 // ── TCP low‑level optimizations ───────────────────────────────────────────────
+// ── IMP 3: runtime.GOOS dead-code branch removed ─────────────────────────────
+// File has //go:build linux so runtime.GOOS is always "linux". The non-Linux
+// branch was unreachable dead code. Removed to reduce binary size and
+// eliminate a branch on the hot connection path.
 func setTCPOptions(conn net.Conn) {
 	tcpConn, ok := conn.(*net.TCPConn)
 	if !ok {
@@ -923,22 +672,43 @@ func setTCPOptions(conn net.Conn) {
 		return
 	}
 	raw.Control(func(fd uintptr) {
+		// TCP_QUICKACK – disable delayed ACKs for faster ACK delivery
 		_ = unix.SetsockoptInt(int(fd), unix.IPPROTO_TCP, unix.TCP_QUICKACK, 1)
+
+		// TCP_FASTOPEN_CONNECT – save one RTT on repeat connections (Linux 4.11+)
 		_ = unix.SetsockoptInt(int(fd), unix.IPPROTO_TCP, unix.TCP_FASTOPEN_CONNECT, 1)
+
+		// ── PERF 2: TCP_NOTSENT_LOWAT (IPPROTO_TCP level, value 25) ──────────
+		// Limits unsent data in the kernel send buffer to 16 KiB. Prevents
+		// write-ahead buffering from inflating perceived latency on small DoH
+		// payloads. DISTINCT from SO_SNDLOWAT — earlier code used the wrong one.
 		_ = unix.SetsockoptInt(int(fd), unix.IPPROTO_TCP, unix.TCP_NOTSENT_LOWAT, tcpNotSentLowat)
+
+		// ── PERF 8: SO_SNDBUF / SO_RCVBUF – 256 KiB socket buffers ──────────
+		// Requests larger OS socket buffers. Kernel may cap at sysctl limits.
+		// Prevents buffer-stall on high-BDP paths without hurting DoH latency.
 		_ = unix.SetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_SNDBUF, tcpSocketBufSize)
 		_ = unix.SetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_RCVBUF, tcpSocketBufSize)
 	})
 	_ = tcpConn.SetNoDelay(true)
 }
 
+// setUDPOptions applies Linux-specific latency optimizations to a UDP socket.
+// Called on H3/QUIC UDP connections where microsecond latency matters.
 func setUDPOptions(conn *net.UDPConn) {
 	raw, err := conn.SyscallConn()
 	if err != nil {
 		return
 	}
 	raw.Control(func(fd uintptr) {
+		// ── PERF 3: SO_BUSY_POLL – kernel busy-polls for 50 µs before sleeping ─
+		// Avoids the interrupt + context-switch overhead on the receive path.
+		// Reduces per-response latency by ~7 µs on low-latency paths.
+		// Requires CAP_NET_ADMIN to increase above the system default (0).
+		// Silently ignored if the kernel or driver does not support it.
 		_ = unix.SetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_BUSY_POLL, udpBusyPollMicros)
+
+		// ── PERF 8: SO_RCVBUF / SO_SNDBUF for UDP ────────────────────────────
 		_ = unix.SetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_SNDBUF, tcpSocketBufSize)
 		_ = unix.SetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_RCVBUF, tcpSocketBufSize)
 	})
@@ -988,31 +758,55 @@ func (x *XTransport) rebuildTransport() {
 		transport.Proxy = x.httpProxyFunction
 	}
 	x.transport = transport
+
+	// ── PERF 1: Store http.Client as a field — zero per-request allocation ────
+	// Rebuilding happens rarely (config reload); hot path in Fetch() is free.
 	x.httpClient = http.Client{Transport: transport}
+
+	// Reset prewarmer so new connections will be prewarmed on next request
 	x.prewarmed = hostPrewarmer{}
 
 	if x.http3 {
 		if x.h3Transport != nil {
 			x.h3Transport.Close()
 		}
+
+		// ── PERF 5: QUIC flow-control configuration ───────────────────────────
 		quicCfg := &quic.Config{
 			InitialStreamReceiveWindow:     h3InitialStreamWindow,
 			MaxStreamReceiveWindow:         h3MaxStreamWindow,
 			InitialConnectionReceiveWindow: h3InitialConnWindow,
 			MaxConnectionReceiveWindow:     h3MaxConnWindow,
 		}
+
 		x.h3Transport = &http3.Transport{
 			DisableCompression: true,
 			TLSClientConfig:    x.tlsClientConfig,
 			QUICConfig:         quicCfg,
 			Dial:               x.buildH3DialFunc(),
 		}
+		// ── PERF 1: H3 client also stored as field ────────────────────────────
 		x.h3Client = http.Client{Transport: x.h3Transport}
 	}
 }
 
-// prewarmConnection ensures a full TLS+HTTP/2 (and optionally QUIC) handshake
-// is completed once per host before real traffic arrives.
+// prewarmConnection ensures a full TLS+HTTP/2 handshake (and optionally a QUIC
+// handshake) is completed once per host before real traffic arrives.
+//
+// ── PERF 4: Full TLS handshake via real HEAD request ─────────────────────────
+// The previous implementation called transport.DialContext (TCP only). No TLS
+// or HTTP/2 negotiation occurred so the "warm" connection was immediately
+// closed and discarded — providing no benefit at all.
+//
+// We now issue a HEAD request via the stored httpClient. The transport performs
+// the complete TLS+ALPN+HTTP/2 handshake and deposits the idle connection into
+// its pool. The HEAD response body is drained and discarded. Any error (404,
+// connection refused, etc.) is silently ignored — we only care about warming
+// the connection pool, not about the response content.
+//
+// ── IMP 2: H3 path also prewarmed when Alt-Svc entry is present ──────────────
+// When an Alt-Svc entry exists for the host, the h3Client is also warmed so
+// the QUIC handshake is already complete before the first real DoH request.
 func (x *XTransport) prewarmConnection(hostPort string) {
 	hk := unique.Make(hostPort)
 	x.prewarmed.do(hk, func() {
@@ -1037,6 +831,7 @@ func (x *XTransport) prewarmConnection(hostPort string) {
 				dlog.Debugf("Prewarmed HTTP/2 connection to %s (status %d)", hostPort, resp.StatusCode)
 			}
 
+			// ── IMP 2: Also warm H3 if transport is ready and Alt-Svc exists ─
 			if x.h3Transport == nil {
 				return
 			}
@@ -1066,6 +861,8 @@ func (x *XTransport) prewarmConnection(hostPort string) {
 }
 
 // splitHostPort splits "host:port" → ("host", "port"), handling IPv6 brackets.
+// Unlike net.SplitHostPort it never returns an error — used only for logging/
+// cache lookups where an imperfect split is acceptable.
 func splitHostPort(hostPort string) (host, port string) {
 	if i := strings.LastIndexByte(hostPort, ':'); i >= 0 {
 		return hostPort[:i], hostPort[i+1:]
@@ -1076,7 +873,6 @@ func splitHostPort(hostPort string) (host, port string) {
 func (x *XTransport) buildDialContext() func(context.Context, string, string) (net.Conn, error) {
 	timeout, keepAlive := x.timeout, x.keepAlive
 	useIPv4, useIPv6 := x.useIPv4, x.useIPv6
-	obfWire := x.obfuscateWire
 
 	d := &net.Dialer{
 		Timeout: timeout,
@@ -1134,15 +930,6 @@ func (x *XTransport) buildDialContext() func(context.Context, string, string) (n
 			}
 			if err == nil {
 				setTCPOptions(conn)
-				// ── OBF 4: wrap with byte-stuffing obfuscation if enabled ──────
-				if obfWire {
-					conn, err = newObfuscatedConn(conn)
-					if err != nil {
-						conn.Close()
-						lastErr = err
-						continue
-					}
-				}
 				return conn, nil
 			}
 			lastErr = err
@@ -1200,12 +987,6 @@ func (x *XTransport) buildH3DialFunc() func(context.Context, string, *tls.Config
 		tlsCfg := x.tlsClientConfig.Clone()
 		tlsCfg.ServerName = host
 
-		// ── OBF 5: SNI concealment ─────────────────────────────────────────────
-		if x.obfuscateSNI != "" {
-			tlsCfg.ServerName = x.obfuscateSNI
-			dlog.Debugf("H3 dial: SNI replaced with [%s] (OBF 5)", x.obfuscateSNI)
-		}
-
 		for i, t := range targets {
 			udpAddr, err := net.ResolveUDPAddr(t.network, t.addr)
 			if err != nil {
@@ -1221,6 +1002,7 @@ func (x *XTransport) buildH3DialFunc() func(context.Context, string, *tls.Config
 				if listenErr != nil {
 					return nil, listenErr
 				}
+				// ── PERF 3: Apply SO_BUSY_POLL to this UDP socket ─────────────
 				setUDPOptions(udpConn)
 
 				connClosed := false
@@ -1233,7 +1015,7 @@ func (x *XTransport) buildH3DialFunc() func(context.Context, string, *tls.Config
 				if err != nil {
 					return nil, err
 				}
-				connClosed = true
+				connClosed = true // QUIC conn now owns the socket
 				return c, nil
 			}()
 			if dialErr != nil {
@@ -1505,7 +1287,8 @@ func (x *XTransport) resolveUsingServers(
 	if len(resolvers) == 0 {
 		return nil, 0, errEmptyResolvers
 	}
-	// ✅ FIX 3: Deep-copy the resolvers slice.
+	// ✅ FIX 3: Deep-copy the resolvers slice so the promotion swap never races
+	// against concurrent readers of x.internalResolvers / x.bootstrapResolvers.
 	resolversCopy := make([]string, len(resolvers))
 	copy(resolversCopy, resolvers)
 
@@ -1591,6 +1374,9 @@ func (x *XTransport) resolve(host string, returnIPv4, returnIPv6 bool) ([]net.IP
 // ── Per‑host resolution mutex ─────────────────────────────────────────────────
 func (x *XTransport) hostResolveMu(host string) *sync.Mutex {
 	k := unique.Make(host)
+	// ── PERF 6: Single LoadOrStore — eliminates redundant map traversal ───────
+	// Previous pattern: Load (miss) → allocate → LoadOrStore → discard extra.
+	// Now: one atomic operation regardless of hit/miss.
 	v, _ := x.resolveMu.LoadOrStore(k, new(sync.Mutex))
 	return v.(*sync.Mutex)
 }
@@ -1672,21 +1458,21 @@ func (x *XTransport) Fetch(
 		timeout = x.timeout
 	}
 
-	// ── OBF 3: Jittered request pacing ────────────────────────────────────────
-	if x.obfuscationJitter > 0 {
-		jitter := time.Duration(mathrand.Int64N(int64(x.obfuscationJitter)))
-		time.Sleep(jitter)
-	}
-
+	// ── PERF 1: Use stored http.Client — zero allocation on hot path ──────────
+	// Previously: `client := http.Client{Transport: x.transport}` allocated a
+	// new 56-byte struct + heap escape on EVERY request. Now we select the
+	// pre-built client stored in XTransport.
 	client := &x.httpClient
 
 	host, port := ExtractHostAndPort(url.Host, 443)
 
+	// Prewarm a full TLS+HTTP/2 (and optionally H3) connection once per host
 	x.prewarmConnection(host + ":" + strconv.Itoa(port))
 
 	hasAltSupport := false
 	if x.h3Transport != nil {
 		if x.http3Probe {
+			// ── PERF 1: Use stored h3Client — same zero-allocation benefit ────
 			client = &x.h3Client
 		} else {
 			x.altSupport.RLock()
@@ -1694,6 +1480,7 @@ func (x *XTransport) Fetch(
 			x.altSupport.RUnlock()
 			if inCache {
 				hasAltSupport = true
+				// ── IMP 4: use isAltSvcExpired for unambiguous expiry check ───
 				negativeExpired := entry.port == 0 && isAltSvcExpired(entry, time.Now())
 				switch {
 				case entry.port > 0 && int(entry.port) == port:
@@ -1705,18 +1492,8 @@ func (x *XTransport) Fetch(
 		}
 	}
 
-	// Clone base headers.
+	// Clone base headers – avoids modifying the shared map
 	header := x.baseHeaders.Clone()
-
-	// ── OBF 7: User-Agent spoofing ─────────────────────────────────────────────
-	if x.obfuscateSpoofUA {
-		header.Set("User-Agent", obfPickUserAgent())
-	}
-
-	// ── OBF 2: Inject decorative headers ──────────────────────────────────────
-	if x.obfuscateHeaders {
-		obfInjectDecorativeHeaders(header)
-	}
 
 	if accept != "" {
 		header.Set("Accept", accept)
@@ -1724,7 +1501,6 @@ func (x *XTransport) Fetch(
 	if contentType != "" {
 		header.Set("Content-Type", contentType)
 	}
-
 	if body != nil {
 		h := sha512.Sum512_256(*body)
 		qs := url.Query()
@@ -1733,12 +1509,14 @@ func (x *XTransport) Fetch(
 		u2.RawQuery = qs.Encode()
 		url = &u2
 	}
-
 	if x.proxyDialer == nil && strings.HasSuffix(host, ".onion") {
 		return nil, 0, nil, 0, errNoTorProxy
 	}
 
 	// ── PERF 7: Fast-exit for IP-literal hosts bypasses resolver entirely ─────
+	// resolveAndUpdateCache already guards with ParseIP, but we save the entire
+	// function call overhead (proxy check, cache lock acquisition) for the
+	// common case where the host is already a bare IP address.
 	if ParseIP(host) == nil {
 		if err := x.resolveAndUpdateCache(host); err != nil {
 			dlog.Errorf("Unable to resolve [%s]: check bootstrap_resolvers or system resolver", host)
@@ -1749,7 +1527,6 @@ func (x *XTransport) Fetch(
 	if compress && body == nil {
 		header.Set("Accept-Encoding", "gzip")
 	}
-
 	bodyLen := 0
 	if body != nil {
 		bodyLen = len(*body)
@@ -1769,14 +1546,6 @@ func (x *XTransport) Fetch(
 		}
 		req.Header = header
 		req.ContentLength = int64(bodyLen)
-
-		// ── OBF 5: SNI concealment for TCP/TLS connections ─────────────────
-		// The DialContext wrapper already clones the TLS config for H3; here
-		// we patch the transport's TLS config SNI field for H1/H2 connections.
-		// This is done per-request via a req context value that buildDialContext
-		// can read, but the simplest approach is patching the transport directly.
-		// We use a per-request approach via the existing TLS config SNI below.
-
 		return req, nil
 	}
 
@@ -1785,30 +1554,9 @@ func (x *XTransport) Fetch(
 		return nil, 0, nil, 0, err
 	}
 
-	// ── OBF 1: TLS ClientHello size normalisation ──────────────────────────────
-	// For H1/H2 we patch the transport's TLS config with a padded clone before
-	// the dial so the ClientHello size is normalised to a bucket boundary.
-	if x.obfuscateTLSPad && client == &x.httpClient {
-		paddedCfg := obfPadTLSConfig(x.tlsClientConfig, len(host))
-		x.transport.TLSClientConfig = paddedCfg
-	}
-
-	// ── OBF 5: SNI concealment for H1/H2 connections ─────────────────────────
-	if x.obfuscateSNI != "" && client == &x.httpClient {
-		sniCfg := x.transport.TLSClientConfig.Clone()
-		sniCfg.ServerName = x.obfuscateSNI
-		x.transport.TLSClientConfig = sniCfg
-		dlog.Debugf("Fetch: SNI replaced with [%s] for [%s] (OBF 5)", x.obfuscateSNI, host)
-	}
-
 	start := time.Now()
 	resp, err := client.Do(req)
 	rtt := time.Since(start)
-
-	// ── Restore canonical TLS config after obfuscated dial ───────────────────
-	if (x.obfuscateTLSPad || x.obfuscateSNI != "") && client == &x.httpClient {
-		x.transport.TLSClientConfig = x.tlsClientConfig
-	}
 
 	if err != nil && client == &x.h3Client {
 		// ✅ FIX 4a: Close any non-nil H3 response body before resp is overwritten.
@@ -1822,6 +1570,8 @@ func (x *XTransport) Fetch(
 		x.altSupport.Unlock()
 
 		// ── IMP 1: Build a fresh *http.Request for the retry ─────────────────
+		// Reusing the original req after Do() violates the net/http contract.
+		// newRequest() constructs a brand-new request with the same parameters.
 		client = &x.httpClient
 		req, err = newRequest()
 		if err != nil {
@@ -1837,17 +1587,16 @@ func (x *XTransport) Fetch(
 		var bodyCloseOnce sync.Once
 		defer func() { bodyCloseOnce.Do(func() { resp.Body.Close() }) }()
 	}
-
 	statusCode := 503
 	if resp != nil {
 		statusCode = resp.StatusCode
 	}
-
 	if err == nil {
 		switch {
 		case resp == nil:
 			err = errEmptyResponse
 		case resp.StatusCode < 200 || resp.StatusCode > 299:
+			// Drain a small amount so the underlying connection can be reused.
 			_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 32*1024))
 			err = errors.New(resp.Status)
 		}
@@ -1891,6 +1640,7 @@ func (x *XTransport) parseAndCacheAltSvc(host string, port int, header http.Head
 	x.altSupport.RLock()
 	existing, inCache := x.altSupport.cache[host]
 	x.altSupport.RUnlock()
+	// ── IMP 4: use isAltSvcExpired for unambiguous negative-cache check ───────
 	if inCache && existing.port == 0 && !isAltSvcExpired(existing, now) {
 		dlog.Debugf("Alt-Svc: negative cache still valid for [%s]; skipping", host)
 		return
@@ -1927,6 +1677,7 @@ outer:
 	}
 
 	x.altSupport.Lock()
+	// ── IMP 4: noExpiry=true for positive Alt-Svc entries (no TTL in header) ─
 	x.altSupport.cache[host] = altSvcEntry{port: altPort, noExpiry: true}
 	dlog.Debugf("Alt-Svc: cached port %d for [%s]", altPort, host)
 	x.altSupport.Unlock()
@@ -1965,17 +1716,6 @@ func (x *XTransport) dohLikeQuery(
 	body []byte,
 	timeout time.Duration,
 ) ([]byte, int, *tls.ConnectionState, time.Duration, error) {
-	// ── OBF 6: DNS query padding ───────────────────────────────────────────────
-	if x.obfuscateDNSPad > 0 {
-		msg := new(dns.Msg)
-		if err := msg.Unpack(body); err == nil {
-			if padded, padErr := obfPadDNSMessage(msg, x.obfuscateDNSPad); padErr == nil {
-				body = padded
-				dlog.Debugf("OBF 6: DNS query padded from %d to %d bytes", len(body), len(padded))
-			}
-		}
-	}
-
 	if useGet {
 		qs := url.Query()
 		qs.Add("dns", base64.RawURLEncoding.EncodeToString(body))
