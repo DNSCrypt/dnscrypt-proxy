@@ -9,7 +9,7 @@ require (
 	github.com/BurntSushi/toml v1.6.0
 	github.com/VividCortex/ewma v1.2.0
 	github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf
-	github.com/coreos/go-systemd/v22 v@main
+	github.com/coreos/go-systemd@main
 	github.com/dchest/safefile v0.0.0-20151022103144-855e8d98f185
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/gorilla/websocket v1.5.3
