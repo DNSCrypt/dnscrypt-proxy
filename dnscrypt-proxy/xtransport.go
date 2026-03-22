@@ -165,9 +165,11 @@
 //        by io.ReadAll(io.LimitReader(r, max)). Simpler code, fewer moving
 //        parts, and leverages stdlib optimizations that track runtime changes.
 //
-// OPT 9: ParseIP replaced with netip.ParseAddr throughout
-//        net.ParseIP heap-allocates a []byte; netip.ParseAddr returns a
-//        stack-allocated value type. Also handles bracketed IPv6 natively.
+// OPT 9: Internal parseIPAddr uses netip.ParseAddr for hot-path checks
+//        Public ParseIP retains net.IP return type for API compatibility
+//        with config.go, serversInfo.go, config_loader.go callers.
+//        Internal hot-path calls (dial targets, cache guards, Fetch IP check)
+//        use parseIPAddr returning netip.Addr — zero-allocation, stack-allocated.
 //        splitHostPort now uses strings.Cut for clarity.
 //        Resolver retry backoff uses time.Timer + select for cancellability.
 // ══════════════════════════════════════════════════════════════════════════════
@@ -548,11 +550,18 @@ func NewXTransport() *XTransport {
     }
 }
 
-// ── IP helpers (OPT 9: netip.ParseAddr replaces net.ParseIP) ──────────────────
+// ── IP helpers (OPT 9: netip.ParseAddr used internally) ───────────────────────
 // ParseIP parses an IP address string, stripping optional IPv6 brackets.
-// Returns the zero netip.Addr{} (addr.IsValid() == false) on failure.
-func ParseIP(ipStr string) netip.Addr {
-    // netip.ParseAddr handles most formats; strip brackets for [::1] style
+// Returns net.IP (nil on failure) — public API, used by config.go, serversInfo.go etc.
+func ParseIP(ipStr string) net.IP {
+    ipStr = strings.TrimPrefix(ipStr, "[")
+    ipStr = strings.TrimSuffix(ipStr, "]")
+    return net.ParseIP(ipStr)
+}
+
+// parseIPAddr is the internal netip.Addr version — zero-allocation, stack-allocated.
+// Used only within xtransport.go for cache lookups and dial target formatting.
+func parseIPAddr(ipStr string) netip.Addr {
     ipStr = strings.TrimPrefix(ipStr, "[")
     ipStr = strings.TrimSuffix(ipStr, "]")
     addr, err := netip.ParseAddr(ipStr)
@@ -560,16 +569,6 @@ func ParseIP(ipStr string) netip.Addr {
         return netip.Addr{}
     }
     return addr.Unmap()
-}
-
-// ParseIPCompat returns a net.IP for backward compatibility with callers
-// outside this file that still use net.IP. Prefer ParseIP for new code.
-func ParseIPCompat(ipStr string) net.IP {
-    addr := ParseIP(ipStr)
-    if !addr.IsValid() {
-        return nil
-    }
-    return addr.AsSlice()
 }
 
 // ── OPT 1: netip.Addr deduplication (replaces uniqueNormalizedIPs) ────────────
@@ -1040,7 +1039,7 @@ func (x *XTransport) buildDialContext() func(context.Context, string, string) (n
                 return formatDialTarget(addr, portU16)
             }
             // Fallback: hostname dial (no cached IP)
-            parsed := ParseIP(host)
+            parsed := parseIPAddr(host)
             if parsed.IsValid() {
                 return formatDialTarget(parsed, portU16)
             }
@@ -1107,7 +1106,7 @@ func (x *XTransport) buildH3DialFunc() func(context.Context, string, *tls.Config
                 }
                 return udpTarget{formatDialTarget(addr, portU16), nw}
             }
-            parsed := ParseIP(host)
+            parsed := parseIPAddr(host)
             if parsed.IsValid() {
                 nw := "udp4"
                 if parsed.Is6() {
@@ -1543,7 +1542,7 @@ func (x *XTransport) resolveAndUpdateCache(host string) error {
     if x.proxyDialer != nil || x.httpProxyFunction != nil {
         return nil
     }
-    if ParseIP(host).IsValid() {
+    if parseIPAddr(host).IsValid() {
         return nil
     }
 
@@ -1689,7 +1688,7 @@ func (x *XTransport) Fetch(
     }
 
     // ── PERF 7: Fast-exit for IP-literal hosts bypasses resolver entirely ─────
-    if !ParseIP(host).IsValid() {
+    if !parseIPAddr(host).IsValid() {
         if err := x.resolveAndUpdateCache(host); err != nil {
             dlog.Errorf("Unable to resolve [%s]: check bootstrap_resolvers or system resolver", host)
             return nil, 0, nil, 0, err
