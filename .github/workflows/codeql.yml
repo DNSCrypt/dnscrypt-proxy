@@ -25,7 +25,7 @@ jobs:
           - language: actions
             build-mode: none
           - language: go
-            build-mode: manual        # ← manual since go.mod is in a subdir
+            build-mode: manual
           - language: javascript-typescript
             build-mode: none
           - language: python
@@ -33,9 +33,11 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5    # ← Fixed: v6 does not exist
+        uses: actions/checkout@v5
+        with:
+          submodules: recursive        # Clones dnscrypt-proxy submodule so go.mod exists
 
-      - name: Setup Go              # ← Add for Go language matrix only
+      - name: Setup Go
         if: matrix.language == 'go'
         uses: actions/setup-go@v5
         with:
