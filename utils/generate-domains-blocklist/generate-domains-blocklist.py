@@ -96,10 +96,18 @@ def parse_list(content, trusted=False):
 
 
 def print_restricted_name(output_fd, name, time_restrictions):
-    if name in time_restrictions:
+    # Sanitize the name to avoid logging arbitrary untrusted content; keep only
+    # characters valid for trusted list entries (lowercase letters, digits, dot,
+    # hyphen and asterisk), which matches the parsing regex constraints.
+    sanitized_name = re.sub(r"[^a-z0-9.*-]", "", name)
+    if sanitized_name in time_restrictions:
         # Do not print the raw time restriction label to avoid exposing potentially sensitive data.
         # Instead, indicate generically that this entry is time-restricted.
-        print("{}\t{}".format(name, "@time-restricted"), file=output_fd, end="\n")
+        print(
+            "{}\t{}".format(sanitized_name, "@time-restricted"),
+            file=output_fd,
+            end="\n",
+        )
     else:
         print(
             "# ignored: an entry was in the time-restricted list, "
