@@ -22,39 +22,39 @@ jobs:
       fail-fast: false
       matrix:
         include:
-        - language: actions
-          build-mode: none
-        - language: go
-          build-mode: manual        # ← changed from autobuild
-        - language: javascript-typescript
-          build-mode: none
-        - language: python
-          build-mode: none
+          - language: actions
+            build-mode: none
+          - language: go
+            build-mode: manual        # ← manual since go.mod is in a subdir
+          - language: javascript-typescript
+            build-mode: none
+          - language: python
+            build-mode: none
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v6
+      - name: Checkout repository
+        uses: actions/checkout@v5    # ← Fixed: v6 does not exist
 
-    - name: Setup Go                # ← added: pin Go version before manual build
-      if: matrix.language == 'go'
-      uses: actions/setup-go@v5
-      with:
-        go-version-file: 'dnscrypt-proxy/go.mod'
+      - name: Setup Go              # ← Add for Go language matrix only
+        if: matrix.language == 'go'
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'dnscrypt-proxy/go.mod'
 
-    - name: Initialize CodeQL
-      uses: github/codeql-action/init@v4
-      with:
-        languages: ${{ matrix.language }}
-        build-mode: ${{ matrix.build-mode }}
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
 
-    - name: Run manual build steps
-      if: matrix.build-mode == 'manual'
-      shell: bash
-      run: |
-        cd dnscrypt-proxy           # ← source lives in subdirectory
-        go build ./...
+      - name: Manual build (Go)
+        if: matrix.language == 'go'
+        shell: bash
+        run: |
+          cd dnscrypt-proxy
+          go build ./...
 
-    - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@v4
-      with:
-        category: "/language:${{matrix.language}}"
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: "/language:${{matrix.language}}"
