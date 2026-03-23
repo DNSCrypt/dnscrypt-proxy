@@ -41,7 +41,7 @@ jobs:
         if: matrix.language == 'go'
         uses: actions/setup-go@v5
         with:
-          go-version-file: 'go.mod'           # ← Fixed: go.mod is at repo root
+          go-version-file: 'go.mod'
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v4
@@ -53,7 +53,8 @@ jobs:
         if: matrix.language == 'go'
         shell: bash
         run: |
-          go build ./dnscrypt-proxy/...       # ← build from repo root
+          go mod vendor                        # Re-sync vendor with go.mod
+          go build ./dnscrypt-proxy/...
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v4
