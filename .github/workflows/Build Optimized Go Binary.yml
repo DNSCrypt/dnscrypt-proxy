@@ -1,5 +1,8 @@
 name: Build Optimized Go Binary
 
+permissions:
+  contents: read
+
 on:
   push:
   workflow_dispatch:
