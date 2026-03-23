@@ -1,3 +1,4 @@
+
 name: "CodeQL Advanced"
 
 on:
@@ -53,9 +54,9 @@ jobs:
         if: matrix.language == 'go'
         shell: bash
         run: |
-          go mod tidy                    # Fix go.sum missing checksums
-          go mod vendor                  # Re-sync vendor dir
-          go build ./dnscrypt-proxy/...
+          go mod tidy
+          go mod vendor
+          go build -o /dev/null ./dnscrypt-proxy/...
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v4
