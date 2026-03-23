@@ -10,6 +10,8 @@
 //   - ComputeSharedKeyWithError is now the single implementation; compat wrapper removed
 //   - generateEphemeralKeys uses sha512.Sum512_256 (stack, no heap alloc)
 //   - generateEphemeralKeys: ephSk zeroed with clear() + runtime.KeepAlive to prevent elision
+//   - generateEphemeralKeys: fixed-size stack buffer replaces append() for KDF input,
+//     eliminating buffer-aliasing risk and ensuring secret key material is explicitly zeroed
 //   - encryptXChaCha20: Seal appends directly into the output buffer (one fewer allocation)
 //   - decryptXChaCha20: tag reorder done with a [TagSize]byte stack copy (no extra alloc)
 //   - bufferPool removed (was dead code; getBuffer/putBuffer never called)
@@ -180,8 +182,8 @@ func ValidatePublicKey(publicKey *[32]byte) error {
 // error and returns a zero key. Callers must check the result with isZeroKey if
 // they need to distinguish a failure from a valid key.
 //
-// Deprecated: prefer ComputeSharedKey which now returns an error. This variant
-// is kept for callers that cannot handle an error return.
+// Deprecated: prefer ComputeSharedKeyWithError which returns an error. This
+// variant is kept for callers that cannot handle an error return.
 func ComputeSharedKey(
 	cryptoConstruction CryptoConstruction,
 	secretKey *[32]byte,
@@ -313,13 +315,27 @@ func (proxy *Proxy) Encrypt(
 //
 // Derivation: ephSk = SHA-512/256(clientNonce || proxySecretKey)
 // This is deterministic per nonce, so retries produce the same key pair.
+//
+// Security note: the KDF input is built in a fixed-size stack-allocated array
+// rather than via append(), preventing buffer-aliasing into a caller-owned
+// backing array and ensuring the concatenated secret material is explicitly
+// zeroed before the function returns.
 func (proxy *Proxy) generateEphemeralKeys(
 	serverInfo *ServerInfo,
 	clientNonce []byte,
 ) (*[PublicKeySize]byte, *[32]byte, error) {
-	// sha512.Sum512_256 is a one-shot function that avoids heap-allocating
-	// a hash.Hash object.
-	h := sha512.Sum512_256(append(clientNonce, proxy.proxySecretKey[:]...))
+	// Build the KDF input in a fixed-size stack buffer.
+	// Using append(clientNonce, secretKey...) would risk writing secretKey bytes
+	// into the caller's backing array if cap(clientNonce) > len(clientNonce),
+	// and would leave an unzeroed heap allocation containing the secret key.
+	var kdfInput [HalfNonceSize + 32]byte
+	copy(kdfInput[:HalfNonceSize], clientNonce)
+	copy(kdfInput[HalfNonceSize:], proxy.proxySecretKey[:])
+	h := sha512.Sum512_256(kdfInput[:])
+	// Zeroize the buffer containing nonce || secretKey before any early return.
+	clear(kdfInput[:])
+	runtime.KeepAlive(&kdfInput)
+
 	ephSk := h // [32]byte on the stack
 
 	var ephPk [PublicKeySize]byte
