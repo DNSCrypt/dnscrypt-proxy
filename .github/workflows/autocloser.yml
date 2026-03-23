@@ -1,5 +1,8 @@
 name: Autocloser
 on: [issues]
+permissions:
+  contents: read
+  issues: write
 jobs:
   autoclose:
     runs-on: ubuntu-latest
