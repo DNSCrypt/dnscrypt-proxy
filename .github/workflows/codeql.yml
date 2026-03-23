@@ -53,7 +53,8 @@ jobs:
         if: matrix.language == 'go'
         shell: bash
         run: |
-          go mod vendor                        # Re-sync vendor with go.mod
+          go mod tidy                    # Fix go.sum missing checksums
+          go mod vendor                  # Re-sync vendor dir
           go build ./dnscrypt-proxy/...
 
       - name: Perform CodeQL Analysis
