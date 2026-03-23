@@ -312,8 +312,9 @@ def blocklists_from_config_file(
 
             # Time restricted names should be allowed, or they could be always blocked
             allowed_names |= time_restricted_names
-        except Exception as e:
-            log_err.write(f"Error loading time-restricted list: {str(e)}\n")
+        except Exception:
+            # Log a generic error message without including potentially sensitive exception details.
+            log_err.write("Error loading time-restricted list\n")
 
     # Allowed list
     if allowlist and not re.match(r"^[a-z0-9]+:", allowlist):
