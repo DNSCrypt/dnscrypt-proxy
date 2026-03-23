@@ -101,10 +101,11 @@ def print_restricted_name(output_fd, name, time_restrictions):
     # hyphen and asterisk), which matches the parsing regex constraints.
     sanitized_name = re.sub(r"[^a-z0-9.*-]", "", name)
     if sanitized_name in time_restrictions:
-        # Do not print the raw time restriction label to avoid exposing potentially sensitive data.
-        # Instead, indicate generically that this entry is time-restricted.
+        # Do not print the raw time restriction label or the specific entry name
+        # to avoid exposing potentially sensitive data. Instead, emit a generic
+        # marker indicating that a time-restricted entry exists.
         print(
-            "{}\t{}".format(sanitized_name, "@time-restricted"),
+            "# time-restricted entry present (details omitted)",
             file=output_fd,
             end="\n",
         )
