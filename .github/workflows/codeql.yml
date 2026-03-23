@@ -33,9 +33,18 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v5       # v6 does not exist
         with:
-          submodules: recursive        # Clones dnscrypt-proxy submodule so go.mod exists
+          submodules: recursive         # Fetches dnscrypt-proxy submodule
+
+      - name: Debug filesystem         # Remove this step once working
+        run: |
+          echo "--- Repo root ---"
+          ls -la
+          echo "--- dnscrypt-proxy dir ---"
+          ls -la dnscrypt-proxy/ || echo "DIRECTORY MISSING"
+          echo "--- go.mod check ---"
+          cat dnscrypt-proxy/go.mod || echo "go.mod MISSING"
 
       - name: Setup Go
         if: matrix.language == 'go'
