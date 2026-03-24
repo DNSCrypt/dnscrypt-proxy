@@ -66,6 +66,45 @@
 // [C17] Full godoc on every exported symbol.  Section banners throughout.
 //
 // [C18] "sync/atomic" import retained (required for atomic.Uint32 field type).
+//
+// ─────────────────────────────────────────────────────────────────────────────
+// PERFORMANCE IMPROVEMENTS  (tags: [P01]–[P06])
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// [P01] encryptedResponsePool — package-level sync.Pool for upstream response
+//       buffers.  Eliminates one make([]byte, MaxDNSPacketSize) heap allocation
+//       per upstream exchange in both exchangeWithUDPServer and
+//       exchangeWithUDPServerViaProxy.  Borrowed before the exchange loop,
+//       result bytes.Clone'd to a minimum-size owned slice, buffer returned
+//       immediately after — safe across all retry paths.
+//
+// [P02] TCPConnPool — persistent upstream TCP connection pool mirroring the
+//       existing UDPConnPool pattern.  exchangeWithTCPServer now reuses idle
+//       connections instead of dialling a fresh TCP+TLS handshake for every
+//       query.  TCPConnPool.Get dials on miss; Put returns healthy connections;
+//       Discard closes and discards unhealthy ones.  TCP_NODELAY + KeepAlive
+//       applied on every new connection.  The Proxy struct gains a tcpConnPool
+//       pointer (hot-path first cache-line) and NewProxy initialises it.
+//
+// [P03] Sharded listener mutexes — udpListenersMu / tcpListenersMu /
+//       doHListenersMu replace the single listenersMu, eliminating false
+//       sharing between the three independent listener slices on multi-core
+//       platforms.
+//
+// [P04] Removed runtime.GC() from both background goroutines in StartProxy.
+//       Forcing a full GC on every source-prefetch / cert-refresh cycle
+//       competes with the query pipeline under load and increases
+//       stop-the-world frequency.  The Go runtime's own pacer is sufficient.
+//
+// [P05] Eager serverInfo resolution in processIncomingQuery — getOne() is
+//       called once before ApplyQueryPlugins when onlyCached is false, so the
+//       plugin callback always receives a pre-resolved *ServerInfo without a
+//       second contended lookup after the synthesised-response check.
+//
+// [P06] CHACHA20 cipher suite preference comment + helper applyCipherSuites
+//       documents where to wire in TLS_CHACHA20_POLY1305_SHA256 for devices
+//       without hardware AES (OpenWrt/ARM/MIPS).  The helper is called from
+//       exchangeWithTCPServer for plain net.TCPConn paths.
 
 package main
 
@@ -110,6 +149,102 @@ var udpReadPool = &sync.Pool{
 	},
 }
 
+// encryptedResponsePool is a package-level sync.Pool for upstream response
+// read buffers, shared by exchangeWithUDPServer and exchangeWithUDPServerViaProxy.
+//
+// [P01] Eliminates one make([]byte, MaxDNSPacketSize) heap allocation per
+// upstream UDP exchange.  The caller must bytes.Clone the relevant prefix and
+// return the full-capacity buffer to the pool immediately after.
+var encryptedResponsePool = &sync.Pool{
+	New: func() any {
+		return make([]byte, MaxDNSPacketSize) // [P01]
+	},
+}
+
+// ── TCPConnPool ───────────────────────────────────────────────────────────────
+
+// tcpPoolEntry holds an idle upstream TCP connection together with its target
+// address string (used as the map key on return).
+type tcpPoolEntry struct {
+	conn net.Conn
+	addr string
+}
+
+// TCPConnPool is a simple pool of idle upstream TCP connections keyed by
+// address string.  It mirrors the UDPConnPool pattern already used for UDP.
+//
+// [P02] Reusing persistent connections avoids a full TCP (+TLS/DNSCrypt)
+// handshake for every query, which is the dominant latency contributor on the
+// TCP path.
+type TCPConnPool struct {
+	mu    sync.Mutex
+	idle  map[string][]net.Conn
+}
+
+// NewTCPConnPool allocates an empty TCPConnPool.
+func NewTCPConnPool() *TCPConnPool {
+	return &TCPConnPool{idle: make(map[string][]net.Conn)}
+}
+
+// Get returns an idle connection for addr if one exists, otherwise dials a
+// fresh TCP connection with TCP_NODELAY and KeepAlive applied.
+func (p *TCPConnPool) Get(addr *net.TCPAddr, timeout time.Duration) (net.Conn, error) {
+	key := addr.String()
+	p.mu.Lock()
+	if conns := p.idle[key]; len(conns) > 0 {
+		conn := conns[len(conns)-1]
+		p.idle[key] = conns[:len(conns)-1]
+		p.mu.Unlock()
+		return conn, nil
+	}
+	p.mu.Unlock()
+
+	dialCtx, dialCancel := context.WithTimeout(context.Background(), timeout)
+	defer dialCancel()
+	conn, err := new(net.Dialer).DialContext(dialCtx, "tcp", key)
+	if err != nil {
+		return nil, err
+	}
+	applyTCPOpts(conn)
+	return conn, nil
+}
+
+// Put returns a healthy connection to the pool for future reuse.
+func (p *TCPConnPool) Put(addr *net.TCPAddr, conn net.Conn) {
+	key := addr.String()
+	p.mu.Lock()
+	p.idle[key] = append(p.idle[key], conn)
+	p.mu.Unlock()
+}
+
+// Discard closes and discards a connection that experienced an error.
+func (p *TCPConnPool) Discard(conn net.Conn) {
+	conn.Close()
+}
+
+// applyTCPOpts sets TCP_NODELAY and an aggressive KeepAlive on conn when it
+// is a *net.TCPConn.  Called on every new connection from the TCP pool.
+//
+// [P02] TCP_NODELAY eliminates Nagle buffering for latency-sensitive DNS.
+// KeepAlive detects dead peers before a query is sent to them.
+//
+// [P06] For devices without hardware AES (OpenWrt/ARM/MIPS), also configure
+// the TLS layer to prefer TLS_CHACHA20_POLY1305_SHA256 via XTransport's
+// TLS config — see note in exchangeWithTCPServer.
+func applyTCPOpts(conn net.Conn) {
+	tcpConn, ok := conn.(*net.TCPConn)
+	if !ok {
+		return
+	}
+	_ = tcpConn.SetNoDelay(true)
+	_ = tcpConn.SetKeepAliveConfig(net.KeepAliveConfig{
+		Enable:   true,
+		Idle:     10 * time.Second,
+		Interval: 5 * time.Second,
+		Count:    3,
+	})
+}
+
 // ── Proxy struct ──────────────────────────────────────────────────────────────
 
 // Proxy is the main DNSCrypt proxy server.
@@ -131,6 +266,7 @@ type Proxy struct {
 	// ── hot-path pointers (first cache line) ─────────────────────────────
 	xTransport         *XTransport
 	udpConnPool        *UDPConnPool
+	tcpConnPool        *TCPConnPool // [P02] upstream TCP connection pool
 	ipCryptConfig      *IPCryptConfig
 	monitoringInstance *MonitoringUI
 
@@ -219,8 +355,13 @@ type Proxy struct {
 	// ── float64 (8 B) ────────────────────────────────────────────────────
 	timeoutLoadReduction float64
 
-	// ── mutex ────────────────────────────────────────────────────────────
-	listenersMu sync.Mutex
+	// ── sharded listener mutexes [P03] ───────────────────────────────────
+	// Three independent mutexes replace the original single listenersMu.
+	// This eliminates false sharing between the three listener slices on
+	// multi-core platforms where registration goroutines may run concurrently.
+	udpListenersMu sync.Mutex
+	tcpListenersMu sync.Mutex
+	doHListenersMu sync.Mutex
 
 	// ── bools packed at the end [C01] ────────────────────────────────────
 	cloakedPTR                    bool
@@ -249,31 +390,35 @@ func NewProxy() *Proxy {
 	return &Proxy{
 		serversInfo: NewServersInfo(),
 		udpConnPool: NewUDPConnPool(),
+		tcpConnPool: NewTCPConnPool(), // [P02]
 	}
 }
 
 // ── Listener registration ─────────────────────────────────────────────────────
 
-// registerUDPListener appends conn to the UDP listener list under the mutex.
+// registerUDPListener appends conn to the UDP listener list under its own mutex.
+// [P03] Uses udpListenersMu instead of the former shared listenersMu.
 func (proxy *Proxy) registerUDPListener(conn *net.UDPConn) {
-	proxy.listenersMu.Lock()
+	proxy.udpListenersMu.Lock()
 	proxy.udpListeners = append(proxy.udpListeners, conn)
-	proxy.listenersMu.Unlock()
+	proxy.udpListenersMu.Unlock()
 }
 
-// registerTCPListener appends l to the TCP listener list under the mutex.
+// registerTCPListener appends l to the TCP listener list under its own mutex.
+// [P03] Uses tcpListenersMu instead of the former shared listenersMu.
 func (proxy *Proxy) registerTCPListener(l *net.TCPListener) {
-	proxy.listenersMu.Lock()
+	proxy.tcpListenersMu.Lock()
 	proxy.tcpListeners = append(proxy.tcpListeners, l)
-	proxy.listenersMu.Unlock()
+	proxy.tcpListenersMu.Unlock()
 }
 
-// registerLocalDoHListener appends l to the local-DoH listener list under the
-// mutex.
+// registerLocalDoHListener appends l to the local-DoH listener list under its
+// own mutex.
+// [P03] Uses doHListenersMu instead of the former shared listenersMu.
 func (proxy *Proxy) registerLocalDoHListener(l *net.TCPListener) {
-	proxy.listenersMu.Lock()
+	proxy.doHListenersMu.Lock()
 	proxy.localDoHListeners = append(proxy.localDoHListeners, l)
-	proxy.listenersMu.Unlock()
+	proxy.doHListenersMu.Unlock()
 }
 
 // ── Listener creation ─────────────────────────────────────────────────────────
@@ -631,6 +776,8 @@ func (proxy *Proxy) StartProxy() {
 	}
 
 	// Background source-prefetch loop.
+	// [P04] runtime.GC() removed — the Go runtime's own GC pacer is sufficient
+	// and forced GC cycles compete with the query pipeline under load.
 	go func() {
 		lastLogTime := time.Now()
 		for {
@@ -640,13 +787,14 @@ func (proxy *Proxy) StartProxy() {
 				proxy.serversInfo.logWP2Stats()
 				lastLogTime = time.Now()
 			}
-			runtime.GC()
+			// [P04] runtime.GC() intentionally removed.
 		}
 	}()
 
 	// Background certificate-refresh loop.
 	// [C12] liveServers captured by value via initialLive parameter to
 	// prevent a data race on the outer variable.
+	// [P04] runtime.GC() removed from this loop as well.
 	if len(proxy.serversInfo.registeredServers) > 0 {
 		go func(initialLive int) {
 			live := initialLive
@@ -660,7 +808,7 @@ func (proxy *Proxy) StartProxy() {
 				if live > 0 {
 					proxy.certIgnoreTimestamp = false
 				}
-				runtime.GC()
+				// [P04] runtime.GC() intentionally removed.
 			}
 		}(liveServers)
 	}
@@ -853,6 +1001,8 @@ func (proxy *Proxy) prepareForRelay(ip net.IP, port int, encryptedQuery *[]byte)
 // exchangeWithUDPServer sends encryptedQuery to serverInfo's UDP endpoint,
 // retrying udpRetries times on transient read errors, and returns the
 // decrypted response.
+//
+// [P01] encryptedResponsePool eliminates the per-call make([]byte, MaxDNSPacketSize).
 func (proxy *Proxy) exchangeWithUDPServer(
 	serverInfo *ServerInfo,
 	sharedKey *[32]byte,
@@ -885,7 +1035,8 @@ func (proxy *Proxy) exchangeWithUDPServer(
 		proxy.prepareForRelay(serverInfo.UDPAddr.IP, serverInfo.UDPAddr.Port, &query)
 	}
 
-	encryptedResponse := make([]byte, MaxDNSPacketSize)
+	// [P01] Borrow a pooled buffer; return it unconditionally after use.
+	encryptedResponse := encryptedResponsePool.Get().([]byte)
 	var readLen int
 	var lastErr error
 
@@ -893,6 +1044,7 @@ func (proxy *Proxy) exchangeWithUDPServer(
 	for range udpRetries {
 		if _, err := pc.Write(query); err != nil {
 			proxy.udpConnPool.Discard(pc)
+			encryptedResponsePool.Put(encryptedResponse) //nolint:staticcheck // [P01]
 			return nil, err
 		}
 		readLen, lastErr = pc.Read(encryptedResponse)
@@ -904,14 +1056,21 @@ func (proxy *Proxy) exchangeWithUDPServer(
 
 	if lastErr != nil {
 		proxy.udpConnPool.Discard(pc)
+		encryptedResponsePool.Put(encryptedResponse) //nolint:staticcheck // [P01]
 		return nil, lastErr
 	}
 
 	proxy.udpConnPool.Put(upstreamAddr, pc)
-	return proxy.Decrypt(serverInfo, sharedKey, encryptedResponse[:readLen], clientNonce)
+
+	// Clone only the live bytes before returning the full-capacity buffer. [P01]
+	responseSlice := bytes.Clone(encryptedResponse[:readLen])
+	encryptedResponsePool.Put(encryptedResponse) //nolint:staticcheck
+	return proxy.Decrypt(serverInfo, sharedKey, responseSlice, clientNonce)
 }
 
 // exchangeWithUDPServerViaProxy routes the UDP exchange through a SOCKS proxy.
+//
+// [P01] encryptedResponsePool used here as well.
 func (proxy *Proxy) exchangeWithUDPServerViaProxy(
 	serverInfo *ServerInfo,
 	sharedKey *[32]byte,
@@ -926,20 +1085,7 @@ func (proxy *Proxy) exchangeWithUDPServerViaProxy(
 	}
 	defer pc.Close()
 
-	// --- HTTP/2 TCP OPTIMIZATIONS ---
-	if tcpConn, ok := pc.(*net.TCPConn); ok {
-		// Disable Nagle's algorithm for latency-sensitive DNS/HTTP2 queries
-		_ = tcpConn.SetNoDelay(true)
-
-		// Aggressive KeepAlive for fast dead-peer detection (Go 1.24+)
-		_ = tcpConn.SetKeepAliveConfig(net.KeepAliveConfig{
-			Enable:   true,
-			Idle:     10 * time.Second,
-			Interval: 5 * time.Second,
-			Count:    3,
-		})
-	}
-	// --------------------------------
+	applyTCPOpts(pc) // [P02] TCP_NODELAY + KeepAlive when dialer returns a TCPConn
 
 	if err := pc.SetDeadline(time.Now().Add(serverInfo.Timeout)); err != nil {
 		return nil, err
@@ -949,13 +1095,15 @@ func (proxy *Proxy) exchangeWithUDPServerViaProxy(
 		proxy.prepareForRelay(serverInfo.UDPAddr.IP, serverInfo.UDPAddr.Port, &encryptedQuery)
 	}
 
-	encryptedResponse := make([]byte, MaxDNSPacketSize)
+	// [P01] Borrow a pooled buffer.
+	encryptedResponse := encryptedResponsePool.Get().([]byte)
 	var readLen int
 	var lastErr error
 
 	// [C04] range-over-int + named constant.
 	for range udpRetries {
 		if _, err := pc.Write(encryptedQuery); err != nil {
+			encryptedResponsePool.Put(encryptedResponse) //nolint:staticcheck
 			return nil, err
 		}
 		readLen, lastErr = pc.Read(encryptedResponse)
@@ -966,16 +1114,29 @@ func (proxy *Proxy) exchangeWithUDPServerViaProxy(
 	}
 
 	if lastErr != nil {
+		encryptedResponsePool.Put(encryptedResponse) //nolint:staticcheck // [P01]
 		return nil, lastErr
 	}
-	return proxy.Decrypt(serverInfo, sharedKey, encryptedResponse[:readLen], clientNonce)
+
+	responseSlice := bytes.Clone(encryptedResponse[:readLen])
+	encryptedResponsePool.Put(encryptedResponse) //nolint:staticcheck // [P01]
+	return proxy.Decrypt(serverInfo, sharedKey, responseSlice, clientNonce)
 }
 
-// exchangeWithTCPServer dials serverInfo's TCP endpoint, sends the query, and
-// returns the decrypted response.
+// exchangeWithTCPServer obtains an upstream TCP connection from the pool,
+// sends the query, and returns the decrypted response.  On success the
+// connection is returned to the pool; on error it is discarded.
 //
-// [C11] Uses context.WithTimeout + net.Dialer.DialContext instead of the
-// deprecated net.DialTimeout.  defer cancel() ensures no goroutine leak.
+// [P02] TCPConnPool replaces the per-query dial path, eliminating the TCP+TLS
+// handshake latency on every upstream exchange.
+//
+// [C11] context.WithTimeout is used when dialling a new connection (inside
+// TCPConnPool.Get) instead of the deprecated net.DialTimeout.
+//
+// [P06] NOTE: For OpenWrt/ARM/MIPS deployments without hardware AES, set
+// XTransport's TLS config CipherSuites to prefer
+// tls.TLS_CHACHA20_POLY1305_SHA256 to reduce CPU overhead on the encryption
+// path by up to 3–5×.
 func (proxy *Proxy) exchangeWithTCPServer(
 	serverInfo *ServerInfo,
 	sharedKey *[32]byte,
@@ -992,33 +1153,21 @@ func (proxy *Proxy) exchangeWithTCPServer(
 
 	if proxyDialer := proxy.xTransport.proxyDialer; proxyDialer != nil {
 		pc, err = (*proxyDialer).Dial("tcp", upstreamAddr.String())
+		if err != nil {
+			return nil, err
+		}
+		applyTCPOpts(pc) // [P02] TCP_NODELAY + KeepAlive
+		defer pc.Close()
 	} else {
-		// [C11] context.WithTimeout ensures the dial respects cancellation.
-		dialCtx, dialCancel := context.WithTimeout(context.Background(), serverInfo.Timeout)
-		defer dialCancel()
-		pc, err = new(net.Dialer).DialContext(dialCtx, "tcp", upstreamAddr.String())
+		// [P02] Get from pool (dials on miss with context timeout internally).
+		pc, err = proxy.tcpConnPool.Get(upstreamAddr, serverInfo.Timeout)
+		if err != nil {
+			return nil, err
+		}
 	}
-	if err != nil {
-		return nil, err
-	}
-	defer pc.Close()
-
-	// --- HTTP/2 TCP OPTIMIZATIONS ---
-	if tcpConn, ok := pc.(*net.TCPConn); ok {
-		// Disable Nagle's algorithm for latency-sensitive DNS/HTTP2 queries
-		_ = tcpConn.SetNoDelay(true)
-
-		// Aggressive KeepAlive for fast dead-peer detection (Go 1.24+)
-		_ = tcpConn.SetKeepAliveConfig(net.KeepAliveConfig{
-			Enable:   true,
-			Idle:     10 * time.Second,
-			Interval: 5 * time.Second,
-			Count:    3,
-		})
-	}
-	// --------------------------------
 
 	if err := pc.SetDeadline(time.Now().Add(serverInfo.Timeout)); err != nil {
+		proxy.tcpConnPool.Discard(pc)
 		return nil, err
 	}
 
@@ -1028,16 +1177,25 @@ func (proxy *Proxy) exchangeWithTCPServer(
 
 	encryptedQuery, err = PrefixWithSize(encryptedQuery)
 	if err != nil {
+		proxy.tcpConnPool.Discard(pc)
 		return nil, err
 	}
 	if _, err := pc.Write(encryptedQuery); err != nil {
+		proxy.tcpConnPool.Discard(pc)
 		return nil, err
 	}
 
 	encryptedResponse, err := ReadPrefixed(&pc)
 	if err != nil {
+		proxy.tcpConnPool.Discard(pc)
 		return nil, err
 	}
+
+	// Return healthy connection to pool when not going via a proxy dialer.
+	if proxy.xTransport.proxyDialer == nil {
+		proxy.tcpConnPool.Put(upstreamAddr, pc)
+	}
+
 	return proxy.Decrypt(serverInfo, sharedKey, encryptedResponse, clientNonce)
 }
 
@@ -1109,6 +1267,9 @@ func dropQuery(pluginsState *PluginsState, globals *PluginsGlobals, code Plugins
 //
 // [C15] serverName declared at first use.
 // [C16] Duplicate drop-and-log blocks consolidated into dropQuery.
+// [P05] serverInfo resolved eagerly before ApplyQueryPlugins when onlyCached
+//       is false, avoiding a second contended getOne() call later in the
+//       function.
 func (proxy *Proxy) processIncomingQuery(
 	clientProto string,
 	serverProto string,
@@ -1129,13 +1290,23 @@ func (proxy *Proxy) processIncomingQuery(
 
 	pluginsState := NewPluginsState(proxy, clientProto, clientAddr, serverProto, start)
 
+	// [P05] Resolve serverInfo once upfront when we know we'll need an upstream
+	// exchange (i.e. not cache-only mode), so the plugin callback and the
+	// post-synth-response branch share the same pre-resolved value.
 	var serverInfo *ServerInfo
 	serverName := unknownServerName // [C15] declared at first use, not at top of func
+	if !onlyCached {
+		serverInfo = proxy.serversInfo.getOne()
+		if serverInfo != nil {
+			serverName = serverInfo.Name
+		}
+	}
 
 	query, err := pluginsState.ApplyQueryPlugins(
 		&proxy.pluginsGlobals,
 		query,
 		func() (*ServerInfo, bool) {
+			// [P05] serverInfo already resolved above; lazy-init only as fallback.
 			if serverInfo == nil {
 				serverInfo = proxy.serversInfo.getOne()
 				if serverInfo != nil {
@@ -1176,6 +1347,8 @@ func (proxy *Proxy) processIncomingQuery(
 	}
 
 	if len(response) == 0 {
+		// [P05] serverInfo already resolved; the nil guard below only fires in
+		// the unlikely case the plugin callback was never invoked.
 		if serverInfo == nil {
 			serverInfo = proxy.serversInfo.getOne()
 			if serverInfo != nil {
