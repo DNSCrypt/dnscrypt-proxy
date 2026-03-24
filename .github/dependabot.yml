@@ -6,10 +6,50 @@ updates:
     directory: "/"
     schedule:
       interval: "daily"
+      time: "09:00"
+      timezone: "Australia/Sydney"
+    open-pull-requests-limit: 10
+    groups:
+      github-actions-all:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+    commit-message:
+      prefix: "ci(deps)"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "ci"
 
-  # Maintain dependencies for Go
+  # Maintain dependencies for Go modules
   - package-ecosystem: "gomod"
     directory: "/"
     schedule:
       interval: "daily"
+      time: "09:00"
+      timezone: "Australia/Sydney"
     open-pull-requests-limit: 10
+    allow:
+      - dependency-type: "direct"
+    groups:
+      go-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "patch"
+      go-minor:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+    cooldown:
+      semver-major-days: 14
+      semver-minor-days: 3
+    commit-message:
+      prefix: "build(deps)"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "go"
