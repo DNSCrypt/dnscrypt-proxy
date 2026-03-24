@@ -1,6 +1,8 @@
 name: "CodeQL scan"
+
 permissions:
   contents: read
+  security-events: write  # required for CodeQL to upload results
 
 on:
   push:
@@ -15,20 +17,23 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v6
-      with:
-        fetch-depth: 2
+      uses: actions/checkout@v4  # v6 does not exist; latest stable is v4
 
     - name: Setup Go
-      uses: actions/setup-go@v6
+      uses: actions/setup-go@v5  # v6 does not exist; latest stable is v5
       with:
         go-version-file: 'go.mod'
+        cache: false  # vendor dir makes module cache irrelevant
 
     - name: Initialize CodeQL
       uses: github/codeql-action/init@v4
+      with:
+        languages: go  # explicitly declare; autobuild guessed this before
 
-    - name: Autobuild
-      uses: github/codeql-action/autobuild@v4
+    - name: Build
+      run: go build -mod=vendor ./...  # replaces autobuild; vendor dir is used directly
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v4
+      with:
+        category: "/language:go"  # ties init and analyze together correctly
