@@ -34,19 +34,16 @@ updates:
     allow:
       - dependency-type: "direct"
     groups:
-      go-patch:
-        patterns:
-          - "*"
-        update-types:
-          - "patch"
-      go-minor:
+      go-minor-patch:
         patterns:
           - "*"
         update-types:
           - "minor"
+          - "patch"
     cooldown:
       semver-major-days: 14
       semver-minor-days: 3
+      semver-patch-days: 1
     commit-message:
       prefix: "build(deps)"
       include: "scope"
