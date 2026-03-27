@@ -1,6 +1,7 @@
 name: "CodeQL scan"
 
 permissions:
+  actions: read          # Required for CodeQL to read workflow run details
   contents: read
   security-events: write
 
@@ -23,12 +24,14 @@ jobs:
       uses: actions/setup-go@v6
       with:
         go-version-file: 'go.mod'
-        cache: false
+        cache: true      # Enables GOCACHE for faster compilation of vendored projects
 
     - name: Initialize CodeQL
       uses: github/codeql-action/init@v4
       with:
         languages: go
+        build-mode: manual # Required in v4 when utilizing a custom build step below
+        queries: security-extended,security-and-quality
 
     - name: Build
       run: go build -mod=vendor ./...
