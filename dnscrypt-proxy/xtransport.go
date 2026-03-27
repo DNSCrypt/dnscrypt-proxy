@@ -1127,7 +1127,11 @@ func (x *XTransport) buildDialContext() func(context.Context, string, string) (n
             if x.proxyDialer == nil {
                 conn, err = d.DialContext(ctx, dialNet, target)
             } else {
-                conn, err = (*x.proxyDialer).Dial(dialNet, target)
+                if pdCtx, ok := (*x.proxyDialer).(netproxy.ContextDialer); ok {
+                	conn, err = pdCtx.DialContext(ctx, dialNet, target)
+                } else {
+                	conn, err = (*x.proxyDialer).Dial(dialNet, target)
+                }
             }
             if err == nil {
                 setTCPOptions(conn)
@@ -1579,7 +1583,7 @@ func (x *XTransport) resolve(host string, returnIPv4, returnIPv6 bool) ([]net.IP
         }
     }
 
-    if x.ignoreSystemDNS {
+    if !x.ignoreSystemDNS {
         dlog.Noticef("Bootstrap resolvers failed — last-resort system resolver for [%s]", host)
         ips, ttl, err = x.resolveUsingSystem(host, returnIPv4, returnIPv6)
     }
