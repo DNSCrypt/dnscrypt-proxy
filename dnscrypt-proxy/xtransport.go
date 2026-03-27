@@ -1,10 +1,62 @@
 //go:build linux
-// +build linux
 
 // xtransport.go — HTTP/HTTPS transport layer for dnscrypt-proxy.
 //
 // Complete rewrite for Go 1.26+, focusing on performance, efficiency,
 // and full compatibility with dnscrypt-proxy 2. Drop-in replacement.
+//
+// ══════════════════════════════════════════════════════════════════════════════
+// ✅ ELITE IMPROVEMENTS - March 27, 2026
+// ══════════════════════════════════════════════════════════════════════════════
+// ELITE 1: Removed obsolete `// +build linux` legacy directive (line 2)
+//          In Go 1.17+, only //go:build is authoritative. The old //+build
+//          form is ignored by the toolchain in Go 1.26 and is pure noise
+//          that tools like gopls still flag. Removed to keep the file clean.
+//
+// ELITE 2: formatDialTarget — eliminated concurrent-Store race (was: Load→Store)
+//          On a cold miss two goroutines could both fall through Load() and both
+//          call Store(), creating a harmless but redundant double-write.
+//          Changed to Load → compute → LoadOrStore so only one value ever wins.
+//          The racing goroutine's computed string is discarded; no lock needed.
+//
+// ELITE 3: resolveUsingServers — fixed dead-code cancel branch (CRITICAL BUG)
+//          The OPT 9 "cancellable backoff" select had context.Background().Done()
+//          as one of its cases. context.Background().Done() returns a nil channel.
+//          A receive on a nil channel blocks forever — that case NEVER fires.
+//          The comment "Cancellable backoff — responds to context cancellation"
+//          was factually incorrect. Removed the dead branch entirely. Per-query
+//          cancellation already works correctly inside resolveRRType via its own
+//          context.WithTimeoutCause. The backoff is now a clean timer drain.
+//
+// ELITE 4: resolveAndUpdateCache — eliminated stale-IP net.IP round-trip
+//          Stale-cache path converted []netip.Addr → []net.IP (via AsSlice())
+//          only to pass to saveCachedIPs which converted straight back to
+//          []netip.Addr. Two heap allocations (staleIPs slice + each AsSlice
+//          byte backing) wasted per grace-period refresh. Now calls
+//          saveCachedAddrs directly with the already-typed []netip.Addr and
+//          returns immediately — zero redundant allocations.
+//
+// ELITE 5: Fetch — eliminated context.WithCancel allocation on hot path
+//          When the caller already provides a deadline, the prior code called
+//          context.WithCancel(ctx) purely to obtain a cancel func for defer.
+//          This allocated a child context and a CancelFunc needlessly.
+//          Now uses a stack-allocated noop func() {} as the cancel when the
+//          caller has a deadline. Saves one context allocation per request on
+//          the hot path (every DoH query from callers with an existing deadline).
+//
+// ELITE 6: parseAndCacheAltSvc — removed always-true `p <= 65535` guard
+//          strconv.ParseUint(v, 10, 16) with bitSize=16 already constrains the
+//          result to [0, 65535] by specification. The follow-on `p <= 65535`
+//          condition was provably always true — dead predicate executed on every
+//          Alt-Svc field in every response. Removed for cleaner, faster parsing.
+//
+// ELITE 7: parseAndCacheAltSvc — added TOCTOU re-check under write lock
+//          Between the initial RLock read and the final Lock+Store, a concurrent
+//          goroutine could write a fresh negative-cache entry. Without the
+//          re-check the second goroutine would silently overwrite it. Added a
+//          double-checked read under the write lock before the Store so concurrent
+//          writes are detected and the spurious overwrite is skipped.
+// ══════════════════════════════════════════════════════════════════════════════
 //
 // ══════════════════════════════════════════════════════════════════════════════
 // ✅ CRITICAL BUG FIXES APPLIED - March 12, 2026 (all fixes correctly implemented)
@@ -369,6 +421,10 @@ func formatDialTarget(addr netip.Addr, port uint16) string {
     if v, ok := dialTargetCache.Load(k); ok {
         return v.(string)
     }
+    // Compute before LoadOrStore — no lock held during formatting.
+    // Two goroutines may race on a cold miss; LoadOrStore ensures only one
+    // value wins (the loser's allocation is simply discarded). This is
+    // always correct and cheaper than a mutex around Store.
     portStr := strconv.FormatUint(uint64(port), 10)
     var s string
     if addr.Is4() {
@@ -376,8 +432,8 @@ func formatDialTarget(addr netip.Addr, port uint16) string {
     } else {
         s = "[" + addr.String() + "]:" + portStr
     }
-    dialTargetCache.Store(k, s)
-    return s
+    v, _ := dialTargetCache.LoadOrStore(k, s)
+    return v.(string)
 }
 
 // ── Cache types (OPT 1: netip.Addr replaces net.IP) ──────────────────────────
@@ -1461,14 +1517,16 @@ func (x *XTransport) resolveUsingServers(
             dlog.Debugf("Resolver attempt %d/%d for [%s] via [%s] (%s): %v",
                 attempt+1, resolverRetryCount, host, resolver, proto, err)
             if attempt < resolverRetryCount-1 {
-                // ── OPT 9: Cancellable backoff — responds to context cancellation ─
+                // ── ELITE FIX: corrected timer-based backoff ──────────────────
+                // The previous select had context.Background().Done() as a case.
+                // context.Background().Done() returns a nil channel — a receive
+                // on a nil channel BLOCKS FOREVER. That case was dead code that
+                // could never fire, making the comment "cancellable backoff" a
+                // documentation lie. Removed the unreachable branch entirely.
+                // Per-query cancellation already happens in resolveRRType via
+                // context.WithTimeoutCause. Always drain the timer to avoid leaks.
                 timer := time.NewTimer(delay)
-                select {
-                case <-timer.C:
-                case <-context.Background().Done():
-                    timer.Stop()
-                    return nil, 0, context.Background().Err()
-                }
+                <-timer.C
                 delay = min(delay*2, resolverRetryMaxBackoff)
             }
         }
@@ -1576,14 +1634,14 @@ func (x *XTransport) resolveAndUpdateCache(host string) error {
     selectedIPs := ips
     if (resolveErr != nil || len(selectedIPs) == 0) && len(cachedAddrs) > 0 {
         dlog.Noticef("Using stale cached address for [%s] (grace period)", host)
-        // Convert cached addrs back to net.IP for saveCachedIPs
-        staleIPs := make([]net.IP, 0, len(cachedAddrs))
-        for _, a := range cachedAddrs {
-            staleIPs = append(staleIPs, a.AsSlice())
-        }
-        selectedIPs = staleIPs
-        ttl = ExpiredCachedIPGraceTTL
-        resolveErr = nil
+        // ── ELITE FIX: eliminated net.IP round-trip alloc ─────────────────────
+        // Prior code: cachedAddrs ([]netip.Addr) → []net.IP via AsSlice()
+        //             → saveCachedIPs converts back to []netip.Addr.
+        // Two heap allocations (staleIPs slice + each AsSlice byte backing) and
+        // a full netip.AddrFromSlice loop wasted for no semantic reason.
+        // We already have []netip.Addr; call saveCachedAddrs directly.
+        x.saveCachedAddrs(host, cachedAddrs, ExpiredCachedIPGraceTTL)
+        return nil
     }
 
     if resolveErr != nil {
@@ -1700,13 +1758,15 @@ func (x *XTransport) Fetch(
         bodyLen = len(*body)
     }
 
-    // ── OPT 5: Use caller context; only create WithTimeout if ctx has no deadline ─
+    // ── OPT 5 + ELITE FIX: Use caller context; only create WithTimeout if needed ─
+    // The prior code called context.WithCancel(ctx) when the caller already had a
+    // deadline — allocating a child context and a CancelFunc just to defer cancel().
+    // When the caller already provides a deadline, use ctx directly with a noop
+    // cancel. This saves one context allocation per request on the hot path.
     fetchCtx := ctx
-    var cancel context.CancelFunc
+    cancel := func() {} // noop by default — no allocation
     if _, hasDeadline := ctx.Deadline(); !hasDeadline {
         fetchCtx, cancel = context.WithTimeout(ctx, timeout)
-    } else {
-        fetchCtx, cancel = context.WithCancel(ctx)
     }
     defer cancel()
 
@@ -1846,7 +1906,11 @@ outer:
             j++
             if after, ok := strings.CutPrefix(strings.TrimSpace(field), `h3="`); ok {
                 v := strings.TrimSuffix(after, `"`)
-                if p, pErr := strconv.ParseUint(v, 10, 16); pErr == nil && p <= 65535 {
+                // ── ELITE FIX: removed redundant p <= 65535 guard ─────────────
+                // ParseUint(v, 10, 16) already restricts the result to [0, 65535]
+                // by construction (bitSize=16). The extra check was always true
+                // and added a branch on every loop iteration for nothing.
+                if p, pErr := strconv.ParseUint(v, 10, 16); pErr == nil {
                     altPort = uint16(p)
                     dlog.Debugf("Alt-Svc: HTTP/3 advertised for [%s] on port %d", host, altPort)
                     break outer
@@ -1856,6 +1920,15 @@ outer:
     }
 
     x.altSupport.Lock()
+    // ── ELITE FIX: TOCTOU double-check under write lock ───────────────────────
+    // Between the RLock read at the top of this function and this Lock, another
+    // goroutine could have already written a fresh entry. Re-check so we never
+    // overwrite a concurrently-written negative-cache entry with a stale parse.
+    if cur, ok := x.altSupport.cache[host]; ok && cur.port == 0 && !isAltSvcExpired(cur, now) {
+        x.altSupport.Unlock()
+        dlog.Debugf("Alt-Svc: concurrent negative cache write for [%s]; skipping", host)
+        return
+    }
     // ── IMP 4: noExpiry=true for positive Alt-Svc entries (no TTL in header) ─
     x.altSupport.cache[host] = altSvcEntry{port: altPort, noExpiry: true}
     dlog.Debugf("Alt-Svc: cached port %d for [%s]", altPort, host)
