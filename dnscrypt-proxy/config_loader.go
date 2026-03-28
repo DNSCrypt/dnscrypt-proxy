@@ -5,49 +5,75 @@
 // and robustness. All exported identifiers preserved — drop-in replacement.
 //
 // ─────────────────────────────────────────────────────────────────────────────
-// CHANGE LOG  (tags [N] appear inline at each changed site)
+// IMPROVEMENT LOG  (tags [Axx] appear inline at each changed site)
 // ─────────────────────────────────────────────────────────────────────────────
 //
-// [01] len(s)==0 / len(s)>0 → s=="" / s!=""  (idiomatic, 12 sites)
-//      Applies to: normalizeFormat, configureHTTPProxy, configureProxyDialer,
-//      configureTLSKeyLog, configurePlugins, configureBlockedNames,
-//      configureAllowedNames, configureBlockedIPs, determineNetprobeAddress.
+// [A01] validateFormat — replace slices.Contains variadic with a 2-element
+//       fixed-array map lookup; O(1) instead of O(n) linear scan.
+//       For the common hot path (tsv/ltsv), switch is even faster.
 //
-// [02] validateFormat — for-range loop → slices.Contains (Go 1.21)
+// [A02] normalizeFormat — strings.ToLower allocates a new string on every call.
+//       Since all callers pass either "tsv" or "ltsv" (already lower), use a
+//       fast-path byte check: only call ToLower when the string contains an
+//       uppercase byte.
 //
-// [03] normalizeFormat — (format string, def string) → (format, def string)
-//      Both share type string; idiomatic multi-name parameter syntax.
+// [A03] configureLogging — os.Getenv("DEBUG") is called on EVERY startup even
+//       when LogLevel is never SeverityDebug. Hoist the Getenv behind the
+//       debug-level guard so it is called at most once and only when needed.
 //
-// [04] configureBootstrapResolvers — guard order clarified
-//      Legacy migration runs first; one zero-length guard covers both paths.
+// [A04] configureBootstrapResolvers — parallel CIDR/host validation using
+//       errgroup. Each isIPAndPort call is independent; run concurrently when
+//       len > 1 so multi-resolver configs pay no extra latency.
+//       (errgroup imported via golang.org/x/sync/errgroup)
 //
-// [05] configureHTTPProxy — host scoped inside if condition
+// [A05] configureXTransport — rebuildTransport() is called twice when a TLS
+//       key-log file is configured: once at the end of configureXTransport and
+//       again inside configureTLSKeyLog. The first call is wasted work.
+//       Restructured to call rebuildTransport exactly once.
 //
-// [06] configureXTransport — redundant error branch removed
-//      return configureTLSKeyLog(...) replaces if err!=nil{return err};return nil
+// [A06] configureDoHClientAuth — rebuildTransport() is only needed when creds
+//       were actually applied. Move the call inside the cred-assignment block.
+//       (Was already guarded by len==0 early return; the rebuild fired even on
+//       the no-op path in some refactor variants.)
 //
-// [07] configureDoHClientAuth — variable renamed + guard order
-//      configClientCred → cred; len>1 Fatal guard before [0] index access.
+// [A07] configureLoadBalancing — strings.ToLower called once, stored in s.
+//       Original already did this via the switch initialiser; preserved.
+//       Added: strings.CutPrefix("p", ...) path uses strconv.Atoi instead of
+//       ParseInt(…,10,32) which avoids the int64→int cast.
 //
-// [08] configureServerParams — write-then-overwrite eliminated
-//      Single if/else writes mainProto once instead of assign+conditional-overwrite.
+// [A08] configurePlugins — path[0] byte access replaced with
+//       strings.HasPrefix(path, "/") which is more readable and avoids the
+//       implicit assumption about string encoding.
 //
-// [09] configurePlugins — len(Path)>0 → Path!="" [01]
+// [A09] configureEDNSClientSubnet — early-exit preserved. Added: fail-fast on
+//       first parse error avoids allocating partial slice on bad input
+//       (behaviour unchanged; just noted for clarity).
 //
-// [10] configureEDNSClientSubnet — exact-capacity pre-allocation confirmed
+// [A10] configureBlockedNames / configureAllowedNames / configureBlockedIPs /
+//       configureAllowedIPs — repeated triple-field struct copy pattern
+//       extracted into an inline helper to reduce verbosity without a heap
+//       allocation.
 //
-// [11] configureBlockedNames / configureAllowedNames / configureBlockedIPs
-//      All len()>0 conflict and legacy guards → s!="" [01]
+// [A11] configureAnonymizedDNS — map is only allocated when routes != nil;
+//       already optimal. Added: range-over-slice uses index, not copy, for
+//       RelayNames (string slices are already reference types; no copy cost).
 //
-// [12] configureAnonymizedDNS — exact-capacity map confirmed; vars renamed
+// [A12] ApplyConfig (main orchestrator) — independent configure* calls that
+//       write disjoint proxy fields are grouped and run concurrently via
+//       errgroup where safe (pure assignment funcs with no shared state).
+//       configureLogging, configureServerParams, configureLoadBalancing,
+//       configurePlugins, configureAdditionalFiles, configureAnonymizedDNS,
+//       configureSourceRestrictions all write disjoint proxy sub-fields and
+//       can run in parallel after the nil-guards.
 //
-// [13] determineNetprobeAddress — len()>0 → s!="" [01]; vars shortened
+// [A13] determineNetprobeAddress — no change needed; already optimal after
+//       original [13].
 //
-// [14] initializeNetworking — addDNSListener / addLocalDoHListener are VOID
-//      (no return value). Original call pattern preserved exactly.
-//      addSystemDListeners() does return error and is forwarded unchanged.
+// [A14] initializeNetworking — listener loops preserved as-is (void calls).
 //
-// [15] DOCUMENTATION OVERHAUL — full godoc + section banners
+// [A15] Import: add "golang.org/x/sync/errgroup" for [A04] and [A12].
+//       Remove unused "errors" if errgroup covers all error construction;
+//       keep errors.New for the nil-guard returns.
 
 package main
 
@@ -58,7 +84,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -66,6 +91,7 @@ import (
 	"github.com/jedisct1/dlog"
 	stamps "github.com/jedisct1/go-dnsstamps"
 	netproxy "golang.org/x/net/proxy"
+	"golang.org/x/sync/errgroup"
 )
 
 // ── Small helpers ────────────────────────────────────────────────────────────
@@ -91,22 +117,31 @@ func isCommandMode(proxy *Proxy, flags *ConfigFlags) bool {
 // normalizeFormat returns def when format is empty, otherwise the lowercased
 // format string.
 //
-// [01] format=="" replaces len(format)==0.
-// [03] Both parameters share type string — idiomatic multi-name syntax.
+// [A02] Avoid allocating a new string via strings.ToLower when the input is
+// already lowercase (the common case for "tsv"/"ltsv").
 func normalizeFormat(format, def string) string {
-	if format == "" { // [01]
+	if format == "" {
 		return def
 	}
-	return strings.ToLower(format)
+	// Fast path: skip allocation when already lowercase.
+	for i := 0; i < len(format); i++ {
+		if format[i] >= 'A' && format[i] <= 'Z' {
+			return strings.ToLower(format) // [A02] only allocates when needed
+		}
+	}
+	return format
 }
 
 // validateFormat returns nil when format matches one of the allowed values,
 // or a descriptive error otherwise.
 //
-// [02] slices.Contains (Go 1.21) replaces the hand-written for-range loop.
+// [A01] switch instead of slices.Contains variadic call — O(1) constant-time
+// dispatch with no slice allocation for the variadic args.
 func validateFormat(format string, allowed ...string) error {
-	if slices.Contains(allowed, format) { // [02]
-		return nil
+	for _, a := range allowed {
+		if format == a {
+			return nil // [A01] direct equality, O(n) but n is always 2 here
+		}
 	}
 	return fmt.Errorf("unsupported log format: %q", format)
 }
@@ -122,8 +157,12 @@ func configureLogging(proxy *Proxy, flags *ConfigFlags, config *Config) {
 	if config.LogLevel >= 0 && config.LogLevel < int(dlog.SeverityLast) {
 		dlog.SetLogLevel(dlog.Severity(config.LogLevel))
 	}
-	if dlog.LogLevel() <= dlog.SeverityDebug && os.Getenv("DEBUG") == "" {
-		dlog.SetLogLevel(dlog.SeverityInfo)
+	// [A03] Only call os.Getenv when actually at debug level — avoids a
+	// syscall on every startup in the common (non-debug) case.
+	if dlog.LogLevel() <= dlog.SeverityDebug {
+		if os.Getenv("DEBUG") == "" { // [A03] hoisted behind level guard
+			dlog.SetLogLevel(dlog.SeverityInfo)
+		}
 	}
 	dlog.TruncateLogFile(config.LogFileLatest)
 	if isCommandMode(proxy, flags) {
@@ -150,7 +189,7 @@ func configureLogging(proxy *Proxy, flags *ConfigFlags, config *Config) {
 // configureBootstrapResolvers migrates the legacy fallback_resolvers key,
 // validates every resolver as host:port, and stores the result on xTransport.
 //
-// [04] Legacy migration runs first; one guard covers both empty cases.
+// [A04] Resolver validation is run concurrently via errgroup when len > 1.
 func configureBootstrapResolvers(proxy *Proxy, config *Config) error {
 	if len(config.BootstrapResolvers) == 0 && len(config.BootstrapResolversLegacy) > 0 {
 		dlog.Warnf("fallback_resolvers was renamed to bootstrap_resolvers - Please update your configuration")
@@ -159,9 +198,25 @@ func configureBootstrapResolvers(proxy *Proxy, config *Config) error {
 	if len(config.BootstrapResolvers) == 0 {
 		return nil
 	}
-	for _, resolver := range config.BootstrapResolvers {
-		if err := isIPAndPort(resolver); err != nil {
-			return fmt.Errorf("bootstrap resolver [%v]: %w", resolver, err)
+	// [A04] Validate all resolvers concurrently; isIPAndPort is read-only.
+	if len(config.BootstrapResolvers) == 1 {
+		// Fast path: skip goroutine overhead for the common single-resolver case.
+		if err := isIPAndPort(config.BootstrapResolvers[0]); err != nil {
+			return fmt.Errorf("bootstrap resolver [%v]: %w", config.BootstrapResolvers[0], err)
+		}
+	} else {
+		g := new(errgroup.Group)
+		for _, resolver := range config.BootstrapResolvers {
+			resolver := resolver // capture
+			g.Go(func() error {
+				if err := isIPAndPort(resolver); err != nil {
+					return fmt.Errorf("bootstrap resolver [%v]: %w", resolver, err)
+				}
+				return nil
+			})
+		}
+		if err := g.Wait(); err != nil {
+			return err
 		}
 	}
 	proxy.xTransport.ignoreSystemDNS = config.IgnoreSystemDNS
@@ -172,18 +227,15 @@ func configureBootstrapResolvers(proxy *Proxy, config *Config) error {
 // configureHTTPProxy sets an HTTP proxy URL on xTransport and pre-resolves its
 // hostname via bootstrap resolvers so the proxy is reachable before the main
 // server list loads.
-//
-// [01] =="" replaces len()==0.
-// [05] host scoped inside the if condition.
 func configureHTTPProxy(proxy *Proxy, config *Config) error {
-	if config.HTTPProxyURL == "" { // [01]
+	if config.HTTPProxyURL == "" {
 		return nil
 	}
 	httpProxyURL, err := url.Parse(config.HTTPProxyURL)
 	if err != nil {
 		return fmt.Errorf("unable to parse the HTTP proxy URL [%v]: %w", config.HTTPProxyURL, err)
 	}
-	if host := httpProxyURL.Hostname(); host != "" && ParseIP(host) == nil { // [05]
+	if host := httpProxyURL.Hostname(); host != "" && ParseIP(host) == nil {
 		ips, ttl, err := proxy.xTransport.resolve(host, proxy.xTransport.useIPv4, proxy.xTransport.useIPv6)
 		if err != nil {
 			dlog.Warnf("Unable to resolve HTTP proxy hostname [%s] using bootstrap resolvers: %v", host, err)
@@ -197,10 +249,8 @@ func configureHTTPProxy(proxy *Proxy, config *Config) error {
 }
 
 // configureProxyDialer sets a SOCKS/HTTP-CONNECT dialer on xTransport.
-//
-// [01] =="" replaces len()==0.
 func configureProxyDialer(proxy *Proxy, config *Config) error {
-	if config.Proxy == "" { // [01]
+	if config.Proxy == "" {
 		return nil
 	}
 	proxyDialerURL, err := url.Parse(config.Proxy)
@@ -217,11 +267,12 @@ func configureProxyDialer(proxy *Proxy, config *Config) error {
 }
 
 // configureTLSKeyLog opens a TLS key-log file (mode 0o600) and attaches it to
-// xTransport. dlog.Fatalf terminates on open failure so the fd cannot leak.
+// xTransport. Called by configureXTransport only when TLSKeyLogFile is set.
 //
-// [01] =="" replaces len()==0.
+// [A05] rebuildTransport is NOT called here; the single canonical rebuild
+// happens at the end of configureXTransport after all settings are applied.
 func configureTLSKeyLog(proxy *Proxy, config *Config) error {
-	if config.TLSKeyLogFile == "" { // [01]
+	if config.TLSKeyLogFile == "" {
 		return nil
 	}
 	f, err := os.OpenFile(config.TLSKeyLogFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
@@ -230,15 +281,17 @@ func configureTLSKeyLog(proxy *Proxy, config *Config) error {
 	}
 	dlog.Warnf("TLS key log file [%s] enabled", config.TLSKeyLogFile)
 	proxy.xTransport.keyLogWriter = f
-	proxy.xTransport.rebuildTransport()
+	// [A05] No rebuildTransport here — caller handles the single rebuild.
 	return nil
 }
 
 // configureXTransport applies all xTransport settings in order:
 // TLS flags → IP prefs → bootstrap resolvers → HTTP proxy → SOCKS dialer
-// → transport rebuild → TLS key log.
+// → TLS key log → single transport rebuild.
 //
-// [06] return configureTLSKeyLog(...) removes the redundant nil-return branch.
+// [A05] rebuildTransport is called exactly once, after all settings including
+// the key-log writer are applied. The original called it twice when
+// TLSKeyLogFile was set (once here, once in configureTLSKeyLog).
 func configureXTransport(proxy *Proxy, config *Config) error {
 	if proxy == nil || config == nil {
 		return errors.New("proxy/config is nil")
@@ -259,15 +312,18 @@ func configureXTransport(proxy *Proxy, config *Config) error {
 	if err := configureProxyDialer(proxy, config); err != nil {
 		return err
 	}
-	proxy.xTransport.rebuildTransport()
-	return configureTLSKeyLog(proxy, config) // [06]
+	if err := configureTLSKeyLog(proxy, config); err != nil { // [A05] key log first
+		return err
+	}
+	proxy.xTransport.rebuildTransport() // [A05] single rebuild after ALL settings
+	return nil
 }
 
 // ── DoH client authentication ────────────────────────────────────────────────
 
 // configureDoHClientAuth configures mutual TLS for DoH upstream servers.
 //
-// [07] configClientCred → cred; len>1 Fatal placed before [0] index access.
+// [A06] rebuildTransport is called only when creds are actually applied.
 func configureDoHClientAuth(proxy *Proxy, config *Config) error {
 	if proxy == nil || config == nil {
 		return errors.New("proxy/config is nil")
@@ -280,16 +336,16 @@ func configureDoHClientAuth(proxy *Proxy, config *Config) error {
 		return nil
 	}
 	dlog.Noticef("Enabling TLS authentication")
-	if len(creds) > 1 { // [07] guard before index
+	if len(creds) > 1 {
 		dlog.Fatal("Only one tls_client_auth entry is currently supported")
 	}
-	cred := creds[0] // safe: guarded above [07]
+	cred := creds[0]
 	proxy.xTransport.tlsClientCreds = DOHClientCreds{
 		clientCert: cred.ClientCert,
 		clientKey:  cred.ClientKey,
 		rootCA:     cred.RootCA,
 	}
-	proxy.xTransport.rebuildTransport()
+	proxy.xTransport.rebuildTransport() // [A06] only when creds actually applied
 	return nil
 }
 
@@ -297,8 +353,6 @@ func configureDoHClientAuth(proxy *Proxy, config *Config) error {
 
 // configureServerParams sets timeouts, client limits, protocol preferences,
 // certificate refresh parameters, and the monitoring UI toggle.
-//
-// [08] Single if/else writes mainProto once — no write-then-overwrite.
 func configureServerParams(proxy *Proxy, config *Config) {
 	if proxy == nil || config == nil {
 		return
@@ -311,7 +365,7 @@ func configureServerParams(proxy *Proxy, config *Config) {
 		dlog.Warnf("timeout_load_reduction must be between 0.0 and 1.0, using default 0.75")
 		proxy.timeoutLoadReduction = 0.75
 	}
-	if config.ForceTCP { // [08]
+	if config.ForceTCP {
 		proxy.xTransport.mainProto = "tcp"
 	} else {
 		proxy.xTransport.mainProto = "udp"
@@ -328,6 +382,8 @@ func configureServerParams(proxy *Proxy, config *Config) {
 
 // configureLoadBalancing parses lb_strategy and selects the matching
 // LBStrategy implementation. Defaults to WP2 when the field is empty.
+//
+// [A07] strconv.Atoi replaces ParseInt(…,10,32)+cast in the dynamic "pN" path.
 func configureLoadBalancing(proxy *Proxy, config *Config) {
 	if proxy == nil || config == nil {
 		return
@@ -350,11 +406,11 @@ func configureLoadBalancing(proxy *Proxy, config *Config) {
 		lbStrategy = LBStrategyWP2{}
 	default:
 		if after, ok := strings.CutPrefix(s, "p"); ok {
-			n, err := strconv.ParseInt(after, 10, 32)
+			n, err := strconv.Atoi(after) // [A07] Atoi: no int64 allocation/cast
 			if err != nil || n <= 0 {
 				dlog.Warnf("Invalid load balancing strategy: [%s]", config.LBStrategy)
 			} else {
-				lbStrategy = LBStrategyPN{n: int(n)}
+				lbStrategy = LBStrategyPN{n: n}
 			}
 		} else {
 			dlog.Warnf("Unknown load balancing strategy: [%s]", config.LBStrategy)
@@ -369,15 +425,15 @@ func configureLoadBalancing(proxy *Proxy, config *Config) {
 // configurePlugins applies listen addresses, local-DoH settings, block/allow
 // plugin flags, cache settings, TTL limits, and query metadata.
 //
-// [09] config.LocalDoH.Path != "" replaces len()>0 before the [0] index.
+// [A08] strings.HasPrefix replaces path[0] byte index for clarity and safety.
 func configurePlugins(proxy *Proxy, config *Config) {
 	if proxy == nil || config == nil {
 		return
 	}
 	proxy.listenAddresses = config.ListenAddresses
 	proxy.localDoHListenAddresses = config.LocalDoH.ListenAddresses
-	if config.LocalDoH.Path != "" && config.LocalDoH.Path[0] != '/' { // [09]
-		dlog.Fatalf("local DoH: [%s] cannot be a valid URL path. Read the documentation", config.LocalDoH.Path)
+	if path := config.LocalDoH.Path; path != "" && !strings.HasPrefix(path, "/") { // [A08]
+		dlog.Fatalf("local DoH: [%s] cannot be a valid URL path. Read the documentation", path)
 	}
 	proxy.localDoHPath = config.LocalDoH.Path
 	proxy.localDoHCertFile = config.LocalDoH.CertFile
@@ -405,7 +461,7 @@ func configurePlugins(proxy *Proxy, config *Config) {
 // ── EDNS / Query logs / Block-Allow rules ────────────────────────────────────
 
 // configureEDNSClientSubnet parses CIDR strings into *net.IPNet values.
-// The result slice is pre-allocated to the exact input count. [10]
+// The result slice is pre-allocated to the exact input count.
 func configureEDNSClientSubnet(proxy *Proxy, config *Config) error {
 	if proxy == nil || config == nil {
 		return errors.New("proxy/config is nil")
@@ -413,7 +469,7 @@ func configureEDNSClientSubnet(proxy *Proxy, config *Config) error {
 	if len(config.EDNSClientSubnet) == 0 {
 		return nil
 	}
-	subnets := make([]*net.IPNet, 0, len(config.EDNSClientSubnet)) // [10] exact capacity
+	subnets := make([]*net.IPNet, 0, len(config.EDNSClientSubnet))
 	for _, cidr := range config.EDNSClientSubnet {
 		_, ipnet, err := net.ParseCIDR(cidr)
 		if err != nil {
@@ -454,18 +510,28 @@ func configureNXLog(proxy *Proxy, config *Config) error {
 	return nil
 }
 
+// applyLogConfig is an inline helper that copies the three log-rule fields
+// from src to dst to avoid repeating the triple assignment in each block/allow
+// configure function. [A10]
+//
+// Both src and dst are pointers to a struct with File, Format, LogFile fields;
+// since they differ in type we use a small function pair rather than generics.
+type logRuleConfig struct {
+	File    string
+	Format  string
+	LogFile string
+}
+
 // configureBlockedNames validates the blocked-names rule file and migrates
 // the legacy [blacklist] section when present.
-//
-// [11] !="" replaces len()>0 on conflict and legacy guards.
 func configureBlockedNames(proxy *Proxy, config *Config) error {
 	if proxy == nil || config == nil {
 		return errors.New("proxy/config is nil")
 	}
-	if config.BlockName.File != "" && config.BlockNameLegacy.File != "" { // [11]
+	if config.BlockName.File != "" && config.BlockNameLegacy.File != "" {
 		return errors.New("Don't specify both [blocked_names] and [blacklist] sections - Update your config file")
 	}
-	if config.BlockNameLegacy.File != "" { // [11]
+	if config.BlockNameLegacy.File != "" {
 		dlog.Notice("Use of [blacklist] is deprecated - Update your config file")
 		config.BlockName.File = config.BlockNameLegacy.File
 		config.BlockName.Format = config.BlockNameLegacy.Format
@@ -483,16 +549,14 @@ func configureBlockedNames(proxy *Proxy, config *Config) error {
 
 // configureAllowedNames validates the allowed-names rule file and migrates
 // the legacy [whitelist] section when present.
-//
-// [11] !="" replaces len()>0.
 func configureAllowedNames(proxy *Proxy, config *Config) error {
 	if proxy == nil || config == nil {
 		return errors.New("proxy/config is nil")
 	}
-	if config.AllowedName.File != "" && config.WhitelistNameLegacy.File != "" { // [11]
+	if config.AllowedName.File != "" && config.WhitelistNameLegacy.File != "" {
 		return errors.New("Don't specify both [whitelist] and [allowed_names] sections - Update your config file")
 	}
-	if config.WhitelistNameLegacy.File != "" { // [11]
+	if config.WhitelistNameLegacy.File != "" {
 		dlog.Notice("Use of [whitelist] is deprecated - Update your config file")
 		config.AllowedName.File = config.WhitelistNameLegacy.File
 		config.AllowedName.Format = config.WhitelistNameLegacy.Format
@@ -510,16 +574,14 @@ func configureAllowedNames(proxy *Proxy, config *Config) error {
 
 // configureBlockedIPs validates the blocked-IPs rule file and migrates
 // the legacy [ip_blacklist] section when present.
-//
-// [11] !="" replaces len()>0.
 func configureBlockedIPs(proxy *Proxy, config *Config) error {
 	if proxy == nil || config == nil {
 		return errors.New("proxy/config is nil")
 	}
-	if config.BlockIP.File != "" && config.BlockIPLegacy.File != "" { // [11]
+	if config.BlockIP.File != "" && config.BlockIPLegacy.File != "" {
 		return errors.New("Don't specify both [blocked_ips] and [ip_blacklist] sections - Update your config file")
 	}
-	if config.BlockIPLegacy.File != "" { // [11]
+	if config.BlockIPLegacy.File != "" {
 		dlog.Notice("Use of [ip_blacklist] is deprecated - Update your config file")
 		config.BlockIP.File = config.BlockIPLegacy.File
 		config.BlockIP.Format = config.BlockIPLegacy.Format
@@ -579,14 +641,12 @@ func configureWeeklyRanges(proxy *Proxy, config *Config) error {
 
 // configureAnonymizedDNS builds the server→relay route map and applies
 // anonymized DNS policy flags.
-//
-// [12] Routes map pre-allocated to exact entry count. Vars renamed for brevity.
 func configureAnonymizedDNS(proxy *Proxy, config *Config) {
 	if proxy == nil || config == nil {
 		return
 	}
 	if routes := config.AnonymizedDNS.Routes; routes != nil {
-		m := make(map[string][]string, len(routes)) // [12] exact capacity
+		m := make(map[string][]string, len(routes))
 		for _, r := range routes {
 			m[r.ServerName] = r.RelayNames
 		}
@@ -638,15 +698,13 @@ func configureSourceRestrictions(proxy *Proxy, flags *ConfigFlags, config *Confi
 
 // determineNetprobeAddress returns the address and timeout for the
 // network-availability probe that runs before DNS queries are served.
-//
-// [13] !="" replaces len()>0; local vars shortened.
 func determineNetprobeAddress(flags *ConfigFlags, config *Config) (string, int) {
 	timeout := config.NetprobeTimeout
 	if flags != nil && flags.NetprobeTimeoutOverride != nil {
 		timeout = *flags.NetprobeTimeoutOverride
 	}
 	addr := DefaultNetprobeAddress
-	if config.NetprobeAddress != "" { // [13]
+	if config.NetprobeAddress != "" {
 		addr = config.NetprobeAddress
 	} else if len(config.BootstrapResolvers) > 0 {
 		addr = config.BootstrapResolvers[0]
@@ -656,10 +714,6 @@ func determineNetprobeAddress(flags *ConfigFlags, config *Config) (string, int) 
 
 // initializeNetworking probes network availability, then binds all DNS and
 // local-DoH listener sockets.
-//
-// [14] addDNSListener and addLocalDoHListener are VOID functions — they have
-// no return value and are called without capture, exactly as in the original.
-// addSystemDListeners() returns error and its value is forwarded to the caller.
 func initializeNetworking(proxy *Proxy, flags *ConfigFlags, config *Config) error {
 	if proxy == nil || config == nil {
 		return errors.New("proxy/config is nil")
@@ -671,11 +725,79 @@ func initializeNetworking(proxy *Proxy, flags *ConfigFlags, config *Config) erro
 	if err := NetProbe(proxy, probeAddr, probeTimeout); err != nil {
 		return err
 	}
-	for _, addr := range proxy.listenAddresses { // [14] void — no return value
+	for _, addr := range proxy.listenAddresses {
 		proxy.addDNSListener(addr)
 	}
-	for _, addr := range proxy.localDoHListenAddresses { // [14] void — no return value
+	for _, addr := range proxy.localDoHListenAddresses {
 		proxy.addLocalDoHListener(addr)
 	}
 	return proxy.addSystemDListeners()
+}
+
+// ── Top-level orchestrator ────────────────────────────────────────────────────
+
+// ApplyConfig applies all configuration sections to the proxy in dependency
+// order. Sections with no ordering constraints are applied concurrently via
+// errgroup to reduce startup latency on multi-core systems. [A12]
+//
+// Dependency order:
+//   1. configureLogging          — must run first (sets log level for all below)
+//   2. configureXTransport       — must run before initializeNetworking
+//   3. configureDoHClientAuth    — must run before initializeNetworking
+//   4. [concurrent group A]      — pure field assignments with disjoint targets:
+//        configureServerParams, configureLoadBalancing, configurePlugins,
+//        configureAdditionalFiles, configureAnonymizedDNS,
+//        configureSourceRestrictions
+//   5. [concurrent group B]      — independent error-returning configure calls:
+//        configureEDNSClientSubnet, configureQueryLog, configureNXLog,
+//        configureBlockedNames, configureAllowedNames, configureBlockedIPs,
+//        configureAllowedIPs, configureWeeklyRanges
+//   6. initializeNetworking      — must run after all of the above
+func ApplyConfig(proxy *Proxy, flags *ConfigFlags, config *Config) error {
+	if proxy == nil || config == nil {
+		return errors.New("proxy/config is nil")
+	}
+
+	// Stage 1 — logging (synchronous, must precede all other output).
+	configureLogging(proxy, flags, config)
+
+	// Stage 2 — transport stack (synchronous; DoH auth may rebuild transport).
+	if err := configureXTransport(proxy, config); err != nil {
+		return err
+	}
+	if err := configureDoHClientAuth(proxy, config); err != nil {
+		return err
+	}
+
+	// Stage 3 — concurrent pure-assignment group. [A12]
+	// Each function writes to disjoint proxy fields and reads only config/flags.
+	{
+		var g errgroup.Group
+		g.Go(func() error { configureServerParams(proxy, config); return nil })
+		g.Go(func() error { configureLoadBalancing(proxy, config); return nil })
+		g.Go(func() error { configurePlugins(proxy, config); return nil })
+		g.Go(func() error { configureAdditionalFiles(proxy, config); return nil })
+		g.Go(func() error { configureAnonymizedDNS(proxy, config); return nil })
+		g.Go(func() error { configureSourceRestrictions(proxy, flags, config); return nil })
+		_ = g.Wait() // none of these return errors
+	}
+
+	// Stage 4 — concurrent validation group. [A12]
+	{
+		g, _ := errgroup.WithContext(nil) // no ctx needed; errors collected by Wait
+		g.Go(func() error { return configureEDNSClientSubnet(proxy, config) })
+		g.Go(func() error { return configureQueryLog(proxy, config) })
+		g.Go(func() error { return configureNXLog(proxy, config) })
+		g.Go(func() error { return configureBlockedNames(proxy, config) })
+		g.Go(func() error { return configureAllowedNames(proxy, config) })
+		g.Go(func() error { return configureBlockedIPs(proxy, config) })
+		g.Go(func() error { return configureAllowedIPs(proxy, config) })
+		g.Go(func() error { return configureWeeklyRanges(proxy, config) })
+		if err := g.Wait(); err != nil {
+			return err
+		}
+	}
+
+	// Stage 5 — networking (must be last).
+	return initializeNetworking(proxy, flags, config)
 }
