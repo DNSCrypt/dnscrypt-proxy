@@ -6,6 +6,28 @@
 // and full compatibility with dnscrypt-proxy 2. Drop-in replacement.
 //
 // ══════════════════════════════════════════════════════════════════════════════
+// ✅ ELITE IMPROVEMENTS - March 29, 2026
+// ══════════════════════════════════════════════════════════════════════════════
+// ELITE 8: saveCachedAddrs — removed temp var for expiration pointer
+//          Go 1.26 new(expr) allows any expression as the operand, not just a
+//          bare type name.  The prior code wrote:
+//            exp := time.Now().Add(ttl)
+//            item.expiration = &exp
+//          The temp `exp` existed solely to make the expression addressable.
+//          Now replaced with a single:
+//            item.expiration = new(time.Now().Add(ttl))
+//          One fewer local variable; same semantics; cleaner intent.
+//
+// ELITE 9: markUpdatingCachedIP — removed temp var for updatingUntil pointer
+//          Same Go 1.26 new(expr) pattern as ELITE 8.  The temp `until` was
+//          used in both branches of an if/else, so it cannot be inlined at the
+//          call-sites without computing time.Now() twice.  Instead it is
+//          computed once before the lock and named `updatingUntil` to make the
+//          intent self-documenting:
+//            updatingUntil := new(time.Now().Add(x.timeout))
+//          Both branches assign the same pointer, matching prior semantics.
+// ══════════════════════════════════════════════════════════════════════════════
+//
 // ✅ ELITE IMPROVEMENTS - March 27, 2026
 // ══════════════════════════════════════════════════════════════════════════════
 // ELITE 1: Removed obsolete `// +build linux` legacy directive (line 2)
@@ -242,6 +264,7 @@
 // • maps.DeleteFunc for lock‑free cache purging
 // • io.ReadAll (Go 1.26 optimized version – 2× faster, 50% less memory) (OPT 8)
 // • netip.Addr throughout IP cache layer — zero-allocation value type (OPT 1)
+// • new(expr) — Go 1.26 allows any expression in new(), eliminating temp vars for pointer fields (ELITE 8, 9)
 //
 // ── Performance Enhancements ──────────────────────────────────────────────────
 // • Per‑host connection prewarming with full TLS+HTTP/2 handshake (eliminates cold‑start RTT)
@@ -677,8 +700,7 @@ func (x *XTransport) saveCachedAddrs(host string, addrs []netip.Addr, ttl time.D
     if ttl >= 0 {
         ttl = max(ttl, MinResolverIPTTL)
         ttl += time.Duration(rand.Int64N(int64(ResolverIPTTLMaxJitter)))
-        exp := time.Now().Add(ttl)
-        item.expiration = &exp
+        item.expiration = new(time.Now().Add(ttl)) // Go 1.26: new(expr) — no temp var
     }
 
     x.cachedIPs.Lock()
@@ -726,12 +748,12 @@ func (x *XTransport) saveCachedIP(host string, ip net.IP, ttl time.Duration) {
 }
 
 func (x *XTransport) markUpdatingCachedIP(host string) {
-    until := time.Now().Add(x.timeout)
+    updatingUntil := new(time.Now().Add(x.timeout)) // Go 1.26: new(expr) — no temp var
     x.cachedIPs.Lock()
     if item, ok := x.cachedIPs.cache[host]; ok {
-        item.updatingUntil = &until
+        item.updatingUntil = updatingUntil
     } else {
-        x.cachedIPs.cache[host] = &CachedIPItem{updatingUntil: &until}
+        x.cachedIPs.cache[host] = &CachedIPItem{updatingUntil: updatingUntil}
     }
     x.cachedIPs.Unlock()
     dlog.Debugf("[%s] IP address marked as updating", host)
