@@ -39,6 +39,7 @@ jobs:
           go get github.com/hashicorp/go-immutable-radix/v2@v2
           go get github.com/davecgh/go-spew
           go get github.com/quic-go/qpack@master
+          go fix -newexpr ./...
           go mod tidy
           go build \
             -pgo=default.pgo \
