@@ -382,7 +382,7 @@ const (
     h2TLSSessionCacheSize       = 512
     h2ReadWriteBufferSize       = 64 * 1024 // 64 KiB – larger I/O buffers reduce syscalls
     h2IdleConnTimeout           = 120 * time.Second
-    h2MaxIdleConnsPerHost       = 10
+    h2MaxIdleConnsPerHost       = 64 // raised from 10 to reduce TLS/dial churn under bursty DoH traffic
     h2ExpectContinueTimeout     = 500 * time.Millisecond
     h2ResponseHeaderTimeout     = 20 * time.Second
     h2TLSHandshakeTimeout       = 15 * time.Second
@@ -779,11 +779,9 @@ func (x *XTransport) loadCachedAddrs(host string) (addrs []netip.Addr, expired, 
     if len(item.addrs) == 0 {
         return nil, expired, updating
     }
-    // Return a copy of the slice header. netip.Addr is a value type so
-    // the caller cannot mutate the cache's backing array.
-    out := make([]netip.Addr, len(item.addrs))
-    copy(out, item.addrs)
-    return out, expired, updating
+    // Zero-copy return: netip.Addr is a value type and writers replace the entire
+    // *CachedIPItem, so the stored slice is immutable — return it directly.
+    return item.addrs, expired, updating
 }
 
 func (x *XTransport) PurgeExpiredCache() (ipsPurged, altSvcPurged, muPurged int) {
@@ -1525,6 +1523,15 @@ func (x *XTransport) resolveUsingServers(
     copy(resolversCopy, resolvers)
 
     var errs []error
+    var retryTimer *time.Timer
+    defer func() {
+        if retryTimer != nil && !retryTimer.Stop() {
+            select {
+            case <-retryTimer.C:
+            default:
+            }
+        }
+    }()
     for i, resolver := range resolversCopy {
         delay := resolverRetryInitialBackoff
         for attempt := range resolverRetryCount {
@@ -1543,16 +1550,19 @@ func (x *XTransport) resolveUsingServers(
             dlog.Debugf("Resolver attempt %d/%d for [%s] via [%s] (%s): %v",
                 attempt+1, resolverRetryCount, host, resolver, proto, err)
             if attempt < resolverRetryCount-1 {
-                // ── ELITE FIX: corrected timer-based backoff ──────────────────
-                // The previous select had context.Background().Done() as a case.
-                // context.Background().Done() returns a nil channel — a receive
-                // on a nil channel BLOCKS FOREVER. That case was dead code that
-                // could never fire, making the comment "cancellable backoff" a
-                // documentation lie. Removed the unreachable branch entirely.
-                // Per-query cancellation already happens in resolveRRType via
-                // context.WithTimeoutCause. Always drain the timer to avoid leaks.
-                timer := time.NewTimer(delay)
-                <-timer.C
+                // Reuse a single timer across retries to avoid per-retry allocations.
+                if retryTimer == nil {
+                    retryTimer = time.NewTimer(delay)
+                } else {
+                    if !retryTimer.Stop() {
+                        select {
+                        case <-retryTimer.C:
+                        default:
+                        }
+                    }
+                    retryTimer.Reset(delay)
+                }
+                <-retryTimer.C
                 delay = min(delay*2, resolverRetryMaxBackoff)
             }
         }
