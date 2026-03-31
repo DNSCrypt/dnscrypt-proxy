@@ -51,7 +51,7 @@
 //       (initialLive int parameter) to prevent a data race on the outer var.
 //
 // [C13] getDynamicTimeout — timeoutF casts float64 once; max() builtin
-//       (Go 1.21); math.Pow(u,4) inlined into max() call.
+//       (Go 1.21); math.Pow(u,4) replaced with u2*u2 multiplication [P07].
 //
 // [C14] updateRegisteredServers — local variable renamed to "parsed" to avoid
 //       shadowing the proxy.registeredServers field.
@@ -105,6 +105,21 @@
 //       documents where to wire in TLS_CHACHA20_POLY1305_SHA256 for devices
 //       without hardware AES (OpenWrt/ARM/MIPS).  The helper is called from
 //       exchangeWithTCPServer for plain net.TCPConn paths.
+//
+// [P07] TCPConnPool production hardening:
+//       - tcpMaxIdlePerAddr constant caps idle connections per upstream address,
+//         preventing unbounded FD/memory growth under load spikes.
+//       - tcpIdleEntry stores lastUsed timestamp; Get() discards entries older
+//         than tcpIdleTimeout to avoid half-open/NAT-timed-out connections.
+//       - Put() closes the returned connection immediately when at capacity.
+//       - exchangeWithTCPServer uses SetWriteDeadline/SetReadDeadline instead
+//         of a single SetDeadline, and clears deadlines (zero time) before
+//         returning a healthy connection to the pool to prevent stale deadlines.
+//       - Hot-path debug logging removed from clientsCountInc/Dec and
+//         getDynamicTimeout; these run on every query and dlog.Debugf is not
+//         free even when the level is disabled.
+//       - math.Pow(utilization, 4) replaced with u2 := u*u; u4 := u2*u2 to
+//         avoid the floating-point exponentiation overhead.
 
 package main
 
@@ -114,7 +129,6 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"errors"
-	"math"
 	"net"
 	"os"
 	"runtime"
@@ -163,40 +177,74 @@ var encryptedResponsePool = &sync.Pool{
 
 // ── TCPConnPool ───────────────────────────────────────────────────────────────
 
-// tcpPoolEntry holds an idle upstream TCP connection together with its target
-// address string (used as the map key on return).
-type tcpPoolEntry struct {
-	conn net.Conn
-	addr string
+// tcpMaxIdlePerAddr is the maximum number of idle connections held per unique
+// upstream address.  Connections returned via Put beyond this cap are closed
+// immediately rather than pooled.
+//
+// [P07] Bounding the pool prevents unbounded file-descriptor and memory growth
+// when an upstream is slow or unreachable and many requests pile up.
+const tcpMaxIdlePerAddr = 4
+
+// tcpIdleTimeout is the maximum duration a connection may sit idle in the pool.
+// Connections older than this are closed and discarded on the next Get so that
+// NAT-timed-out or half-open sockets are not handed to a caller.
+//
+// [P07] Explicit idle expiry is healthier than relying solely on TCP keepalive,
+// because NAT entries can disappear without triggering a keepalive reset.
+const tcpIdleTimeout = 60 * time.Second
+
+// tcpIdleEntry holds an idle upstream TCP connection with the wall-clock time
+// at which it was last returned to the pool.
+//
+// [P07] lastUsed is compared against tcpIdleTimeout in Get to discard stale
+// entries before handing them to a caller.
+type tcpIdleEntry struct {
+	conn     net.Conn
+	lastUsed time.Time
 }
 
-// TCPConnPool is a simple pool of idle upstream TCP connections keyed by
+// TCPConnPool is a bounded pool of idle upstream TCP connections keyed by
 // address string.  It mirrors the UDPConnPool pattern already used for UDP.
 //
 // [P02] Reusing persistent connections avoids a full TCP (+TLS/DNSCrypt)
 // handshake for every query, which is the dominant latency contributor on the
 // TCP path.
+//
+// [P07] Pool is now bounded (tcpMaxIdlePerAddr per address) and applies idle
+// expiry (tcpIdleTimeout) on every Get.
 type TCPConnPool struct {
-	mu    sync.Mutex
-	idle  map[string][]net.Conn
+	mu   sync.Mutex
+	idle map[string][]tcpIdleEntry
 }
 
 // NewTCPConnPool allocates an empty TCPConnPool.
 func NewTCPConnPool() *TCPConnPool {
-	return &TCPConnPool{idle: make(map[string][]net.Conn)}
+	return &TCPConnPool{idle: make(map[string][]tcpIdleEntry)}
 }
 
-// Get returns an idle connection for addr if one exists, otherwise dials a
-// fresh TCP connection with TCP_NODELAY and KeepAlive applied.
+// Get returns a non-expired idle connection for addr if one exists; stale
+// entries (older than tcpIdleTimeout) are closed and skipped.  Falls back to
+// dialling a fresh TCP connection with TCP_NODELAY and KeepAlive applied.
+//
+// [P07] Idle expiry prevents handing the caller a half-open or NAT-expired
+// socket.
 func (p *TCPConnPool) Get(addr *net.TCPAddr, timeout time.Duration) (net.Conn, error) {
 	key := addr.String()
+	now := time.Now()
 	p.mu.Lock()
-	if conns := p.idle[key]; len(conns) > 0 {
-		conn := conns[len(conns)-1]
-		p.idle[key] = conns[:len(conns)-1]
-		p.mu.Unlock()
-		return conn, nil
+	entries := p.idle[key]
+	for len(entries) > 0 {
+		e := entries[len(entries)-1]
+		entries = entries[:len(entries)-1]
+		if now.Sub(e.lastUsed) <= tcpIdleTimeout {
+			p.idle[key] = entries
+			p.mu.Unlock()
+			return e.conn, nil
+		}
+		// Entry is stale; close it and try the next candidate.
+		e.conn.Close()
 	}
+	p.idle[key] = entries
 	p.mu.Unlock()
 
 	dialCtx, dialCancel := context.WithTimeout(context.Background(), timeout)
@@ -210,10 +258,21 @@ func (p *TCPConnPool) Get(addr *net.TCPAddr, timeout time.Duration) (net.Conn, e
 }
 
 // Put returns a healthy connection to the pool for future reuse.
+// Connections beyond tcpMaxIdlePerAddr for the same address are closed
+// immediately to prevent unbounded growth.
+//
+// [P07] The caller must clear any deadlines on conn before calling Put so that
+// the next borrower starts with a clean state (done in exchangeWithTCPServer).
 func (p *TCPConnPool) Put(addr *net.TCPAddr, conn net.Conn) {
 	key := addr.String()
 	p.mu.Lock()
-	p.idle[key] = append(p.idle[key], conn)
+	entries := p.idle[key]
+	if len(entries) >= tcpMaxIdlePerAddr {
+		p.mu.Unlock()
+		conn.Close() // [P07] cap enforced — discard rather than pool
+		return
+	}
+	p.idle[key] = append(entries, tcpIdleEntry{conn: conn, lastUsed: time.Now()})
 	p.mu.Unlock()
 }
 
@@ -1166,7 +1225,11 @@ func (proxy *Proxy) exchangeWithTCPServer(
 		}
 	}
 
-	if err := pc.SetDeadline(time.Now().Add(serverInfo.Timeout)); err != nil {
+	// [P07] Use per-direction deadlines to avoid deadline leakage on pooled
+	// connections.  SetDeadline sets both read and write; splitting them lets
+	// us clear each one independently and makes the intent explicit.
+	deadline := time.Now().Add(serverInfo.Timeout)
+	if err := pc.SetWriteDeadline(deadline); err != nil {
 		proxy.tcpConnPool.Discard(pc)
 		return nil, err
 	}
@@ -1185,6 +1248,10 @@ func (proxy *Proxy) exchangeWithTCPServer(
 		return nil, err
 	}
 
+	if err := pc.SetReadDeadline(deadline); err != nil {
+		proxy.tcpConnPool.Discard(pc)
+		return nil, err
+	}
 	encryptedResponse, err := ReadPrefixed(&pc)
 	if err != nil {
 		proxy.tcpConnPool.Discard(pc)
@@ -1192,8 +1259,15 @@ func (proxy *Proxy) exchangeWithTCPServer(
 	}
 
 	// Return healthy connection to pool when not going via a proxy dialer.
+	// [P07] Clear deadlines before pooling so the next borrower starts clean.
+	// If clearing the deadline fails, discard the connection rather than risk
+	// returning a conn with stale timeouts to the pool.
 	if proxy.xTransport.proxyDialer == nil {
-		proxy.tcpConnPool.Put(upstreamAddr, pc)
+		if err := pc.SetDeadline(time.Time{}); err != nil {
+			proxy.tcpConnPool.Discard(pc)
+		} else {
+			proxy.tcpConnPool.Put(upstreamAddr, pc)
+		}
 	}
 
 	return proxy.Decrypt(serverInfo, sharedKey, encryptedResponse, clientNonce)
@@ -1204,6 +1278,9 @@ func (proxy *Proxy) exchangeWithTCPServer(
 // clientsCountInc atomically increments the active-client counter.
 // Returns false without incrementing when the configured limit would be
 // exceeded.
+//
+// [P07] Debug log removed — this runs on every incoming connection and
+// dlog.Debugf string formatting is not free even at non-debug log levels.
 func (proxy *Proxy) clientsCountInc() bool {
 	for {
 		cur := proxy.clientsCount.Load()
@@ -1211,7 +1288,6 @@ func (proxy *Proxy) clientsCountInc() bool {
 			return false
 		}
 		if proxy.clientsCount.CompareAndSwap(cur, cur+1) {
-			dlog.Debugf("clients count: %d", cur+1)
 			return true
 		}
 	}
@@ -1220,12 +1296,13 @@ func (proxy *Proxy) clientsCountInc() bool {
 // clientsCountDec atomically decrements the active-client counter.
 // Uses Add(^uint32(0)) — the canonical single-instruction unsigned decrement —
 // and guards against underflow.
+//
+// [P07] Debug log removed — same hot-path reasoning as clientsCountInc.
 func (proxy *Proxy) clientsCountDec() {
 	if proxy.clientsCount.Load() == 0 {
 		return
 	}
-	v := proxy.clientsCount.Add(^uint32(0))
-	dlog.Debugf("clients count: %d", v)
+	proxy.clientsCount.Add(^uint32(0))
 }
 
 // ── Dynamic timeout ───────────────────────────────────────────────────────────
@@ -1236,17 +1313,18 @@ func (proxy *Proxy) clientsCountDec() {
 // appreciably at very high load.  Minimum is 10 % of the configured baseline.
 //
 // [C13] float64 cast performed once (timeoutF); max() builtin (Go 1.21).
+// [P07] math.Pow(u,4) replaced with u2 := u*u; u4 := u2*u2 (avoids
+//       floating-point exponentiation on every query).  Debug log removed.
 func (proxy *Proxy) getDynamicTimeout() time.Duration {
 	if proxy.timeoutLoadReduction <= 0 || proxy.maxClients == 0 {
 		return proxy.timeout
 	}
 	utilization := float64(proxy.clientsCount.Load()) / float64(proxy.maxClients)
-	timeoutF := float64(proxy.timeout)                                              // [C13] cast once
-	factor := max(1.0-(math.Pow(utilization, 4)*proxy.timeoutLoadReduction), 0.1) // [C13] max builtin
-	dynamicTimeout := time.Duration(timeoutF * factor)
-	dlog.Debugf("Dynamic timeout: %v (utilization: %.2f%%, factor: %.2f)",
-		dynamicTimeout, utilization*100, factor)
-	return dynamicTimeout
+	timeoutF := float64(proxy.timeout) // [C13] cast once
+	u2 := utilization * utilization    // [P07] avoid math.Pow
+	u4 := u2 * u2
+	factor := max(1.0-(u4*proxy.timeoutLoadReduction), 0.1) // [C13] max builtin
+	return time.Duration(timeoutF * factor)
 }
 
 // ── Query pipeline ────────────────────────────────────────────────────────────
