@@ -6,6 +6,24 @@
 // and full compatibility with dnscrypt-proxy 2. Drop-in replacement.
 //
 // ══════════════════════════════════════════════════════════════════════════════
+// ✅ ELITE IMPROVEMENTS - March 31, 2026
+// ══════════════════════════════════════════════════════════════════════════════
+// ELITE 10: buildDialContext — socket options moved to net.Dialer.ControlContext
+//           TCP_FASTOPEN_CONNECT MUST be set before connect(). The prior code
+//           called setTCPOptions(conn) after DialContext returned — by then the
+//           kernel had already completed the TCP handshake and silently discarded
+//           the option. TFO was never actually active on any direct connection.
+//           SO_SNDBUF / SO_RCVBUF are also more effective pre-connect (the kernel
+//           sizes buffers at connect time).
+//           Fix: net.Dialer.ControlContext (Go 1.20+) fires after socket() but
+//           before connect() — the correct timing for all TCP socket options.
+//           tcpControlContext is a package-level func (zero allocation as a field
+//           value). net.Dialer is now stored as XTransport.dialer (consistent with
+//           the PERF 1 pattern for http.Client). SetNoDelay(true) removed — Go's
+//           net package sets TCP_NODELAY automatically on every TCPConn.
+// ══════════════════════════════════════════════════════════════════════════════
+//
+// ══════════════════════════════════════════════════════════════════════════════
 // ✅ ELITE IMPROVEMENTS - March 29, 2026
 // ══════════════════════════════════════════════════════════════════════════════
 // ELITE 8: saveCachedAddrs — removed temp var for expiration pointer
@@ -329,6 +347,7 @@ import (
     "strconv"
     "strings"
     "sync"
+    "syscall"
     "time"
     "unique"
 
@@ -603,6 +622,12 @@ type XTransport struct {
 
     // ── OPT 6: Conditional body_hash on POST requests ─────────────────────────
     BodyHashEnabled bool
+
+    // ── ELITE 10: net.Dialer stored as field ─────────────────────────────
+    // Built once in rebuildTransport() with ControlContext set, consistent with
+    // the PERF 1 pattern that stores http.Client as a field. Zero allocation on
+    // the hot dial path; rebuild only on config reload.
+    dialer net.Dialer
 }
 
 // ── Constructor ───────────────────────────────────────────────────────────────
@@ -871,11 +896,41 @@ func (x *XTransport) CachedHosts() iter.Seq[string] {
     }
 }
 
-// ── TCP low‑level optimizations ───────────────────────────────────────────────
+// ── TCP low‑level optimizations ─────────────────────────────────────────────
 // ── IMP 3: runtime.GOOS dead-code branch removed ─────────────────────────────
 // File has //go:build linux so runtime.GOOS is always "linux". The non-Linux
 // branch was unreachable dead code. Removed to reduce binary size and
 // eliminate a branch on the hot connection path.
+
+// tcpControlContext is assigned to net.Dialer.ControlContext.
+// Called by the Go runtime after socket() but BEFORE connect() — the only
+// correct placement for TCP_FASTOPEN_CONNECT, which the kernel silently ignores
+// if set on an already-connected socket. SO_SNDBUF / SO_RCVBUF are also more
+// effective here: the kernel sizes socket buffers at connect time.
+//
+// Package-level func (not a closure) — zero allocation cost as a struct field.
+// ── ELITE 10 ───────────────────────────────────────────────────────────────────────
+func tcpControlContext(_ context.Context, _, _ string, c syscall.RawConn) error {
+    return c.Control(func(fd uintptr) {
+        ifd := int(fd)
+        // TCP_FASTOPEN_CONNECT — MUST be pre-connect; saves one RTT on repeat conns
+        _ = unix.SetsockoptInt(ifd, unix.IPPROTO_TCP, unix.TCP_FASTOPEN_CONNECT, 1)
+        // TCP_QUICKACK — disable delayed ACKs for faster ACK delivery
+        _ = unix.SetsockoptInt(ifd, unix.IPPROTO_TCP, unix.TCP_QUICKACK, 1)
+        // TCP_NOTSENT_LOWAT — prevents kernel-side send-buffer bloat (PERF 2)
+        _ = unix.SetsockoptInt(ifd, unix.IPPROTO_TCP, unix.TCP_NOTSENT_LOWAT, tcpNotSentLowat)
+        // SO_SNDBUF / SO_RCVBUF — 256 KiB socket buffers (PERF 8)
+        _ = unix.SetsockoptInt(ifd, unix.SOL_SOCKET, unix.SO_SNDBUF, tcpSocketBufSize)
+        _ = unix.SetsockoptInt(ifd, unix.SOL_SOCKET, unix.SO_RCVBUF, tcpSocketBufSize)
+    })
+}
+
+// setTCPOptions applies post-dial TCP socket options for proxy-path connections.
+// Direct connections use tcpControlContext (pre-connect) — this function is
+// ONLY called when a proxy dialer establishes the underlying TCP connection.
+//
+// TCP_FASTOPEN_CONNECT omitted — it is a no-op on already-connected sockets.
+// TCP_NODELAY omitted — Go’s net package sets it automatically on every TCPConn.
 func setTCPOptions(conn net.Conn) {
     tcpConn, ok := conn.(*net.TCPConn)
     if !ok {
@@ -883,29 +938,15 @@ func setTCPOptions(conn net.Conn) {
     }
     raw, err := tcpConn.SyscallConn()
     if err != nil {
-        _ = tcpConn.SetNoDelay(true)
         return
     }
-    raw.Control(func(fd uintptr) {
-        // TCP_QUICKACK – disable delayed ACKs for faster ACK delivery
-        _ = unix.SetsockoptInt(int(fd), unix.IPPROTO_TCP, unix.TCP_QUICKACK, 1)
-
-        // TCP_FASTOPEN_CONNECT – save one RTT on repeat connections (Linux 4.11+)
-        _ = unix.SetsockoptInt(int(fd), unix.IPPROTO_TCP, unix.TCP_FASTOPEN_CONNECT, 1)
-
-        // ── PERF 2: TCP_NOTSENT_LOWAT (IPPROTO_TCP level, value 25) ──────────
-        // Limits unsent data in the kernel send buffer to 16 KiB. Prevents
-        // write-ahead buffering from inflating perceived latency on small DoH
-        // payloads. DISTINCT from SO_SNDLOWAT — earlier code used the wrong one.
-        _ = unix.SetsockoptInt(int(fd), unix.IPPROTO_TCP, unix.TCP_NOTSENT_LOWAT, tcpNotSentLowat)
-
-        // ── PERF 8: SO_SNDBUF / SO_RCVBUF – 256 KiB socket buffers ──────────
-        // Requests larger OS socket buffers. Kernel may cap at sysctl limits.
-        // Prevents buffer-stall on high-BDP paths without hurting DoH latency.
-        _ = unix.SetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_SNDBUF, tcpSocketBufSize)
-        _ = unix.SetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_RCVBUF, tcpSocketBufSize)
+    _ = raw.Control(func(fd uintptr) {
+        ifd := int(fd)
+        _ = unix.SetsockoptInt(ifd, unix.IPPROTO_TCP, unix.TCP_QUICKACK, 1)
+        _ = unix.SetsockoptInt(ifd, unix.IPPROTO_TCP, unix.TCP_NOTSENT_LOWAT, tcpNotSentLowat)
+        _ = unix.SetsockoptInt(ifd, unix.SOL_SOCKET, unix.SO_SNDBUF, tcpSocketBufSize)
+        _ = unix.SetsockoptInt(ifd, unix.SOL_SOCKET, unix.SO_RCVBUF, tcpSocketBufSize)
     })
-    _ = tcpConn.SetNoDelay(true)
 }
 
 // setUDPOptions applies Linux-specific latency optimizations to a UDP socket.
@@ -936,6 +977,21 @@ func (x *XTransport) rebuildTransport() {
         x.transport.CloseIdleConnections()
     }
     x.tlsClientConfig = x.buildTLSConfig()
+
+    // ── ELITE 10: Build net.Dialer once with ControlContext ───────────────
+    // ControlContext fires after socket() but BEFORE connect(), so
+    // TCP_FASTOPEN_CONNECT is active for the very first connect() call.
+    // Stored as a field (consistent with PERF 1) — zero alloc on hot path.
+    x.dialer = net.Dialer{
+        Timeout: x.timeout,
+        KeepAliveConfig: net.KeepAliveConfig{
+            Enable:   true,
+            Idle:     x.keepAlive,
+            Interval: max(x.keepAlive/3, time.Second),
+            Count:    3,
+        },
+        ControlContext: tcpControlContext,
+    }
 
     // Rebuild pre-built headers (OPT 2)
     x.headers = buildPrebuiltHeaders()
@@ -1092,19 +1148,8 @@ func splitHostPort(hostPort string) (host, port string) {
 }
 
 func (x *XTransport) buildDialContext() func(context.Context, string, string) (net.Conn, error) {
-    timeout, keepAlive := x.timeout, x.keepAlive
     useIPv4, useIPv6 := x.useIPv4, x.useIPv6
-
-    d := &net.Dialer{
-        Timeout: timeout,
-        KeepAliveConfig: net.KeepAliveConfig{
-            Enable:   true,
-            Idle:     keepAlive,
-            Interval: max(keepAlive/3, time.Second),
-            Count:    3,
-        },
-    }
-
+    // x.dialer is pre-built in rebuildTransport() with ControlContext set (ELITE 10).
     return func(ctx context.Context, network, addrStr string) (net.Conn, error) {
         host, port := ExtractHostAndPort(addrStr, stamps.DefaultPort)
         portU16 := uint16(port & 0xffff)
@@ -1145,16 +1190,23 @@ func (x *XTransport) buildDialContext() func(context.Context, string, string) (n
             var conn net.Conn
             var err error
             if x.proxyDialer == nil {
-                conn, err = d.DialContext(ctx, dialNet, target)
+                // ControlContext (tcpControlContext) applies all socket options
+                // pre-connect — no post-dial call needed here (ELITE 10).
+                conn, err = x.dialer.DialContext(ctx, dialNet, target)
             } else {
                 if pdCtx, ok := (*x.proxyDialer).(netproxy.ContextDialer); ok {
                 	conn, err = pdCtx.DialContext(ctx, dialNet, target)
                 } else {
                 	conn, err = (*x.proxyDialer).Dial(dialNet, target)
                 }
+                if err == nil {
+                    // Proxy path: ControlContext cannot run (proxy owns the socket).
+                    // Apply options post-dial; TCP_FASTOPEN_CONNECT is omitted
+                    // as it is a no-op on already-connected sockets.
+                    setTCPOptions(conn)
+                }
             }
             if err == nil {
-                setTCPOptions(conn)
                 return conn, nil
             }
             lastErr = err
