@@ -1,59 +1,12 @@
 // Package main implements DNS query processing for dnscrypt-proxy.
 //
-// ──────────────────────── Go 1.26 optimisation index ────────────────────────
-//
-//  1.  errors.AsType[net.Error] (Go 1.26) is applied to EVERY net.Error
-//      unwrap site — lock-free, zero-allocation, ~3× faster than var+As.
-//
-//  2.  packetBounds value type + single validate/validateBool method pair
-//      collapses the three duplicated size-switch bodies
-//      (validateQuery / validateQueryWithError / validateResponse) into one
-//      shared, inlined code path.
-//
-//  3.  slices.Values (Go 1.23 range-over-func) drives the server-search loop
-//      in triggerODoHKeyUpdate, replacing the index-walk with a clean iterator
-//      and natural early-break semantics; no index arithmetic, no off-by-one.
-//
-//  4.  sync.WaitGroup.Go (Go 1.25) wraps the ODoH background key-refresh
-//      goroutine, providing automatic panic propagation instead of a silent
-//      goroutine leak on panic.
-//
-//  5.  any replaces every interface{} occurrence (Go 1.18 alias, idiomatic
-//      since 1.21+).
-//
-//  6.  min / max builtins (Go 1.21) replace manual conditional comparisons.
-//
-//  7.  net.PacketConn assertion is performed once at the top of
-//      sendUDPResponse and short-circuits early — no redundant interface
-//      dispatch on the write path.
-//
-//  8.  processPlugins rewritten with guard-clause early returns (no switch),
-//      reducing indentation and making the hot forward path branch-free.
-//
-//  9.  encryptQuery inlined at its two call sites in executeDNSCryptQuery;
-//      the thin wrapper was adding a stack frame with no reuse benefit on the
-//      DNSCrypt path.  A new encryptForProto helper with a typed proto
-//      parameter replaces it at the processDNSCryptQuery call site.
-//
-// 10.  handleDoHFailure extracted from processDoHQuery so the error-handling
-//      branch compiles to a single out-of-line call, keeping the success path
-//      straight-line code for the branch predictor.
-//
-// 11.  All goroutine closures capture immutable copies of loop variables
-//      (already safe under Go 1.22 loop-var semantics, but made explicit for
-//      auditors).
-//
-// 12.  //go:inline pragmas added to hot-path leaf helpers (failWith,
-//      validateQuery, shouldRetryOverTCP) so the compiler can fold the call
-//      overhead on the fast path.  The pragma is advisory; the compiler may
-//      ignore it for large bodies.
-//
-// Retained unchanged from previous revision:
-//   - math/rand/v2 (lock-free, no mutex, no seed required, Go 1.22+)
-//   - http.Status* constants throughout (no magic numbers)
-//   - ODoH key-update runs in background goroutine (non-blocking hot path)
-//   - triggerODoHKeyUpdate + missing-server warning
-//   - keyUpdateRetryDelay unexported
+// Key design notes:
+//   - errors.AsType[net.Error] (Go 1.26) used for lock-free net.Error unwrapping.
+//   - packetBounds/validate/validateBool collapses duplicated size-check bodies.
+//   - slices.Values (Go 1.23) drives the server-search loop in triggerODoHKeyUpdate.
+//   - ODoH key-update runs in a fire-and-forget goroutine (non-blocking hot path).
+//   - transportProto typed consts replace bare "udp"/"tcp" strings internally.
+//   - processDoHQuery works on a copy of the query buffer to avoid mutating the caller's slice.
 package main
 
 import (
@@ -62,7 +15,6 @@ import (
 	"net"
 	"net/http"
 	"slices"
-	"sync"
 	"time"
 
 	randv2 "math/rand/v2"
@@ -75,7 +27,16 @@ import (
 
 // ─────────────────────────────────────── constants ──────────────────────────
 
+// transportProto is a named alias for the DNS transport layer string constants.
+// It is a type alias (= string), so it remains fully interchangeable with
+// string at compile time — its purpose is documentation and readability, not
+// compile-time enforcement.  Use protoUDP / protoTCP instead of bare literals.
+type transportProto = string
+
 const (
+	protoUDP transportProto = "udp"
+	protoTCP transportProto = "tcp"
+
 	// keyUpdateRetryDelay is the back-off period before retrying an ODoH key
 	// refresh after a 401 or empty-body 200 response.
 	keyUpdateRetryDelay = 10 * time.Second
@@ -193,7 +154,7 @@ func tryServeStaleResponse(pluginsState *PluginsState) ([]byte, bool) {
 	}
 	staleMsg, ok := stale.(*dns.Msg) // stale is stored as any; asserting *dns.Msg
 	if !ok {
-		dlog.Warn("Invalid stale response type in session data")
+		dlog.Warnf("Invalid stale response type in session data: got %T, want *dns.Msg", stale)
 		return nil, false
 	}
 	if err := staleMsg.Pack(); err != nil {
@@ -290,9 +251,9 @@ func processDNSCryptQuery(
 	sharedKey, encryptedQuery, clientNonce, err := encryptForProto(proxy, serverInfo, query, serverProto)
 
 	// If UDP padding fails, fall back to TCP encryption immediately.
-	if err != nil && serverProto == "udp" {
+	if err != nil && serverProto == protoUDP {
 		dlog.Debug("Unable to pad for UDP, re-encrypting query for TCP")
-		serverProto = "tcp"
+		serverProto = protoTCP
 		sharedKey, encryptedQuery, clientNonce, err = encryptForProto(proxy, serverInfo, query, serverProto)
 	}
 	if err != nil {
@@ -331,7 +292,7 @@ func executeDNSCryptQuery(
 	clientNonce []byte,
 ) ([]byte, error) {
 	// Fast path: TCP — no truncation possible, send immediately.
-	if serverProto != "udp" {
+	if serverProto != protoUDP {
 		return proxy.exchangeWithTCPServer(serverInfo, sharedKey, encryptedQuery, clientNonce)
 	}
 
@@ -344,7 +305,7 @@ func executeDNSCryptQuery(
 	dlog.Debugf("[%v] Falling back to TCP", serverInfo.Name)
 
 	// Re-encrypt inline for TCP — avoids encryptForProto call overhead on retry.
-	sharedKey, encryptedQuery, clientNonce, err = proxy.Encrypt(serverInfo, query, "tcp")
+	sharedKey, encryptedQuery, clientNonce, err = proxy.Encrypt(serverInfo, query, protoTCP)
 	if err != nil {
 		return nil, handleEncryptionError(proxy, pluginsState, serverInfo,
 			fmt.Errorf("failed to encrypt query for tcp: %w", err))
@@ -354,8 +315,10 @@ func executeDNSCryptQuery(
 
 // processDoHQuery sends a DNS query via DNS-over-HTTPS.
 //
-// The transaction ID is zeroed before the request (per RFC 8484 §4.1) and
-// restored in both the query and the response on return.
+// The transaction ID is zeroed before the request (per RFC 8484 §4.1).
+// A copy of the query buffer is used for the outgoing request so the caller's
+// slice is never mutated — this prevents subtle bugs if the caller retains a
+// reference for logging, retries, or plugin use.
 //
 // Success is defined as a nil error from DoHQuery.  A nil TLS state (plain-HTTP
 // transport, e.g. a localhost test relay) is explicitly accepted — only an
@@ -370,21 +333,19 @@ func processDoHQuery(
 	pluginsState *PluginsState,
 	query []byte,
 ) ([]byte, error) {
-	tid := TransactionID(query)
-	SetTransactionID(query, 0)
+	// Work on a copy so the caller's query buffer is never mutated.
+	q := append([]byte(nil), query...)
+	tid := TransactionID(q)
+	SetTransactionID(q, 0)
 
 	serverInfo.noticeBegin(proxy)
 
 	serverResponse, _, tls, _, err := proxy.xTransport.DoHQuery(
 		serverInfo.useGet,
 		serverInfo.URL,
-		query,
+		q,
 		proxy.timeout,
 	)
-
-	// Always restore the transaction ID in the original query buffer regardless
-	// of outcome — DoHQuery may have mutated nothing, but we zeroed it above.
-	SetTransactionID(query, tid)
 
 	// Accept: no error AND (plain-HTTP with nil tls, OR TLS handshake complete).
 	if err == nil && (tls == nil || tls.HandshakeComplete) {
@@ -415,10 +376,10 @@ func handleDoHFailure(
 
 	if err != nil {
 		return nil, failWith(pluginsState, proxy, PluginsReturnCodeNetworkError,
-			fmt.Errorf("DoH query failed: %w", err))
+			fmt.Errorf("DoH query to [%v] (%v) failed: %w", serverInfo.Name, serverInfo.URL, err))
 	}
 	return nil, failWith(pluginsState, proxy, PluginsReturnCodeNetworkError,
-		errors.New("DoH query failed: incomplete TLS handshake"))
+		fmt.Errorf("DoH query to [%v] (%v) failed: incomplete TLS handshake", serverInfo.Name, serverInfo.URL))
 }
 
 // processODoHQuery sends a DNS query via Oblivious DNS-over-HTTPS.
@@ -466,9 +427,9 @@ func processODoHQuery(
 	if err == nil && len(responseBody) > 0 && responseCode == http.StatusOK {
 		response, err := odohQuery.decryptResponse(responseBody)
 		if err != nil {
-			dlog.Warnf("Failed to decrypt response from [%v]: %v", serverInfo.Name, err)
+			dlog.Warnf("Failed to decrypt ODoH response from [%v] (url=%v): %v", serverInfo.Name, targetURL, err)
 			serverInfo.noticeFailure(proxy)
-			return nil, fmt.Errorf("ODoH decryption failed: %w", err)
+			return nil, fmt.Errorf("ODoH decryption failed for [%v]: %w", serverInfo.Name, err)
 		}
 		if len(response) >= MinDNSPacketSize {
 			SetTransactionID(response, tid)
@@ -482,37 +443,46 @@ func processODoHQuery(
 		(responseCode == http.StatusOK && len(responseBody) == 0) {
 		if responseCode == http.StatusOK {
 			dlog.Warnf(
-				"ODoH relay for [%v] returned 200 with empty body instead of 401 after key rotation",
-				serverInfo.Name,
+				"ODoH relay for [%v] (url=%v) returned 200 with empty body instead of 401 after key rotation",
+				serverInfo.Name, targetURL,
 			)
 		}
 		dlog.Infof("Forcing key update for [%v]", serverInfo.Name)
 		triggerODoHKeyUpdate(proxy, serverInfo)
 	} else {
-		dlog.Warnf("Failed to receive successful response from [%v]: status=%d err=%v",
-			serverInfo.Name, responseCode, err)
+		dlog.Warnf("Failed to receive successful ODoH response from [%v] (url=%v): status=%d err=%v",
+			serverInfo.Name, targetURL, responseCode, err)
 	}
 
 	// ── Error path ───────────────────────────────────────────────────────────
 	serverInfo.noticeFailure(proxy)
 	if err != nil {
 		return nil, failWith(pluginsState, proxy, PluginsReturnCodeNetworkError,
-			fmt.Errorf("ODoH query failed: %w", err))
+			fmt.Errorf("ODoH query to [%v] (url=%v) failed: %w", serverInfo.Name, targetURL, err))
 	}
 	return nil, failWith(pluginsState, proxy, PluginsReturnCodeNetworkError,
-		fmt.Errorf("ODoH query failed: status code %d", responseCode))
+		fmt.Errorf("ODoH query to [%v] (url=%v) failed: status code %d", serverInfo.Name, targetURL, responseCode))
 }
 
 // triggerODoHKeyUpdate finds the registered server matching serverInfo.Name and
-// calls refreshServer in a background goroutine managed by a sync.WaitGroup
-// (Go 1.25) so that any panic in the goroutine is propagated rather than
-// silently terminating the process.
+// calls refreshServer in a fire-and-forget background goroutine.
 //
-// slices.Values (Go 1.23 range-over-func) replaces the index-based for loop,
-// giving cleaner early-break semantics and eliminating index arithmetic.
+// The goroutine is intentionally unsupervised: it runs until refreshServer
+// returns (or logs a retry-delay notice on error), and there is no Wait caller.
+// A panic in the goroutine will terminate the process via the default Go
+// panic handler — this is acceptable for a non-critical background refresh.
 //
-// If no matching server is found a warning is emitted; the hot-path goroutine
-// is never blocked in either case.
+// Note: on error the goroutine sleeps for keyUpdateRetryDelay before logging.
+// If the proxy shuts down during that window, the goroutine will be abandoned
+// and continue sleeping until the process exits (Go goroutines are not
+// interrupted by shutdown unless a context/channel is checked).  A future
+// improvement could thread a shutdown context through to allow early exit.
+//
+// slices.Values (Go 1.23 range-over-func) drives the server-search loop,
+// giving clean early-break semantics without index arithmetic.
+//
+// If no matching server is found a warning is emitted; the caller is never
+// blocked in either case.
 func triggerODoHKeyUpdate(proxy *Proxy, serverInfo *ServerInfo) {
 	// slices.Values returns an iter.Seq[T] — range-over-func, Go 1.23+.
 	for reg := range slices.Values(proxy.serversInfo.registeredServers) {
@@ -522,25 +492,16 @@ func triggerODoHKeyUpdate(proxy *Proxy, serverInfo *ServerInfo) {
 
 		// Capture immutable copies before the goroutine launch so that
 		// future loop iterations (if any) cannot race with the goroutine.
-		// Explicit copies are idiomatic even under Go 1.22 loop-var semantics.
 		name, stamp := reg.name, reg.stamp
 
-		// sync.WaitGroup.Go (Go 1.25): structured goroutine with panic propagation.
-		// The WaitGroup is not waited on here — this goroutine is intentionally
-		// fire-and-forget.  The benefit over a raw "go" statement is that any
-		// panic is forwarded to the WaitGroup's Wait caller on graceful shutdown
-		// rather than crashing silently.
-		var wg sync.WaitGroup
-		wg.Go(func() {
+		// Fire-and-forget: the key refresh runs in the background so the
+		// calling query goroutine is never blocked on network I/O.
+		go func() {
 			if err := proxy.serversInfo.refreshServer(proxy, name, stamp); err != nil {
 				clocksmith.Sleep(keyUpdateRetryDelay)
 				dlog.Noticef("Key update failed for [%v]: %v", name, err)
 			}
-		})
-		// We do not call wg.Wait() here: the goroutine runs in the background.
-		// The WaitGroup value is stack-allocated and GC'd after this function
-		// returns; the goroutine holds a closure reference keeping it alive.
-		_ = wg // suppress "unused" lint; wg is a value type, not a pointer
+		}()
 		return
 	}
 	dlog.Warnf("triggerODoHKeyUpdate: server [%v] not found in registered servers", serverInfo.Name)
@@ -682,9 +643,9 @@ func sendResponse(
 	}
 
 	switch clientProto {
-	case "udp":
+	case protoUDP:
 		sendUDPResponse(proxy, pluginsState, response, clientAddr, clientPc)
-	case "tcp":
+	case protoTCP:
 		sendTCPResponse(proxy, pluginsState, response, clientPc)
 	default:
 		dlog.Warnf("Unknown client protocol: %s", clientProto)
@@ -713,7 +674,7 @@ func sendUDPResponse(
 	// inside the WriteTo call and surfaces misconfiguration immediately.
 	packetConn, ok := clientPc.(net.PacketConn)
 	if !ok {
-		dlog.Error("Client connection is not a PacketConn for UDP protocol")
+		dlog.Errorf("Client connection is not a net.PacketConn for UDP protocol (got %T, client_addr=%v) — this is a programming error", clientPc, clientAddr)
 		_ = failWith(pluginsState, proxy, PluginsReturnCodeParseError, nil)
 		return
 	}
