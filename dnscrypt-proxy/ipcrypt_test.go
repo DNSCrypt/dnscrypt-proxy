@@ -87,8 +87,8 @@ func TestNewIPCryptConfig(t *testing.T) {
 				} else {
 					if config == nil {
 						t.Errorf("expected config but got nil")
-					} else if config.Algorithm != tt.algorithm {
-						t.Errorf("expected algorithm=%v, got %v", tt.algorithm, config.Algorithm)
+					} else if string(config.Algorithm()) != tt.algorithm {
+						t.Errorf("expected algorithm=%v, got %v", tt.algorithm, config.Algorithm())
 					}
 				}
 			}

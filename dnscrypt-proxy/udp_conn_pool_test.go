@@ -37,12 +37,12 @@ func TestUDPConnPool_Basic(t *testing.T) {
 
 	pool.Put(addr, conn2)
 
-	totalConns, addrCount := pool.Stats()
-	if totalConns != 1 {
-		t.Errorf("Expected 1 connection in pool, got %d", totalConns)
+	stats := pool.Stats()
+	if stats.TotalConnections != 1 {
+		t.Errorf("Expected 1 connection in pool, got %d", stats.TotalConnections)
 	}
-	if addrCount != 1 {
-		t.Errorf("Expected 1 address in pool, got %d", addrCount)
+	if stats.UniqueAddresses != 1 {
+		t.Errorf("Expected 1 address in pool, got %d", stats.UniqueAddresses)
 	}
 }
 
@@ -65,9 +65,8 @@ func TestUDPConnPool_MaxConns(t *testing.T) {
 		pool.Put(addr, conn)
 	}
 
-	totalConns, _ := pool.Stats()
-	if totalConns != UDPPoolMaxConnsPerAddr {
-		t.Errorf("Expected %d connections in pool, got %d", UDPPoolMaxConnsPerAddr, totalConns)
+	if pool.Stats().TotalConnections != UDPPoolMaxConnsPerAddr {
+		t.Errorf("Expected %d connections in pool, got %d", UDPPoolMaxConnsPerAddr, pool.Stats().TotalConnections)
 	}
 }
 
@@ -84,9 +83,8 @@ func TestUDPConnPool_Discard(t *testing.T) {
 
 	pool.Discard(conn)
 
-	totalConns, _ := pool.Stats()
-	if totalConns != 0 {
-		t.Errorf("Expected 0 connections after discard, got %d", totalConns)
+	if pool.Stats().TotalConnections != 0 {
+		t.Errorf("Expected 0 connections after discard, got %d", pool.Stats().TotalConnections)
 	}
 }
 
@@ -115,9 +113,8 @@ func TestUDPConnPool_Concurrent(t *testing.T) {
 
 	wg.Wait()
 
-	totalConns, _ := pool.Stats()
-	if totalConns > UDPPoolMaxConnsPerAddr {
-		t.Errorf("Pool exceeded max connections: %d > %d", totalConns, UDPPoolMaxConnsPerAddr)
+	if pool.Stats().TotalConnections > UDPPoolMaxConnsPerAddr {
+		t.Errorf("Pool exceeded max connections: %d > %d", pool.Stats().TotalConnections, UDPPoolMaxConnsPerAddr)
 	}
 }
 
@@ -134,12 +131,12 @@ func TestUDPConnPool_MultipleAddresses(t *testing.T) {
 	pool.Put(addr1, conn1)
 	pool.Put(addr2, conn2)
 
-	totalConns, addrCount := pool.Stats()
-	if totalConns != 2 {
-		t.Errorf("Expected 2 connections, got %d", totalConns)
+	stats2 := pool.Stats()
+	if stats2.TotalConnections != 2 {
+		t.Errorf("Expected 2 connections, got %d", stats2.TotalConnections)
 	}
-	if addrCount != 2 {
-		t.Errorf("Expected 2 addresses, got %d", addrCount)
+	if stats2.UniqueAddresses != 2 {
+		t.Errorf("Expected 2 addresses, got %d", stats2.UniqueAddresses)
 	}
 }
 
@@ -153,16 +150,14 @@ func TestUDPConnPool_Close(t *testing.T) {
 
 	pool.Close()
 
-	conn2, err := pool.Get(addr)
-	if err != nil {
-		t.Fatalf("Get after close should still work: %v", err)
+	// After Close, Get must return ErrPoolClosed — the pool is shut down.
+	_, err := pool.Get(addr)
+	if err == nil {
+		t.Fatal("Get after close should return an error, got nil")
 	}
 
-	pool.Put(addr, conn2)
-
-	totalConns, _ := pool.Stats()
-	if totalConns != 0 {
-		t.Errorf("Expected 0 connections after close, got %d", totalConns)
+	if pool.Stats().TotalConnections != 0 {
+		t.Errorf("Expected 0 connections after close, got %d", pool.Stats().TotalConnections)
 	}
 }
 

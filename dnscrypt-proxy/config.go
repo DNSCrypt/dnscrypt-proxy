@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/BurntSushi/toml"
@@ -339,6 +340,62 @@ type ConfigFlags struct {
 	ShowCerts               *bool
 }
 
+// ── Minimal config for fast-path decode ──────────────────────────────────────
+
+// minimalConfig is a subset of Config containing only the fields needed for
+// early-exit CLI modes (--resolve). Decoding into this small struct is faster
+// than a full Config decode and avoids allocating sub-structs we don't need.
+type minimalConfig struct {
+	ListenAddresses []string `toml:"listen_addresses"`
+	ServerNames     []string `toml:"server_names"`
+	OfflineMode     bool     `toml:"offline_mode"`
+}
+
+// ── Startup profiling ─────────────────────────────────────────────────────────
+
+// phaseMarker is a function that records the end of one named startup phase.
+// When profiling is disabled it is a no-op.
+type phaseMarker func(phase string)
+
+// newStartupProfiler returns a phase-marking function and a finish function.
+//
+// Both are no-ops unless the environment variable DNSCRYPT_PROXY_PROFILE_STARTUP
+// is set to "1". When enabled, each call to the returned phaseMarker logs the
+// elapsed time since the previous marker and since startup. Calling the finish
+// function logs the total startup duration.
+//
+// Example:
+//
+//	markPhase, endProfile := newStartupProfiler()
+//	defer endProfile()
+//	// … do work …
+//	markPhase("findConfigFile")
+func newStartupProfiler() (phaseMarker, func()) {
+	if os.Getenv("DNSCRYPT_PROXY_PROFILE_STARTUP") != "1" {
+		return func(string) {}, func() {}
+	}
+	start := time.Now()
+	var mu sync.Mutex
+	last := start
+	mark := func(phase string) {
+		now := time.Now()
+		mu.Lock()
+		sincePhase := now.Sub(last)
+		sinceStart := now.Sub(start)
+		last = now
+		mu.Unlock()
+		dlog.Noticef("[startup profiler] %s: +%s (total %s)",
+			phase,
+			sincePhase.Round(time.Millisecond),
+			sinceStart.Round(time.Millisecond),
+		)
+	}
+	finish := func() {
+		mark("startup-complete")
+	}
+	return mark, finish
+}
+
 // ── Defaults ─────────────────────────────────────────────────────────────────
 
 // newConfig returns a Config pre-populated with production-safe defaults.
@@ -415,7 +472,8 @@ func flagBool(f *bool) bool {
 //
 // Resolution order:
 //  1. Absolute path — stat directly.
-//  2. Relative to the current working directory.
+//  2. Relative to the current working directory (os.Stat on a relative path
+//     uses the process cwd internally; no Getwd syscall needed).
 //  3. Relative to the executable directory (calls cdLocal, which changes the
 //     process working directory — an intentional, process-global side effect
 //     inherited from the original dnscrypt-proxy design).
@@ -432,25 +490,26 @@ func findConfigFile(configFile *string) (string, error) {
 		return *configFile, nil
 	}
 
-	// 2. Relative to cwd.
-	if pwd, err := os.Getwd(); err == nil {
-		candidate := filepath.Join(pwd, *configFile)
-		if _, err := os.Stat(candidate); err == nil {
-			return candidate, nil
+	// 2. Relative to cwd — os.Stat on a relative path already uses the process
+	// cwd internally, saving a Getwd syscall in the common case.
+	if _, err := os.Stat(*configFile); err == nil {
+		abs, err := filepath.Abs(*configFile)
+		if err != nil {
+			return *configFile, nil // fallback: return relative path as-is
 		}
+		return abs, nil
 	}
 
 	// 3. Relative to executable directory (side-effects: changes process cwd).
 	cdLocal()
-	pwd, err := os.Getwd()
+	if _, err := os.Stat(*configFile); err != nil {
+		return "", err
+	}
+	abs, err := filepath.Abs(*configFile)
 	if err != nil {
 		return "", err
 	}
-	candidate := filepath.Join(pwd, *configFile)
-	if _, err := os.Stat(candidate); err != nil {
-		return "", err
-	}
-	return candidate, nil
+	return abs, nil
 }
 
 // cdFileDir changes the process working directory to the directory containing
@@ -492,6 +551,10 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 		return errors.New("flags is nil")
 	}
 
+	// Startup profiling (no-op unless DNSCRYPT_PROXY_PROFILE_STARTUP=1).
+	markPhase, endProfile := newStartupProfiler()
+	defer endProfile()
+
 	foundConfigFile, err := findConfigFile(flags.ConfigFile)
 	if err != nil {
 		// Wrap the underlying filesystem error so the full diagnostic is preserved.
@@ -501,23 +564,34 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 		}
 		return fmt.Errorf("unable to load configuration file [%s]: %w -- maybe use the -config command-line switch?", cfgPath, err)
 	}
+	markPhase("findConfigFile")
 	WarnIfMaybeWritableByOtherUsers(foundConfigFile)
+
+	// ── Fast path for --resolve ────────────────────────────────────────────
+	// Decode only the fields needed for address resolution into a small struct.
+	// This avoids allocating the full Config and all its sub-structs when the
+	// caller only needs listen_addresses and server_names to call Resolve().
+	if flags.Resolve != nil && len(*flags.Resolve) > 0 {
+		var mc minimalConfig
+		mc.ListenAddresses = []string{"127.0.0.1:53"} // default if not in file
+		if _, err := toml.DecodeFile(foundConfigFile, &mc); err == nil {
+			addr := "127.0.0.1:53"
+			if len(mc.ListenAddresses) > 0 {
+				addr = mc.ListenAddresses[0]
+			}
+			Resolve(addr, *flags.Resolve, len(mc.ServerNames) == 1)
+			os.Exit(0)
+		}
+		// Fall through to full decode on minimal-decode failure; the full
+		// decode will surface a proper diagnostic error to the caller.
+	}
 
 	config := newConfig()
 	md, err := toml.DecodeFile(foundConfigFile, &config)
 	if err != nil {
 		return err
 	}
-
-	// Handle --resolve before cdFileDir so the proxy is not partially initialised.
-	if flags.Resolve != nil && len(*flags.Resolve) > 0 {
-		addr := "127.0.0.1:53"
-		if len(config.ListenAddresses) > 0 {
-			addr = config.ListenAddresses[0]
-		}
-		Resolve(addr, *flags.Resolve, len(config.ServerNames) == 1)
-		os.Exit(0)
-	}
+	markPhase("tomlDecode")
 
 	if err := cdFileDir(foundConfigFile); err != nil {
 		return err
@@ -586,6 +660,7 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	if err := initializeNetworking(proxy, flags, &config); err != nil {
 		return err
 	}
+	markPhase("configure")
 
 	// Privilege dropping: on supported platforms dropPrivilege replaces the
 	// process image (exec) and never returns here. On unsupported platforms it
@@ -593,6 +668,13 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	if len(proxy.userName) > 0 && !proxy.child {
 		proxy.dropPrivilege(proxy.userName, FileDescriptors)
 		return errors.New("dropping privileges is not supported on this operating system -- unset [user_name] in the configuration file")
+	}
+
+	// --check exits here: all configure* validation has run, but source loading
+	// (network I/O) has not. This makes --check fast and fully offline.
+	if flagBool(flags.Check) {
+		dlog.Notice("Configuration successfully checked")
+		os.Exit(0)
 	}
 
 	if !config.OfflineMode {
@@ -604,6 +686,7 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 			return errors.New("none of the servers listed in [server_names] were found in the configured sources")
 		}
 	}
+	markPhase("loadSources")
 
 	// --list / --list-all: flagBool replaces the five-part nil+deref pattern.
 	if flagBool(flags.List) || flagBool(flags.ListAll) {
@@ -619,11 +702,6 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 
 	// Route logging extracted to its own function for readability.
 	logAnonymizedDNSRoutes(proxy)
-
-	if flagBool(flags.Check) {
-		dlog.Notice("Configuration successfully checked")
-		os.Exit(0)
-	}
 
 	return nil
 }
@@ -817,9 +895,12 @@ func buildServerSummary(server *RegisteredServer, isRelay bool) ServerSummary {
 func (config *Config) loadSources(proxy *Proxy) error {
 	for cfgSourceName, cfgSource := range config.SourcesConfig {
 		// cfgSource is a copy of the map value; shuffle in place then pass by pointer.
-		randv2.Shuffle(len(cfgSource.URLs), func(i, j int) {
-			cfgSource.URLs[i], cfgSource.URLs[j] = cfgSource.URLs[j], cfgSource.URLs[i]
-		})
+		// Shuffling a single-element (or empty) slice is a no-op; skip the call.
+		if len(cfgSource.URLs) > 1 {
+			randv2.Shuffle(len(cfgSource.URLs), func(i, j int) {
+				cfgSource.URLs[i], cfgSource.URLs[j] = cfgSource.URLs[j], cfgSource.URLs[i]
+			})
+		}
 		if err := config.loadSource(proxy, cfgSourceName, &cfgSource); err != nil {
 			return err
 		}
