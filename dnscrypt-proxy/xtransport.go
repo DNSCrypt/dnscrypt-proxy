@@ -956,7 +956,7 @@ func setUDPOptions(conn *net.UDPConn) {
     if err != nil {
         return
     }
-    raw.Control(func(fd uintptr) {
+    _ = raw.Control(func(fd uintptr) {
         // ── PERF 3: SO_BUSY_POLL – kernel busy-polls for 50 µs before sleeping ─
         // Avoids the interrupt + context-switch overhead on the receive path.
         // Reduces per-response latency by ~7 µs on low-latency paths.
@@ -1136,13 +1136,10 @@ func (x *XTransport) prewarmConnection(hostPort string) {
 }
 
 // splitHostPort splits "host:port" → ("host", "port"), handling IPv6 brackets.
-// ── OPT 9: uses strings.Cut for clarity ──────────────────────────────────────
+// Uses net.SplitHostPort for correct IPv6 address handling (e.g. "::1:443").
 func splitHostPort(hostPort string) (host, port string) {
-    if host, port, ok := strings.Cut(hostPort, "]:"); ok {
-        return strings.TrimPrefix(host, "["), port
-    }
-    if host, port, ok := strings.Cut(hostPort, ":"); ok {
-        return host, port
+    if h, p, err := net.SplitHostPort(hostPort); err == nil {
+        return h, p
     }
     return hostPort, ""
 }
@@ -1365,10 +1362,13 @@ func (x *XTransport) buildTLSConfig() *tls.Config {
         }
         certPool.AppendCertsFromPEM(pem)
     }
-    if certPool != nil {
-        certPool.AppendCertsFromPEM(isrgRootX1PEM)
-        cfg.RootCAs = certPool
+    // Ensure the ISRG Root X1 certificate is always installed, even when
+    // SystemCertPool returns (nil, nil) in sandboxed or minimal environments.
+    if certPool == nil {
+        certPool = x509.NewCertPool()
     }
+    certPool.AppendCertsFromPEM(isrgRootX1PEM)
+    cfg.RootCAs = certPool
     if creds.clientCert != "" {
         cert, err := tls.LoadX509KeyPair(creds.clientCert, creds.clientKey)
         if err != nil {
@@ -1477,9 +1477,17 @@ func (x *XTransport) resolveRRType(
         }
         switch rrType {
         case dns.TypeA:
-            ips = append(ips, answer.(*dns.A).A.Addr.AsSlice())
+            if a, ok := answer.(*dns.A); ok {
+                ips = append(ips, a.A.Addr.AsSlice())
+            } else {
+                continue
+            }
         case dns.TypeAAAA:
-            ips = append(ips, answer.(*dns.AAAA).AAAA.Addr.AsSlice())
+            if aaaa, ok := answer.(*dns.AAAA); ok {
+                ips = append(ips, aaaa.AAAA.Addr.AsSlice())
+            } else {
+                continue
+            }
         }
         if ttl := answer.Header().TTL; ttl < minTTL {
             minTTL = ttl
@@ -1980,6 +1988,7 @@ func (x *XTransport) parseAndCacheAltSvc(host string, port int, header http.Head
     dlog.Debugf("Alt-Svc [%s]: %v", host, alt)
 
     altPort := uint16(port & 0xffff)
+    h3Found := false
 
 outer:
     for i, entry := range alt {
@@ -1994,12 +2003,11 @@ outer:
             j++
             if after, ok := strings.CutPrefix(strings.TrimSpace(field), `h3="`); ok {
                 v := strings.TrimSuffix(after, `"`)
-                // ── ELITE FIX: removed redundant p <= 65535 guard ─────────────
                 // ParseUint(v, 10, 16) already restricts the result to [0, 65535]
-                // by construction (bitSize=16). The extra check was always true
-                // and added a branch on every loop iteration for nothing.
+                // by construction (bitSize=16).
                 if p, pErr := strconv.ParseUint(v, 10, 16); pErr == nil {
                     altPort = uint16(p)
+                    h3Found = true
                     dlog.Debugf("Alt-Svc: HTTP/3 advertised for [%s] on port %d", host, altPort)
                     break outer
                 }
@@ -2007,17 +2015,23 @@ outer:
         }
     }
 
+    // If no h3= field was found in the Alt-Svc header, do not cache a
+    // positive entry — altPort still equals the current port, and caching
+    // it would incorrectly route all future requests through the H3 client.
+    if !h3Found {
+        dlog.Debugf("Alt-Svc: no h3= field found for [%s]; not caching", host)
+        return
+    }
+
     x.altSupport.Lock()
-    // ── ELITE FIX: TOCTOU double-check under write lock ───────────────────────
-    // Between the RLock read at the top of this function and this Lock, another
-    // goroutine could have already written a fresh entry. Re-check so we never
-    // overwrite a concurrently-written negative-cache entry with a stale parse.
+    // TOCTOU double-check under write lock: between the RLock read at the top
+    // of this function and this Lock, another goroutine could have written a
+    // fresh negative-cache entry. Re-check to avoid overwriting it.
     if cur, ok := x.altSupport.cache[host]; ok && cur.port == 0 && !isAltSvcExpired(cur, now) {
         x.altSupport.Unlock()
         dlog.Debugf("Alt-Svc: concurrent negative cache write for [%s]; skipping", host)
         return
     }
-    // ── IMP 4: noExpiry=true for positive Alt-Svc entries (no TTL in header) ─
     x.altSupport.cache[host] = altSvcEntry{port: altPort, noExpiry: true}
     dlog.Debugf("Alt-Svc: cached port %d for [%s]", altPort, host)
     x.altSupport.Unlock()
