@@ -45,7 +45,7 @@ func Exchange(ctx context.Context, m *Msg, network, address string) (r *Msg, err
 // If the TLS config is set in the transport a (TCP) connection with TLS is attempted.
 //
 // It is up to the caller to create a message that allows for larger responses to be returned. Specifically
-// this means setting [Msg.Bufsize] that will advertise a larger buffer. Messages without an Bufsize will
+// this means setting [Msg.UDPSize] that will advertise a larger buffer. Messages without a UDPSize will
 // fall back to the historic limit of 512 octets (bytes).
 //
 // The full binary data is included in the (decoded) message as r.Data. If the Data buffer in m is empty

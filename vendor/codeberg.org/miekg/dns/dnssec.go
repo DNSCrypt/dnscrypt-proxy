@@ -248,7 +248,11 @@ func (rr *RRSIG) Sign(k crypto.Signer, rrset []RR, options *SignOption) error {
 	if err != nil {
 		return err
 	}
-	m := rawSignatureData(signdata[n:], rrset, rr)
+	m, err := rawSignatureData(signdata[n:], rrset, rr)
+	if err != nil {
+		return err
+	}
+
 	signdata = signdata[:m+n]
 
 	var h hash.Hash
@@ -361,7 +365,10 @@ func (rr *RRSIG) Verify(k *DNSKEY, rrset []RR, options *SignOption) error {
 
 	rr.Signature = signature
 
-	m := rawSignatureData(signeddata[n:], rrset, rr)
+	m, err := rawSignatureData(signeddata[n:], rrset, rr)
+	if err != nil {
+		return err
+	}
 	signeddata = signeddata[:m+n]
 
 	sigbuf, _ := pack.Base64([]byte(rr.Signature))

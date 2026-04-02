@@ -12,63 +12,7 @@ import (
 	"codeberg.org/miekg/dns/svcb"
 )
 
-func parseSOA(rd *rdata.SOA, c *dnslex.Lexer, o string) error {
-	l, _ := c.Next()
-	rd.Ns = dnsutilAbsolute(l.Token, o)
-	if l.Value == dnslex.Error || rd.Ns == "" {
-		return &ParseError{err: "bad SOA Ns", lex: l}
-	}
-
-	c.Next() // dnslex.Blank
-
-	l, _ = c.Next()
-	rd.Mbox = dnsutilAbsolute(l.Token, o)
-	if l.Value == dnslex.Error || rd.Mbox == "" {
-		return &ParseError{err: "bad SOA Mbox", lex: l}
-	}
-
-	c.Next() // dnslex.Blank
-
-	for i := range 5 {
-		l, _ = c.Next()
-		if l.Value == dnslex.Error {
-			return &ParseError{err: "bad SOA field", lex: l}
-		}
-
-		v, err := dnsstring.AtoiUint32(l.Token)
-		if err != nil {
-			if i == 0 { // Serial must be a number
-				return &ParseError{err: "bad SOA Serial", lex: l}
-			}
-			// We allow other fields to be unitful duration strings
-			var ok bool
-			v, ok = stringToTTL(l.Token)
-			if !ok {
-				return &ParseError{err: "bad SOA field", lex: l}
-			}
-		}
-
-		switch i {
-		case 0:
-			rd.Serial = v
-			c.Next() // dnslex.Blank
-		case 1:
-			rd.Refresh = v
-			c.Next() // dnslex.Blank
-		case 2:
-			rd.Retry = v
-			c.Next() // dnslex.Blank
-		case 3:
-			rd.Expire = v
-			c.Next() // dnslex.Blank
-		case 4:
-			rd.Minttl = v
-		}
-	}
-	return toParseError(dnslex.Discard(c))
-}
-
-func parseHINFO(rd *rdata.HINFO, c *dnslex.Lexer, o string) error {
+func parseHINFO(rd *rdata.HINFO, c *dnslex.Lexer, _ string) error {
 	chunks, err := remainderSlice(c, "bad HINFO fields")
 	if err != nil {
 		return err
@@ -91,7 +35,7 @@ func parseHINFO(rd *rdata.HINFO, c *dnslex.Lexer, o string) error {
 }
 
 // according to RFC 1183 the parsing is identical to HINFO, so just use that code.
-func parseISDN(rd *rdata.ISDN, c *dnslex.Lexer, o string) error {
+func parseISDN(rd *rdata.ISDN, c *dnslex.Lexer, _ string) error {
 	chunks, err := remainderSlice(c, "bad ISDN fields")
 	if err != nil {
 		return err
@@ -198,7 +142,7 @@ func parseNAPTR(rd *rdata.NAPTR, c *dnslex.Lexer, o string) error {
 	return toParseError(dnslex.Discard(c))
 }
 
-func parseLOC(rd *rdata.LOC, c *dnslex.Lexer, o string) error {
+func parseLOC(rd *rdata.LOC, c *dnslex.Lexer, _ string) error {
 	var err error
 	// Non zero defaults for LOC record, see RFC 1876, Section 3.
 	rd.Size = 0x12     // 1e2 cm (1m)
@@ -378,7 +322,7 @@ func parseHIP(rd *rdata.HIP, c *dnslex.Lexer, o string) error {
 	return nil
 }
 
-func parseCSYNC(rd *rdata.CSYNC, c *dnslex.Lexer, o string) error {
+func parseCSYNC(rd *rdata.CSYNC, c *dnslex.Lexer, _ string) error {
 	var err error
 	l, _ := c.Next()
 	rd.Serial, err = dnsstring.AtoiUint32(l.Token)
@@ -492,7 +436,7 @@ func parseNSEC(rd *rdata.NSEC, c *dnslex.Lexer, o string) error {
 	return nil
 }
 
-func parseNSEC3(rd *rdata.NSEC3, c *dnslex.Lexer, o string) error {
+func parseNSEC3(rd *rdata.NSEC3, c *dnslex.Lexer, _ string) error {
 	var err error
 	l, _ := c.Next()
 	rd.Hash, err = dnsstring.AtoiUint8(l.Token)
@@ -539,7 +483,7 @@ func parseNSEC3(rd *rdata.NSEC3, c *dnslex.Lexer, o string) error {
 	return nil
 }
 
-func parseNSEC3PARAM(rd *rdata.NSEC3PARAM, c *dnslex.Lexer, o string) error {
+func parseNSEC3PARAM(rd *rdata.NSEC3PARAM, c *dnslex.Lexer, _ string) error {
 	var err error
 	l, _ := c.Next()
 	rd.Hash, err = dnsstring.AtoiUint8(l.Token)
@@ -570,7 +514,7 @@ func parseNSEC3PARAM(rd *rdata.NSEC3PARAM, c *dnslex.Lexer, o string) error {
 	return toParseError(dnslex.Discard(c))
 }
 
-func parseEUI48(rd *rdata.EUI48, c *dnslex.Lexer, o string) error {
+func parseEUI48(rd *rdata.EUI48, c *dnslex.Lexer, _ string) error {
 	l, _ := c.Next()
 	if len(l.Token) != 17 || l.Value == dnslex.Error {
 		return &ParseError{err: "bad EUI48 Address", lex: l}
@@ -596,7 +540,7 @@ func parseEUI48(rd *rdata.EUI48, c *dnslex.Lexer, o string) error {
 	return toParseError(dnslex.Discard(c))
 }
 
-func parseEUI64(rd *rdata.EUI64, c *dnslex.Lexer, o string) error {
+func parseEUI64(rd *rdata.EUI64, c *dnslex.Lexer, _ string) error {
 	l, _ := c.Next()
 	if len(l.Token) != 23 || l.Value == dnslex.Error {
 		return &ParseError{err: "bad EUI64 Address", lex: l}
@@ -622,7 +566,7 @@ func parseEUI64(rd *rdata.EUI64, c *dnslex.Lexer, o string) error {
 	return toParseError(dnslex.Discard(c))
 }
 
-func parseGPOS(rd *rdata.GPOS, c *dnslex.Lexer, o string) error {
+func parseGPOS(rd *rdata.GPOS, c *dnslex.Lexer, _ string) error {
 	var err error
 	l, _ := c.Next()
 	if _, err = strconv.ParseFloat(l.Token, 64); err != nil || l.Value == dnslex.Error {
@@ -646,7 +590,7 @@ func parseGPOS(rd *rdata.GPOS, c *dnslex.Lexer, o string) error {
 	return toParseError(dnslex.Discard(c))
 }
 
-func parseRFC3597(rd *rdata.RFC3597, c *dnslex.Lexer, o string) error {
+func parseRFC3597(rd *rdata.RFC3597, c *dnslex.Lexer, _ string) error {
 	l, _ := c.Next()
 	if l.Token != "\\#" {
 		return &ParseError{err: "bad RFC3597 Rdata", lex: l}
@@ -666,7 +610,7 @@ func parseRFC3597(rd *rdata.RFC3597, c *dnslex.Lexer, o string) error {
 	return err
 }
 
-func parseTXT(rd *rdata.TXT, c *dnslex.Lexer, o string) error {
+func parseTXT(rd *rdata.TXT, c *dnslex.Lexer, _ string) error {
 	var err error
 	// no dnslex.Blank reading here, because all this rdata is TXT
 	rd.Txt, err = remainderSlice(c, "bad TXT Txt")
@@ -674,13 +618,13 @@ func parseTXT(rd *rdata.TXT, c *dnslex.Lexer, o string) error {
 }
 
 // identical to setTXT
-func parseNINFO(rd *rdata.NINFO, c *dnslex.Lexer, o string) error {
+func parseNINFO(rd *rdata.NINFO, c *dnslex.Lexer, _ string) error {
 	var err error
 	rd.ZSData, err = remainderSlice(c, "bad NINFO ZSData")
 	return err
 }
 
-func parseURI(rd *rdata.URI, c *dnslex.Lexer, o string) error {
+func parseURI(rd *rdata.URI, c *dnslex.Lexer, _ string) error {
 	var err error
 	l, _ := c.Next()
 	rd.Priority, err = dnsstring.AtoiUint16(l.Token)
@@ -707,7 +651,7 @@ func parseURI(rd *rdata.URI, c *dnslex.Lexer, o string) error {
 	return nil
 }
 
-func parseUINFO(rd *rdata.UINFO, c *dnslex.Lexer, o string) error {
+func parseUINFO(rd *rdata.UINFO, c *dnslex.Lexer, _ string) error {
 	s, err := remainderSlice(c, "bad UINFO Uinfo")
 	if err != nil {
 		return err
@@ -719,7 +663,7 @@ func parseUINFO(rd *rdata.UINFO, c *dnslex.Lexer, o string) error {
 	return nil
 }
 
-func parseCAA(rd *rdata.CAA, c *dnslex.Lexer, o string) error {
+func parseCAA(rd *rdata.CAA, c *dnslex.Lexer, _ string) error {
 	var err error
 	l, _ := c.Next()
 	rd.Flag, err = dnsstring.AtoiUint8(l.Token)
@@ -746,7 +690,7 @@ func parseCAA(rd *rdata.CAA, c *dnslex.Lexer, o string) error {
 	return nil
 }
 
-func parseTKEY(rd *rdata.TKEY, c *dnslex.Lexer, o string) error {
+func parseTKEY(rd *rdata.TKEY, c *dnslex.Lexer, _ string) error {
 	var err error
 	l, _ := c.Next()
 

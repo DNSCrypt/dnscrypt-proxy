@@ -176,6 +176,79 @@ func parseRP(rd *rdata.RP, c *dnslex.Lexer, o string) (err error) {
 	return toParseError(dnslex.Discard(c))
 }
 
+func parseSOA(rd *rdata.SOA, c *dnslex.Lexer, o string) (err error) {
+	l, _ := c.Next()
+	rd.Ns = dnsutilAbsolute(l.Token, o)
+	if l.Value == dnslex.Error || rd.Ns == "" {
+		return &ParseError{err: "bad SOA Ns", lex: l}
+	}
+
+	c.Next() // dnslex.Blank
+
+	l, _ = c.Next()
+	rd.Mbox = dnsutilAbsolute(l.Token, o)
+	if l.Value == dnslex.Error || rd.Mbox == "" {
+		return &ParseError{err: "bad SOA Mbox", lex: l}
+	}
+
+	c.Next() // dnslex.Blank
+
+	l, _ = c.Next()
+	rd.Serial, err = dnsstring.AtoiUint32(l.Token)
+	if l.Value == dnslex.Error || err != nil {
+		return &ParseError{err: "bad SOA Serial", lex: l}
+	}
+
+	c.Next() // dnslex.Blank
+
+	l, _ = c.Next()
+	rd.Refresh, err = dnsstring.AtoiUint32(l.Token)
+	if l.Value == dnslex.Error || err != nil {
+		var ok bool
+		rd.Refresh, ok = stringToTTL(l.Token)
+		if !ok {
+			return &ParseError{err: "bad SOA Refresh", lex: l}
+		}
+	}
+
+	c.Next() // dnslex.Blank
+
+	l, _ = c.Next()
+	rd.Retry, err = dnsstring.AtoiUint32(l.Token)
+	if l.Value == dnslex.Error || err != nil {
+		var ok bool
+		rd.Retry, ok = stringToTTL(l.Token)
+		if !ok {
+			return &ParseError{err: "bad SOA Retry", lex: l}
+		}
+	}
+
+	c.Next() // dnslex.Blank
+
+	l, _ = c.Next()
+	rd.Expire, err = dnsstring.AtoiUint32(l.Token)
+	if l.Value == dnslex.Error || err != nil {
+		var ok bool
+		rd.Expire, ok = stringToTTL(l.Token)
+		if !ok {
+			return &ParseError{err: "bad SOA Expire", lex: l}
+		}
+	}
+
+	c.Next() // dnslex.Blank
+
+	l, _ = c.Next()
+	rd.Minttl, err = dnsstring.AtoiUint32(l.Token)
+	if l.Value == dnslex.Error || err != nil {
+		var ok bool
+		rd.Minttl, ok = stringToTTL(l.Token)
+		if !ok {
+			return &ParseError{err: "bad SOA Minttl", lex: l}
+		}
+	}
+	return toParseError(dnslex.Discard(c))
+}
+
 func parseIPN(rd *rdata.IPN, c *dnslex.Lexer, o string) (err error) {
 	l, _ := c.Next()
 	rd.Node, err = dnsstring.AtoiUint64(l.Token)

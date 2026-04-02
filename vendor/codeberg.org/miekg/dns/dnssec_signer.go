@@ -174,8 +174,7 @@ func (k *DNSKEY) publicKeyED25519() ed25519.PublicKey {
 }
 
 // Return the raw signature data.
-func rawSignatureData(buf []byte, rrset []RR, s *RRSIG) int {
-	off := 0
+func rawSignatureData(buf []byte, rrset []RR, s *RRSIG) (off int, err error) {
 	for _, rr := range rrset {
 		rr.Header().TTL = s.OrigTTL
 		labels := dnsutilLabels(rr.Header().Name)
@@ -199,7 +198,9 @@ func rawSignatureData(buf []byte, rrset []RR, s *RRSIG) int {
 
 	off = 0
 	for _, rr := range rrset {
-		_, off, _ = packRR(rr, buf, off, nil)
+		if _, off, err = packRR(rr, buf, off, nil); err != nil {
+			return 0, err
+		}
 	}
-	return off
+	return off, nil
 }

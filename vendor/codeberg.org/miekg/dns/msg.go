@@ -760,7 +760,7 @@ func (m *Msg) ReadFrom(r io.Reader) (int64, error) {
 	li := int(l)
 	if li < MsgHeaderSize {
 		io.Copy(io.Discard, io.LimitReader(r, int64(li))) // discard the remaining octets
-		return 0, fmt.Errorf("dns: TCP message size %d, can not be smaller than %d", li, MsgHeaderSize)
+		return 0, fmt.Errorf("dns: message size %d, can not be smaller than %d", li, MsgHeaderSize)
 	}
 
 	if len(m.Data) < li {
@@ -769,9 +769,10 @@ func (m *Msg) ReadFrom(r io.Reader) (int64, error) {
 		m.Data = m.Data[:li]
 	}
 	n, err := io.ReadFull(r, m.Data)
-	if err != nil {
-		m.Data = m.Data[:n]
+	if err == nil && n != li {
+		return 0, fmt.Errorf("dns: message size %d does not match prefix %d", li, n)
 	}
+	m.Data = m.Data[:n]
 	return int64(n), err
 }
 

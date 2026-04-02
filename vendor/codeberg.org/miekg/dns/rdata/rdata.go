@@ -123,10 +123,10 @@ type SOA struct {
 	// the \. instead of jumping over it.
 	Mbox    string `dns:"mname"`
 	Serial  uint32
-	Refresh uint32
-	Retry   uint32
-	Expire  uint32
-	Minttl  uint32
+	Refresh uint32 `dns:"ttl"`
+	Retry   uint32 `dns:"ttl"`
+	Expire  uint32 `dns:"ttl"`
+	Minttl  uint32 `dns:"ttl"`
 }
 
 // TXT data. See RFC 1035.

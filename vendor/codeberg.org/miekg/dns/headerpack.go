@@ -31,7 +31,7 @@ func (h Header) packHeader(msg []byte, off int, rrtype uint16, compress map[stri
 	if err != nil {
 		return len(msg), err
 	}
-	if len(msg)-off < 10 {
+	if len(msg)-off < 11 {
 		return len(msg), &pack.Error{Err: "overflow RR header"}
 	}
 	_ = msg[off+10]

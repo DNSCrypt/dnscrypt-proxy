@@ -469,11 +469,13 @@ const (
 	ExtendedErrorNetworkError
 	ExtendedErrorInvalidData
 	ExtendedErrorSignatureExpiredBeforeValid
-	ExtendedErrorTooEarly
-	ExtendedErrorUnsupportedNSEC3IterValue
+	ExtendedErrorTooEarly                  // RFC 9250
+	ExtendedErrorUnsupportedNSEC3IterValue // RFC 9276
 	ExtendedErrorUnableToConformToPolicy
 	ExtendedErrorSynthesized
-	ExtendedErrorInvalidQueryType
+	ExtendedErrorInvalidQueryType // RFC 9824
+	ExtendedErrorRateLimited
+	ExtendedErrorOverQuota
 )
 
 // ExtendedErrorToString maps extended error info codes to a human readable description. This is used inside
