@@ -1195,13 +1195,6 @@ func (x *XTransport) buildDialContext() func(context.Context, string, string) (n
 		portU16 := uint16(port & 0xffff)
 
 		cachedAddrs, _, _ := x.loadCachedAddrs(host)
-		fallbackTarget := ""
-		parsedHost := parseIPAddr(host)
-		if parsedHost.IsValid() {
-			fallbackTarget = formatDialTarget(parsedHost, portU16)
-		} else {
-			fallbackTarget = host + ":" + strconv.Itoa(port)
-		}
 
 		dialNet := network
 		switch {
@@ -1242,8 +1235,17 @@ func (x *XTransport) buildDialContext() func(context.Context, string, string) (n
 			}
 		}
 
-		if len(cachedAddrs) == 0 {
-			dlog.Debugf("[%s] no cached IP; falling back to hostname dial", host)
+		if len(cachedAddrs) > 0 {
+			return nil, lastErr
+		}
+		dlog.Debugf("[%s] no cached IP; falling back to hostname dial", host)
+
+		fallbackTarget := ""
+		parsedHost := parseIPAddr(host)
+		if parsedHost.IsValid() {
+			fallbackTarget = formatDialTarget(parsedHost, portU16)
+		} else {
+			fallbackTarget = host + ":" + strconv.Itoa(port)
 		}
 
 		var conn net.Conn
@@ -1263,10 +1265,7 @@ func (x *XTransport) buildDialContext() func(context.Context, string, string) (n
 		if err == nil {
 			return conn, nil
 		}
-		if lastErr == nil {
-			lastErr = err
-		}
-		return nil, lastErr
+		return nil, err
 	}
 }
 
