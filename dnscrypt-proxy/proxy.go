@@ -1367,6 +1367,7 @@ func (proxy *Proxy) processIncomingQuery(
 	}
 
 	pluginsState := NewPluginsState(proxy, clientProto, clientAddr, serverProto, start)
+	defer pluginsState.ReleaseSessionData(&proxy.pluginsGlobals)
 
 	// [P05] Resolve serverInfo once upfront when we know we'll need an upstream
 	// exchange (i.e. not cache-only mode), so the plugin callback and the

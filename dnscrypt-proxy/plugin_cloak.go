@@ -140,6 +140,7 @@ func (plugin *PluginCloak) loadRules(lines string, patternMatcher *PatternMatche
 		}
 	}
 
+	patternMatcher.Build()
 	return nil
 }
 

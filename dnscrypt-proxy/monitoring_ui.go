@@ -10,6 +10,7 @@ import (
 	"os"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -485,39 +486,63 @@ func (mc *MetricsCollector) generatePrometheusMetrics() string {
 	// Write help and type information for each metric
 	result.WriteString("# HELP dnscrypt_proxy_build_info A metric with a constant '1' value labeled by version, goversion from which dnscrypt_proxy was built, and the goos and goarch for the build.\n")
 	result.WriteString("# TYPE dnscrypt_proxy_build_info gauge\n")
-	result.WriteString(fmt.Sprintf("dnscrypt_proxy_build_info{goarch=\"%s\", goos=\"%s\", goversion=\"%s\", version=\"%s\"} 1\n", runtime.GOARCH, runtime.GOOS, runtime.Version(), AppVersion))
+	result.WriteString("dnscrypt_proxy_build_info{goarch=\"")
+	result.WriteString(runtime.GOARCH)
+	result.WriteString("\", goos=\"")
+	result.WriteString(runtime.GOOS)
+	result.WriteString("\", goversion=\"")
+	result.WriteString(runtime.Version())
+	result.WriteString("\", version=\"")
+	result.WriteString(AppVersion)
+	result.WriteString("\"} 1\n")
 
 	result.WriteString("# HELP dnscrypt_proxy_queries_total Total number of DNS queries processed\n")
 	result.WriteString("# TYPE dnscrypt_proxy_queries_total counter\n")
-	result.WriteString(fmt.Sprintf("dnscrypt_proxy_queries_total %d\n", totalQueries))
+	result.WriteString("dnscrypt_proxy_queries_total ")
+	result.WriteString(strconv.FormatUint(totalQueries, 10))
+	result.WriteByte('\n')
 
 	result.WriteString("# HELP dnscrypt_proxy_queries_per_second Current queries per second rate\n")
 	result.WriteString("# TYPE dnscrypt_proxy_queries_per_second gauge\n")
-	result.WriteString(fmt.Sprintf("dnscrypt_proxy_queries_per_second %.2f\n", queriesPerSecond))
+	result.WriteString("dnscrypt_proxy_queries_per_second ")
+	result.WriteString(strconv.FormatFloat(queriesPerSecond, 'f', 2, 64))
+	result.WriteByte('\n')
 
 	result.WriteString("# HELP dnscrypt_proxy_uptime_seconds Uptime in seconds\n")
 	result.WriteString("# TYPE dnscrypt_proxy_uptime_seconds counter\n")
-	result.WriteString(fmt.Sprintf("dnscrypt_proxy_uptime_seconds %.0f\n", uptime))
+	result.WriteString("dnscrypt_proxy_uptime_seconds ")
+	result.WriteString(strconv.FormatFloat(uptime, 'f', 0, 64))
+	result.WriteByte('\n')
 
 	result.WriteString("# HELP dnscrypt_proxy_cache_hits_total Total number of cache hits\n")
 	result.WriteString("# TYPE dnscrypt_proxy_cache_hits_total counter\n")
-	result.WriteString(fmt.Sprintf("dnscrypt_proxy_cache_hits_total %d\n", cacheHits))
+	result.WriteString("dnscrypt_proxy_cache_hits_total ")
+	result.WriteString(strconv.FormatUint(cacheHits, 10))
+	result.WriteByte('\n')
 
 	result.WriteString("# HELP dnscrypt_proxy_cache_misses_total Total number of cache misses\n")
 	result.WriteString("# TYPE dnscrypt_proxy_cache_misses_total counter\n")
-	result.WriteString(fmt.Sprintf("dnscrypt_proxy_cache_misses_total %d\n", cacheMisses))
+	result.WriteString("dnscrypt_proxy_cache_misses_total ")
+	result.WriteString(strconv.FormatUint(cacheMisses, 10))
+	result.WriteByte('\n')
 
 	result.WriteString("# HELP dnscrypt_proxy_cache_hit_ratio Current cache hit ratio\n")
 	result.WriteString("# TYPE dnscrypt_proxy_cache_hit_ratio gauge\n")
-	result.WriteString(fmt.Sprintf("dnscrypt_proxy_cache_hit_ratio %.4f\n", cacheHitRatio))
+	result.WriteString("dnscrypt_proxy_cache_hit_ratio ")
+	result.WriteString(strconv.FormatFloat(cacheHitRatio, 'f', 4, 64))
+	result.WriteByte('\n')
 
 	result.WriteString("# HELP dnscrypt_proxy_blocked_queries_total Total number of blocked queries\n")
 	result.WriteString("# TYPE dnscrypt_proxy_blocked_queries_total counter\n")
-	result.WriteString(fmt.Sprintf("dnscrypt_proxy_blocked_queries_total %d\n", blockCount))
+	result.WriteString("dnscrypt_proxy_blocked_queries_total ")
+	result.WriteString(strconv.FormatUint(blockCount, 10))
+	result.WriteByte('\n')
 
 	result.WriteString("# HELP dnscrypt_proxy_response_time_average_ms Average response time in milliseconds\n")
 	result.WriteString("# TYPE dnscrypt_proxy_response_time_average_ms gauge\n")
-	result.WriteString(fmt.Sprintf("dnscrypt_proxy_response_time_average_ms %.2f\n", avgResponseTime))
+	result.WriteString("dnscrypt_proxy_response_time_average_ms ")
+	result.WriteString(strconv.FormatFloat(avgResponseTime, 'f', 2, 64))
+	result.WriteByte('\n')
 
 	// Add server-specific metrics
 	mc.serverMutex.RLock()
@@ -526,7 +551,11 @@ func (mc *MetricsCollector) generatePrometheusMetrics() string {
 	for server, count := range mc.serverQueryCount {
 		// For Prometheus labels, escape quotes and backslashes to prevent label injection
 		escapedServer := strings.ReplaceAll(strings.ReplaceAll(server, "\\", "\\\\"), "\"", "\\\"")
-		result.WriteString(fmt.Sprintf("dnscrypt_proxy_server_queries_total{server=\"%s\"} %d\n", escapedServer, count))
+		result.WriteString("dnscrypt_proxy_server_queries_total{server=\"")
+		result.WriteString(escapedServer)
+		result.WriteString("\"} ")
+		result.WriteString(strconv.FormatUint(count, 10))
+		result.WriteByte('\n')
 	}
 
 	result.WriteString("# HELP dnscrypt_proxy_server_response_time_average_ms Average response time per server in milliseconds\n")
@@ -536,7 +565,11 @@ func (mc *MetricsCollector) generatePrometheusMetrics() string {
 			avgTime := float64(mc.serverResponseTime[server]) / float64(count)
 			// For Prometheus labels, escape quotes and backslashes to prevent label injection
 			escapedServer := strings.ReplaceAll(strings.ReplaceAll(server, "\\", "\\\\"), "\"", "\\\"")
-			result.WriteString(fmt.Sprintf("dnscrypt_proxy_server_response_time_average_ms{server=\"%s\"} %.2f\n", escapedServer, avgTime))
+			result.WriteString("dnscrypt_proxy_server_response_time_average_ms{server=\"")
+			result.WriteString(escapedServer)
+			result.WriteString("\"} ")
+			result.WriteString(strconv.FormatFloat(avgTime, 'f', 2, 64))
+			result.WriteByte('\n')
 		}
 	}
 	mc.serverMutex.RUnlock()
@@ -547,7 +580,11 @@ func (mc *MetricsCollector) generatePrometheusMetrics() string {
 	result.WriteString("# TYPE dnscrypt_proxy_query_type_total counter\n")
 	for qtype, count := range mc.queryTypes {
 		// DNS query types are safe alphanumeric values, no escaping needed
-		result.WriteString(fmt.Sprintf("dnscrypt_proxy_query_type_total{type=\"%s\"} %d\n", qtype, count))
+		result.WriteString("dnscrypt_proxy_query_type_total{type=\"")
+		result.WriteString(qtype)
+		result.WriteString("\"} ")
+		result.WriteString(strconv.FormatUint(count, 10))
+		result.WriteByte('\n')
 	}
 	mc.queryTypesMutex.RUnlock()
 
@@ -559,11 +596,15 @@ func (mc *MetricsCollector) generatePrometheusMetrics() string {
 
 	result.WriteString("# HELP dnscrypt_proxy_query_log_entries Current number of query log entries in memory\n")
 	result.WriteString("# TYPE dnscrypt_proxy_query_log_entries gauge\n")
-	result.WriteString(fmt.Sprintf("dnscrypt_proxy_query_log_entries %d\n", queryLogEntries))
+	result.WriteString("dnscrypt_proxy_query_log_entries ")
+	result.WriteString(strconv.Itoa(queryLogEntries))
+	result.WriteByte('\n')
 
 	result.WriteString("# HELP dnscrypt_proxy_memory_usage_bytes Current memory usage in bytes for query logs\n")
 	result.WriteString("# TYPE dnscrypt_proxy_memory_usage_bytes gauge\n")
-	result.WriteString(fmt.Sprintf("dnscrypt_proxy_memory_usage_bytes %d\n", memoryUsage))
+	result.WriteString("dnscrypt_proxy_memory_usage_bytes ")
+	result.WriteString(strconv.FormatInt(memoryUsage, 10))
+	result.WriteByte('\n')
 
 	return result.String()
 }

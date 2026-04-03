@@ -71,7 +71,7 @@ func parseODoHTargetConfigs(configs []byte) ([]ODoHTargetConfig, error) {
 		return nil, fmt.Errorf("Malformed configs")
 	}
 
-	targets := make([]ODoHTargetConfig, 0)
+	targets := make([]ODoHTargetConfig, 0, maxODoHConfigs)
 	offset := 2
 	for {
 		if offset+4 > len(configs) || len(targets) >= maxODoHConfigs {

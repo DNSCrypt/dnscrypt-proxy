@@ -105,7 +105,7 @@ func (plugin *PluginBlockName) Init(proxy *Proxy) error {
 
 // loadRules parses and loads name patterns into the BlockedNames
 func (plugin *PluginBlockName) loadRules(lines string, blockedNamesObj *BlockedNames) error {
-	return ProcessConfigLines(lines, func(line string, lineNo int) error {
+	err := ProcessConfigLines(lines, func(line string, lineNo int) error {
 		rulePart, weeklyRanges, err := ParseTimeBasedRule(line, lineNo, blockedNamesObj.allWeeklyRanges)
 		if err != nil {
 			dlog.Error(err)
@@ -118,6 +118,11 @@ func (plugin *PluginBlockName) loadRules(lines string, blockedNamesObj *BlockedN
 		}
 		return nil
 	})
+	if err != nil {
+		return err
+	}
+	blockedNamesObj.patternMatcher.Build()
+	return nil
 }
 
 func (plugin *PluginBlockName) Drop() error {

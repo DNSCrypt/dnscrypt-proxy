@@ -1,13 +1,10 @@
 package main
 
 import (
-	"errors"
-	"fmt"
 	"io"
-	"time"
+	"strconv"
 
 	"codeberg.org/miekg/dns"
-	"github.com/jedisct1/dlog"
 )
 
 type PluginNxLog struct {
@@ -52,27 +49,13 @@ func (plugin *PluginNxLog) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 	question := msg.Question[0]
 	qType, ok := dns.TypeToString[dns.RRToType(question)]
 	if !ok {
-		qType = fmt.Sprintf("%d", dns.RRToType(question))
+		qType = strconv.FormatUint(uint64(dns.RRToType(question)), 10)
 	}
 	qName := pluginsState.qName
 
-	var line string
-	if plugin.format == "tsv" {
-		now := time.Now()
-		year, month, day := now.Date()
-		hour, minute, second := now.Clock()
-		tsStr := fmt.Sprintf("[%d-%02d-%02d %02d:%02d:%02d]", year, int(month), day, hour, minute, second)
-		line = fmt.Sprintf("%s\t%s\t%s\t%s\n", tsStr, clientIPStr, StringQuote(qName), qType)
-	} else if plugin.format == "ltsv" {
-		line = fmt.Sprintf("time:%d\thost:%s\tmessage:%s\ttype:%s\n",
-			time.Now().Unix(), clientIPStr, StringQuote(qName), qType)
-	} else {
-		dlog.Fatalf("Unexpected log format: [%s]", plugin.format)
+	if err := WritePluginLog(plugin.logger, plugin.format, clientIPStr, qName, qType); err != nil {
+		return err
 	}
-	if plugin.logger == nil {
-		return errors.New("Log file not initialized")
-	}
-	_, _ = plugin.logger.Write([]byte(line))
 
 	return nil
 }

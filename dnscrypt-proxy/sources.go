@@ -337,7 +337,6 @@ func (source *Source) Parse() ([]RegisteredServer, error) {
 }
 
 func (source *Source) parseV2() ([]RegisteredServer, error) {
-	var registeredServers []RegisteredServer
 	var stampErrs []string
 
 	appendStampErr := func(format string, a ...any) {
@@ -359,6 +358,8 @@ func (source *Source) parseV2() ([]RegisteredServer, error) {
 
 	parts = parts[1:] // Skip preamble.
 
+	registeredServers := make([]RegisteredServer, 0, len(parts))
+
 	for _, part := range parts {
 		part = strings.TrimSpace(part)
 		subparts := strings.Split(part, "\n")
@@ -374,7 +375,7 @@ func (source *Source) parseV2() ([]RegisteredServer, error) {
 		subparts = subparts[1:]
 
 		var description string
-		stampStrs := make([]string, 0)
+		stampStrs := make([]string, 0, 2)
 
 		for _, subpart := range subparts {
 			subpart = strings.TrimSpace(subpart)

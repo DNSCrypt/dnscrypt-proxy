@@ -127,7 +127,7 @@ func (plugin *PluginForward) initDHCPDetectors(proxy *Proxy) error {
 // the parsed forward map, and any errors encountered.
 func (plugin *PluginForward) parseForwardFile(lines string) (bool, []PluginForwardEntry, error) {
 	requiresDHCP := false
-	forwardMap := make([]PluginForwardEntry, 0)
+	forwardMap := make([]PluginForwardEntry, 0, strings.Count(lines, "\n")+1)
 
 	for lineNo, line := range strings.Split(lines, "\n") {
 		line = TrimAndStripInlineComments(line)

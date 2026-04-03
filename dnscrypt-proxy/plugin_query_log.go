@@ -2,8 +2,8 @@ package main
 
 import (
 	"errors"
-	"fmt"
 	"io"
+	"strconv"
 	"strings"
 	"time"
 
@@ -12,10 +12,11 @@ import (
 )
 
 type PluginQueryLog struct {
-	logger        io.Writer
-	format        string
-	ignoredQtypes []string
-	ipCryptConfig *IPCryptConfig
+	logger          io.Writer
+	format          string
+	ignoredQtypes   []string
+	ignoredQtypeMap map[string]struct{} // O(1) lookup for ignored query types
+	ipCryptConfig   *IPCryptConfig
 }
 
 func (plugin *PluginQueryLog) Name() string {
@@ -31,6 +32,14 @@ func (plugin *PluginQueryLog) Init(proxy *Proxy) error {
 	plugin.format = proxy.queryLogFormat
 	plugin.ignoredQtypes = proxy.queryLogIgnoredQtypes
 	plugin.ipCryptConfig = proxy.ipCryptConfig
+
+	// Build O(1) lookup map for ignored query types
+	if len(plugin.ignoredQtypes) > 0 {
+		plugin.ignoredQtypeMap = make(map[string]struct{}, len(plugin.ignoredQtypes))
+		for _, qt := range plugin.ignoredQtypes {
+			plugin.ignoredQtypeMap[strings.ToUpper(qt)] = struct{}{}
+		}
+	}
 
 	return nil
 }
@@ -52,13 +61,11 @@ func (plugin *PluginQueryLog) Eval(pluginsState *PluginsState, msg *dns.Msg) err
 	question := msg.Question[0]
 	qType, ok := dns.TypeToString[dns.RRToType(question)]
 	if !ok {
-		qType = fmt.Sprintf("%d", dns.RRToType(question))
+		qType = strconv.FormatUint(uint64(dns.RRToType(question)), 10)
 	}
-	if len(plugin.ignoredQtypes) > 0 {
-		for _, ignoredQtype := range plugin.ignoredQtypes {
-			if strings.EqualFold(ignoredQtype, qType) {
-				return nil
-			}
+	if len(plugin.ignoredQtypeMap) > 0 {
+		if _, ignored := plugin.ignoredQtypeMap[strings.ToUpper(qType)]; ignored {
+			return nil
 		}
 	}
 	qName := pluginsState.qName
@@ -73,7 +80,7 @@ func (plugin *PluginQueryLog) Eval(pluginsState *PluginsState, msg *dns.Msg) err
 	}
 	returnCode, ok := PluginsReturnCodeToString[pluginsState.returnCode]
 	if !ok {
-		returnCode = fmt.Sprintf("%d", pluginsState.returnCode)
+		returnCode = strconv.Itoa(int(pluginsState.returnCode))
 	}
 
 	var requestDuration time.Duration
@@ -95,37 +102,57 @@ func (plugin *PluginQueryLog) Eval(pluginsState *PluginsState, msg *dns.Msg) err
 		relayName = "-"
 	}
 
-	var line string
+	var b strings.Builder
 	if plugin.format == "tsv" {
-		now := time.Now()
-		year, month, day := now.Date()
-		hour, minute, second := now.Clock()
-		tsStr := fmt.Sprintf("[%d-%02d-%02d %02d:%02d:%02d]", year, int(month), day, hour, minute, second)
-		line = fmt.Sprintf(
-			"%s\t%s\t%s\t%s\t%s\t%dms\t%s\t%s\n",
-			tsStr,
-			clientIPStr,
-			StringQuote(qName),
-			qType,
-			returnCode,
-			requestDuration/time.Millisecond,
-			StringQuote(pluginsState.serverName),
-			StringQuote(relayName),
-		)
+		b.Grow(128 + len(qName) + len(pluginsState.serverName) + len(relayName))
+		b.WriteString(formatTimestampTSV(time.Now()))
+		b.WriteByte('\t')
+		b.WriteString(clientIPStr)
+		b.WriteByte('\t')
+		b.WriteString(StringQuote(qName))
+		b.WriteByte('\t')
+		b.WriteString(qType)
+		b.WriteByte('\t')
+		b.WriteString(returnCode)
+		b.WriteByte('\t')
+		b.WriteString(strconv.FormatInt(int64(requestDuration/time.Millisecond), 10))
+		b.WriteString("ms\t")
+		b.WriteString(StringQuote(pluginsState.serverName))
+		b.WriteByte('\t')
+		b.WriteString(StringQuote(relayName))
+		b.WriteByte('\n')
 	} else if plugin.format == "ltsv" {
-		cached := 0
+		cached := "0"
 		if pluginsState.cacheHit {
-			cached = 1
+			cached = "1"
 		}
-		line = fmt.Sprintf("time:%d\thost:%s\tmessage:%s\ttype:%s\treturn:%s\tcached:%d\tduration:%d\tserver:%s\trelay:%s\n",
-			time.Now().Unix(), clientIPStr, StringQuote(qName), qType, returnCode, cached, requestDuration/time.Millisecond, StringQuote(pluginsState.serverName), StringQuote(relayName))
+		b.Grow(128 + len(qName) + len(pluginsState.serverName) + len(relayName))
+		b.WriteString("time:")
+		b.WriteString(strconv.FormatInt(time.Now().Unix(), 10))
+		b.WriteString("\thost:")
+		b.WriteString(clientIPStr)
+		b.WriteString("\tmessage:")
+		b.WriteString(StringQuote(qName))
+		b.WriteString("\ttype:")
+		b.WriteString(qType)
+		b.WriteString("\treturn:")
+		b.WriteString(returnCode)
+		b.WriteString("\tcached:")
+		b.WriteString(cached)
+		b.WriteString("\tduration:")
+		b.WriteString(strconv.FormatInt(int64(requestDuration/time.Millisecond), 10))
+		b.WriteString("\tserver:")
+		b.WriteString(StringQuote(pluginsState.serverName))
+		b.WriteString("\trelay:")
+		b.WriteString(StringQuote(relayName))
+		b.WriteByte('\n')
 	} else {
 		dlog.Fatalf("Unexpected log format: [%s]", plugin.format)
 	}
 	if plugin.logger == nil {
 		return errors.New("Log file not initialized")
 	}
-	_, _ = plugin.logger.Write([]byte(line))
+	_, _ = io.WriteString(plugin.logger, b.String())
 
 	return nil
 }

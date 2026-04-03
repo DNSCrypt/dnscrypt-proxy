@@ -55,7 +55,7 @@ func (plugin *PluginAllowName) Init(proxy *Proxy) error {
 
 // loadPatterns parses and loads patterns into the provided pattern matcher
 func (plugin *PluginAllowName) loadPatterns(lines string, patternMatcher *PatternMatcher) error {
-	return ProcessConfigLines(lines, func(line string, lineNo int) error {
+	err := ProcessConfigLines(lines, func(line string, lineNo int) error {
 		rulePart, weeklyRanges, err := ParseTimeBasedRule(line, lineNo, plugin.allWeeklyRanges)
 		if err != nil {
 			dlog.Error(err)
@@ -68,6 +68,11 @@ func (plugin *PluginAllowName) loadPatterns(lines string, patternMatcher *Patter
 		}
 		return nil
 	})
+	if err != nil {
+		return err
+	}
+	patternMatcher.Build()
+	return nil
 }
 
 func (plugin *PluginAllowName) Drop() error {

@@ -26,6 +26,7 @@ type PluginsGlobals struct {
 	queryPlugins           *[]Plugin
 	responsePlugins        *[]Plugin
 	loggingPlugins         *[]Plugin
+	sessionDataPool        sync.Pool // Pool for sessionData maps
 	refusedCodeInResponses bool
 	respondWithIPv4        net.IP
 	respondWithIPv6        net.IP
@@ -249,6 +250,14 @@ func NewPluginsState(
 	serverProto string,
 	start time.Time,
 ) PluginsState {
+	// Get a sessionData map from the pool or create a new one
+	var sessionData map[string]any
+	if v := proxy.pluginsGlobals.sessionDataPool.Get(); v != nil {
+		sessionData = v.(map[string]any)
+		clear(sessionData) // Reset map contents without deallocating
+	} else {
+		sessionData = make(map[string]any)
+	}
 	return PluginsState{
 		action:                           PluginsActionContinue,
 		returnCode:                       PluginsReturnCodePass,
@@ -268,8 +277,17 @@ func NewPluginsState(
 		timeout:                          proxy.timeout,
 		requestStart:                     start,
 		maxUnencryptedUDPSafePayloadSize: MaxDNSUDPSafePacketSize,
-		sessionData:                      make(map[string]any),
+		sessionData:                      sessionData,
 		xTransport:                       proxy.xTransport,
+	}
+}
+
+// ReleaseSessionData returns the sessionData map to the pool for reuse.
+// Must be called when the PluginsState is no longer needed.
+func (pluginsState *PluginsState) ReleaseSessionData(pluginsGlobals *PluginsGlobals) {
+	if pluginsState.sessionData != nil {
+		pluginsGlobals.sessionDataPool.Put(pluginsState.sessionData)
+		pluginsState.sessionData = nil
 	}
 }
 

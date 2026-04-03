@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io"
 	"net"
+	"net/netip"
 	"sync"
 
 	"codeberg.org/miekg/dns"
@@ -162,11 +163,13 @@ func (plugin *PluginBlockIP) Eval(pluginsState *PluginsState, msg *dns.Msg) erro
 		if header.Class != dns.ClassINET || (rrtype != dns.TypeA && rrtype != dns.TypeAAAA) {
 			continue
 		}
+		var addr netip.Addr
 		if rrtype == dns.TypeA {
-			ipStr = answer.(*dns.A).A.Addr.String()
+			addr = answer.(*dns.A).A.Addr
 		} else if rrtype == dns.TypeAAAA {
-			ipStr = answer.(*dns.AAAA).AAAA.Addr.String() // IPv4-mapped IPv6 addresses are converted to IPv4
+			addr = answer.(*dns.AAAA).AAAA.Addr // IPv4-mapped IPv6 addresses are converted to IPv4
 		}
+		ipStr = addr.String()
 		if _, found := plugin.blockedIPs[ipStr]; found {
 			reject, reason = true, ipStr
 			break
@@ -179,11 +182,15 @@ func (plugin *PluginBlockIP) Eval(pluginsState *PluginsState, msg *dns.Msg) erro
 			}
 		}
 		if plugin.blockedNetworks.Size() > 0 {
-			if ip := net.ParseIP(ipStr); ip != nil {
-				if route, _, _ := plugin.blockedNetworks.MatchIP(ip); route != nil {
-					reject, reason = true, route.String()
-					break
-				}
+			// Convert netip.Addr directly to net.IP without going through string parsing
+			ip := addr.As16()
+			netIP := net.IP(ip[:])
+			if addr.Is4() {
+				netIP = netIP[12:16] // Use only the last 4 bytes for IPv4
+			}
+			if route, _, _ := plugin.blockedNetworks.MatchIP(netIP); route != nil {
+				reject, reason = true, route.String()
+				break
 			}
 		}
 	}

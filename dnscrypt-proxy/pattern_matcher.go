@@ -22,12 +22,13 @@ const (
 )
 
 type PatternMatcher struct {
-	prefixes     *critbitgo.Trie
-	suffixes     *critbitgo.Trie
-	substrings   []string
-	patterns     []string
-	exact        map[string]any
-	indirectVals map[string]any
+	prefixes       *critbitgo.Trie
+	suffixes       *critbitgo.Trie
+	substrings     []string
+	substringAC    *AhoCorasick // Aho-Corasick automaton for substring matching
+	patterns       []string
+	exact          map[string]any
+	indirectVals   map[string]any
 }
 
 func NewPatternMatcher() *PatternMatcher {
@@ -122,6 +123,19 @@ func (patternMatcher *PatternMatcher) Add(pattern string, val any, position int)
 	return nil
 }
 
+// Build constructs the Aho-Corasick automaton for substring matching.
+// Must be called after all patterns have been added via Add() and before Eval().
+func (patternMatcher *PatternMatcher) Build() {
+	if len(patternMatcher.substrings) > 0 {
+		ac := NewAhoCorasick()
+		for _, s := range patternMatcher.substrings {
+			ac.AddPattern(s)
+		}
+		ac.Build()
+		patternMatcher.substringAC = ac
+	}
+}
+
 func (patternMatcher *PatternMatcher) Eval(qName string) (reject bool, reason string, val any) {
 	if len(qName) < 2 {
 		return false, "", nil
@@ -152,9 +166,17 @@ func (patternMatcher *PatternMatcher) Eval(qName string) (reject bool, reason st
 		return true, string(match) + "*", xval
 	}
 
-	for _, substring := range patternMatcher.substrings {
-		if strings.Contains(qName, substring) {
+	// Use Aho-Corasick automaton for O(n) multi-pattern substring matching
+	if patternMatcher.substringAC != nil && patternMatcher.substringAC.PatternCount() > 0 {
+		if found, idx := patternMatcher.substringAC.ContainsAny(qName); found {
+			substring := patternMatcher.substringAC.Pattern(idx)
 			return true, "*" + substring + "*", patternMatcher.indirectVals[substring]
+		}
+	} else {
+		for _, substring := range patternMatcher.substrings {
+			if strings.Contains(qName, substring) {
+				return true, "*" + substring + "*", patternMatcher.indirectVals[substring]
+			}
 		}
 	}
 
