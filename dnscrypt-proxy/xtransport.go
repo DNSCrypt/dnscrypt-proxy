@@ -23,6 +23,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 	"unique"
@@ -103,6 +104,25 @@ const (
 	// 50 µs of kernel busy-polling before sleeping. Eliminates the interrupt
 	// context-switch on the receive path for latency-sensitive DoH/DoQ.
 	udpBusyPollMicros = 50 // µs
+
+	// ── Prewarm concurrency gate ───────────────────────────────────────────────
+	// Caps simultaneous prewarm goroutines to prevent scheduler pressure during
+	// bursty unique-host traffic. Goroutines that cannot acquire a slot are
+	// skipped immediately — prewarming is best-effort and never blocks callers.
+	prewarmMaxConcurrency = 16
+
+	// ── Bounded dialTargetCache ────────────────────────────────────────────────
+	// When the cache exceeds this size, PurgeExpiredCache will evict entries
+	// whose IP address is no longer in the live cached-IP set.
+	dialTargetCacheMaxSize = 1024
+
+	// ── H3 per-host failure / backoff thresholds ──────────────────────────────
+	// After h3FailureThreshold consecutive H3 failures for a host, suppress H3
+	// for an exponentially increasing window (h3BackoffInitial × 2^n, capped at
+	// h3BackoffMax). H3 is retried automatically once the window expires.
+	h3FailureThreshold = 3
+	h3BackoffInitial   = 30 * time.Second
+	h3BackoffMax       = 10 * time.Minute
 )
 
 // ── Package‑level sentinel errors (zero‑allocation returns) ──────────────────
@@ -118,6 +138,21 @@ var (
 
 // ── Global TLS session cache – saves one full TLS 1.3 RTT on reconnect ───────
 var tlsSessionCache = tls.NewLRUClientSessionCache(h2TLSSessionCacheSize)
+
+// ── Internal observability counters ──────────────────────────────────────────
+// All counters are written atomically and never reset, making them safe to read
+// concurrently at any time. They aid tuning without adding external dependencies.
+var (
+	h3FallbackTotal  atomic.Int64 // cumulative H3→H2 fallback events
+	resolverRaceWins atomic.Int64 // cumulative parallel-race first-resolver wins
+	prewarmSkipped   atomic.Int64 // prewarm goroutines skipped (semaphore full)
+	cacheEvictions   atomic.Int64 // cumulative dial-target + prewarm cache evictions
+)
+
+// ── Prewarm concurrency gate ──────────────────────────────────────────────────
+// Buffered channel used as a counting semaphore. Goroutines that cannot acquire
+// a slot (channel full) are discarded — prewarming is always best-effort.
+var prewarmSem = make(chan struct{}, prewarmMaxConcurrency)
 
 // ── gzip.Reader pool – eliminates 32 KB allocations per compressed response ───
 var gzipReaderPool = sync.Pool{
@@ -153,6 +188,10 @@ func formatDialTarget(addr netip.Addr, port uint16) string {
 	v, _ := dialTargetCache.LoadOrStore(k, s)
 	return v.(string)
 }
+
+// ptr returns a pointer to a new copy of v.
+// Replaces the new(expr) pattern — e.g., ptr(time.Now().Add(d)) yields *time.Time.
+func ptr[T any](v T) *T { return &v }
 
 // ── Cache types (OPT 1: netip.Addr replaces net.IP) ──────────────────────────
 type CachedIPItem struct {
@@ -192,6 +231,54 @@ func isAltSvcExpired(e altSvcEntry, now time.Time) bool {
 		return false
 	}
 	return !e.validTo.IsZero() && now.After(e.validTo)
+}
+
+// ── H3 per-host health state ──────────────────────────────────────────────────
+// Tracks consecutive H3 failures per host and suppresses H3 for an exponentially
+// increasing backoff window after repeated failures. This avoids repeatedly burning
+// time on expensive QUIC handshakes when H3 is broken for a specific host.
+// H3 is automatically retried after the backoff window expires (probe-then-recover).
+type h3HealthState struct {
+	mu           sync.Mutex
+	failures     int
+	backoffUntil time.Time
+}
+
+// inBackoff reports whether H3 should currently be suppressed for this host.
+func (s *h3HealthState) inBackoff() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return time.Now().Before(s.backoffUntil)
+}
+
+// onFailure increments the consecutive-failure counter and sets a backoff window
+// once the threshold is crossed. The window grows exponentially (factor of 2 per
+// extra failure beyond the threshold) up to h3BackoffMax.
+func (s *h3HealthState) onFailure() (inBackoff bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.failures++
+	if s.failures >= h3FailureThreshold {
+		shift := s.failures - h3FailureThreshold
+		if shift > 4 {
+			shift = 4 // cap at 16× h3BackoffInitial
+		}
+		backoff := h3BackoffInitial * (1 << shift)
+		if backoff > h3BackoffMax {
+			backoff = h3BackoffMax
+		}
+		s.backoffUntil = time.Now().Add(backoff)
+		return true
+	}
+	return false
+}
+
+// onSuccess resets the failure counter and clears any active backoff.
+func (s *h3HealthState) onSuccess() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.failures = 0
+	s.backoffUntil = time.Time{}
 }
 
 // ── IMP 6 (PERF 6): hostPrewarmer uses unique.Handle[string] keys ─────────────
@@ -305,6 +392,11 @@ type XTransport struct {
 	// the PERF 1 pattern that stores http.Client as a field. Zero allocation on
 	// the hot dial path; rebuild only on config reload.
 	dialer net.Dialer
+
+	// ── H3 per-host health state ──────────────────────────────────────────────
+	// Tracks consecutive H3 failures per host and the active backoff window.
+	// Loaded lazily via LoadOrStore; cleared on full transport rebuild.
+	h3Health sync.Map // map[string]*h3HealthState
 }
 
 // ── Constructor ───────────────────────────────────────────────────────────────
@@ -402,7 +494,7 @@ func (x *XTransport) saveCachedAddrs(host string, addrs []netip.Addr, ttl time.D
 	if ttl >= 0 {
 		ttl = max(ttl, MinResolverIPTTL)
 		ttl += time.Duration(rand.Int64N(int64(ResolverIPTTLMaxJitter)))
-		item.expiration = new(time.Now().Add(ttl)) // Go 1.26: new(expr) — no temp var
+		item.expiration = ptr(time.Now().Add(ttl))
 	}
 
 	x.cachedIPs.Lock()
@@ -450,7 +542,7 @@ func (x *XTransport) saveCachedIP(host string, ip net.IP, ttl time.Duration) {
 }
 
 func (x *XTransport) markUpdatingCachedIP(host string) {
-	updatingUntil := new(time.Now().Add(x.timeout)) // Go 1.26: new(expr) — no temp var
+	updatingUntil := ptr(time.Now().Add(x.timeout))
 	x.cachedIPs.Lock()
 	if item, ok := x.cachedIPs.cache[host]; ok {
 		item.updatingUntil = updatingUntil
@@ -504,10 +596,16 @@ func (x *XTransport) PurgeExpiredCache() (ipsPurged, altSvcPurged, muPurged int)
 	})
 	ipsPurged = before - len(x.cachedIPs.cache)
 
-	// Build live set for later mutex cleanup
+	// Build live set for later mutex + prewarmer + dial-target cleanup
 	live := make(map[string]struct{}, len(x.cachedIPs.cache))
-	for host := range x.cachedIPs.cache {
+	liveAddrs := make(map[netip.Addr]struct{})
+	for host, item := range x.cachedIPs.cache {
 		live[host] = struct{}{}
+		if item != nil {
+			for _, addr := range item.addrs {
+				liveAddrs[addr] = struct{}{}
+			}
+		}
 	}
 	x.cachedIPs.Unlock()
 
@@ -531,9 +629,39 @@ func (x *XTransport) PurgeExpiredCache() (ipsPurged, altSvcPurged, muPurged int)
 		return true
 	})
 
-	if ipsPurged > 0 || altSvcPurged > 0 || muPurged > 0 {
-		dlog.Debugf("PurgeExpiredCache: %d IP, %d Alt‑Svc, %d mutex entries removed",
-			ipsPurged, altSvcPurged, muPurged)
+	// ── Evict stale dialTargetCache entries ───────────────────────────────────
+	// Remove cached dial-target strings whose IP address is no longer in the live
+	// IP set. This prevents the global sync.Map from growing unboundedly when CDN
+	// or rotating resolver IPs cycle through many distinct addresses over time.
+	var dialEvicted int
+	dialTargetCache.Range(func(key, _ any) bool {
+		k := key.(dialTargetKey)
+		if _, ok := liveAddrs[k.addr]; !ok {
+			dialTargetCache.Delete(key)
+			dialEvicted++
+		}
+		return true
+	})
+
+	// ── Evict stale hostPrewarmer entries ─────────────────────────────────────
+	// Remove prewarm sync.Once entries for hosts no longer in the live IP cache.
+	// Without this, host churn (e.g., stamp list changes) causes the prewarmer
+	// map to accumulate dead entries indefinitely.
+	var prewarmEvicted int
+	x.prewarmed.m.Range(func(key, _ any) bool {
+		h := key.(unique.Handle[string])
+		host, _ := splitHostPort(h.Value())
+		if _, ok := live[host]; !ok {
+			x.prewarmed.m.Delete(key)
+			prewarmEvicted++
+		}
+		return true
+	})
+
+	if ipsPurged > 0 || altSvcPurged > 0 || muPurged > 0 || dialEvicted > 0 || prewarmEvicted > 0 {
+		dlog.Debugf("PurgeExpiredCache: %d IP, %d Alt‑Svc, %d mutex, %d dial-target, %d prewarm entries removed",
+			ipsPurged, altSvcPurged, muPurged, dialEvicted, prewarmEvicted)
+		cacheEvictions.Add(int64(dialEvicted + prewarmEvicted))
 	}
 	return
 }
@@ -717,6 +845,12 @@ func (x *XTransport) rebuildTransport() {
 	// Reset prewarmer so new connections will be prewarmed on next request
 	x.prewarmed = hostPrewarmer{}
 
+	// Clear H3 health state so the rebuilt transport starts with a clean slate.
+	x.h3Health.Range(func(key, _ any) bool {
+		x.h3Health.Delete(key)
+		return true
+	})
+
 	if x.http3 {
 		if x.h3Transport != nil {
 			x.h3Transport.Close()
@@ -763,6 +897,19 @@ func (x *XTransport) prewarmConnection(hostPort string) {
 	hk := unique.Make(hostPort)
 	x.prewarmed.do(hk, func() {
 		go func() {
+			// ── Concurrency gate: skip this prewarm if the semaphore is full ──────
+			// prewarmSem is a buffered channel of size prewarmMaxConcurrency.
+			// Non-blocking send: if the channel is full, all slots are occupied and
+			// we skip rather than queue — prewarming is best-effort.
+			select {
+			case prewarmSem <- struct{}{}:
+				defer func() { <-prewarmSem }()
+			default:
+				prewarmSkipped.Add(1)
+				dlog.Debugf("Prewarm: semaphore full, skipping %s", hostPort)
+				return
+			}
+
 			ctx, cancel := context.WithTimeout(context.Background(), h2TLSHandshakeTimeout)
 			defer cancel()
 
@@ -1270,6 +1417,53 @@ func (x *XTransport) resolveUsingServers(
 	resolversCopy := make([]string, len(resolvers))
 	copy(resolversCopy, resolvers)
 
+	// ── Parallel race: try top-2 resolvers concurrently for the first attempt ──
+	// Whichever responds first with a valid answer wins. This cuts P95/P99 tail
+	// latency significantly when one resolver is occasionally slow: instead of
+	// waiting up to ResolverReadTimeout for resolver[0] before trying resolver[1],
+	// both are queried simultaneously and the faster result is used.
+	//
+	// The goroutines use buffered channels (size raceN) so they can always send
+	// without blocking even after we have returned, and will complete within at
+	// most ResolverReadTimeout on their own. If both fail we fall through to the
+	// full serial+retry loop below (which re-tries with exponential backoff).
+	if len(resolversCopy) >= 2 {
+		type raceItem struct {
+			ips []net.IP
+			ttl time.Duration
+			idx int // -1 signals failure
+		}
+		const raceN = 2
+		ch := make(chan raceItem, raceN) // buffered so goroutines never block on send
+		for i := 0; i < raceN; i++ {
+			go func(idx int, resolver string) {
+				rips, rttl, rerr := x.resolveUsingResolver(proto, host, resolver, returnIPv4, returnIPv6)
+				if rerr == nil && len(rips) > 0 {
+					ch <- raceItem{rips, rttl, idx}
+				} else {
+					ch <- raceItem{idx: -1}
+				}
+			}(i, resolversCopy[i])
+		}
+		failures := 0
+		for failures < raceN {
+			res := <-ch
+			if res.idx >= 0 {
+				// First success: promote the winning resolver to position 0 so
+				// future calls (and the serial loop below) try it first.
+				if res.idx > 0 {
+					resolversCopy[0], resolversCopy[res.idx] = resolversCopy[res.idx], resolversCopy[0]
+					dlog.Infof("Resolver race: %s[%s] won for [%s]; promoting to first",
+						proto, resolversCopy[0], host)
+				}
+				resolverRaceWins.Add(1)
+				return res.ips, res.ttl, nil
+			}
+			failures++
+		}
+		// Both race attempts failed; fall through to the full serial+retry loop.
+	}
+
 	var errs []error
 	var retryTimer *time.Timer
 	defer func() {
@@ -1478,7 +1672,11 @@ func (x *XTransport) Fetch(
 	if x.h3Transport != nil {
 		if x.http3Probe {
 			// ── PERF 1: Use stored h3Client — same zero-allocation benefit ────
-			client = &x.h3Client
+			// Respect H3 health backoff even in probe mode to avoid hammering
+			// a transiently broken QUIC endpoint.
+			if !x.isH3InBackoff(url.Host) {
+				client = &x.h3Client
+			}
 		} else {
 			x.altSupport.RLock()
 			entry, inCache := x.altSupport.cache[url.Host]
@@ -1488,7 +1686,9 @@ func (x *XTransport) Fetch(
 				// ── IMP 4: use isAltSvcExpired for unambiguous expiry check ───
 				negativeExpired := entry.port == 0 && isAltSvcExpired(entry, time.Now())
 				switch {
-				case entry.port > 0 && int(entry.port) == port:
+				case entry.port > 0 && int(entry.port) == port && !x.isH3InBackoff(url.Host):
+					// Use H3 only when within its Alt-Svc advertisement AND not in
+					// a per-host backoff window caused by repeated H3 failures.
 					client = &x.h3Client
 				case negativeExpired:
 					hasAltSupport = false
@@ -1577,6 +1777,9 @@ func (x *XTransport) Fetch(
 	resp, err := client.Do(req)
 	rtt := time.Since(start)
 
+	// Track whether the initial request used H3 so we can update its health state.
+	usedH3 := client == &x.h3Client
+
 	if err != nil && client == &x.h3Client {
 		// ✅ FIX 4a: Close any non-nil H3 response body before resp is overwritten.
 		if resp != nil {
@@ -1584,6 +1787,9 @@ func (x *XTransport) Fetch(
 			resp = nil
 		}
 		dlog.Debugf("HTTP/3 failed for [%s]: %v — retrying over HTTP/2", url.Host, err)
+		// Record H3 failure for adaptive backoff. After h3FailureThreshold
+		// consecutive failures the host enters a backoff window.
+		x.recordH3Failure(url.Host)
 		x.altSupport.Lock()
 		x.altSupport.cache[url.Host] = altSvcEntry{port: 0, validTo: time.Now().Add(altSvcNegativeTTL)}
 		x.altSupport.Unlock()
@@ -1591,6 +1797,7 @@ func (x *XTransport) Fetch(
 		// ── IMP 1: Build a fresh *http.Request for the retry ─────────────────
 		// Reusing the original req after Do() violates the net/http contract.
 		// newRequest() constructs a brand-new request with the same parameters.
+		usedH3 = false // fallback occurred; H3 did not produce the response
 		client = &x.httpClient
 		req, err = newRequest()
 		if err != nil {
@@ -1601,11 +1808,21 @@ func (x *XTransport) Fetch(
 		rtt = time.Since(start)
 	}
 
-	if resp != nil {
-		// ✅ FIX 4b: sync.Once ensures resp.Body.Close is called exactly once.
-		var bodyCloseOnce sync.Once
-		defer func() { bodyCloseOnce.Do(func() { resp.Body.Close() }) }()
+	// Record H3 success: resets failure counter and clears any active backoff.
+	// Only called when the H3 request itself succeeded (no fallback triggered).
+	if usedH3 && err == nil {
+		x.recordH3Success(url.Host)
 	}
+
+	// ── Body close ────────────────────────────────────────────────────────────
+	// Always register the defer (outside the resp != nil guard so it fires
+	// regardless of the code path taken above). The closure captures resp by
+	// reference, so it always closes the final resp value — nil-safe.
+	defer func() {
+		if resp != nil {
+			resp.Body.Close()
+		}
+	}()
 	statusCode := 503
 	if resp != nil {
 		statusCode = resp.StatusCode
@@ -1723,6 +1940,41 @@ outer:
 	x.altSupport.cache[host] = altSvcEntry{port: altPort, noExpiry: true}
 	dlog.Debugf("Alt-Svc: cached port %d for [%s]", altPort, host)
 	x.altSupport.Unlock()
+}
+
+// ── H3 per-host health helpers ────────────────────────────────────────────────
+
+// h3HealthFor returns (or lazily creates) the h3HealthState for host.
+func (x *XTransport) h3HealthFor(host string) *h3HealthState {
+	v, _ := x.h3Health.LoadOrStore(host, &h3HealthState{})
+	return v.(*h3HealthState)
+}
+
+// isH3InBackoff reports whether H3 should currently be suppressed for host.
+// Called on the hot path; uses a short lock only inside h3HealthState.inBackoff.
+func (x *XTransport) isH3InBackoff(host string) bool {
+	if v, ok := x.h3Health.Load(host); ok {
+		return v.(*h3HealthState).inBackoff()
+	}
+	return false
+}
+
+// recordH3Failure increments the per-host H3 failure counter and sets a backoff
+// window once the threshold is crossed. Also increments the global h3FallbackTotal
+// counter for observability.
+func (x *XTransport) recordH3Failure(host string) {
+	if inBackoff := x.h3HealthFor(host).onFailure(); inBackoff {
+		dlog.Debugf("H3 health: [%s] entered backoff after %d failures", host, h3FailureThreshold)
+	}
+	h3FallbackTotal.Add(1)
+}
+
+// recordH3Success resets the per-host H3 health state, clearing any active backoff
+// so H3 will be used again on the next applicable request.
+func (x *XTransport) recordH3Success(host string) {
+	if v, ok := x.h3Health.Load(host); ok {
+		v.(*h3HealthState).onSuccess()
+	}
 }
 
 // ── Public query helpers ──────────────────────────────────────────────────────
