@@ -163,9 +163,8 @@ var gzipReaderPool = sync.Pool{
 	New: func() any { return new(gzip.Reader) },
 }
 
-// ── OPT 4: Cached dial target strings ────────────────────────────────────────
-// Avoids repeated strconv.Itoa + string concat on the hot dial path.
-// Key is a compact struct (netip.Addr is 24 bytes + uint16 port = 26 bytes).
+// Cached dial target strings – avoids repeated strconv.Itoa + string concat
+// on the hot dial path. Key is a compact struct (netip.Addr + uint16 port).
 type dialTargetKey struct {
 	addr netip.Addr
 	port uint16
@@ -197,7 +196,7 @@ func formatDialTarget(addr netip.Addr, port uint16) string {
 // Replaces the new(expr) pattern — e.g., ptr(time.Now().Add(d)) yields *time.Time.
 func ptr[T any](v T) *T { return &v }
 
-// ── Cache types (OPT 1: netip.Addr replaces net.IP) ──────────────────────────
+// ── Cache types ───────────────────────────────────────────────────────────────
 type CachedIPItem struct {
 	addrs         []netip.Addr
 	expiration    *time.Time
@@ -211,13 +210,9 @@ type CachedIPs struct {
 
 // altSvcEntry records an Alt-Svc advertisement for a host.
 //
-// ── IMP 4: explicit noExpiry bool removes zero-time ambiguity ─────────────────
-// Previously validTo.IsZero() had dual meaning depending on port value:
-//
-//	port>0, validTo.IsZero()  → "valid forever" (positive, no expiry)
-//	port==0, validTo.IsZero() → ambiguous (no-negative-cache OR still-valid)
-//
-// Now noExpiry=true unambiguously means "this entry never expires".
+// The noExpiry bool removes a zero-time ambiguity: previously validTo.IsZero()
+// had dual meaning (valid-forever vs. ambiguous). noExpiry=true now
+// unambiguously means "this entry never expires".
 type altSvcEntry struct {
 	validTo  time.Time
 	port     uint16
@@ -285,10 +280,8 @@ func (s *h3HealthState) onSuccess() {
 	s.backoffUntil = time.Time{}
 }
 
-// ── IMP 6 (PERF 6): hostPrewarmer uses unique.Handle[string] keys ─────────────
-// Previously used raw string keys — map comparisons hashed/compared the full
-// string bytes on every lookup. unique.Handle keys compare by pointer identity
-// (same as resolveMu), which is O(1) and allocation-free.
+// hostPrewarmer uses unique.Handle[string] keys so map comparisons are O(1)
+// pointer-identity checks rather than full string-byte comparisons.
 type hostPrewarmer struct {
 	m sync.Map // map[unique.Handle[string]]*sync.Once
 }
@@ -298,9 +291,8 @@ func (p *hostPrewarmer) do(hostport unique.Handle[string], fn func()) {
 	v.(*sync.Once).Do(fn)
 }
 
-// ── OPT 2: Pre-built header key constants ─────────────────────────────────────
-// These header maps are built once in rebuildTransport() and assigned directly
-// to requests without cloning. They are treated as immutable after construction.
+// prebuiltHeaders are built once and assigned directly to requests without
+// cloning. They are treated as immutable after construction.
 type prebuiltHeaders struct {
 	getGzip  http.Header // GET with Accept-Encoding: gzip
 	getPlain http.Header // GET without gzip
@@ -343,9 +335,7 @@ type XTransport struct {
 	h3Transport     *http3.Transport
 	tlsClientConfig *tls.Config
 
-	// ── PERF 1: Cached http.Client instances – zero per-request allocation ────
-	// httpClient wraps transport; h3Client wraps h3Transport.
-	// Both are rebuilt in rebuildTransport() and selected in Fetch().
+	// Cached http.Client instances – rebuilt in rebuildTransport(), selected in Fetch().
 	// http.Client is safe for concurrent use (documented in net/http).
 	httpClient http.Client
 	h3Client   http.Client
@@ -379,22 +369,17 @@ type XTransport struct {
 	// Per‑host resolution mutexes (singleflight style)
 	resolveMu sync.Map // map[unique.Handle[string]]*sync.Mutex
 
-	// ── OPT 2: Pre-built immutable header maps ────────────────────────────────
-	headers prebuiltHeaders
+	headers prebuiltHeaders // pre-built immutable header maps; rebuilt on config reload
 
-	// Per‑host connection prewarmer (IMP 6: unique.Handle[string] keys)
-	prewarmed hostPrewarmer
+	prewarmed hostPrewarmer // per-host connection prewarmer
 
-	// ── OPT 3: Shared DNS client for resolver queries ─────────────────────────
-	dnsClient *dns.Client
+	dnsClient *dns.Client // shared DNS client for resolver queries
 
-	// ── OPT 6: Conditional body_hash on POST requests ─────────────────────────
-	BodyHashEnabled bool
+	BodyHashEnabled bool // when true, appends body_hash query parameter to POST requests
 
-	// ── ELITE 10: net.Dialer stored as field ─────────────────────────────
-	// Built once in rebuildTransport() with ControlContext set, consistent with
-	// the PERF 1 pattern that stores http.Client as a field. Zero allocation on
-	// the hot dial path; rebuild only on config reload.
+	// dialer is built once in rebuildTransport() with ControlContext set so
+	// TCP_FASTOPEN_CONNECT is active for connect(). Zero allocation on the hot
+	// dial path; rebuilt only on config reload.
 	dialer net.Dialer
 
 	// ── H3 per-host health state ──────────────────────────────────────────────
@@ -409,7 +394,6 @@ func NewXTransport() *XTransport {
 		panic("DefaultBootstrapResolver is not a valid IP:port — " + err.Error())
 	}
 
-	// ── OPT 3: Build shared DNS client once ───────────────────────────────────
 	tr := dns.NewTransport()
 	tr.ReadTimeout = ResolverReadTimeout
 	dnsClient := &dns.Client{Transport: tr}
@@ -427,7 +411,7 @@ func NewXTransport() *XTransport {
 	}
 }
 
-// ── IP helpers (OPT 9: netip.ParseAddr used internally) ───────────────────────
+// ── IP helpers ────────────────────────────────────────────────────────────────
 // ParseIP parses an IP address string, stripping optional IPv6 brackets.
 // Returns net.IP (nil on failure) — public API, used by config.go, serversInfo.go etc.
 func ParseIP(ipStr string) net.IP {
@@ -448,8 +432,7 @@ func parseIPAddr(ipStr string) netip.Addr {
 	return addr.Unmap()
 }
 
-// ── OPT 1: netip.Addr deduplication (replaces uniqueNormalizedIPs) ────────────
-// uniqueNormalizedAddrs deduplicates addrs using a stack‑allocated array for up
+// uniqueNormalizedAddrs deduplicates addrs using a stack-allocated array for up
 // to 8 entries; beyond 8 the seen slice grows onto the heap automatically.
 func uniqueNormalizedAddrs(addrs []netip.Addr) []netip.Addr {
 	if len(addrs) == 0 {
@@ -530,9 +513,8 @@ func (x *XTransport) saveCachedIPs(host string, ips []net.IP, ttl time.Duration)
 	x.saveCachedAddrs(host, addrs, ttl)
 }
 
-// saveCachedIP saves a single IP into the cache.
-//
-// ── IMP 5: stack-allocated single-element — no heap alloc ─────────────────
+// saveCachedIP saves a single IP into the cache using a stack-allocated
+// single-element array to avoid a heap allocation.
 func (x *XTransport) saveCachedIP(host string, ip net.IP, ttl time.Duration) {
 	if ip == nil {
 		return
@@ -706,10 +688,7 @@ func (x *XTransport) CachedHosts() iter.Seq[string] {
 }
 
 // ── TCP low‑level optimizations ─────────────────────────────────────────────
-// ── IMP 3: runtime.GOOS dead-code branch removed ─────────────────────────────
-// File has //go:build linux so runtime.GOOS is always "linux". The non-Linux
-// branch was unreachable dead code. Removed to reduce binary size and
-// eliminate a branch on the hot connection path.
+// (File has //go:build linux, so these use Linux-specific syscalls throughout.)
 
 // tcpControlContext is assigned to net.Dialer.ControlContext.
 // Called by the Go runtime after socket() but BEFORE connect() — the only
@@ -718,7 +697,6 @@ func (x *XTransport) CachedHosts() iter.Seq[string] {
 // effective here: the kernel sizes socket buffers at connect time.
 //
 // Package-level func (not a closure) — zero allocation cost as a struct field.
-// ── ELITE 10 ───────────────────────────────────────────────────────────────────────
 func tcpControlContext(_ context.Context, _, _ string, c syscall.RawConn) error {
 	return c.Control(func(fd uintptr) {
 		ifd := int(fd)
@@ -726,9 +704,9 @@ func tcpControlContext(_ context.Context, _, _ string, c syscall.RawConn) error 
 		_ = unix.SetsockoptInt(ifd, unix.IPPROTO_TCP, unix.TCP_FASTOPEN_CONNECT, 1)
 		// TCP_QUICKACK — disable delayed ACKs for faster ACK delivery
 		_ = unix.SetsockoptInt(ifd, unix.IPPROTO_TCP, unix.TCP_QUICKACK, 1)
-		// TCP_NOTSENT_LOWAT — prevents kernel-side send-buffer bloat (PERF 2)
+		// TCP_NOTSENT_LOWAT — prevents kernel-side send-buffer bloat
 		_ = unix.SetsockoptInt(ifd, unix.IPPROTO_TCP, unix.TCP_NOTSENT_LOWAT, tcpNotSentLowat)
-		// SO_SNDBUF / SO_RCVBUF — 256 KiB socket buffers (PERF 8)
+		// SO_SNDBUF / SO_RCVBUF — 256 KiB socket buffers reduce syscall frequency
 		_ = unix.SetsockoptInt(ifd, unix.SOL_SOCKET, unix.SO_SNDBUF, tcpSocketBufSize)
 		_ = unix.SetsockoptInt(ifd, unix.SOL_SOCKET, unix.SO_RCVBUF, tcpSocketBufSize)
 	})
@@ -766,14 +744,10 @@ func setUDPOptions(conn *net.UDPConn) {
 		return
 	}
 	_ = raw.Control(func(fd uintptr) {
-		// ── PERF 3: SO_BUSY_POLL – kernel busy-polls for 50 µs before sleeping ─
-		// Avoids the interrupt + context-switch overhead on the receive path.
-		// Reduces per-response latency by ~7 µs on low-latency paths.
-		// Requires CAP_NET_ADMIN to increase above the system default (0).
-		// Silently ignored if the kernel or driver does not support it.
+		// SO_BUSY_POLL – kernel busy-polls for 50 µs before sleeping, avoiding the
+		// interrupt + context-switch overhead on the receive path. Requires
+		// CAP_NET_ADMIN; silently ignored if kernel or driver does not support it.
 		_ = unix.SetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_BUSY_POLL, udpBusyPollMicros)
-
-		// ── PERF 8: SO_RCVBUF / SO_SNDBUF for UDP ────────────────────────────
 		_ = unix.SetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_SNDBUF, tcpSocketBufSize)
 		_ = unix.SetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_RCVBUF, tcpSocketBufSize)
 	})
@@ -787,10 +761,9 @@ func (x *XTransport) rebuildTransport() {
 	}
 	x.tlsClientConfig = x.buildTLSConfig()
 
-	// ── ELITE 10: Build net.Dialer once with ControlContext ───────────────
-	// ControlContext fires after socket() but BEFORE connect(), so
-	// TCP_FASTOPEN_CONNECT is active for the very first connect() call.
-	// Stored as a field (consistent with PERF 1) — zero alloc on hot path.
+	// Build net.Dialer once with ControlContext so TCP_FASTOPEN_CONNECT is
+	// active for the very first connect() call. Stored as a field for zero
+	// allocation on the hot dial path; rebuilt only on config reload.
 	x.dialer = net.Dialer{
 		Timeout: x.timeout,
 		KeepAliveConfig: net.KeepAliveConfig{
@@ -802,7 +775,7 @@ func (x *XTransport) rebuildTransport() {
 		ControlContext: tcpControlContext,
 	}
 
-	// Rebuild pre-built headers (OPT 2)
+	// Rebuild pre-built headers
 	x.headers = buildPrebuiltHeaders()
 
 	h2Cfg := &http.HTTP2Config{
@@ -842,8 +815,7 @@ func (x *XTransport) rebuildTransport() {
 	}
 	x.transport = transport
 
-	// ── PERF 1: Store http.Client as a field — zero per-request allocation ────
-	// Rebuilding happens rarely (config reload); hot path in Fetch() is free.
+	// Rebuilding happens rarely (config reload); hot path in Fetch() is allocation-free.
 	x.httpClient = http.Client{Transport: transport}
 
 	// Reset prewarmer so new connections will be prewarmed on next request
@@ -860,13 +832,13 @@ func (x *XTransport) rebuildTransport() {
 			x.h3Transport.Close()
 		}
 
-		// ── PERF 5 + OPT 7: QUIC flow-control + 0-RTT session resumption ─────
+		// QUIC flow-control windows sized for DoH bursts; token store enables 0-RTT.
 		quicCfg := &quic.Config{
 			InitialStreamReceiveWindow:     h3InitialStreamWindow,
 			MaxStreamReceiveWindow:         h3MaxStreamWindow,
 			InitialConnectionReceiveWindow: h3InitialConnWindow,
 			MaxConnectionReceiveWindow:     h3MaxConnWindow,
-			TokenStore:                     quic.NewLRUTokenStore(256, 8), // OPT 7: enables 0-RTT
+			TokenStore:                     quic.NewLRUTokenStore(256, 8),
 		}
 
 		x.h3Transport = &http3.Transport{
@@ -875,7 +847,6 @@ func (x *XTransport) rebuildTransport() {
 			QUICConfig:         quicCfg,
 			Dial:               x.buildH3DialFunc(),
 		}
-		// ── PERF 1: H3 client also stored as field ────────────────────────────
 		x.h3Client = http.Client{Transport: x.h3Transport}
 	}
 }
@@ -883,20 +854,12 @@ func (x *XTransport) rebuildTransport() {
 // prewarmConnection ensures a full TLS+HTTP/2 handshake (and optionally a QUIC
 // handshake) is completed once per host before real traffic arrives.
 //
-// ── PERF 4: Full TLS handshake via real HEAD request ─────────────────────────
-// The previous implementation called transport.DialContext (TCP only). No TLS
-// or HTTP/2 negotiation occurred so the "warm" connection was immediately
-// closed and discarded — providing no benefit at all.
-//
-// We now issue a HEAD request via the stored httpClient. The transport performs
-// the complete TLS+ALPN+HTTP/2 handshake and deposits the idle connection into
-// its pool. The HEAD response body is drained and discarded. Any error (404,
-// connection refused, etc.) is silently ignored — we only care about warming
-// the connection pool, not about the response content.
-//
-// ── IMP 2: H3 path also prewarmed when Alt-Svc entry is present ──────────────
-// When an Alt-Svc entry exists for the host, the h3Client is also warmed so
-// the QUIC handshake is already complete before the first real DoH request.
+// A HEAD request is issued via the stored httpClient so the transport performs
+// the complete TLS+ALPN+HTTP/2 handshake and deposits an idle connection into
+// its pool. The HEAD response is drained and discarded — we only care about
+// warming the connection pool. When an Alt-Svc entry exists for the host, the
+// h3Client is also warmed so the QUIC handshake is complete before the first
+// real DoH request arrives.
 func (x *XTransport) prewarmConnection(hostPort string) {
 	hk := unique.Make(hostPort)
 	x.prewarmed.do(hk, func() {
@@ -934,7 +897,7 @@ func (x *XTransport) prewarmConnection(hostPort string) {
 				dlog.Debugf("Prewarmed HTTP/2 connection to %s (status %d)", hostPort, resp.StatusCode)
 			}
 
-			// ── IMP 2: Also warm H3 if transport is ready and Alt-Svc exists ─
+			// Also warm H3 if transport is ready and Alt-Svc exists for the host.
 			if x.h3Transport == nil {
 				return
 			}
@@ -974,7 +937,6 @@ func splitHostPort(hostPort string) (host, port string) {
 
 func (x *XTransport) buildDialContext() func(context.Context, string, string) (net.Conn, error) {
 	useIPv4, useIPv6 := x.useIPv4, x.useIPv6
-	// x.dialer is pre-built in rebuildTransport() with ControlContext set (ELITE 10).
 	return func(ctx context.Context, network, addrStr string) (net.Conn, error) {
 		host, port := ExtractHostAndPort(addrStr, stamps.DefaultPort)
 		portU16 := uint16(port & 0xffff)
@@ -989,28 +951,30 @@ func (x *XTransport) buildDialContext() func(context.Context, string, string) (n
 			dialNet = "tcp6"
 		}
 
+		dialOne := func(ctx context.Context, dialNet, target string) (net.Conn, error) {
+			if x.proxyDialer == nil {
+				return x.dialer.DialContext(ctx, dialNet, target)
+			}
+			// Proxy path: ControlContext cannot run (proxy owns the socket).
+			// Apply options post-dial; TCP_FASTOPEN_CONNECT is omitted as it
+			// is a no-op on already-connected sockets.
+			var conn net.Conn
+			var err error
+			if pdCtx, ok := (*x.proxyDialer).(netproxy.ContextDialer); ok {
+				conn, err = pdCtx.DialContext(ctx, dialNet, target)
+			} else {
+				conn, err = (*x.proxyDialer).Dial(dialNet, target)
+			}
+			if err == nil {
+				setTCPOptions(conn)
+			}
+			return conn, err
+		}
+
 		var lastErr error
 		for i, addr := range cachedAddrs {
 			target := formatDialTarget(addr, portU16)
-			var conn net.Conn
-			var err error
-			if x.proxyDialer == nil {
-				// ControlContext (tcpControlContext) applies all socket options
-				// pre-connect — no post-dial call needed here (ELITE 10).
-				conn, err = x.dialer.DialContext(ctx, dialNet, target)
-			} else {
-				if pdCtx, ok := (*x.proxyDialer).(netproxy.ContextDialer); ok {
-					conn, err = pdCtx.DialContext(ctx, dialNet, target)
-				} else {
-					conn, err = (*x.proxyDialer).Dial(dialNet, target)
-				}
-				if err == nil {
-					// Proxy path: ControlContext cannot run (proxy owns the socket).
-					// Apply options post-dial; TCP_FASTOPEN_CONNECT is omitted
-					// as it is a no-op on already-connected sockets.
-					setTCPOptions(conn)
-				}
-			}
+			conn, err := dialOne(ctx, dialNet, target)
 			if err == nil {
 				return conn, nil
 			}
@@ -1033,20 +997,7 @@ func (x *XTransport) buildDialContext() func(context.Context, string, string) (n
 			fallbackTarget = host + ":" + strconv.Itoa(port)
 		}
 
-		var conn net.Conn
-		var err error
-		if x.proxyDialer == nil {
-			conn, err = x.dialer.DialContext(ctx, dialNet, fallbackTarget)
-		} else {
-			if pdCtx, ok := (*x.proxyDialer).(netproxy.ContextDialer); ok {
-				conn, err = pdCtx.DialContext(ctx, dialNet, fallbackTarget)
-			} else {
-				conn, err = (*x.proxyDialer).Dial(dialNet, fallbackTarget)
-			}
-			if err == nil {
-				setTCPOptions(conn)
-			}
-		}
+		conn, err := dialOne(ctx, dialNet, fallbackTarget)
 		if err == nil {
 			return conn, nil
 		}
@@ -1065,7 +1016,7 @@ func (x *XTransport) buildH3DialFunc() func(context.Context, string, *tls.Config
 			network string
 		}
 
-		// ── OPT 4: Use cached dial target strings for UDP ─────────────────────
+		// Use cached dial target strings for UDP (avoids repeated formatting).
 		udpEndpoint := func(addr netip.Addr) udpTarget {
 			if addr.IsValid() {
 				nw := "udp4"
@@ -1116,13 +1067,12 @@ func (x *XTransport) buildH3DialFunc() func(context.Context, string, *tls.Config
 				}
 				continue
 			}
-			// ✅ FIX 1: Wrap ListenUDP+DialEarly in an IIFE so defer fires per-iteration.
+			// Wrap ListenUDP+DialEarly in an IIFE so defer fires per-iteration.
 			conn, dialErr := func() (*quic.Conn, error) {
 				udpConn, listenErr := net.ListenUDP(t.network, nil)
 				if listenErr != nil {
 					return nil, listenErr
 				}
-				// ── PERF 3: Apply SO_BUSY_POLL to this UDP socket ─────────────
 				setUDPOptions(udpConn)
 
 				connClosed := false
@@ -1288,7 +1238,6 @@ func (x *XTransport) resolveUsingSystem(host string, returnIPv4, returnIPv6 bool
 	return out, SystemResolverIPTTL, err
 }
 
-// ── OPT 3: resolveRRType uses shared dns.Client ──────────────────────────────
 func (x *XTransport) resolveRRType(
 	proto, host, resolver string,
 	rrType uint16,
@@ -1407,7 +1356,6 @@ func (x *XTransport) resolveUsingResolver(
 	return nil, 0, errNoIPRecords
 }
 
-// ── OPT 9: Cancellable retry backoff via time.Timer + select ──────────────────
 func (x *XTransport) resolveUsingServers(
 	proto, host string,
 	resolvers []string,
@@ -1416,8 +1364,8 @@ func (x *XTransport) resolveUsingServers(
 	if len(resolvers) == 0 {
 		return nil, 0, errEmptyResolvers
 	}
-	// ✅ FIX 3: Deep-copy the resolvers slice so the promotion swap never races
-	// against concurrent readers of x.internalResolvers / x.bootstrapResolvers.
+	// Deep-copy the resolvers slice so the promotion swap never races against
+	// concurrent readers of x.internalResolvers / x.bootstrapResolvers.
 	resolversCopy := make([]string, len(resolvers))
 	copy(resolversCopy, resolvers)
 
@@ -1571,9 +1519,7 @@ func (x *XTransport) resolve(host string, returnIPv4, returnIPv6 bool) ([]net.IP
 // ── Per‑host resolution mutex ─────────────────────────────────────────────────
 func (x *XTransport) hostResolveMu(host string) *sync.Mutex {
 	k := unique.Make(host)
-	// ── PERF 6: Single LoadOrStore — eliminates redundant map traversal ───────
-	// Previous pattern: Load (miss) → allocate → LoadOrStore → discard extra.
-	// Now: one atomic operation regardless of hit/miss.
+	// Single LoadOrStore — one atomic operation regardless of cache hit/miss.
 	v, _ := x.resolveMu.LoadOrStore(k, new(sync.Mutex))
 	return v.(*sync.Mutex)
 }
@@ -1616,12 +1562,8 @@ func (x *XTransport) resolveAndUpdateCache(host string) error {
 	selectedIPs := ips
 	if (resolveErr != nil || len(selectedIPs) == 0) && len(cachedAddrs) > 0 {
 		dlog.Noticef("Using stale cached address for [%s] (grace period)", host)
-		// ── ELITE FIX: eliminated net.IP round-trip alloc ─────────────────────
-		// Prior code: cachedAddrs ([]netip.Addr) → []net.IP via AsSlice()
-		//             → saveCachedIPs converts back to []netip.Addr.
-		// Two heap allocations (staleIPs slice + each AsSlice byte backing) and
-		// a full netip.AddrFromSlice loop wasted for no semantic reason.
-		// We already have []netip.Addr; call saveCachedAddrs directly.
+		// We already have []netip.Addr; call saveCachedAddrs directly to avoid
+		// an unnecessary netip.Addr → net.IP → netip.Addr round-trip.
 		x.saveCachedAddrs(host, cachedAddrs, ExpiredCachedIPGraceTTL)
 		return nil
 	}
@@ -1647,8 +1589,7 @@ func (x *XTransport) resolveAndUpdateCache(host string) error {
 }
 
 // ── HTTP fetch engine ─────────────────────────────────────────────────────────
-// ── OPT 5: Fetch now accepts a context.Context parameter ──────────────────────
-// Callers with an existing deadline pass it directly. Pass context.Background()
+// Callers with an existing deadline pass ctx directly; pass context.Background()
 // to use the default x.timeout.
 func (x *XTransport) Fetch(
 	ctx context.Context,
@@ -1664,7 +1605,13 @@ func (x *XTransport) Fetch(
 		timeout = x.timeout
 	}
 
-	// ── PERF 1: Use stored http.Client — zero allocation on hot path ──────────
+	if url == nil {
+		return nil, 0, nil, 0, errors.New("nil URL")
+	}
+	if url.Host == "" {
+		return nil, 0, nil, 0, errors.New("empty host in URL")
+	}
+
 	client := &x.httpClient
 
 	host, port := ExtractHostAndPort(url.Host, 443)
@@ -1675,7 +1622,6 @@ func (x *XTransport) Fetch(
 	hasAltSupport := false
 	if x.h3Transport != nil {
 		if x.http3Probe {
-			// ── PERF 1: Use stored h3Client — same zero-allocation benefit ────
 			// Respect H3 health backoff even in probe mode to avoid hammering
 			// a transiently broken QUIC endpoint.
 			if !x.isH3InBackoff(url.Host) {
@@ -1687,7 +1633,7 @@ func (x *XTransport) Fetch(
 			x.altSupport.RUnlock()
 			if inCache {
 				hasAltSupport = true
-				// ── IMP 4: use isAltSvcExpired for unambiguous expiry check ───
+				// Use isAltSvcExpired for an unambiguous negative-cache check.
 				negativeExpired := entry.port == 0 && isAltSvcExpired(entry, time.Now())
 				switch {
 				case entry.port > 0 && int(entry.port) == port && !x.isH3InBackoff(url.Host):
@@ -1701,7 +1647,7 @@ func (x *XTransport) Fetch(
 		}
 	}
 
-	// ── OPT 2: Select pre-built header map — zero allocation ──────────────────
+	// Select pre-built header map — zero allocation on the hot path.
 	var header http.Header
 	switch {
 	case method == http.MethodPost && contentType == "application/dns-message":
@@ -1720,7 +1666,7 @@ func (x *XTransport) Fetch(
 		header.Set("Accept", accept)
 	}
 
-	// ── OPT 6: Conditional body_hash — only compute when enabled ──────────────
+	// Append body_hash query parameter only when the feature is enabled.
 	if body != nil && x.BodyHashEnabled {
 		h := sha512.Sum512_256(*body)
 		qs := url.Query()
@@ -1733,11 +1679,11 @@ func (x *XTransport) Fetch(
 		return nil, 0, nil, 0, errNoTorProxy
 	}
 
-	// ── PERF 7: Fast-exit for IP-literal hosts bypasses resolver entirely ─────
+	// IP-literal hosts bypass the resolver entirely.
 	if !parseIPAddr(host).IsValid() {
 		if err := x.resolveAndUpdateCache(host); err != nil {
-			dlog.Errorf("Unable to resolve [%s]: check bootstrap_resolvers or system resolver", host)
-			return nil, 0, nil, 0, err
+			dlog.Errorf("[%s]: unable to resolve host: %v", host, err)
+			return nil, 0, nil, 0, fmt.Errorf("resolve %s: %w", host, err)
 		}
 	}
 
@@ -1746,11 +1692,9 @@ func (x *XTransport) Fetch(
 		bodyLen = len(*body)
 	}
 
-	// ── OPT 5 + ELITE FIX: Use caller context; only create WithTimeout if needed ─
-	// The prior code called context.WithCancel(ctx) when the caller already had a
-	// deadline — allocating a child context and a CancelFunc just to defer cancel().
-	// When the caller already provides a deadline, use ctx directly with a noop
-	// cancel. This saves one context allocation per request on the hot path.
+	// Use the caller's context when it already has a deadline; only create a
+	// child WithTimeout context when no deadline is set. This avoids one context
+	// allocation per request on the hot path.
 	fetchCtx := ctx
 	cancel := func() {} // noop by default — no allocation
 	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
@@ -1785,7 +1729,7 @@ func (x *XTransport) Fetch(
 	usedH3 := client == &x.h3Client
 
 	if err != nil && client == &x.h3Client {
-		// ✅ FIX 4a: Close any non-nil H3 response body before resp is overwritten.
+		// Close any non-nil H3 response body before resp is overwritten.
 		if resp != nil {
 			resp.Body.Close()
 			resp = nil
@@ -1798,9 +1742,8 @@ func (x *XTransport) Fetch(
 		x.altSupport.cache[url.Host] = altSvcEntry{port: 0, validTo: time.Now().Add(altSvcNegativeTTL)}
 		x.altSupport.Unlock()
 
-		// ── IMP 1: Build a fresh *http.Request for the retry ─────────────────
-		// Reusing the original req after Do() violates the net/http contract.
-		// newRequest() constructs a brand-new request with the same parameters.
+		// Build a fresh *http.Request for the H2 retry: reusing the original req
+		// after Do() violates the net/http contract.
 		usedH3 = false // fallback occurred; H3 did not produce the response
 		client = &x.httpClient
 		req, err = newRequest()
@@ -1860,13 +1803,13 @@ func (x *XTransport) Fetch(
 	var bodyReader io.ReadCloser = resp.Body
 	if compress && resp.Header.Get("Content-Encoding") == "gzip" {
 		gr := gzipReaderPool.Get().(*gzip.Reader)
-		grErr := gr.Reset(io.LimitReader(resp.Body, MaxHTTPBodyLength)) // defined in common.go
+		grErr := gr.Reset(io.LimitReader(resp.Body, MaxHTTPBodyLength))
 		if grErr != nil {
-			// ✅ FIX 2: Do NOT return a failed-Reset reader to the pool.
+			// Do not return a failed-Reset reader to the pool.
 			return nil, statusCode, tlsState, rtt, grErr
 		}
 		defer func() {
-			// ✅ FIX 2: Only return healthy readers to the pool.
+			// Only return healthy readers to the pool.
 			if closeErr := gr.Close(); closeErr == nil {
 				gzipReaderPool.Put(gr)
 			}
@@ -1874,9 +1817,6 @@ func (x *XTransport) Fetch(
 		bodyReader = gr
 	}
 
-	// ── OPT 8: Use Go 1.26 optimized io.ReadAll ──────────────────────────────
-	// Go 1.26 io.ReadAll is 2× faster with 50% less memory than prior versions.
-	// Replaces the manual sync.Pool[*bytes.Buffer] + bytes.Clone pattern.
 	bin, err := io.ReadAll(io.LimitReader(bodyReader, MaxHTTPBodyLength))
 	if err != nil {
 		return nil, statusCode, tlsState, rtt, err
@@ -1889,7 +1829,6 @@ func (x *XTransport) parseAndCacheAltSvc(host string, port int, header http.Head
 	x.altSupport.RLock()
 	existing, inCache := x.altSupport.cache[host]
 	x.altSupport.RUnlock()
-	// ── IMP 4: use isAltSvcExpired for unambiguous negative-cache check ───────
 	if inCache && existing.port == 0 && !isAltSvcExpired(existing, now) {
 		dlog.Debugf("Alt-Svc: negative cache still valid for [%s]; skipping", host)
 		return
