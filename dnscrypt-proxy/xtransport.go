@@ -83,7 +83,7 @@ const (
 	h2ResponseHeaderTimeout     = 20 * time.Second
 	h2TLSHandshakeTimeout       = 15 * time.Second
 
-	// ── QUIC / HTTP/3 flow-control windows (PERF 5) ───────────────────────────
+	// ── QUIC / HTTP/3 flow-control windows ───────────────────────────────────
 	// DNS responses are small but larger windows prevent ACK-stall on request
 	// bursts and reduce WINDOW_UPDATE round-trips.
 	h3InitialStreamWindow = 512 * 1024      // 512 KiB per stream
@@ -91,16 +91,16 @@ const (
 	h3InitialConnWindow   = 1024 * 1024     // 1 MiB per connection
 	h3MaxConnWindow       = 8 * 1024 * 1024 // 8 MiB per connection
 
-	// ── TCP socket buffer sizes (PERF 8) ─────────────────────────────────────
+	// ── TCP socket buffer sizes ───────────────────────────────────────────────
 	// Request 256 KiB send/recv buffers. Kernel caps at net.core.{w,r}mem_max.
 	tcpSocketBufSize = 256 * 1024 // 256 KiB
 
-	// ── TCP_NOTSENT_LOWAT value (PERF 2) ─────────────────────────────────────
+	// ── TCP_NOTSENT_LOWAT value ───────────────────────────────────────────────
 	// 16 KiB: enough slack to keep writes non-blocking while preventing
 	// excessive kernel-side buffering that inflates write latency.
 	tcpNotSentLowat = 16 * 1024 // 16 KiB
 
-	// ── SO_BUSY_POLL value for H3 UDP sockets (PERF 3) ───────────────────────
+	// ── SO_BUSY_POLL value for H3 UDP sockets ────────────────────────────────
 	// 50 µs of kernel busy-polling before sleeping. Eliminates the interrupt
 	// context-switch on the receive path for latency-sensitive DoH/DoQ.
 	udpBusyPollMicros = 50 // µs
@@ -470,7 +470,7 @@ func uniqueNormalizedAddrs(addrs []netip.Addr) []netip.Addr {
 	return out
 }
 
-// ── IP cache operations (OPT 1: netip.Addr throughout) ────────────────────────
+// ── IP cache operations ────────────────────────────────────────────────────────
 func (x *XTransport) saveCachedAddrs(host string, addrs []netip.Addr, ttl time.Duration) {
 	normalized := uniqueNormalizedAddrs(addrs)
 	if len(normalized) == 0 {
@@ -595,7 +595,7 @@ func (x *XTransport) PurgeExpiredCache() (ipsPurged, altSvcPurged, muPurged int)
 	}
 	x.cachedIPs.Unlock()
 
-	// Alt‑Svc cache — use IMP 4 isAltSvcExpired helper
+	// Alt‑Svc cache — use isAltSvcExpired helper
 	x.altSupport.Lock()
 	before = len(x.altSupport.cache)
 	maps.DeleteFunc(x.altSupport.cache, func(_ string, e altSvcEntry) bool {
