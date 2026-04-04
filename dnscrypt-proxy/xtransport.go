@@ -123,6 +123,10 @@ const (
 	h3FailureThreshold = 3
 	h3BackoffInitial   = 30 * time.Second
 	h3BackoffMax       = 10 * time.Minute
+	// h3BackoffShiftMax caps the left-shift in the exponential calculation.
+	// 1 << 4 == 16, so the maximum multiplier is 16× h3BackoffInitial = 480s,
+	// which is already capped to h3BackoffMax (10 min) anyway.
+	h3BackoffShiftMax = 4
 )
 
 // ── Package‑level sentinel errors (zero‑allocation returns) ──────────────────
@@ -260,8 +264,8 @@ func (s *h3HealthState) onFailure() (inBackoff bool) {
 	s.failures++
 	if s.failures >= h3FailureThreshold {
 		shift := s.failures - h3FailureThreshold
-		if shift > 4 {
-			shift = 4 // cap at 16× h3BackoffInitial
+		if shift > h3BackoffShiftMax {
+			shift = h3BackoffShiftMax
 		}
 		backoff := h3BackoffInitial * (1 << shift)
 		if backoff > h3BackoffMax {
@@ -1453,7 +1457,7 @@ func (x *XTransport) resolveUsingServers(
 				// future calls (and the serial loop below) try it first.
 				if res.idx > 0 {
 					resolversCopy[0], resolversCopy[res.idx] = resolversCopy[res.idx], resolversCopy[0]
-					dlog.Infof("Resolver race: %s[%s] won for [%s]; promoting to first",
+					dlog.Debugf("Resolver race: %s[%s] won for [%s]; promoting to first",
 						proto, resolversCopy[0], host)
 				}
 				resolverRaceWins.Add(1)
@@ -1810,7 +1814,12 @@ func (x *XTransport) Fetch(
 
 	// Record H3 success: resets failure counter and clears any active backoff.
 	// Only called when the H3 request itself succeeded (no fallback triggered).
-	if usedH3 && err == nil {
+	// Intentionally placed before the status-code check: a 4xx/5xx HTTP response
+	// is an application-layer error, not an H3 transport failure — the QUIC path
+	// is working correctly if we received any response without a Do() error.
+	// We do not record success for 5xx responses to avoid masking H3-specific
+	// server-side degradation patterns; partial success is treated conservatively.
+	if usedH3 && err == nil && resp != nil && resp.StatusCode < 500 {
 		x.recordH3Success(url.Host)
 	}
 
