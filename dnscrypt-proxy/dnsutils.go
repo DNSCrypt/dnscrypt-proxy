@@ -751,7 +751,11 @@ func exchangeDNSOnce(
 		}
 		upstreamAddr := udpAddr
 		if relay != nil {
-			proxy.prepareForRelay(udpAddr.IP, udpAddr.Port, &binQuery)
+			var relayErr error
+			binQuery, relayErr = proxy.prepareForRelay(udpAddr.IP, udpAddr.Port, binQuery)
+			if relayErr != nil {
+				return dnsExchangeResult{err: relayErr}
+			}
 			upstreamAddr = relay.RelayUDPAddr
 		}
 
@@ -796,7 +800,11 @@ func exchangeDNSOnce(
 		}
 		upstreamAddr := tcpAddr
 		if relay != nil {
-			proxy.prepareForRelay(tcpAddr.IP, tcpAddr.Port, &binQuery)
+			var relayErr error
+			binQuery, relayErr = proxy.prepareForRelay(tcpAddr.IP, tcpAddr.Port, binQuery)
+			if relayErr != nil {
+				return dnsExchangeResult{err: relayErr}
+			}
 			upstreamAddr = relay.RelayTCPAddr
 		}
 

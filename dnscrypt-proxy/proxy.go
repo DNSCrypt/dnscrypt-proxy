@@ -11,11 +11,10 @@ import (
 	"runtime"
 	"strings"
 	"sync"
-	"sync/atomic" // [C18] required for atomic.Uint32 field type
+	"sync/atomic" // [C18] required for atomic.Uint32 and atomic.Bool field types
 	"time"
 
 	"github.com/jedisct1/dlog"
-	clocksmith "github.com/jedisct1/go-clocksmith"
 	stamps "github.com/jedisct1/go-dnsstamps"
 	"golang.org/x/crypto/curve25519"
 	netproxy "golang.org/x/net/proxy"
@@ -206,6 +205,12 @@ type Proxy struct {
 	ipCryptConfig      *IPCryptConfig
 	monitoringInstance *MonitoringUI
 
+	// ── graceful-shutdown context ─────────────────────────────────────────
+	// shutdownCtx is cancelled by StopProxy to signal background goroutines
+	// (source prefetch and cert refresh loops) to exit cleanly.
+	shutdownCtx    context.Context
+	shutdownCancel context.CancelFunc
+
 	// ── embedded structs ─────────────────────────────────────────────────
 	pluginsGlobals        PluginsGlobals
 	serversInfo           ServersInfo
@@ -306,7 +311,10 @@ type Proxy struct {
 	ephemeralKeys                 bool
 	pluginBlockUnqualified        bool
 	showCerts                     bool
-	certIgnoreTimestamp           bool
+	// certIgnoreTimestamp controls whether certificate timestamp validation is
+	// skipped. Stored as atomic.Bool because it is written from the cert-refresh
+	// background goroutine and read from query-processing goroutines concurrently.
+	certIgnoreTimestamp           atomic.Bool
 	skipAnonIncompatibleResolvers bool
 	anonDirectCertFallback        bool
 	pluginBlockUndelegated        bool
@@ -323,11 +331,21 @@ type Proxy struct {
 // Callers must populate xTransport, pluginsGlobals, and listen addresses
 // before calling StartProxy.
 func NewProxy() *Proxy {
+	ctx, cancel := context.WithCancel(context.Background())
 	return &Proxy{
-		serversInfo: NewServersInfo(),
-		udpConnPool: NewUDPConnPool(),
-		tcpConnPool: NewTCPConnPool(), // [P02]
+		serversInfo:    NewServersInfo(),
+		udpConnPool:    NewUDPConnPool(),
+		tcpConnPool:    NewTCPConnPool(), // [P02]
+		shutdownCtx:    ctx,
+		shutdownCancel: cancel,
 	}
+}
+
+// StopProxy cancels the shutdown context, signalling all background goroutines
+// (source prefetch and cert refresh loops) started by StartProxy to exit
+// cleanly. It is safe to call more than once.
+func (proxy *Proxy) StopProxy() {
+	proxy.shutdownCancel()
 }
 
 // ── Listener registration ─────────────────────────────────────────────────────
@@ -440,28 +458,33 @@ func (proxy *Proxy) setupParentListeners(udpNet, tcpNet string, listenUDPAddr *n
 // parent process.
 func (proxy *Proxy) setupChildListeners(listenUDPAddr *net.UDPAddr, listenAddrStr string) {
 	FileDescriptorsMu.Lock()
+	defer FileDescriptorsMu.Unlock() // unlock on function exit, covering all error paths
 
 	udpPC, err := net.FilePacketConn(os.NewFile(InheritedDescriptorsBase+FileDescriptorNum, "listenerUDP"))
 	if err != nil {
-		FileDescriptorsMu.Unlock()
 		dlog.Fatalf("Unable to switch to a different user: %v", err)
 	}
 	FileDescriptorNum++
 
 	tcpL, err := net.FileListener(os.NewFile(InheritedDescriptorsBase+FileDescriptorNum, "listenerTCP"))
 	if err != nil {
-		FileDescriptorsMu.Unlock()
 		dlog.Fatalf("Unable to switch to a different user: %v", err)
 	}
 	FileDescriptorNum++
 
-	FileDescriptorsMu.Unlock()
-
+	udpConn, ok := udpPC.(*net.UDPConn)
+	if !ok {
+		dlog.Fatal("setupChildListeners: inherited UDP file conn is not a *net.UDPConn")
+	}
 	dlog.Noticef("Now listening to %v [UDP]", listenUDPAddr)
-	proxy.registerUDPListener(udpPC.(*net.UDPConn))
+	proxy.registerUDPListener(udpConn)
 
+	tcpListener, ok := tcpL.(*net.TCPListener)
+	if !ok {
+		dlog.Fatal("setupChildListeners: inherited TCP file listener is not a *net.TCPListener")
+	}
 	dlog.Noticef("Now listening to %v [TCP]", listenAddrStr)
-	proxy.registerTCPListener(tcpL.(*net.TCPListener))
+	proxy.registerTCPListener(tcpListener)
 }
 
 // addLocalDoHListener binds a local DNS-over-HTTPS socket for listenAddrStr
@@ -502,15 +525,18 @@ func (proxy *Proxy) addLocalDoHListener(listenAddrStr string) {
 	}
 
 	FileDescriptorsMu.Lock()
+	defer FileDescriptorsMu.Unlock() // unlock on function exit, covering all error paths
 	tcpL, err := net.FileListener(os.NewFile(InheritedDescriptorsBase+FileDescriptorNum, "listenerTCP"))
 	if err != nil {
-		FileDescriptorsMu.Unlock()
 		dlog.Fatalf("Unable to switch to a different user: %v", err)
 	}
 	FileDescriptorNum++
-	FileDescriptorsMu.Unlock()
 
-	proxy.registerLocalDoHListener(tcpL.(*net.TCPListener))
+	tcpListener, ok := tcpL.(*net.TCPListener)
+	if !ok {
+		dlog.Fatal("addLocalDoHListener: inherited TCP file listener is not a *net.TCPListener")
+	}
+	proxy.registerLocalDoHListener(tcpListener)
 	dlog.Noticef("Now listening to https://%v%v [DoH]", listenAddrStr, proxy.localDoHPath)
 }
 
@@ -531,7 +557,12 @@ func (proxy *Proxy) udpListenerFromAddr(listenAddr *net.UDPAddr) error {
 	if err != nil {
 		return err
 	}
-	proxy.registerUDPListener(pc.(*net.UDPConn))
+	udpConn, ok := pc.(*net.UDPConn)
+	if !ok {
+		_ = pc.Close()
+		return errors.New("udpListenerFromAddr: ListenPacket did not return a *net.UDPConn")
+	}
+	proxy.registerUDPListener(udpConn)
 	dlog.Noticef("Now listening to %v [UDP]", listenAddr)
 	return nil
 }
@@ -551,7 +582,12 @@ func (proxy *Proxy) tcpListenerFromAddr(listenAddr *net.TCPAddr) error {
 	if err != nil {
 		return err
 	}
-	proxy.registerTCPListener(l.(*net.TCPListener))
+	tcpListener, ok := l.(*net.TCPListener)
+	if !ok {
+		_ = l.Close()
+		return errors.New("tcpListenerFromAddr: Listen did not return a *net.TCPListener")
+	}
+	proxy.registerTCPListener(tcpListener)
 	dlog.Noticef("Now listening to %v [TCP]", listenAddr)
 	return nil
 }
@@ -572,7 +608,12 @@ func (proxy *Proxy) localDoHListenerFromAddr(listenAddr *net.TCPAddr) error {
 	if err != nil {
 		return err
 	}
-	proxy.registerLocalDoHListener(l.(*net.TCPListener))
+	tcpListener, ok := l.(*net.TCPListener)
+	if !ok {
+		_ = l.Close()
+		return errors.New("localDoHListenerFromAddr: Listen did not return a *net.TCPListener")
+	}
+	proxy.registerLocalDoHListener(tcpListener)
 	dlog.Noticef("Now listening to https://%v%v [DoH]", listenAddr, proxy.localDoHPath)
 	return nil
 }
@@ -699,7 +740,7 @@ func (proxy *Proxy) StartProxy() {
 
 	liveServers, err := proxy.serversInfo.refresh(proxy)
 	if liveServers > 0 {
-		proxy.certIgnoreTimestamp = false
+		proxy.certIgnoreTimestamp.Store(false)
 	}
 
 	if proxy.showCerts {
@@ -714,16 +755,21 @@ func (proxy *Proxy) StartProxy() {
 	// Background source-prefetch loop.
 	// [P04] runtime.GC() removed — the Go runtime's own GC pacer is sufficient
 	// and forced GC cycles compete with the query pipeline under load.
+	// Shutdown-aware: exits cleanly when proxy.shutdownCtx is cancelled.
 	go func() {
 		lastLogTime := time.Now()
 		for {
-			clocksmith.Sleep(PrefetchSources(proxy.xTransport, proxy.sources))
+			d := PrefetchSources(proxy.xTransport, proxy.sources)
+			select {
+			case <-proxy.shutdownCtx.Done():
+				return
+			case <-time.After(d):
+			}
 			proxy.updateRegisteredServers()
 			if time.Since(lastLogTime) > 5*time.Minute {
 				proxy.serversInfo.logWP2Stats()
 				lastLogTime = time.Now()
 			}
-			// [P04] runtime.GC() intentionally removed.
 		}
 	}()
 
@@ -731,6 +777,7 @@ func (proxy *Proxy) StartProxy() {
 	// [C12] liveServers captured by value via initialLive parameter to
 	// prevent a data race on the outer variable.
 	// [P04] runtime.GC() removed from this loop as well.
+	// Shutdown-aware: exits cleanly when proxy.shutdownCtx is cancelled.
 	if len(proxy.serversInfo.registeredServers) > 0 {
 		go func(initialLive int) {
 			live := initialLive
@@ -739,12 +786,15 @@ func (proxy *Proxy) StartProxy() {
 				if live == 0 {
 					delay = proxy.certRefreshDelayAfterFailure
 				}
-				clocksmith.Sleep(delay)
+				select {
+				case <-proxy.shutdownCtx.Done():
+					return
+				case <-time.After(delay):
+				}
 				live, _ = proxy.serversInfo.refresh(proxy)
 				if live > 0 {
-					proxy.certIgnoreTimestamp = false
+					proxy.certIgnoreTimestamp.Store(false)
 				}
-				// [P04] runtime.GC() intentionally removed.
 			}
 		}(liveServers)
 	}
@@ -904,19 +954,24 @@ func (proxy *Proxy) commitServerUpdates() {
 
 // ── Relay wire-format helper ──────────────────────────────────────────────────
 
-// prepareForRelay prepends the anonymised-DNS relay header to *encryptedQuery
-// in a single allocation. [C10]
+// prepareForRelay constructs and returns the anonymised-DNS relay header
+// prepended to encryptedQuery in a single allocation. [C10]
 //
 // Wire layout:
 //
 //	[0xff × 8][0x00 × 2][ip.To16() = 16 bytes][big-endian port uint16][query]
-func (proxy *Proxy) prepareForRelay(ip net.IP, port int, encryptedQuery *[]byte) {
+//
+// Returns an error when ip.To16() is nil (invalid or unspecified IP address).
+func (proxy *Proxy) prepareForRelay(ip net.IP, port int, encryptedQuery []byte) ([]byte, error) {
 	const magicLen = 8 // 0xff bytes
 	const padLen   = 2 // zero pad following magic
 	ip16 := ip.To16()
-	ip16Len := len(ip16)                                            // [C10] cached
-	total := magicLen + padLen + ip16Len + 2 + len(*encryptedQuery)
-	buf := make([]byte, total)                                      // [C10] one allocation
+	if ip16 == nil {
+		return nil, errors.New("prepareForRelay: ip.To16() returned nil; IP address may be invalid or unspecified")
+	}
+	ip16Len := len(ip16)                                          // [C10] cached
+	total := magicLen + padLen + ip16Len + 2 + len(encryptedQuery)
+	buf := make([]byte, total)                                    // [C10] one allocation
 
 	for i := range magicLen { // [C10] range-over-int (Go 1.22)
 		buf[i] = 0xff
@@ -927,9 +982,9 @@ func (proxy *Proxy) prepareForRelay(ip net.IP, port int, encryptedQuery *[]byte)
 	off += ip16Len
 	binary.BigEndian.PutUint16(buf[off:], uint16(port))
 	off += 2
-	copy(buf[off:], *encryptedQuery)
+	copy(buf[off:], encryptedQuery)
 
-	*encryptedQuery = buf
+	return buf, nil
 }
 
 // ── Upstream exchanges ────────────────────────────────────────────────────────
@@ -968,7 +1023,12 @@ func (proxy *Proxy) exchangeWithUDPServer(
 
 	query := encryptedQuery
 	if serverInfo.Relay != nil && serverInfo.Relay.Dnscrypt != nil {
-		proxy.prepareForRelay(serverInfo.UDPAddr.IP, serverInfo.UDPAddr.Port, &query)
+		var relayErr error
+		query, relayErr = proxy.prepareForRelay(serverInfo.UDPAddr.IP, serverInfo.UDPAddr.Port, query)
+		if relayErr != nil {
+			proxy.udpConnPool.Discard(pc)
+			return nil, relayErr
+		}
 	}
 
 	// [P01] Borrow a pooled buffer; return it unconditionally after use.
@@ -976,8 +1036,8 @@ func (proxy *Proxy) exchangeWithUDPServer(
 	var readLen int
 	var lastErr error
 
-	// [C04] range-over-int (Go 1.22) + named constant udpRetries.
-	for range udpRetries {
+	// [C04] Named constant udpRetries; counted loop for attempt number in log.
+	for i := 0; i < udpRetries; i++ {
 		if _, err := pc.Write(query); err != nil {
 			proxy.udpConnPool.Discard(pc)
 			encryptedResponsePool.Put(encryptedResponse) //nolint:staticcheck // [P01]
@@ -987,7 +1047,7 @@ func (proxy *Proxy) exchangeWithUDPServer(
 		if lastErr == nil {
 			break
 		}
-		dlog.Debugf("[%v] Retry on read error", serverInfo.Name)
+		dlog.Debugf("[%v] Retry %d/%d on read error: %v", serverInfo.Name, i+1, udpRetries, lastErr)
 	}
 
 	if lastErr != nil {
@@ -1028,7 +1088,11 @@ func (proxy *Proxy) exchangeWithUDPServerViaProxy(
 	}
 
 	if serverInfo.Relay != nil && serverInfo.Relay.Dnscrypt != nil {
-		proxy.prepareForRelay(serverInfo.UDPAddr.IP, serverInfo.UDPAddr.Port, &encryptedQuery)
+		var relayErr error
+		encryptedQuery, relayErr = proxy.prepareForRelay(serverInfo.UDPAddr.IP, serverInfo.UDPAddr.Port, encryptedQuery)
+		if relayErr != nil {
+			return nil, relayErr
+		}
 	}
 
 	// [P01] Borrow a pooled buffer.
@@ -1036,8 +1100,8 @@ func (proxy *Proxy) exchangeWithUDPServerViaProxy(
 	var readLen int
 	var lastErr error
 
-	// [C04] range-over-int + named constant.
-	for range udpRetries {
+	// [C04] Named constant udpRetries; counted loop for attempt number in log.
+	for i := 0; i < udpRetries; i++ {
 		if _, err := pc.Write(encryptedQuery); err != nil {
 			encryptedResponsePool.Put(encryptedResponse) //nolint:staticcheck
 			return nil, err
@@ -1046,7 +1110,7 @@ func (proxy *Proxy) exchangeWithUDPServerViaProxy(
 		if lastErr == nil {
 			break
 		}
-		dlog.Debugf("[%v] Retry on read error", serverInfo.Name)
+		dlog.Debugf("[%v] Retry %d/%d on read error: %v", serverInfo.Name, i+1, udpRetries, lastErr)
 	}
 
 	if lastErr != nil {
@@ -1112,7 +1176,12 @@ func (proxy *Proxy) exchangeWithTCPServer(
 	}
 
 	if serverInfo.Relay != nil && serverInfo.Relay.Dnscrypt != nil {
-		proxy.prepareForRelay(serverInfo.TCPAddr.IP, serverInfo.TCPAddr.Port, &encryptedQuery)
+		var relayErr error
+		encryptedQuery, relayErr = proxy.prepareForRelay(serverInfo.TCPAddr.IP, serverInfo.TCPAddr.Port, encryptedQuery)
+		if relayErr != nil {
+			proxy.tcpConnPool.Discard(pc)
+			return nil, relayErr
+		}
 	}
 
 	encryptedQuery, err = PrefixWithSize(encryptedQuery)
@@ -1171,15 +1240,20 @@ func (proxy *Proxy) clientsCountInc() bool {
 }
 
 // clientsCountDec atomically decrements the active-client counter.
-// Uses Add(^uint32(0)) — the canonical single-instruction unsigned decrement —
-// and guards against underflow.
+// Uses a CAS loop to avoid the race window between Load and Add that the
+// former Load+Add(^uint32(0)) pattern had.  Guards against underflow.
 //
 // [P07] Debug log removed — same hot-path reasoning as clientsCountInc.
 func (proxy *Proxy) clientsCountDec() {
-	if proxy.clientsCount.Load() == 0 {
-		return
+	for {
+		cur := proxy.clientsCount.Load()
+		if cur == 0 {
+			return
+		}
+		if proxy.clientsCount.CompareAndSwap(cur, cur-1) {
+			return
+		}
 	}
-	proxy.clientsCount.Add(^uint32(0))
 }
 
 // ── Dynamic timeout ───────────────────────────────────────────────────────────

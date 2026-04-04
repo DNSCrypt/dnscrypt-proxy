@@ -373,7 +373,7 @@ func configureServerParams(proxy *Proxy, config *Config) {
 	proxy.certRefreshConcurrency = Max(1, config.CertRefreshConcurrency)
 	proxy.certRefreshDelay = time.Duration(Max(60, config.CertRefreshDelay)) * time.Minute
 	proxy.certRefreshDelayAfterFailure = 10 * time.Second
-	proxy.certIgnoreTimestamp = config.CertIgnoreTimestamp
+	proxy.certIgnoreTimestamp.Store(config.CertIgnoreTimestamp)
 	proxy.ephemeralKeys = config.EphemeralKeys
 	proxy.monitoringUI = config.MonitoringUI
 }
