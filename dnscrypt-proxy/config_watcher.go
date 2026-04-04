@@ -245,27 +245,33 @@ func (cw *ConfigWatcher) AddFile(path string, reloadFunc func() error) error {
 
 	dir := filepath.Dir(absPath)
 
-	cw.mu.Lock()
-	cw.watchedFiles[absPath] = wf
-	if _, ok := cw.filesByDir[dir]; !ok {
-		cw.filesByDir[dir] = make(map[string]struct{})
-	}
-	cw.filesByDir[dir][absPath] = struct{}{}
-
-	// Watch the directory containing the file to catch atomic replace patterns.
-	if cw.watcher != nil {
-		if _, ok := cw.watchedDirs[dir]; !ok {
-			if err := cw.watcher.Add(dir); err != nil {
-				delete(cw.watchedFiles, absPath)
-				delete(cw.filesByDir[dir], absPath)
-				cw.mu.Unlock()
-				return err
-			}
-			cw.watchedDirs[dir] = struct{}{}
+	var watchErr error
+	func() {
+		cw.mu.Lock()
+		defer cw.mu.Unlock()
+		cw.watchedFiles[absPath] = wf
+		if _, ok := cw.filesByDir[dir]; !ok {
+			cw.filesByDir[dir] = make(map[string]struct{})
 		}
-	}
-	cw.mu.Unlock()
+		cw.filesByDir[dir][absPath] = struct{}{}
 
+		// Watch the directory containing the file to catch atomic replace patterns.
+		if cw.watcher != nil {
+			if _, ok := cw.watchedDirs[dir]; !ok {
+				if err := cw.watcher.Add(dir); err != nil {
+					delete(cw.watchedFiles, absPath)
+					delete(cw.filesByDir[dir], absPath)
+					watchErr = err
+					return
+				}
+				cw.watchedDirs[dir] = struct{}{}
+			}
+		}
+	}()
+
+	if watchErr != nil {
+		return watchErr
+	}
 	dlog.Noticef("Now watching [%s] for changes", absPath)
 	return nil
 }
@@ -336,8 +342,10 @@ func newPollingConfigWatcher(interval time.Duration) *ConfigWatcher {
 	ctx, cancel := context.WithCancel(context.Background())
 	cw := &ConfigWatcher{
 		watchedFiles: make(map[string]*WatchedFile),
-		ctx:         ctx,
-		cancel:      cancel,
+		filesByDir:   make(map[string]map[string]struct{}),
+		timers:       make(map[string]*time.Timer),
+		ctx:          ctx,
+		cancel:       cancel,
 		pollInterval: poll,
 	}
 
