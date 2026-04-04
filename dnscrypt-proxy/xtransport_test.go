@@ -3,6 +3,7 @@
 package main
 
 import (
+	"context"
 	"net/http"
 	"net/netip"
 	"net/url"
@@ -155,7 +156,7 @@ func TestFetchNilURL(t *testing.T) {
 	x.rebuildTransport()
 
 	t.Run("nil URL", func(t *testing.T) {
-		_, _, _, _, err := x.Fetch(nil, http.MethodGet, nil, "", "", nil, time.Second, false)
+		_, _, _, _, err := x.Fetch(context.Background(), http.MethodGet, nil, "", "", nil, time.Second, false)
 		if err == nil {
 			t.Error("expected error for nil URL, got nil")
 		}
@@ -163,7 +164,7 @@ func TestFetchNilURL(t *testing.T) {
 
 	t.Run("empty host", func(t *testing.T) {
 		u := &url.URL{Scheme: "https", Host: ""}
-		_, _, _, _, err := x.Fetch(nil, http.MethodGet, u, "", "", nil, time.Second, false)
+		_, _, _, _, err := x.Fetch(context.Background(), http.MethodGet, u, "", "", nil, time.Second, false)
 		if err == nil {
 			t.Error("expected error for empty host, got nil")
 		}
