@@ -1878,11 +1878,18 @@ func (x *XTransport) Fetch(
 		bodyReader = gr
 	}
 
-	// Read the response body into a pooled buffer to avoid a heap allocation
-	// per response. The buffer is grown as needed by appendFrom and returned
-	// to the pool after the caller is done (the returned slice aliases the
-	// pooled buffer's backing array, so callers must not retain it beyond the
-	// current query lifecycle — which is already the case for DNS wire bytes).
+	// Read the response body into a pooled buffer to avoid the internal
+	// reallocation chain of io.ReadAll (which starts at 512 bytes and doubles
+	// on each grow). The pooled buffer is pre-sized to 4096 bytes, covering
+	// the vast majority of DNS responses in a single read with no reallocation.
+	//
+	// A right-sized copy is made before returning. This is intentional: the
+	// pooled buffer must be returned immediately so it can be reused by the
+	// next query. Returning the pooled slice directly would create a
+	// use-after-return hazard since callers (processDoHQuery, plugin cache)
+	// retain the response across goroutine lifetimes. The net gain is still
+	// positive: one exact-size allocation + copy vs io.ReadAll's O(log n)
+	// growing reallocation chain.
 	bufp := httpResponseBufPool.Get().(*[]byte)
 	buf := (*bufp)[:0]
 	buf, err = appendFrom(buf, io.LimitReader(bodyReader, MaxHTTPBodyLength))
