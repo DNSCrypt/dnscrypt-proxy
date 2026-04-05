@@ -18,7 +18,9 @@ jobs:
       - name: Setup Go 1.26.1
         uses: actions/setup-go@main
         with:
-          go-version: '1.26.1'
+            go-version-file: 'go.mod'
+            env:
+            GOTOOLCHAIN: auto
 
       - name: Build Optimized Binary
         env:
