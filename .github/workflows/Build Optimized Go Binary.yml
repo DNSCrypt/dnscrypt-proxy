@@ -19,8 +19,6 @@ jobs:
         uses: actions/setup-go@main
         with:
             go-version-file: 'go.mod'
-            env:
-            GOTOOLCHAIN: auto
 
       - name: Build Optimized Binary
         env:
