@@ -665,7 +665,7 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 
 	// Warn when the monitoring UI is enabled but no credentials are configured:
 	// the UI will be reachable without authentication in that case.
-	if config.MonitoringUI.Enabled && config.MonitoringUI.Username == "" {
+	if config.MonitoringUI.Enabled && (config.MonitoringUI.Username == "" || config.MonitoringUI.Password == "") {
 		dlog.Warn("Monitoring UI is enabled without credentials — the UI is accessible without authentication. Set [monitoring_ui] username and password in the configuration file.")
 	}
 
