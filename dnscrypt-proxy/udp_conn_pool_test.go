@@ -161,6 +161,86 @@ func TestUDPConnPool_Close(t *testing.T) {
 	}
 }
 
+func TestUDPConnPool_Drain(t *testing.T) {
+	pool := NewUDPConnPool()
+	defer pool.Close()
+
+	addr, _ := net.ResolveUDPAddr("udp", "127.0.0.1:53")
+
+	// Put a connection in the pool.
+	conn, err := pool.Get(addr)
+	if err != nil {
+		t.Fatalf("Get failed: %v", err)
+	}
+	pool.Put(addr, conn)
+
+	if pool.Stats().TotalConnections != 1 {
+		t.Fatalf("Expected 1 connection before Drain, got %d", pool.Stats().TotalConnections)
+	}
+
+	// Drain must empty the pool without closing it.
+	if err := pool.Drain(); err != nil {
+		t.Fatalf("Drain returned error: %v", err)
+	}
+
+	s := pool.Stats()
+	if s.TotalConnections != 0 {
+		t.Errorf("Expected 0 connections after Drain, got %d", s.TotalConnections)
+	}
+	if s.IsClosed {
+		t.Error("Pool should not be closed after Drain")
+	}
+
+	// Get must still work after Drain.
+	conn2, err := pool.Get(addr)
+	if err != nil {
+		t.Fatalf("Get after Drain failed: %v", err)
+	}
+	pool.Put(addr, conn2)
+}
+
+// TestUDPConnPool_RaceDrainClose is a concurrency stress test designed to be
+// run with -race.  Many goroutines issue Get/Put concurrently while Drain and
+// Close are called, exercising all shutdown edge-cases.
+func TestUDPConnPool_RaceDrainClose(t *testing.T) {
+	pool := NewUDPConnPool()
+
+	addr, _ := net.ResolveUDPAddr("udp", "127.0.0.1:53")
+
+	const workers = 8
+	const iterations = 200
+
+	var wg sync.WaitGroup
+
+	// Start workers that Get/Put in a tight loop.
+	for range workers {
+		wg.Go(func() {
+			for range iterations {
+				conn, err := pool.Get(addr)
+				if err != nil {
+					// ErrPoolClosed is expected once Close is called.
+					return
+				}
+				pool.Put(addr, conn)
+			}
+		})
+	}
+
+	// Drain once in the middle.
+	wg.Go(func() {
+		time.Sleep(time.Millisecond)
+		_ = pool.Drain()
+	})
+
+	// Close after a short pause; workers should see ErrPoolClosed.
+	wg.Go(func() {
+		time.Sleep(5 * time.Millisecond)
+		_ = pool.Close()
+	})
+
+	wg.Wait()
+}
+
 func BenchmarkUDPConnPool_GetPut(b *testing.B) {
 	pool := NewUDPConnPool()
 	defer pool.Close()

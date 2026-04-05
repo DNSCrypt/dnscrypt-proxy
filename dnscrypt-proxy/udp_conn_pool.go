@@ -87,6 +87,14 @@ import (
 	"github.com/jedisct1/dlog"
 )
 
+// init asserts at program startup that UDPPoolShards is a power of two.
+// This is required for the bitwise AND shard index computation in getShard.
+func init() {
+	if UDPPoolShards == 0 || UDPPoolShards&(UDPPoolShards-1) != 0 {
+		panic("UDPPoolShards must be a power of two")
+	}
+}
+
 // ── Configuration ─────────────────────────────────────────────────────────────
 
 const (
@@ -103,7 +111,7 @@ const (
 	UDPPoolCleanupInterval = 10 * time.Second
 
 	// UDPPoolShards is the number of independent lock partitions.
-	// Must be a power of two so the modulo in getShard reduces to a bitwise AND.
+	// Must be a power of two so the bitwise AND in getShard works correctly.
 	UDPPoolShards = 64
 
 	// UDPPoolDialTimeout bounds how long dialNew may block waiting for the OS
@@ -253,9 +261,9 @@ func NewUDPConnPoolWithContext(ctx context.Context) *UDPConnPool {
 //     shard (hash-flooding). FNV-1a uses a fixed, public seed.
 //  3. Speed — the runtime's maphash is SIMD-accelerated on x86/ARM64.
 //
-// UDPPoolShards == 64 == 1<<6, so the % compiles to a single AND instruction.
+// UDPPoolShards == 64 == 1<<6, so the bitwise AND is a single instruction.
 func (p *UDPConnPool) getShard(addr string) *poolShard {
-	return &p.shards[maphash.String(p.seed, addr)%UDPPoolShards]
+	return &p.shards[maphash.String(p.seed, addr)&(UDPPoolShards-1)]
 }
 
 // drainShard removes all connections from shard under its lock and returns them.
@@ -263,8 +271,8 @@ func (p *UDPConnPool) getShard(addr string) *poolShard {
 // clear(m) (Go 1.21) resets the map in O(1).
 func drainShard(shard *poolShard) []*pooledConn {
 	shard.mu.Lock()
-	defer shard.mu.Unlock()
 	if len(shard.conns) == 0 {
+		shard.mu.Unlock()
 		return nil
 	}
 	// Pre-size to avoid growth; UDPPoolMaxConnsPerAddr * entries is the max.
@@ -273,14 +281,16 @@ func drainShard(shard *poolShard) []*pooledConn {
 		all = append(all, stack...)
 	}
 	clear(shard.conns) // O(1) map reset; retains allocated buckets for reuse
+	shard.mu.Unlock()
 	return all
 }
 
 // closeAll closes every connection in the slice and returns a joined error.
 // errors.Join (Go 1.20) returns nil when errs is empty and a multi-error
 // otherwise; each sub-error remains individually inspectable.
+// errs is allocated lazily to avoid a heap allocation on the common happy path.
 func closeAll(conns []*pooledConn) error {
-	errs := make([]error, 0, len(conns))
+	var errs []error
 	for _, pc := range conns {
 		if err := pc.conn.Close(); err != nil {
 			errs = append(errs, err)
@@ -326,18 +336,23 @@ func (p *UDPConnPool) cleanupLoop() {
 // concurrent Get/Put callers on that shard.
 func (p *UDPConnPool) cleanupStale() {
 	now := time.Now()
+	cutoff := now.Add(-UDPPoolMaxIdleTime) // compute once; pc.lastUsed.Before(cutoff) avoids per-conn Sub
 	var totalEvicted int
+
+	// stale is declared outside the shard loop so its backing array is reused
+	// across iterations, avoiding a fresh allocation per shard.
+	var stale []*pooledConn
 
 	for i := range p.shards {
 		shard := &p.shards[i]
 
 		// ── Collect stale entries under the lock ──────────────────────────────
-		var stale []*pooledConn
+		stale = stale[:0]
 		shard.mu.Lock()
 		for addr, conns := range shard.conns {
 			w := 0
 			for _, pc := range conns {
-				if now.Sub(pc.lastUsed) > UDPPoolMaxIdleTime {
+				if pc.lastUsed.Before(cutoff) {
 					stale = append(stale, pc)
 				} else {
 					conns[w] = pc
@@ -394,6 +409,12 @@ func (p *UDPConnPool) Get(addr *net.UDPAddr) (*net.UDPConn, error) {
 	shard := p.getShard(addrStr)
 
 	shard.mu.Lock()
+	// Re-check closed under the lock: prevents returning a pooled conn that
+	// was already drained by a concurrent Close() call.
+	if p.closed.Load() {
+		shard.mu.Unlock()
+		return nil, ErrPoolClosed
+	}
 	conns := shard.conns[addrStr]
 	if n := len(conns); n > 0 {
 		// LIFO pop: the most-recently-returned connection is most likely to
@@ -454,19 +475,19 @@ func (p *UDPConnPool) dialNew(addr *net.UDPAddr) (*net.UDPConn, error) {
 // Ownership of conn transfers to the pool. If the pool is full for addr
 // (≥ UDPPoolMaxConnsPerAddr) or has been closed, conn is closed immediately.
 // Put is a no-op when conn or addr is nil (nil conn is silently ignored; nil
-// addr logs a warning and closes conn).
+// addr logs a warning at WARN level and closes conn).
 func (p *UDPConnPool) Put(addr *net.UDPAddr, conn *net.UDPConn) {
 	if conn == nil {
 		dlog.Debug("UDP pool: Put called with nil conn; ignoring")
 		return
 	}
 	if addr == nil {
-		dlog.Debug("UDP pool: Put called with nil addr; closing conn")
+		dlog.Warn("UDP pool: Put called with nil addr; closing conn")
 		_ = conn.Close()
 		return
 	}
 	if p.closed.Load() {
-		dlog.Debugf("UDP pool: pool is closed; discarding conn to %s", addr)
+		dlog.Debugf("UDP pool: pool is closed; discarding conn to %s", addr.String())
 		_ = conn.Close()
 		return
 	}
