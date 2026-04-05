@@ -40,6 +40,7 @@ jobs:
           go get github.com/davecgh/go-spew
           go get github.com/quic-go/qpack@master
           go mod tidy
+          go mod vendor
           go build \
             -pgo=default.pgo \
             -mod=mod \
