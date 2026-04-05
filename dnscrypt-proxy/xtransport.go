@@ -163,6 +163,17 @@ var gzipReaderPool = sync.Pool{
 	New: func() any { return new(gzip.Reader) },
 }
 
+// ── Response buffer pool – reuses byte buffers for HTTP response body reads ───
+// Typical DNS responses are 100–4096 bytes. The initial capacity of 4096 covers
+// the vast majority of responses without re-allocation. Buffers that grow beyond
+// this (rare large responses) are still returned to the pool.
+var httpResponseBufPool = sync.Pool{
+	New: func() any {
+		b := make([]byte, 0, 4096)
+		return &b
+	},
+}
+
 // Cached dial target strings – avoids repeated strconv.Itoa + string concat
 // on the hot dial path. Key is a compact struct (netip.Addr + uint16 port).
 type dialTargetKey struct {
@@ -171,6 +182,27 @@ type dialTargetKey struct {
 }
 
 var dialTargetCache sync.Map // map[dialTargetKey]string
+
+// hostPortCache caches "host:port" strings to avoid repeated concatenation and
+// strconv.Itoa allocations on the hot Fetch() path. Key is host+port.
+type hostPortKey struct {
+	host string
+	port int
+}
+
+var hostPortCache sync.Map // map[hostPortKey]string
+
+// formatHostPort returns a cached "host:port" string, allocating only on the
+// first call for each unique (host, port) pair.
+func formatHostPort(host string, port int) string {
+	k := hostPortKey{host: host, port: port}
+	if v, ok := hostPortCache.Load(k); ok {
+		return v.(string)
+	}
+	s := host + ":" + strconv.Itoa(port)
+	v, _ := hostPortCache.LoadOrStore(k, s)
+	return v.(string)
+}
 
 func formatDialTarget(addr netip.Addr, port uint16) string {
 	k := dialTargetKey{addr: addr, port: port}
@@ -190,6 +222,27 @@ func formatDialTarget(addr netip.Addr, port uint16) string {
 	}
 	v, _ := dialTargetCache.LoadOrStore(k, s)
 	return v.(string)
+}
+
+// appendFrom reads from r into buf, growing it as needed, and returns the
+// extended slice. This replaces io.ReadAll on the hot path: when buf already
+// has sufficient capacity (the common case for DNS responses), no new heap
+// allocation occurs.
+func appendFrom(buf []byte, r io.Reader) ([]byte, error) {
+	for {
+		// Grow by at least 512 bytes when capacity is exhausted.
+		if cap(buf)-len(buf) == 0 {
+			buf = append(buf, make([]byte, 512)...)[:len(buf)]
+		}
+		n, err := r.Read(buf[len(buf):cap(buf)])
+		buf = buf[:len(buf)+n]
+		if err != nil {
+			if err == io.EOF {
+				return buf, nil
+			}
+			return buf, err
+		}
+	}
 }
 
 // ptr returns a pointer to a new copy of v.
@@ -237,17 +290,24 @@ func isAltSvcExpired(e altSvcEntry, now time.Time) bool {
 // increasing backoff window after repeated failures. This avoids repeatedly burning
 // time on expensive QUIC handshakes when H3 is broken for a specific host.
 // H3 is automatically retried after the backoff window expires (probe-then-recover).
+//
+// The read path (inBackoff) is lock-free: it loads an atomic int64 timestamp
+// and compares against the current time. Only the write paths (onFailure,
+// onSuccess) take the mutex, which are rare events.
 type h3HealthState struct {
-	mu           sync.Mutex
-	failures     int
-	backoffUntil time.Time
+	// backoffDeadline stores the backoff expiry as UnixNano. A value of 0
+	// means no backoff is active. Reads are lock-free via atomic.Int64.
+	backoffDeadline atomic.Int64
+
+	mu       sync.Mutex // protects failures + backoff deadline writes
+	failures int
 }
 
 // inBackoff reports whether H3 should currently be suppressed for this host.
+// Lock-free: only performs an atomic load and a time comparison.
 func (s *h3HealthState) inBackoff() bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return time.Now().Before(s.backoffUntil)
+	deadline := s.backoffDeadline.Load()
+	return deadline != 0 && time.Now().UnixNano() < deadline
 }
 
 // onFailure increments the consecutive-failure counter and sets a backoff window
@@ -266,7 +326,7 @@ func (s *h3HealthState) onFailure() (inBackoff bool) {
 		if backoff > h3BackoffMax {
 			backoff = h3BackoffMax
 		}
-		s.backoffUntil = time.Now().Add(backoff)
+		s.backoffDeadline.Store(time.Now().Add(backoff).UnixNano())
 		return true
 	}
 	return false
@@ -277,7 +337,7 @@ func (s *h3HealthState) onSuccess() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.failures = 0
-	s.backoffUntil = time.Time{}
+	s.backoffDeadline.Store(0)
 }
 
 // hostPrewarmer uses unique.Handle[string] keys so map comparisons are O(1)
@@ -1616,8 +1676,9 @@ func (x *XTransport) Fetch(
 
 	host, port := ExtractHostAndPort(url.Host, 443)
 
-	// Prewarm a full TLS+HTTP/2 (and optionally H3) connection once per host
-	x.prewarmConnection(host + ":" + strconv.Itoa(port))
+	// Prewarm a full TLS+HTTP/2 (and optionally H3) connection once per host.
+	// Use the cached "host:port" string to avoid a string concatenation per request.
+	x.prewarmConnection(formatHostPort(host, port))
 
 	hasAltSupport := false
 	if x.h3Transport != nil {
@@ -1817,10 +1878,24 @@ func (x *XTransport) Fetch(
 		bodyReader = gr
 	}
 
-	bin, err := io.ReadAll(io.LimitReader(bodyReader, MaxHTTPBodyLength))
+	// Read the response body into a pooled buffer to avoid a heap allocation
+	// per response. The buffer is grown as needed by appendFrom and returned
+	// to the pool after the caller is done (the returned slice aliases the
+	// pooled buffer's backing array, so callers must not retain it beyond the
+	// current query lifecycle — which is already the case for DNS wire bytes).
+	bufp := httpResponseBufPool.Get().(*[]byte)
+	buf := (*bufp)[:0]
+	buf, err = appendFrom(buf, io.LimitReader(bodyReader, MaxHTTPBodyLength))
 	if err != nil {
+		*bufp = buf
+		httpResponseBufPool.Put(bufp)
 		return nil, statusCode, tlsState, rtt, err
 	}
+	// Make an owned copy so the pooled buffer can be returned immediately.
+	bin := make([]byte, len(buf))
+	copy(bin, buf)
+	*bufp = buf
+	httpResponseBufPool.Put(bufp)
 	return bin, statusCode, tlsState, rtt, nil
 }
 
@@ -1959,10 +2034,16 @@ func (x *XTransport) dohLikeQuery(
 	timeout time.Duration,
 ) ([]byte, int, *tls.ConnectionState, time.Duration, error) {
 	if useGet {
-		qs := url.Query()
-		qs.Add("dns", base64.RawURLEncoding.EncodeToString(body))
+		// Build the query string directly instead of going through url.Query()
+		// (which allocates a url.Values map) + qs.Encode() (which re-encodes).
+		// The "dns" parameter value is already URL-safe (base64 raw-URL encoding).
+		encoded := base64.RawURLEncoding.EncodeToString(body)
 		u2 := *url
-		u2.RawQuery = qs.Encode()
+		if url.RawQuery == "" {
+			u2.RawQuery = "dns=" + encoded
+		} else {
+			u2.RawQuery = url.RawQuery + "&dns=" + encoded
+		}
 		return x.Get(&u2, dataType, timeout)
 	}
 	return x.Post(url, dataType, dataType, &body, timeout)

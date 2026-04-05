@@ -3,10 +3,13 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"io"
 	"net/http"
 	"net/netip"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 )
@@ -253,5 +256,130 @@ func BenchmarkUniqueNormalizedAddrs(b *testing.B) {
 	b.ReportAllocs()
 	for b.Loop() {
 		_ = uniqueNormalizedAddrs(addrs)
+	}
+}
+
+// TestFormatHostPort verifies that formatHostPort returns correct cached strings.
+func TestFormatHostPort(t *testing.T) {
+	tests := []struct {
+		host string
+		port int
+		want string
+	}{
+		{"example.com", 443, "example.com:443"},
+		{"dns.google", 53, "dns.google:53"},
+		{"localhost", 8080, "localhost:8080"},
+	}
+	for _, tt := range tests {
+		got := formatHostPort(tt.host, tt.port)
+		if got != tt.want {
+			t.Errorf("formatHostPort(%q, %d) = %q, want %q", tt.host, tt.port, got, tt.want)
+		}
+		// Second call must return identical string (cache hit).
+		got2 := formatHostPort(tt.host, tt.port)
+		if got2 != tt.want {
+			t.Errorf("cached formatHostPort(%q, %d) = %q, want %q", tt.host, tt.port, got2, tt.want)
+		}
+	}
+}
+
+// TestH3HealthStateLockFree verifies that inBackoff works without mutex.
+func TestH3HealthStateLockFree(t *testing.T) {
+	s := &h3HealthState{}
+
+	// Fresh state: not in backoff.
+	if s.inBackoff() {
+		t.Error("fresh h3HealthState should not be in backoff")
+	}
+
+	// After enough failures: in backoff.
+	for range h3FailureThreshold {
+		s.onFailure()
+	}
+	if !s.inBackoff() {
+		t.Error("h3HealthState should be in backoff after threshold failures")
+	}
+
+	// After success: backoff cleared.
+	s.onSuccess()
+	if s.inBackoff() {
+		t.Error("h3HealthState should not be in backoff after success")
+	}
+}
+
+// TestAppendFrom verifies the appendFrom helper reads correctly.
+func TestAppendFrom(t *testing.T) {
+	data := "hello, world! This is a test of appendFrom."
+	buf := make([]byte, 0, 16) // intentionally small capacity
+	got, err := appendFrom(buf, strings.NewReader(data))
+	if err != nil {
+		t.Fatalf("appendFrom: %v", err)
+	}
+	if string(got) != data {
+		t.Errorf("appendFrom = %q, want %q", string(got), data)
+	}
+}
+
+// TestAppendFromEmpty verifies appendFrom handles empty reader.
+func TestAppendFromEmpty(t *testing.T) {
+	buf := make([]byte, 0, 16)
+	got, err := appendFrom(buf, strings.NewReader(""))
+	if err != nil {
+		t.Fatalf("appendFrom: %v", err)
+	}
+	if len(got) != 0 {
+		t.Errorf("appendFrom on empty reader returned %d bytes", len(got))
+	}
+}
+
+// TestResponseBufferPool verifies pool returns usable buffers.
+func TestResponseBufferPool(t *testing.T) {
+	bufp := httpResponseBufPool.Get().(*[]byte)
+	buf := (*bufp)[:0]
+	data := []byte("test DNS response data")
+	buf, err := appendFrom(buf, bytes.NewReader(data))
+	if err != nil {
+		t.Fatalf("appendFrom: %v", err)
+	}
+	if !bytes.Equal(buf, data) {
+		t.Errorf("got %q, want %q", buf, data)
+	}
+	// Return to pool.
+	*bufp = buf
+	httpResponseBufPool.Put(bufp)
+}
+
+// BenchmarkFormatHostPort measures the cached host:port string lookup.
+func BenchmarkFormatHostPort(b *testing.B) {
+	// Seed the cache.
+	formatHostPort("example.com", 443)
+	b.ReportAllocs()
+	for b.Loop() {
+		_ = formatHostPort("example.com", 443)
+	}
+}
+
+// BenchmarkAppendFrom measures reading a typical DNS response into a pooled buffer.
+func BenchmarkAppendFrom(b *testing.B) {
+	data := make([]byte, 512) // typical DNS response size
+	for i := range data {
+		data[i] = byte(i)
+	}
+	b.ReportAllocs()
+	for b.Loop() {
+		bufp := httpResponseBufPool.Get().(*[]byte)
+		buf := (*bufp)[:0]
+		buf, _ = appendFrom(buf, io.LimitReader(bytes.NewReader(data), MaxHTTPBodyLength))
+		*bufp = buf
+		httpResponseBufPool.Put(bufp)
+	}
+}
+
+// BenchmarkH3HealthInBackoff measures lock-free inBackoff on the hot path.
+func BenchmarkH3HealthInBackoff(b *testing.B) {
+	s := &h3HealthState{}
+	b.ReportAllocs()
+	for b.Loop() {
+		_ = s.inBackoff()
 	}
 }
