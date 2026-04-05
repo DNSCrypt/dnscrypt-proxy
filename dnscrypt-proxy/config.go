@@ -81,7 +81,7 @@ type Config struct {
 	BlockedQueryResponse   string `toml:"blocked_query_response"`
 	RefusedCodeInResponses bool   `toml:"refused_code_in_responses"`
 
-	// Cache — explicit toml tag guards against silent breakage on field rename
+	// Cache
 	Cache          bool   `toml:"cache"`
 	CacheSize      int    `toml:"cache_size"`
 	CacheNegTTL    uint32 `toml:"cache_neg_ttl"`
@@ -447,12 +447,13 @@ func newConfig() Config {
 }
 
 // defaultMonitoringUIConfig returns safe defaults for the monitoring UI.
+// Credentials are intentionally left empty; if the UI is enabled without
+// explicit credentials the proxy will emit a warning at startup and the UI
+// will be accessible without authentication (see basicAuthMiddleware).
 // Extracted from newConfig for readability.
 func defaultMonitoringUIConfig() MonitoringUIConfig {
 	return MonitoringUIConfig{
 		ListenAddress: "127.0.0.1:8080",
-		Username:      "admin",
-		Password:      "changeme",
 		PrivacyLevel:  2,
 	}
 }
@@ -534,7 +535,7 @@ func cdLocal() {
 		return // early return replaces the original else-if chain
 	}
 	if err := os.Chdir(filepath.Dir(exeFileName)); err != nil {
-		dlog.Warnf("Unable to change working directory to [%s]: %s", exeFileName, err)
+		dlog.Warnf("Unable to change working directory to [%s]: %s", filepath.Dir(exeFileName), err)
 	}
 }
 
@@ -606,7 +607,7 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 		return fmt.Errorf("unsupported keys in configuration file: [%s]", strings.Join(keys, ", "))
 	}
 
-	proxy.showCerts = flagBool(flags.ShowCerts) || len(os.Getenv("SHOW_CERTS")) > 0
+	proxy.showCerts = flagBool(flags.ShowCerts) || os.Getenv("SHOW_CERTS") != ""
 	proxy.logMaxSize = config.LogMaxSize
 	proxy.logMaxAge = config.LogMaxAge
 	proxy.logMaxBackups = config.LogMaxBackups
@@ -661,6 +662,12 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 		return err
 	}
 	markPhase("configure")
+
+	// Warn when the monitoring UI is enabled but no credentials are configured:
+	// the UI will be reachable without authentication in that case.
+	if config.MonitoringUI.Enabled && config.MonitoringUI.Username == "" {
+		dlog.Warn("Monitoring UI is enabled without credentials — the UI is accessible without authentication. Set [monitoring_ui] username and password in the configuration file.")
+	}
 
 	// Privilege dropping: on supported platforms dropPrivilege replaces the
 	// process image (exec) and never returns here. On unsupported platforms it
@@ -836,8 +843,8 @@ func (config *Config) printRegisteredServers(proxy *Proxy, jsonOutput bool, incl
 //   - DNSCrypt relays: both false (relay stamps carry no filtering properties).
 func buildServerSummary(server *RegisteredServer, isRelay bool) ServerSummary {
 	addrStr := server.stamp.ServerAddrStr
-	port := stamps.DefaultPort
-	hostAddr, port := ExtractHostAndPort(addrStr, port)
+	defaultPort := stamps.DefaultPort
+	hostAddr, port := ExtractHostAndPort(addrStr, defaultPort)
 
 	addrs := make([]string, 0, 2)
 	if (server.stamp.Proto == stamps.StampProtoTypeDoH ||
@@ -995,8 +1002,7 @@ func (config *Config) loadSource(proxy *Proxy, cfgSourceName string, cfgSource *
 		cfgSource.Prefix,
 	)
 	if err != nil {
-		// len is always >= 0; == 0 is correct and unambiguous here.
-		if len(source.bin) == 0 {
+		if source == nil || len(source.bin) == 0 {
 			dlog.Criticalf("Unable to retrieve source [%s]: [%s]", cfgSourceName, err)
 			return err
 		}
