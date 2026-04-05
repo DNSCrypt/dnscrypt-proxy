@@ -1,5 +1,5 @@
 # codeberg.org/miekg/dns v0.6.73
-## explicit; go 1.25.0
+## explicit; go 1.26.0
 codeberg.org/miekg/dns
 codeberg.org/miekg/dns/deleg
 codeberg.org/miekg/dns/internal/ddd
@@ -13,17 +13,17 @@ codeberg.org/miekg/dns/pkg/pool
 codeberg.org/miekg/dns/rdata
 codeberg.org/miekg/dns/svcb
 # github.com/BurntSushi/toml v1.6.0
-## explicit; go 1.18
+## explicit; go 1.26
 github.com/BurntSushi/toml
 github.com/BurntSushi/toml/internal
 # github.com/VividCortex/ewma v1.2.0
-## explicit; go 1.12
+## explicit; go 1.26
 github.com/VividCortex/ewma
 # github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf
 ## explicit
 github.com/coreos/go-systemd/activation
 # github.com/coreos/go-systemd/v22 v22.7.0
-## explicit; go 1.23
+## explicit; go 1.26
 github.com/coreos/go-systemd/v22/daemon
 # github.com/davecgh/go-spew v1.1.1
 ## explicit
@@ -32,11 +32,11 @@ github.com/davecgh/go-spew/spew
 ## explicit
 github.com/dchest/safefile
 # github.com/fsnotify/fsnotify v1.9.0
-## explicit; go 1.17
+## explicit; go 1.26
 github.com/fsnotify/fsnotify
 github.com/fsnotify/fsnotify/internal
 # github.com/gorilla/websocket v1.5.3
-## explicit; go 1.12
+## explicit; go 1.26
 github.com/gorilla/websocket
 # github.com/hashicorp/go-immutable-radix v1.3.1
 ## explicit
@@ -45,41 +45,41 @@ github.com/hashicorp/go-immutable-radix
 ## explicit
 github.com/hashicorp/go-syslog
 # github.com/hashicorp/golang-lru v1.0.2
-## explicit; go 1.12
+## explicit; go 1.26
 github.com/hashicorp/golang-lru/simplelru
 # github.com/hectane/go-acl v0.0.0-20230122075934-ca0b05cb1adb
-## explicit; go 1.12
+## explicit; go 1.26
 github.com/hectane/go-acl
 github.com/hectane/go-acl/api
 # github.com/jedisct1/dlog v0.0.0-20241212093805-3c5fd791b405
-## explicit; go 1.23
+## explicit; go 1.26
 github.com/jedisct1/dlog
 # github.com/jedisct1/go-clocksmith v0.0.0-20260103230147-eff3e038eebd
-## explicit; go 1.21
+## explicit; go 1.26
 github.com/jedisct1/go-clocksmith
 # github.com/jedisct1/go-dnsstamps v0.0.0-20260329135226-5c52ba568986
-## explicit; go 1.18
+## explicit; go 1.26
 github.com/jedisct1/go-dnsstamps
 # github.com/jedisct1/go-hpke-compact v0.0.0-20241212093903-5caa4621366f
-## explicit; go 1.23.4
+## explicit; go 1.26
 github.com/jedisct1/go-hpke-compact
 # github.com/jedisct1/go-ipcrypt v0.1.2
-## explicit; go 1.20
+## explicit; go 1.26
 github.com/jedisct1/go-ipcrypt
 # github.com/jedisct1/go-minisign v0.0.0-20241212093149-d2f9f49435c7
-## explicit; go 1.23.4
+## explicit; go 1.26
 github.com/jedisct1/go-minisign
 # github.com/jedisct1/go-sieve-cache v0.1.8
-## explicit; go 1.21
+## explicit; go 1.26
 github.com/jedisct1/go-sieve-cache/pkg/sievecache
 # github.com/k-sone/critbitgo v1.4.0
 ## explicit
 github.com/k-sone/critbitgo
 # github.com/kardianos/service v1.2.4
-## explicit; go 1.23.0
+## explicit; go 1.26
 github.com/kardianos/service
 # github.com/lifenjoiner/dhcpdns v0.0.7
-## explicit; go 1.20
+## explicit; go 1.26
 github.com/lifenjoiner/dhcpdns
 # github.com/pkg/errors v0.9.1
 ## explicit
@@ -88,16 +88,16 @@ github.com/pkg/errors
 ## explicit
 github.com/pmezard/go-difflib/difflib
 # github.com/powerman/check v1.9.0
-## explicit; go 1.24
+## explicit; go 1.26
 github.com/powerman/check
 # github.com/powerman/deepequal v0.1.0
-## explicit; go 1.16
+## explicit; go 1.26
 github.com/powerman/deepequal
 # github.com/quic-go/qpack v0.6.0
-## explicit; go 1.24
+## explicit; go 1.26
 github.com/quic-go/qpack
 # github.com/quic-go/quic-go v0.59.0
-## explicit; go 1.24
+## explicit; go 1.26
 github.com/quic-go/quic-go
 github.com/quic-go/quic-go/http3
 github.com/quic-go/quic-go/http3/qlog
@@ -117,11 +117,11 @@ github.com/quic-go/quic-go/qlogwriter
 github.com/quic-go/quic-go/qlogwriter/jsontext
 github.com/quic-go/quic-go/quicvarint
 # github.com/smartystreets/goconvey v1.8.1
-## explicit; go 1.18
+## explicit; go 1.26
 github.com/smartystreets/goconvey/convey/gotest
 github.com/smartystreets/goconvey/convey/reporting
 # golang.org/x/crypto v0.49.0
-## explicit; go 1.25.0
+## explicit; go 1.26
 golang.org/x/crypto/blake2b
 golang.org/x/crypto/chacha20
 golang.org/x/crypto/chacha20poly1305
@@ -136,7 +136,7 @@ golang.org/x/crypto/nacl/box
 golang.org/x/crypto/nacl/secretbox
 golang.org/x/crypto/salsa20/salsa
 # golang.org/x/net v0.52.0
-## explicit; go 1.25.0
+## explicit; go 1.26
 golang.org/x/net/bpf
 golang.org/x/net/http/httpguts
 golang.org/x/net/http2/hpack
@@ -148,10 +148,10 @@ golang.org/x/net/ipv4
 golang.org/x/net/ipv6
 golang.org/x/net/proxy
 # golang.org/x/sync v0.20.0
-## explicit; go 1.25.0
+## explicit; go 1.26
 golang.org/x/sync/errgroup
 # golang.org/x/sys v0.42.0
-## explicit; go 1.25.0
+## explicit; go 1.26
 golang.org/x/sys/cpu
 golang.org/x/sys/unix
 golang.org/x/sys/windows
@@ -160,16 +160,16 @@ golang.org/x/sys/windows/svc
 golang.org/x/sys/windows/svc/eventlog
 golang.org/x/sys/windows/svc/mgr
 # golang.org/x/text v0.35.0
-## explicit; go 1.25.0
+## explicit; go 1.26
 golang.org/x/text/secure/bidirule
 golang.org/x/text/transform
 golang.org/x/text/unicode/bidi
 golang.org/x/text/unicode/norm
 # google.golang.org/genproto/googleapis/rpc v0.0.0-20260203192932-546029d2fa20
-## explicit; go 1.24.0
+## explicit; go 1.26
 google.golang.org/genproto/googleapis/rpc/status
 # google.golang.org/grpc v1.81.0-dev
-## explicit; go 1.24.0
+## explicit; go 1.26
 google.golang.org/grpc/codes
 google.golang.org/grpc/connectivity
 google.golang.org/grpc/grpclog
@@ -179,7 +179,7 @@ google.golang.org/grpc/internal/status
 google.golang.org/grpc/serviceconfig
 google.golang.org/grpc/status
 # google.golang.org/protobuf v1.36.11
-## explicit; go 1.23
+## explicit; go 1.26
 google.golang.org/protobuf/encoding/prototext
 google.golang.org/protobuf/encoding/protowire
 google.golang.org/protobuf/internal/descfmt
@@ -210,5 +210,5 @@ google.golang.org/protobuf/runtime/protoiface
 google.golang.org/protobuf/runtime/protoimpl
 google.golang.org/protobuf/types/known/anypb
 # gopkg.in/natefinch/lumberjack.v2 v2.2.1
-## explicit; go 1.13
+## explicit; go 1.26
 gopkg.in/natefinch/lumberjack.v2
