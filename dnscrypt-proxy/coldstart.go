@@ -68,29 +68,32 @@ func (h *CaptivePortalHandler) Stop() {
 // ── CaptivePortalMap methods ──────────────────────────────────────────────────────────────────
 
 // GetEntry looks up the single DNS question in msg against the captive portal
-// map and returns the question RR and the configured response IPs.
-// Returns (nil, nil) for any invalid, multi-question, non-INET, or unmatched message.
+// map and returns the question RR, the configured response IPs, and whether a
+// match was found. Returns (nil, nil, false) for any invalid, multi-question,
+// non-INET, or unmatched message.
 //
 // [03] Class check is performed before NormalizeQName so that non-INET queries
 // short-circuit without a heap allocation.
-func (m *CaptivePortalMap) GetEntry(msg *dns.Msg) (dns.RR, *CaptivePortalEntryIPs) {
+// [03b] Returns CaptivePortalEntryIPs by value with an explicit bool rather
+// than a pointer to a local slice header, making the return contract clearer.
+func (m CaptivePortalMap) GetEntry(msg *dns.Msg) (dns.RR, CaptivePortalEntryIPs, bool) {
 	if m == nil || msg == nil || len(msg.Question) != 1 {
-		return nil, nil
+		return nil, nil, false
 	}
 	question := msg.Question[0]
 	hdr := question.Header()
 	if hdr.Class != dns.ClassINET { // [03] cheap check before allocating
-		return nil, nil
+		return nil, nil, false
 	}
 	name, err := NormalizeQName(hdr.Name)
 	if err != nil {
-		return nil, nil
+		return nil, nil, false
 	}
-	ips, ok := (*m)[name]
+	ips, ok := m[name]
 	if !ok {
-		return nil, nil
+		return nil, nil, false
 	}
-	return question, &ips
+	return question, ips, true
 }
 
 // ── Query synthesis ───────────────────────────────────────────────────────────────────────────
@@ -98,6 +101,11 @@ func (m *CaptivePortalMap) GetEntry(msg *dns.Msg) (dns.RR, *CaptivePortalEntryIP
 // HandleCaptivePortalQuery builds a synthetic A or AAAA DNS response for the
 // captive portal mapping. Returns nil when any argument is nil or when the
 // question type is neither A nor AAAA.
+//
+// When the query type matches (A or AAAA) but no IPs of the requested address
+// family are present in ips, the function returns NOERROR with an empty answer
+// section (NODATA). This is intentional: it signals "we handle this name but
+// have no records of that type" without triggering a fallback to upstream.
 //
 // [04] netip.AddrFromSlice + .Unmap() replace the original manual [4]byte /
 // [16]byte copy idiom, reducing 4 lines of boilerplate per record type.
@@ -212,12 +220,12 @@ func handleColdStartConn(ctx context.Context, clientPc *net.UDPConn, ipsMap *Cap
 			continue
 		}
 
-		question, ips := ipsMap.GetEntry(msg)
-		if ips == nil {
+		question, ips, ok := ipsMap.GetEntry(msg)
+		if !ok {
 			continue
 		}
 
-		respMsg := HandleCaptivePortalQuery(msg, question, ips)
+		respMsg := HandleCaptivePortalQuery(msg, question, &ips)
 		if respMsg == nil {
 			continue
 		}
@@ -245,7 +253,8 @@ func udpNetworkForListenAddr(listenAddrStr string) string {
 	host, _, err := net.SplitHostPort(listenAddrStr)
 	if err != nil {
 		// Fallback heuristic: a leading ASCII digit strongly implies IPv4.
-		if isDigit(listenAddrStr[0]) {
+		// Guard with len > 0 for extra safety even though the "" case is handled above.
+		if len(listenAddrStr) > 0 && isDigit(listenAddrStr[0]) {
 			return "udp4"
 		}
 		return "udp"
@@ -304,6 +313,9 @@ func addColdStartListener(ipsMap *CaptivePortalMap, listenAddrStr string, h *Cap
 func parseCaptivePortalMap(lines string) (CaptivePortalMap, error) {
 	ipsMap := make(CaptivePortalMap)
 	sc := bufio.NewScanner(strings.NewReader(lines)) // [11]
+	// [11b] Raise the scanner token buffer to 1 MiB so long config lines (e.g.
+	// hostnames with many IPs) do not hit the default 64 KiB token limit.
+	sc.Buffer(make([]byte, 64*1024), 1024*1024)
 	lineNo := 0
 	for sc.Scan() {
 		line := TrimAndStripInlineComments(sc.Text())
@@ -380,6 +392,7 @@ func ColdStart(proxy *Proxy) (*CaptivePortalHandler, error) {
 	// [14] Range directly; no need for an intermediate slice-header variable.
 	for _, listenAddrStr := range proxy.listenAddresses {
 		if err := addColdStartListener(&ipsMap, listenAddrStr, h); err != nil {
+			dlog.Warnf("coldstart: listener %s failed: %v", listenAddrStr, err)
 			if firstErr == nil {
 				firstErr = err
 			}

@@ -32,11 +32,11 @@ func (plugin *PluginCaptivePortal) Reload() error {
 }
 
 func (plugin *PluginCaptivePortal) Eval(pluginsState *PluginsState, msg *dns.Msg) error {
-	question, ips := plugin.captivePortalMap.GetEntry(msg)
-	if ips == nil {
+	question, ips, ok := plugin.captivePortalMap.GetEntry(msg)
+	if !ok {
 		return nil
 	}
-	if synth := HandleCaptivePortalQuery(msg, question, ips); synth != nil {
+	if synth := HandleCaptivePortalQuery(msg, question, &ips); synth != nil {
 		pluginsState.synthResponse = synth
 		pluginsState.action = PluginsActionSynth
 	}
