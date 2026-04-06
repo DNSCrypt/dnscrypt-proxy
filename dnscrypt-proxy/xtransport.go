@@ -200,8 +200,8 @@ func formatHostPort(host string, port int) string {
 		return v.(string)
 	}
 	s := host + ":" + strconv.Itoa(port)
-	v, _ := hostPortCache.LoadOrStore(k, s)
-	return v.(string)
+	hostPortCache.Store(k, s)
+	return s
 }
 
 func formatDialTarget(addr netip.Addr, port uint16) string {
@@ -230,9 +230,13 @@ func formatDialTarget(addr netip.Addr, port uint16) string {
 // allocation occurs.
 func appendFrom(buf []byte, r io.Reader) ([]byte, error) {
 	for {
-		// Grow by at least 512 bytes when capacity is exhausted.
+		// Exponential growth: start at 512 B, double up to 64 KiB per step.
 		if cap(buf)-len(buf) == 0 {
-			buf = append(buf, make([]byte, 512)...)[:len(buf)]
+			growth := 512
+			if c := cap(buf); c >= 8*1024 {
+				growth = min(c, 64*1024)
+			}
+			buf = append(buf, make([]byte, growth)...)[:len(buf)]
 		}
 		n, err := r.Read(buf[len(buf):cap(buf)])
 		buf = buf[:len(buf)+n]
@@ -1054,7 +1058,9 @@ func (x *XTransport) buildDialContext() func(context.Context, string, string) (n
 		if parsedHost.IsValid() {
 			fallbackTarget = formatDialTarget(parsedHost, portU16)
 		} else {
-			fallbackTarget = host + ":" + strconv.Itoa(port)
+			// formatHostPort caches the "host:port" string, avoiding a repeated
+			// strconv.Itoa call on every dial attempt for uncached IP hosts.
+			fallbackTarget = formatHostPort(host, port)
 		}
 
 		conn, err := dialOne(ctx, dialNet, fallbackTarget)
@@ -1682,10 +1688,13 @@ func (x *XTransport) Fetch(
 
 	hasAltSupport := false
 	if x.h3Transport != nil {
+		// Cache the backoff result to avoid calling isH3InBackoff twice for
+		// the same host within a single request.
+		h3InBackoff := x.isH3InBackoff(url.Host)
 		if x.http3Probe {
 			// Respect H3 health backoff even in probe mode to avoid hammering
 			// a transiently broken QUIC endpoint.
-			if !x.isH3InBackoff(url.Host) {
+			if !h3InBackoff {
 				client = &x.h3Client
 			}
 		} else {
@@ -1697,7 +1706,7 @@ func (x *XTransport) Fetch(
 				// Use isAltSvcExpired for an unambiguous negative-cache check.
 				negativeExpired := entry.port == 0 && isAltSvcExpired(entry, time.Now())
 				switch {
-				case entry.port > 0 && int(entry.port) == port && !x.isH3InBackoff(url.Host):
+				case entry.port > 0 && int(entry.port) == port && !h3InBackoff:
 					// Use H3 only when within its Alt-Svc advertisement AND not in
 					// a per-host backoff window caused by repeated H3 failures.
 					client = &x.h3Client
@@ -1728,12 +1737,18 @@ func (x *XTransport) Fetch(
 	}
 
 	// Append body_hash query parameter only when the feature is enabled.
+	// Direct string concatenation is safe here: hex.EncodeToString produces
+	// only [0-9a-f] characters (URL-safe), and url.RawQuery is already
+	// percent-encoded. This avoids allocating a url.Values map.
 	if body != nil && x.BodyHashEnabled {
 		h := sha512.Sum512_256(*body)
-		qs := url.Query()
-		qs.Add("body_hash", hex.EncodeToString(h[:]))
+		hashHex := hex.EncodeToString(h[:])
 		u2 := *url
-		u2.RawQuery = qs.Encode()
+		if url.RawQuery == "" {
+			u2.RawQuery = "body_hash=" + hashHex
+		} else {
+			u2.RawQuery = url.RawQuery + "&body_hash=" + hashHex
+		}
 		url = &u2
 	}
 	if x.proxyDialer == nil && strings.HasSuffix(host, ".onion") {
