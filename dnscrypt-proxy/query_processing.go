@@ -689,7 +689,7 @@ func sendUDPResponse(
 	// Guard against nil clientAddr to prevent a panic on the WriteTo deref below.
 	if clientAddr == nil {
 		dlog.Errorf("sendUDPResponse: clientAddr is nil — cannot send UDP response, dropping")
-		_ = failWith(pluginsState, proxy, PluginsReturnCodeParseError, nil)
+		_ = failWith(pluginsState, proxy, PluginsReturnCodeNetworkError, nil)
 		return
 	}
 

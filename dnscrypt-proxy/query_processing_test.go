@@ -14,9 +14,8 @@ import (
 // plugin list — sufficient for failWith / sendUDPResponse tests that must not
 // panic on ApplyLoggingPlugins.
 func minimalProxy() *Proxy {
-	empty := &[]Plugin{}
 	p := &Proxy{}
-	p.pluginsGlobals.loggingPlugins = empty
+	p.pluginsGlobals.loggingPlugins = &[]Plugin{}
 	p.questionSizeEstimator = NewQuestionSizeEstimator()
 	return p
 }
