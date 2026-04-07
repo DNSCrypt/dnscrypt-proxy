@@ -14,6 +14,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"codeberg.org/miekg/dns"
@@ -64,6 +65,12 @@ type ServerInfo struct {
 	Proto              stamps.StampProtoType
 	useGet             bool
 	odohTargetConfigs  []ODoHTargetConfig
+
+	// odohKeyUpdateInProgress is set to true while a background goroutine is
+	// refreshing ODoH key material.  Using atomic.Bool avoids mutex overhead
+	// on the hot query path: triggerODoHKeyUpdate does a single CAS and only
+	// spawns one goroutine per server at a time (stampede protection).
+	odohKeyUpdateInProgress atomic.Bool
 
 	// WP2 strategy fields
 	totalQueries   uint64    // Total queries sent to this server

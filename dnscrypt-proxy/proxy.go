@@ -1392,7 +1392,7 @@ func (proxy *Proxy) processIncomingQuery(
 				pluginsState.relayName = serverInfo.Relay.Name
 			}
 
-			exchangeResponse, exchErr := handleDNSExchange(proxy, serverInfo, &pluginsState, query, serverProto)
+			exchangeResponse, exchErr := handleDNSExchange(proxy, serverInfo, &pluginsState, query, transportProto(serverProto))
 			proxy.serversInfo.updateServerStats(serverName, exchErr == nil && exchangeResponse != nil)
 
 			if exchErr != nil || exchangeResponse == nil {
@@ -1420,7 +1420,7 @@ func (proxy *Proxy) processIncomingQuery(
 		return response
 	}
 
-	sendResponse(proxy, &pluginsState, response, clientProto, clientAddr, clientPc)
+	sendResponse(proxy, &pluginsState, response, transportProto(clientProto), clientAddr, clientPc)
 	pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
 	updateMonitoringMetrics(proxy, &pluginsState)
 
