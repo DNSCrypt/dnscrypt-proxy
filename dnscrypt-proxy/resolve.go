@@ -232,21 +232,13 @@ func normalizeServer(server string) string {
 
 // resolveResolverInfo queries the well-known resolver TXT record, prints the
 // resolver IP (enriched with PTR), and returns the EDNS Client Subnet value.
-//
-// [R05] singleResolver parameter removed — was never read inside the function.
-// [R14] cname return removed — was always equal to the caller's name variable.
-// [R18] Returns an error instead of calling os.Exit; Resolve decides policy.
-// [R20] name parameter removed — after [R14] dropped the cname return, name
-//
-//	became completely unused inside this function (second dead-param bug
-//	exposed by the [R14] cascade).
 func resolveResolverInfo(server string) (clientSubnet string, err error) {
 	response, err := resolveQuery(server, myResolverHost, dns.TypeTXT, true)
 	if err != nil {
 		return "", fmt.Errorf("resolver info query failed: %w", err)
 	}
 	fmt.Print("Resolver      : ")
-	printOrDash(extractResolverIPs(server, response, &clientSubnet)) // [R04]
+	printOrDash(extractResolverIPs(server, response, &clientSubnet))
 	return clientSubnet, nil
 }
 

@@ -964,7 +964,7 @@ func (proxy *Proxy) commitServerUpdates() {
 // ── Relay wire-format helper ──────────────────────────────────────────────────
 
 // prepareForRelay constructs and returns the anonymised-DNS relay header
-// prepended to encryptedQuery in a single allocation. [C10]
+// prepended to encryptedQuery in a single allocation.
 //
 // Wire layout:
 //
@@ -978,11 +978,11 @@ func (proxy *Proxy) prepareForRelay(ip net.IP, port int, encryptedQuery []byte) 
 	if ip16 == nil {
 		return nil, errors.New("prepareForRelay: ip.To16() returned nil; IP address may be invalid or unspecified")
 	}
-	ip16Len := len(ip16) // [C10] cached
+	ip16Len := len(ip16)
 	total := magicLen + padLen + ip16Len + 2 + len(encryptedQuery)
-	buf := make([]byte, total) // [C10] one allocation
+	buf := make([]byte, total)
 
-	for i := range magicLen { // [C10] range-over-int (Go 1.22)
+	for i := range magicLen {
 		buf[i] = 0xff
 	}
 	// [magicLen : magicLen+padLen] is already zero from make.
@@ -1271,20 +1271,15 @@ func (proxy *Proxy) clientsCountDec() {
 //
 // Reduction follows a quartic curve (utilisation⁴) so the timeout only shrinks
 // appreciably at very high load.  Minimum is 10 % of the configured baseline.
-//
-// [C13] float64 cast performed once (timeoutF); max() builtin (Go 1.21).
-// [P07] math.Pow(u,4) replaced with u2 := u*u; u4 := u2*u2 (avoids
-//
-//	floating-point exponentiation on every query).  Debug log removed.
 func (proxy *Proxy) getDynamicTimeout() time.Duration {
 	if proxy.timeoutLoadReduction <= 0 || proxy.maxClients == 0 {
 		return proxy.timeout
 	}
 	utilization := float64(proxy.clientsCount.Load()) / float64(proxy.maxClients)
-	timeoutF := float64(proxy.timeout) // [C13] cast once
-	u2 := utilization * utilization    // [P07] avoid math.Pow
+	timeoutF := float64(proxy.timeout)
+	u2 := utilization * utilization
 	u4 := u2 * u2
-	factor := max(1.0-(u4*proxy.timeoutLoadReduction), 0.1) // [C13] max builtin
+	factor := max(1.0-(u4*proxy.timeoutLoadReduction), 0.1)
 	return time.Duration(timeoutF * factor)
 }
 
@@ -1303,13 +1298,6 @@ func dropQuery(pluginsState *PluginsState, globals *PluginsGlobals, code Plugins
 // processIncomingQuery is the main DNS query pipeline:
 // validate → query plugins → optional upstream exchange →
 // response plugins → send → log.
-//
-// [C15] serverName declared at first use.
-// [C16] Duplicate drop-and-log blocks consolidated into dropQuery.
-// [P05] serverInfo resolved eagerly before ApplyQueryPlugins when onlyCached
-//
-//	is false, avoiding a second contended getOne() call later in the
-//	function.
 func (proxy *Proxy) processIncomingQuery(
 	clientProto string,
 	serverProto string,

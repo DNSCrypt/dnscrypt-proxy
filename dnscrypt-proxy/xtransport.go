@@ -117,6 +117,10 @@ const (
 	// hostPortCacheMaxSize bounds the global host:port cache.
 	hostPortCacheMaxSize = 2048
 
+	// cacheTrimWindow prevents repeated cache clears under bursty concurrent
+	// insertions by allowing only a narrow clear window around max size.
+	cacheTrimWindow = 16
+
 	// ── H3 per-host failure / backoff thresholds ──────────────────────────────
 	// After h3FailureThreshold consecutive H3 failures for a host, suppress H3
 	// for an exponentially increasing window (h3BackoffInitial × 2^n, capped at
@@ -239,7 +243,7 @@ func trimStringCache(cache *sync.Map, sizeCounter *atomic.Int64, maxSize int64) 
 	if size < maxSize {
 		return
 	}
-	if size > maxSize+16 {
+	if size > maxSize+cacheTrimWindow {
 		return
 	}
 	cache.Clear()
