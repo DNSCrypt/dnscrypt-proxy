@@ -133,8 +133,12 @@ func (app *App) Start(service.Service) error {
 }
 
 func (app *App) AppMain() {
-	if err := ConfigLoad(app.proxy, app.flags); err != nil {
+	action, err := ConfigLoad(app.proxy, app.flags)
+	if err != nil {
 		dlog.Fatal(err)
+	}
+	if action == ConfigLoadActionExitSuccess {
+		os.Exit(0)
 	}
 	if err := PidFileCreate(); err != nil {
 		dlog.Errorf("Unable to create the PID file: [%v]", err)

@@ -11,7 +11,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
-	"sync/atomic" // [C18] required for atomic.Uint32 and atomic.Bool field types
+	"sync/atomic"
 	"time"
 
 	"github.com/jedisct1/dlog"
@@ -25,7 +25,6 @@ import (
 const unknownServerName = "-"
 
 // udpRetries is the number of UDP write+read attempts before giving up.
-// [C04] Named constant — previously the magic number 2 appeared twice inline.
 const udpRetries = 2
 
 // udpReadPool is a package-level sync.Pool shared by every UDP listener
@@ -752,51 +751,61 @@ func (proxy *Proxy) StartProxy() {
 		dlog.Notice("dnscrypt-proxy is waiting for at least one server to be reachable")
 	}
 
-	// Background source-prefetch loop.
-	// [P04] runtime.GC() removed — the Go runtime's own GC pacer is sufficient
-	// and forced GC cycles compete with the query pipeline under load.
-	// Shutdown-aware: exits cleanly when proxy.shutdownCtx is cancelled.
-	go func() {
-		lastLogTime := time.Now()
-		for {
-			d := PrefetchSources(proxy.xTransport, proxy.sources)
-			select {
-			case <-proxy.shutdownCtx.Done():
-				return
-			case <-time.After(d):
-			}
-			proxy.updateRegisteredServers()
-			if time.Since(lastLogTime) > 5*time.Minute {
-				proxy.serversInfo.logWP2Stats()
-				lastLogTime = time.Now()
-			}
-		}
-	}()
-
-	// Background certificate-refresh loop.
-	// [C12] liveServers captured by value via initialLive parameter to
-	// prevent a data race on the outer variable.
-	// [P04] runtime.GC() removed from this loop as well.
-	// Shutdown-aware: exits cleanly when proxy.shutdownCtx is cancelled.
+	go proxy.startSourcePrefetchLoop()
 	if len(proxy.serversInfo.registeredServers) > 0 {
-		go func(initialLive int) {
-			live := initialLive
-			for {
-				delay := proxy.certRefreshDelay
-				if live == 0 {
-					delay = proxy.certRefreshDelayAfterFailure
-				}
-				select {
-				case <-proxy.shutdownCtx.Done():
-					return
-				case <-time.After(delay):
-				}
-				live, _ = proxy.serversInfo.refresh(proxy)
-				if live > 0 {
-					proxy.certIgnoreTimestamp.Store(false)
-				}
-			}
-		}(liveServers)
+		go proxy.startCertificateRefreshLoop(liveServers)
+	}
+}
+
+func resetTimer(timer *time.Timer, d time.Duration) {
+	if !timer.Stop() {
+		select {
+		case <-timer.C:
+		default:
+		}
+	}
+	timer.Reset(d)
+}
+
+func (proxy *Proxy) startSourcePrefetchLoop() {
+	lastLogTime := time.Now()
+	timer := time.NewTimer(0)
+	defer timer.Stop()
+	for {
+		d := PrefetchSources(proxy.xTransport, proxy.sources)
+		resetTimer(timer, d)
+		select {
+		case <-proxy.shutdownCtx.Done():
+			return
+		case <-timer.C:
+		}
+		proxy.updateRegisteredServers()
+		if time.Since(lastLogTime) > 5*time.Minute {
+			proxy.serversInfo.logWP2Stats()
+			lastLogTime = time.Now()
+		}
+	}
+}
+
+func (proxy *Proxy) startCertificateRefreshLoop(initialLive int) {
+	live := initialLive
+	timer := time.NewTimer(0)
+	defer timer.Stop()
+	for {
+		delay := proxy.certRefreshDelay
+		if live == 0 {
+			delay = proxy.certRefreshDelayAfterFailure
+		}
+		resetTimer(timer, delay)
+		select {
+		case <-proxy.shutdownCtx.Done():
+			return
+		case <-timer.C:
+		}
+		live, _ = proxy.serversInfo.refresh(proxy)
+		if live > 0 {
+			proxy.certIgnoreTimestamp.Store(false)
+		}
 	}
 }
 

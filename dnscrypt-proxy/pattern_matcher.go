@@ -118,7 +118,7 @@ func (patternMatcher *PatternMatcher) Add(pattern string, val any, position int)
 	case PatternTypeExact:
 		patternMatcher.exact[pattern] = val
 	default:
-		dlog.Fatal("Unexpected rule pattern type")
+		return fmt.Errorf("unexpected rule pattern type: %v", patternType)
 	}
 	return nil
 }

@@ -1,83 +1,4 @@
-// plugin_cache.go — DNS cache reader and writer plugins for dnscrypt-proxy.
-//
-// Complete ground-up rewrite targeting Go 1.26.
-// Every line audited for correctness, concurrency safety, and idiomatic Go.
-// Drop-in replacement — all exported type and method signatures preserved.
-//
-// ─────────────────────────────────────────────────────────────────────────────
-// CHANGE LOG  (tags appear inline at every changed site)
-// ─────────────────────────────────────────────────────────────────────────────
-//
-// [C01] atomic.Pointer for cachedResponses.cache
-//       The original stored the sieve-cache pointer as a plain field read
-//       concurrently by PluginCache.Eval without synchronisation — a data
-//       race under Go's memory model.  Replaced with atomic.Pointer[T]
-//       (Go 1.19): every Load/Store is sequentially consistent, no mutex.
-//
-// [C02] time.Now() captured once in PluginCache.Eval
-//       Was called twice: once for expiry comparison and once for the stale
-//       deadline.  A single now := time.Now() is correct and cheaper.
-//
-// [C03] expiration2 renamed to staleExpiration
-//       expiration2 is opaque; staleExpiration makes the purpose obvious.
-//
-// [C04] cacheable named boolean in PluginCacheResponse.Eval
-//       The original negated a three-term OR inline.  A named boolean makes
-//       the intent ("skip non-cacheable rcodes") readable at a glance.
-//
-// [C05] tmp renamed buf; buf[:2] idiomatic slice
-//       Superseded by [C13].
-//
-// [C06] msg.Copy() and computeCacheKey deferred until cache confirmed available
-//       The original allocated a copy unconditionally.  Both the hash
-//       computation and the copy now happen only when cache.Load() != nil,
-//       avoiding wasted work after a permanent init failure.
-//
-// [C07] expiration computed once in PluginCacheResponse.Eval
-//       time.Now().Add(ttl) was computed inside the CachedResponse literal
-//       then re-read as cachedResponse.expiration.  One variable; used twice.
-//
-// [C08] cacheOnce closure uses early return
-//       if/else inside the closure replaced with early return on error,
-//       reducing nesting and matching idiomatic Go error handling.
-//
-// [C09] initErr stored in CachedResponses struct
-//       The original captured the error in a local variable.  After the first
-//       call, cacheOnce.Do does not re-run and the local is nil — subsequent
-//       callers silently skip caching.  Storing initErr in the struct (written
-//       once inside Do; visible after Do via the sync.Once happens-before
-//       guarantee) means all callers receive the error consistently.
-//
-// [C10] binary.NativeEndian replaces binary.LittleEndian (Go 1.21)
-//       Cache keys are local-only and never serialised or transmitted.
-//       NativeEndian is semantically correct (consistency matters, not
-//       portability) and avoids a byte-swap on big-endian CPUs.
-//
-// [C11] Bounds guard in computeCacheKey
-//       msg.Question[0] panics on an empty Question slice.  An early guard
-//       returns a zero key for malformed messages, preventing a crash.
-//
-// [C12] sync.Pool for SHA-512/256 hash object
-//       sha512.New512_256() allocated a new heap object on every DNS query.
-//       A sync.Pool recycles hash objects across goroutines; the fast path is
-//       a single atomic pointer swap with zero allocation.
-//
-// [C13] AppendUint16 + stack-backed slice (Go 1.23)
-//       PutUint16 with manual [0:2]/[2:4] index arithmetic replaced by
-//       binary.NativeEndian.AppendUint16 with a stack-backed slice
-//       (var backing [5]byte; buf := backing[:0]).  Zero allocation;
-//       no manual index math.
-//
-// [C14] CachedResponse.expiration as int64 Unix nanoseconds
-//       time.Time is 24 bytes on 64-bit (wall uint64 + ext int64 +
-//       *time.Location).  Storing the expiration as a plain int64 (Unix
-//       nanoseconds) reduces the struct from 32 bytes to 16 bytes — saving
-//       16 bytes per cached entry.  For a cache of 10 000 entries that is
-//       160 KiB; for 1 000 000 entries it is 16 MiB.  time.Unix(0, ns)
-//       reconstructs a time.Time cheaply where updateTTL needs one.
-//
-// [C15] Full godoc on all exported types and functions; section banners;
-//       StaleResponseTTL documented.
+// plugin_cache.go implements DNS response cache reader/writer plugins.
 
 package main
 
@@ -85,9 +6,9 @@ import (
 	"crypto/sha512"
 	"encoding/binary"
 	"fmt"
-	"hash"        // [C12]
+	"hash"
 	"sync"
-	"sync/atomic" // [C01]
+	"sync/atomic"
 	"time"
 
 	"codeberg.org/miekg/dns"
@@ -104,10 +25,10 @@ const StaleResponseTTL = 30 * time.Second
 
 // CachedResponse pairs a DNS response with its cache expiration deadline.
 //
-// expiration is stored as Unix nanoseconds (int64) rather than time.Time [C14]
-// to reduce the struct size from 32 bytes to 16 bytes per cached entry.
+// expiration is stored as Unix nanoseconds (int64) rather than time.Time
+// to reduce per-entry memory usage.
 type CachedResponse struct {
-	expiration int64    // [C14] Unix nanoseconds; 8 B instead of 24 B (time.Time)
+	expiration int64
 	msg        *dns.Msg // 8 B pointer
 }
 

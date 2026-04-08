@@ -112,9 +112,10 @@ const (
 	prewarmMaxConcurrency = 16
 
 	// ── Bounded dialTargetCache ────────────────────────────────────────────────
-	// When the cache exceeds this size, PurgeExpiredCache will evict entries
-	// whose IP address is no longer in the live cached-IP set.
 	dialTargetCacheMaxSize = 1024
+
+	// hostPortCacheMaxSize bounds the global host:port cache.
+	hostPortCacheMaxSize = 2048
 
 	// ── H3 per-host failure / backoff thresholds ──────────────────────────────
 	// After h3FailureThreshold consecutive H3 failures for a host, suppress H3
@@ -151,6 +152,9 @@ var (
 	resolverRaceWins atomic.Int64 // cumulative parallel-race first-resolver wins
 	prewarmSkipped   atomic.Int64 // prewarm goroutines skipped (semaphore full)
 	cacheEvictions   atomic.Int64 // cumulative dial-target + prewarm cache evictions
+
+	dialTargetCacheSize atomic.Int64
+	hostPortCacheSize   atomic.Int64
 )
 
 // ── Prewarm concurrency gate ──────────────────────────────────────────────────
@@ -200,8 +204,11 @@ func formatHostPort(host string, port int) string {
 		return v.(string)
 	}
 	s := host + ":" + strconv.Itoa(port)
-	hostPortCache.Store(k, s)
-	return s
+	v, loaded := hostPortCache.LoadOrStore(k, s)
+	if !loaded {
+		trimStringCache(&hostPortCache, &hostPortCacheSize, hostPortCacheMaxSize)
+	}
+	return v.(string)
 }
 
 func formatDialTarget(addr netip.Addr, port uint16) string {
@@ -220,8 +227,23 @@ func formatDialTarget(addr netip.Addr, port uint16) string {
 	} else {
 		s = "[" + addr.String() + "]:" + portStr
 	}
-	v, _ := dialTargetCache.LoadOrStore(k, s)
+	v, loaded := dialTargetCache.LoadOrStore(k, s)
+	if !loaded {
+		trimStringCache(&dialTargetCache, &dialTargetCacheSize, dialTargetCacheMaxSize)
+	}
 	return v.(string)
+}
+
+func trimStringCache(cache *sync.Map, sizeCounter *atomic.Int64, maxSize int64) {
+	size := sizeCounter.Add(1)
+	if size < maxSize {
+		return
+	}
+	if size > maxSize+16 {
+		return
+	}
+	cache.Clear()
+	sizeCounter.Store(0)
 }
 
 // appendFrom reads from r into buf, growing it as needed, and returns the
@@ -692,6 +714,11 @@ func (x *XTransport) PurgeExpiredCache() (ipsPurged, altSvcPurged, muPurged int)
 		}
 		return true
 	})
+	if dialEvicted > 0 {
+		if dialTargetCacheSize.Add(-int64(dialEvicted)) < 0 {
+			dialTargetCacheSize.Store(0)
+		}
+	}
 
 	// ── Evict stale hostPrewarmer entries ─────────────────────────────────────
 	// Remove prewarm sync.Once entries for hosts no longer in the live IP cache.
@@ -724,6 +751,11 @@ func (x *XTransport) ResetCache() {
 	x.altSupport.Lock()
 	clear(x.altSupport.cache)
 	x.altSupport.Unlock()
+
+	dialTargetCache.Clear()
+	hostPortCache.Clear()
+	dialTargetCacheSize.Store(0)
+	hostPortCacheSize.Store(0)
 
 	x.resolveMu.Range(func(key, _ any) bool {
 		x.resolveMu.Delete(key)

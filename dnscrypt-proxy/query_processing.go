@@ -1,12 +1,4 @@
 // Package main implements DNS query processing for dnscrypt-proxy.
-//
-// Key design notes:
-//   - errors.AsType[net.Error] (Go 1.26) used for lock-free net.Error unwrapping.
-//   - packetBounds/validate/validateBool collapses duplicated size-check bodies.
-//   - slices.Values (Go 1.23) drives the server-search loop in triggerODoHKeyUpdate.
-//   - ODoH key-update runs in a fire-and-forget goroutine (non-blocking hot path).
-//   - transportProto typed consts replace bare "udp"/"tcp" strings internally.
-//   - processDoHQuery works on a copy of the query buffer to avoid mutating the caller's slice.
 package main
 
 import (
@@ -506,11 +498,13 @@ func triggerODoHKeyUpdate(proxy *Proxy, serverInfo *ServerInfo) {
 
 			if err := proxy.serversInfo.refreshServer(proxy, name, stamp); err != nil {
 				// Context-aware delay: exit early if the proxy is shutting down.
+				timer := time.NewTimer(keyUpdateRetryDelay)
+				defer timer.Stop()
 				select {
 				case <-shutdownCtx.Done():
 					dlog.Debugf("ODoH key update delay cancelled for [%v] (proxy shutting down)", name)
 					return
-				case <-time.After(keyUpdateRetryDelay):
+				case <-timer.C:
 				}
 				dlog.Noticef("Key update failed for [%v]: %v", name, err)
 			}
@@ -550,10 +544,7 @@ func handleDNSExchange(
 	case stamps.StampProtoTypeODoHTarget:
 		response, err = processODoHQuery(proxy, serverInfo, pluginsState, query)
 	default:
-		// dlog.Fatalf terminates the process; the return is unreachable but
-		// required by the compiler to satisfy control-flow analysis.
-		dlog.Fatalf("Unsupported protocol: %v", serverInfo.Proto)
-		return nil, ErrUnsupportedProtocol
+		return nil, fmt.Errorf("%w: %v", ErrUnsupportedProtocol, serverInfo.Proto)
 	}
 
 	if err != nil {

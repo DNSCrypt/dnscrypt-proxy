@@ -1,100 +1,4 @@
-// resolve.go — DNS resolution and diagnostics for dnscrypt-proxy.
-//
-// Complete ground-up rewrite targeting Go 1.26.
-// Every line audited for correctness, performance, and idiomatic Go.
-// Drop-in replacement — all exported call signatures preserved.
-//
-// ─────────────────────────────────────────────────────────────────────────────
-// CHANGE LOG  (tags appear inline at every changed site)
-// ─────────────────────────────────────────────────────────────────────────────
-//
-// [R01] errors.As for net.Error
-//       err.(net.Error) → errors.As(err, &netErr).  errors.As correctly
-//       unwraps error chains; direct assertions miss wrapped errors and are
-//       flagged by go vet since Go 1.20.
-//
-// [R02] netip.MustParsePrefix in addClientSubnetOption
-//       net.ParseCIDR + netip.AddrFromSlice + totalSize switch replaced by
-//       netip.MustParsePrefix (Go 1.18) + Is4().  Input is a compile-time
-//       constant so MustParsePrefix cannot panic; the old error path is gone.
-//
-// [R03] isInetRecord guard helper
-//       "dns.RRToType(rr)!=T || Class!=ClassINET" appeared 10+ times.
-//       One helper — consistent, shorter, self-documenting at every site.
-//
-// [R04] printOrDash helper
-//       The if-len-zero / else-Join pattern appeared 7 times verbatim.
-//       Extracted once; called everywhere.
-//
-// [R05] Remove unused singleResolver param from resolveResolverInfo
-//       The parameter was received but never read inside the function body.
-//       Removing it fixes a staticcheck warning.
-//
-// [R06] Capacity hints on alias/info slices
-//       make([]string, 0) → make([]string, 0, len(response.Answer)) in
-//       extractHTTPSRecords, eliminating grow-and-copy on typical responses.
-//
-// [R07] Explicit time.Duration cast for timeout doubling
-//       timeout *= time.Duration(timeoutMultiplier) makes the arithmetic
-//       intent explicit instead of relying on untyped-constant promotion.
-//
-// [R08] Typed uint16 ECS family constants
-//       ecsIPv4Family / ecsIPv6Family declared as uint16 to match
-//       dns.SUBNET.Family exactly and eliminate implicit conversions.
-//
-// [R09] resolveCNAMEChain — nextCNAME variable replaces bool "found"
-//       Inner loop sets nextCNAME; outer loop breaks on empty string.
-//       Data-flow is explicit; no side-effect flag.
-//
-// [R10] strings.Cut replaces strings.SplitN in parseNameAndServer
-//       Clearer intent, one allocation, idiomatic since Go 1.18.
-//
-// [R11] context.Background() cached once before the retry loop
-//       Was called on every iteration; now called once into bg.
-//
-// [R12] Single-pass HTTPS record extraction
-//       displayHTTPSAliases and displayHTTPSServiceInfo each iterated over
-//       response.Answer separately.  extractHTTPSRecords does one pass and
-//       returns both slices.
-//
-// [R13] Type switch in extractIPAddresses
-//       switch rec := answer.(type) replaces the redundant uint16 dispatch +
-//       separate type assertions.  Concise and idiomatic.
-//
-// [R14] resolveResolverInfo — cname return removed
-//       cname was always equal to the input name.  Caller retains it directly.
-//
-// [R15] resolveQuery post-loop return accurately commented
-//       Reachable only when maxRetries == 0; was silent dead code.
-//
-// [R16] addClientSubnetOption — error return removed
-//       After [R02] the function can never fail.  Removing the error return
-//       makes the signature honest and eliminates a pointless nil-check.
-//
-// [R17] ecsTestPrefix pre-parsed once at package init
-//       netip.MustParsePrefix was called inside addClientSubnetOption on
-//       every ECS probe.  A package-level var parses the constant once.
-//
-// [R18] resolveResolverInfo returns (string, error) — os.Exit moved to Resolve
-//       Calling os.Exit inside a helper is untestable and swallows failures.
-//       resolveResolverInfo now returns an error; Resolve decides to exit.
-//
-// [R19] ErrInvalidAddress removed
-//       Was only ever used in the now-deleted AddrFromSlice error path
-//       inside addClientSubnetOption ([R02]).  Keeping it is dead state.
-//
-// [R20] resolveResolverInfo — name parameter removed
-//       In the original code name initialised the cname return value.
-//       After [R14] removed that return, name became completely unused inside
-//       the function.  This is a second dead-parameter bug, found by tracing
-//       the cascade from [R14].
-//
-// [R21] resolveMailServers — shows actual MX hostnames instead of a count
-//       Every other record-type function (A, AAAA, NS, PTR, TXT, HINFO)
-//       prints the actual values.  Printing only "3 mail servers found"
-//       was an inconsistency; now uses printOrDash like all siblings.
-//
-// [R22] Full godoc on all exported symbols; section banners throughout.
+// resolve.go implements resolver diagnostics used by the --resolve command.
 
 package main
 
@@ -242,14 +146,14 @@ func addClientSubnetOption(msg *dns.Msg) {
 	bits := ecsTestPrefix.Bits()
 
 	var family uint16
-	if addr.Is4() { // [R02] Is4() replaces switch on totalSize
+	if addr.Is4() {
 		family = ecsIPv4Family
 	} else {
 		family = ecsIPv6Family
 	}
 
 	msg.Pseudo = append(msg.Pseudo, &dns.SUBNET{
-		Family:  family,      // [R08] typed uint16
+		Family:  family,
 		Netmask: uint8(bits),
 		Scope:   0,
 		Address: addr,
@@ -269,9 +173,8 @@ func Resolve(server, name string, singleResolver bool) {
 	fmt.Printf("Resolving [%s] using %s port %d\n\n", name, host, port)
 
 	name = fqdn(name)
-	cname := name // [R14] resolveResolverInfo no longer returns cname
+	cname := name
 
-	// [R18] resolveResolverInfo returns an error; os.Exit lives here in Resolve.
 	clientSubnet, err := resolveResolverInfo(server)
 	if err != nil {
 		fmt.Printf("Unable to resolve: [%s]\n", err)
@@ -306,7 +209,6 @@ func Resolve(server, name string, singleResolver bool) {
 // parseNameAndServer splits name on the first comma.  If a comma is present
 // the text after it overrides server and singleResolver becomes true.
 //
-// [R10] strings.Cut replaces strings.SplitN — one allocation, clearer intent.
 func parseNameAndServer(name, server string, singleResolver bool) (string, string, bool) {
 	if host, override, ok := strings.Cut(name, ","); ok {
 		return host, override, true

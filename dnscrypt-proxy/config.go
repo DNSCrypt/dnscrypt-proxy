@@ -340,6 +340,14 @@ type ConfigFlags struct {
 	ShowCerts               *bool
 }
 
+// ConfigLoadAction describes the post-load action the caller should take.
+type ConfigLoadAction int
+
+const (
+	ConfigLoadActionNone ConfigLoadAction = iota
+	ConfigLoadActionExitSuccess
+)
+
 // ── Minimal config for fast-path decode ──────────────────────────────────────
 
 // minimalConfig is a subset of Config containing only the fields needed for
@@ -542,14 +550,13 @@ func cdLocal() {
 // ── ConfigLoad ────────────────────────────────────────────────────────────────
 
 // ConfigLoad reads the TOML configuration file, validates it, and populates
-// proxy with the resolved settings. It handles all informational CLI modes
-// (--resolve, --list, --check) and calls os.Exit(0) for each.
-func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
+// proxy with the resolved settings.
+func ConfigLoad(proxy *Proxy, flags *ConfigFlags) (ConfigLoadAction, error) {
 	if proxy == nil {
-		return errors.New("proxy is nil")
+		return ConfigLoadActionNone, errors.New("proxy is nil")
 	}
 	if flags == nil {
-		return errors.New("flags is nil")
+		return ConfigLoadActionNone, errors.New("flags is nil")
 	}
 
 	// Startup profiling (no-op unless DNSCRYPT_PROXY_PROFILE_STARTUP=1).
@@ -563,7 +570,7 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 		if flags.ConfigFile != nil {
 			cfgPath = *flags.ConfigFile
 		}
-		return fmt.Errorf("unable to load configuration file [%s]: %w -- maybe use the -config command-line switch?", cfgPath, err)
+		return ConfigLoadActionNone, fmt.Errorf("unable to load configuration file [%s]: %w -- maybe use the -config command-line switch?", cfgPath, err)
 	}
 	markPhase("findConfigFile")
 	WarnIfMaybeWritableByOtherUsers(foundConfigFile)
@@ -581,7 +588,7 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 				addr = mc.ListenAddresses[0]
 			}
 			Resolve(addr, *flags.Resolve, len(mc.ServerNames) == 1)
-			os.Exit(0)
+			return ConfigLoadActionExitSuccess, nil
 		}
 		// Fall through to full decode on minimal-decode failure; the full
 		// decode will surface a proper diagnostic error to the caller.
@@ -590,12 +597,12 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	config := newConfig()
 	md, err := toml.DecodeFile(foundConfigFile, &config)
 	if err != nil {
-		return err
+		return ConfigLoadActionNone, err
 	}
 	markPhase("tomlDecode")
 
 	if err := cdFileDir(foundConfigFile); err != nil {
-		return err
+		return ConfigLoadActionNone, err
 	}
 
 	// Report ALL unknown TOML keys at once — the original reported only [0].
@@ -604,7 +611,7 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 		for i, k := range undecoded {
 			keys[i] = k.String()
 		}
-		return fmt.Errorf("unsupported keys in configuration file: [%s]", strings.Join(keys, ", "))
+		return ConfigLoadActionNone, fmt.Errorf("unsupported keys in configuration file: [%s]", strings.Join(keys, ", "))
 	}
 
 	proxy.showCerts = flagBool(flags.ShowCerts) || os.Getenv("SHOW_CERTS") != ""
@@ -619,47 +626,47 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	configureLogging(proxy, flags, &config)
 	configureServerParams(proxy, &config)
 	if err := configureXTransport(proxy, &config); err != nil {
-		return err
+		return ConfigLoadActionNone, err
 	}
 	if err := configureDoHClientAuth(proxy, &config); err != nil {
-		return err
+		return ConfigLoadActionNone, err
 	}
 	configureLoadBalancing(proxy, &config)
 	configurePlugins(proxy, &config)
 	if err := configureEDNSClientSubnet(proxy, &config); err != nil {
-		return err
+		return ConfigLoadActionNone, err
 	}
 	if err := configureQueryLog(proxy, &config); err != nil {
-		return err
+		return ConfigLoadActionNone, err
 	}
 	if err := configureNXLog(proxy, &config); err != nil {
-		return err
+		return ConfigLoadActionNone, err
 	}
 	if err := configureBlockedNames(proxy, &config); err != nil {
-		return err
+		return ConfigLoadActionNone, err
 	}
 	if err := configureAllowedNames(proxy, &config); err != nil {
-		return err
+		return ConfigLoadActionNone, err
 	}
 	if err := configureBlockedIPs(proxy, &config); err != nil {
-		return err
+		return ConfigLoadActionNone, err
 	}
 	if err := configureAllowedIPs(proxy, &config); err != nil {
-		return err
+		return ConfigLoadActionNone, err
 	}
 	configureAdditionalFiles(proxy, &config)
 	if err := configureWeeklyRanges(proxy, &config); err != nil {
-		return err
+		return ConfigLoadActionNone, err
 	}
 	configureAnonymizedDNS(proxy, &config)
 	configureBrokenImplementations(proxy, &config)
 	configureDNS64(proxy, &config)
 	if err := configureIPEncryption(proxy, &config); err != nil {
-		return err
+		return ConfigLoadActionNone, err
 	}
 	configureSourceRestrictions(proxy, flags, &config)
 	if err := initializeNetworking(proxy, flags, &config); err != nil {
-		return err
+		return ConfigLoadActionNone, err
 	}
 	markPhase("configure")
 
@@ -674,23 +681,23 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	// is a no-op, so we return an error to prevent the proxy running as root.
 	if len(proxy.userName) > 0 && !proxy.child {
 		proxy.dropPrivilege(proxy.userName, FileDescriptors)
-		return errors.New("dropping privileges is not supported on this operating system -- unset [user_name] in the configuration file")
+		return ConfigLoadActionNone, errors.New("dropping privileges is not supported on this operating system -- unset [user_name] in the configuration file")
 	}
 
-	// --check exits here: all configure* validation has run, but source loading
-	// (network I/O) has not. This makes --check fast and fully offline.
+	// --check returns here: all configure* validation has run, but source loading
+	// (network I/O) has not. This keeps --check fast and fully offline.
 	if flagBool(flags.Check) {
 		dlog.Notice("Configuration successfully checked")
-		os.Exit(0)
+		return ConfigLoadActionExitSuccess, nil
 	}
 
 	if !config.OfflineMode {
 		if err := config.loadSources(proxy); err != nil {
-			return err
+			return ConfigLoadActionNone, err
 		}
 		if len(proxy.registeredServers) == 0 {
 			// No trailing period — consistent with Go error conventions.
-			return errors.New("none of the servers listed in [server_names] were found in the configured sources")
+			return ConfigLoadActionNone, errors.New("none of the servers listed in [server_names] were found in the configured sources")
 		}
 	}
 	markPhase("loadSources")
@@ -702,15 +709,15 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 			flagBool(flags.JSONOutput),
 			flagBool(flags.IncludeRelays),
 		); err != nil {
-			return err
+			return ConfigLoadActionNone, err
 		}
-		os.Exit(0)
+		return ConfigLoadActionExitSuccess, nil
 	}
 
 	// Route logging extracted to its own function for readability.
 	logAnonymizedDNSRoutes(proxy)
 
-	return nil
+	return ConfigLoadActionNone, nil
 }
 
 // logAnonymizedDNSRoutes logs the active anonymized-DNS routing table.
