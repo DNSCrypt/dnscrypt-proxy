@@ -1272,7 +1272,7 @@ func (x *XTransport) buildTLSConfig() *tls.Config {
 	cfg.ClientSessionCache = tlsSessionCache
 
 	if x.tlsPreferRSA {
-		cfg.MaxVersion = tls.VersionTLS12
+		cfg.MaxVersion = tls.VersionTLS13
 	}
 
 	cfg.CurvePreferences = []tls.CurveID{
