@@ -27,6 +27,8 @@ const unknownServerName = "-"
 // udpRetries is the number of UDP write+read attempts before giving up.
 const udpRetries = 2
 
+const parkedTimerDuration = time.Duration(1<<63 - 1)
+
 // udpReadPool is a package-level sync.Pool shared by every UDP listener
 // goroutine to avoid per-packet heap allocations.
 //
@@ -769,7 +771,7 @@ func resetTimer(timer *time.Timer, d time.Duration) {
 
 func (proxy *Proxy) startSourcePrefetchLoop() {
 	lastLogTime := time.Now()
-	timer := time.NewTimer(0)
+	timer := time.NewTimer(parkedTimerDuration)
 	defer timer.Stop()
 	for {
 		d := PrefetchSources(proxy.xTransport, proxy.sources)
@@ -789,7 +791,7 @@ func (proxy *Proxy) startSourcePrefetchLoop() {
 
 func (proxy *Proxy) startCertificateRefreshLoop(initialLive int) {
 	live := initialLive
-	timer := time.NewTimer(0)
+	timer := time.NewTimer(parkedTimerDuration)
 	defer timer.Stop()
 	for {
 		delay := proxy.certRefreshDelay

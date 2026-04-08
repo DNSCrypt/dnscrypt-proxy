@@ -31,6 +31,9 @@ const (
 	// keyUpdateRetryDelay is the back-off period before retrying an ODoH key
 	// refresh after a 401 or empty-body 200 response.
 	keyUpdateRetryDelay = 10 * time.Second
+
+	// queryParkedTimerDuration is used to create timers that will be reset before use.
+	queryParkedTimerDuration = time.Duration(1<<63 - 1)
 )
 
 // ─────────────────────────────────────── sentinel errors ────────────────────
@@ -487,7 +490,7 @@ func triggerODoHKeyUpdate(proxy *Proxy, serverInfo *ServerInfo) {
 		// Fire-and-forget: the key refresh runs in the background so the
 		// calling query goroutine is never blocked on network I/O.
 		go func() {
-			retryTimer := time.NewTimer(100 * 365 * 24 * time.Hour)
+			retryTimer := time.NewTimer(queryParkedTimerDuration)
 			defer retryTimer.Stop()
 
 			// Panic recovery: a bug in refreshServer must not crash the process.
