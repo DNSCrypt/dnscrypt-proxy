@@ -67,7 +67,7 @@ func (v dump) diff(expected dump) string {
 //
 // - []byte: same as string instead of hexdump for valid utf8
 // - []rune: use quoted char instead of number for valid runes in list
-// - json.RawMessage: indent, then same as string.
+// - [json.RawMessage]: indent, then same as string.
 func newDump(i any) (d dump) { //nolint:gocyclo,gocognit,funlen,cyclop // By design.
 	d.dump = spewCfg.Sdump(i)
 
@@ -79,7 +79,7 @@ func newDump(i any) (d dump) { //nolint:gocyclo,gocognit,funlen,cyclop // By des
 	val := reflect.ValueOf(i)
 	typ := reflect.TypeOf(i)
 	kind := typ.Kind()
-	if kind == reflect.Ptr {
+	if kind == reflect.Pointer {
 		if val.IsNil() {
 			return d
 		}
@@ -90,7 +90,7 @@ func newDump(i any) (d dump) { //nolint:gocyclo,gocognit,funlen,cyclop // By des
 	d.indirectType = typ
 
 	switch {
-	case typ == reflect.TypeOf(json.RawMessage(nil)):
+	case typ == reflect.TypeFor[json.RawMessage]():
 		v := val.Bytes()
 		var buf bytes.Buffer
 		if json.Indent(&buf, v, "", "  ") == nil {
@@ -98,11 +98,11 @@ func newDump(i any) (d dump) { //nolint:gocyclo,gocognit,funlen,cyclop // By des
 		}
 
 	case kind == reflect.Uint8:
-		v := byte(val.Uint())
+		v := byte(val.Uint()) //nolint:gosec // False positive.
 		d.dump = fmt.Sprintf("(%T) 0x%02X\n", i, v)
 
 	case kind == reflect.Int32:
-		v := rune(val.Int())
+		v := rune(val.Int()) //nolint:gosec // False positive.
 		if utf8.ValidRune(v) {
 			d.dump = fmt.Sprintf("(%T) %q\n", i, v)
 		}
@@ -110,7 +110,7 @@ func newDump(i any) (d dump) { //nolint:gocyclo,gocognit,funlen,cyclop // By des
 	case kind == reflect.Slice && typ.Elem().Kind() == reflect.Int32:
 		valid := true
 		for k := 0; k < val.Len() && valid; k++ {
-			valid = valid && utf8.ValidRune(rune(val.Index(k).Int()))
+			valid = valid && utf8.ValidRune(rune(val.Index(k).Int())) //nolint:gosec // False positive.
 		}
 		if valid {
 			d.dump = fmt.Sprintf("(%T) %q\n", i, i)

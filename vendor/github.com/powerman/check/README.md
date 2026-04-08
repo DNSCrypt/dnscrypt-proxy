@@ -8,6 +8,10 @@
 [![Release](https://img.shields.io/github/v/release/powerman/check?color=blue)](https://github.com/powerman/check/releases/latest)
 [![Go Reference](https://pkg.go.dev/badge/github.com/powerman/check.svg)](https://pkg.go.dev/github.com/powerman/check)
 
+![Linux | amd64 arm64 armv7 ppc64le s390x riscv64](https://img.shields.io/badge/Linux-amd64%20arm64%20armv7%20ppc64le%20s390x%20riscv64-royalblue)
+![macOS | amd64 arm64](https://img.shields.io/badge/macOS-amd64%20arm64-royalblue)
+![Windows | amd64 arm64](https://img.shields.io/badge/Windows-amd64%20arm64-royalblue)
+
 Helpers to complement Go [testing](https://golang.org/pkg/testing/)
 package.
 
@@ -72,8 +76,6 @@ import _ "github.com/smartystreets/goconvey/convey"
 ```
 
 ## Installation
-
-Require [Go 1.9](https://golang.org/doc/go1.9#test-helper).
 
 ```sh
 go get github.com/powerman/check

@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.1] - 2026-04-07
+
+### 📚 Documentation
+
+- **(README)** Drop outdated requirement by @powerman in [3ef3f9b]
+
+### 📦️ Dependencies
+
+- **(deps)** Bump google.golang.org/protobuf from 1.36.7 to 1.36.8 by @dependabot[bot] in [#109]
+- **(deps)** Bump google.golang.org/grpc from 1.74.2 to 1.75.0 by @dependabot[bot] in [#110]
+- **(deps)** Bump golang.org/x/sys from 0.35.0 to 0.36.0 by @dependabot[bot] in [#114]
+- **(deps)** Bump google.golang.org/protobuf from 1.36.8 to 1.36.9 by @dependabot[bot] in [#115]
+- **(deps)** Bump google.golang.org/grpc from 1.75.0 to 1.75.1 by @dependabot[bot] in [#116]
+- **(deps)** Bump google.golang.org/grpc from 1.75.1 to 1.76.0 by @dependabot[bot] in [#118]
+- **(deps)** Bump google.golang.org/protobuf from 1.36.9 to 1.36.10 by @dependabot[bot] in [#117]
+- **(deps)** Bump golang.org/x/sys from 0.36.0 to 0.37.0 by @dependabot[bot] in [#119]
+- **(deps)** Upgrade by @powerman in [7e10e84]
+
+[1.9.1]: https://github.com/powerman/check/compare/v1.9.0..v1.9.1
+[3ef3f9b]: https://github.com/powerman/check/commit/3ef3f9b8faad4c2e6f739e3ae43a5107435fdd04
+[#109]: https://github.com/powerman/check/pull/109
+[#110]: https://github.com/powerman/check/pull/110
+[#114]: https://github.com/powerman/check/pull/114
+[#115]: https://github.com/powerman/check/pull/115
+[#116]: https://github.com/powerman/check/pull/116
+[#118]: https://github.com/powerman/check/pull/118
+[#117]: https://github.com/powerman/check/pull/117
+[#119]: https://github.com/powerman/check/pull/119
+[7e10e84]: https://github.com/powerman/check/commit/7e10e844bd7fef3890de60bc1fb80a1402d3e36b
+
 ## [1.9.0] - 2025-08-17
 
 [1.9.0]: https://github.com/powerman/check/compare/v1.8.0..v1.9.0

@@ -11,7 +11,7 @@
 //   - Statistics with amount of passed/failed checks.
 //   - Colored output in terminal.
 //   - 100% compatible with testing package - check package just provide
-//     convenient wrappers for *testing.T methods and doesn't introduce
+//     convenient wrappers for [*testing.T] methods and doesn't introduce
 //     new concepts like BDD, custom test suite or unusual execution flow.
 //   - All checks you may ever need! :)
 //   - Very easy to add your own check functions.
@@ -19,7 +19,7 @@
 //
 // # Quickstart
 //
-// Just wrap each (including subtests) *testing.T using check.T() and write
+// Just wrap each (including subtests) [*testing.T] using check.T() and write
 // tests as usually with testing package. Call new methods provided by
 // this package to have more clean/concise test code and cool dump/diff.
 //

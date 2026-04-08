@@ -1,9 +1,10 @@
 package check
 
 import (
+	"cmp"
 	"fmt"
 	"os"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -84,7 +85,9 @@ func Report() {
 	total.failed.size = digits(total.failed.value)
 
 	if testing.Verbose() {
-		sort.Slice(ts, func(a, b int) bool { return ts[a].Name() < ts[b].Name() })
+		slices.SortFunc(ts, func(a, b *testing.T) int { //nolint:thelper // False positive.
+			return cmp.Compare(a.Name(), b.Name())
+		})
 		for _, t := range ts {
 			stats[t].passed.size = total.passed.size
 			stats[t].forged.size = total.forged.size

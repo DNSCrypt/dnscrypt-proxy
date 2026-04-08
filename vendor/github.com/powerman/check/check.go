@@ -21,12 +21,12 @@ import (
 
 //nolint:gochecknoglobals // Const.
 var (
-	typString  = reflect.TypeOf("")
-	typBytes   = reflect.TypeOf([]byte(nil))
-	typFloat64 = reflect.TypeOf(0.0)
+	typString  = reflect.TypeFor[string]()
+	typBytes   = reflect.TypeFor[[]byte]()
+	typFloat64 = reflect.TypeFor[float64]()
 )
 
-// C wraps *testing.T to make it convenient to call checkers in test.
+// C wraps [*testing.T] to make it convenient to call checkers in test.
 type C struct {
 	*testing.T
 
@@ -54,7 +54,7 @@ func (t *C) Parallel() {
 
 // T creates and returns new *C, which wraps given tt and supposed to be
 // used inplace of it, providing you with access to many useful helpers in
-// addition to standard methods of *testing.T.
+// addition to standard methods of [*testing.T].
 //
 // It's convenient to rename Test function's arg from t to something
 // else, create wrapped variable with usual name t and use only t:
@@ -373,15 +373,15 @@ func isNil(actual any) bool {
 	switch val := reflect.ValueOf(actual); val.Kind() {
 	case reflect.Invalid:
 		return actual == nil
-	case reflect.Chan, reflect.Func, reflect.Map, reflect.Ptr, reflect.Slice:
+	case reflect.Chan, reflect.Func, reflect.Map, reflect.Pointer, reflect.Slice:
 		return val.IsNil()
-	case reflect.Uintptr, reflect.UnsafePointer: // Subtle cases documented above.
-	case reflect.Interface: // ???
-	// Can't be nil:
-	case reflect.Struct, reflect.Array, reflect.Bool, reflect.String:
-	case reflect.Complex128, reflect.Complex64, reflect.Float32, reflect.Float64:
-	case reflect.Int, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Int8:
-	case reflect.Uint, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uint8:
+	case reflect.Uintptr, reflect.UnsafePointer, // Subtle cases documented above.
+		reflect.Interface, // ???
+		// Can't be nil:
+		reflect.Struct, reflect.Array, reflect.Bool, reflect.String,
+		reflect.Complex128, reflect.Complex64, reflect.Float32, reflect.Float64,
+		reflect.Int, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Int8,
+		reflect.Uint, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uint8:
 	}
 	return false
 }
@@ -427,7 +427,7 @@ func (t *C) False(cond bool, msg ...any) bool {
 
 // Equal checks for actual == expected.
 //
-// Note: For time.Time it uses actual.Equal(expected) instead.
+// Note: For [time.Time] it uses actual.Equal(expected) instead.
 func (t *C) Equal(actual, expected any, msg ...any) bool {
 	t.Helper()
 	return t.report2(actual, expected, msg,
@@ -462,7 +462,7 @@ func (t *C) NE(actual, expected any, msg ...any) bool {
 	return t.NotEqual(actual, expected, msg...)
 }
 
-// BytesEqual checks for bytes.Equal(actual, expected).
+// BytesEqual checks for [bytes.Equal](actual, expected).
 //
 // Hint: BytesEqual([]byte{}, []byte(nil)) is true (unlike DeepEqual).
 func (t *C) BytesEqual(actual, expected []byte, msg ...any) bool {
@@ -480,9 +480,9 @@ func (t *C) NotBytesEqual(actual, expected []byte, msg ...any) bool {
 		!bytes.Equal(actual, expected))
 }
 
-// DeepEqual checks for reflect.DeepEqual(actual, expected).
+// DeepEqual checks for [reflect.DeepEqual](actual, expected).
 // It will also use Equal method for types which implements it
-// (e.g. time.Time, decimal.Decimal, etc.).
+// (e.g. [time.Time], decimal.Decimal, etc.).
 // It will use proto.Equal for protobuf messages.
 func (t *C) DeepEqual(actual, expected any, msg ...any) bool {
 	t.Helper()
@@ -496,9 +496,9 @@ func (t *C) DeepEqual(actual, expected any, msg ...any) bool {
 		deepequal.DeepEqual(actual, expected))
 }
 
-// NotDeepEqual checks for !reflect.DeepEqual(actual, expected).
+// NotDeepEqual checks for ![reflect.DeepEqual](actual, expected).
 // It will also use Equal method for types which implements it
-// (e.g. time.Time, decimal.Decimal, etc.).
+// (e.g. [time.Time], decimal.Decimal, etc.).
 // It will use proto.Equal for protobuf messages.
 func (t *C) NotDeepEqual(actual, expected any, msg ...any) bool {
 	t.Helper()
@@ -514,13 +514,13 @@ func (t *C) NotDeepEqual(actual, expected any, msg ...any) bool {
 
 // Match checks for regex.MatchString(actual).
 //
-// Regex type can be either *regexp.Regexp or string.
+// Regex type can be either [*regexp.Regexp] or string.
 //
 // Actual type can be:
 //   - string       - will match with actual
 //   - []byte       - will match with string(actual)
 //   - []rune       - will match with string(actual)
-//   - fmt.Stringer - will match with actual.String()
+//   - [fmt.Stringer] - will match with actual.String()
 //   - error        - will match with actual.Error()
 //   - nil          - will not match (even with empty regex)
 func (t *C) Match(actual, regex any, msg ...any) bool {
@@ -717,10 +717,10 @@ func (t *C) NotLen(actual any, expected int, msg ...any) bool {
 
 // Err checks is actual error is the same as expected error.
 //
-// If errors.Is() fails then it'll use more sofiscated logic:
+// If [errors.Is]() fails then it'll use more sofiscated logic:
 //
 // It tries to recursively unwrap actual before checking using
-// errors.Unwrap() and github.com/pkg/errors.Cause().
+// [errors.Unwrap]() and [github.com/pkg/errors.Cause]().
 // In case of multi-error (Unwrap() []error) it use only first error.
 //
 // It will use proto.Equal for gRPC status errors.
@@ -769,7 +769,7 @@ func unwrapErr(err error) (actual error) {
 // NotErr checks is actual error is not the same as expected error.
 //
 // It tries to recursively unwrap actual before checking using
-// errors.Unwrap() and github.com/pkg/errors.Cause().
+// [errors.Unwrap]() and [github.com/pkg/errors.Cause]().
 // In case of multi-error (Unwrap() []error) it use only first error.
 //
 // It will use !proto.Equal for gRPC status errors.
@@ -778,7 +778,7 @@ func unwrapErr(err error) (actual error) {
 // Different instances with same type and value will be considered the
 // same error, and so is both nil.
 //
-// Finally it'll use !errors.Is().
+// Finally it'll use ![errors.Is]().
 func (t *C) NotErr(actual, expected error, msg ...any) bool {
 	t.Helper()
 	actual2 := unwrapErr(actual)
@@ -826,7 +826,7 @@ func (t *C) NotPanic(actual func(), msg ...any) bool {
 
 // PanicMatch checks is actual() panics and panic text match regex.
 //
-// Regex type can be either *regexp.Regexp or string.
+// Regex type can be either [*regexp.Regexp] or string.
 //
 // In case of panic(nil) it will match like panic("<nil>").
 func (t *C) PanicMatch(actual func(), regex any, msg ...any) bool {
@@ -856,7 +856,7 @@ func (t *C) PanicMatch(actual func(), regex any, msg ...any) bool {
 
 // PanicNotMatch checks is actual() panics and panic text not match regex.
 //
-// Regex type can be either *regexp.Regexp or string.
+// Regex type can be either [*regexp.Regexp] or string.
 //
 // In case of panic(nil) it will match like panic("<nil>").
 func (t *C) PanicNotMatch(actual func(), regex any, msg ...any) bool {
@@ -891,7 +891,7 @@ func (t *C) PanicNotMatch(actual func(), regex any, msg ...any) bool {
 //   - unsigned integers
 //   - floats
 //   - strings
-//   - time.Time
+//   - [time.Time]
 func (t *C) Less(actual, expected any, msg ...any) bool {
 	t.Helper()
 	return t.report2(actual, expected, msg,
@@ -929,7 +929,7 @@ func (t *C) LT(actual, expected any, msg ...any) bool {
 //   - unsigned integers
 //   - floats
 //   - strings
-//   - time.Time
+//   - [time.Time]
 func (t *C) LessOrEqual(actual, expected any, msg ...any) bool {
 	t.Helper()
 	return t.report2(actual, expected, msg,
@@ -967,7 +967,7 @@ func (t *C) LE(actual, expected any, msg ...any) bool {
 //   - unsigned integers
 //   - floats
 //   - strings
-//   - time.Time
+//   - [time.Time]
 func (t *C) Greater(actual, expected any, msg ...any) bool {
 	t.Helper()
 	return t.report2(actual, expected, msg,
@@ -987,7 +987,7 @@ func (t *C) GT(actual, expected any, msg ...any) bool {
 //   - unsigned integers
 //   - floats
 //   - strings
-//   - time.Time
+//   - [time.Time]
 func (t *C) GreaterOrEqual(actual, expected any, msg ...any) bool {
 	t.Helper()
 	return t.report2(actual, expected, msg,
@@ -1007,7 +1007,7 @@ func (t *C) GE(actual, expected any, msg ...any) bool {
 //   - unsigned integers
 //   - floats
 //   - strings
-//   - time.Time
+//   - [time.Time]
 func (t *C) Between(actual, minimum, maximum any, msg ...any) bool {
 	t.Helper()
 	return t.report3(actual, minimum, maximum, msg,
@@ -1041,7 +1041,7 @@ func isBetween(actual, minimum, maximum any) bool {
 //   - unsigned integers
 //   - floats
 //   - strings
-//   - time.Time
+//   - [time.Time]
 func (t *C) NotBetween(actual, minimum, maximum any, msg ...any) bool {
 	t.Helper()
 	return t.report3(actual, minimum, maximum, msg,
@@ -1055,7 +1055,7 @@ func (t *C) NotBetween(actual, minimum, maximum any, msg ...any) bool {
 //   - unsigned integers
 //   - floats
 //   - strings
-//   - time.Time
+//   - [time.Time]
 func (t *C) BetweenOrEqual(actual, minimum, maximum any, msg ...any) bool {
 	t.Helper()
 	return t.report3(actual, minimum, maximum, msg,
@@ -1069,7 +1069,7 @@ func (t *C) BetweenOrEqual(actual, minimum, maximum any, msg ...any) bool {
 //   - unsigned integers
 //   - floats
 //   - strings
-//   - time.Time
+//   - [time.Time]
 func (t *C) NotBetweenOrEqual(actual, minimum, maximum any, msg ...any) bool {
 	t.Helper()
 	return t.report3(actual, minimum, maximum, msg,
@@ -1082,7 +1082,7 @@ func (t *C) NotBetweenOrEqual(actual, minimum, maximum any, msg ...any) bool {
 //   - signed integers
 //   - unsigned integers
 //   - floats
-//   - time.Time (in this case delta must be time.Duration)
+//   - [time.Time] (in this case delta must be [time.Duration])
 func (t *C) InDelta(actual, expected, delta any, msg ...any) bool {
 	t.Helper()
 	return t.report3(actual, expected, delta, msg,
@@ -1119,7 +1119,7 @@ func isInDelta(actual, expected, delta any) bool {
 //   - signed integers
 //   - unsigned integers
 //   - floats
-//   - time.Time (in this case delta must be time.Duration)
+//   - [time.Time] (in this case delta must be [time.Duration])
 func (t *C) NotInDelta(actual, expected, delta any, msg ...any) bool {
 	t.Helper()
 	return t.report3(actual, expected, delta, msg,
@@ -1176,13 +1176,13 @@ func (t *C) NotInSMAPE(actual, expected any, smape float64, msg ...any) bool {
 		!isInSMAPE(actual, expected, smape))
 }
 
-// HasPrefix checks for strings.HasPrefix(actual, expected).
+// HasPrefix checks for [strings.HasPrefix](actual, expected).
 //
 // Both actual and expected may have any of these types:
 //   - string       - will use as is
 //   - []byte       - will convert with string()
 //   - []rune       - will convert with string()
-//   - fmt.Stringer - will convert with actual.String()
+//   - [fmt.Stringer] - will convert with actual.String()
 //   - error        - will convert with actual.Error()
 //   - nil          - check will always fail
 func (t *C) HasPrefix(actual, expected any, msg ...any) bool {
@@ -1217,13 +1217,13 @@ func (t *C) NotHasPrefix(actual, expected any, msg ...any) bool {
 		ok)
 }
 
-// HasSuffix checks for strings.HasSuffix(actual, expected).
+// HasSuffix checks for [strings.HasSuffix](actual, expected).
 //
 // Both actual and expected may have any of these types:
 //   - string       - will use as is
 //   - []byte       - will convert with string()
 //   - []rune       - will convert with string()
-//   - fmt.Stringer - will convert with actual.String()
+//   - [fmt.Stringer] - will convert with actual.String()
 //   - error        - will convert with actual.Error()
 //   - nil          - check will always fail
 func (t *C) HasSuffix(actual, expected any, msg ...any) bool {
@@ -1259,13 +1259,13 @@ func (t *C) NotHasSuffix(actual, expected any, msg ...any) bool {
 }
 
 // JSONEqual normalize formatting of actual and expected (if they're valid
-// JSON) and then checks for bytes.Equal(actual, expected).
+// JSON) and then checks for [bytes.Equal](actual, expected).
 //
 // Both actual and expected may have any of these types:
 //   - string
 //   - []byte
-//   - json.RawMessage
-//   - *json.RawMessage
+//   - [json.RawMessage]
+//   - [*json.RawMessage]
 //   - nil
 //
 // In case any of actual or expected is nil or empty or (for string or
@@ -1344,7 +1344,7 @@ func (t *C) Implements(actual, expected any, msg ...any) bool {
 
 func isImplements(actual, expected any) bool {
 	typActual := reflect.TypeOf(actual)
-	if typActual.Kind() != reflect.Ptr {
+	if typActual.Kind() != reflect.Pointer {
 		typActual = reflect.PointerTo(typActual)
 	}
 	return typActual.Implements(reflect.TypeOf(expected).Elem())

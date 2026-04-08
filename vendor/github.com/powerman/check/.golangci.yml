@@ -1,4 +1,4 @@
-# Origin: https://github.com/powerman/golangci-lint-strict version 2.4.0
+# Origin: https://github.com/powerman/golangci-lint-strict version 2.11.4
 version: "2"
 linters:
   default: all
@@ -94,6 +94,11 @@ linters:
           skipRecvDeref: false
         unnamedResult:
           checkExported: true
+    godoclint:
+      default: all
+      options:
+        max-len:
+          length: 97
     godot:
       exclude:
         - :$ # Allow line followed by details in next line(s).
@@ -202,6 +207,7 @@ linters:
         - name: enforce-switch-style
           arguments:
             - allowNoDefault
+        - name: epoch-naming
         - name: error-naming
         - name: error-return
         - name: error-strings
@@ -211,18 +217,24 @@ linters:
         - name: file-length-limit
         - name: filename-format
         - name: flag-parameter
+        - name: forbidden-call-in-wg-go
         - name: function-length
           disabled: true # Duplicates funlen linter.
         - name: function-result-limit
           disabled: true # Questionable.
         - name: get-return
         - name: identical-branches
+        - name: identical-ifelseif-branches
+        - name: identical-ifelseif-conditions
+        - name: identical-switch-branches
+        - name: identical-switch-conditions
         - name: if-return
         - name: import-alias-naming
         - name: import-shadowing
         - name: imports-blocklist
         - name: increment-decrement
         - name: indent-error-flow
+        - name: inefficient-map-lookup
         - name: line-length-limit
           disabled: true # Duplicates lll linter.
         - name: max-control-nesting
@@ -234,6 +246,8 @@ linters:
           disabled: true # Questionable (useful in tests, may worth enabling for non-tests).
         - name: optimize-operands-order
         - name: package-comments
+        - name: package-directory-mismatch
+        - name: package-naming
         - name: range
         - name: range-val-address
         - name: range-val-in-closure
@@ -264,14 +278,20 @@ linters:
         - name: unhandled-error
           disabled: true # Duplicates errcheck linter.
         - name: unnecessary-format
+        - name: unnecessary-if
         - name: unnecessary-stmt
         - name: unreachable-code
+        - name: use-slices-sort
+        - name: unsecure-url-scheme
         - name: unused-parameter
         - name: unused-receiver
         - name: use-any
         - name: use-errors-new
         - name: use-fmt-print
+        - name: use-slices-sort
+        - name: use-waitgroup-go
         - name: useless-break
+        - name: useless-fallthrough
         - name: var-declaration
         - name: var-naming
         - name: waitgroup-by-value
@@ -347,6 +367,7 @@ linters:
           - gochecknoinits
           - gocognit
           - goconst
+          - godoclint
           - gosec
           - maintidx
           - reassign
@@ -376,7 +397,6 @@ formatters:
     - gofumpt
     - goimports
     - golines
-    - swaggo
   settings:
     gci:
       sections:
