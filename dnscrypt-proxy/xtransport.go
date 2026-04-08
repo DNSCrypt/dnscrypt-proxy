@@ -761,8 +761,6 @@ func (x *XTransport) ResetCache() {
 
 	dialTargetCache.Clear()
 	hostPortCache.Clear()
-	dialTargetCacheSize.Store(0)
-	hostPortCacheSize.Store(0)
 
 	x.resolveMu.Range(func(key, _ any) bool {
 		x.resolveMu.Delete(key)

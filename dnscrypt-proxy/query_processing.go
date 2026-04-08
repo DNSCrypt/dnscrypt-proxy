@@ -487,13 +487,7 @@ func triggerODoHKeyUpdate(proxy *Proxy, serverInfo *ServerInfo) {
 		// Fire-and-forget: the key refresh runs in the background so the
 		// calling query goroutine is never blocked on network I/O.
 		go func() {
-			retryTimer := time.NewTimer(0)
-			if !retryTimer.Stop() {
-				select {
-				case <-retryTimer.C:
-				default:
-				}
-			}
+			retryTimer := time.NewTimer(100 * 365 * 24 * time.Hour)
 			defer retryTimer.Stop()
 
 			// Panic recovery: a bug in refreshServer must not crash the process.
