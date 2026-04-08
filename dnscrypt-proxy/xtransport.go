@@ -244,10 +244,13 @@ func trimStringCache(cache *sync.Map, sizeCounter *atomic.Int64, maxSize int64) 
 		return
 	}
 	if size > maxSize+cacheTrimWindow {
+		sizeCounter.Store(maxSize)
+		return
+	}
+	if !sizeCounter.CompareAndSwap(size, 0) {
 		return
 	}
 	cache.Clear()
-	sizeCounter.Store(0)
 }
 
 // appendFrom reads from r into buf, growing it as needed, and returns the

@@ -487,6 +487,15 @@ func triggerODoHKeyUpdate(proxy *Proxy, serverInfo *ServerInfo) {
 		// Fire-and-forget: the key refresh runs in the background so the
 		// calling query goroutine is never blocked on network I/O.
 		go func() {
+			retryTimer := time.NewTimer(0)
+			if !retryTimer.Stop() {
+				select {
+				case <-retryTimer.C:
+				default:
+				}
+			}
+			defer retryTimer.Stop()
+
 			// Panic recovery: a bug in refreshServer must not crash the process.
 			defer func() {
 				if r := recover(); r != nil {
@@ -498,13 +507,12 @@ func triggerODoHKeyUpdate(proxy *Proxy, serverInfo *ServerInfo) {
 
 			if err := proxy.serversInfo.refreshServer(proxy, name, stamp); err != nil {
 				// Context-aware delay: exit early if the proxy is shutting down.
-				timer := time.NewTimer(keyUpdateRetryDelay)
-				defer timer.Stop()
+				resetRetryTimer(retryTimer, keyUpdateRetryDelay)
 				select {
 				case <-shutdownCtx.Done():
 					dlog.Debugf("ODoH key update delay cancelled for [%v] (proxy shutting down)", name)
 					return
-				case <-timer.C:
+				case <-retryTimer.C:
 				}
 				dlog.Noticef("Key update failed for [%v]: %v", name, err)
 			}
@@ -515,6 +523,16 @@ func triggerODoHKeyUpdate(proxy *Proxy, serverInfo *ServerInfo) {
 	// Server not found — release the gate so a future rename/reload can retry.
 	serverInfo.odohKeyUpdateInProgress.Store(false)
 	dlog.Warnf("triggerODoHKeyUpdate: server [%v] not found in registered servers", serverInfo.Name)
+}
+
+func resetRetryTimer(timer *time.Timer, d time.Duration) {
+	if !timer.Stop() {
+		select {
+		case <-timer.C:
+		default:
+		}
+	}
+	timer.Reset(d)
 }
 
 // ─────────────────────────────────────── dispatch ───────────────────────────
