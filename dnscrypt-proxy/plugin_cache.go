@@ -43,7 +43,7 @@ type CachedResponse struct {
 // additional synchronisation. [C09]
 type CachedResponses struct {
 	cache     atomic.Pointer[sievecache.ShardedSieveCache[[32]byte, CachedResponse]] // [C01]
-	initErr   error  // [C09] written once under cacheOnce; readable after Do
+	initErr   error                                                                  // [C09] written once under cacheOnce; readable after Do
 	cacheOnce sync.Once
 }
 
@@ -61,7 +61,6 @@ func (cr *CachedResponses) CacheStats() (entries, capacity int) {
 	}
 	return 0, 0
 }
-
 
 // ── Hash pool ─────────────────────────────────────────────────────────────────
 
@@ -236,8 +235,8 @@ func (plugin *PluginCacheResponse) Eval(pluginsState *PluginsState, msg *dns.Msg
 	if c := cachedResponses.cache.Load(); c != nil { // [C01][C06]
 		cacheKey := computeCacheKey(pluginsState, msg) // [C06] inside guard
 		c.Insert(cacheKey, CachedResponse{
-			expiration: expiration,    // [C14] int64
-			msg:        msg.Copy(),    // [C06] copy only when cache is ready
+			expiration: expiration, // [C14] int64
+			msg:        msg.Copy(), // [C06] copy only when cache is ready
 		})
 	}
 

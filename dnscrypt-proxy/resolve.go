@@ -208,7 +208,6 @@ func Resolve(server, name string, singleResolver bool) {
 
 // parseNameAndServer splits name on the first comma.  If a comma is present
 // the text after it overrides server and singleResolver becomes true.
-//
 func parseNameAndServer(name, server string, singleResolver bool) (string, string, bool) {
 	if host, override, ok := strings.Cut(name, ","); ok {
 		return host, override, true
@@ -238,8 +237,9 @@ func normalizeServer(server string) string {
 // [R14] cname return removed — was always equal to the caller's name variable.
 // [R18] Returns an error instead of calling os.Exit; Resolve decides policy.
 // [R20] name parameter removed — after [R14] dropped the cname return, name
-//       became completely unused inside this function (second dead-param bug
-//       exposed by the [R14] cascade).
+//
+//	became completely unused inside this function (second dead-param bug
+//	exposed by the [R14] cascade).
 func resolveResolverInfo(server string) (clientSubnet string, err error) {
 	response, err := resolveQuery(server, myResolverHost, dns.TypeTXT, true)
 	if err != nil {

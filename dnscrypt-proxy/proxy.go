@@ -304,12 +304,12 @@ type Proxy struct {
 	doHListenersMu sync.Mutex
 
 	// ── bools packed at the end [C01] ────────────────────────────────────
-	cloakedPTR                    bool
-	cache                         bool
-	pluginBlockIPv6               bool
-	ephemeralKeys                 bool
-	pluginBlockUnqualified        bool
-	showCerts                     bool
+	cloakedPTR             bool
+	cache                  bool
+	pluginBlockIPv6        bool
+	ephemeralKeys          bool
+	pluginBlockUnqualified bool
+	showCerts              bool
 	// certIgnoreTimestamp controls whether certificate timestamp validation is
 	// skipped. Stored as atomic.Bool because it is written from the cert-refresh
 	// background goroutine and read from query-processing goroutines concurrently.
@@ -973,14 +973,14 @@ func (proxy *Proxy) commitServerUpdates() {
 // Returns an error when ip.To16() is nil (invalid or unspecified IP address).
 func (proxy *Proxy) prepareForRelay(ip net.IP, port int, encryptedQuery []byte) ([]byte, error) {
 	const magicLen = 8 // 0xff bytes
-	const padLen   = 2 // zero pad following magic
+	const padLen = 2   // zero pad following magic
 	ip16 := ip.To16()
 	if ip16 == nil {
 		return nil, errors.New("prepareForRelay: ip.To16() returned nil; IP address may be invalid or unspecified")
 	}
-	ip16Len := len(ip16)                                          // [C10] cached
+	ip16Len := len(ip16) // [C10] cached
 	total := magicLen + padLen + ip16Len + 2 + len(encryptedQuery)
-	buf := make([]byte, total)                                    // [C10] one allocation
+	buf := make([]byte, total) // [C10] one allocation
 
 	for i := range magicLen { // [C10] range-over-int (Go 1.22)
 		buf[i] = 0xff
@@ -1274,7 +1274,8 @@ func (proxy *Proxy) clientsCountDec() {
 //
 // [C13] float64 cast performed once (timeoutF); max() builtin (Go 1.21).
 // [P07] math.Pow(u,4) replaced with u2 := u*u; u4 := u2*u2 (avoids
-//       floating-point exponentiation on every query).  Debug log removed.
+//
+//	floating-point exponentiation on every query).  Debug log removed.
 func (proxy *Proxy) getDynamicTimeout() time.Duration {
 	if proxy.timeoutLoadReduction <= 0 || proxy.maxClients == 0 {
 		return proxy.timeout
@@ -1306,8 +1307,9 @@ func dropQuery(pluginsState *PluginsState, globals *PluginsGlobals, code Plugins
 // [C15] serverName declared at first use.
 // [C16] Duplicate drop-and-log blocks consolidated into dropQuery.
 // [P05] serverInfo resolved eagerly before ApplyQueryPlugins when onlyCached
-//       is false, avoiding a second contended getOne() call later in the
-//       function.
+//
+//	is false, avoiding a second contended getOne() call later in the
+//	function.
 func (proxy *Proxy) processIncomingQuery(
 	clientProto string,
 	serverProto string,

@@ -22,13 +22,13 @@ const (
 )
 
 type PatternMatcher struct {
-	prefixes       *critbitgo.Trie
-	suffixes       *critbitgo.Trie
-	substrings     []string
-	substringAC    *AhoCorasick // Aho-Corasick automaton for substring matching
-	patterns       []string
-	exact          map[string]any
-	indirectVals   map[string]any
+	prefixes     *critbitgo.Trie
+	suffixes     *critbitgo.Trie
+	substrings   []string
+	substringAC  *AhoCorasick // Aho-Corasick automaton for substring matching
+	patterns     []string
+	exact        map[string]any
+	indirectVals map[string]any
 }
 
 func NewPatternMatcher() *PatternMatcher {
