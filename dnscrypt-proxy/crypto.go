@@ -138,6 +138,7 @@ func pad(packet []byte, minSize int, scratch []byte) []byte {
 func getPaddedPacketBuffer(size int) []byte {
 	buf := paddedPacketPool.Get().([]byte)
 	if cap(buf) < size {
+		paddedPacketPool.Put(buf[:0])
 		return make([]byte, 0, size)
 	}
 	return buf[:0]
@@ -152,6 +153,7 @@ func putPaddedPacketBuffer(buf []byte) {
 func getXChaChaReorderBuffer(size int) []byte {
 	buf := xchachaReorderPool.Get().([]byte)
 	if cap(buf) < size {
+		xchachaReorderPool.Put(buf[:0])
 		return make([]byte, size)
 	}
 	return buf[:size]
