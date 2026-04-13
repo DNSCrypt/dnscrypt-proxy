@@ -472,6 +472,8 @@ func (proxy *Proxy) encryptXChaCha20(
 	out := make([]byte, start+TagSize+len(plaintext))
 	copy(out, dst)
 
+	// Zero-length slice at the ciphertext start lets Seal append directly into
+	// the reserved tail of out without an additional allocation.
 	sealDst := out[start+TagSize : start+TagSize : len(out)]
 	sealed := aead.Seal(sealDst, nonce, plaintext, nil) // ciphertext || tag
 	if len(sealed) < TagSize {
@@ -600,8 +602,9 @@ func (proxy *Proxy) decryptXChaCha20(
 	// AEAD.Open expects:      ciphertext || tag(16)
 	// Rearrange in one allocation with direct copies.
 	stdFormat := make([]byte, len(tagAndCt))
-	copy(stdFormat, tagAndCt[TagSize:]) // ciphertext
-	copy(stdFormat[len(stdFormat)-TagSize:], tagAndCt[:TagSize])
+	ciphertextLen := len(tagAndCt) - TagSize
+	copy(stdFormat, tagAndCt[TagSize:])                 // ciphertext
+	copy(stdFormat[ciphertextLen:], tagAndCt[:TagSize]) // tag
 
 	packet, err := aead.Open(nil, serverNonce, stdFormat, nil)
 	if err != nil {
