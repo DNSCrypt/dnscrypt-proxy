@@ -30,6 +30,7 @@ import (
 	"errors"
 	"fmt"
 	"runtime"
+	"sync"
 
 	"github.com/jedisct1/dlog"
 	"golang.org/x/crypto/chacha20"
@@ -93,22 +94,76 @@ var (
 	ErrCipherInitFailed        = errors.New("cipher initialization failed")
 )
 
+var (
+	// paddedPacketPool reuses temporary plaintext buffers used during query
+	// padding/encryption on the DNSCrypt hot path.
+	paddedPacketPool = sync.Pool{
+		New: func() any {
+			return make([]byte, 0, MaxDNSPacketSize)
+		},
+	}
+
+	// xchachaReorderPool reuses temporary buffers used to convert DNSCrypt's
+	// tag||ciphertext layout into AEAD's ciphertext||tag layout.
+	xchachaReorderPool = sync.Pool{
+		New: func() any {
+			return make([]byte, 0, MaxDNSPacketSize+TagSize)
+		},
+	}
+)
+
 // ─────────────────────────────────────── padding ────────────────────────────
 
 // pad applies ISO/IEC 7816-4 padding to packet, extending it to minSize.
 // The format is: data || 0x80 || 0x00… up to minSize.
 // If len(packet) >= minSize, only the 0x80 delimiter is appended.
-func pad(packet []byte, minSize int) []byte {
+func pad(packet []byte, minSize int, scratch []byte) []byte {
 	n := len(packet)
 	target := minSize
 	if n >= minSize {
 		target = n + 1
 	}
-	result := make([]byte, target)
+	var result []byte
+	if cap(scratch) >= target {
+		result = scratch[:target]
+	} else {
+		result = make([]byte, target)
+	}
 	copy(result, packet)
 	result[n] = paddingDelimiter
-	// Remaining bytes are zero from make().
+	clear(result[n+1:])
 	return result
+}
+
+func getPaddedPacketBuffer(size int) []byte {
+	buf := paddedPacketPool.Get().([]byte)
+	if cap(buf) < size {
+		return make([]byte, 0, size)
+	}
+	return buf[:0]
+}
+
+func putPaddedPacketBuffer(buf []byte) {
+	if cap(buf) > MaxDNSPacketSize {
+		return
+	}
+	clear(buf)
+	paddedPacketPool.Put(buf[:0])
+}
+
+func getXChaChaReorderBuffer(size int) []byte {
+	buf := xchachaReorderPool.Get().([]byte)
+	if cap(buf) < size {
+		return make([]byte, size)
+	}
+	return buf[:size]
+}
+
+func putXChaChaReorderBuffer(buf []byte) {
+	if cap(buf) > MaxDNSPacketSize+TagSize {
+		return
+	}
+	xchachaReorderPool.Put(buf[:0])
 }
 
 // unpad removes ISO/IEC 7816-4 padding from packet.
@@ -442,7 +497,9 @@ func (proxy *Proxy) buildEncryptedPacket(
 	encrypted = append(encrypted, clientNonce...)
 
 	// Pad the plaintext to the target length.
-	padded := pad(packet, paddedLength-QueryOverhead)
+	paddedScratch := getPaddedPacketBuffer(paddedLength - QueryOverhead)
+	padded := pad(packet, paddedLength-QueryOverhead, paddedScratch)
+	defer putPaddedPacketBuffer(padded)
 
 	switch serverInfo.CryptoConstruction {
 	case XChacha20Poly1305:
@@ -605,7 +662,8 @@ func (proxy *Proxy) decryptXChaCha20(
 	// DNSCrypt layout: tag(16) || ciphertext
 	// AEAD.Open expects:      ciphertext || tag(16)
 	// Rearrange in one allocation with direct copies.
-	stdFormat := make([]byte, len(tagAndCt))
+	stdFormat := getXChaChaReorderBuffer(len(tagAndCt))
+	defer putXChaChaReorderBuffer(stdFormat)
 	ciphertextLen := len(tagAndCt) - TagSize
 	copy(stdFormat, tagAndCt[TagSize:])                 // ciphertext
 	copy(stdFormat[ciphertextLen:], tagAndCt[:TagSize]) // tag
