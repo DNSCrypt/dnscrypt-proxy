@@ -223,7 +223,7 @@ func toNetIPAddrMap(ips map[string]any) map[netip.Addr]string {
 	for ip := range ips {
 		if addr, err := netip.ParseAddr(ip); err == nil {
 			addr = addr.Unmap()
-			addrMap[addr] = addr.String()
+			addrMap[addr] = ip
 		}
 	}
 	return addrMap
