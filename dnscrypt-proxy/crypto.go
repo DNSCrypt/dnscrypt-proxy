@@ -154,9 +154,9 @@ func getXChaChaReorderBuffer(size int) []byte {
 	buf := xchachaReorderPool.Get().([]byte)
 	if cap(buf) < size {
 		xchachaReorderPool.Put(buf[:0])
-		return make([]byte, size)
+		return make([]byte, 0, size)
 	}
-	return buf[:size]
+	return buf[:0]
 }
 
 func putXChaChaReorderBuffer(buf []byte) {
@@ -660,6 +660,7 @@ func (proxy *Proxy) decryptXChaCha20(
 	// AEAD.Open expects:      ciphertext || tag(16)
 	// Rearrange in one allocation with direct copies.
 	stdFormat := getXChaChaReorderBuffer(len(tagAndCt))
+	stdFormat = stdFormat[:len(tagAndCt)]
 	defer putXChaChaReorderBuffer(stdFormat)
 	ciphertextLen := len(tagAndCt) - TagSize
 	copy(stdFormat, tagAndCt[TagSize:])                 // ciphertext
