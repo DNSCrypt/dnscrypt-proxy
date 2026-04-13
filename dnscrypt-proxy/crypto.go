@@ -472,7 +472,7 @@ func (proxy *Proxy) encryptXChaCha20(
 	out := make([]byte, start+TagSize+len(plaintext))
 	copy(out, dst)
 
-	sealDst := out[start+TagSize : start+TagSize]
+	sealDst := out[start+TagSize : start+TagSize : len(out)]
 	sealed := aead.Seal(sealDst, nonce, plaintext, nil) // ciphertext || tag
 	if len(sealed) < TagSize {
 		return dst, fmt.Errorf("%w: ciphertext too short after seal", ErrMessageTooShort)
@@ -601,7 +601,7 @@ func (proxy *Proxy) decryptXChaCha20(
 	// Rearrange in one allocation with direct copies.
 	stdFormat := make([]byte, len(tagAndCt))
 	copy(stdFormat, tagAndCt[TagSize:]) // ciphertext
-	copy(stdFormat[len(tagAndCt)-TagSize:], tagAndCt[:TagSize])
+	copy(stdFormat[len(stdFormat)-TagSize:], tagAndCt[:TagSize])
 
 	packet, err := aead.Open(nil, serverNonce, stdFormat, nil)
 	if err != nil {
