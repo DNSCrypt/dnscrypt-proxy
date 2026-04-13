@@ -144,9 +144,7 @@ func getPaddedPacketBuffer(size int) []byte {
 }
 
 func putPaddedPacketBuffer(buf []byte) {
-	if cap(buf) > MaxDNSPacketSize {
-		return
-	}
+	// Padded plaintext carries DNS query contents; zero before reuse.
 	clear(buf)
 	paddedPacketPool.Put(buf[:0])
 }
@@ -160,9 +158,6 @@ func getXChaChaReorderBuffer(size int) []byte {
 }
 
 func putXChaChaReorderBuffer(buf []byte) {
-	if cap(buf) > MaxDNSPacketSize+TagSize {
-		return
-	}
 	xchachaReorderPool.Put(buf[:0])
 }
 
