@@ -17,6 +17,8 @@ import (
 // TestFormatDialTarget verifies that formatDialTarget produces the correct
 // "host:port" and "[ipv6]:port" strings and that results are cached.
 func TestFormatDialTarget(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name string
 		ip   string
@@ -30,10 +32,9 @@ func TestFormatDialTarget(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			addr, err := netip.ParseAddr(tt.ip)
-			if err != nil {
-				t.Fatalf("ParseAddr(%q): %v", tt.ip, err)
-			}
+			t.Parallel()
+
+			addr := netip.MustParseAddr(tt.ip)
 			got := formatDialTarget(addr, tt.port)
 			if got != tt.want {
 				t.Errorf("formatDialTarget(%q, %d) = %q, want %q", tt.ip, tt.port, got, tt.want)
@@ -50,6 +51,8 @@ func TestFormatDialTarget(t *testing.T) {
 // TestParseIPAddr verifies that parseIPAddr correctly parses plain and
 // bracketed IP strings, and returns the zero Addr for invalid input.
 func TestParseIPAddr(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		input string
 		valid bool
@@ -65,6 +68,8 @@ func TestParseIPAddr(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
+			t.Parallel()
+
 			got := parseIPAddr(tt.input)
 			if got.IsValid() != tt.valid {
 				t.Errorf("parseIPAddr(%q).IsValid() = %v, want %v", tt.input, got.IsValid(), tt.valid)
@@ -79,23 +84,20 @@ func TestParseIPAddr(t *testing.T) {
 // TestUniqueNormalizedAddrs verifies deduplication, nil handling, and
 // IPv4-in-IPv6 normalisation.
 func TestUniqueNormalizedAddrs(t *testing.T) {
-	mustAddr := func(s string) netip.Addr {
-		a, err := netip.ParseAddr(s)
-		if err != nil {
-			t.Helper()
-			t.Fatalf("ParseAddr(%q): %v", s, err)
-		}
-		return a
-	}
+	t.Parallel()
 
 	t.Run("empty", func(t *testing.T) {
+		t.Parallel()
+
 		if got := uniqueNormalizedAddrs(nil); got != nil {
 			t.Errorf("got %v, want nil", got)
 		}
 	})
 
 	t.Run("single valid", func(t *testing.T) {
-		in := []netip.Addr{mustAddr("1.2.3.4")}
+		t.Parallel()
+
+		in := []netip.Addr{netip.MustParseAddr("1.2.3.4")}
 		got := uniqueNormalizedAddrs(in)
 		if len(got) != 1 || got[0].String() != "1.2.3.4" {
 			t.Errorf("got %v", got)
@@ -103,7 +105,9 @@ func TestUniqueNormalizedAddrs(t *testing.T) {
 	})
 
 	t.Run("duplicates removed", func(t *testing.T) {
-		in := []netip.Addr{mustAddr("1.2.3.4"), mustAddr("1.2.3.4"), mustAddr("5.6.7.8")}
+		t.Parallel()
+
+		in := []netip.Addr{netip.MustParseAddr("1.2.3.4"), netip.MustParseAddr("1.2.3.4"), netip.MustParseAddr("5.6.7.8")}
 		got := uniqueNormalizedAddrs(in)
 		if len(got) != 2 {
 			t.Errorf("got %d entries, want 2: %v", len(got), got)
@@ -111,7 +115,9 @@ func TestUniqueNormalizedAddrs(t *testing.T) {
 	})
 
 	t.Run("IPv4-in-IPv6 deduplicated with plain IPv4", func(t *testing.T) {
-		in := []netip.Addr{mustAddr("1.2.3.4"), mustAddr("::ffff:1.2.3.4")}
+		t.Parallel()
+
+		in := []netip.Addr{netip.MustParseAddr("1.2.3.4"), netip.MustParseAddr("::ffff:1.2.3.4")}
 		got := uniqueNormalizedAddrs(in)
 		if len(got) != 1 {
 			t.Errorf("got %d entries, want 1 (unmap dedup): %v", len(got), got)
@@ -121,9 +127,13 @@ func TestUniqueNormalizedAddrs(t *testing.T) {
 
 // TestIsAltSvcExpired verifies expiry logic for altSvcEntry.
 func TestIsAltSvcExpired(t *testing.T) {
+	t.Parallel()
+
 	now := time.Now()
 
 	t.Run("noExpiry is never expired", func(t *testing.T) {
+		t.Parallel()
+
 		e := altSvcEntry{noExpiry: true, validTo: now.Add(-time.Hour)}
 		if isAltSvcExpired(e, now) {
 			t.Error("expected not expired for noExpiry=true")
@@ -131,6 +141,8 @@ func TestIsAltSvcExpired(t *testing.T) {
 	})
 
 	t.Run("zero validTo is not expired", func(t *testing.T) {
+		t.Parallel()
+
 		e := altSvcEntry{}
 		if isAltSvcExpired(e, now) {
 			t.Error("expected not expired for zero validTo")
@@ -138,6 +150,8 @@ func TestIsAltSvcExpired(t *testing.T) {
 	})
 
 	t.Run("past validTo is expired", func(t *testing.T) {
+		t.Parallel()
+
 		e := altSvcEntry{validTo: now.Add(-time.Second)}
 		if !isAltSvcExpired(e, now) {
 			t.Error("expected expired for past validTo")
@@ -145,6 +159,8 @@ func TestIsAltSvcExpired(t *testing.T) {
 	})
 
 	t.Run("future validTo is not expired", func(t *testing.T) {
+		t.Parallel()
+
 		e := altSvcEntry{validTo: now.Add(time.Hour)}
 		if isAltSvcExpired(e, now) {
 			t.Error("expected not expired for future validTo")
@@ -155,10 +171,13 @@ func TestIsAltSvcExpired(t *testing.T) {
 // TestFetchNilURL verifies that Fetch returns a clean error on nil or
 // host-less URLs rather than panicking.
 func TestFetchNilURL(t *testing.T) {
+	t.Parallel()
+
 	x := NewXTransport()
-	x.rebuildTransport()
 
 	t.Run("nil URL", func(t *testing.T) {
+		t.Parallel()
+
 		_, _, _, _, err := x.Fetch(context.Background(), http.MethodGet, nil, "", "", nil, time.Second, false)
 		if err == nil {
 			t.Error("expected error for nil URL, got nil")
@@ -166,6 +185,8 @@ func TestFetchNilURL(t *testing.T) {
 	})
 
 	t.Run("empty host", func(t *testing.T) {
+		t.Parallel()
+
 		u := &url.URL{Scheme: "https", Host: ""}
 		_, _, _, _, err := x.Fetch(context.Background(), http.MethodGet, u, "", "", nil, time.Second, false)
 		if err == nil {
@@ -177,9 +198,13 @@ func TestFetchNilURL(t *testing.T) {
 // TestParseAndCacheAltSvc verifies that parseAndCacheAltSvc correctly
 // extracts an h3= port from an Alt-Svc header and caches it.
 func TestParseAndCacheAltSvc(t *testing.T) {
+	t.Parallel()
+
 	x := NewXTransport()
 
 	t.Run("h3 port cached", func(t *testing.T) {
+		t.Parallel()
+
 		// The parser expects h3="<port>" (bare port number, not ":<port>").
 		hdr := http.Header{
 			"Alt-Svc": []string{`h3="443"; ma=86400`},
@@ -202,15 +227,16 @@ func TestParseAndCacheAltSvc(t *testing.T) {
 	})
 
 	t.Run("no h3 field not cached", func(t *testing.T) {
-		x2 := NewXTransport()
+		t.Parallel()
+
 		hdr := http.Header{
 			"Alt-Svc": []string{`h2=":443"`},
 		}
-		x2.parseAndCacheAltSvc("other.example.com", 443, hdr)
+		x.parseAndCacheAltSvc("other.example.com", 443, hdr)
 
-		x2.altSupport.RLock()
-		_, ok := x2.altSupport.cache["other.example.com"]
-		x2.altSupport.RUnlock()
+		x.altSupport.RLock()
+		_, ok := x.altSupport.cache["other.example.com"]
+		x.altSupport.RUnlock()
 
 		if ok {
 			t.Error("expected no cache entry for non-h3 Alt-Svc")
@@ -218,12 +244,13 @@ func TestParseAndCacheAltSvc(t *testing.T) {
 	})
 
 	t.Run("absent Alt-Svc header not cached", func(t *testing.T) {
-		x3 := NewXTransport()
-		x3.parseAndCacheAltSvc("absent.example.com", 443, http.Header{})
+		t.Parallel()
 
-		x3.altSupport.RLock()
-		_, ok := x3.altSupport.cache["absent.example.com"]
-		x3.altSupport.RUnlock()
+		x.parseAndCacheAltSvc("absent.example.com", 443, http.Header{})
+
+		x.altSupport.RLock()
+		_, ok := x.altSupport.cache["absent.example.com"]
+		x.altSupport.RUnlock()
 
 		if ok {
 			t.Error("expected no cache entry when Alt-Svc header is absent")
@@ -253,6 +280,7 @@ func BenchmarkUniqueNormalizedAddrs(b *testing.B) {
 		netip.MustParseAddr("1.2.3.4"),
 		netip.MustParseAddr("::1"),
 	}
+	b.ResetTimer()
 	b.ReportAllocs()
 	for b.Loop() {
 		_ = uniqueNormalizedAddrs(addrs)
@@ -261,6 +289,8 @@ func BenchmarkUniqueNormalizedAddrs(b *testing.B) {
 
 // TestFormatHostPort verifies that formatHostPort returns correct cached strings.
 func TestFormatHostPort(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		host string
 		port int
@@ -271,20 +301,26 @@ func TestFormatHostPort(t *testing.T) {
 		{"localhost", 8080, "localhost:8080"},
 	}
 	for _, tt := range tests {
-		got := formatHostPort(tt.host, tt.port)
-		if got != tt.want {
-			t.Errorf("formatHostPort(%q, %d) = %q, want %q", tt.host, tt.port, got, tt.want)
-		}
-		// Second call must return identical string (cache hit).
-		got2 := formatHostPort(tt.host, tt.port)
-		if got2 != tt.want {
-			t.Errorf("cached formatHostPort(%q, %d) = %q, want %q", tt.host, tt.port, got2, tt.want)
-		}
+		t.Run(tt.host, func(t *testing.T) {
+			t.Parallel()
+
+			got := formatHostPort(tt.host, tt.port)
+			if got != tt.want {
+				t.Errorf("formatHostPort(%q, %d) = %q, want %q", tt.host, tt.port, got, tt.want)
+			}
+			// Second call must return identical string (cache hit).
+			got2 := formatHostPort(tt.host, tt.port)
+			if got2 != tt.want {
+				t.Errorf("cached formatHostPort(%q, %d) = %q, want %q", tt.host, tt.port, got2, tt.want)
+			}
+		})
 	}
 }
 
 // TestH3HealthStateLockFree verifies that inBackoff works without mutex.
 func TestH3HealthStateLockFree(t *testing.T) {
+	t.Parallel()
+
 	s := &h3HealthState{}
 
 	// Fresh state: not in backoff.
@@ -309,6 +345,8 @@ func TestH3HealthStateLockFree(t *testing.T) {
 
 // TestAppendFrom verifies the appendFrom helper reads correctly.
 func TestAppendFrom(t *testing.T) {
+	t.Parallel()
+
 	data := "hello, world! This is a test of appendFrom."
 	buf := make([]byte, 0, 16) // intentionally small capacity
 	got, err := appendFrom(buf, strings.NewReader(data))
@@ -322,6 +360,8 @@ func TestAppendFrom(t *testing.T) {
 
 // TestAppendFromEmpty verifies appendFrom handles empty reader.
 func TestAppendFromEmpty(t *testing.T) {
+	t.Parallel()
+
 	buf := make([]byte, 0, 16)
 	got, err := appendFrom(buf, strings.NewReader(""))
 	if err != nil {
@@ -334,6 +374,8 @@ func TestAppendFromEmpty(t *testing.T) {
 
 // TestResponseBufferPool verifies pool returns usable buffers.
 func TestResponseBufferPool(t *testing.T) {
+	t.Parallel()
+
 	bufp := httpResponseBufPool.Get().(*[]byte)
 	buf := (*bufp)[:0]
 	data := []byte("test DNS response data")
@@ -353,6 +395,7 @@ func TestResponseBufferPool(t *testing.T) {
 func BenchmarkFormatHostPort(b *testing.B) {
 	// Seed the cache.
 	formatHostPort("example.com", 443)
+	b.ResetTimer()
 	b.ReportAllocs()
 	for b.Loop() {
 		_ = formatHostPort("example.com", 443)
@@ -365,11 +408,14 @@ func BenchmarkAppendFrom(b *testing.B) {
 	for i := range data {
 		data[i] = byte(i)
 	}
+	reader := bytes.NewReader(data)
+	b.ResetTimer()
 	b.ReportAllocs()
 	for b.Loop() {
+		reader.Reset(data)
 		bufp := httpResponseBufPool.Get().(*[]byte)
 		buf := (*bufp)[:0]
-		buf, _ = appendFrom(buf, io.LimitReader(bytes.NewReader(data), MaxHTTPBodyLength))
+		buf, _ = appendFrom(buf, io.LimitReader(reader, MaxHTTPBodyLength))
 		*bufp = buf
 		httpResponseBufPool.Put(bufp)
 	}
