@@ -650,6 +650,8 @@ func (proxy *Proxy) udpListener(clientPc *net.UDPConn) {
 
 		go func(pkt []byte, addr net.Addr, backing []byte) {
 			defer proxy.clientsCountDec()
+			// processIncomingQuery fully processes pkt synchronously; the backing
+			// buffer is returned to the pool only after that call returns.
 			defer udpReadPool.Put(backing) //nolint:staticcheck
 			proxy.processIncomingQuery(
 				"udp", proxy.xTransport.mainProto,

@@ -392,10 +392,7 @@ func (plugin *PluginForward) findMatchingSequence(qName string) []SearchSequence
 	}
 
 	for _, candidateIdx := range plugin.forwardIndex["."] {
-		candidate := plugin.forwardMap[candidateIdx]
-		if candidate.domain == "." {
-			return candidate.sequence
-		}
+		return plugin.forwardMap[candidateIdx].sequence
 	}
 
 	return nil
@@ -533,20 +530,19 @@ func (plugin *PluginForward) exchangeWithServer(pluginsState *PluginsState, msg 
 	ctx, cancel := context.WithTimeout(context.Background(), pluginsState.timeout)
 	defer cancel()
 
-	// Create a struct value copy (slice headers are copied, backing arrays shared)
-	// and clear Extra/Data for forwarding.
-	forwardMsg := *msg
+	// Create an isolated copy for forwarding and clear Extra/Data.
+	forwardMsg := msg.Copy()
 	forwardMsg.Extra = nil
 	forwardMsg.Data = nil
 
-	respMsg, _, err := client.Exchange(ctx, &forwardMsg, pluginsState.serverProto, server)
+	respMsg, _, err := client.Exchange(ctx, forwardMsg, pluginsState.serverProto, server)
 	if err != nil {
 		return nil, fmt.Errorf("exchange failed: %w", err)
 	}
 
 	// Handle truncated response by retrying over TCP
 	if respMsg.Truncated {
-		respMsg, _, err = client.Exchange(ctx, &forwardMsg, "tcp", server)
+		respMsg, _, err = client.Exchange(ctx, forwardMsg, "tcp", server)
 		if err != nil {
 			return nil, fmt.Errorf("TCP retry failed: %w", err)
 		}
