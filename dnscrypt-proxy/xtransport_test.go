@@ -129,11 +129,10 @@ func TestUniqueNormalizedAddrs(t *testing.T) {
 func TestIsAltSvcExpired(t *testing.T) {
 	t.Parallel()
 
-	now := time.Now()
-
 	t.Run("noExpiry is never expired", func(t *testing.T) {
 		t.Parallel()
 
+		now := time.Now()
 		e := altSvcEntry{noExpiry: true, validTo: now.Add(-time.Hour)}
 		if isAltSvcExpired(e, now) {
 			t.Error("expected not expired for noExpiry=true")
@@ -143,6 +142,7 @@ func TestIsAltSvcExpired(t *testing.T) {
 	t.Run("zero validTo is not expired", func(t *testing.T) {
 		t.Parallel()
 
+		now := time.Now()
 		e := altSvcEntry{}
 		if isAltSvcExpired(e, now) {
 			t.Error("expected not expired for zero validTo")
@@ -152,6 +152,7 @@ func TestIsAltSvcExpired(t *testing.T) {
 	t.Run("past validTo is expired", func(t *testing.T) {
 		t.Parallel()
 
+		now := time.Now()
 		e := altSvcEntry{validTo: now.Add(-time.Second)}
 		if !isAltSvcExpired(e, now) {
 			t.Error("expected expired for past validTo")
@@ -161,6 +162,7 @@ func TestIsAltSvcExpired(t *testing.T) {
 	t.Run("future validTo is not expired", func(t *testing.T) {
 		t.Parallel()
 
+		now := time.Now()
 		e := altSvcEntry{validTo: now.Add(time.Hour)}
 		if isAltSvcExpired(e, now) {
 			t.Error("expected not expired for future validTo")
@@ -173,11 +175,10 @@ func TestIsAltSvcExpired(t *testing.T) {
 func TestFetchNilURL(t *testing.T) {
 	t.Parallel()
 
-	x := NewXTransport()
-
 	t.Run("nil URL", func(t *testing.T) {
 		t.Parallel()
 
+		x := NewXTransport()
 		_, _, _, _, err := x.Fetch(context.Background(), http.MethodGet, nil, "", "", nil, time.Second, false)
 		if err == nil {
 			t.Error("expected error for nil URL, got nil")
@@ -187,6 +188,7 @@ func TestFetchNilURL(t *testing.T) {
 	t.Run("empty host", func(t *testing.T) {
 		t.Parallel()
 
+		x := NewXTransport()
 		u := &url.URL{Scheme: "https", Host: ""}
 		_, _, _, _, err := x.Fetch(context.Background(), http.MethodGet, u, "", "", nil, time.Second, false)
 		if err == nil {
