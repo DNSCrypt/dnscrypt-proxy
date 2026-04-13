@@ -73,6 +73,10 @@ const (
 	// paddingBlockSize is the alignment boundary for padded DNS packets.
 	// 64-byte blocks hide query sizes and provide natural alignment.
 	paddingBlockSize = 64
+
+	// Minimum capacities kept in buffer pools to avoid retaining tiny buffers.
+	minPooledPaddedPacketCap  = 512
+	minPooledXChaChaBufferCap = 512
 )
 
 // ─────────────────────────────────────── sentinel errors ────────────────────
@@ -138,13 +142,18 @@ func pad(packet []byte, minSize int, scratch []byte) []byte {
 func getPaddedPacketBuffer(size int) []byte {
 	buf := paddedPacketPool.Get().([]byte)
 	if cap(buf) < size {
-		paddedPacketPool.Put(buf[:0])
+		if cap(buf) >= minPooledPaddedPacketCap {
+			paddedPacketPool.Put(buf[:0])
+		}
 		return make([]byte, 0, size)
 	}
 	return buf[:0]
 }
 
 func putPaddedPacketBuffer(buf []byte) {
+	if cap(buf) < minPooledPaddedPacketCap {
+		return
+	}
 	// Padded plaintext carries DNS query contents; zero before reuse.
 	clear(buf)
 	paddedPacketPool.Put(buf[:0])
@@ -153,13 +162,18 @@ func putPaddedPacketBuffer(buf []byte) {
 func getXChaChaReorderBuffer(size int) []byte {
 	buf := xchachaReorderPool.Get().([]byte)
 	if cap(buf) < size {
-		xchachaReorderPool.Put(buf[:0])
+		if cap(buf) >= minPooledXChaChaBufferCap {
+			xchachaReorderPool.Put(buf[:0])
+		}
 		return make([]byte, 0, size)
 	}
 	return buf[:0]
 }
 
 func putXChaChaReorderBuffer(buf []byte) {
+	if cap(buf) < minPooledXChaChaBufferCap {
+		return
+	}
 	xchachaReorderPool.Put(buf[:0])
 }
 
