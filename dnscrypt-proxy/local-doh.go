@@ -169,8 +169,9 @@ func xPadHeader(padLen int) string {
 		return ""
 	}
 	if v, ok := xPadHeaderCache.Load(padLen); ok {
-		// Cache values are only stored by xPadHeader and are always strings.
-		return v.(string)
+		if cached, ok := v.(string); ok {
+			return cached
+		}
 	}
 	val := strings.Repeat("X", padLen)
 	xPadHeaderCache.Store(padLen, val)
