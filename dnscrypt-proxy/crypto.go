@@ -140,11 +140,14 @@ func isZeroKey(key []byte) bool {
 	if len(key) == 0 {
 		return true
 	}
-	var acc byte
-	for i := 0; i < len(key); i++ {
-		acc |= key[i]
+	// The hot-path key size is 32 bytes; use a stack zero buffer to avoid a heap
+	// allocation while keeping subtle.ConstantTimeCompare semantics.
+	if len(key) == 32 {
+		var zeros [32]byte
+		return subtle.ConstantTimeCompare(key, zeros[:]) == 1
 	}
-	return subtle.ConstantTimeByteEq(acc, 0) == 1
+	zeros := make([]byte, len(key))
+	return subtle.ConstantTimeCompare(key, zeros) == 1
 }
 
 // ZeroizeKey securely zeros a byte slice.
@@ -472,15 +475,16 @@ func (proxy *Proxy) encryptXChaCha20(
 	out := make([]byte, start+TagSize+len(plaintext))
 	copy(out, dst)
 
-	// Zero-length slice at the ciphertext start lets Seal append directly into
-	// the reserved tail of out without an additional allocation.
-	sealDst := out[start+TagSize : start+TagSize : len(out)]
-	sealed := aead.Seal(sealDst, nonce, plaintext, nil) // ciphertext || tag
+	// Zero-length slice at the ciphertext start: Seal appends ciphertext||tag
+	// into the reserved tail when capacity allows.
+	sealAppendTarget := out[start+TagSize : start+TagSize : len(out)]
+	sealed := aead.Seal(sealAppendTarget, nonce, plaintext, nil) // ciphertext || tag
 	if len(sealed) < TagSize {
 		return dst, fmt.Errorf("%w: ciphertext too short after seal", ErrMessageTooShort)
 	}
 
 	ciphertextLen := len(sealed) - TagSize
+	// Always copy from sealed so this remains correct even if Seal reallocates.
 	copy(out[start:start+TagSize], sealed[ciphertextLen:]) // tag
 	copy(out[start+TagSize:], sealed[:ciphertextLen])      // ciphertext
 	return out, nil
