@@ -50,11 +50,20 @@ type PluginForwardEntry struct {
 	sequence []SearchSequenceItem
 }
 
+type resolvConfCacheEntry struct {
+	mtimeUnixNano int64
+	servers       []string
+	warnings      []string
+}
+
 // PluginForward routes queries matching specific domains to dedicated DNS servers.
 type PluginForward struct {
 	forwardMap         []PluginForwardEntry
+	forwardIndex       map[string][]int
 	bootstrapResolvers []string
 	dhcpdns            []*dhcpdns.Detector
+	resolvconfCache    map[string]resolvConfCacheEntry
+	dnsClient          dns.Client
 
 	// Hot-reloading support
 	mu            sync.RWMutex
@@ -96,6 +105,9 @@ func (plugin *PluginForward) Init(proxy *Proxy) error {
 			return fmt.Errorf("failed to initialize DHCP detectors: %w", err)
 		}
 	}
+	plugin.forwardIndex = buildForwardIndex(plugin.forwardMap)
+	plugin.resolvconfCache = make(map[string]resolvConfCacheEntry)
+	plugin.dnsClient = dns.Client{}
 
 	return nil
 }
@@ -306,6 +318,7 @@ func (plugin *PluginForward) ApplyReload() error {
 
 	plugin.mu.Lock()
 	plugin.forwardMap = plugin.stagingMap
+	plugin.forwardIndex = buildForwardIndex(plugin.stagingMap)
 	plugin.stagingMap = nil
 	plugin.mu.Unlock()
 
@@ -358,8 +371,13 @@ func (plugin *PluginForward) Eval(pluginsState *PluginsState, msg *dns.Msg) erro
 // findMatchingSequence finds the forwarding sequence for a query name.
 func (plugin *PluginForward) findMatchingSequence(qName string) []SearchSequenceItem {
 	qNameLen := len(qName)
+	tld := qName
+	if idx := strings.LastIndexByte(qName, '.'); idx >= 0 && idx+1 < len(qName) {
+		tld = qName[idx+1:]
+	}
 
-	for _, candidate := range plugin.forwardMap {
+	for _, candidateIdx := range plugin.forwardIndex[tld] {
+		candidate := plugin.forwardMap[candidateIdx]
 		candidateLen := len(candidate.domain)
 		if candidateLen > qNameLen {
 			continue
@@ -369,6 +387,13 @@ func (plugin *PluginForward) findMatchingSequence(qName string) []SearchSequence
 		if (qName[qNameLen-candidateLen:] == candidate.domain &&
 			(candidateLen == qNameLen || qName[qNameLen-candidateLen-1] == '.')) ||
 			candidate.domain == "." {
+			return candidate.sequence
+		}
+	}
+
+	for _, candidateIdx := range plugin.forwardIndex["."] {
+		candidate := plugin.forwardMap[candidateIdx]
+		if candidate.domain == "." {
 			return candidate.sequence
 		}
 	}
@@ -474,7 +499,7 @@ func (plugin *PluginForward) selectResolvconfServer(item *SearchSequenceItem, qN
 		}
 	}
 
-	servers, warnings, err := parseResolvConf(item.resolvconf)
+	servers, warnings, err := plugin.cachedResolvConf(item.resolvconf)
 	if err != nil {
 		dlog.Warnf("Failed to open '%s' while resolving [%s]: %v", item.resolvconf, qName, err)
 		item.rcLastFail.Store(time.Now().Unix())
@@ -504,23 +529,23 @@ func (plugin *PluginForward) selectResolvconfServer(item *SearchSequenceItem, qN
 
 // exchangeWithServer performs DNS exchange with a server, handling truncation.
 func (plugin *PluginForward) exchangeWithServer(pluginsState *PluginsState, msg *dns.Msg, server string) (*dns.Msg, error) {
-	client := dns.Client{}
+	client := plugin.dnsClient
 	ctx, cancel := context.WithTimeout(context.Background(), pluginsState.timeout)
 	defer cancel()
 
-	// Create clean copy without Extra section for forwarding
-	forwardMsg := msg.Copy()
+	// Create a shallow copy without Extra section for forwarding.
+	forwardMsg := *msg
 	forwardMsg.Extra = nil
 	forwardMsg.Data = nil
 
-	respMsg, _, err := client.Exchange(ctx, forwardMsg, pluginsState.serverProto, server)
+	respMsg, _, err := client.Exchange(ctx, &forwardMsg, pluginsState.serverProto, server)
 	if err != nil {
 		return nil, fmt.Errorf("exchange failed: %w", err)
 	}
 
 	// Handle truncated response by retrying over TCP
 	if respMsg.Truncated {
-		respMsg, _, err = client.Exchange(ctx, forwardMsg, "tcp", server)
+		respMsg, _, err = client.Exchange(ctx, &forwardMsg, "tcp", server)
 		if err != nil {
 			return nil, fmt.Errorf("TCP retry failed: %w", err)
 		}
@@ -567,6 +592,56 @@ func parseResolvConf(filename string) ([]string, []string, error) {
 	}
 
 	return servers, warnings, nil
+}
+
+func buildForwardIndex(forwardMap []PluginForwardEntry) map[string][]int {
+	index := make(map[string][]int)
+	for i, entry := range forwardMap {
+		if entry.domain == "." {
+			index["."] = append(index["."], i)
+			continue
+		}
+		lastLabel := entry.domain
+		if idx := strings.LastIndexByte(entry.domain, '.'); idx >= 0 && idx+1 < len(entry.domain) {
+			lastLabel = entry.domain[idx+1:]
+		}
+		index[lastLabel] = append(index[lastLabel], i)
+	}
+	return index
+}
+
+func (plugin *PluginForward) cachedResolvConf(filename string) ([]string, []string, error) {
+	info, err := os.Stat(filename)
+	if err != nil {
+		return nil, nil, err
+	}
+	mtime := info.ModTime().UnixNano()
+
+	plugin.mu.RLock()
+	cacheEntry, ok := plugin.resolvconfCache[filename]
+	plugin.mu.RUnlock()
+	if ok && cacheEntry.mtimeUnixNano == mtime {
+		return cacheEntry.servers, cacheEntry.warnings, nil
+	}
+
+	servers, warnings, err := parseResolvConf(filename)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	serversCopy := append([]string(nil), servers...)
+	warningsCopy := append([]string(nil), warnings...)
+	plugin.mu.Lock()
+	if plugin.resolvconfCache == nil {
+		plugin.resolvconfCache = make(map[string]resolvConfCacheEntry)
+	}
+	plugin.resolvconfCache[filename] = resolvConfCacheEntry{
+		mtimeUnixNano: mtime,
+		servers:       serversCopy,
+		warnings:      warningsCopy,
+	}
+	plugin.mu.Unlock()
+	return serversCopy, warningsCopy, nil
 }
 
 // normalizeIPAndOptionalPort validates and normalizes an IP address with optional port.

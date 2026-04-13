@@ -16,6 +16,7 @@ import (
 type PluginBlockIP struct {
 	blockedPrefixes *iradix.Tree
 	blockedIPs      map[string]any
+	blockedAddrMap  map[netip.Addr]string
 	blockedNetworks *critbitgo.Net
 	logger          io.Writer
 	format          string
@@ -27,6 +28,7 @@ type PluginBlockIP struct {
 	configWatcher   *ConfigWatcher
 	stagingPrefixes *iradix.Tree
 	stagingIPs      map[string]any
+	stagingAddrMap  map[netip.Addr]string
 	stagingNetworks *critbitgo.Net
 }
 
@@ -49,12 +51,14 @@ func (plugin *PluginBlockIP) Init(proxy *Proxy) error {
 
 	plugin.blockedPrefixes = iradix.New()
 	plugin.blockedIPs = make(map[string]any)
+	plugin.blockedAddrMap = make(map[netip.Addr]string)
 	plugin.blockedNetworks = critbitgo.NewNet()
 
 	plugin.blockedPrefixes, err = plugin.loadRules(lines, plugin.blockedPrefixes, plugin.blockedIPs, plugin.blockedNetworks)
 	if err != nil {
 		return err
 	}
+	plugin.blockedAddrMap = toNetIPAddrMap(plugin.blockedIPs)
 
 	plugin.logger, plugin.format = InitializePluginLogger(proxy.blockIPLogFile, proxy.blockIPFormat, proxy.logMaxSize, proxy.logMaxAge, proxy.logMaxBackups)
 	plugin.ipCryptConfig = proxy.ipCryptConfig
@@ -80,11 +84,13 @@ func (plugin *PluginBlockIP) PrepareReload() error {
 		// Create staging structures
 		plugin.stagingPrefixes = iradix.New()
 		plugin.stagingIPs = make(map[string]any)
+		plugin.stagingAddrMap = make(map[netip.Addr]string)
 		plugin.stagingNetworks = critbitgo.NewNet()
 
 		// Load rules into staging structures
 		var err error
 		plugin.stagingPrefixes, err = plugin.loadRules(lines, plugin.stagingPrefixes, plugin.stagingIPs, plugin.stagingNetworks)
+		plugin.stagingAddrMap = toNetIPAddrMap(plugin.stagingIPs)
 		return err
 	})
 }
@@ -92,7 +98,7 @@ func (plugin *PluginBlockIP) PrepareReload() error {
 // ApplyReload atomically replaces the active rules with the staging ones
 func (plugin *PluginBlockIP) ApplyReload() error {
 	return StandardApplyReloadPattern(plugin.Name(), func() error {
-		if plugin.stagingPrefixes == nil || plugin.stagingIPs == nil || plugin.stagingNetworks == nil {
+		if plugin.stagingPrefixes == nil || plugin.stagingIPs == nil || plugin.stagingNetworks == nil || plugin.stagingAddrMap == nil {
 			return errors.New("no staged configuration to apply")
 		}
 
@@ -100,9 +106,11 @@ func (plugin *PluginBlockIP) ApplyReload() error {
 		plugin.rwLock.Lock()
 		plugin.blockedPrefixes = plugin.stagingPrefixes
 		plugin.blockedIPs = plugin.stagingIPs
+		plugin.blockedAddrMap = plugin.stagingAddrMap
 		plugin.blockedNetworks = plugin.stagingNetworks
 		plugin.stagingPrefixes = nil
 		plugin.stagingIPs = nil
+		plugin.stagingAddrMap = nil
 		plugin.stagingNetworks = nil
 		plugin.rwLock.Unlock()
 
@@ -114,6 +122,7 @@ func (plugin *PluginBlockIP) ApplyReload() error {
 func (plugin *PluginBlockIP) CancelReload() {
 	plugin.stagingPrefixes = nil
 	plugin.stagingIPs = nil
+	plugin.stagingAddrMap = nil
 	plugin.stagingNetworks = nil
 }
 
@@ -169,11 +178,11 @@ func (plugin *PluginBlockIP) Eval(pluginsState *PluginsState, msg *dns.Msg) erro
 		} else if rrtype == dns.TypeAAAA {
 			addr = answer.(*dns.AAAA).AAAA.Addr // IPv4-mapped IPv6 addresses are converted to IPv4
 		}
-		ipStr = addr.String()
-		if _, found := plugin.blockedIPs[ipStr]; found {
-			reject, reason = true, ipStr
+		if reason, found := plugin.blockedAddrMap[addr.Unmap()]; found {
+			reject, ipStr = true, reason
 			break
 		}
+		ipStr = addr.String()
 		match, _, found := plugin.blockedPrefixes.Root().LongestPrefix([]byte(ipStr))
 		if found {
 			if len(match) == len(ipStr) || (ipStr[len(match)] == '.' || ipStr[len(match)] == ':') {

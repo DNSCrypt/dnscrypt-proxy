@@ -1801,6 +1801,7 @@ func (x *XTransport) Fetch(
 	if body != nil {
 		bodyLen = len(*body)
 	}
+	requestURL := url.String()
 
 	// Use the caller's context when it already has a deadline; only create a
 	// child WithTimeout context when no deadline is set. This avoids one context
@@ -1817,7 +1818,7 @@ func (x *XTransport) Fetch(
 		if body != nil {
 			reqBody = bytes.NewReader(*body)
 		}
-		req, err := http.NewRequestWithContext(fetchCtx, method, url.String(), reqBody)
+		req, err := http.NewRequestWithContext(fetchCtx, method, requestURL, reqBody)
 		if err != nil {
 			return nil, err
 		}

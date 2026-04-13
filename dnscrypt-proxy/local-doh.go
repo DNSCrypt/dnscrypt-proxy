@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"codeberg.org/miekg/dns"
@@ -15,6 +16,8 @@ import (
 )
 
 const dohMediaType = "application/dns-message"
+
+var xPadHeaderCache sync.Map // map[int]string
 
 type localDoHHandler struct {
 	proxy *Proxy
@@ -56,7 +59,13 @@ func (h localDoHHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	xClientAddr := net.Addr(clientAddr)
 
-	hadPadding, err := hasEDNS0Padding(packet)
+	msg := dns.Msg{Data: packet}
+	if err := msg.Unpack(); err != nil {
+		http.Error(w, "invalid dns message", http.StatusBadRequest)
+		return
+	}
+
+	hadPadding, err := hasEDNS0PaddingInMsg(&msg)
 	if err != nil {
 		http.Error(w, "invalid dns message", http.StatusBadRequest)
 		return
@@ -73,12 +82,6 @@ func (h localDoHHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	)
 	if len(response) == 0 {
 		http.Error(w, "upstream failure", http.StatusInternalServerError)
-		return
-	}
-
-	msg := dns.Msg{Data: packet}
-	if err := msg.Unpack(); err != nil {
-		http.Error(w, "invalid dns message", http.StatusBadRequest)
 		return
 	}
 
@@ -145,8 +148,32 @@ func applyDoHPadding(w http.ResponseWriter, q *dns.Msg, response []byte, clientH
 	}
 
 	// If the client didn't send padding, mimic previous behavior: use a header.
-	w.Header().Set("X-Pad", strings.Repeat("X", padLen))
+	w.Header().Set("X-Pad", xPadHeader(padLen))
 	return response, nil
+}
+
+func hasEDNS0PaddingInMsg(msg *dns.Msg) (bool, error) {
+	if msg == nil {
+		return false, errors.New("nil DNS message")
+	}
+	for _, rr := range msg.Pseudo {
+		if _, ok := rr.(*dns.PADDING); ok {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func xPadHeader(padLen int) string {
+	if padLen <= 0 {
+		return ""
+	}
+	if v, ok := xPadHeaderCache.Load(padLen); ok {
+		return v.(string)
+	}
+	val := strings.Repeat("X", padLen)
+	xPadHeaderCache.Store(padLen, val)
+	return val
 }
 
 func (proxy *Proxy) localDoHListener(acceptPc *net.TCPListener) {

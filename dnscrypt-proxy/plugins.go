@@ -296,6 +296,18 @@ func (pluginsState *PluginsState) ApplyQueryPlugins(
 	packet []byte,
 	getServerInfo func() (*ServerInfo, bool),
 ) ([]byte, error) {
+	if len(*pluginsGlobals.queryPlugins) == 0 &&
+		len(*pluginsGlobals.responsePlugins) == 0 &&
+		len(*pluginsGlobals.loggingPlugins) == 0 {
+		if getServerInfo == nil {
+			return packet, nil
+		}
+		_, needsEDNS0Padding := getServerInfo()
+		if !needsEDNS0Padding {
+			return packet, nil
+		}
+	}
+
 	msg := dns.Msg{Data: packet}
 	if err := msg.Unpack(); err != nil {
 		return packet, err
@@ -356,6 +368,20 @@ func (pluginsState *PluginsState) ApplyResponsePlugins(
 	pluginsGlobals *PluginsGlobals,
 	packet []byte,
 ) ([]byte, error) {
+	if len(*pluginsGlobals.responsePlugins) == 0 {
+		switch Rcode(packet) {
+		case dns.RcodeSuccess:
+			pluginsState.returnCode = PluginsReturnCodePass
+		case dns.RcodeNameError:
+			pluginsState.returnCode = PluginsReturnCodeNXDomain
+		case dns.RcodeServerFailure:
+			pluginsState.returnCode = PluginsReturnCodeServFail
+		default:
+			pluginsState.returnCode = PluginsReturnCodeResponseError
+		}
+		return packet, nil
+	}
+
 	msg := dns.Msg{Data: packet}
 	if err := msg.Unpack(); err != nil {
 		if len(packet) >= MinDNSPacketSize && HasTCFlag(packet) {

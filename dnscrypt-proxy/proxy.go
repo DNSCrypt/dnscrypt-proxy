@@ -636,29 +636,27 @@ func (proxy *Proxy) udpListener(clientPc *net.UDPConn) {
 			return
 		}
 
-		// bytes.Clone owns the copy; return the shared buffer immediately. [C03]
-		packet := bytes.Clone(buf[:length])
-		udpReadPool.Put(buf) //nolint:staticcheck
-
 		if !proxy.clientsCountInc() {
 			dlog.Warnf("Too many incoming connections (max=%d)", proxy.maxClients)
 			dlog.Debugf("Number of goroutines: %d", runtime.NumGoroutine())
 			proxy.processIncomingQuery(
 				"udp", proxy.xTransport.mainProto,
-				packet, &clientAddr, clientPc,
+				buf[:length], &clientAddr, clientPc,
 				time.Now(), true,
 			)
+			udpReadPool.Put(buf) //nolint:staticcheck
 			continue
 		}
 
-		go func(pkt []byte, addr net.Addr) {
+		go func(pkt []byte, addr net.Addr, backing []byte) {
 			defer proxy.clientsCountDec()
+			defer udpReadPool.Put(backing) //nolint:staticcheck
 			proxy.processIncomingQuery(
 				"udp", proxy.xTransport.mainProto,
 				pkt, &addr, clientPc,
 				time.Now(), false,
 			)
-		}(packet, clientAddr)
+		}(buf[:length], clientAddr, buf)
 	}
 }
 
@@ -1309,10 +1307,6 @@ func (proxy *Proxy) processIncomingQuery(
 	start time.Time,
 	onlyCached bool,
 ) []byte {
-	if clientAddr != nil {
-		dlog.Debugf("Processing incoming query from %s", (*clientAddr).String())
-	}
-
 	var response []byte
 	if !validateQuery(query) {
 		return response
@@ -1354,7 +1348,6 @@ func (proxy *Proxy) processIncomingQuery(
 	)
 
 	if err != nil {
-		dlog.Debugf("Plugins failed: %v", err)
 		return dropQuery(&pluginsState, &proxy.pluginsGlobals, PluginsReturnCodeDrop) // [C16]
 	}
 
