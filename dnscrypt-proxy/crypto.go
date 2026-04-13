@@ -140,8 +140,11 @@ func isZeroKey(key []byte) bool {
 	if len(key) == 0 {
 		return true
 	}
-	zeros := make([]byte, len(key))
-	return subtle.ConstantTimeCompare(key, zeros) == 1
+	var acc byte
+	for i := 0; i < len(key); i++ {
+		acc |= key[i]
+	}
+	return subtle.ConstantTimeByteEq(acc, 0) == 1
 }
 
 // ZeroizeKey securely zeros a byte slice.
@@ -463,18 +466,22 @@ func (proxy *Proxy) encryptXChaCha20(
 		return dst, fmt.Errorf("%w: XChaCha20-Poly1305: %w", ErrCipherInitFailed, err)
 	}
 
-	// Seal produces: ciphertext || tag (standard AEAD layout).
-	// We append to a temporary slice and then rearrange into dst.
-	ctWithTag := aead.Seal(nil, nonce, plaintext, nil)
-	if len(ctWithTag) < TagSize {
+	// Build final output in a single allocation:
+	// [existing dst][tag][ciphertext], while Seal writes [ciphertext][tag].
+	start := len(dst)
+	out := make([]byte, start+TagSize+len(plaintext))
+	copy(out, dst)
+
+	sealDst := out[start+TagSize : start+TagSize]
+	sealed := aead.Seal(sealDst, nonce, plaintext, nil) // ciphertext || tag
+	if len(sealed) < TagSize {
 		return dst, fmt.Errorf("%w: ciphertext too short after seal", ErrMessageTooShort)
 	}
 
-	// DNSCrypt requires: tag || ciphertext.
-	tagOffset := len(ctWithTag) - TagSize
-	dst = append(dst, ctWithTag[tagOffset:]...) // tag
-	dst = append(dst, ctWithTag[:tagOffset]...) // ciphertext
-	return dst, nil
+	ciphertextLen := len(sealed) - TagSize
+	copy(out[start:start+TagSize], sealed[ciphertextLen:]) // tag
+	copy(out[start+TagSize:], sealed[:ciphertextLen])      // ciphertext
+	return out, nil
 }
 
 // encryptXSalsa20 appends a Tag||Ciphertext block to dst using
@@ -591,17 +598,10 @@ func (proxy *Proxy) decryptXChaCha20(
 
 	// DNSCrypt layout: tag(16) || ciphertext
 	// AEAD.Open expects:      ciphertext || tag(16)
-	//
-	// Strategy: copy the 16-byte tag to a stack buffer, build the standard
-	// format as ciphertext||tag in one allocation, then Open.
-	var tag [TagSize]byte
-	copy(tag[:], tagAndCt[:TagSize])
-	ct := tagAndCt[TagSize:]
-
-	// stdFormat = ciphertext || tag — single allocation.
-	stdFormat := make([]byte, 0, len(ct)+TagSize)
-	stdFormat = append(stdFormat, ct...)
-	stdFormat = append(stdFormat, tag[:]...)
+	// Rearrange in one allocation with direct copies.
+	stdFormat := make([]byte, len(tagAndCt))
+	copy(stdFormat, tagAndCt[TagSize:]) // ciphertext
+	copy(stdFormat[len(tagAndCt)-TagSize:], tagAndCt[:TagSize])
 
 	packet, err := aead.Open(nil, serverNonce, stdFormat, nil)
 	if err != nil {
