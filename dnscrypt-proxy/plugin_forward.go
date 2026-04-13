@@ -533,7 +533,8 @@ func (plugin *PluginForward) exchangeWithServer(pluginsState *PluginsState, msg 
 	ctx, cancel := context.WithTimeout(context.Background(), pluginsState.timeout)
 	defer cancel()
 
-	// Create a shallow copy without Extra section for forwarding.
+	// Create a struct value copy (slice headers are copied, backing arrays shared)
+	// and clear Extra/Data for forwarding.
 	forwardMsg := *msg
 	forwardMsg.Extra = nil
 	forwardMsg.Data = nil

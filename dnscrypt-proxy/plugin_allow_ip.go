@@ -156,7 +156,7 @@ func (plugin *PluginAllowedIP) Eval(pluginsState *PluginsState, msg *dns.Msg) er
 		return nil
 	}
 
-	allowed, reason, ipStr := false, "", ""
+	allowed, matchedReason, ipStr := false, "", ""
 
 	// Use read lock for thread-safe access to configuration
 	plugin.rwLock.RLock()
@@ -174,15 +174,15 @@ func (plugin *PluginAllowedIP) Eval(pluginsState *PluginsState, msg *dns.Msg) er
 		} else if rrtype == dns.TypeAAAA {
 			addr = answer.(*dns.AAAA).AAAA.Addr // IPv4-mapped IPv6 addresses are converted to IPv4
 		}
-		if reason, found := plugin.allowedAddrMap[addr.Unmap()]; found {
-			allowed, ipStr = true, reason
+		if matchedIP, found := plugin.allowedAddrMap[addr.Unmap()]; found {
+			allowed, ipStr, matchedReason = true, matchedIP, matchedIP
 			break
 		}
 		ipStr = addr.String()
 		match, _, found := plugin.allowedPrefixes.Root().LongestPrefix([]byte(ipStr))
 		if found {
 			if len(match) == len(ipStr) || (ipStr[len(match)] == '.' || ipStr[len(match)] == ':') {
-				allowed, reason = true, string(match)+"*"
+				allowed, matchedReason = true, string(match)+"*"
 				break
 			}
 		}
@@ -194,7 +194,7 @@ func (plugin *PluginAllowedIP) Eval(pluginsState *PluginsState, msg *dns.Msg) er
 				netIP = netIP[12:16] // Use only the last 4 bytes for IPv4
 			}
 			if route, _, _ := plugin.allowedNetworks.MatchIP(netIP); route != nil {
-				allowed, reason = true, route.String()
+				allowed, matchedReason = true, route.String()
 				break
 			}
 		}
@@ -210,7 +210,7 @@ func (plugin *PluginAllowedIP) Eval(pluginsState *PluginsState, msg *dns.Msg) er
 				return nil
 			}
 
-			if err := WritePluginLog(plugin.logger, plugin.format, clientIPStr, qName, reason, ipStr); err != nil {
+			if err := WritePluginLog(plugin.logger, plugin.format, clientIPStr, qName, matchedReason, ipStr); err != nil {
 				return err
 			}
 		}
