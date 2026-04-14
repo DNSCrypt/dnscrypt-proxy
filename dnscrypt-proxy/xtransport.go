@@ -45,7 +45,7 @@ var hasAESGCMHardwareSupport = (cpu.X86.HasAES && cpu.X86.HasPCLMULQDQ) ||
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const (
-	noTTL = ^uint32(0)
+	ttlSentinel = ^uint32(0)
 
 	DefaultBootstrapResolver    = "9.9.9.9:53"
 	DefaultKeepAlive            = 5 * time.Second
@@ -73,7 +73,7 @@ const (
 	h2MaxReceiveBufferPerConn   = 4*1024*1024 - 1  // ~4 MiB
 	h2MaxReceiveBufferPerStream = 4*1024*1024 - 1  // ~4 MiB
 	h2SendPingTimeout           = 15 * time.Second
-	h2PingTimeout               = 15 * time.Second
+	h2PingTimeout               = h2SendPingTimeout // same budget for both send and round-trip ping
 	h2WriteByteTimeout          = 10 * time.Second
 	h2TLSSessionCacheSize       = 512
 	h2ReadWriteBufferSize       = 64 * 1024 // 64 KiB – larger I/O buffers reduce syscalls
@@ -145,6 +145,8 @@ var (
 	errSystemResolverTimeout = errors.New("system resolver timed out")
 )
 
+var systemResolver = &net.Resolver{PreferGo: true}
+
 // ── Global TLS session cache – saves one full TLS 1.3 RTT on reconnect ───────
 var tlsSessionCache = tls.NewLRUClientSessionCache(h2TLSSessionCacheSize)
 
@@ -207,7 +209,7 @@ func formatHostPort(host string, port int) string {
 	if v, ok := hostPortCache.Load(k); ok {
 		return v.(string)
 	}
-	s := host + ":" + strconv.Itoa(port)
+	s := net.JoinHostPort(host, strconv.Itoa(port))
 	v, loaded := hostPortCache.LoadOrStore(k, s)
 	if !loaded {
 		trimStringCache(&hostPortCache, &hostPortCacheSize, hostPortCacheMaxSize)
@@ -257,7 +259,7 @@ func trimStringCache(cache *sync.Map, sizeCounter *atomic.Int64, maxSize int64) 
 func appendFrom(buf []byte, r io.Reader) ([]byte, error) {
 	for {
 		// Exponential growth: start at 512 B, double up to 64 KiB per step.
-		if cap(buf)-len(buf) == 0 {
+		if len(buf) == cap(buf) {
 			growth := 512
 			if c := cap(buf); c >= 8*1024 {
 				growth = min(c, 64*1024)
@@ -267,7 +269,7 @@ func appendFrom(buf []byte, r io.Reader) ([]byte, error) {
 		n, err := r.Read(buf[len(buf):cap(buf)])
 		buf = buf[:len(buf)+n]
 		if err != nil {
-			if err == io.EOF {
+			if errors.Is(err, io.EOF) {
 				return buf, nil
 			}
 			return buf, err
@@ -275,15 +277,11 @@ func appendFrom(buf []byte, r io.Reader) ([]byte, error) {
 	}
 }
 
-// ptr returns a pointer to a new copy of v.
-// Replaces the new(expr) pattern — e.g., ptr(time.Now().Add(d)) yields *time.Time.
-func ptr[T any](v T) *T { return &v }
-
 // ── Cache types ───────────────────────────────────────────────────────────────
 type CachedIPItem struct {
 	addrs         []netip.Addr
-	expiration    *time.Time
-	updatingUntil *time.Time
+	expiration    time.Time // zero == no expiry
+	updatingUntil time.Time // zero == not updating
 }
 
 type CachedIPs struct {
@@ -392,7 +390,7 @@ type prebuiltHeaders struct {
 
 func buildPrebuiltHeaders() prebuiltHeaders {
 	base := func(extra int) http.Header {
-		h := make(http.Header, 4+extra)
+		h := make(http.Header, 2+extra)
 		h.Set("User-Agent", "dnscrypt-proxy")
 		h.Set("Cache-Control", "max-stale")
 		return h
@@ -571,11 +569,11 @@ func (x *XTransport) saveCachedAddrs(host string, addrs []netip.Addr, ttl time.D
 	if ttl >= 0 {
 		ttl = max(ttl, MinResolverIPTTL)
 		ttl += time.Duration(rand.Int64N(int64(ResolverIPTTLMaxJitter)))
-		item.expiration = ptr(time.Now().Add(ttl))
+		item.expiration = time.Now().Add(ttl)
 	}
 
 	x.cachedIPs.Lock()
-	item.updatingUntil = nil
+	item.updatingUntil = time.Time{}
 	x.cachedIPs.cache[host] = item
 	x.cachedIPs.Unlock()
 
@@ -618,7 +616,7 @@ func (x *XTransport) saveCachedIP(host string, ip net.IP, ttl time.Duration) {
 }
 
 func (x *XTransport) markUpdatingCachedIP(host string) {
-	updatingUntil := ptr(time.Now().Add(x.timeout))
+	updatingUntil := time.Now().Add(x.timeout)
 	x.cachedIPs.Lock()
 	if item, ok := x.cachedIPs.cache[host]; ok {
 		item.updatingUntil = updatingUntil
@@ -640,10 +638,10 @@ func (x *XTransport) loadCachedAddrs(host string) (addrs []netip.Addr, expired, 
 		return nil, false, false
 	}
 	now := time.Now()
-	if item.updatingUntil != nil && now.Before(*item.updatingUntil) {
+	if !item.updatingUntil.IsZero() && now.Before(item.updatingUntil) {
 		updating = true
 	}
-	if item.expiration != nil && now.After(*item.expiration) {
+	if !item.expiration.IsZero() && now.After(item.expiration) {
 		expired = true
 	}
 	if len(item.addrs) == 0 {
@@ -665,10 +663,10 @@ func (x *XTransport) PurgeExpiredCache() (ipsPurged, altSvcPurged, muPurged int)
 		if item == nil {
 			return true
 		}
-		if item.updatingUntil != nil && now.Before(*item.updatingUntil) {
+		if !item.updatingUntil.IsZero() && now.Before(item.updatingUntil) {
 			return false
 		}
-		return item.expiration != nil && item.expiration.Before(grace)
+		return !item.expiration.IsZero() && item.expiration.Before(grace)
 	})
 	ipsPurged = before - len(x.cachedIPs.cache)
 
@@ -758,17 +756,10 @@ func (x *XTransport) ResetCache() {
 
 	dialTargetCache.Clear()
 	hostPortCache.Clear()
+	dialTargetCacheSize.Store(0)
+	hostPortCacheSize.Store(0)
 
-	x.resolveMu.Range(func(key, _ any) bool {
-		x.resolveMu.Delete(key)
-		return true
-	})
-
-	// Clear cached dial target strings
-	dialTargetCache.Range(func(key, _ any) bool {
-		dialTargetCache.Delete(key)
-		return true
-	})
+	x.resolveMu.Clear()
 
 	dlog.Debug("ResetCache: all IP, Alt‑Svc, mutex, and dial-target cache entries cleared")
 }
@@ -842,12 +833,13 @@ func setUDPOptions(conn *net.UDPConn) {
 		return
 	}
 	_ = raw.Control(func(fd uintptr) {
+		ifd := int(fd)
 		// SO_BUSY_POLL – kernel busy-polls for 50 µs before sleeping, avoiding the
 		// interrupt + context-switch overhead on the receive path. Requires
 		// CAP_NET_ADMIN; silently ignored if kernel or driver does not support it.
-		_ = unix.SetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_BUSY_POLL, udpBusyPollMicros)
-		_ = unix.SetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_SNDBUF, tcpSocketBufSize)
-		_ = unix.SetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_RCVBUF, tcpSocketBufSize)
+		_ = unix.SetsockoptInt(ifd, unix.SOL_SOCKET, unix.SO_BUSY_POLL, udpBusyPollMicros)
+		_ = unix.SetsockoptInt(ifd, unix.SOL_SOCKET, unix.SO_SNDBUF, tcpSocketBufSize)
+		_ = unix.SetsockoptInt(ifd, unix.SOL_SOCKET, unix.SO_RCVBUF, tcpSocketBufSize)
 	})
 }
 
@@ -892,7 +884,6 @@ func (x *XTransport) rebuildTransport() {
 	}
 
 	transport := &http.Transport{
-		DisableKeepAlives:      false,
 		DisableCompression:     true,
 		MaxIdleConns:           MaxIdleConns,
 		MaxIdleConnsPerHost:    h2MaxIdleConnsPerHost,
@@ -920,10 +911,7 @@ func (x *XTransport) rebuildTransport() {
 	x.prewarmed = hostPrewarmer{}
 
 	// Clear H3 health state so the rebuilt transport starts with a clean slate.
-	x.h3Health.Range(func(key, _ any) bool {
-		x.h3Health.Delete(key)
-		return true
-	})
+	x.h3Health.Clear()
 
 	if x.http3 {
 		if x.h3Transport != nil {
@@ -1039,7 +1027,10 @@ func (x *XTransport) buildDialContext() func(context.Context, string, string) (n
 		host, port := ExtractHostAndPort(addrStr, stamps.DefaultPort)
 		portU16 := uint16(port & 0xffff)
 
-		cachedAddrs, _, _ := x.loadCachedAddrs(host)
+		cachedAddrs, expired, updating := x.loadCachedAddrs(host)
+		if expired && !updating && len(cachedAddrs) > 0 {
+			dlog.Debugf("[%s] dialing with expired cached IP (refresh pending)", host)
+		}
 
 		dialNet := network
 		switch {
@@ -1087,21 +1078,15 @@ func (x *XTransport) buildDialContext() func(context.Context, string, string) (n
 		}
 		dlog.Debugf("[%s] no cached IP; falling back to hostname dial", host)
 
-		fallbackTarget := ""
-		parsedHost := parseIPAddr(host)
-		if parsedHost.IsValid() {
+		var fallbackTarget string
+		if parsedHost := parseIPAddr(host); parsedHost.IsValid() {
 			fallbackTarget = formatDialTarget(parsedHost, portU16)
 		} else {
 			// formatHostPort caches the "host:port" string, avoiding a repeated
 			// strconv.Itoa call on every dial attempt for uncached IP hosts.
 			fallbackTarget = formatHostPort(host, port)
 		}
-
-		conn, err := dialOne(ctx, dialNet, fallbackTarget)
-		if err == nil {
-			return conn, nil
-		}
-		return nil, err
+		return dialOne(ctx, dialNet, fallbackTarget)
 	}
 }
 
@@ -1144,7 +1129,10 @@ func (x *XTransport) buildH3DialFunc() func(context.Context, string, *tls.Config
 			return udpTarget{host + ":" + strconv.Itoa(port), nw}
 		}
 
-		cachedAddrs, _, _ := x.loadCachedAddrs(host)
+		cachedAddrs, expired, updating := x.loadCachedAddrs(host)
+		if expired && !updating && len(cachedAddrs) > 0 {
+			dlog.Debugf("[%s] H3 dialing with expired cached IP (refresh pending)", host)
+		}
 		targets := make([]udpTarget, 0, max(len(cachedAddrs), 1))
 		for _, addr := range cachedAddrs {
 			targets = append(targets, udpEndpoint(addr))
@@ -1308,14 +1296,16 @@ func (x *XTransport) buildTLSConfig() *tls.Config {
 
 // ── DNS resolution ────────────────────────────────────────────────────────────
 func (x *XTransport) resolveUsingSystem(host string, returnIPv4, returnIPv6 bool) ([]net.IP, time.Duration, error) {
-	r := &net.Resolver{PreferGo: true}
 	ctx, cancel := context.WithTimeoutCause(context.Background(), SystemResolverTimeout, errSystemResolverTimeout)
 	defer cancel()
-	addrs, err := r.LookupIPAddr(ctx, host)
+	addrs, err := systemResolver.LookupIPAddr(ctx, host)
 	if err != nil && len(addrs) == 0 {
 		return nil, SystemResolverIPTTL, err
 	}
 	if returnIPv4 && returnIPv6 {
+		if len(addrs) == 0 {
+			return nil, SystemResolverIPTTL, err
+		}
 		ips := make([]net.IP, 0, len(addrs))
 		for _, a := range addrs {
 			ips = append(ips, a.IP)
@@ -1347,7 +1337,7 @@ func (x *XTransport) resolveRRType(
 
 	msg := dns.NewMsg(fqdn(host), rrType) // fqdn is defined in common.go
 	if msg == nil {
-		return nil, noTTL, fmt.Errorf("dns.NewMsg returned nil for [%s] type %d", host, rrType)
+		return nil, ttlSentinel, fmt.Errorf("dns.NewMsg returned nil for [%s] type %d", host, rrType)
 	}
 	msg.RecursionDesired = true
 	msg.UDPSize = uint16(MaxDNSPacketSize) // defined in common.go
@@ -1355,10 +1345,10 @@ func (x *XTransport) resolveRRType(
 
 	in, _, err := x.dnsClient.Exchange(ctx, msg, proto, resolver)
 	if err != nil {
-		return nil, noTTL, err
+		return nil, ttlSentinel, err
 	}
 
-	minTTL = noTTL
+	minTTL = ttlSentinel
 	for _, answer := range in.Answer {
 		if dns.RRToType(answer) != rrType {
 			continue
@@ -1410,7 +1400,7 @@ func (x *XTransport) resolveUsingResolver(
 		if len(rips) == 0 {
 			return nil, 0, errNoIPRecords
 		}
-		if rttl == noTTL {
+		if rttl == ttlSentinel {
 			rttl = 0
 		}
 		return rips, time.Duration(rttl) * time.Second, nil
@@ -1424,7 +1414,6 @@ func (x *XTransport) resolveUsingResolver(
 	var results [2]rrResult
 	var wg sync.WaitGroup
 	for i, rrType := range qt[:n] {
-		i, rrType := i, rrType
 		wg.Go(func() {
 			results[i].ips, results[i].minTTL, results[i].err =
 				x.resolveRRType(proto, host, resolver, rrType)
@@ -1432,7 +1421,7 @@ func (x *XTransport) resolveUsingResolver(
 	}
 	wg.Wait()
 
-	overallMinTTL := noTTL
+	overallMinTTL := ttlSentinel
 	var errs []error
 	for _, r := range results[:n] {
 		if r.err != nil {
@@ -1445,7 +1434,7 @@ func (x *XTransport) resolveUsingResolver(
 		}
 	}
 	if len(ips) > 0 {
-		if overallMinTTL == noTTL {
+		if overallMinTTL == ttlSentinel {
 			overallMinTTL = 0
 		}
 		return ips, time.Duration(overallMinTTL) * time.Second, nil
@@ -1566,10 +1555,11 @@ func (x *XTransport) resolveUsingServers(
 }
 
 func (x *XTransport) resolve(host string, returnIPv4, returnIPv6 bool) ([]net.IP, time.Duration, error) {
-	protos := [2]string{"udp", "tcp"}
+	primary, fallback := "udp", "tcp"
 	if x.mainProto == "tcp" {
-		protos = [2]string{"tcp", "udp"}
+		primary, fallback = "tcp", "udp"
 	}
+	protos := [2]string{primary, fallback}
 
 	var (
 		ips []net.IP
@@ -1659,8 +1649,7 @@ func (x *XTransport) resolveAndUpdateCache(host string) error {
 
 	ttl = max(ttl, MinResolverIPTTL)
 
-	selectedIPs := ips
-	if (resolveErr != nil || len(selectedIPs) == 0) && len(cachedAddrs) > 0 {
+	if (resolveErr != nil || len(ips) == 0) && len(cachedAddrs) > 0 {
 		dlog.Noticef("Using stale cached address for [%s] (grace period)", host)
 		// We already have []netip.Addr; call saveCachedAddrs directly to avoid
 		// an unnecessary netip.Addr → net.IP → netip.Addr round-trip.
@@ -1672,7 +1661,7 @@ func (x *XTransport) resolveAndUpdateCache(host string) error {
 		return resolveErr
 	}
 
-	if len(selectedIPs) == 0 {
+	if len(ips) == 0 {
 		switch {
 		case !x.useIPv4 && x.useIPv6:
 			dlog.Warnf("no IPv6 address found for [%s]", host)
@@ -1684,7 +1673,7 @@ func (x *XTransport) resolveAndUpdateCache(host string) error {
 		return nil
 	}
 
-	x.saveCachedIPs(host, selectedIPs, ttl)
+	x.saveCachedIPs(host, ips, ttl)
 	return nil
 }
 
@@ -1715,6 +1704,9 @@ func (x *XTransport) Fetch(
 	client := &x.httpClient
 
 	host, port := ExtractHostAndPort(url.Host, 443)
+	if x.proxyDialer == nil && strings.HasSuffix(host, ".onion") {
+		return nil, 0, nil, 0, errNoTorProxy
+	}
 
 	// Prewarm a full TLS+HTTP/2 (and optionally H3) connection once per host.
 	// Use the cached "host:port" string to avoid a string concatenation per request.
@@ -1785,10 +1777,6 @@ func (x *XTransport) Fetch(
 		}
 		url = &u2
 	}
-	if x.proxyDialer == nil && strings.HasSuffix(host, ".onion") {
-		return nil, 0, nil, 0, errNoTorProxy
-	}
-
 	// IP-literal hosts bypass the resolver entirely.
 	if !parseIPAddr(host).IsValid() {
 		if err := x.resolveAndUpdateCache(host); err != nil {
@@ -1849,8 +1837,9 @@ func (x *XTransport) Fetch(
 		// Record H3 failure for adaptive backoff. After h3FailureThreshold
 		// consecutive failures the host enters a backoff window.
 		x.recordH3Failure(url.Host)
+		negativeUntil := time.Now().Add(altSvcNegativeTTL)
 		x.altSupport.Lock()
-		x.altSupport.cache[url.Host] = altSvcEntry{port: 0, validTo: time.Now().Add(altSvcNegativeTTL)}
+		x.altSupport.cache[url.Host] = altSvcEntry{port: 0, validTo: negativeUntil}
 		x.altSupport.Unlock()
 
 		// Build a fresh *http.Request for the H2 retry: reusing the original req
