@@ -52,6 +52,20 @@ var encryptedResponsePool = &sync.Pool{
 	},
 }
 
+const relayHeaderLen = 8 + 2 + net.IPv6len + 2
+
+var relayQueryPool = &sync.Pool{
+	New: func() any {
+		return make([]byte, 0, MaxDNSPacketSize+relayHeaderLen)
+	},
+}
+
+func putRelayQueryBuffer(buf []byte) {
+	if cap(buf) == MaxDNSPacketSize+relayHeaderLen {
+		relayQueryPool.Put(buf[:0]) //nolint:staticcheck
+	}
+}
+
 // ── TCPConnPool ───────────────────────────────────────────────────────────────
 
 // tcpMaxIdlePerAddr is the maximum number of idle connections held per unique
@@ -108,21 +122,30 @@ func NewTCPConnPool() *TCPConnPool {
 func (p *TCPConnPool) Get(addr *net.TCPAddr, timeout time.Duration) (net.Conn, error) {
 	key := addr.String()
 	now := time.Now()
-	p.mu.Lock()
-	entries := p.idle[key]
-	for len(entries) > 0 {
-		e := entries[len(entries)-1]
-		entries = entries[:len(entries)-1]
-		if now.Sub(e.lastUsed) <= tcpIdleTimeout {
-			p.idle[key] = entries
+	if conn := func() net.Conn {
+		var stale []net.Conn
+		p.mu.Lock()
+		defer func() {
 			p.mu.Unlock()
-			return e.conn, nil
+			for _, conn := range stale {
+				conn.Close()
+			}
+		}()
+		entries := p.idle[key]
+		for len(entries) > 0 {
+			e := entries[len(entries)-1]
+			entries = entries[:len(entries)-1]
+			if now.Sub(e.lastUsed) <= tcpIdleTimeout {
+				p.idle[key] = entries
+				return e.conn
+			}
+			stale = append(stale, e.conn)
 		}
-		// Entry is stale; close it and try the next candidate.
-		e.conn.Close()
+		p.idle[key] = entries
+		return nil
+	}(); conn != nil {
+		return conn, nil
 	}
-	p.idle[key] = entries
-	p.mu.Unlock()
 
 	dialCtx, dialCancel := context.WithTimeout(context.Background(), timeout)
 	defer dialCancel()
@@ -142,15 +165,20 @@ func (p *TCPConnPool) Get(addr *net.TCPAddr, timeout time.Duration) (net.Conn, e
 // the next borrower starts with a clean state (done in exchangeWithTCPServer).
 func (p *TCPConnPool) Put(addr *net.TCPAddr, conn net.Conn) {
 	key := addr.String()
+	shouldClose := false
 	p.mu.Lock()
+	defer func() {
+		p.mu.Unlock()
+		if shouldClose {
+			conn.Close() // [P07] cap enforced — discard rather than pool
+		}
+	}()
 	entries := p.idle[key]
 	if len(entries) >= tcpMaxIdlePerAddr {
-		p.mu.Unlock()
-		conn.Close() // [P07] cap enforced — discard rather than pool
+		shouldClose = true
 		return
 	}
 	p.idle[key] = append(entries, tcpIdleEntry{conn: conn, lastUsed: time.Now()})
-	p.mu.Unlock()
 }
 
 // Discard closes and discards a connection that experienced an error.
@@ -633,7 +661,10 @@ func (proxy *Proxy) udpListener(clientPc *net.UDPConn) {
 		length, clientAddr, err := clientPc.ReadFrom(buf)
 		if err != nil {
 			udpReadPool.Put(buf) //nolint:staticcheck // [C09] return buf on error
-			return
+			if errors.Is(err, net.ErrClosed) {
+				return
+			}
+			continue
 		}
 
 		if !proxy.clientsCountInc() {
@@ -666,6 +697,7 @@ func (proxy *Proxy) udpListener(clientPc *net.UDPConn) {
 // Exits cleanly when the listener is closed. [C08]
 func (proxy *Proxy) tcpListener(acceptPc *net.TCPListener) {
 	defer acceptPc.Close()
+	var tempDelay time.Duration
 
 	for {
 		clientPc, err := acceptPc.Accept()
@@ -673,8 +705,23 @@ func (proxy *Proxy) tcpListener(acceptPc *net.TCPListener) {
 			if errors.Is(err, net.ErrClosed) { // [C08] stop loop on permanent close
 				return
 			}
+			var netErr net.Error
+			if errors.As(err, &netErr) && netErr.Temporary() {
+				if tempDelay == 0 {
+					tempDelay = 5 * time.Millisecond
+				} else {
+					tempDelay *= 2
+					if tempDelay > time.Second {
+						tempDelay = time.Second
+					}
+				}
+				time.Sleep(tempDelay)
+				continue
+			}
+			tempDelay = 0
 			continue
 		}
+		tempDelay = 0
 
 		if !proxy.clientsCountInc() {
 			dlog.Warnf("Too many incoming connections (max=%d)", proxy.maxClients)
@@ -982,7 +1029,12 @@ func (proxy *Proxy) prepareForRelay(ip net.IP, port int, encryptedQuery []byte) 
 	}
 	ip16Len := len(ip16)
 	total := magicLen + padLen + ip16Len + 2 + len(encryptedQuery)
-	buf := make([]byte, total)
+	var buf []byte
+	if total <= MaxDNSPacketSize+relayHeaderLen {
+		buf = relayQueryPool.Get().([]byte)[:total]
+	} else {
+		buf = make([]byte, total)
+	}
 
 	for i := range magicLen {
 		buf[i] = 0xff
@@ -1040,6 +1092,7 @@ func (proxy *Proxy) exchangeWithUDPServer(
 			proxy.udpConnPool.Discard(pc)
 			return nil, relayErr
 		}
+		defer putRelayQueryBuffer(query)
 	}
 
 	// [P01] Borrow a pooled buffer; return it unconditionally after use.
@@ -1048,7 +1101,7 @@ func (proxy *Proxy) exchangeWithUDPServer(
 	var lastErr error
 
 	// [C04] Named constant udpRetries; counted loop for attempt number in log.
-	for i := 0; i < udpRetries; i++ {
+	for i := range udpRetries {
 		if _, err := pc.Write(query); err != nil {
 			proxy.udpConnPool.Discard(pc)
 			encryptedResponsePool.Put(encryptedResponse) //nolint:staticcheck // [P01]
@@ -1098,12 +1151,14 @@ func (proxy *Proxy) exchangeWithUDPServerViaProxy(
 		return nil, err
 	}
 
+	query := encryptedQuery
 	if serverInfo.Relay != nil && serverInfo.Relay.Dnscrypt != nil {
 		var relayErr error
-		encryptedQuery, relayErr = proxy.prepareForRelay(serverInfo.UDPAddr.IP, serverInfo.UDPAddr.Port, encryptedQuery)
+		query, relayErr = proxy.prepareForRelay(serverInfo.UDPAddr.IP, serverInfo.UDPAddr.Port, query)
 		if relayErr != nil {
 			return nil, relayErr
 		}
+		defer putRelayQueryBuffer(query)
 	}
 
 	// [P01] Borrow a pooled buffer.
@@ -1112,8 +1167,8 @@ func (proxy *Proxy) exchangeWithUDPServerViaProxy(
 	var lastErr error
 
 	// [C04] Named constant udpRetries; counted loop for attempt number in log.
-	for i := 0; i < udpRetries; i++ {
-		if _, err := pc.Write(encryptedQuery); err != nil {
+	for i := range udpRetries {
+		if _, err := pc.Write(query); err != nil {
 			encryptedResponsePool.Put(encryptedResponse) //nolint:staticcheck
 			return nil, err
 		}
@@ -1193,6 +1248,7 @@ func (proxy *Proxy) exchangeWithTCPServer(
 			proxy.tcpConnPool.Discard(pc)
 			return nil, relayErr
 		}
+		defer putRelayQueryBuffer(encryptedQuery)
 	}
 
 	encryptedQuery, err = PrefixWithSize(encryptedQuery)
@@ -1239,12 +1295,14 @@ func (proxy *Proxy) exchangeWithTCPServer(
 // [P07] Debug log removed — this runs on every incoming connection and
 // dlog.Debugf string formatting is not free even at non-debug log levels.
 func (proxy *Proxy) clientsCountInc() bool {
+	clientsCount := &proxy.clientsCount
+	maxClients := proxy.maxClients
 	for {
-		cur := proxy.clientsCount.Load()
-		if cur >= proxy.maxClients {
+		cur := clientsCount.Load()
+		if cur >= maxClients {
 			return false
 		}
-		if proxy.clientsCount.CompareAndSwap(cur, cur+1) {
+		if clientsCount.CompareAndSwap(cur, cur+1) {
 			return true
 		}
 	}
@@ -1256,12 +1314,13 @@ func (proxy *Proxy) clientsCountInc() bool {
 //
 // [P07] Debug log removed — same hot-path reasoning as clientsCountInc.
 func (proxy *Proxy) clientsCountDec() {
+	clientsCount := &proxy.clientsCount
 	for {
-		cur := proxy.clientsCount.Load()
+		cur := clientsCount.Load()
 		if cur == 0 {
 			return
 		}
-		if proxy.clientsCount.CompareAndSwap(cur, cur-1) {
+		if clientsCount.CompareAndSwap(cur, cur-1) {
 			return
 		}
 	}
@@ -1274,14 +1333,16 @@ func (proxy *Proxy) clientsCountDec() {
 // Reduction follows a quartic curve (utilisation⁴) so the timeout only shrinks
 // appreciably at very high load.  Minimum is 10 % of the configured baseline.
 func (proxy *Proxy) getDynamicTimeout() time.Duration {
-	if proxy.timeoutLoadReduction <= 0 || proxy.maxClients == 0 {
+	timeoutLoadReduction := proxy.timeoutLoadReduction
+	maxClients := proxy.maxClients
+	if timeoutLoadReduction <= 0 || maxClients == 0 {
 		return proxy.timeout
 	}
-	utilization := float64(proxy.clientsCount.Load()) / float64(proxy.maxClients)
+	utilization := float64(proxy.clientsCount.Load()) / float64(maxClients)
 	timeoutF := float64(proxy.timeout)
 	u2 := utilization * utilization
 	u4 := u2 * u2
-	factor := max(1.0-(u4*proxy.timeoutLoadReduction), 0.1)
+	factor := max(1.0-(u4*timeoutLoadReduction), 0.1)
 	return time.Duration(timeoutF * factor)
 }
 
