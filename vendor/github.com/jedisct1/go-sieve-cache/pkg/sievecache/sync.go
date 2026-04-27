@@ -1,6 +1,7 @@
 package sievecache
 
 import (
+	"reflect"
 	"sync"
 )
 
@@ -81,37 +82,35 @@ func (c *SyncSieveCache[K, V]) Get(key K) (V, bool) {
 
 // GetMut gets a mutable reference to the value in the cache mapped to by key via a callback function.
 // Returns true if the key exists and the callback was invoked, false otherwise.
+// The callback may be invoked more than once if the entry is modified concurrently;
+// non-idempotent side effects should be avoided or guarded with WithLock instead.
 func (c *SyncSieveCache[K, V]) GetMut(key K, f func(*V)) bool {
-	// First get a copy of the value to avoid holding the lock during callback
-	c.mutex.Lock()
-	var valueCopy V
-	var exists bool
-	ptr := c.cache.GetPointer(key)
-	if ptr != nil {
-		valueCopy = *ptr
-		exists = true
+	for {
+		c.mutex.Lock()
+		ptr := c.cache.GetPointer(key)
+		if ptr == nil {
+			c.mutex.Unlock()
+			return false
+		}
+		original := *ptr
+		valueCopy := original
+		c.mutex.Unlock()
+
+		f(&valueCopy)
+
+		c.mutex.Lock()
+		ptr = c.cache.GetPointer(key)
+		if ptr == nil {
+			c.mutex.Unlock()
+			return false
+		}
+		if reflect.DeepEqual(*ptr, original) {
+			*ptr = valueCopy
+			c.mutex.Unlock()
+			return true
+		}
+		c.mutex.Unlock()
 	}
-	c.mutex.Unlock()
-
-	if !exists {
-		return false
-	}
-
-	// Execute callback on the copy
-	f(&valueCopy)
-
-	// Update the value back in the cache
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-
-	// Check if the key still exists
-	ptr = c.cache.GetPointer(key)
-	if ptr != nil {
-		*ptr = valueCopy
-		return true
-	}
-
-	return false
 }
 
 // Insert maps key to value in the cache, possibly evicting old entries.
@@ -168,54 +167,60 @@ func (c *SyncSieveCache[K, V]) Items() []struct {
 
 // ForEachValue applies a function to all values in the cache.
 // The function receives and can modify a copy of each value, and changes will be saved back to the cache.
+// Modifications are dropped for keys that were updated concurrently by another goroutine.
 func (c *SyncSieveCache[K, V]) ForEachValue(f func(*V)) {
-	// First collect all items under the read lock
 	c.mutex.RLock()
 	items := c.cache.Items()
 	c.mutex.RUnlock()
 
-	// Process each value without holding the lock
-	// Pre-allocate map with the expected size to prevent resizing
-	updatedItems := make(map[K]V, len(items))
-	for _, item := range items {
-		valueCopy := item.Value
-		f(&valueCopy)
-		updatedItems[item.Key] = valueCopy
+	updates := make([]struct {
+		key      K
+		original V
+		updated  V
+	}, len(items))
+	for i, item := range items {
+		updates[i].key = item.Key
+		updates[i].original = item.Value
+		updates[i].updated = item.Value
+		f(&updates[i].updated)
 	}
 
-	// Update any changed values back to the cache
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
-	for k, v := range updatedItems {
-		if c.cache.ContainsKey(k) {
-			c.cache.Insert(k, v)
+	for _, u := range updates {
+		ptr := c.cache.GetPointer(u.key)
+		if ptr != nil && reflect.DeepEqual(*ptr, u.original) {
+			*ptr = u.updated
 		}
 	}
 }
 
 // ForEachEntry applies a function to all key-value pairs in the cache.
 // The function receives the key and can modify a copy of each value, and changes will be saved back to the cache.
+// Modifications are dropped for keys that were updated concurrently by another goroutine.
 func (c *SyncSieveCache[K, V]) ForEachEntry(f func(K, *V)) {
-	// First collect all items under the read lock
 	c.mutex.RLock()
 	items := c.cache.Items()
 	c.mutex.RUnlock()
 
-	// Process each entry without holding the lock
-	// Pre-allocate map with the expected size to prevent resizing
-	updatedItems := make(map[K]V, len(items))
-	for _, item := range items {
-		valueCopy := item.Value
-		f(item.Key, &valueCopy)
-		updatedItems[item.Key] = valueCopy
+	updates := make([]struct {
+		key      K
+		original V
+		updated  V
+	}, len(items))
+	for i, item := range items {
+		updates[i].key = item.Key
+		updates[i].original = item.Value
+		updates[i].updated = item.Value
+		f(item.Key, &updates[i].updated)
 	}
 
-	// Update any changed values back to the cache
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
-	for k, v := range updatedItems {
-		if c.cache.ContainsKey(k) {
-			c.cache.Insert(k, v)
+	for _, u := range updates {
+		ptr := c.cache.GetPointer(u.key)
+		if ptr != nil && reflect.DeepEqual(*ptr, u.original) {
+			*ptr = u.updated
 		}
 	}
 }
