@@ -82,6 +82,13 @@ func (w *watches) len() int                  { return len(w.wd) }
 func (w *watches) add(ww *watch)             { w.wd[ww.wd] = ww; w.path[ww.path] = ww.wd }
 func (w *watches) remove(watch *watch)       { delete(w.path, watch.path); delete(w.wd, watch.wd) }
 
+func isSameOrDescendantPath(path, root string) bool {
+	if path == root {
+		return true
+	}
+	return strings.HasPrefix(path, root+string(os.PathSeparator))
+}
+
 func (w *watches) removePath(path string) ([]uint32, error) {
 	path, recurse := recursivePath(path)
 	wd, ok := w.path[path]
@@ -103,7 +110,7 @@ func (w *watches) removePath(path string) ([]uint32, error) {
 	wds := make([]uint32, 0, 8)
 	wds = append(wds, wd)
 	for p, rwd := range w.path {
-		if strings.HasPrefix(p, path) {
+		if isSameOrDescendantPath(p, path) {
 			delete(w.path, p)
 			delete(w.wd, rwd)
 			wds = append(wds, rwd)
@@ -501,7 +508,7 @@ func (w *inotify) handleEvent(inEvent *unix.InotifyEvent, buf *[65536]byte, offs
 					if k == watch.wd || ww.path == ev.Name {
 						continue
 					}
-					if strings.HasPrefix(ww.path, ev.renamedFrom) {
+					if isSameOrDescendantPath(ww.path, ev.renamedFrom) {
 						ww.path = strings.Replace(ww.path, ev.renamedFrom, ev.Name, 1)
 						w.watches.wd[k] = ww
 					}

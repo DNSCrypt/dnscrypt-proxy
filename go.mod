@@ -1,6 +1,6 @@
 module github.com/dnscrypt/dnscrypt-proxy
 
-go 1.25
+go 1.25.0
 
 require (
 	codeberg.org/miekg/dns v0.6.73
@@ -8,7 +8,7 @@ require (
 	github.com/VividCortex/ewma v1.2.0
 	github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf
 	github.com/dchest/safefile v0.0.0-20151022103144-855e8d98f185
-	github.com/fsnotify/fsnotify v1.10.0
+	github.com/fsnotify/fsnotify v1.10.1
 	github.com/gorilla/websocket v1.5.3
 	github.com/hashicorp/go-immutable-radix v1.3.1
 	github.com/hectane/go-acl v0.0.0-20230122075934-ca0b05cb1adb
@@ -23,7 +23,6 @@ require (
 	github.com/k-sone/critbitgo v1.4.0
 	github.com/kardianos/service v1.2.4
 	github.com/lifenjoiner/dhcpdns v0.0.7
-	github.com/miekg/dns v1.1.72
 	github.com/powerman/check v1.9.1
 	github.com/quic-go/quic-go v0.59.0
 	golang.org/x/crypto v0.50.0
@@ -43,10 +42,7 @@ require (
 	github.com/quic-go/qpack v0.6.0 // indirect
 	github.com/smartystreets/goconvey v1.8.1 // indirect
 	go.uber.org/mock v0.6.0 // indirect
-	golang.org/x/mod v0.35.0 // indirect
-	golang.org/x/sync v0.20.0 // indirect
 	golang.org/x/text v0.36.0 // indirect
-	golang.org/x/tools v0.44.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260414002931-afd174a4e478 // indirect
 	google.golang.org/grpc v1.80.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
