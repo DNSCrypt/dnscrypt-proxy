@@ -831,6 +831,13 @@ func (rr *LLQ) Clone() RR {
 	}
 }
 
+func (rr *UPDATELEASE) Clone() RR {
+	return &UPDATELEASE{
+		rr.Lease,
+		rr.KeyLease,
+	}
+}
+
 func (rr *REPORTING) Clone() RR {
 	return &REPORTING{
 		rr.AgentDomain,

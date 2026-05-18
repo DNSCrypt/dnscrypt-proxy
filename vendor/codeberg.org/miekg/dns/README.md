@@ -78,6 +78,7 @@ A not-so-up-to-date-list-that-may-be-actually-current:
 - [DNSControl](https://dnscontrol.org/) - DNSControl is an opinionated platform for seamlessly managing your DNS configuration across any number of DNS hosts,
   both in the cloud or in your own infrastructure.
 - [Gonemaster](https://codeberg.org/pawal/gonemaster) - Gonemaster is a Go implementation of the DNS test framework Zonemaster engine and CLI.
+- [DNSieve](https://github.com/secu-tools/dnsieve) - a DNS filtering proxy that fans out queries to multiple upstream resolvers concurrently and enforces block-consensus.
 
 Send pull request if you want to be listed here.
 

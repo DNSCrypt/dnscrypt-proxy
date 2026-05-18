@@ -15,7 +15,7 @@ import (
 const (
 	CodeNone         uint16 = 0x0
 	CodeLLQ          uint16 = 0x1  // Long lived queries: http://tools.ietf.org/html/draft-sekar-dns-llq-01.
-	CodeUL           uint16 = 0x2  // Update lease draft: http://files.dns-sd.org/draft-sekar-dns-ul.txt.
+	CodeUPDATELEASE  uint16 = 0x2  // Update lease (see RFC 9664).
 	CodeNSID         uint16 = 0x3  // Nsid (see RFC 5001).
 	CodeESU          uint16 = 0x4  // ENUM Source-URI draft: https://datatracker.ietf.org/doc/html/draft-kaplan-enum-source-uri-00.
 	CodeDAU          uint16 = 0x5  // DNSSEC Algorithm Understood.
@@ -55,6 +55,33 @@ func (o *LLQ) String() string {
 	sprintData(sb, strconv.FormatUint(uint64(o.Version), 10), strconv.FormatUint(uint64(o.Opcode), 10),
 		strconv.FormatUint(uint64(o.Error), 10), strconv.FormatUint(o.ID, 10),
 		strconv.FormatUint(uint64(o.LeaseLife), 10))
+	s := sb.String()
+	builderPool.Put(*sb)
+	return s
+}
+
+// UPDATELEASE implements the EDNS0 Update Lease option (RFC 9664).
+//
+// The Update Lease option provides lease durations that should be associated
+// with a given DNS Update request, and are included in responses for acknowledgement.
+// A DNS server should automatically delete the included RRs after the lease time
+// is over.
+//
+// The Update Lease option has two variants: a pre-RFC 4-byte variant and
+// the 8-byte variant. This library only supports the post-standardization
+// 8-byte variant.
+//
+// This record must be put in the pseudo section.
+type UPDATELEASE struct {
+	Lease    uint32
+	KeyLease uint32
+}
+
+func (o *UPDATELEASE) Len() int    { return tlv + 8 }
+func (o *UPDATELEASE) Data() RDATA { return o }
+func (o *UPDATELEASE) String() string {
+	sb := sprintOptionHeader(o)
+	sprintData(sb, strconv.FormatUint(uint64(o.Lease), 10), strconv.FormatUint(uint64(o.KeyLease), 10))
 	s := sb.String()
 	builderPool.Put(*sb)
 	return s

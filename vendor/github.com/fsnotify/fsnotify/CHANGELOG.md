@@ -1,5 +1,20 @@
 # Changelog
 
+1.10.1 2026-05-04
+-----------------
+
+### Changes and fixes
+
+- inotify: don't remove sibling watches sharing a path prefix ([#754])
+
+- inotify, windows: don't rename sibling watches sharing a path prefix
+  ([#755])
+
+
+[#754]: https://github.com/fsnotify/fsnotify/pull/754
+[#755]: https://github.com/fsnotify/fsnotify/pull/755
+
+
 1.10.0 2026-04-30
 -----------------
 This version of fsnotify needs Go 1.23.

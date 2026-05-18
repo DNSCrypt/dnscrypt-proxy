@@ -55,6 +55,28 @@ func (o *LLQ) unpack(s *cryptobyte.String) error {
 	return nil
 }
 
+func (o *UPDATELEASE) pack(msg []byte, off int) (int, error) {
+	off, err := pack.Uint32(o.Lease, msg, off)
+	if err != nil {
+		return off, err
+	}
+	off, err = pack.Uint32(o.KeyLease, msg, off)
+	if err != nil {
+		return off, err
+	}
+	return off, nil
+}
+
+func (o *UPDATELEASE) unpack(s *cryptobyte.String) error {
+	if !s.ReadUint32(&o.Lease) {
+		return unpack.ErrOverflow
+	}
+	if !s.ReadUint32(&o.KeyLease) {
+		return unpack.ErrOverflow
+	}
+	return nil
+}
+
 func (o *NSID) unpack(s *cryptobyte.String) error {
 	o.Nsid = hex.EncodeToString(*s)
 	return nil
@@ -151,8 +173,8 @@ func (o *EDE) pack(msg []byte, off int) (int, error) {
 	if err != nil {
 		return off, err
 	}
-	o.ExtraText = string(msg[off:])
-	return off, nil
+	copy(msg[off:], []byte(o.ExtraText))
+	return off + len(o.ExtraText), nil
 }
 
 func (e *REPORTING) unpack(s *cryptobyte.String) (err error) {
