@@ -151,8 +151,8 @@ func (o *EDE) pack(msg []byte, off int) (int, error) {
 	if err != nil {
 		return off, err
 	}
-	o.ExtraText = string(msg[off:])
-	return off, nil
+	copy(msg[off:], []byte(o.ExtraText))
+	return off+len(o.ExtraText), nil
 }
 
 func (e *REPORTING) unpack(s *cryptobyte.String) (err error) {
