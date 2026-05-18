@@ -1064,9 +1064,8 @@ func (ui *MonitoringUI) handleRoot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// No cache, no heartbeat fetching. You will need to log in again after restarting your browser.
+	// Don't cache: ensures the browser revalidates auth before the JS issues /api/metrics and WebSocket calls.
 	setDynamicCacheHeaders(w)
-
 	w.Header().Set("Content-Type", "text/html")
 	w.Write([]byte(MainHTMLTemplate))
 }
