@@ -39,6 +39,8 @@ const (
 	DefaultBootstrapResolver    = "9.9.9.9:53"
 	DefaultKeepAlive            = 5 * time.Second
 	DefaultTimeout              = 30 * time.Second
+	DefaultIdleConnTimeout      = 90 * time.Second
+	DefaultMaxIdleConns         = 16
 	ResolverReadTimeout         = 5 * time.Second
 	SystemResolverIPTTL         = 12 * time.Hour
 	MinResolverIPTTL            = 4 * time.Hour
@@ -222,12 +224,15 @@ func (xTransport *XTransport) rebuildTransport() {
 	if xTransport.transport != nil {
 		xTransport.transport.CloseIdleConnections()
 	}
+	if xTransport.h3Transport != nil {
+		xTransport.h3Transport.CloseIdleConnections()
+	}
 	timeout := xTransport.timeout
 	transport := &http.Transport{
 		DisableKeepAlives:      false,
 		DisableCompression:     true,
-		MaxIdleConns:           1,
-		IdleConnTimeout:        xTransport.keepAlive,
+		MaxIdleConns:           DefaultMaxIdleConns,
+		IdleConnTimeout:        DefaultIdleConnTimeout,
 		ResponseHeaderTimeout:  timeout,
 		ExpectContinueTimeout:  timeout,
 		MaxResponseHeaderBytes: 4096,
@@ -258,7 +263,7 @@ func (xTransport *XTransport) rebuildTransport() {
 
 			dial := func(address string) (net.Conn, error) {
 				if xTransport.proxyDialer == nil {
-					dialer := &net.Dialer{Timeout: timeout, KeepAlive: timeout, DualStack: true}
+					dialer := &net.Dialer{Timeout: timeout, KeepAlive: xTransport.keepAlive, DualStack: true}
 					return dialer.DialContext(ctx, network, address)
 				}
 				return (*xTransport.proxyDialer).Dial(network, address)
@@ -284,6 +289,11 @@ func (xTransport *XTransport) rebuildTransport() {
 
 	clientCreds := xTransport.tlsClientCreds
 
+	// ServerName must stay empty: crypto/tls and quic-go both derive SNI from the
+	// request URL host on a per-connection clone. For DoH stamps that connect to an
+	// IP while presenting a different cert name, the URL host is set to the stamp's
+	// ProviderName, so the right SNI is used automatically. Setting ServerName here
+	// would override that for every host sharing this transport.
 	tlsClientConfig := tls.Config{}
 	certPool, certPoolErr := x509.SystemCertPool()
 
@@ -417,7 +427,6 @@ func (xTransport *XTransport) rebuildTransport() {
 					}
 					continue
 				}
-				tlsCfg.ServerName = host
 				conn, err := quic.DialEarly(ctx, udpConn, udpAddr, tlsCfg, cfg)
 				if err != nil {
 					udpConn.Close()
