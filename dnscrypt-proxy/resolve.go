@@ -17,6 +17,7 @@ import (
 const (
 	myResolverHost  string = "resolver.dnscrypt.info."
 	nonexistentName string = "nonexistent-zone.dnscrypt-test."
+	bogusDNSSECName string = "dnssec-failed.org."
 )
 
 func resolveQuery(server string, qName string, qType uint16, sendClientSubnet bool) (*dns.Msg, error) {
@@ -155,9 +156,19 @@ func Resolve(server string, name string, singleResolver bool) {
 
 			if response.Rcode == dns.RcodeNameError {
 				fmt.Printf("DNSSEC        : ")
-				if response.AuthenticatedData {
+				validatesDenial := response.AuthenticatedData
+				rejectsBogus := false
+				if bogus, err := resolveQuery(server, bogusDNSSECName, dns.TypeA, false); err == nil {
+					rejectsBogus = bogus.Rcode == dns.RcodeServerFailure
+				}
+				switch {
+				case validatesDenial && rejectsBogus:
 					fmt.Println("yes, the resolver supports DNSSEC")
-				} else {
+				case rejectsBogus:
+					fmt.Println("incomplete, the resolver rejects bogus signatures but doesn't validate authenticated denial of existence")
+				case validatesDenial:
+					fmt.Println("incomplete, the resolver validates authenticated denial of existence but accepts bogus signatures")
+				default:
 					fmt.Println("no, the resolver doesn't support DNSSEC")
 				}
 			}
