@@ -45,7 +45,7 @@ func NewIPCryptConfig(keyHex string, algorithm string) (*IPCryptConfig, error) {
 	}
 
 	// Validate key length and prepare config based on algorithm
-	switch strings.ToLower(algorithm) {
+	switch config.Algorithm {
 	case "ipcrypt-deterministic":
 		// Deterministic IPCrypt uses 16-byte keys
 		if len(key) != 16 {
