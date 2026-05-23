@@ -162,19 +162,59 @@ type Relay struct {
 
 type ServersInfo struct {
 	sync.RWMutex
-	inner             []*ServerInfo
-	registeredServers []RegisteredServer
-	registeredRelays  []RegisteredServer
-	lbStrategy        LBStrategy
-	lbEstimator       bool
+	inner               []*ServerInfo
+	registeredServers   []RegisteredServer
+	registeredRelays    []RegisteredServer
+	lbStrategy          LBStrategy
+	lbEstimator         bool
+	odohRefreshMu       sync.Mutex
+	odohRefreshInFlight map[string]bool
+	odohLastFailureAt   map[string]time.Time
 }
 
 func NewServersInfo() ServersInfo {
 	return ServersInfo{
-		lbStrategy:        DefaultLBStrategy,
-		lbEstimator:       true,
-		registeredServers: make([]RegisteredServer, 0),
-		registeredRelays:  make([]RegisteredServer, 0),
+		lbStrategy:          DefaultLBStrategy,
+		lbEstimator:         true,
+		registeredServers:   make([]RegisteredServer, 0),
+		registeredRelays:    make([]RegisteredServer, 0),
+		odohRefreshInFlight: make(map[string]bool),
+		odohLastFailureAt:   make(map[string]time.Time),
+	}
+}
+
+// beginODoHRefresh returns true if the caller should perform an ODoH key
+// refresh for the named server. It returns false when another refresh is
+// already in flight or when the previous attempt failed within the
+// failureCooldown window. Successful claims must be paired with a call to
+// endODoHRefresh.
+func (serversInfo *ServersInfo) beginODoHRefresh(name string, failureCooldown time.Duration) bool {
+	now := time.Now()
+	serversInfo.odohRefreshMu.Lock()
+	defer serversInfo.odohRefreshMu.Unlock()
+	if serversInfo.odohRefreshInFlight[name] {
+		return false
+	}
+	if last, ok := serversInfo.odohLastFailureAt[name]; ok && now.Sub(last) < failureCooldown {
+		return false
+	}
+	serversInfo.odohRefreshInFlight[name] = true
+	return true
+}
+
+// endODoHRefresh releases the in-flight slot claimed by beginODoHRefresh and
+// records whether the refresh succeeded. On success, the failure timestamp
+// is cleared so the next 401 can trigger a fresh refresh immediately if
+// needed. On failure, the timestamp is stamped to throttle a hostile-relay
+// retry loop.
+func (serversInfo *ServersInfo) endODoHRefresh(name string, success bool) {
+	serversInfo.odohRefreshMu.Lock()
+	defer serversInfo.odohRefreshMu.Unlock()
+	delete(serversInfo.odohRefreshInFlight, name)
+	if success {
+		delete(serversInfo.odohLastFailureAt, name)
+	} else {
+		serversInfo.odohLastFailureAt[name] = time.Now()
 	}
 }
 

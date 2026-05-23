@@ -7,7 +7,6 @@ import (
 
 	"codeberg.org/miekg/dns"
 	"github.com/jedisct1/dlog"
-	clocksmith "github.com/jedisct1/go-clocksmith"
 	stamps "github.com/jedisct1/go-dnsstamps"
 )
 
@@ -189,16 +188,22 @@ func processODoHQuery(
 			dlog.Warnf("ODoH relay for [%v] is buggy and returns a 200 status code instead of 401 after a key update", serverInfo.Name)
 		}
 
-		dlog.Infof("Forcing key update for [%v]", serverInfo.Name)
-		for _, registeredServer := range proxy.serversInfo.registeredServers {
-			if registeredServer.name == serverInfo.Name {
-				if err = proxy.serversInfo.refreshServer(proxy, registeredServer.name, registeredServer.stamp); err != nil {
-					dlog.Noticef("Key update failed for [%v]", serverInfo.Name)
-					serverInfo.noticeFailure(proxy)
-					clocksmith.Sleep(10 * time.Second)
+		if proxy.serversInfo.beginODoHRefresh(serverInfo.Name, 10*time.Second) {
+			dlog.Infof("Forcing key update for [%v]", serverInfo.Name)
+			refreshOk := true
+			for _, registeredServer := range proxy.serversInfo.registeredServers {
+				if registeredServer.name == serverInfo.Name {
+					if err = proxy.serversInfo.refreshServer(proxy, registeredServer.name, registeredServer.stamp); err != nil {
+						dlog.Noticef("Key update failed for [%v]", serverInfo.Name)
+						serverInfo.noticeFailure(proxy)
+						refreshOk = false
+					}
+					break
 				}
-				break
 			}
+			proxy.serversInfo.endODoHRefresh(serverInfo.Name, refreshOk)
+		} else {
+			dlog.Debugf("Skipping key update for [%v] (refresh in flight or recently failed)", serverInfo.Name)
 		}
 	} else {
 		dlog.Warnf("Failed to receive successful response from [%v]", serverInfo.Name)
