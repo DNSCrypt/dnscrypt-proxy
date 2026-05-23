@@ -876,7 +876,7 @@ func (proxy *Proxy) processIncomingQuery(
 			// Process the response through plugins
 			processedResponse, err := processPlugins(proxy, &pluginsState, query, serverInfo, response)
 			if err != nil {
-				return response
+				return nil
 			}
 
 			response = processedResponse

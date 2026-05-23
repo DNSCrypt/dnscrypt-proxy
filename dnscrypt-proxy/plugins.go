@@ -340,9 +340,6 @@ func (pluginsState *PluginsState) ApplyResponsePlugins(
 ) ([]byte, error) {
 	msg := dns.Msg{Data: packet}
 	if err := msg.Unpack(); err != nil {
-		if len(packet) >= MinDNSPacketSize && HasTCFlag(packet) {
-			err = nil
-		}
 		return packet, err
 	}
 	switch Rcode(packet) {
