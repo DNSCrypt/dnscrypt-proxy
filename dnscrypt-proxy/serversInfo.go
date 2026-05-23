@@ -187,11 +187,18 @@ func NewServersInfo() ServersInfo {
 // refresh for the named server. It returns false when another refresh is
 // already in flight or when the previous attempt failed within the
 // failureCooldown window. Successful claims must be paired with a call to
-// endODoHRefresh.
+// endODoHRefresh, ideally via defer so a panic in the refresh path does
+// not leak the in-flight slot.
 func (serversInfo *ServersInfo) beginODoHRefresh(name string, failureCooldown time.Duration) bool {
 	now := time.Now()
 	serversInfo.odohRefreshMu.Lock()
 	defer serversInfo.odohRefreshMu.Unlock()
+	if serversInfo.odohRefreshInFlight == nil {
+		serversInfo.odohRefreshInFlight = make(map[string]bool)
+	}
+	if serversInfo.odohLastFailureAt == nil {
+		serversInfo.odohLastFailureAt = make(map[string]time.Time)
+	}
 	if serversInfo.odohRefreshInFlight[name] {
 		return false
 	}
@@ -203,10 +210,12 @@ func (serversInfo *ServersInfo) beginODoHRefresh(name string, failureCooldown ti
 }
 
 // endODoHRefresh releases the in-flight slot claimed by beginODoHRefresh and
-// records whether the refresh succeeded. On success, the failure timestamp
-// is cleared so the next 401 can trigger a fresh refresh immediately if
-// needed. On failure, the timestamp is stamped to throttle a hostile-relay
-// retry loop.
+// records whether the refresh succeeded. On success the failure timestamp is
+// cleared so the next 401 can trigger a fresh refresh immediately if needed.
+// On failure the timestamp is stamped to throttle a hostile-relay retry
+// loop. Callers that claim a slot but then discover they have no refresh to
+// perform (e.g. the server is no longer registered) should use
+// cancelODoHRefresh instead so the cooldown state is not mutated.
 func (serversInfo *ServersInfo) endODoHRefresh(name string, success bool) {
 	serversInfo.odohRefreshMu.Lock()
 	defer serversInfo.odohRefreshMu.Unlock()
@@ -214,8 +223,21 @@ func (serversInfo *ServersInfo) endODoHRefresh(name string, success bool) {
 	if success {
 		delete(serversInfo.odohLastFailureAt, name)
 	} else {
+		if serversInfo.odohLastFailureAt == nil {
+			serversInfo.odohLastFailureAt = make(map[string]time.Time)
+		}
 		serversInfo.odohLastFailureAt[name] = time.Now()
 	}
+}
+
+// cancelODoHRefresh releases the in-flight slot without touching the failure
+// cooldown. It is used when beginODoHRefresh was claimed but no refresh
+// actually ran, so neither stamping a failure nor clearing a prior one is
+// appropriate.
+func (serversInfo *ServersInfo) cancelODoHRefresh(name string) {
+	serversInfo.odohRefreshMu.Lock()
+	defer serversInfo.odohRefreshMu.Unlock()
+	delete(serversInfo.odohRefreshInFlight, name)
 }
 
 func (serversInfo *ServersInfo) registerServer(name string, stamp stamps.ServerStamp) {

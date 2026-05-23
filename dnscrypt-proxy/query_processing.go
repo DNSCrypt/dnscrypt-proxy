@@ -140,6 +140,27 @@ func processDoHQuery(
 	return nil, err
 }
 
+// refreshODoHKey claims the per-server refresh slot, drives the actual
+// refresh, and releases the slot under defer so a panic in refreshServer
+// cannot leak the in-flight flag. It returns the refresh error so the
+// caller can propagate it the way the original 401 handler did.
+func refreshODoHKey(proxy *Proxy, serverInfo *ServerInfo, stamp stamps.ServerStamp) error {
+	if !proxy.serversInfo.beginODoHRefresh(serverInfo.Name, 10*time.Second) {
+		dlog.Debugf("Skipping key update for [%v] (refresh in flight or recently failed)", serverInfo.Name)
+		return nil
+	}
+	success := false
+	defer func() { proxy.serversInfo.endODoHRefresh(serverInfo.Name, success) }()
+	dlog.Infof("Forcing key update for [%v]", serverInfo.Name)
+	if err := proxy.serversInfo.refreshServer(proxy, serverInfo.Name, stamp); err != nil {
+		dlog.Noticef("Key update failed for [%v]", serverInfo.Name)
+		serverInfo.noticeFailure(proxy)
+		return err
+	}
+	success = true
+	return nil
+}
+
 // processODoHQuery - Processes a query using the ODoH protocol
 func processODoHQuery(
 	proxy *Proxy,
@@ -188,22 +209,21 @@ func processODoHQuery(
 			dlog.Warnf("ODoH relay for [%v] is buggy and returns a 200 status code instead of 401 after a key update", serverInfo.Name)
 		}
 
-		if proxy.serversInfo.beginODoHRefresh(serverInfo.Name, 10*time.Second) {
-			dlog.Infof("Forcing key update for [%v]", serverInfo.Name)
-			refreshOk := true
-			for _, registeredServer := range proxy.serversInfo.registeredServers {
-				if registeredServer.name == serverInfo.Name {
-					if err = proxy.serversInfo.refreshServer(proxy, registeredServer.name, registeredServer.stamp); err != nil {
-						dlog.Noticef("Key update failed for [%v]", serverInfo.Name)
-						serverInfo.noticeFailure(proxy)
-						refreshOk = false
-					}
-					break
-				}
+		var stamp stamps.ServerStamp
+		matched := false
+		proxy.serversInfo.RLock()
+		for _, registeredServer := range proxy.serversInfo.registeredServers {
+			if registeredServer.name == serverInfo.Name {
+				stamp = registeredServer.stamp
+				matched = true
+				break
 			}
-			proxy.serversInfo.endODoHRefresh(serverInfo.Name, refreshOk)
-		} else {
-			dlog.Debugf("Skipping key update for [%v] (refresh in flight or recently failed)", serverInfo.Name)
+		}
+		proxy.serversInfo.RUnlock()
+		if matched {
+			if refreshErr := refreshODoHKey(proxy, serverInfo, stamp); refreshErr != nil {
+				err = refreshErr
+			}
 		}
 	} else {
 		dlog.Warnf("Failed to receive successful response from [%v]", serverInfo.Name)
