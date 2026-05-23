@@ -328,7 +328,10 @@ func (proxy *Proxy) StartProxy() {
 					delay = proxy.certRefreshDelayAfterFailure
 				}
 				clocksmith.Sleep(delay)
-				liveServers, _ = proxy.serversInfo.refresh(proxy)
+				liveServers, err = proxy.serversInfo.refresh(proxy)
+				if err != nil {
+					dlog.Warnf("Server refresh error: %v", err)
+				}
 				if liveServers > 0 {
 					proxy.certIgnoreTimestamp = false
 				}
