@@ -864,7 +864,9 @@ func dohTestPacket(msgID uint16) []byte {
 	msg.UDPSize = uint16(MaxDNSPacketSize)
 	msg.Security = false
 	paddingData := make([]byte, 16)
-	_, _ = crypto_rand.Read(paddingData)
+	if _, err := crypto_rand.Read(paddingData); err != nil {
+		dlog.Warnf("Failed to generate random padding: %v", err)
+	}
 	padding := &dns.PADDING{Padding: hex.EncodeToString(paddingData)}
 	msg.Pseudo = append(msg.Pseudo, padding)
 	if err := msg.Pack(); err != nil {
@@ -885,7 +887,9 @@ func dohNXTestPacket(msgID uint16) []byte {
 	msg.UDPSize = uint16(MaxDNSPacketSize)
 	msg.Security = false
 	paddingData := make([]byte, 16)
-	_, _ = crypto_rand.Read(paddingData)
+	if _, err := crypto_rand.Read(paddingData); err != nil {
+		dlog.Warnf("Failed to generate random padding: %v", err)
+	}
 	padding := &dns.PADDING{Padding: hex.EncodeToString(paddingData)}
 	msg.Pseudo = append(msg.Pseudo, padding)
 	if err := msg.Pack(); err != nil {
