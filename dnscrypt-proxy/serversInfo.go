@@ -261,7 +261,7 @@ func (serversInfo *ServersInfo) refresh(proxy *Proxy) (int, error) {
 		go func(registeredServer *RegisteredServer) {
 			err := serversInfo.refreshServer(proxy, registeredServer.name, registeredServer.stamp)
 			if err == nil {
-				proxy.xTransport.internalResolverReady = true
+				proxy.xTransport.internalResolverReady.Store(true)
 			}
 			errorChannel <- err
 			<-countChannel
