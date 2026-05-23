@@ -112,6 +112,9 @@ func RefusedResponseFromMessage(srcMsg *dns.Msg, refusedCode bool, ipv4 net.IP, 
 }
 
 func HasTCFlag(packet []byte) bool {
+	if len(packet) < 3 {
+		return false
+	}
 	return packet[2]&2 == 2
 }
 
