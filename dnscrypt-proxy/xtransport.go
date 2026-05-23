@@ -19,6 +19,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"codeberg.org/miekg/dns"
@@ -78,7 +79,7 @@ type XTransport struct {
 	bootstrapResolvers       []string
 	mainProto                string
 	ignoreSystemDNS          bool
-	internalResolverReady    bool
+	internalResolverReady    atomic.Bool
 	useIPv4                  bool
 	useIPv6                  bool
 	http3                    bool
@@ -559,7 +560,7 @@ func (xTransport *XTransport) resolve(host string, returnIPv4, returnIPv6 bool) 
 		protos = []string{"tcp", "udp"}
 	}
 	if xTransport.ignoreSystemDNS {
-		if xTransport.internalResolverReady {
+		if xTransport.internalResolverReady.Load() {
 			for _, proto := range protos {
 				ips, ttl, err = xTransport.resolveUsingServers(proto, host, xTransport.internalResolvers, returnIPv4, returnIPv6)
 				if err == nil {
