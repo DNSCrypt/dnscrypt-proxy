@@ -186,12 +186,15 @@ func ExtractClientIPStr(pluginsState *PluginsState) (string, bool) {
 	}
 	switch pluginsState.clientProto {
 	case "udp":
-		return (*pluginsState.clientAddr).(*net.UDPAddr).IP.String(), true
+		if udpAddr, ok := (*pluginsState.clientAddr).(*net.UDPAddr); ok && udpAddr != nil {
+			return udpAddr.IP.String(), true
+		}
 	case "tcp", "local_doh":
-		return (*pluginsState.clientAddr).(*net.TCPAddr).IP.String(), true
-	default:
-		return "", false
+		if tcpAddr, ok := (*pluginsState.clientAddr).(*net.TCPAddr); ok && tcpAddr != nil {
+			return tcpAddr.IP.String(), true
+		}
 	}
+	return "", false
 }
 
 // ExtractClientIPStrEncrypted extracts and optionally encrypts client IP string
