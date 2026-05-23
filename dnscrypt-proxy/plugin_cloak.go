@@ -321,11 +321,15 @@ func (plugin *PluginCloak) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 			n := Min(16, len(foundIPs))
 			switch qtype {
 			case dns.TypeA:
-				cloakedName.lastUpdate4 = &now
-				cloakedName.ipv4 = foundIPs[:n]
+				if len(cloakedName.ipv4) == 0 {
+					cloakedName.lastUpdate4 = &now
+					cloakedName.ipv4 = foundIPs[:n]
+				}
 			case dns.TypeAAAA:
-				cloakedName.lastUpdate6 = &now
-				cloakedName.ipv6 = foundIPs[:n]
+				if len(cloakedName.ipv6) == 0 {
+					cloakedName.lastUpdate6 = &now
+					cloakedName.ipv6 = foundIPs[:n]
+				}
 			}
 		}
 		plugin.Unlock()
