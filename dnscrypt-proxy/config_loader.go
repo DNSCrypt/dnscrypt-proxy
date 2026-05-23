@@ -29,9 +29,6 @@ func configureLogging(proxy *Proxy, flags *ConfigFlags, config *Config) {
 	if config.LogLevel >= 0 && config.LogLevel < int(dlog.SeverityLast) {
 		dlog.SetLogLevel(dlog.Severity(config.LogLevel))
 	}
-	if dlog.LogLevel() <= dlog.SeverityDebug && os.Getenv("DEBUG") == "" {
-		dlog.SetLogLevel(dlog.SeverityInfo)
-	}
 	dlog.TruncateLogFile(config.LogFileLatest)
 
 	isCommandMode := false
