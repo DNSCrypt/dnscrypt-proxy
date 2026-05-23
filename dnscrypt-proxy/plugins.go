@@ -342,6 +342,9 @@ func (pluginsState *PluginsState) ApplyResponsePlugins(
 	if err := msg.Unpack(); err != nil {
 		return packet, err
 	}
+	if len(msg.Question) != 1 {
+		return packet, errors.New("Unexpected number of questions in response")
+	}
 	switch Rcode(packet) {
 	case dns.RcodeSuccess:
 		pluginsState.returnCode = PluginsReturnCodePass
