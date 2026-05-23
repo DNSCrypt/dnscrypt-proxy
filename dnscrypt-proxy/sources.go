@@ -177,12 +177,16 @@ func (source *Source) fetchWithCache(xTransport *XTransport) (time.Duration, err
 		return 0, err
 	}
 	if ttl > 0 {
+		source.Lock()
 		source.refresh = now.Add(ttl)
+		source.Unlock()
 		return 0, err
 	}
 
 	ttl = MinimumPrefetchInterval
+	source.Lock()
 	source.refresh = now.Add(ttl)
+	source.Unlock()
 	var bin, sig []byte
 	for _, srcURL := range source.urls {
 		dlog.Infof("Source [%s] loading from URL [%s]", source.name, srcURL)
@@ -208,7 +212,9 @@ func (source *Source) fetchWithCache(xTransport *XTransport) (time.Duration, err
 	}
 	source.updateCache(bin, sig)
 	ttl = source.prefetchDelay
+	source.Lock()
 	source.refresh = now.Add(ttl)
+	source.Unlock()
 	return ttl, nil
 }
 
@@ -264,7 +270,10 @@ func PrefetchSources(xTransport *XTransport, sources []*Source) time.Duration {
 	now := getCurrentTime()
 	interval := MinimumPrefetchInterval
 	for _, source := range sources {
-		if source.refresh.IsZero() || source.refresh.After(now) {
+		source.RLock()
+		needsRefresh := source.refresh.IsZero() || !source.refresh.After(now)
+		source.RUnlock()
+		if !needsRefresh {
 			continue
 		}
 		dlog.Debugf("Prefetching [%s]", source.name)
