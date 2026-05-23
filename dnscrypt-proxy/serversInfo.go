@@ -223,20 +223,20 @@ func (serversInfo *ServersInfo) refreshServer(proxy *Proxy, name string, stamp s
 	}
 	newServer.rtt = ewma.NewMovingAverage(RTTEwmaDecay)
 	newServer.rtt.Set(float64(newServer.initialRtt))
-	isNew = true
 	serversInfo.Lock()
+	found := false
 	for i, oldServer := range serversInfo.inner {
 		if oldServer.Name == name {
 			serversInfo.inner[i] = &newServer
-			isNew = false
+			found = true
 			break
 		}
 	}
-	serversInfo.Unlock()
-	if isNew {
-		serversInfo.Lock()
+	if !found {
 		serversInfo.inner = append(serversInfo.inner, &newServer)
-		serversInfo.Unlock()
+	}
+	serversInfo.Unlock()
+	if !found {
 		proxy.serversInfo.registerServer(name, stamp)
 	}
 
