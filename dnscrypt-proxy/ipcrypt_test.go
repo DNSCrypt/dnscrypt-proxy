@@ -2,6 +2,7 @@ package main
 
 import (
 	"net"
+	"strings"
 	"testing"
 )
 
@@ -16,6 +17,12 @@ func TestNewIPCryptConfig(t *testing.T) {
 			name:      "none algorithm config",
 			keyHex:    "",
 			algorithm: "none",
+			wantErr:   false,
+		},
+		{
+			name:      "uppercase none algorithm config",
+			keyHex:    "",
+			algorithm: "NONE",
 			wantErr:   false,
 		},
 		{
@@ -79,16 +86,17 @@ func TestNewIPCryptConfig(t *testing.T) {
 				if err != nil {
 					t.Errorf("unexpected error: %v", err)
 				}
+				expectedAlgorithm := strings.ToLower(tt.algorithm)
 				// For "none" algorithm, config should be nil
-				if tt.algorithm == "none" || tt.algorithm == "" {
+				if expectedAlgorithm == "none" || expectedAlgorithm == "" {
 					if config != nil {
 						t.Errorf("expected nil config for algorithm='%s', got %+v", tt.algorithm, config)
 					}
 				} else {
 					if config == nil {
 						t.Errorf("expected config but got nil")
-					} else if config.Algorithm != tt.algorithm {
-						t.Errorf("expected algorithm=%v, got %v", tt.algorithm, config.Algorithm)
+					} else if config.Algorithm != expectedAlgorithm {
+						t.Errorf("expected algorithm=%v, got %v", expectedAlgorithm, config.Algorithm)
 					}
 				}
 			}
