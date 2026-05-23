@@ -57,8 +57,8 @@ func resolveQuery(server string, qName string, qType uint16, sendClientSubnet bo
 		msg.ID = dns.ID()
 		msg.Data = nil // Clear packed data so Exchange will re-pack with new ID
 		ctx, cancel := context.WithTimeout(context.Background(), readTimeout)
+		defer cancel()
 		response, rtt, err := client.Exchange(ctx, msg, "udp", server)
-		cancel()
 		if neterr, ok := err.(net.Error); ok && neterr.Timeout() {
 			readTimeout *= 2
 			continue
