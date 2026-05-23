@@ -20,6 +20,8 @@ type IPCryptConfig struct {
 // NewIPCryptConfig creates a new IPCryptConfig from configuration values
 // Returns nil when encryption is disabled (algorithm is "none" or empty)
 func NewIPCryptConfig(keyHex string, algorithm string) (*IPCryptConfig, error) {
+	algorithm = strings.ToLower(algorithm)
+
 	// Default to "none" if empty
 	if algorithm == "" {
 		algorithm = "none"
@@ -41,11 +43,11 @@ func NewIPCryptConfig(keyHex string, algorithm string) (*IPCryptConfig, error) {
 
 	config := &IPCryptConfig{
 		Key:       key,
-		Algorithm: strings.ToLower(algorithm),
+		Algorithm: algorithm,
 	}
 
 	// Validate key length and prepare config based on algorithm
-	switch config.Algorithm {
+	switch algorithm {
 	case "ipcrypt-deterministic":
 		// Deterministic IPCrypt uses 16-byte keys
 		if len(key) != 16 {
