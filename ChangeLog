@@ -1,3 +1,42 @@
+# Version 2.1.16
+ - Dashboard HTML pages are no longer cached, preventing stale content from
+being served after upgrades.
+ - The IP allow/block plugins now support CIDR ranges in addition to single
+addresses and prefix matching.
+ - Forwarding rules now support `$RESOLVCONF:<file>` to pick up upstream
+resolvers from a resolv.conf-style file, complementing the existing `$DHCP`
+syntax.
+ - Recursive cloaking rules are now rejected at load time instead of being
+detected only when a matching query arrives.
+ - Servers that hit a transient high RTT could previously stay penalized
+forever and never come back into rotation; their RTT estimate now decays so
+they can recover.
+ - Servers are no longer penalized for slow responses when the response is
+actually being served from the stale cache.
+ - HTTP/3 probing now consults a negative cache before retrying, avoiding
+repeated probes against servers known not to support it.
+ - The HTTP transport now handles `Alt-Svc: clear` properly and reuses HTTP
+connections more aggressively.
+ - The cache TTL is now an explicit, configurable parameter rather than being
+derived implicitly.
+ - Log entries now include the relay name when a query was sent through an
+anonymized DNS or ODoH relay.
+ - A new `tls_prefer_rsa` option has been added to prefer RSA cipher suites
+during the TLS handshake, useful on systems without hardware AES.
+ - The `tls_cipher_suite` option is now a no-op. Modern TLS stacks no longer
+expose cipher suite selection in a meaningful way, and the option had become
+misleading.
+ - The `-resolve` command now reports incomplete DNSSEC support instead of
+silently treating partial signatures as a success.
+ - ODoH: the 401 key-refresh path has been hardened against panics, races
+and bad server state, refreshes are now coalesced, and the blocking sleep
+on refresh has been removed.
+ - A log size of 0 no longer means "unlimited"; it now correctly disables
+rotation by size.
+ - `jsdelivr` is now offered as an alternative source URL for resolver
+lists, providing more redundancy when the primary mirrors are unreachable.
+ - The miekg/dns library has been updated to the v2 series.
+
 # Version 2.1.15
  - The proxy now dynamically reduces timeouts as the connection limit is
 approached, improving performance and preventing connection exhaustion under
