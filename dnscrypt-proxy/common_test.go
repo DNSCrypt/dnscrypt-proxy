@@ -56,6 +56,97 @@ func TestExtractClientIPStr(t *testing.T) {
 			wantOK: true,
 		},
 		{
+			name:         "nil pluginsState should return empty",
+			pluginsState: nil,
+			wantIP:       "",
+			wantOK:       false,
+		},
+		{
+			name: "valid local_doh address",
+			pluginsState: &PluginsState{
+				clientProto: "local_doh",
+				clientAddr: func() *net.Addr {
+					addr := net.Addr(
+						&net.TCPAddr{
+							IP:   net.ParseIP("127.0.0.1"),
+							Port: 443,
+						},
+					)
+					return &addr
+				}(),
+			},
+			wantIP: "127.0.0.1",
+			wantOK: true,
+		},
+		{
+			name: "valid IPv6 UDP address",
+			pluginsState: &PluginsState{
+				clientProto: "udp",
+				clientAddr: func() *net.Addr {
+					addr := net.Addr(
+						&net.UDPAddr{
+							IP:   net.ParseIP("::1"),
+							Port: 53,
+						},
+					)
+					return &addr
+				}(),
+			},
+			wantIP: "::1",
+			wantOK: true,
+		},
+		{
+			name: "valid IPv6 TCP address",
+			pluginsState: &PluginsState{
+				clientProto: "tcp",
+				clientAddr: func() *net.Addr {
+					addr := net.Addr(
+						&net.TCPAddr{
+							IP:   net.ParseIP("2001:db8::1"),
+							Port: 53,
+						},
+					)
+					return &addr
+				}(),
+			},
+			wantIP: "2001:db8::1",
+			wantOK: true,
+		},
+		{
+			name: "UDP protocol with TCPAddr type mismatch",
+			pluginsState: &PluginsState{
+				clientProto: "udp",
+				clientAddr: func() *net.Addr {
+					addr := net.Addr(
+						&net.TCPAddr{
+							IP:   net.ParseIP("10.0.0.1"),
+							Port: 53,
+						},
+					)
+					return &addr
+				}(),
+			},
+			wantIP: "",
+			wantOK: false,
+		},
+		{
+			name: "TCP protocol with UDPAddr type mismatch",
+			pluginsState: &PluginsState{
+				clientProto: "tcp",
+				clientAddr: func() *net.Addr {
+					addr := net.Addr(
+						&net.UDPAddr{
+							IP:   net.ParseIP("10.0.0.1"),
+							Port: 53,
+						},
+					)
+					return &addr
+				}(),
+			},
+			wantIP: "",
+			wantOK: false,
+		},
+		{
 			name: "unknown protocol",
 			pluginsState: &PluginsState{
 				clientProto: "unknown",

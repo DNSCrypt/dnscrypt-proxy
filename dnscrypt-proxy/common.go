@@ -181,14 +181,20 @@ func isDigit(b byte) bool { return b >= '0' && b <= '9' }
 
 // ExtractClientIPStr extracts client IP string from pluginsState based on protocol
 func ExtractClientIPStr(pluginsState *PluginsState) (string, bool) {
-	if pluginsState.clientAddr == nil {
+	if pluginsState == nil || pluginsState.clientAddr == nil {
 		return "", false
 	}
 	switch pluginsState.clientProto {
 	case "udp":
-		return (*pluginsState.clientAddr).(*net.UDPAddr).IP.String(), true
+		if udpAddr, ok := (*pluginsState.clientAddr).(*net.UDPAddr); ok {
+			return udpAddr.IP.String(), true
+		}
+		return "", false
 	case "tcp", "local_doh":
-		return (*pluginsState.clientAddr).(*net.TCPAddr).IP.String(), true
+		if tcpAddr, ok := (*pluginsState.clientAddr).(*net.TCPAddr); ok {
+			return tcpAddr.IP.String(), true
+		}
+		return "", false
 	default:
 		return "", false
 	}
