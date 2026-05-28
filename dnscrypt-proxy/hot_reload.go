@@ -45,59 +45,14 @@ func (proxy *Proxy) InitHotReload() error {
 
 	// Register plugins for config watching
 	for _, plugin := range plugins {
-		switch p := plugin.(type) {
-		case *PluginAllowName:
-			if len(p.configFile) > 0 {
-				if err := configWatcher.AddFile(p.configFile, p.Reload); err != nil {
-					dlog.Warnf("Failed to watch config file for plugin [%s]: %v", p.Name(), err)
+		if rp, ok := plugin.(ReloadablePlugin); ok {
+			configPath := rp.GetConfigPath()
+			if len(configPath) > 0 {
+				if err := configWatcher.AddFile(configPath, rp.Reload); err != nil {
+					dlog.Warnf("Failed to watch config file for plugin [%s]: %v", rp.Name(), err)
 				} else {
-					p.SetConfigWatcher(configWatcher)
-					dlog.Noticef("Watching config file for plugin [%s]: %s", p.Name(), p.configFile)
-				}
-			}
-		case *PluginAllowedIP:
-			if len(p.configFile) > 0 {
-				if err := configWatcher.AddFile(p.configFile, p.Reload); err != nil {
-					dlog.Warnf("Failed to watch config file for plugin [%s]: %v", p.Name(), err)
-				} else {
-					p.SetConfigWatcher(configWatcher)
-					dlog.Noticef("Watching config file for plugin [%s]: %s", p.Name(), p.configFile)
-				}
-			}
-		case *PluginBlockIP:
-			if len(p.configFile) > 0 {
-				if err := configWatcher.AddFile(p.configFile, p.Reload); err != nil {
-					dlog.Warnf("Failed to watch config file for plugin [%s]: %v", p.Name(), err)
-				} else {
-					p.SetConfigWatcher(configWatcher)
-					dlog.Noticef("Watching config file for plugin [%s]: %s", p.Name(), p.configFile)
-				}
-			}
-		case *PluginBlockName:
-			if len(p.configFile) > 0 {
-				if err := configWatcher.AddFile(p.configFile, p.Reload); err != nil {
-					dlog.Warnf("Failed to watch config file for plugin [%s]: %v", p.Name(), err)
-				} else {
-					p.SetConfigWatcher(configWatcher)
-					dlog.Noticef("Watching config file for plugin [%s]: %s", p.Name(), p.configFile)
-				}
-			}
-		case *PluginCloak:
-			if len(p.configFile) > 0 {
-				if err := configWatcher.AddFile(p.configFile, p.Reload); err != nil {
-					dlog.Warnf("Failed to watch config file for plugin [%s]: %v", p.Name(), err)
-				} else {
-					p.SetConfigWatcher(configWatcher)
-					dlog.Noticef("Watching config file for plugin [%s]: %s", p.Name(), p.configFile)
-				}
-			}
-		case *PluginForward:
-			if len(p.configFile) > 0 {
-				if err := configWatcher.AddFile(p.configFile, p.Reload); err != nil {
-					dlog.Warnf("Failed to watch config file for plugin [%s]: %v", p.Name(), err)
-				} else {
-					p.SetConfigWatcher(configWatcher)
-					dlog.Noticef("Watching config file for plugin [%s]: %s", p.Name(), p.configFile)
+					rp.SetConfigWatcher(configWatcher)
+					dlog.Noticef("Watching config file for plugin [%s]: %s", rp.Name(), configPath)
 				}
 			}
 		}

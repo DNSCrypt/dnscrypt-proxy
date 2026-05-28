@@ -133,13 +133,13 @@ func (cw *ConfigWatcher) checkFile(wf *WatchedFile) {
 	}
 
 	// If file size or hash is still changing, it's still being written
-	if size1 != size2 || !hashesEqual(hash1, hash2) {
+	if size1 != size2 || !bytes.Equal(hash1, hash2) {
 		dlog.Debugf("File [%s] is still being modified, waiting for stability", wf.path)
 		return
 	}
 
 	// The file appears stable, check if it's different from last loaded version
-	if wf.lastSize == size2 && hashesEqual(wf.lastHash, hash2) {
+	if wf.lastSize == size2 && bytes.Equal(wf.lastHash, hash2) {
 		// Content hasn't changed despite mod time change
 		wf.lastMod = fileInfo.ModTime()
 		return
@@ -296,9 +296,4 @@ func getFileHash(path string) ([]byte, error) {
 	}
 
 	return hash.Sum(nil), nil
-}
-
-// hashesEqual compares two hashes for equality
-func hashesEqual(h1, h2 []byte) bool {
-	return bytes.Equal(h1, h2)
 }
