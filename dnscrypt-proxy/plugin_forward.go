@@ -387,11 +387,13 @@ func (plugin *PluginForward) Eval(pluginsState *PluginsState, msg *dns.Msg) erro
 		forwardMsg.Data = nil // Clear packed data so Exchange will re-pack without Extra
 
 		respMsg, _, err = client.Exchange(ctx, forwardMsg, pluginsState.serverProto, server)
-		if err != nil {
+		if err != nil && (respMsg == nil || !respMsg.Truncated) {
 			cancel()
 			continue
 		}
-		if respMsg.Truncated {
+		if respMsg != nil && respMsg.Truncated {
+			cancel()
+			ctx, cancel = context.WithTimeout(context.Background(), pluginsState.timeout)
 			respMsg, _, err = client.Exchange(ctx, forwardMsg, "tcp", server)
 			if err != nil {
 				cancel()
