@@ -1003,9 +1003,16 @@ func fetchDoHServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, isN
 	if tls == nil || !tls.HandshakeComplete {
 		return ServerInfo{}, errors.New("TLS handshake failed")
 	}
+	queryMsg := dns.Msg{Data: body}
+	if err := queryMsg.Unpack(); err != nil {
+		return ServerInfo{}, err
+	}
 	msg := dns.Msg{Data: serverResponse}
 	if err := msg.Unpack(); err != nil {
 		dlog.Warnf("[%s]: %v", name, err)
+		return ServerInfo{}, err
+	}
+	if err := validateResponseQuestion(&queryMsg, &msg); err != nil {
 		return ServerInfo{}, err
 	}
 	if msg.Rcode != dns.RcodeNameError {
@@ -1166,9 +1173,16 @@ func _fetchODoHTargetInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, i
 		}
 		workingConfigs = append(workingConfigs, odohTargetConfig)
 
+		queryMsg := dns.Msg{Data: query}
+		if err := queryMsg.Unpack(); err != nil {
+			return ServerInfo{}, err
+		}
 		msg := dns.Msg{Data: serverResponse}
 		if err := msg.Unpack(); err != nil {
 			dlog.Warnf("[%s]: %v", name, err)
+			return ServerInfo{}, err
+		}
+		if err := validateResponseQuestion(&queryMsg, &msg); err != nil {
 			return ServerInfo{}, err
 		}
 		if msg.Rcode != dns.RcodeNameError {

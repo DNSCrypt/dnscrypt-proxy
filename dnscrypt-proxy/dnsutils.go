@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"net"
 	"net/netip"
 	"strings"
@@ -13,6 +14,27 @@ import (
 	"codeberg.org/miekg/dns/rdata"
 	"github.com/jedisct1/dlog"
 )
+
+func validateResponseQuestion(query, response *dns.Msg) error {
+	if query == nil || response == nil || len(query.Question) != 1 || len(response.Question) != 1 {
+		return errors.New("Unexpected number of questions")
+	}
+	qQuestion := query.Question[0]
+	rQuestion := response.Question[0]
+	qHeader := qQuestion.Header()
+	rHeader := rQuestion.Header()
+	if dns.RRToType(qQuestion) != dns.RRToType(rQuestion) || qHeader.Class != rHeader.Class || !dns.EqualName(qHeader.Name, rHeader.Name) {
+		return fmt.Errorf("Response question does not match query: %s/%d/%d != %s/%d/%d",
+			rHeader.Name,
+			dns.RRToType(rQuestion),
+			rHeader.Class,
+			qHeader.Name,
+			dns.RRToType(qQuestion),
+			qHeader.Class,
+		)
+	}
+	return nil
+}
 
 func EmptyResponseFromMessage(srcMsg *dns.Msg) *dns.Msg {
 	dstMsg := &dns.Msg{}
@@ -498,6 +520,15 @@ func _dnsExchange(
 	}
 	msg := dns.Msg{Data: packet}
 	if err := msg.Unpack(); err != nil {
+		return DNSExchangeResponse{err: err}
+	}
+	if !msg.Response {
+		return DNSExchangeResponse{err: errors.New("response bit is not set")}
+	}
+	if msg.ID != query.ID {
+		return DNSExchangeResponse{err: fmt.Errorf("response ID mismatch: %d != %d", msg.ID, query.ID)}
+	}
+	if err := validateResponseQuestion(query, &msg); err != nil {
 		return DNSExchangeResponse{err: err}
 	}
 	return DNSExchangeResponse{response: &msg, rtt: rtt, err: nil}
