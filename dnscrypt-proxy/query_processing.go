@@ -23,6 +23,10 @@ func validateQuery(query []byte) bool {
 
 // handleSynthesizedResponse - Handles a synthesized DNS response from plugins
 func handleSynthesizedResponse(pluginsState *PluginsState, synth *dns.Msg) ([]byte, error) {
+	if err := validateResponseForQuery(pluginsState.questionMsg, synth); err != nil {
+		pluginsState.returnCode = PluginsReturnCodeParseError
+		return nil, err
+	}
 	if err := synth.Pack(); err != nil {
 		pluginsState.returnCode = PluginsReturnCodeParseError
 		return nil, err
@@ -296,12 +300,11 @@ func processPlugins(
 	}
 
 	if pluginsState.synthResponse != nil {
-		if err = pluginsState.synthResponse.Pack(); err != nil {
-			pluginsState.returnCode = PluginsReturnCodeParseError
+		response, err = handleSynthesizedResponse(pluginsState, pluginsState.synthResponse)
+		if err != nil {
 			pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
 			return response, err
 		}
-		response = pluginsState.synthResponse.Data
 	}
 
 	// Check rcode and handle failures

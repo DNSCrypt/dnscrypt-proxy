@@ -23,17 +23,32 @@ func validateResponseQuestion(query, response *dns.Msg) error {
 	rQuestion := response.Question[0]
 	qHeader := qQuestion.Header()
 	rHeader := rQuestion.Header()
-	if dns.RRToType(qQuestion) != dns.RRToType(rQuestion) || qHeader.Class != rHeader.Class || !dns.EqualName(qHeader.Name, rHeader.Name) {
+	qType := dns.RRToType(qQuestion)
+	rType := dns.RRToType(rQuestion)
+	if qType != rType || qHeader.Class != rHeader.Class || !dns.EqualName(qHeader.Name, rHeader.Name) {
 		return fmt.Errorf("Response question does not match query: %s/%d/%d != %s/%d/%d",
 			rHeader.Name,
-			dns.RRToType(rQuestion),
+			rType,
 			rHeader.Class,
 			qHeader.Name,
-			dns.RRToType(qQuestion),
+			qType,
 			qHeader.Class,
 		)
 	}
 	return nil
+}
+
+func validateResponseForQuery(query, response *dns.Msg) error {
+	if query == nil || response == nil {
+		return errors.New("Missing query or response")
+	}
+	if !response.Response {
+		return errors.New("response bit is not set")
+	}
+	if response.ID != query.ID {
+		return fmt.Errorf("response ID mismatch: %d != %d", response.ID, query.ID)
+	}
+	return validateResponseQuestion(query, response)
 }
 
 func EmptyResponseFromMessage(srcMsg *dns.Msg) *dns.Msg {
@@ -522,13 +537,7 @@ func _dnsExchange(
 	if err := msg.Unpack(); err != nil {
 		return DNSExchangeResponse{err: err}
 	}
-	if !msg.Response {
-		return DNSExchangeResponse{err: errors.New("response bit is not set")}
-	}
-	if msg.ID != query.ID {
-		return DNSExchangeResponse{err: fmt.Errorf("response ID mismatch: %d != %d", msg.ID, query.ID)}
-	}
-	if err := validateResponseQuestion(query, &msg); err != nil {
+	if err := validateResponseForQuery(query, &msg); err != nil {
 		return DNSExchangeResponse{err: err}
 	}
 	return DNSExchangeResponse{response: &msg, rtt: rtt, err: nil}
