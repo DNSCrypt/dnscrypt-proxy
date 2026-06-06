@@ -192,7 +192,8 @@ func processODoHQuery(
 	}
 
 	responseBody, responseCode, _, _, err := proxy.xTransport.ObliviousDoHQuery(
-		serverInfo.useGet, targetURL, odohQuery.odohMessage, proxy.timeout)
+		serverInfo.useGet, targetURL, odohQuery.odohMessage, proxy.timeout,
+	)
 
 	if err == nil && len(responseBody) > 0 && responseCode == 200 {
 		response, err := odohQuery.decryptResponse(responseBody)

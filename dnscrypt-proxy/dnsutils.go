@@ -26,7 +26,8 @@ func validateResponseQuestion(query, response *dns.Msg) error {
 	qType := dns.RRToType(qQuestion)
 	rType := dns.RRToType(rQuestion)
 	if qType != rType || qHeader.Class != rHeader.Class || !dns.EqualName(qHeader.Name, rHeader.Name) {
-		return fmt.Errorf("Response question does not match query: %s/%d/%d != %s/%d/%d",
+		return fmt.Errorf(
+			"Response question does not match query: %s/%d/%d != %s/%d/%d",
 			rHeader.Name,
 			rType,
 			rHeader.Class,

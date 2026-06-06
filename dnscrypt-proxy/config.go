@@ -543,7 +543,8 @@ func configureBrokenImplementations(proxy *Proxy, config *Config) {
 	// Backwards compatibility
 	config.BrokenImplementations.FragmentsBlocked = append(
 		config.BrokenImplementations.FragmentsBlocked,
-		config.BrokenImplementations.BrokenQueryPadding...)
+		config.BrokenImplementations.BrokenQueryPadding...,
+	)
 
 	proxy.serversBlockingFragments = config.BrokenImplementations.FragmentsBlocked
 }
