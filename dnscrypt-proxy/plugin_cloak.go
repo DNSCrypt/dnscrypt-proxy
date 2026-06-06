@@ -27,6 +27,12 @@ type CloakedName struct {
 	PTR         []string
 }
 
+// followsTarget returns true when resolving this rule requires following its
+// name target. Rules mapped to at least one IP address never follow it.
+func (cloakedName *CloakedName) followsTarget() bool {
+	return !cloakedName.isIP && cloakedName.target != ""
+}
+
 type PluginCloak struct {
 	sync.RWMutex
 	patternMatcher *PatternMatcher
@@ -148,25 +154,50 @@ func (plugin *PluginCloak) loadRules(lines string, patternMatcher *PatternMatche
 		}
 	}
 
+	return detectCloakingLoops(cloakedNames, patternMatcher)
+}
+
+// detectCloakingLoops rejects rules whose name targets form a resolution loop.
+// A target that matches another cloaking rule is fine as long as the chain
+// terminates: rules mapped to IP addresses never follow their name target at
+// runtime, so they end the chain. Only chains that revisit a rule can loop
+// forever. The offender with the lowest line number is reported so the error
+// does not depend on map iteration order.
+func detectCloakingLoops(cloakedNames map[string]*CloakedName, patternMatcher *PatternMatcher) error {
 	var firstRecursive *CloakedName
 	var firstRecursivePattern string
 	for _, cloakedName := range cloakedNames {
-		if cloakedName.isIP || cloakedName.target == "" {
+		if !cloakedName.followsTarget() {
 			continue
 		}
-		matched, pattern, _ := patternMatcher.Eval(cloakedName.target)
-		if matched && (firstRecursive == nil || cloakedName.lineNo < firstRecursive.lineNo) {
-			firstRecursive = cloakedName
-			firstRecursivePattern = pattern
+		visited := map[*CloakedName]bool{cloakedName: true}
+		current := cloakedName
+		for {
+			matched, pattern, xNext := patternMatcher.Eval(current.target)
+			if !matched {
+				break
+			}
+			next := xNext.(*CloakedName)
+			if !next.followsTarget() {
+				break
+			}
+			if visited[next] {
+				if firstRecursive == nil || cloakedName.lineNo < firstRecursive.lineNo {
+					firstRecursive = cloakedName
+					firstRecursivePattern = pattern
+				}
+				break
+			}
+			visited[next] = true
+			current = next
 		}
 	}
 	if firstRecursive != nil {
 		return fmt.Errorf(
-			"recursive cloaking rule at line %d: target [%s] matches cloak pattern [%s]",
+			"recursive cloaking rule at line %d: target [%s] loops back to cloak pattern [%s]",
 			firstRecursive.lineNo, firstRecursive.target, firstRecursivePattern,
 		)
 	}
-
 	return nil
 }
 
@@ -294,7 +325,7 @@ func (plugin *PluginCloak) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 		}
 	}
 	synth := EmptyResponseFromMessage(msg)
-	if !cloakedName.isIP && ((qtype == dns.TypeA && cloakedName.ipv4 == nil) ||
+	if cloakedName.followsTarget() && ((qtype == dns.TypeA && cloakedName.ipv4 == nil) ||
 		(qtype == dns.TypeAAAA && cloakedName.ipv6 == nil) || expired) {
 		target := cloakedName.target
 		plugin.RUnlock()
