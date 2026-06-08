@@ -853,11 +853,7 @@ func (s *baseServer) handleInitialImpl(p receivedPacket, hdr *wire.Header) error
 		delete(s.zeroRTTQueues, hdr.DestConnectionID)
 	}
 
-	s.handshakingCount.Add(1)
-	go func() {
-		defer s.handshakingCount.Done()
-		s.handleNewConn(conn)
-	}()
+	s.handshakingCount.Go(func() { s.handleNewConn(conn) })
 	go conn.run()
 	return nil
 }

@@ -115,6 +115,13 @@ func (m *outgoingStreamsMap[T]) OpenStreamSync(ctx context.Context) (T, error) {
 		if m.closeErr != nil {
 			return *new(T), m.closeErr
 		}
+		if err := ctx.Err(); err != nil {
+			m.openQueue = slices.DeleteFunc(m.openQueue, func(c chan struct{}) bool {
+				return c == waitChan
+			})
+			m.maybeUnblockOpenSync()
+			return *new(T), err
+		}
 		if m.nextStream > m.maxStream {
 			// no stream available. Continue waiting
 			continue

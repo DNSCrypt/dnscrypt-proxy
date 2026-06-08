@@ -3,18 +3,16 @@ package handshake
 import (
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/hkdf"
 	"crypto/rand"
 	"crypto/sha256"
 	"fmt"
-	"io"
-
-	"golang.org/x/crypto/hkdf"
 )
 
 // TokenProtectorKey is the key used to encrypt both Retry and session resumption tokens.
 type TokenProtectorKey [32]byte
 
-const tokenNonceSize = 32
+const tokenSaltSize = 32
 
 // tokenProtector is used to create and verify a token
 type tokenProtector struct {
@@ -28,47 +26,53 @@ func newTokenProtector(key TokenProtectorKey) *tokenProtector {
 
 // NewToken encodes data into a new token.
 func (s *tokenProtector) NewToken(data []byte) ([]byte, error) {
-	var nonce [tokenNonceSize]byte
-	if _, err := rand.Read(nonce[:]); err != nil {
+	var salt [tokenSaltSize]byte
+	if _, err := rand.Read(salt[:]); err != nil {
 		return nil, err
 	}
-	aead, aeadNonce, err := s.createAEAD(nonce[:])
+	aead, err := s.createAEAD(salt[:])
 	if err != nil {
 		return nil, err
 	}
-	return append(nonce[:], aead.Seal(nil, aeadNonce, data, nil)...), nil
+	return append(salt[:], aead.Seal(nil, nil, data, nil)...), nil
 }
 
 // DecodeToken decodes a token.
 func (s *tokenProtector) DecodeToken(p []byte) ([]byte, error) {
-	if len(p) < tokenNonceSize {
+	if len(p) < tokenSaltSize {
 		return nil, fmt.Errorf("token too short: %d", len(p))
 	}
-	nonce := p[:tokenNonceSize]
-	aead, aeadNonce, err := s.createAEAD(nonce)
+	salt := p[:tokenSaltSize]
+	aead, err := s.createAEAD(salt)
 	if err != nil {
 		return nil, err
 	}
-	return aead.Open(nil, aeadNonce, p[tokenNonceSize:], nil)
+	if len(p[tokenSaltSize:]) < aead.Overhead() {
+		return nil, fmt.Errorf("token too short: %d", len(p))
+	}
+	return aead.Open(nil, nil, p[tokenSaltSize:], nil)
 }
 
-func (s *tokenProtector) createAEAD(nonce []byte) (cipher.AEAD, []byte, error) {
-	h := hkdf.New(sha256.New, s.key[:], nonce, []byte("quic-go token source"))
-	key := make([]byte, 32) // use a 32 byte key, in order to select AES-256
-	if _, err := io.ReadFull(h, key); err != nil {
-		return nil, nil, err
+const tokenProtectorHKDFInfo = "quic-go token source"
+
+func (s *tokenProtector) createAEAD(salt []byte) (cipher.AEAD, error) {
+	prk, err := hkdf.Extract(sha256.New, s.key[:], salt)
+	if err != nil {
+		return nil, err
 	}
-	aeadNonce := make([]byte, 12)
-	if _, err := io.ReadFull(h, aeadNonce); err != nil {
-		return nil, nil, err
+
+	key, err := hkdf.Expand(sha256.New, prk, tokenProtectorHKDFInfo, 32)
+	if err != nil {
+		return nil, err
 	}
+
 	c, err := aes.NewCipher(key)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	aead, err := cipher.NewGCM(c)
+	aead, err := cipher.NewGCMWithRandomNonce(c)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	return aead, aeadNonce, nil
+	return aead, nil
 }

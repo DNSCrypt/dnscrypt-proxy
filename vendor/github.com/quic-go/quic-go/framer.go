@@ -102,7 +102,7 @@ func (f *framer) Append(
 	f.mutex.Lock()
 	// pop STREAM frames, until less than 128 bytes are left in the packet
 	numActiveStreams := f.streamQueue.Len()
-	for i := 0; i < numActiveStreams; i++ {
+	for range numActiveStreams {
 		if protocol.MinStreamFrameSize > maxLen {
 			break
 		}

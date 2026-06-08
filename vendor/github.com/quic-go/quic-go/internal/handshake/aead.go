@@ -1,12 +1,13 @@
 package handshake
 
 import (
+	"crypto/cipher"
 	"encoding/binary"
 
 	"github.com/quic-go/quic-go/internal/protocol"
 )
 
-func createAEAD(suite cipherSuite, trafficSecret []byte, v protocol.Version) *xorNonceAEAD {
+func createAEAD(suite cipherSuite, trafficSecret []byte, v protocol.Version) cipher.AEAD {
 	keyLabel := hkdfLabelKeyV1
 	ivLabel := hkdfLabelIVV1
 	if v == protocol.Version2 {
@@ -19,14 +20,14 @@ func createAEAD(suite cipherSuite, trafficSecret []byte, v protocol.Version) *xo
 }
 
 type longHeaderSealer struct {
-	aead            *xorNonceAEAD
+	aead            cipher.AEAD
 	headerProtector headerProtector
 	nonceBuf        [8]byte
 }
 
 var _ LongHeaderSealer = &longHeaderSealer{}
 
-func newLongHeaderSealer(aead *xorNonceAEAD, headerProtector headerProtector) LongHeaderSealer {
+func newLongHeaderSealer(aead cipher.AEAD, headerProtector headerProtector) LongHeaderSealer {
 	if aead.NonceSize() != 8 {
 		panic("unexpected nonce size")
 	}
@@ -50,7 +51,7 @@ func (s *longHeaderSealer) Overhead() int {
 }
 
 type longHeaderOpener struct {
-	aead            *xorNonceAEAD
+	aead            cipher.AEAD
 	headerProtector headerProtector
 	highestRcvdPN   protocol.PacketNumber // highest packet number received (which could be successfully unprotected)
 
@@ -60,7 +61,7 @@ type longHeaderOpener struct {
 
 var _ LongHeaderOpener = &longHeaderOpener{}
 
-func newLongHeaderOpener(aead *xorNonceAEAD, headerProtector headerProtector) LongHeaderOpener {
+func newLongHeaderOpener(aead cipher.AEAD, headerProtector headerProtector) LongHeaderOpener {
 	if aead.NonceSize() != 8 {
 		panic("unexpected nonce size")
 	}

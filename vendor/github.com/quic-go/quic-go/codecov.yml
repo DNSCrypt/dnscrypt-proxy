@@ -8,7 +8,6 @@ coverage:
     - internal/mocks/
     - internal/utils/linkedlist/linkedlist.go
     - internal/testdata
-    - internal/synctest
     - testutils/
     - fuzzing/
     - metrics/
@@ -17,3 +16,8 @@ coverage:
       default:
         threshold: 0.5
     patch: false
+flags:
+  clusterfuzz-lite-batch:
+    joined: false
+  clusterfuzz:
+    joined: false
