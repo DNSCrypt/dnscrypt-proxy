@@ -390,7 +390,7 @@ function formatSourceStatus(status, error) {
 }
 
 function fetchMetrics() {
-    return fetch('/api/metrics', {
+    return fetch(window.location.origin + '/api/metrics', {
         credentials: 'same-origin',
         cache: 'no-store',
         headers: { 'Accept': 'application/json' },
