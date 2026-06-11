@@ -327,7 +327,6 @@ func (srv *Server) serveDNS(w *response, r *Msg) {
 		return
 
 	case MsgReject, MsgRejectNotImplemented:
-		r.Opcode = OpcodeQuery
 		r.Rcode = RcodeFormatError
 		if action == MsgRejectNotImplemented {
 			r.Rcode = RcodeNotImplemented
