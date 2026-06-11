@@ -15,4 +15,6 @@ fuzzing/*/sonarprofile
 fuzzing/*/suppressions
 fuzzing/*/corpus/
 
+**/testdata/fuzz/
+
 gomock_reflect_*/

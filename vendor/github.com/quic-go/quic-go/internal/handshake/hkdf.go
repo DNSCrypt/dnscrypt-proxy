@@ -2,9 +2,9 @@ package handshake
 
 import (
 	"crypto"
+	"crypto/hkdf"
 	"encoding/binary"
-
-	"golang.org/x/crypto/hkdf"
+	"fmt"
 )
 
 // hkdfExpandLabel HKDF expands a label as defined in RFC 8446, section 7.1.
@@ -18,10 +18,9 @@ func hkdfExpandLabel(hash crypto.Hash, secret, context []byte, label string, len
 	b[3+6+len(label)] = uint8(len(context))
 	b = append(b, context...)
 
-	out := make([]byte, length)
-	n, err := hkdf.Expand(hash.New, secret, b).Read(out)
-	if err != nil || n != length {
-		panic("quic: HKDF-Expand-Label invocation failed unexpectedly")
+	expanded, err := hkdf.Expand(hash.New, secret, string(b), length)
+	if err != nil {
+		panic(fmt.Errorf("quic: HKDF-Expand-Label invocation failed unexpectedly: %v", err))
 	}
-	return out
+	return expanded
 }

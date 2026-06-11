@@ -78,13 +78,11 @@ func getMacOSVersion() (int, error) {
 	if err := unix.Uname(uname); err != nil {
 		return 0, err
 	}
-
-	release := string(uname.Release[:])
-	idx := strings.Index(release, ".")
-	if idx == -1 {
+	before, _, ok := strings.Cut(string(uname.Release[:]), ".")
+	if !ok {
 		return 0, nil
 	}
-	version, err := strconv.Atoi(release[:idx])
+	version, err := strconv.Atoi(before)
 	if err != nil {
 		return 0, err
 	}

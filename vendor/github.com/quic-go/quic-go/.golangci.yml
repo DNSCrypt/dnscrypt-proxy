@@ -53,8 +53,6 @@ linters:
           deny:
             - pkg: 'github.com/quic-go/quic-go/internal'
               desc: 'no dependency on quic-go/internal'
-          allow:
-            - 'github.com/quic-go/quic-go/internal/synctest'
     misspell:
       ignore-rules:
         - ect
@@ -82,14 +80,6 @@ linters:
           - staticcheck
         path: _test\.go
         text: 'SA1029:' # inappropriate key in call to context.WithValue
-      # WebTransport still relies on the ConnectionTracingID and ConnectionTracingKey.
-      # See https://github.com/quic-go/quic-go/issues/4405 for more details.
-      - linters:
-          - staticcheck
-        paths:
-          - http3/
-          - integrationtests/self/http_test.go
-        text: 'SA1019:.+quic\.ConnectionTracing(ID|Key)'
     paths:
       - internal/handshake/cipher_suite.go
       - third_party$
