@@ -10,9 +10,11 @@ package http2
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"net"
 	"net/http"
+	"slices"
 	"sync"
 	"time"
 )
@@ -44,6 +46,20 @@ func configureServer(s *http.Server, conf *Server) error {
 			h2.IdleTimeout = h1.ReadTimeout
 		}
 	}
+
+	// Register h2 and http/1.1 ALPN protocols on s.TLSConfig, matching
+	// the pre-wrapping implementation in server.go, so that TLS listeners
+	// built from s.TLSConfig still negotiate HTTP/2.
+	if s.TLSConfig == nil {
+		s.TLSConfig = new(tls.Config)
+	}
+	if !slices.Contains(s.TLSConfig.NextProtos, NextProtoTLS) {
+		s.TLSConfig.NextProtos = append(s.TLSConfig.NextProtos, NextProtoTLS)
+	}
+	if !slices.Contains(s.TLSConfig.NextProtos, "http/1.1") {
+		s.TLSConfig.NextProtos = append(s.TLSConfig.NextProtos, "http/1.1")
+	}
+
 	conf.state = &serverInternalState{
 		s1: s,
 	}
@@ -158,4 +174,44 @@ type FrameWriteRequest struct {
 	// Ideally we'd define this in writesched_common.go,
 	// to avoid duplicating an exported symbol across two files,
 	// but the changes required to make this work are fairly large.
+}
+
+func (wr FrameWriteRequest) StreamID() uint32 {
+	return 0
+}
+
+func (wr FrameWriteRequest) DataSize() int {
+	return 0
+}
+
+func (wr FrameWriteRequest) Consume(n int32) (FrameWriteRequest, FrameWriteRequest, int) {
+	return FrameWriteRequest{}, FrameWriteRequest{}, 0
+}
+
+func (wr FrameWriteRequest) String() string {
+	return ""
+}
+
+// NewPriorityWriteScheduler is deprecated.
+//
+// Deprecated: User-provided write schedulers are deprecated.
+func NewPriorityWriteScheduler(cfg *PriorityWriteSchedulerConfig) WriteScheduler {
+	return unsupportedWriteScheduler{}
+}
+
+// NewRandomWriteScheduler is deprecated.
+//
+// Deprecated: User-provided write schedulers are deprecated.
+func NewRandomWriteScheduler() WriteScheduler {
+	return unsupportedWriteScheduler{}
+}
+
+type unsupportedWriteScheduler struct{}
+
+func (unsupportedWriteScheduler) OpenStream(streamID uint32, options OpenStreamOptions) {}
+func (unsupportedWriteScheduler) CloseStream(streamID uint32)                           {}
+func (unsupportedWriteScheduler) AdjustStream(streamID uint32, priority PriorityParam)  {}
+func (unsupportedWriteScheduler) Push(wr FrameWriteRequest)                             {}
+func (unsupportedWriteScheduler) Pop() (wr FrameWriteRequest, ok bool) {
+	return FrameWriteRequest{}, false
 }
