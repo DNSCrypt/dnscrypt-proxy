@@ -1,7 +1,7 @@
 ## go-acl
 
-[![Build status](https://ci.appveyor.com/api/projects/status/rbdyu7c39o2j0ru9?svg=true)](https://ci.appveyor.com/project/nathan-osman/go-acl)
-[![GoDoc](https://godoc.org/github.com/hectane/go-acl?status.svg)](https://godoc.org/github.com/hectane/go-acl)
+[![Build Status](https://github.com/hectane/go-acl/actions/workflows/test.yml/badge.svg)](https://github.com/hectane/go-acl/actions/workflows/test.yml)
+[![GoDoc](https://pkg.go.dev/badge/github.com/hectane/go-acl.svg)](https://pkg.go.dev/github.com/hectane/go-acl)
 [![MIT License](http://img.shields.io/badge/license-MIT-9370d8.svg?style=flat)](http://opensource.org/licenses/MIT)
 
 Manipulating ACLs (Access Control Lists) on Windows is difficult. go-acl wraps the Windows API functions that control access to objects, simplifying the process.

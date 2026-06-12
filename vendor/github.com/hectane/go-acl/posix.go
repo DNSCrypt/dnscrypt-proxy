@@ -1,8 +1,10 @@
-//+build !windows
+//go:build !windows
 
 package acl
 
-import "os"
+import (
+	"os"
+)
 
 // Chmod is os.Chmod.
 var Chmod = os.Chmod
