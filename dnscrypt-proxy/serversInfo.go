@@ -60,6 +60,9 @@ type ServerInfo struct {
 	ServerPk           [32]byte
 	SharedKey          [32]byte
 	MagicQuery         [8]byte
+	PqPublicKey        []byte
+	PqCertContext      []byte
+	pqResumption       *pqResumptionState
 	knownBugs          ServerBugs
 	Proto              stamps.StampProtoType
 	useGet             bool
@@ -854,6 +857,9 @@ func fetchDNSCryptServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp
 	if err != nil {
 		return ServerInfo{}, err
 	}
+	if certInfo.CryptoConstruction == XWingPQ {
+		dlog.Noticef("[%v] using the post-quantum X-Wing key exchange", name)
+	}
 	remoteUDPAddr, err := net.ResolveUDPAddr("udp", stamp.ServerAddrStr)
 	if err != nil {
 		return ServerInfo{}, err
@@ -903,6 +909,9 @@ func fetchDNSCryptServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp
 		ServerPk:           certInfo.ServerPk,
 		SharedKey:          certInfo.SharedKey,
 		CryptoConstruction: certInfo.CryptoConstruction,
+		PqPublicKey:        certInfo.PqPublicKey,
+		PqCertContext:      certInfo.PqCertContext,
+		pqResumption:       newPqResumptionState(certInfo.CryptoConstruction),
 		Name:               name,
 		Timeout:            proxy.timeout,
 		UDPAddr:            remoteUDPAddr,

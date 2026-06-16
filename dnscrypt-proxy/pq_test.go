@@ -1,0 +1,121 @@
+package main
+
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"testing"
+
+	"github.com/cloudflare/circl/kem/xwing"
+	"github.com/jedisct1/xsecretbox"
+)
+
+func iotaBytes(n int, start byte) []byte {
+	b := make([]byte, n)
+	for i := range b {
+		b[i] = start + byte(i)
+	}
+	return b
+}
+
+func mustHex(s string) []byte {
+	b, err := hex.DecodeString(s)
+	if err != nil {
+		panic(err)
+	}
+	return b
+}
+
+// TestPQAppendix3Vectors checks the client's PQ crypto against the pinned
+// values of Appendix 3 of the draft, the same anchor the server validates.
+func TestPQAppendix3Vectors(t *testing.T) {
+	clientMagic := [8]byte{0xa1, 0xb2, 0xc3, 0xd4, 0xe5, 0xf6, 0x07, 0x18}
+	dnsQuery := mustHex("12340100000100000000000003777777076578616d706c6503636f6d0000010001")
+
+	// X-Wing keygen + deterministic encapsulation.
+	rseed := iotaBytes(32, 0x20)
+	peseed := iotaBytes(64, 0x40)
+	_, pk := xwing.DeriveKeyPair(rseed)
+	pkb, _ := pk.MarshalBinary()
+	if got := hex.EncodeToString(hashSum(pkb)); got != "a1f324bc0701f1234fbba7b11901023b3644f3bb8c6eb4ee4368d7e859eb6228" {
+		t.Fatalf("resolver-pk mismatch: %s", got)
+	}
+	kemSS, ct, err := xwing.Encapsulate(pkb, peseed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := hex.EncodeToString(kemSS); got != "8dac8602d4ce5e27e81335b54b25fdcaea86e56613214ee0522db4a5e0a38d50" {
+		t.Fatalf("kem-ss mismatch: %s", got)
+	}
+
+	// Build the certificate bytes the cert-context is derived from.
+	binCert := make([]byte, 1320)
+	copy(binCert[0:4], []byte{0x44, 0x4e, 0x53, 0x43})
+	binCert[4], binCert[5] = 0x00, 0x03
+	copy(binCert[72:1288], pkb)
+	copy(binCert[1288:1296], clientMagic[:])
+	copy(binCert[1296:1300], []byte{0x00, 0x00, 0x00, 0x01})
+	copy(binCert[1300:1304], []byte{0x68, 0x00, 0x00, 0x00})
+	copy(binCert[1304:1308], []byte{0x68, 0x01, 0x51, 0x80})
+	copy(binCert[1308:1320], pqProfileExtension())
+
+	certCtx := pqCertContext(binCert)
+	sharedKey := pqDeriveSharedKey(kemSS, clientMagic, certCtx, ct)
+	if got := hex.EncodeToString(sharedKey[:]); got != "e6d4ab9cffc9b49e2a64d80d7eb2dde280f806b89e834d596ad385b1dd75e9ef" {
+		t.Fatalf("shared-key mismatch: %s", got)
+	}
+
+	// Full query: encrypted-query and the wire packet.
+	qNonce := iotaBytes(12, 0xb0)
+	qNonce24 := append(append([]byte{}, qNonce...), make([]byte, 12)...)
+	padded := pqPad(dnsQuery, 64)
+	if len(padded) != 64 {
+		t.Fatalf("padded query length: %d", len(padded))
+	}
+	encQuery := xsecretbox.Seal(nil, qNonce24, padded, sharedKey[:])
+	if got := hex.EncodeToString(encQuery); got != "c41764468cb42d3a837c51234c08be714af49e1a6830ea6da28178e9e280d76bac1b87fd7f56515f2b2cc3d4715aaa42907c282db1edff0bc3b92cd535a710e264859a5bdaf67c17ffa6e1c6f6e02a50" {
+		t.Fatalf("encrypted-query mismatch: %s", got)
+	}
+	fullQuery := append([]byte{}, clientMagic[:]...)
+	fullQuery = append(fullQuery, ct...)
+	fullQuery = append(fullQuery, qNonce...)
+	fullQuery = append(fullQuery, encQuery...)
+	if len(fullQuery) != 1220 {
+		t.Fatalf("full query length: %d", len(fullQuery))
+	}
+	if got := hex.EncodeToString(hashSum(fullQuery)); got != "65c3421776283f503779916e7b5c32d0d41c885508ad892b349688db6c901233" {
+		t.Fatalf("full query wire mismatch: %s", got)
+	}
+
+	// Resumption secret derivation matches the server's.
+	rs := pqResumeSecret(sharedKey, clientMagic, qNonce)
+	if got := hex.EncodeToString(rs[:]); got != "df158804e3f8ddf383ff7c9d3128491b29437a894936ec72c68aed8a9553272b" {
+		t.Fatalf("resume-secret mismatch: %s", got)
+	}
+
+	// Resumed query against the pinned ticket.
+	ticket := mustHex("00000001d0d1d2d3d4d5d6d7d8d9dadbdcdddedfe0e1e2e3e4e5e6e7e1d90c86474574e0e51e82d8a29938896b0999e827138f8f452f21e044d9809f65a013cfad8981be94c1354178b3e03dd518c28bcbaab962aa45246e446de7763288aa4a01e207725a0ae7bc95452fef3743f6083deb10cd23e2881e8d9307fc2f43bce1a97e")
+	rqNonce := iotaBytes(12, 0xf0)
+	resumedKey := pqResumedSharedKey(rs, clientMagic, rqNonce, ticket)
+	if got := hex.EncodeToString(resumedKey[:]); got != "e61f03acb2ee2ef01b952a0c312c60653267d47a2766fcfd804747fdf2fe789f" {
+		t.Fatalf("resumed shared-key mismatch: %s", got)
+	}
+	rqNonce24 := append(append([]byte{}, rqNonce...), make([]byte, 12)...)
+	rpadded := pqPad(dnsQuery, 256)
+	rencQuery := xsecretbox.Seal(nil, rqNonce24, rpadded, resumedKey[:])
+	resumeQuery := append([]byte{}, PQResumeMagic[:]...)
+	resumeQuery = append(resumeQuery, 0x00, 0x82)
+	resumeQuery = append(resumeQuery, ticket...)
+	resumeQuery = append(resumeQuery, rqNonce...)
+	resumeQuery = append(resumeQuery, rencQuery...)
+	if len(resumeQuery) != 424 {
+		t.Fatalf("resume query length: %d", len(resumeQuery))
+	}
+	if got := hex.EncodeToString(hashSum(resumeQuery)); got != "34be2e331b4d7c7e808e968c5efc9f25675a9de9064cb33f7c66950e0e4e6db7" {
+		t.Fatalf("resume query wire mismatch: %s", got)
+	}
+}
+
+func hashSum(b []byte) []byte {
+	h := sha256.Sum256(b)
+	return h[:]
+}

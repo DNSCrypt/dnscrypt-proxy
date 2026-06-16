@@ -80,6 +80,9 @@ func (proxy *Proxy) Encrypt(
 	packet []byte,
 	proto string,
 ) (sharedKey *[32]byte, encrypted []byte, clientNonce []byte, err error) {
+	if serverInfo.CryptoConstruction == XWingPQ {
+		return proxy.encryptPQ(serverInfo, packet, proto)
+	}
 	nonce, clientNonce := make([]byte, NonceSize), make([]byte, HalfNonceSize)
 	if _, err := crypto_rand.Read(clientNonce); err != nil {
 		return nil, nil, nil, err
@@ -153,9 +156,10 @@ func (proxy *Proxy) Decrypt(
 	}
 	var packet []byte
 	var err error
-	if serverInfo.CryptoConstruction == XChacha20Poly1305 {
+	switch serverInfo.CryptoConstruction {
+	case XChacha20Poly1305, XWingPQ:
 		packet, err = xsecretbox.Open(nil, serverNonce, encrypted[responseHeaderLen:], sharedKey[:])
-	} else {
+	default:
 		var xsalsaServerNonce [24]byte
 		copy(xsalsaServerNonce[:], serverNonce)
 		var ok bool
@@ -166,6 +170,12 @@ func (proxy *Proxy) Decrypt(
 	}
 	if err != nil {
 		return encrypted, err
+	}
+	if serverInfo.CryptoConstruction == XWingPQ {
+		packet, err = proxy.pqStripControl(serverInfo, sharedKey, nonce, packet)
+		if err != nil {
+			return encrypted, err
+		}
 	}
 	packet, err = unpad(packet)
 	if err != nil || len(packet) < MinDNSPacketSize {
