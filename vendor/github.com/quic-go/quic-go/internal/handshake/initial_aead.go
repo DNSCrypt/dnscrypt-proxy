@@ -2,9 +2,9 @@ package handshake
 
 import (
 	"crypto"
+	"crypto/hkdf"
 	"crypto/tls"
-
-	"golang.org/x/crypto/hkdf"
+	"fmt"
 
 	"github.com/quic-go/quic-go/internal/protocol"
 )
@@ -21,38 +21,47 @@ const (
 	hkdfLabelIVV2  = "quicv2 iv"
 )
 
-func getSalt(v protocol.Version) []byte {
-	if v == protocol.Version2 {
-		return quicSaltV2
-	}
-	return quicSaltV1
-}
-
 var initialSuite = getCipherSuite(tls.TLS_AES_128_GCM_SHA256)
 
 // NewInitialAEAD creates a new AEAD for Initial encryption / decryption.
 func NewInitialAEAD(connID protocol.ConnectionID, pers protocol.Perspective, v protocol.Version) (LongHeaderSealer, LongHeaderOpener) {
-	clientSecret, serverSecret := computeSecrets(connID, v)
-	var mySecret, otherSecret []byte
-	if pers == protocol.PerspectiveClient {
-		mySecret = clientSecret
-		otherSecret = serverSecret
-	} else {
-		mySecret = serverSecret
-		otherSecret = clientSecret
-	}
-	myKey, myIV := computeInitialKeyAndIV(mySecret, v)
-	otherKey, otherIV := computeInitialKeyAndIV(otherSecret, v)
+	var sealer LongHeaderSealer
+	var opener LongHeaderOpener
+	// The keys for the Initial AEAD are derived from the connection ID and constants defined in RFC 9001, Section 5.2.
+	// By design, the Initial encryption level provides no confidentiality against any attacker who has read the RFC.
+	// Its sole purpose is integrity protection. The Initial encryption level is therefore out of scope for FIPS 140.
+	// See also this thread on the IETF QUIC mailing list: https://mailarchive.ietf.org/arch/msg/quic/k2kl2W_n5WDEZBbt3O31Ef2XBbM.
+	withoutFIPSEnforcement(func() {
+		clientSecret, serverSecret := computeSecrets(connID, v)
+		var mySecret, otherSecret []byte
+		if pers == protocol.PerspectiveClient {
+			mySecret = clientSecret
+			otherSecret = serverSecret
+		} else {
+			mySecret = serverSecret
+			otherSecret = clientSecret
+		}
+		myKey, myIV := computeInitialKeyAndIV(mySecret, v)
+		otherKey, otherIV := computeInitialKeyAndIV(otherSecret, v)
 
-	encrypter := initialSuite.AEAD(myKey, myIV)
-	decrypter := initialSuite.AEAD(otherKey, otherIV)
+		encrypter := initialSuite.AEAD(myKey, myIV)
+		decrypter := initialSuite.AEAD(otherKey, otherIV)
 
-	return newLongHeaderSealer(encrypter, newHeaderProtector(initialSuite, mySecret, true, v)),
-		newLongHeaderOpener(decrypter, newAESHeaderProtector(initialSuite, otherSecret, true, hkdfHeaderProtectionLabel(v)))
+		sealer = newLongHeaderSealer(encrypter, newHeaderProtector(initialSuite, mySecret, true, v))
+		opener = newLongHeaderOpener(decrypter, newHeaderProtector(initialSuite, otherSecret, true, v))
+	})
+	return sealer, opener
 }
 
 func computeSecrets(connID protocol.ConnectionID, v protocol.Version) (clientSecret, serverSecret []byte) {
-	initialSecret := hkdf.Extract(crypto.SHA256.New, connID.Bytes(), getSalt(v))
+	salt := quicSaltV1
+	if v == protocol.Version2 {
+		salt = quicSaltV2
+	}
+	initialSecret, err := hkdf.Extract(crypto.SHA256.New, connID.Bytes(), salt)
+	if err != nil {
+		panic(fmt.Errorf("quic: HKDF-Extract invocation failed unexpectedly: %v", err))
+	}
 	clientSecret = hkdfExpandLabel(crypto.SHA256, initialSecret, []byte{}, "client in", crypto.SHA256.Size())
 	serverSecret = hkdfExpandLabel(crypto.SHA256, initialSecret, []byte{}, "server in", crypto.SHA256.Size())
 	return

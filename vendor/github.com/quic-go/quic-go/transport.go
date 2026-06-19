@@ -511,11 +511,7 @@ func (t *Transport) close(e error) {
 	// Close existing connections
 	var wg sync.WaitGroup
 	for _, handler := range t.handlers {
-		wg.Add(1)
-		go func(handler packetHandler) {
-			handler.destroy(e)
-			wg.Done()
-		}(handler)
+		wg.Go(func() { handler.destroy(e) })
 	}
 	t.mutex.Unlock() // closing connections requires releasing transport mutex
 	wg.Wait()

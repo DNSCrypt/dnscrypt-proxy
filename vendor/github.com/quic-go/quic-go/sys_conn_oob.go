@@ -151,7 +151,7 @@ func newConn(c OOBCapablePacketConn, supportsDF bool) (*oobConn, error) {
 			ECN: isECNEnabled(),
 		},
 	}
-	for i := 0; i < batchSize; i++ {
+	for i := range batchSize {
 		oobConn.messages[i].OOB = make([]byte, oobBufferSize)
 	}
 	return oobConn, nil

@@ -216,7 +216,7 @@ func (h *mtuFinderAckHandler) OnAcked(wire.Frame) {
 		}
 	}
 	if j > 0 {
-		for i := 0; i < len(h.lost); i++ {
+		for i := range len(h.lost) {
 			if i+j < len(h.lost) {
 				h.lost[i] = h.lost[i+j]
 			} else {
