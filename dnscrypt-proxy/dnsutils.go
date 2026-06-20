@@ -348,6 +348,20 @@ type DNSExchangeResponse struct {
 	err              error
 }
 
+// A resolver and an Anonymized DNSCrypt relay both refuse to return a UDP
+// response larger than the request that triggered it, so a post-quantum
+// certificate only comes back over UDP when the certificate probe is padded past
+// the response. A PQ certificate is ~1.3 KB, ~1.5 KB once paired with the classical
+// certificate; during a key rotation the set doubles to two classical plus two PQ
+// certificates, roughly 3 KB. The large probe is padded past that rollover size so
+// PQ discovery keeps working through relays even mid-rotation. The fragments-blocked
+// probe stays small on purpose, so a PQ resolver truncates it and we still learn of
+// PQ support through the TC bit and fall back to TCP.
+const (
+	certProbePaddedLen           = 3200
+	certProbeFragmentsBlockedLen = 480
+)
+
 func DNSExchange(
 	proxy *Proxy,
 	proto string,
@@ -374,7 +388,7 @@ func DNSExchange(
 					select {
 					case <-cancelChannel:
 					default:
-						option = _dnsExchange(proxy, proto, query, serverAddress, relay, 1500)
+						option = _dnsExchange(proxy, proto, query, serverAddress, relay, certProbePaddedLen)
 					}
 					option.fragmentsBlocked = false
 					option.priority = 0
@@ -390,7 +404,7 @@ func DNSExchange(
 				select {
 				case <-cancelChannel:
 				default:
-					option = _dnsExchange(proxy, proto, query, serverAddress, relay, 480)
+					option = _dnsExchange(proxy, proto, query, serverAddress, relay, certProbeFragmentsBlockedLen)
 				}
 				option.fragmentsBlocked = true
 				option.priority = 1
