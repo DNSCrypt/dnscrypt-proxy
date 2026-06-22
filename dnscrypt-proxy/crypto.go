@@ -44,12 +44,19 @@ func unpad(packet []byte) ([]byte, error) {
 	}
 }
 
+func isClassicDNSCryptConstruction(cryptoConstruction CryptoConstruction) bool {
+	return cryptoConstruction == XSalsa20Poly1305 || cryptoConstruction == XChacha20Poly1305
+}
+
 func ComputeSharedKey(
 	cryptoConstruction CryptoConstruction,
 	secretKey *[32]byte,
 	serverPk *[32]byte,
 	providerName *string,
 ) (sharedKey [32]byte) {
+	if !isClassicDNSCryptConstruction(cryptoConstruction) {
+		return [32]byte{}
+	}
 	if cryptoConstruction == XChacha20Poly1305 {
 		var err error
 		sharedKey, err = xsecretbox.SharedKey(*secretKey, *serverPk)
@@ -75,6 +82,64 @@ func ComputeSharedKey(
 	return sharedKey
 }
 
+// setDNSCryptClientKeyLocked installs a fresh client keypair. The caller must
+// hold proxy.cryptoKeyMu for writing.
+func (proxy *Proxy) setDNSCryptClientKeyLocked(secretKey [32]byte) {
+	proxy.proxySecretKey = secretKey
+	curve25519.ScalarBaseMult(&proxy.proxyPublicKey, &proxy.proxySecretKey)
+}
+
+// recomputeServerSharedKeyLocked refreshes a classic server's shared key from
+// the current client key. The caller must hold proxy.cryptoKeyMu.
+func (proxy *Proxy) recomputeServerSharedKeyLocked(serverInfo *ServerInfo) {
+	if !isClassicDNSCryptConstruction(serverInfo.CryptoConstruction) {
+		return
+	}
+	serverInfo.SharedKey = ComputeSharedKey(
+		serverInfo.CryptoConstruction,
+		&proxy.proxySecretKey,
+		&serverInfo.ServerPk,
+		&serverInfo.Name,
+	)
+}
+
+func (proxy *Proxy) initDNSCryptClientKey() error {
+	var secretKey [32]byte
+	if _, err := crypto_rand.Read(secretKey[:]); err != nil {
+		return err
+	}
+	proxy.cryptoKeyMu.Lock()
+	proxy.setDNSCryptClientKeyLocked(secretKey)
+	proxy.cryptoKeyMu.Unlock()
+	return nil
+}
+
+func (proxy *Proxy) rotateDNSCryptClientKey() error {
+	var secretKey [32]byte
+	if _, err := crypto_rand.Read(secretKey[:]); err != nil {
+		return err
+	}
+	proxy.cryptoKeyMu.Lock()
+	proxy.setDNSCryptClientKeyLocked(secretKey)
+	proxy.serversInfo.Lock()
+	for _, serverInfo := range proxy.serversInfo.inner {
+		proxy.recomputeServerSharedKeyLocked(serverInfo)
+	}
+	proxy.serversInfo.Unlock()
+	proxy.cryptoKeyMu.Unlock()
+	return nil
+}
+
+func (proxy *Proxy) computeSharedKey(
+	cryptoConstruction CryptoConstruction,
+	serverPk *[32]byte,
+	providerName *string,
+) [32]byte {
+	proxy.cryptoKeyMu.RLock()
+	defer proxy.cryptoKeyMu.RUnlock()
+	return ComputeSharedKey(cryptoConstruction, &proxy.proxySecretKey, serverPk, providerName)
+}
+
 func (proxy *Proxy) Encrypt(
 	serverInfo *ServerInfo,
 	packet []byte,
@@ -90,9 +155,12 @@ func (proxy *Proxy) Encrypt(
 	copy(nonce, clientNonce)
 	var publicKey *[PublicKeySize]byte
 	if proxy.ephemeralKeys {
+		proxy.cryptoKeyMu.RLock()
+		secretKey := proxy.proxySecretKey
+		proxy.cryptoKeyMu.RUnlock()
 		h := sha512.New512_256()
 		h.Write(clientNonce)
-		h.Write(proxy.proxySecretKey[:])
+		h.Write(secretKey[:])
 		var ephSk [32]byte
 		h.Sum(ephSk[:0])
 		var xPublicKey [PublicKeySize]byte
@@ -101,8 +169,12 @@ func (proxy *Proxy) Encrypt(
 		xsharedKey := ComputeSharedKey(serverInfo.CryptoConstruction, &ephSk, &serverInfo.ServerPk, nil)
 		sharedKey = &xsharedKey
 	} else {
-		sharedKey = &serverInfo.SharedKey
-		publicKey = &proxy.proxyPublicKey
+		proxy.cryptoKeyMu.RLock()
+		serverSharedKey := serverInfo.SharedKey
+		proxyPublicKey := proxy.proxyPublicKey
+		proxy.cryptoKeyMu.RUnlock()
+		sharedKey = &serverSharedKey
+		publicKey = &proxyPublicKey
 	}
 	minQuestionSize := QueryOverhead + len(packet)
 	if proto == "udp" {

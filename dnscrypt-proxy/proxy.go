@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	crypto_rand "crypto/rand"
 	"encoding/binary"
 	"net"
 	"os"
@@ -15,61 +14,63 @@ import (
 	"github.com/jedisct1/dlog"
 	clocksmith "github.com/jedisct1/go-clocksmith"
 	stamps "github.com/jedisct1/go-dnsstamps"
-	"golang.org/x/crypto/curve25519"
 	netproxy "golang.org/x/net/proxy"
 )
 
 type Proxy struct {
-	pluginsGlobals                PluginsGlobals
-	serversInfo                   ServersInfo
-	questionSizeEstimator         QuestionSizeEstimator
-	registeredServers             []RegisteredServer
-	dns64Resolvers                []string
-	dns64Prefixes                 []string
-	serversBlockingFragments      []string
-	ednsClientSubnets             []*net.IPNet
-	queryLogIgnoredQtypes         []string
-	localDoHListeners             []*net.TCPListener
-	queryMeta                     []string
-	enableHotReload               bool
-	udpListeners                  []*net.UDPConn
-	sources                       []*Source
-	tcpListeners                  []*net.TCPListener
-	registeredRelays              []RegisteredServer
-	listenAddresses               []string
-	localDoHListenAddresses       []string
-	monitoringUI                  MonitoringUIConfig
-	monitoringInstance            *MonitoringUI
-	xTransport                    *XTransport
-	allWeeklyRanges               *map[string]WeeklyRanges
-	routes                        *map[string][]string
-	captivePortalMap              *CaptivePortalMap
-	nxLogFormat                   string
-	localDoHCertFile              string
-	localDoHCertKeyFile           string
-	captivePortalMapFile          string
-	localDoHPath                  string
-	cloakFile                     string
-	forwardFile                   string
-	blockIPFormat                 string
-	blockIPLogFile                string
-	allowedIPFile                 string
-	allowedIPFormat               string
-	allowedIPLogFile              string
-	queryLogFormat                string
-	blockIPFile                   string
-	allowNameFile                 string
-	allowNameFormat               string
-	allowNameLogFile              string
-	blockNameLogFile              string
-	blockNameFormat               string
-	blockNameFile                 string
-	queryLogFile                  string
-	blockedQueryResponse          string
-	userName                      string
-	nxLogFile                     string
-	proxySecretKey                [32]byte
-	proxyPublicKey                [32]byte
+	pluginsGlobals           PluginsGlobals
+	serversInfo              ServersInfo
+	questionSizeEstimator    QuestionSizeEstimator
+	registeredServers        []RegisteredServer
+	dns64Resolvers           []string
+	dns64Prefixes            []string
+	serversBlockingFragments []string
+	ednsClientSubnets        []*net.IPNet
+	queryLogIgnoredQtypes    []string
+	localDoHListeners        []*net.TCPListener
+	queryMeta                []string
+	enableHotReload          bool
+	udpListeners             []*net.UDPConn
+	sources                  []*Source
+	tcpListeners             []*net.TCPListener
+	registeredRelays         []RegisteredServer
+	listenAddresses          []string
+	localDoHListenAddresses  []string
+	monitoringUI             MonitoringUIConfig
+	monitoringInstance       *MonitoringUI
+	xTransport               *XTransport
+	allWeeklyRanges          *map[string]WeeklyRanges
+	routes                   *map[string][]string
+	captivePortalMap         *CaptivePortalMap
+	nxLogFormat              string
+	localDoHCertFile         string
+	localDoHCertKeyFile      string
+	captivePortalMapFile     string
+	localDoHPath             string
+	cloakFile                string
+	forwardFile              string
+	blockIPFormat            string
+	blockIPLogFile           string
+	allowedIPFile            string
+	allowedIPFormat          string
+	allowedIPLogFile         string
+	queryLogFormat           string
+	blockIPFile              string
+	allowNameFile            string
+	allowNameFormat          string
+	allowNameLogFile         string
+	blockNameLogFile         string
+	blockNameFormat          string
+	blockNameFile            string
+	queryLogFile             string
+	blockedQueryResponse     string
+	userName                 string
+	nxLogFile                string
+	proxySecretKey           [32]byte
+	proxyPublicKey           [32]byte
+	// cryptoKeyMu guards proxySecretKey, proxyPublicKey, and the classic
+	// SharedKey of every ServerInfo while the client key is rotated.
+	cryptoKeyMu                   sync.RWMutex
 	ServerNames                   []string
 	DisabledServerNames           []string
 	requiredProps                 stamps.ServerInformalProperties
@@ -128,6 +129,17 @@ func (proxy *Proxy) registerLocalDoHListener(listener *net.TCPListener) {
 	proxy.listenersMu.Lock()
 	proxy.localDoHListeners = append(proxy.localDoHListeners, listener)
 	proxy.listenersMu.Unlock()
+}
+
+func (proxy *Proxy) handleNetworkChange() {
+	if proxy.ephemeralKeys {
+		return
+	}
+	if err := proxy.rotateDNSCryptClientKey(); err != nil {
+		dlog.Errorf("Unable to rotate DNSCrypt client key after network change: %v", err)
+		return
+	}
+	dlog.Notice("Rotated DNSCrypt client key after network change")
 }
 
 func (proxy *Proxy) addDNSListener(listenAddrStr string) {
@@ -264,11 +276,11 @@ func (proxy *Proxy) StartProxy() {
 	proxy.questionSizeEstimator = NewQuestionSizeEstimator()
 	proxy.netMonitor = newNetworkMonitor()
 	proxy.netMonitor.init()
-	go proxy.netMonitor.start(context.Background(), defaultNetworkMonitorInterval)
-	if _, err := crypto_rand.Read(proxy.proxySecretKey[:]); err != nil {
+	proxy.netMonitor.onChange = proxy.handleNetworkChange
+	if err := proxy.initDNSCryptClientKey(); err != nil {
 		dlog.Fatal(err)
 	}
-	curve25519.ScalarBaseMult(&proxy.proxyPublicKey, &proxy.proxySecretKey)
+	go proxy.netMonitor.start(context.Background(), defaultNetworkMonitorInterval)
 
 	// Initialize and start the monitoring UI if enabled
 	if proxy.monitoringUI.Enabled {

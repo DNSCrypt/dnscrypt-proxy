@@ -209,7 +209,7 @@ func FetchCurrentDNSCryptCert(
 		} else {
 			var serverPk [32]byte
 			copy(serverPk[:], binCert[72:104])
-			sharedKey := ComputeSharedKey(cryptoConstruction, &proxy.proxySecretKey, &serverPk, &providerName)
+			sharedKey := proxy.computeSharedKey(cryptoConstruction, &serverPk, &providerName)
 			certInfo.SharedKey = sharedKey
 			certInfo.PqPublicKey = nil
 			certInfo.PqCertContext = nil

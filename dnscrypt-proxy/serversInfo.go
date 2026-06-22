@@ -288,6 +288,8 @@ func (serversInfo *ServersInfo) refreshServer(proxy *Proxy, name string, stamp s
 	}
 	newServer.rtt = ewma.NewMovingAverage(RTTEwmaDecay)
 	newServer.rtt.Set(float64(newServer.initialRtt))
+	proxy.cryptoKeyMu.RLock()
+	proxy.recomputeServerSharedKeyLocked(&newServer)
 	serversInfo.Lock()
 	found := false
 	for i, oldServer := range serversInfo.inner {
@@ -301,6 +303,7 @@ func (serversInfo *ServersInfo) refreshServer(proxy *Proxy, name string, stamp s
 		serversInfo.inner = append(serversInfo.inner, &newServer)
 	}
 	serversInfo.Unlock()
+	proxy.cryptoKeyMu.RUnlock()
 	if !found {
 		proxy.serversInfo.registerServer(name, stamp)
 	}

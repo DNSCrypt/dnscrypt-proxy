@@ -31,6 +31,7 @@ type networkMonitor struct {
 	mu          sync.Mutex
 	last        string
 	fingerprint func() string
+	onChange    func()
 }
 
 func newNetworkMonitor() *networkMonitor {
@@ -77,17 +78,24 @@ func (monitor *networkMonitor) start(ctx context.Context, interval time.Duration
 func (monitor *networkMonitor) check() {
 	fingerprint := monitor.currentFingerprint()
 	monitor.mu.Lock()
-	defer monitor.mu.Unlock()
 	if monitor.last == "" {
 		monitor.last = fingerprint
+		monitor.mu.Unlock()
 		return
 	}
 	if monitor.last == fingerprint {
+		monitor.mu.Unlock()
 		return
 	}
 	monitor.last = fingerprint
 	monitor.epochValue.Add(1)
-	dlog.Notice("Network change detected; rotating PQ resumption tickets")
+	onChange := monitor.onChange
+	monitor.mu.Unlock()
+
+	dlog.Notice("Network change detected; rotating DNSCrypt client state")
+	if onChange != nil {
+		onChange()
+	}
 }
 
 func (monitor *networkMonitor) currentFingerprint() string {
