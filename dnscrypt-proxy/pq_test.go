@@ -2,8 +2,10 @@ package main
 
 import (
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
 	"testing"
+	"time"
 
 	"github.com/cloudflare/circl/kem/xwing"
 	"github.com/jedisct1/xsecretbox"
@@ -113,6 +115,67 @@ func TestPQAppendix3Vectors(t *testing.T) {
 	if got := hex.EncodeToString(hashSum(resumeQuery)); got != "34be2e331b4d7c7e808e968c5efc9f25675a9de9064cb33f7c66950e0e4e6db7" {
 		t.Fatalf("resume query wire mismatch: %s", got)
 	}
+}
+
+func TestPQResumptionStateEpoch(t *testing.T) {
+	state := newPqResumptionState(XWingPQ)
+	ticket := []byte("ticket")
+	var resumeSecret [32]byte
+	resumeSecret[0] = 42
+
+	state.store(ticket, resumeSecret, time.Now().Add(time.Minute), 7)
+	gotTicket, gotSecret, ok := state.get(7)
+	if !ok {
+		t.Fatal("expected ticket for matching epoch")
+	}
+	if string(gotTicket) != string(ticket) || gotSecret != resumeSecret {
+		t.Fatal("unexpected ticket or resume secret")
+	}
+
+	gotTicket[0] = 'T'
+	gotTicket, _, ok = state.get(8)
+	if ok || gotTicket != nil {
+		t.Fatal("expected epoch mismatch to reject ticket")
+	}
+	if state.ticket != nil || state.resumeSecret != [32]byte{} || !state.expiry.IsZero() {
+		t.Fatal("expected epoch mismatch to clear stored ticket material")
+	}
+}
+
+func TestPQProcessControlDiscardsTicketAfterNetworkChange(t *testing.T) {
+	monitor := newNetworkMonitor()
+	monitor.epochValue.Store(2)
+	proxy := &Proxy{netMonitor: monitor}
+	serverInfo := &ServerInfo{
+		Name:         "test",
+		pqResumption: newPqResumptionState(XWingPQ),
+	}
+	sharedKey := &[32]byte{1, 2, 3}
+	clientNonce := []byte("abcdefghijkl")
+	control := buildTestPQControl([]byte("ticket"), 60)
+
+	proxy.pqProcessControl(serverInfo, sharedKey, clientNonce, control, 1)
+	if _, _, ok := serverInfo.pqResumption.get(2); ok {
+		t.Fatal("expected ticket from old epoch to be discarded")
+	}
+
+	proxy.pqProcessControl(serverInfo, sharedKey, clientNonce, control, 2)
+	if ticket, _, ok := serverInfo.pqResumption.get(2); !ok || string(ticket) != "ticket" {
+		t.Fatal("expected ticket to be stored when query epoch still matches")
+	}
+}
+
+func buildTestPQControl(ticket []byte, lifetime uint32) []byte {
+	control := append([]byte{}, PQControlMagic[:]...)
+	control = append(control, PQControlVersion)
+	var lifetimeBytes [4]byte
+	binary.BigEndian.PutUint32(lifetimeBytes[:], lifetime)
+	control = append(control, lifetimeBytes[:]...)
+	var ticketLen [2]byte
+	binary.BigEndian.PutUint16(ticketLen[:], uint16(len(ticket)))
+	control = append(control, ticketLen[:]...)
+	control = append(control, ticket...)
+	return control
 }
 
 func hashSum(b []byte) []byte {

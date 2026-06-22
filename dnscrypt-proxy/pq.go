@@ -137,6 +137,7 @@ type pqResumptionState struct {
 	ticket       []byte
 	resumeSecret [32]byte
 	expiry       time.Time
+	epoch        uint64
 }
 
 func newPqResumptionState(c CryptoConstruction) *pqResumptionState {
@@ -146,7 +147,7 @@ func newPqResumptionState(c CryptoConstruction) *pqResumptionState {
 	return &pqResumptionState{}
 }
 
-func (s *pqResumptionState) store(ticket []byte, resumeSecret [32]byte, expiry time.Time) {
+func (s *pqResumptionState) store(ticket []byte, resumeSecret [32]byte, expiry time.Time, epoch uint64) {
 	if s == nil {
 		return
 	}
@@ -155,15 +156,22 @@ func (s *pqResumptionState) store(ticket []byte, resumeSecret [32]byte, expiry t
 	s.ticket = append([]byte(nil), ticket...)
 	s.resumeSecret = resumeSecret
 	s.expiry = expiry
+	s.epoch = epoch
 }
 
-func (s *pqResumptionState) get() (ticket []byte, resumeSecret [32]byte, ok bool) {
+func (s *pqResumptionState) get(currentEpoch uint64) (ticket []byte, resumeSecret [32]byte, ok bool) {
 	if s == nil {
 		return nil, [32]byte{}, false
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.ticket == nil || !time.Now().Before(s.expiry) {
+		return nil, [32]byte{}, false
+	}
+	if s.epoch != currentEpoch {
+		s.ticket = nil
+		s.resumeSecret = [32]byte{}
+		s.expiry = time.Time{}
 		return nil, [32]byte{}, false
 	}
 	return append([]byte(nil), s.ticket...), s.resumeSecret, true
@@ -175,15 +183,16 @@ func (proxy *Proxy) encryptPQ(
 	serverInfo *ServerInfo,
 	packet []byte,
 	_ string,
-) (sharedKey *[32]byte, encrypted []byte, clientNonce []byte, err error) {
+) (sharedKey *[32]byte, encrypted []byte, clientNonce []byte, queryEpoch uint64, err error) {
+	queryEpoch = proxy.networkEpoch()
 	nonce := make([]byte, NonceSize)
 	clientNonce = make([]byte, HalfNonceSize)
 	if _, err = crypto_rand.Read(clientNonce); err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, queryEpoch, err
 	}
 	copy(nonce, clientNonce)
 
-	if ticket, resumeSecret, ok := serverInfo.pqResumption.get(); ok {
+	if ticket, resumeSecret, ok := serverInfo.pqResumption.get(queryEpoch); ok {
 		key := pqResumedSharedKey(resumeSecret, serverInfo.MagicQuery, clientNonce, ticket)
 		padded := pqPad(packet, 256)
 		ct := xsecretbox.Seal(nil, nonce, padded, key[:])
@@ -195,12 +204,12 @@ func (proxy *Proxy) encryptPQ(
 		out = append(out, ticket...)
 		out = append(out, clientNonce...)
 		out = append(out, ct...)
-		return &key, out, clientNonce, nil
+		return &key, out, clientNonce, queryEpoch, nil
 	}
 
 	kemSS, ctKem, err := pqEncapsulate(serverInfo.PqPublicKey)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, queryEpoch, err
 	}
 	key := pqDeriveSharedKey(kemSS, serverInfo.MagicQuery, serverInfo.PqCertContext, ctKem)
 	padded := pqPad(packet, 64)
@@ -210,7 +219,7 @@ func (proxy *Proxy) encryptPQ(
 	out = append(out, ctKem...)
 	out = append(out, clientNonce...)
 	out = append(out, ct...)
-	return &key, out, clientNonce, nil
+	return &key, out, clientNonce, queryEpoch, nil
 }
 
 // pqStripControl removes the PQ response control block (storing any ticket it
@@ -219,6 +228,7 @@ func (proxy *Proxy) pqStripControl(
 	serverInfo *ServerInfo,
 	sharedKey *[32]byte,
 	clientNonce, plaintext []byte,
+	queryEpoch uint64,
 ) ([]byte, error) {
 	if len(plaintext) < 2 {
 		return nil, errors.New("PQ response too short")
@@ -230,7 +240,7 @@ func (proxy *Proxy) pqStripControl(
 	control := plaintext[2 : 2+controlLen]
 	body := plaintext[2+controlLen:]
 	if controlLen > 0 {
-		proxy.pqProcessControl(serverInfo, sharedKey, clientNonce, control)
+		proxy.pqProcessControl(serverInfo, sharedKey, clientNonce, control, queryEpoch)
 	}
 	return body, nil
 }
@@ -239,6 +249,7 @@ func (proxy *Proxy) pqProcessControl(
 	serverInfo *ServerInfo,
 	sharedKey *[32]byte,
 	clientNonce, control []byte,
+	queryEpoch uint64,
 ) {
 	if len(control) < 11 {
 		return
@@ -252,8 +263,12 @@ func (proxy *Proxy) pqProcessControl(
 		return
 	}
 	ticket := control[11 : 11+ticketLen]
+	if queryEpoch != proxy.networkEpoch() {
+		dlog.Debugf("[%v] discarded a PQ resumption ticket after a network change", serverInfo.Name)
+		return
+	}
 	resumeSecret := pqResumeSecret(*sharedKey, serverInfo.MagicQuery, clientNonce)
 	expiry := time.Now().Add(time.Duration(lifetime) * time.Second)
-	serverInfo.pqResumption.store(ticket, resumeSecret, expiry)
+	serverInfo.pqResumption.store(ticket, resumeSecret, expiry, queryEpoch)
 	dlog.Debugf("[%v] stored a PQ resumption ticket (lifetime %ds)", serverInfo.Name, lifetime)
 }

@@ -79,13 +79,13 @@ func (proxy *Proxy) Encrypt(
 	serverInfo *ServerInfo,
 	packet []byte,
 	proto string,
-) (sharedKey *[32]byte, encrypted []byte, clientNonce []byte, err error) {
+) (sharedKey *[32]byte, encrypted []byte, clientNonce []byte, queryEpoch uint64, err error) {
 	if serverInfo.CryptoConstruction == XWingPQ {
 		return proxy.encryptPQ(serverInfo, packet, proto)
 	}
 	nonce, clientNonce := make([]byte, NonceSize), make([]byte, HalfNonceSize)
 	if _, err := crypto_rand.Read(clientNonce); err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, queryEpoch, err
 	}
 	copy(nonce, clientNonce)
 	var publicKey *[PublicKeySize]byte
@@ -110,7 +110,7 @@ func (proxy *Proxy) Encrypt(
 	} else {
 		var xpad [1]byte
 		if _, err := crypto_rand.Read(xpad[:]); err != nil {
-			return nil, nil, nil, err
+			return nil, nil, nil, queryEpoch, err
 		}
 		minQuestionSize += int(xpad[0])
 	}
@@ -122,7 +122,7 @@ func (proxy *Proxy) Encrypt(
 	}
 	if QueryOverhead+len(packet)+1 > paddedLength {
 		err = errors.New("Question too large; cannot be padded")
-		return sharedKey, encrypted, clientNonce, err
+		return sharedKey, encrypted, clientNonce, queryEpoch, err
 	}
 	encrypted = append(serverInfo.MagicQuery[:], publicKey[:]...)
 	encrypted = append(encrypted, nonce[:HalfNonceSize]...)
@@ -134,7 +134,7 @@ func (proxy *Proxy) Encrypt(
 		copy(xsalsaNonce[:], nonce)
 		encrypted = secretbox.Seal(encrypted, padded, &xsalsaNonce, sharedKey)
 	}
-	return sharedKey, encrypted, clientNonce, err
+	return sharedKey, encrypted, clientNonce, queryEpoch, err
 }
 
 func (proxy *Proxy) Decrypt(
@@ -142,6 +142,7 @@ func (proxy *Proxy) Decrypt(
 	sharedKey *[32]byte,
 	encrypted []byte,
 	nonce []byte,
+	queryEpoch uint64,
 ) ([]byte, error) {
 	serverMagicLen := len(ServerMagic)
 	responseHeaderLen := serverMagicLen + NonceSize
@@ -172,7 +173,7 @@ func (proxy *Proxy) Decrypt(
 		return encrypted, err
 	}
 	if serverInfo.CryptoConstruction == XWingPQ {
-		packet, err = proxy.pqStripControl(serverInfo, sharedKey, nonce, packet)
+		packet, err = proxy.pqStripControl(serverInfo, sharedKey, nonce, packet, queryEpoch)
 		if err != nil {
 			return encrypted, err
 		}

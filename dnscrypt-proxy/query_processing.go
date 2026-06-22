@@ -42,11 +42,11 @@ func processDNSCryptQuery(
 	query []byte,
 	serverProto string,
 ) ([]byte, error) {
-	sharedKey, encryptedQuery, clientNonce, err := proxy.Encrypt(serverInfo, query, serverProto)
+	sharedKey, encryptedQuery, clientNonce, queryEpoch, err := proxy.Encrypt(serverInfo, query, serverProto)
 	if err != nil && serverProto == "udp" {
 		dlog.Debug("Unable to pad for UDP, re-encrypting query for TCP")
 		serverProto = "tcp"
-		sharedKey, encryptedQuery, clientNonce, err = proxy.Encrypt(serverInfo, query, serverProto)
+		sharedKey, encryptedQuery, clientNonce, queryEpoch, err = proxy.Encrypt(serverInfo, query, serverProto)
 	}
 
 	if err != nil {
@@ -59,7 +59,7 @@ func processDNSCryptQuery(
 	var response []byte
 
 	if serverProto == "udp" {
-		response, err = proxy.exchangeWithUDPServer(serverInfo, sharedKey, encryptedQuery, clientNonce)
+		response, err = proxy.exchangeWithUDPServer(serverInfo, sharedKey, encryptedQuery, clientNonce, queryEpoch)
 		retryOverTCP := false
 		if err == nil && len(response) >= MinDNSPacketSize && response[2]&0x02 == 0x02 {
 			retryOverTCP = true
@@ -69,17 +69,17 @@ func processDNSCryptQuery(
 		}
 		if retryOverTCP {
 			serverProto = "tcp"
-			sharedKey, encryptedQuery, clientNonce, err = proxy.Encrypt(serverInfo, query, serverProto)
+			sharedKey, encryptedQuery, clientNonce, queryEpoch, err = proxy.Encrypt(serverInfo, query, serverProto)
 			if err != nil {
 				pluginsState.returnCode = PluginsReturnCodeParseError
 				pluginsState.ApplyLoggingPlugins(&proxy.pluginsGlobals)
 				serverInfo.noticeFailure(proxy)
 				return nil, err
 			}
-			response, err = proxy.exchangeWithTCPServer(serverInfo, sharedKey, encryptedQuery, clientNonce)
+			response, err = proxy.exchangeWithTCPServer(serverInfo, sharedKey, encryptedQuery, clientNonce, queryEpoch)
 		}
 	} else {
-		response, err = proxy.exchangeWithTCPServer(serverInfo, sharedKey, encryptedQuery, clientNonce)
+		response, err = proxy.exchangeWithTCPServer(serverInfo, sharedKey, encryptedQuery, clientNonce, queryEpoch)
 	}
 
 	// Check for stale response if there was an error
