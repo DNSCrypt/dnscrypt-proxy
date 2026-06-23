@@ -50,6 +50,8 @@ const (
 	resolverRetryCount          = 3
 	resolverRetryInitialBackoff = 150 * time.Millisecond
 	resolverRetryMaxBackoff     = 1 * time.Second
+
+	DefaultHTTP3NegativeCacheTTL = 30 * time.Minute
 )
 
 type CachedIPItem struct {
@@ -63,9 +65,18 @@ type CachedIPs struct {
 	cache map[string]*CachedIPItem
 }
 
+// AltSupportEntry records what we know about a host's HTTP/3 support.
+// A positive port means HTTP/3 works on that port. A zero port means HTTP/3 is
+// suppressed: temporarily until negativeUntil when that is set, or permanently
+// (an explicit Alt-Svc: clear) when negativeUntil is the zero value.
+type AltSupportEntry struct {
+	port          uint16
+	negativeUntil time.Time
+}
+
 type AltSupport struct {
 	sync.RWMutex
-	cache map[string]uint16
+	cache map[string]AltSupportEntry
 }
 
 type XTransport struct {
@@ -98,7 +109,7 @@ func NewXTransport() *XTransport {
 	}
 	xTransport := XTransport{
 		cachedIPs:                CachedIPs{cache: make(map[string]*CachedIPItem)},
-		altSupport:               AltSupport{cache: make(map[string]uint16)},
+		altSupport:               AltSupport{cache: make(map[string]AltSupportEntry)},
 		keepAlive:                DefaultKeepAlive,
 		timeout:                  DefaultTimeout,
 		bootstrapResolvers:       []string{DefaultBootstrapResolver},
@@ -112,6 +123,54 @@ func NewXTransport() *XTransport {
 		keyLogWriter:             nil,
 	}
 	return &xTransport
+}
+
+// loadAltSupport reports the cached HTTP/3 state for a host. An expired
+// temporary negative entry is reported as absent (found=false) so that HTTP/3
+// can be probed again and a fresh Alt-Svc header can be parsed.
+func (xTransport *XTransport) loadAltSupport(host string) (port uint16, found bool, negative bool) {
+	xTransport.altSupport.RLock()
+	entry, found := xTransport.altSupport.cache[host]
+	xTransport.altSupport.RUnlock()
+	if !found {
+		return 0, false, false
+	}
+	if entry.port > 0 {
+		return entry.port, true, false
+	}
+	if entry.negativeUntil.IsZero() || time.Now().Before(entry.negativeUntil) {
+		return 0, true, true
+	}
+	return 0, false, false
+}
+
+// saveAltSupport stores a host's HTTP/3 state with no expiry. A positive port
+// records HTTP/3 support; a zero port records an explicit, permanent negative,
+// used for Alt-Svc: clear and for hosts that turned out not to support HTTP/3.
+func (xTransport *XTransport) saveAltSupport(host string, port uint16) {
+	xTransport.altSupport.Lock()
+	xTransport.altSupport.cache[host] = AltSupportEntry{port: port}
+	xTransport.altSupport.Unlock()
+}
+
+// saveAltSupportNegative suppresses HTTP/3 for a host for the given duration,
+// after which it is retried.
+func (xTransport *XTransport) saveAltSupportNegative(host string, ttl time.Duration) {
+	xTransport.altSupport.Lock()
+	xTransport.altSupport.cache[host] = AltSupportEntry{negativeUntil: time.Now().Add(ttl)}
+	xTransport.altSupport.Unlock()
+}
+
+// recordHTTP3ProbeFailure caches the outcome of a failed HTTP/3 probe once the
+// HTTP/2 fallback has revealed the server's Alt-Svc header. A host that still
+// advertises h3 is suppressed only temporarily, since the probe failure was
+// likely transient; any other host is suppressed permanently.
+func (xTransport *XTransport) recordHTTP3ProbeFailure(host string, advertisesH3 bool) {
+	if advertisesH3 {
+		xTransport.saveAltSupportNegative(host, DefaultHTTP3NegativeCacheTTL)
+	} else {
+		xTransport.saveAltSupport(host, 0)
+	}
 }
 
 func ParseIP(ipStr string) net.IP {
@@ -660,14 +719,13 @@ func (xTransport *XTransport) Fetch(
 	}
 	host, port := ExtractHostAndPort(url.Host, 443)
 	hasAltSupport := false
+	http3Suppressed := false
 
 	if xTransport.h3Transport != nil {
+		altPort, found, negative := xTransport.loadAltSupport(url.Host)
+		http3Suppressed = negative
 		if xTransport.http3Probe {
-			xTransport.altSupport.RLock()
-			altPort, inNegativeCache := xTransport.altSupport.cache[url.Host]
-			inNegativeCache = inNegativeCache && altPort == 0
-			xTransport.altSupport.RUnlock()
-			if !inNegativeCache {
+			if !negative {
 				client.Transport = xTransport.h3Transport
 				dlog.Debugf("Probing HTTP/3 transport for [%s]", url.Host)
 			} else {
@@ -675,15 +733,10 @@ func (xTransport *XTransport) Fetch(
 			}
 		} else {
 			// Otherwise use traditional Alt-Svc detection
-			xTransport.altSupport.RLock()
-			var altPort uint16
-			altPort, hasAltSupport = xTransport.altSupport.cache[url.Host]
-			xTransport.altSupport.RUnlock()
-			if hasAltSupport && altPort > 0 { // altPort > 0 ensures we're not in the negative cache
-				if int(altPort) == port {
-					client.Transport = xTransport.h3Transport
-					dlog.Debugf("Using HTTP/3 transport for [%s]", url.Host)
-				}
+			hasAltSupport = found && !negative
+			if hasAltSupport && altPort > 0 && int(altPort) == port {
+				client.Transport = xTransport.h3Transport
+				dlog.Debugf("Using HTTP/3 transport for [%s]", url.Host)
 			}
 		}
 	}
@@ -731,17 +784,20 @@ func (xTransport *XTransport) Fetch(
 	rtt := time.Since(start)
 
 	// Handle HTTP/3 error case - fallback to HTTP/2 when HTTP/3 fails
+	h3ProbeFailed := false
 	if err != nil && client.Transport == xTransport.h3Transport {
 		if xTransport.http3Probe {
+			// A probe is only an optimistic guess at HTTP/3 support, so the
+			// negative-cache decision is deferred until the HTTP/2 fallback below
+			// lets us inspect the server's Alt-Svc header.
 			dlog.Debugf("HTTP/3 probe failed for [%s]: [%s] - falling back to HTTP/2", url.Host, err)
+			h3ProbeFailed = true
 		} else {
+			// Here the host explicitly advertised Alt-Svc: h3, so the failure is
+			// more likely transient. Suppress HTTP/3 only until the TTL expires.
 			dlog.Debugf("HTTP/3 connection failed for [%s]: [%s] - falling back to HTTP/2", url.Host, err)
+			xTransport.saveAltSupportNegative(url.Host, DefaultHTTP3NegativeCacheTTL)
 		}
-
-		// Add server to negative cache when HTTP/3 fails
-		xTransport.altSupport.Lock()
-		xTransport.altSupport.cache[url.Host] = 0 // 0 port means HTTP/3 failed and should not be tried again
-		xTransport.altSupport.Unlock()
 
 		// Retry with HTTP/2
 		client.Transport = xTransport.transport
@@ -773,27 +829,24 @@ func (xTransport *XTransport) Fetch(
 		return nil, statusCode, nil, rtt, err
 	}
 	if xTransport.h3Transport != nil && !hasAltSupport {
-		// Check if there's entry in negative cache when using http3_probe
-		skipAltSvcParsing := false
-		if xTransport.http3Probe {
-			xTransport.altSupport.RLock()
-			altPort, inCache := xTransport.altSupport.cache[url.Host]
-			xTransport.altSupport.RUnlock()
-			// If server is in negative cache (altPort == 0), don't attempt to parse Alt-Svc header
-			if inCache && altPort == 0 {
-				dlog.Debugf("Skipping Alt-Svc parsing for [%s] - previously failed HTTP/3 probe", url.Host)
-				skipAltSvcParsing = true
-			}
+		// In probe mode nothing rewrites the entry between the negative-cache read
+		// above and here, so reuse it rather than locking and looking it up again.
+		skipAltSvcParsing := xTransport.http3Probe && http3Suppressed
+		if skipAltSvcParsing {
+			dlog.Debugf("Skipping Alt-Svc parsing for [%s] - previously failed HTTP/3 probe", url.Host)
 		}
 
 		if !skipAltSvcParsing {
-			if alt, found := resp.Header["Alt-Svc"]; found {
+			alt, found := resp.Header["Alt-Svc"]
+			altPort := uint16(port & 0xffff)
+			advertisesH3 := false
+			if found {
 				dlog.Debugf("Alt-Svc [%s]: [%s]", url.Host, alt)
-				altPort := uint16(port & 0xffff)
 				for i, xalt := range alt {
 					if strings.TrimSpace(xalt) == "clear" {
 						dlog.Debugf("Alt-Svc clear for [%s] - HTTP/3 not available", url.Host)
 						altPort = 0
+						advertisesH3 = false
 						break
 					}
 					for j, v := range strings.Split(xalt, ";") {
@@ -806,16 +859,20 @@ func (xTransport *XTransport) Fetch(
 							v = strings.TrimSuffix(v, "\"")
 							if xAltPort, err := strconv.ParseUint(v, 10, 16); err == nil && xAltPort <= 65535 {
 								altPort = uint16(xAltPort)
+								advertisesH3 = true
 								dlog.Debugf("Using HTTP/3 for [%s]", url.Host)
 								break
 							}
 						}
 					}
 				}
-				xTransport.altSupport.Lock()
-				xTransport.altSupport.cache[url.Host] = altPort
+			}
+			switch {
+			case h3ProbeFailed:
+				xTransport.recordHTTP3ProbeFailure(url.Host, advertisesH3)
+			case found:
+				xTransport.saveAltSupport(url.Host, altPort)
 				dlog.Debugf("Caching altPort for [%v]", url.Host)
-				xTransport.altSupport.Unlock()
 			}
 		}
 	}
