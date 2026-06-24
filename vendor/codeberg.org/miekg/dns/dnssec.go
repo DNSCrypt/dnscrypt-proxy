@@ -10,7 +10,6 @@ import (
 	_ "crypto/sha256" // need its init function
 	_ "crypto/sha512" // need its init function
 	"encoding/asn1"
-	"encoding/binary"
 	"encoding/hex"
 	"hash"
 	"math/big"
@@ -24,8 +23,8 @@ import (
 
 // DNSSEC encryption algorithm codes.
 const (
-	_ uint8 = iota
-	RSAMD5
+	_      uint8 = iota
+	RSAMD5       // Deprecated.
 	DH
 	DSA
 	_ // Skip 4, RFC 6725, section 2.1
@@ -113,33 +112,22 @@ func (k *DNSKEY) KeyTag() uint16 {
 		return k.Tag
 	}
 	keytag := 0
-	switch k.Algorithm {
-	case RSAMD5:
-		// This algorithm has been deprecated, but keep this key-tag calculation.
-		// Look at the bottom two bytes of the modules, which the last item in the pubkey.
-		// See https://www.rfc-editor.org/errata/eid193 .
-		modulus, _ := pack.Base64([]byte(k.PublicKey))
-		if len(modulus) > 1 {
-			x := binary.BigEndian.Uint16(modulus[len(modulus)-3:])
-			keytag = int(x)
-		}
-	default:
-		wire := make([]byte, defaultBufSize/2)
-		n, err := k.pack(wire, 0, nil)
-		if err != nil {
-			return 0
-		}
-		wire = wire[:n]
-		for i, v := range wire {
-			if i&1 != 0 {
-				keytag += int(v) // must be larger than uint32
-			} else {
-				keytag += int(v) << 8
-			}
-		}
-		keytag += keytag >> 16 & 0xFFFF
-		keytag &= 0xFFFF
+	wire := make([]byte, defaultBufSize/2)
+	n, err := k.pack(wire, 0, nil)
+	if err != nil {
+		return 0
 	}
+	wire = wire[:n]
+	for i, v := range wire {
+		if i&1 != 0 {
+			keytag += int(v) // must be larger than uint32
+		} else {
+			keytag += int(v) << 8
+		}
+	}
+	keytag += keytag >> 16 & 0xFFFF
+	keytag &= 0xFFFF
+
 	k.Tag = uint16(keytag)
 	return k.Tag
 }
