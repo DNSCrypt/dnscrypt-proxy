@@ -44,14 +44,18 @@ func (set RRset) Swap(i, j int)      { set[i], set[j] = set[j], set[i] }
 // implemented?
 func CompareName(a, b string) int {
 	// See https://bert-hubert.blogspot.com/2015/10/how-to-do-fast-canonical-ordering-of.html
-	lasta, _ := dnsutilPrev(a, 0)
-	lastb, _ := dnsutilPrev(b, 0)
-
+	// Also exact copy of dnsutil/common.go
+	lasta := len(a)
+	lastb := len(b)
 	for {
-		cura, overshota := dnsutilPrev(a[:lasta], 1)
-		curb, overshotb := dnsutilPrev(b[:lastb], 1)
+		cura, overshota := dnsutilPrev(a, lasta)
+		curb, overshotb := dnsutilPrev(b, lastb)
 		if overshota && overshotb {
-			return 0
+			return compareLabel(a[cura:lasta-1], b[curb:lastb-1])
+		}
+		x := compareLabel(a[cura:lasta-1], b[curb:lastb-1])
+		if x != 0 || (overshota && overshotb) {
+			return x
 		}
 		if overshota {
 			return -1
@@ -60,11 +64,6 @@ func CompareName(a, b string) int {
 			return 1
 		}
 
-		// -1 because of the ending dot, which we most def. do _not_ want to compare
-		x := compareLabel(a[cura:lasta-1], b[curb:lastb-1])
-		if x != 0 {
-			return x
-		}
 		lasta = cura
 		lastb = curb
 	}
