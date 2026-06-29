@@ -1,17 +1,20 @@
 /*
-Package dns implements a full featured interface to the Domain Name System. Both server- and client-side programming is supported.
+Package dns implements a full featured interface to the Domain Name System. Both server- and client-side
+programming is supported.
 
-The package allows complete control over what is sent out to the DNS. The API follows the less-is-more principle, by presenting a small, clean interface.
+The package allows complete control over what is sent out to the DNS. The API follows the less-is-more
+principle, by presenting a small, clean interface.
 
 It supports (asynchronous) querying/replying, incoming/outgoing zone transfers,
 [TSIG], EDNS0, dynamic updates, notifies and DNSSEC validation/signing.
 
-Resource records (RRs) are native types. They are not stored in wire format, but every [Msg] holds the wire-format in its Data field.
-Everything is modelled or made to look like an RR.
-The question section holds a [RR] and the [EDNS0] option codes are also (fake/pseudo) RRs. These EDNS0 option occupy
-a separate section in [Msg], the pseudo section.
+Resource records ([RR]s) are native types. They are not stored in wire format, but every [Msg] holds the
+wire-format in its Data field. Everything is modelled or made to look like an RR: the question section holds a
+[RR] and the [EDNS0] option codes are also (fake/pseudo) RRs. These EDNS0 option occupy a separate section in
+[Msg], the pseudo section.
 
-In the DNS, messages ([Msg]) are exchanged, these messages contain RRs ([RR]) and/or RRsets ([RRset]). Basic pattern for creating a message:
+In the DNS, messages ([Msg]) are exchanged, these messages contain RRs ([RR]) and/or RRsets ([RRset]). Basic
+pattern for creating a message:
 
 	m := new(dns.Msg)
 	m.Question = []dns.RR{mx}
@@ -20,17 +23,20 @@ Or faster, with the correct header bits:
 
 	m := dns.NewMsg("miek.nl.", dns.TypeMX)
 
-The message m is now a message with the question section set to ask the [MX] records for the miek.nl. zone. When making an actual request:
+The message m is now a message with the question section set to ask the [MX] records for the miek.nl. zone.
+When making an actual request:
 
 	m.ID = dns.ID()
 	m.RecursionDesired = true
 
-After creating a message it can be sent. Basic use pattern for synchronous querying the DNS at a server configured on 127.0.0.1 and port 53 using UDP:
+After creating a message it can be sent. Basic use pattern for synchronous querying the DNS at a server
+configured on 127.0.0.1 and port 53 using UDP:
 
 	c := new(dns.Client)
 	r, rtt, err := c.Exchange(context.TODO(), m, "udp", "127.0.0.1:53")
 
-When this functions returns you will get DNS message back. A DNS message consists out of four (on the wire), but five in this package, sections.
+When this functions returns you will get DNS message back. A DNS message consists out of four (on the wire),
+but five in this package, sections.
 
   - The question section: r.Question.
   - The answer section: r.Answer.
@@ -40,8 +46,8 @@ When this functions returns you will get DNS message back. A DNS message consist
 
 The latter was added to make it easier to deal with [EDNS0] option codes, which become more and more prevalent.
 
-Each of these sections contain a []RR. Basic use pattern for accessing the rdata of a [TXT] [RR] as the first [RR] in
-the Answer section:
+Each of these sections contain a []RR. Basic use pattern for accessing the rdata of a [TXT] [RR] as the first
+[RR] in the Answer section:
 
 	if t, ok := r.Answer[0].(*dns.TXT); ok {
 		// do something with t.TXT.Txt
@@ -73,22 +79,23 @@ Requesting DNSSEC information for a zone is done by adding the DO (DNSSEC OK) bi
 	m.Security = true
 	m.UDPSize = 4096
 
-When sending a message [Msg.Pack] is called, this takes care of allocating an [OPT] [RR] and setting the DO bit and the
-UDP Size in there.
+When sending a message [Msg.Pack] is called, this takes care of allocating an [OPT] [RR] and setting the DO
+bit and the UDP Size in there.
 
 Signature generation, signature verification (see [RRSIG]) and key generation are all supported.
 
 # EDNS0
 
-[EDNS0] is an extension mechanism for the DNS defined in RFC 2671 and updated by RFC 6891. It defines a RR type,
-the [OPT] [RR], which holds type-length-value sub-types.
-In this package all EDNS0 options are implemented as RRs. Doing basic "EDNS0" things, like
-setting the DNSSEC OK bit (DO) or the UDP buffer size is handled for you and these can be set directly on message as shown above.
+[EDNS0] is an extension mechanism for the DNS defined in RFC 2671 and updated by RFC 6891. It defines a RR
+type, the [OPT] [RR], which holds type-length-value sub-types. In this package all EDNS0 options are
+implemented as RRs. Doing basic "EDNS0" things, like setting the DNSSEC OK bit (DO) or the UDP buffer size is
+handled for you and these can be set directly on message as shown above.
 
-The data of an [OPT] [RR] sits in the [Msg] Pseudo section consists out of a slice of [EDNS0] (RFC 6891) interfaces.
-These are just RRs with an extra Pseudo() method.
+The data of an [OPT] [RR] sits in the [Msg] Pseudo section consists out of a slice of [EDNS0] (RFC 6891)
+interfaces. These are just RRs with an extra Pseudo() method.
 
-Basic use pattern for a server to check if (and which) options are set, which is similar to how to deal with RRs.
+Basic use pattern for a server to check if (and which) options are set, which is similar to how to deal with
+RRs.
 
 	for _, rr := range m.Pseudo {
 		switch x := rr.(type) {
@@ -99,11 +106,13 @@ Basic use pattern for a server to check if (and which) options are set, which is
 		}
 	}
 
-Unknown options are dealt with and added as [ERFC3597] RRs, simular to actual unknown [RR]s are handled with [RFC3597].
+Unknown options are dealt with and added as [ERFC3597] RRs, simular to actual unknown [RR]s are handled with
+[RFC3597].
 
 # Private Resource Records
 
-Any struct can be used as a private resource record. To make it work you need to implement the following interfaces.
+Any struct can be used as a private resource record. To make it work you need to implement the following
+interfaces.
 
   - [Typer], to give your RR a code point, and see documentation of that interface.
   - [RR], all RRs implement this, if you want to have a private EDNS0 option, implement [EDNS0] interface, this

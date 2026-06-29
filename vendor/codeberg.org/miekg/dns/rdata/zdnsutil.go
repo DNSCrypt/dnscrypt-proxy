@@ -32,9 +32,17 @@ func dnsutilLabels(s string) (labels int) {
 }
 
 // Next returns the index of the start of the next label in the string s starting at offset. A negative offset
-// will cause a panic. The bool end is true when the end of the string has been reached. Also see [Prev].
+// will cause a panic. The bool end is true when the end of the string has been reached. For `www.miek.nl.`
+// this returns:
+//
+// Next("www.miek.nl.", 0) -> 4, false
+// Next("www.miek.nl.", 4) -> 9, false
+// Next("www.miek.nl.", 9) -> 12, true
+//
+// s must be a fully qualified domain name. Also see [Prev].
 func dnsutilNext(s string, offset int) (i int, end bool) {
-	if s == "" {
+	switch len(s) {
+	case 0, 1:
 		return 0, true
 	}
 	for i = offset; i < len(s)-1; i++ {
@@ -43,35 +51,36 @@ func dnsutilNext(s string, offset int) (i int, end bool) {
 		}
 		return i + 1, false
 	}
-	return i + 1, true
+	return len(s), true
 }
 
-// Prev returns the index of the label when starting from the right and jumping n labels to the left.
-// The bool start is true when the start of the string has been overshot. Also see [Next].
-func dnsutilPrev(s string, n int) (i int, start bool) {
-	if s == "" {
+// Prev returns the index of the start of the previous label in the string s start at offset. An offset longer
+// then the string will cause a panic. The bool start is true when the beginning of the string has been
+// reached. For `www.miek.nl.` this returns:
+//
+// Prev("www.miek.nl.", 12) -> 9, false
+// Prev("www.miek.nl.", 9)  -> 4, false
+// Prev("www.miek.nl.", 4)  -> 0, true
+//
+// s must be a fully qualified domain name. Also see [Next].
+func dnsutilPrev(s string, offset int) (i int, start bool) {
+	switch len(s) {
+	case 0, 1:
 		return 0, true
 	}
-	if n == 0 {
-		return len(s), false
+	// if the s[offset] is a dot, we still need to go backwards more
+	if s[offset-1] == '.' {
+		offset -= 2
 	}
 
-	l := len(s) - 1
-	if s[l] == '.' {
-		l--
-	}
-
-	for ; l >= 0 && n > 0; l-- {
-		if s[l] != '.' {
+	for i := offset; i >= 0; i-- {
+		if s[i] != '.' {
 			continue
 		}
-		n--
-		if n == 0 {
-			return l + 1, false
-		}
+		return i + 1, false
 	}
+	return 0, true
 
-	return 0, n > 1
 }
 
 // Fqdn return the fully qualified domain name from s. If s is already fully qualified, it behaves as the
@@ -109,10 +118,6 @@ func dnsutilIsName(s string) bool {
 
 	if ls == 1 && s[0] == '.' {
 		return true
-	}
-
-	if ls > 1 && s[0] == '.' {
-		return false
 	}
 
 	var (
