@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/exec"
 	"strings"
-	"text/template"
 	"time"
 )
 
@@ -39,13 +38,13 @@ func newProcdService(i Interface, platform string, c *Config) (Service, error) {
 	return p, nil
 }
 
-func (p *procd) template() *template.Template {
-	customScript := p.Option.string(optionSysvScript, "")
+var procdTemplate = mustParse(procdScript)
 
-	if customScript != "" {
-		return template.Must(template.New("").Funcs(tf).Parse(customScript))
+func (p *procd) template() (*tmpl, error) {
+	if custom := p.Option.string(optionSysvScript, ""); custom != "" {
+		return parseTemplate(custom)
 	}
-	return template.Must(template.New("").Funcs(tf).Parse(procdScript))
+	return procdTemplate, nil
 }
 
 func (p *procd) Install() error {
@@ -69,18 +68,22 @@ func (p *procd) Install() error {
 		return err
 	}
 
-	var to = &struct {
-		*Config
-		Path         string
-		LogDirectory string
-	}{
-		p.Config,
-		path,
-		p.Option.string(optionLogDirectory, defaultLogDirectory),
+	c := p.Config
+	data := map[string]any{
+		"Path":      path,
+		"Name":      c.Name,
+		"Arguments": c.Arguments,
 	}
 
-	err = p.template().Execute(f, to)
+	t, err := p.template()
 	if err != nil {
+		return err
+	}
+	out, err := t.render(data, tfs)
+	if err != nil {
+		return err
+	}
+	if _, err = f.WriteString(out); err != nil {
 		return err
 	}
 
@@ -151,8 +154,8 @@ USE_PROCD=1
 START=21
 # Before network stops
 STOP=89
-cmd="{{.Path}}{{range .Arguments}} {{.|cmd}}{{end}}"
-name="{{.Name}}"
+cmd="{{Path}}{{range Arguments}} {{. | cmd}}{{end}}"
+name="{{Name}}"
 pid_file="/var/run/${name}.pid"
 
 start_service() {

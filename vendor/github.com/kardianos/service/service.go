@@ -231,6 +231,53 @@ func New(i Interface, c *Config) (Service, error) {
 //   - OnFailureDelayDuration  string ( "1s" )       - Delay before restarting the service, time.Duration string.
 //
 //   - OnFailureResetPeriod    int ( 10 )            - Reset period for errors, seconds.
+//
+// # Custom service-file templates
+//
+// The LaunchdConfig, SystemdScript, UpstartScript, SysvScript, RCSScript, and
+// OpenRCScript options each supply a template used to render the service file
+// in place of the built-in one. Set one by placing the template string in
+// Config.Option under the matching key:
+//
+//	c := &service.Config{
+//		Name: "myservice",
+//		Option: service.KeyValue{
+//			"SystemdScript": myScript, // template string, syntax below
+//		},
+//	}
+//
+// SysvScript is also the key read by the procd, AIX, FreeBSD, and Solaris
+// backends; the key set available to a custom script is whatever the active
+// init system passes (see below).
+//
+// Templates are rendered by a small built-in engine (not text/template). The
+// supported actions are:
+//
+//   - {{Key}}                       substitute a value.
+//   - {{Key | fn | fn}}             substitute, piped through function(s).
+//   - {{if Key}}…{{end}}            include the body when Key is non-empty.
+//   - {{if Key}}…{{else}}…{{end}}   with an else branch.
+//   - {{range Key}}…{{.}}…{{end}}   repeat the body once per item of a list
+//     value, with {{.}} bound to the current item.
+//   - {{- …}} and {{… -}}          trim whitespace before or after the action.
+//
+// Every value is a string or a list of strings; a list is also truthy in
+// {{if}} when non-empty. There is no dotted field access and no arithmetic or
+// boolean functions — any such logic is resolved before rendering. The exact
+// keys and pipeline functions available for a given platform are precisely
+// those used by that platform's default template, so read the corresponding
+// source constant to see them: launchdConfig (darwin), systemdScript,
+// upstartScript, sysvScript, rcsScript, openRCScript, procdScript, svcConfig
+// (AIX), rcScript (FreeBSD), and manifest (Solaris).
+//
+// Compatibility: earlier versions parsed these options with the standard
+// library text/template. Custom scripts written for that engine — using dotted
+// fields such as {{.Name}}, the and/or/not/eq/gt functions, or method calls —
+// must be rewritten in the syntax above; they will otherwise fail to render
+// with an "unknown template key" error. text/template was removed because it
+// reaches reflect.Value.MethodByName, which forces the linker into a
+// conservative mode that defeats dead-code elimination and substantially
+// inflates binaries importing this package.
 type KeyValue map[string]interface{}
 
 // bool returns the value of the given name, assuming the value is a boolean.

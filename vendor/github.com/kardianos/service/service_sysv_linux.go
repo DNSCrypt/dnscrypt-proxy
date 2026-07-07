@@ -11,7 +11,6 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
-	"text/template"
 	"time"
 )
 
@@ -53,13 +52,13 @@ func (s *sysv) configPath() (cp string, err error) {
 	return
 }
 
-func (s *sysv) template() *template.Template {
-	customScript := s.Option.string(optionSysvScript, "")
+var sysvTemplate = mustParse(sysvScript)
 
-	if customScript != "" {
-		return template.Must(template.New("").Funcs(tf).Parse(customScript))
+func (s *sysv) template() (*tmpl, error) {
+	if custom := s.Option.string(optionSysvScript, ""); custom != "" {
+		return parseTemplate(custom)
 	}
-	return template.Must(template.New("").Funcs(tf).Parse(sysvScript))
+	return sysvTemplate, nil
 }
 
 func (s *sysv) Install() error {
@@ -83,18 +82,26 @@ func (s *sysv) Install() error {
 		return err
 	}
 
-	var to = &struct {
-		*Config
-		Path         string
-		LogDirectory string
-	}{
-		s.Config,
-		path,
-		s.Option.string(optionLogDirectory, defaultLogDirectory),
+	c := s.Config
+	data := map[string]any{
+		"Description":      c.Description,
+		"DisplayName":      c.DisplayName,
+		"Path":             path,
+		"Arguments":        c.Arguments,
+		"WorkingDirectory": c.WorkingDirectory,
+		"LogDirectory":     s.Option.string(optionLogDirectory, defaultLogDirectory),
+		"EnvVars":          envVars(c.EnvVars, func(k, v string) string { return "export " + k + "=" + v }),
 	}
 
-	err = s.template().Execute(f, to)
+	t, err := s.template()
 	if err != nil {
+		return err
+	}
+	out, err := t.render(data, tfs)
+	if err != nil {
+		return err
+	}
+	if _, err = f.WriteString(out); err != nil {
 		return err
 	}
 
@@ -187,30 +194,28 @@ func (s *sysv) Restart() error {
 const sysvScript = `#!/bin/sh
 # For RedHat and cousins:
 # chkconfig: - 99 01
-# description: {{.Description}}
-# processname: {{.Path}}
+# description: {{Description}}
+# processname: {{Path}}
 
 ### BEGIN INIT INFO
-# Provides:          {{.Path}}
+# Provides:          {{Path}}
 # Required-Start:
 # Required-Stop:
 # Default-Start:     2 3 4 5
 # Default-Stop:      0 1 6
-# Short-Description: {{.DisplayName}}
-# Description:       {{.Description}}
+# Short-Description: {{DisplayName}}
+# Description:       {{Description}}
 ### END INIT INFO
 
-cmd="{{.Path}}{{range .Arguments}} {{.|cmd}}{{end}}"
+cmd="{{Path}}{{range Arguments}} {{. | cmd}}{{end}}"
 
 name=$(basename $(readlink -f $0))
 pid_file="/var/run/$name.pid"
-stdout_log="{{.LogDirectory}}/$name.log"
-stderr_log="{{.LogDirectory}}/$name.err"
+stdout_log="{{LogDirectory}}/$name.log"
+stderr_log="{{LogDirectory}}/$name.err"
 
-{{range $k, $v := .EnvVars -}}
-export {{$k}}={{$v}}
-{{end -}}
-
+{{range EnvVars}}{{.}}
+{{end}}
 [ -e /etc/sysconfig/$name ] && . /etc/sysconfig/$name
 
 get_pid() {
@@ -227,7 +232,7 @@ case "$1" in
             echo "Already started"
         else
             echo "Starting $name"
-            {{if .WorkingDirectory}}cd '{{.WorkingDirectory}}'{{end}}
+            {{if WorkingDirectory}}cd '{{WorkingDirectory}}'{{end}}
             $cmd >> "$stdout_log" 2>> "$stderr_log" &
             echo $! > "$pid_file"
             if ! is_running; then

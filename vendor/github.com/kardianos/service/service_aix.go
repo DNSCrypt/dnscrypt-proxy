@@ -18,7 +18,6 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
-	"text/template"
 	"time"
 )
 
@@ -96,21 +95,13 @@ func (s *aixService) Platform() string {
 	return version
 }
 
-func (s *aixService) template() *template.Template {
-	functions := template.FuncMap{
-		"bool": func(v bool) string {
-			if v {
-				return "true"
-			}
-			return "false"
-		},
-	}
+var svcConfigTemplate = mustParse(svcConfig)
 
-	customConfig := s.Option.string(optionSysvScript, "")
-	if customConfig != "" {
-		return template.Must(template.New("").Funcs(functions).Parse(customConfig))
+func (s *aixService) template() (*tmpl, error) {
+	if custom := s.Option.string(optionSysvScript, ""); custom != "" {
+		return parseTemplate(custom)
 	}
-	return template.Must(template.New("").Funcs(functions).Parse(svcConfig))
+	return svcConfigTemplate, nil
 }
 
 func (s *aixService) configPath() (string, error) {
@@ -147,15 +138,20 @@ func (s *aixService) Install() error {
 	}
 	defer f.Close()
 
-	to := struct {
-		*Config
-		Path string
-	}{
-		Config: s.Config,
-		Path:   path,
+	data := map[string]any{
+		"Name": s.Config.Name,
+		"Path": path,
 	}
 
-	if err = s.template().Execute(f, &to); err != nil {
+	t, err := s.template()
+	if err != nil {
+		return err
+	}
+	out, err := t.render(data, nil)
+	if err != nil {
+		return err
+	}
+	if _, err = f.WriteString(out); err != nil {
 		return err
 	}
 
@@ -271,13 +267,13 @@ func (s *aixService) SystemLogger(errs chan<- error) (Logger, error) {
 	return newSysLogger(s.Name, errs)
 }
 
-var svcConfig = `#!/bin/ksh
+const svcConfig = `#!/bin/ksh
 case "$1" in
 start)
-        startsrc -s {{.Name}}
+        startsrc -s {{Name}}
         ;;
 stop)
-        stopsrc -s {{.Name}}
+        stopsrc -s {{Name}}
         ;;
 *)
         echo "Usage: $0 {start|stop}"
