@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.10.0] - 2026-07-07
+
+### 🚀 Added
+
+- Add Errorf, Fatal, Fatalf methods with TODO support by @powerman in [32c43b2]
+
+[1.10.0]: https://github.com/powerman/check/compare/v1.9.1..v1.10.0
+[32c43b2]: https://github.com/powerman/check/commit/32c43b2ecd618d77539ef54de5f7df6ab292022c
+
 ## [1.9.1] - 2026-04-07
 
 ### 📚 Documentation
@@ -168,7 +177,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Cleanup tests by @powerman in [034b842]
 - Improve test coverage by @powerman in [e36403b]
 - Improve reporting to goconvey by @powerman in [b2ac659]
-- Add GO_TEST_COLOR by @powerman in [13aa1c9]
+- Add `GO_TEST_COLOR` by @powerman in [13aa1c9]
 - Add go.mod by @powerman in [e6010ba]
 
 ### 🐛 Fixed

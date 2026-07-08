@@ -8,6 +8,7 @@ import (
 	"math"
 	"reflect"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -160,7 +161,7 @@ func (t *C) report(ok bool, msg []any, checker string, name []string, args []any
 	)
 	failureShort := failure.String()
 	// Reverse order to show Actual: last.
-	for i := len(dump) - 1; i >= 0; i-- {
+	for i, v := range slices.Backward(dump) {
 		fmt.Fprintf(failure, "%-10s", name[i]+":")
 		switch name[i] {
 		case nameActual:
@@ -168,23 +169,23 @@ func (t *C) report(ok bool, msg []any, checker string, name []string, args []any
 		default:
 			fmt.Fprint(failure, ansiGreen)
 		}
-		fmt.Fprintf(failure, "%s%s", dump[i], ansiReset)
+		fmt.Fprintf(failure, "%s%s", v, ansiReset)
 	}
 	failureLong := failure.String()
 
-	wantDiff := len(dump) == 2 && name[0] == nameActual && name[1] == nameExpected //nolint:gosec // False positive.
-	if wantDiff {                                                                  //nolint:nestif // No idea how to simplify.
+	wantDiff := len(dump) == 2 && name[0] == nameActual && name[1] == nameExpected
+	if wantDiff { //nolint:nestif // No idea how to simplify.
 		if reportToGoConvey(dump[0].String(), dump[1].String(), failureShort) == nil {
 			t.Fail()
 		} else {
 			fmt.Fprintf(failure, "\n%s", colouredDiff(dump[0].diff(dump[1])))
-			t.Errorf("%s\n", failure)
+			t.T.Errorf("%s\n", failure)
 		}
 	} else {
 		if reportToGoConvey("", "", failureLong) == nil {
 			t.Fail()
 		} else {
-			t.Errorf("%s\n", failure)
+			t.T.Errorf("%s\n", failure)
 		}
 	}
 
@@ -401,6 +402,36 @@ func (t *C) NotNil(actual any, msg ...any) bool {
 func (t *C) Error(msg ...any) {
 	t.Helper()
 	t.report0(msg, false)
+}
+
+// Errorf is equivalent to Logf followed by Fail.
+//
+// It is like t.Errorf with TODO() and statistics support.
+func (t *C) Errorf(format string, args ...any) {
+	t.Helper()
+	t.report0(append([]any{format}, args...), false)
+}
+
+// Fatal is equivalent to Log followed by FailNow.
+//
+// It is like t.Fatal with TODO() and statistics support.
+func (t *C) Fatal(args ...any) {
+	t.Helper()
+	t.report0(args, false)
+	if !t.todo {
+		t.FailNow()
+	}
+}
+
+// Fatalf is equivalent to Logf followed by FailNow.
+//
+// It is like t.Fatalf with TODO() and statistics support.
+func (t *C) Fatalf(format string, args ...any) {
+	t.Helper()
+	t.report0(append([]any{format}, args...), false)
+	if !t.todo {
+		t.FailNow()
+	}
 }
 
 // True checks for cond == true.

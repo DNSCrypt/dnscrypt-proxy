@@ -9,6 +9,6 @@ import (
 )
 
 func isTerminal() bool {
-	_, err := unix.IoctlGetTermios(int(os.Stdout.Fd()), unix.TCGETS) //nolint:gosec // False positive.
+	_, err := unix.IoctlGetTermios(int(os.Stdout.Fd()), unix.TCGETS)
 	return err == nil
 }
