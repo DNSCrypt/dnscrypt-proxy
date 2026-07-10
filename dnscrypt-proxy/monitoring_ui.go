@@ -710,9 +710,9 @@ func (mc *MetricsCollector) collectCacheStats(cacheHitRatio float64, cacheHits, 
 	stats["neg_max_ttl"] = mc.proxy.cacheNegMaxTTL
 	stats["neg_min_ttl"] = mc.proxy.cacheNegMinTTL
 
-	if cachedResponses.cache != nil {
-		stats["entries"] = cachedResponses.cache.Len()
-		stats["capacity"] = cachedResponses.cache.Capacity()
+	if cachedResponses != nil {
+		stats["entries"] = cachedResponses.Len()
+		stats["capacity"] = cachedResponses.Capacity()
 	}
 
 	return stats
