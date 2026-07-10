@@ -260,6 +260,30 @@ func updateTTL(msg *dns.Msg, expiration time.Time) {
 	}
 }
 
+func cloneRRs(src []dns.RR) []dns.RR {
+	if src == nil {
+		return nil
+	}
+	dst := make([]dns.RR, len(src))
+	for i, rr := range src {
+		dst[i] = rr.Clone()
+	}
+	return dst
+}
+
+// Why this exists: miekg/dns/v2 Msg.Copy just does a shallow copy.
+// So, we have to reimplement a clone() function for dns messages.
+func cloneMsg(src *dns.Msg) *dns.Msg {
+	return &dns.Msg{
+		MsgHeader: src.MsgHeader,
+		Question:  cloneRRs(src.Question),
+		Answer:    cloneRRs(src.Answer),
+		Ns:        cloneRRs(src.Ns),
+		Extra:     cloneRRs(src.Extra),
+		Pseudo:    cloneRRs(src.Pseudo),
+	}
+}
+
 func hasEDNS0Padding(packet []byte) (bool, error) {
 	msg := dns.Msg{Data: packet}
 	if err := msg.Unpack(); err != nil {
@@ -380,7 +404,7 @@ func DNSExchange(
 
 		for tries := range maxTries {
 			if tryFragmentsSupport {
-				queryCopy := query.Copy()
+				queryCopy := cloneMsg(query)
 				queryCopy.ID += uint16(options)
 				go func(query *dns.Msg, delay time.Duration) {
 					time.Sleep(delay)
@@ -396,7 +420,7 @@ func DNSExchange(
 				}(queryCopy, time.Duration(200*tries)*time.Millisecond)
 				options++
 			}
-			queryCopy := query.Copy()
+			queryCopy := cloneMsg(query)
 			queryCopy.ID += uint16(options)
 			go func(query *dns.Msg, delay time.Duration) {
 				time.Sleep(delay)
