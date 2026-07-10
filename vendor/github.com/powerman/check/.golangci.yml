@@ -1,4 +1,4 @@
-# Origin: https://github.com/powerman/golangci-lint-strict version 2.11.4
+# Origin: https://github.com/powerman/golangci-lint-strict version 2.12.2
 version: "2"
 linters:
   default: all
@@ -10,6 +10,7 @@ linters:
     - dupl
     - forcetypeassert # Questionable (often we actually want panic).
     - gocyclo # Prefer gocognit.
+    - gomodguard # Deprecated.
     - interfacebloat # Questionable.
     - ireturn # Questionable (is returning unexported types better?).
     - lll # Questionable (sometimes long lines improve readability).
@@ -41,6 +42,10 @@ linters:
               desc: Not allowed because it uses global variables
             - pkg: github.com/golang/protobuf
               desc: Should be replaced by google.golang.org/protobuf package
+            - pkg: github.com/grpc-ecosystem/go-grpc-middleware$
+              desc: Should be replaced by github.com/grpc-ecosystem/go-grpc-middleware/v2
+            - pkg: github.com/grpc-ecosystem/go-grpc-prometheus
+              desc: Should be replaced by github.com/grpc-ecosystem/go-grpc-middleware/providers/prometheus
     dupl:
       threshold: 100
     embeddedstructfieldcheck:
@@ -108,12 +113,11 @@ linters:
         - BUG # Marks issues that should be moved to issue tracker before merging.
         - FIXME # Marks issues that should be resolved before merging.
         - DEBUG # Marks temporary code that should be removed before merging.
-    gomodguard:
+    gomodguard_v2:
       blocked:
-        versions:
-          - github.com/cenkalti/backoff:
-              version: < 4.0.0
-              reason: use actual version
+        - module: github.com/cenkalti/backoff
+          version: < 4.0.0
+          reason: use actual version
     gosec:
       excludes:
         - G104 # Audit errors not checked
@@ -154,8 +158,7 @@ linters:
       require-explanation: true # Disable linters this way: //nolint:first,second // Reason here.
       require-specific: true # Do not allow //nolint without specific linter name(s).
     paralleltest:
-      ignore-missing: true # Do not require `t.Parallel()` everywhere.
-      ignore-missing-subtests: true # Do not require `t.Parallel()` in all subtests.
+      check-cleanup: true
     reassign:
       patterns:
         - .* # Check all global variables.
@@ -185,6 +188,8 @@ linters:
         - name: confusing-results
         - name: constant-logical-expr
         - name: context-as-argument
+          arguments:
+            - allowTypesBefore: '*testing.T,*check.C' # Test helpers keep t first.
         - name: context-keys-type
         - name: cyclomatic
           disabled: true # Duplicates cyclop and gocyclo linters.
@@ -213,6 +218,7 @@ linters:
         - name: error-strings
         - name: errorf
         - name: exported
+          disabled: true # Duplicates godoclint.
         - name: file-header
         - name: file-length-limit
         - name: filename-format
@@ -303,22 +309,35 @@ linters:
       context: scope
       static-msg: true
       msg-style: capitalized
-      key-naming-case: snake
       forbidden-keys:
         - time # Used by standard slog.JSONHandler or slog.TextHandler.
         - level # Used by standard slog.JSONHandler or slog.TextHandler.
         - msg # Used by standard slog.JSONHandler or slog.TextHandler.
         - source # Used by standard slog.JSONHandler or slog.TextHandler.
+      key-naming-case: snake
     tagalign:
       order:
         - json
         - yaml
         - yml
         - toml
+        - cmd
+        - arg
+        - embed
+        - hidden
+        - passthrough
+        - optional
+        - required
+        - default
+        - envprefix
         - env
+        - name
+        - enum
+        - help
         - mod
         - mapstructure
         - binding
+        - mold
         - validate
       strict: true
     tagliatelle:
@@ -352,15 +371,15 @@ linters:
       report-internal-errors: true
   exclusions:
     rules:
-      - path: (.+)\.go$
+      - linters:
+          - govet
         text: declaration of "(log|err|ctx)" shadows
-      - path: (.+)\.go$
-        text: 'missing cases in switch of type \S+: \S+_UNSPECIFIED$'
       - path: _test\.go|testing(_.*)?\.go
         linters:
           - bodyclose
           - dupl
           - errcheck
+          - fatcontext
           - forcetypeassert
           - funlen
           - gochecknoglobals
@@ -371,9 +390,6 @@ linters:
           - gosec
           - maintidx
           - reassign
-      - source: '[Cc]onst' # Define global const-vars like: var SomeGlobal = []int{42} // Const.
-        linters:
-          - gochecknoglobals
       - path: _test\.go|testing(_.*)?\.go
         text: (unnamedResult|exitAfterDefer|rangeValCopy|unnecessaryBlock)
         linters:
@@ -385,9 +401,18 @@ linters:
       - path: ^(.*/)?embed.go$
         linters:
           - gochecknoglobals
+      - source: '[Cc]onst' # Define global const-vars like: var SomeGlobal = []int{42} // Const.
+        linters:
+          - gochecknoglobals
       - linters:
           - lll
         source: '^//go:generate '
+      - linters:
+          - staticcheck
+        text: 'SA5008: duplicate struct tag "set"' # Valid in Kong CLI.
+      - linters:
+          - godoclint
+        text: should have a godoc \("(String|Error|Format|(Marshal|Unmarshal)(Text|JSON))"\)
     paths:
       - \.[\w-]+\.go$ # Use this pattern to name auto-generated files.
 formatters:
@@ -414,6 +439,7 @@ formatters:
     golines:
       max-len: 200
       tab-len: 8
+      reformat-tags: false
   exclusions:
     generated: strict
     paths:
