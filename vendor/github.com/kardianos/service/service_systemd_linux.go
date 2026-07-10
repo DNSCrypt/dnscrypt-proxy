@@ -16,7 +16,6 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
-	"text/template"
 )
 
 func isSystemd() bool {
@@ -130,13 +129,15 @@ func (s *systemd) hasOutputFileSupport() bool {
 	return defaultValue
 }
 
-func (s *systemd) template() *template.Template {
-	customScript := s.Option.string(optionSystemdScript, "")
+// systemdTemplate is the built-in template, parsed once at init and reused for
+// every install. A custom SystemdScript is parsed per install instead.
+var systemdTemplate = mustParse(systemdScript)
 
-	if customScript != "" {
-		return template.Must(template.New("").Funcs(tf).Parse(customScript))
+func (s *systemd) template() (*tmpl, error) {
+	if custom := s.Option.string(optionSystemdScript, ""); custom != "" {
+		return parseTemplate(custom)
 	}
-	return template.Must(template.New("").Funcs(tf).Parse(systemdScript))
+	return systemdTemplate, nil
 }
 
 func (s *systemd) isUserService() bool {
@@ -164,32 +165,50 @@ func (s *systemd) Install() error {
 		return err
 	}
 
-	var to = &struct {
-		*Config
-		Path                 string
-		HasOutputFileSupport bool
-		ReloadSignal         string
-		PIDFile              string
-		LimitNOFILE          int
-		Restart              string
-		SuccessExitStatus    string
-		LogOutput            bool
-		LogDirectory         string
-	}{
-		s.Config,
-		path,
-		s.hasOutputFileSupport(),
-		s.Option.string(optionReloadSignal, ""),
-		s.Option.string(optionPIDFile, ""),
-		s.Option.int(optionLimitNOFILE, optionLimitNOFILEDefault),
-		s.Option.string(optionRestart, "always"),
-		s.Option.string(optionSuccessExitStatus, ""),
-		s.Option.bool(optionLogOutput, optionLogOutputDefault),
-		s.Option.string(optionLogDirectory, defaultLogDirectory),
+	c := s.Config
+
+	// Conditions that the mini engine cannot express (and/gt on non-string
+	// values) are collapsed here to a present-or-empty string, so the template
+	// only needs {{if Key}} truthiness. Everything else is passed through as a
+	// string or a []string for {{range}}.
+	outputFileSupport := ""
+	if s.Option.bool(optionLogOutput, optionLogOutputDefault) && s.hasOutputFileSupport() {
+		outputFileSupport = "yes"
 	}
 
-	err = s.template().Execute(f, to)
+	limitNOFILE := ""
+	if n := s.Option.int(optionLimitNOFILE, optionLimitNOFILEDefault); n > -1 {
+		limitNOFILE = strconv.Itoa(n)
+	}
+
+	data := map[string]any{
+		"Description":       c.Description,
+		"Path":              path,
+		"Name":              c.Name,
+		"Dependencies":      c.Dependencies,
+		"Arguments":         c.Arguments,
+		"ChRoot":            c.ChRoot,
+		"WorkingDirectory":  c.WorkingDirectory,
+		"UserName":          c.UserName,
+		"ReloadSignal":      s.Option.string(optionReloadSignal, ""),
+		"PIDFile":           s.Option.string(optionPIDFile, ""),
+		"LogDirectory":      s.Option.string(optionLogDirectory, defaultLogDirectory),
+		"OutputFileSupport": outputFileSupport,
+		"LimitNOFILE":       limitNOFILE,
+		"Restart":           s.Option.string(optionRestart, "always"),
+		"SuccessExitStatus": s.Option.string(optionSuccessExitStatus, ""),
+		"EnvVars":           envVars(c.EnvVars, func(k, v string) string { return "Environment=" + k + "=" + v }),
+	}
+
+	t, err := s.template()
 	if err != nil {
+		return err
+	}
+	out, err := t.render(data, tfs)
+	if err != nil {
+		return err
+	}
+	if _, err = f.WriteString(out); err != nil {
 		return err
 	}
 
@@ -301,35 +320,33 @@ func (s *systemd) runAction(action string) error {
 	return s.run(action, s.unitName())
 }
 
+// systemdScript is expanded by the mini template engine (renderTemplate).
+// {{if}}/{{range}} operate on plain string / []string values built in Install;
+// compound conditions such as "and .LogOutput .HasOutputFileSupport" or
+// "gt .LimitNOFILE -1" are precomputed there into a present-or-empty string.
 const systemdScript = `[Unit]
-Description={{.Description}}
-ConditionFileIsExecutable={{.Path|cmdEscape}}
-{{range $i, $dep := .Dependencies}} 
-{{$dep}} {{end}}
-
+Description={{Description}}
+ConditionFileIsExecutable={{Path | cmdEscape}}
+{{range Dependencies}}{{.}}
+{{end}}
 [Service]
 StartLimitInterval=5
 StartLimitBurst=10
-ExecStart={{.Path|cmdEscape}}{{range .Arguments}} {{.|cmd}}{{end}}
-{{if .ChRoot}}RootDirectory={{.ChRoot|cmd}}{{end}}
-{{if .WorkingDirectory}}WorkingDirectory={{.WorkingDirectory|cmdEscape}}{{end}}
-{{if .UserName}}User={{.UserName}}{{end}}
-{{if .ReloadSignal}}ExecReload=/bin/kill -{{.ReloadSignal}} "$MAINPID"{{end}}
-{{if .PIDFile}}PIDFile={{.PIDFile|cmd}}{{end}}
-{{if and .LogOutput .HasOutputFileSupport -}}
-StandardOutput=file:{{.LogDirectory}}/{{.Name}}.out
-StandardError=file:{{.LogDirectory}}/{{.Name}}.err
-{{- end}}
-{{if gt .LimitNOFILE -1 }}LimitNOFILE={{.LimitNOFILE}}{{end}}
-{{if .Restart}}Restart={{.Restart}}{{end}}
-{{if .SuccessExitStatus}}SuccessExitStatus={{.SuccessExitStatus}}{{end}}
-RestartSec=120
-EnvironmentFile=-/etc/sysconfig/{{.Name}}
+ExecStart={{Path | cmdEscape}}{{range Arguments}} {{. | cmd}}{{end}}
+{{if ChRoot}}RootDirectory={{ChRoot | cmd}}
+{{end}}{{if WorkingDirectory}}WorkingDirectory={{WorkingDirectory | cmdEscape}}
+{{end}}{{if UserName}}User={{UserName}}
+{{end}}{{if ReloadSignal}}ExecReload=/bin/kill -{{ReloadSignal}} "$MAINPID"
+{{end}}{{if PIDFile}}PIDFile={{PIDFile | cmd}}
+{{end}}{{if OutputFileSupport}}StandardOutput=file:{{LogDirectory}}/{{Name}}.out
+StandardError=file:{{LogDirectory}}/{{Name}}.err
+{{end}}{{if LimitNOFILE}}LimitNOFILE={{LimitNOFILE}}
+{{end}}{{if Restart}}Restart={{Restart}}
+{{end}}{{if SuccessExitStatus}}SuccessExitStatus={{SuccessExitStatus}}
+{{end}}RestartSec=120
+EnvironmentFile=-/etc/sysconfig/{{Name}}
 
-{{range $k, $v := .EnvVars -}}
-Environment={{$k}}={{$v}}
-{{end -}}
-
-[Install]
+{{range EnvVars}}{{.}}
+{{end}}[Install]
 WantedBy=multi-user.target
 `

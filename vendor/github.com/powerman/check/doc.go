@@ -7,7 +7,6 @@
 //   - Compelling output from failed tests:
 //   - Very easy-to-read dumps for expected and actual values.
 //   - Same text diff you loved in testify/assert.
-//   - Also visual diff in GoConvey web UI, if you use it (recommended).
 //   - Statistics with amount of passed/failed checks.
 //   - Colored output in terminal.
 //   - 100% compatible with testing package - check package just provide
@@ -30,8 +29,8 @@
 //		t.Equal(2, 2)
 //		t.Log("You can use new t just like usual *testing.T")
 //		t.Run("Subtests/Parallel example", func(tt *testing.T) {
+//			tt.Parallel()
 //			t := check.T(tt)
-//			t.Parallel()
 //			t.NotEqual(2, 3, "should not be 3!")
 //			obj, err := NewObj()
 //			if t.Nil(err) {
@@ -43,10 +42,6 @@
 // To get optional statistics about executed checkers add:
 //
 //	func TestMain(m *testing.M) { check.TestMain(m) }
-//
-// When use goconvey tool, to get nice diff in web UI add:
-//
-//	import _ "github.com/smartystreets/goconvey/convey"
 //
 // # Hints
 //
@@ -68,6 +63,16 @@
 //	t.Equal(io.EOF, errors.New("EOF"))     // this doesn't work!
 //	t.Err(io.EOF, errors.New("EOF"))       // this works
 //	t.DeepEqual(io.EOF, errors.New("EOF")) // this works too
+//
+//	// ErrIs/ErrAs are pure errors.Is/errors.As wrappers:
+//	t.ErrIs(err, io.EOF)            // errors.Is(err, io.EOF)
+//	t.ErrAs(err, &targetType)       // errors.As(err, &targetType)
+//
+//	// When to use which:
+//	//   - Err    — same type and value (unwraps to root, compares by value)
+//	//   - ErrIs  — standard errors.Is (not value comparison)
+//	//   - ErrAs  — extract the first matching error type
+//	//   - Match  — check by error text against a regexp
 //
 // ★ Each check returns bool, so you can easily skip problematic code:
 //
@@ -111,6 +116,23 @@
 //
 //	export GO_TEST_COLOR=1
 //
+// ★ If you use `t.Parallel()` inside subtest, prefer calling
+// `tt.Parallel()` on the original *[testing.T] before wrapping
+// with check.T() — this satisfies the `paralleltest` linter:
+//
+//	t.Run("subtest", func(tt *testing.T) {
+//		tt.Parallel()
+//		t := check.T(tt)
+//		t.Equal(2, 2)
+//	})
+//
+// ★ Enable Protobuf message comparison and gRPC status error comparison by:
+//
+//	import _ "github.com/powerman/checkgrpc"
+//
+// This enables [proto.Equal] for protobuf messages in [DeepEqual]/[NotDeepEqual]
+// and gRPC status comparison in [Err]/[NotErr].
+//
 // # Contents
 //
 // There are few special functions (assertion, custom checkers, etc.).
@@ -132,6 +154,8 @@
 //	Equal           NotEqual           EQ  NE
 //	DeepEqual       NotDeepEqual
 //	Err             NotErr
+//	ErrIs           NotErrIs
+//	ErrAs           NotErrAs
 //	BytesEqual      NotBytesEqual
 //	JSONEqual
 //

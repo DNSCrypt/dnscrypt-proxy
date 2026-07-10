@@ -1,8 +1,8 @@
-// Package rdata contains the rdata elements of all the resource records, each type that implements
+// Package rdata contains the rdata elements of all the resource records, i.e., each type that implements
 // [codeberg.org/miekg/dns.RR].
 //
-// Each rdata elements implements [codeberg.org/miek/dns.RDATA]. And thus the [fmt.Stringer] interface. To
-// full print the text reprentation use the following:
+// Each rdata element implements [codeberg.org/miek/dns.RDATA]. And thus the [fmt.Stringer] interface. To
+// full print the text reprentation of an RR use the following:
 //
 //	 mx := &dns.MX{Hdr: dns.Header{Name: "miek.nl.", Class: dns.ClassINET, TTL: 3600},
 //			       MX: rdata.MX{Preference: 10, Mx: "mx.miek.nl."}}

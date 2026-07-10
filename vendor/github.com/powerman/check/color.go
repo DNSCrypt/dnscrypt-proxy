@@ -19,6 +19,11 @@ func init() { //nolint:gochecknoinits // By design.
 	}
 }
 
+func isTerminal() bool {
+	fi, err := os.Stdout.Stat()
+	return err == nil && fi.Mode()&os.ModeCharDevice != 0
+}
+
 func wantColor() bool {
 	return strings.Contains(os.Getenv("TERM"), "color") &&
 		(isTerminal() || os.Getenv("GO_TEST_COLOR") != "")

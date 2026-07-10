@@ -5,6 +5,10 @@ lockfile = true # DO NOT FORGET TO `touch mise.lock` if mise.lock does not exist
 [tools]
 go = 'latest'
 
+#--- Format
+# Opinionated Code Formatter.
+prettier = 'latest'
+
 #--- Lint
 # Static checker for GitHub Actions workflow files.
 actionlint = 'latest'
@@ -44,8 +48,8 @@ description = 'Run all tests'
 depends = ['test:*']
 
 [tasks.default]
-description = 'Run all linters and tests'
-depends = ['lint', 'test']
+description = 'Run all formatters, linters and tests'
+depends = ['fmt', 'lint', 'test']
 
 [tasks.ci]
 description = 'Run all CI tasks'
@@ -54,6 +58,11 @@ depends = ['fmt', 'lint', 'test']
 run = '! git status --porcelain | tee /dev/stderr | grep -q .'
 run_windows = 'powershell -c "$status = git status --porcelain; if ($status) { $status; exit 1 }"'
 
+[tasks.'fmt:markdown']
+description = 'Format markdown files'
+sources = ['**/*.md']
+run = 'prettier --write "**/*.md"'
+
 [tasks.'fmt:go']
 description = 'Format Go code'
 run = 'golangci-lint fmt'
@@ -61,6 +70,12 @@ run = 'golangci-lint fmt'
 [tasks.'lint:workflows']
 description = 'Lint GitHub Action workflows'
 run = 'actionlint'
+
+[tasks.'lint:markdown']
+description = 'Lint markdown files'
+wait_for = ['fmt:markdown']
+sources = ['**/*.md']
+run = 'prettier --check "**/*.md"'
 
 [tasks.'lint:go']
 description = 'Lint Go files'
@@ -74,6 +89,11 @@ run = 'GOOS=windows go test -c -o /dev/null ./...'
 description = 'Run Go tests for a whole project'
 wait_for = ['lint:*']                            # Avoid interleaved output with linters.
 run = 'gotestsum -- -race -timeout=60s ./...'
+
+[tasks.'test:go-submodule']
+description = 'Run Go tests in the test/ submodule'
+wait_for = ['lint:*']
+run = 'cd test && gotestsum -- -race -timeout=60s ./...'
 
 [tasks.'cover:go:total']
 description = 'Show Go test coverage total'
@@ -95,6 +115,7 @@ gotestsum -- \
     -coverpkg="$(go list ./... | paste -s -d,)" \
     -coverprofile {{vars.cover}} \
     ./...
+go tool cover -html={{vars.cover}} -o {{vars.cover}}.html
 '''
 
 [tasks.cachedir]

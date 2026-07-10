@@ -8,15 +8,12 @@ import (
 	"math"
 	"reflect"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
-	pkgerrors "github.com/pkg/errors" //nolint:depguard // By design.
 	"github.com/powerman/deepequal"
-	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
 //nolint:gochecknoglobals // Const.
@@ -38,19 +35,6 @@ const (
 	nameActual   = "Actual"
 	nameExpected = "Expected"
 )
-
-// Parallel implements an internal workaround which have no visible
-// effect, so you should just call t.Parallel() as you usually do - it
-// will work as expected.
-func (t *C) Parallel() {
-	t.Helper()
-	// Goconvey anyway doesn't provide -test.cpu= and mixed output of
-	// parallel tests result in reporting failed tests at wrong places
-	// and with wrong failed tests count in web UI.
-	if !flags.detect().conveyJSON {
-		t.T.Parallel()
-	}
-}
 
 // T creates and returns new *C, which wraps given tt and supposed to be
 // used inplace of it, providing you with access to many useful helpers in
@@ -158,9 +142,8 @@ func (t *C) report(ok bool, msg []any, checker string, name []string, args []any
 		format(msg...),
 		ansiYellow, checker, ansiReset,
 	)
-	failureShort := failure.String()
 	// Reverse order to show Actual: last.
-	for i := len(dump) - 1; i >= 0; i-- {
+	for i, v := range slices.Backward(dump) {
 		fmt.Fprintf(failure, "%-10s", name[i]+":")
 		switch name[i] {
 		case nameActual:
@@ -168,25 +151,14 @@ func (t *C) report(ok bool, msg []any, checker string, name []string, args []any
 		default:
 			fmt.Fprint(failure, ansiGreen)
 		}
-		fmt.Fprintf(failure, "%s%s", dump[i], ansiReset)
+		fmt.Fprintf(failure, "%s%s", v, ansiReset)
 	}
-	failureLong := failure.String()
 
-	wantDiff := len(dump) == 2 && name[0] == nameActual && name[1] == nameExpected //nolint:gosec // False positive.
-	if wantDiff {                                                                  //nolint:nestif // No idea how to simplify.
-		if reportToGoConvey(dump[0].String(), dump[1].String(), failureShort) == nil {
-			t.Fail()
-		} else {
-			fmt.Fprintf(failure, "\n%s", colouredDiff(dump[0].diff(dump[1])))
-			t.Errorf("%s\n", failure)
-		}
-	} else {
-		if reportToGoConvey("", "", failureLong) == nil {
-			t.Fail()
-		} else {
-			t.Errorf("%s\n", failure)
-		}
+	wantDiff := len(dump) == 2 && name[0] == nameActual && name[1] == nameExpected
+	if wantDiff {
+		fmt.Fprintf(failure, "\n%s", colouredDiff(dump[0].diff(dump[1])))
 	}
+	t.T.Errorf("%s\n", failure)
 
 	t.fail()
 
@@ -403,6 +375,36 @@ func (t *C) Error(msg ...any) {
 	t.report0(msg, false)
 }
 
+// Errorf is equivalent to Logf followed by Fail.
+//
+// It is like t.Errorf with TODO() and statistics support.
+func (t *C) Errorf(format string, args ...any) {
+	t.Helper()
+	t.report0(append([]any{format}, args...), false)
+}
+
+// Fatal is equivalent to Log followed by FailNow.
+//
+// It is like t.Fatal with TODO() and statistics support.
+func (t *C) Fatal(args ...any) {
+	t.Helper()
+	t.report0(args, false)
+	if !t.todo {
+		t.FailNow()
+	}
+}
+
+// Fatalf is equivalent to Logf followed by FailNow.
+//
+// It is like t.Fatalf with TODO() and statistics support.
+func (t *C) Fatalf(format string, args ...any) {
+	t.Helper()
+	t.report0(append([]any{format}, args...), false)
+	if !t.todo {
+		t.FailNow()
+	}
+}
+
 // True checks for cond == true.
 //
 // This can be useful to use your own custom checks, but this way you
@@ -480,33 +482,48 @@ func (t *C) NotBytesEqual(actual, expected []byte, msg ...any) bool {
 		!bytes.Equal(actual, expected))
 }
 
-// DeepEqual checks for [reflect.DeepEqual](actual, expected).
-// It will also use Equal method for types which implements it
-// (e.g. [time.Time], decimal.Decimal, etc.).
-// It will use proto.Equal for protobuf messages.
-func (t *C) DeepEqual(actual, expected any, msg ...any) bool {
-	t.Helper()
-	protoActual, proto1 := actual.(protoreflect.ProtoMessage)
-	protoExpected, proto2 := expected.(protoreflect.ProtoMessage)
-	if proto1 && proto2 {
-		return t.report2(actual, expected, msg,
-			proto.Equal(protoActual, protoExpected))
+// hasMethod reports whether v has a method with the given name.
+func hasMethod(v any, name string) bool {
+	t := reflect.TypeOf(v)
+	if t == nil {
+		return false
 	}
-	return t.report2(actual, expected, msg,
-		deepequal.DeepEqual(actual, expected))
+	_, found := t.MethodByName(name)
+	return found
 }
 
-// NotDeepEqual checks for ![reflect.DeepEqual](actual, expected).
-// It will also use Equal method for types which implements it
+// DeepEqual checks for [deepequal.DeepEqual](actual, expected).
+// It will use Equal method for types which implements it
 // (e.g. [time.Time], decimal.Decimal, etc.).
-// It will use proto.Equal for protobuf messages.
+//
+// Custom equal checkers registered via [RegisterEqualChecker] run first.
+func (t *C) DeepEqual(actual, expected any, msg ...any) bool {
+	t.Helper()
+	equal, claimed := runEqualCheckers(actual, expected)
+	if !claimed {
+		if hasMethod(actual, "ProtoReflect") || hasMethod(expected, "ProtoReflect") {
+			panic("check: protobuf message detected; " +
+				"import github.com/powerman/checkproto to compare protobuf messages")
+		}
+		equal = deepequal.DeepEqual(actual, expected)
+	}
+	return t.report2(actual, expected, msg, equal)
+}
+
+// NotDeepEqual checks for ![deepequal.DeepEqual](actual, expected).
+// It will use Equal method for types which implements it
+// (e.g. [time.Time], decimal.Decimal, etc.).
+//
+// Custom equal checkers registered via [RegisterEqualChecker] run first.
 func (t *C) NotDeepEqual(actual, expected any, msg ...any) bool {
 	t.Helper()
-	protoActual, proto1 := actual.(protoreflect.ProtoMessage)
-	protoExpected, proto2 := expected.(protoreflect.ProtoMessage)
-	if proto1 && proto2 {
-		return t.report1(actual, msg,
-			!proto.Equal(protoActual, protoExpected))
+	equal, claimed := runEqualCheckers(actual, expected)
+	if claimed {
+		return t.report1(actual, msg, !equal)
+	}
+	if hasMethod(actual, "ProtoReflect") || hasMethod(expected, "ProtoReflect") {
+		panic("check: protobuf message detected; " +
+			"import github.com/powerman/checkproto to compare protobuf messages")
 	}
 	return t.report1(actual, msg,
 		!deepequal.DeepEqual(actual, expected))
@@ -717,25 +734,29 @@ func (t *C) NotLen(actual any, expected int, msg ...any) bool {
 
 // Err checks is actual error is the same as expected error.
 //
-// If [errors.Is]() fails then it'll use more sofiscated logic:
+// Custom error checkers registered via [RegisterErrChecker] run first.
+// If none claims the pair the built-in comparison operates on the
+// original error found by recursively unwrapping actual with
+// [errors.Unwrap]() and [github.com/pkg/errors.Cause]()
+// (multi-error takes only the first),
+// and then compares it using Equal() method or same type and value ([deepequal.DeepEqual]),
+// so they may be different instances, but must have the same type and value.
 //
-// It tries to recursively unwrap actual before checking using
-// [errors.Unwrap]() and [github.com/pkg/errors.Cause]().
-// In case of multi-error (Unwrap() []error) it use only first error.
-//
-// It will use proto.Equal for gRPC status errors.
-//
-// They may be a different instances, but must have same type and value.
+// If both of these fail the comparison falls back to [errors.Is]()
+// on the original actual (not the unwrapped one).
 //
 // Checking for nil is okay, but using Nil(actual) instead is more clean.
 func (t *C) Err(actual, expected error, msg ...any) bool {
 	t.Helper()
-	actual2 := unwrapErr(actual)
-	equal := fmt.Sprintf("%#v", actual2) == fmt.Sprintf("%#v", expected)
-	_, proto1 := actual2.(interface{ GRPCStatus() *status.Status })
-	_, proto2 := expected.(interface{ GRPCStatus() *status.Status })
-	if proto1 || proto2 {
-		equal = proto.Equal(status.Convert(actual2).Proto(), status.Convert(expected).Proto())
+	equal, claimed := runCheckers(actual, expected)
+	if !claimed {
+		actual2 := unwrapErr(actual)
+		if hasMethod(actual2, "GRPCStatus") || hasMethod(expected, "GRPCStatus") {
+			panic("check: gRPC status error detected; " +
+				"import github.com/powerman/checkgrpc to compare gRPC status errors")
+		}
+		equal = reflect.TypeOf(actual2) == reflect.TypeOf(expected) &&
+			deepequal.DeepEqual(actual2, expected)
 	}
 	if !equal {
 		equal = errors.Is(actual, expected)
@@ -743,11 +764,24 @@ func (t *C) Err(actual, expected error, msg ...any) bool {
 	return t.report2(actual, expected, msg, equal)
 }
 
+// cause replicates github.com/pkg/errors.Cause using duck typing,
+// to support that (archived) package without depending on it.
+func cause(err error) error {
+	for err != nil {
+		c, ok := err.(interface{ Cause() error })
+		if !ok {
+			break
+		}
+		err = c.Cause()
+	}
+	return err
+}
+
 func unwrapErr(err error) (actual error) {
 	defer func() { _ = recover() }()
 	actual = err
 	for {
-		actual = pkgerrors.Cause(actual)
+		actual = cause(actual)
 		var unwrapped error
 		switch wrapped := actual.(type) { //nolint:errorlint // False positive.
 		case interface{ Unwrap() error }:
@@ -772,8 +806,6 @@ func unwrapErr(err error) (actual error) {
 // [errors.Unwrap]() and [github.com/pkg/errors.Cause]().
 // In case of multi-error (Unwrap() []error) it use only first error.
 //
-// It will use !proto.Equal for gRPC status errors.
-//
 // They must have either different types or values (or one should be nil).
 // Different instances with same type and value will be considered the
 // same error, and so is both nil.
@@ -781,17 +813,69 @@ func unwrapErr(err error) (actual error) {
 // Finally it'll use ![errors.Is]().
 func (t *C) NotErr(actual, expected error, msg ...any) bool {
 	t.Helper()
-	actual2 := unwrapErr(actual)
-	notEqual := fmt.Sprintf("%#v", actual2) != fmt.Sprintf("%#v", expected)
-	_, proto1 := actual2.(interface{ GRPCStatus() *status.Status })
-	_, proto2 := expected.(interface{ GRPCStatus() *status.Status })
-	if proto1 || proto2 {
-		notEqual = !proto.Equal(status.Convert(actual2).Proto(), status.Convert(expected).Proto())
+	equal, claimed := runCheckers(actual, expected)
+	var notEqual bool
+	if claimed {
+		notEqual = !equal
+	} else {
+		actual2 := unwrapErr(actual)
+		if hasMethod(actual2, "GRPCStatus") || hasMethod(expected, "GRPCStatus") {
+			panic("check: gRPC status error detected; " +
+				"import github.com/powerman/checkgrpc to compare gRPC status errors")
+		}
+		notEqual = reflect.TypeOf(actual2) != reflect.TypeOf(expected) ||
+			!deepequal.DeepEqual(actual2, expected)
 	}
 	if notEqual {
 		notEqual = !errors.Is(actual, expected)
 	}
 	return t.report1(actual, msg, notEqual)
+}
+
+// ErrIs checks for [errors.Is]().
+//
+// Unlike Err which tries to unwrap to root cause and compare values,
+// ErrIs uses pure [errors.Is] semantics for exact error matching.
+//
+// See Err for value-equality checks. ErrIs is preferred when you want
+// the standard Go unwrapping semantics without value comparison.
+func (t *C) ErrIs(actual, expected error, msg ...any) bool {
+	t.Helper()
+	return t.report2(actual, expected, msg,
+		errors.Is(actual, expected))
+}
+
+// NotErrIs checks for ![errors.Is]().
+//
+// See ErrIs for details. Note that nil is not matched by [errors.Is]
+// against any non-nil error, so NotErrIs(nil, [io.EOF]) passes.
+func (t *C) NotErrIs(actual, expected error, msg ...any) bool {
+	t.Helper()
+	return t.report1(actual, msg,
+		!errors.Is(actual, expected))
+}
+
+// ErrAs checks for [errors.As].
+//
+// target must be a non-nil pointer to an error type or to an interface,
+// as required by [errors.As]. On success target is filled
+// with the matched error value. See [errors.As] documentation for details.
+func (t *C) ErrAs(actual error, target any, msg ...any) bool {
+	t.Helper()
+	return t.report2(actual, target, msg,
+		errors.As(actual, target))
+}
+
+// NotErrAs checks for ![errors.As].
+//
+// target must be a non-nil pointer to an error type or to an interface,
+// as required by [errors.As]. Note that [errors.As] may still fill target
+// with a matched error even when this check returns true,
+// because [errors.As] is always called regardless of the negated result.
+func (t *C) NotErrAs(actual error, target any, msg ...any) bool {
+	t.Helper()
+	return t.report1(actual, msg,
+		!errors.As(actual, target))
 }
 
 // Panic checks is actual() panics.
@@ -1092,11 +1176,27 @@ func (t *C) InDelta(actual, expected, delta any, msg ...any) bool {
 func isInDelta(actual, expected, delta any) bool {
 	switch v, e, d := reflect.ValueOf(actual), reflect.ValueOf(expected), reflect.ValueOf(delta); v.Kind() { //nolint:exhaustive // Covered by default case.
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		minimum, maximum := e.Int()-d.Int(), e.Int()+d.Int()
-		return minimum <= v.Int() && v.Int() <= maximum
+		dd := d.Int()
+		if dd < 0 {
+			return false // negative delta: preserve old always-false behavior
+		}
+		a, e2 := v.Int(), e.Int()
+		var diff uint64 // |a-e2| computed without overflow via two's complement
+		if a >= e2 {
+			diff = uint64(a) - uint64(e2) //nolint:gosec // Two's complement: exact even when a-e2 overflows int64.
+		} else {
+			diff = uint64(e2) - uint64(a) //nolint:gosec // Two's complement: exact even when e2-a overflows int64.
+		}
+		return diff <= uint64(dd)
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
-		minimum, maximum := e.Uint()-d.Uint(), e.Uint()+d.Uint()
-		return minimum <= v.Uint() && v.Uint() <= maximum
+		a, e2, dd := v.Uint(), e.Uint(), d.Uint()
+		var diff uint64
+		if a >= e2 {
+			diff = a - e2
+		} else {
+			diff = e2 - a
+		}
+		return diff <= dd
 	case reflect.Float32, reflect.Float64:
 		minimum, maximum := e.Float()-d.Float(), e.Float()+d.Float()
 		return minimum <= v.Float() && v.Float() <= maximum

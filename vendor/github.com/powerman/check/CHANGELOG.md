@@ -5,6 +5,45 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.12.0] - 2026-07-10
+
+### 🔔 Changed
+
+- Extract protobuf/gRPC deps into external modules by @powerman in [2194188]
+
+[1.12.0]: https://github.com/powerman/check/compare/v1.11.0..v1.12.0
+[2194188]: https://github.com/powerman/check/commit/219418899d16476bdaf48d7366936dc287473d54
+
+## [1.11.0] - 2026-07-09
+
+### 🚀 Added
+
+- Add custom err checker framework, ErrIs/ErrAs helpers, and FieldErrChecker by @powerman in [5379277]
+- Add custom equal checker framework for DeepEqual/NotDeepEqual by @powerman in [7fcfc81]
+
+### 🐛 Fixed
+
+- Integer overflow in isInDelta for signed and unsigned types by @powerman in [2f1dd9f]
+
+### 📚 Documentation
+
+- Fix DeepEqual/Err method comments in check.go by @powerman in [22714d8]
+
+[1.11.0]: https://github.com/powerman/check/compare/v1.10.0..v1.11.0
+[2f1dd9f]: https://github.com/powerman/check/commit/2f1dd9fa004481d612fb5d337f4bd136b97ed35c
+[5379277]: https://github.com/powerman/check/commit/53792777a78da0210e9d7f3c68d2f0da964c946b
+[22714d8]: https://github.com/powerman/check/commit/22714d86d1fb9c5d00e3348bc534566ceaf9580b
+[7fcfc81]: https://github.com/powerman/check/commit/7fcfc819e3b76b0a50b686821aa279554d7f171d
+
+## [1.10.0] - 2026-07-07
+
+### 🚀 Added
+
+- Add Errorf, Fatal, Fatalf methods with TODO support by @powerman in [32c43b2]
+
+[1.10.0]: https://github.com/powerman/check/compare/v1.9.1..v1.10.0
+[32c43b2]: https://github.com/powerman/check/commit/32c43b2ecd618d77539ef54de5f7df6ab292022c
+
 ## [1.9.1] - 2026-04-07
 
 ### 📚 Documentation
@@ -168,7 +207,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Cleanup tests by @powerman in [034b842]
 - Improve test coverage by @powerman in [e36403b]
 - Improve reporting to goconvey by @powerman in [b2ac659]
-- Add GO_TEST_COLOR by @powerman in [13aa1c9]
+- Add `GO_TEST_COLOR` by @powerman in [13aa1c9]
 - Add go.mod by @powerman in [e6010ba]
 
 ### 🐛 Fixed

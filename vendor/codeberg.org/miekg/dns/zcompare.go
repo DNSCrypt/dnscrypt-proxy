@@ -489,28 +489,28 @@ func (rr *SOA) compare(b RR) (x int) {
 		}
 		return 1
 	}
-	x = cmp.Compare(rr.Refresh, b.(*SOA).Refresh)
+	x = int(rr.Refresh) - int(b.(*SOA).Refresh)
 	if x != 0 {
 		if x < 0 {
 			return -1
 		}
 		return 1
 	}
-	x = cmp.Compare(rr.Retry, b.(*SOA).Retry)
+	x = int(rr.Retry) - int(b.(*SOA).Retry)
 	if x != 0 {
 		if x < 0 {
 			return -1
 		}
 		return 1
 	}
-	x = cmp.Compare(rr.Expire, b.(*SOA).Expire)
+	x = int(rr.Expire) - int(b.(*SOA).Expire)
 	if x != 0 {
 		if x < 0 {
 			return -1
 		}
 		return 1
 	}
-	x = cmp.Compare(rr.Minttl, b.(*SOA).Minttl)
+	x = int(rr.Minttl) - int(b.(*SOA).Minttl)
 	if x != 0 {
 		if x < 0 {
 			return -1

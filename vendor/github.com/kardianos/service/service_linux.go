@@ -209,11 +209,19 @@ func isInContainerCGroup(cgroupPath string) (bool, error) {
 	return false, nil
 }
 
-var tf = map[string]interface{}{
-	"cmd": func(s string) string {
-		return `"` + strings.Replace(s, `"`, `\"`, -1) + `"`
-	},
-	"cmdEscape": func(s string) string {
-		return strings.Replace(s, " ", `\x20`, -1)
-	},
+// cmdQuote and cmdEscape are the plain string transforms used when building
+// service files. They are also exposed to custom user templates through tfs.
+func cmdQuote(s string) string {
+	return `"` + strings.ReplaceAll(s, `"`, `\"`) + `"`
+}
+
+func cmdEscape(s string) string {
+	return strings.ReplaceAll(s, " ", `\x20`)
+}
+
+// tfs is the string-only function map for the mini template engine, exposing
+// the cmd/cmdEscape pipeline functions to the built-in and custom templates.
+var tfs = map[string]tmplFunc{
+	"cmd":       func(s string) (string, error) { return cmdQuote(s), nil },
+	"cmdEscape": func(s string) (string, error) { return cmdEscape(s), nil },
 }

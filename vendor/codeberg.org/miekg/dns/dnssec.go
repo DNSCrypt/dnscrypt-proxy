@@ -10,7 +10,6 @@ import (
 	_ "crypto/sha256" // need its init function
 	_ "crypto/sha512" // need its init function
 	"encoding/asn1"
-	"encoding/binary"
 	"encoding/hex"
 	"hash"
 	"math/big"
@@ -24,8 +23,8 @@ import (
 
 // DNSSEC encryption algorithm codes.
 const (
-	_ uint8 = iota
-	RSAMD5
+	_      uint8 = iota
+	RSAMD5       // Deprecated.
 	DH
 	DSA
 	_ // Skip 4, RFC 6725, section 2.1
@@ -113,33 +112,22 @@ func (k *DNSKEY) KeyTag() uint16 {
 		return k.Tag
 	}
 	keytag := 0
-	switch k.Algorithm {
-	case RSAMD5:
-		// This algorithm has been deprecated, but keep this key-tag calculation.
-		// Look at the bottom two bytes of the modules, which the last item in the pubkey.
-		// See https://www.rfc-editor.org/errata/eid193 .
-		modulus, _ := pack.Base64([]byte(k.PublicKey))
-		if len(modulus) > 1 {
-			x := binary.BigEndian.Uint16(modulus[len(modulus)-3:])
-			keytag = int(x)
-		}
-	default:
-		wire := make([]byte, defaultBufSize/2)
-		n, err := k.pack(wire, 0, nil)
-		if err != nil {
-			return 0
-		}
-		wire = wire[:n]
-		for i, v := range wire {
-			if i&1 != 0 {
-				keytag += int(v) // must be larger than uint32
-			} else {
-				keytag += int(v) << 8
-			}
-		}
-		keytag += keytag >> 16 & 0xFFFF
-		keytag &= 0xFFFF
+	wire := make([]byte, defaultBufSize/2)
+	n, err := k.pack(wire, 0, nil)
+	if err != nil {
+		return 0
 	}
+	wire = wire[:n]
+	for i, v := range wire {
+		if i&1 != 0 {
+			keytag += int(v) // must be larger than uint32
+		} else {
+			keytag += int(v) << 8
+		}
+	}
+	keytag += keytag >> 16 & 0xFFFF
+	keytag &= 0xFFFF
+
 	k.Tag = uint16(keytag)
 	return k.Tag
 }
@@ -212,7 +200,7 @@ func (d *DS) ToCDS() *CDS {
 
 // Sign signs an RRset. The signature needs to be filled in with the values:
 // Inception, Expiration, KeyTag, SignerName and Algorithm. See [NewRRSIG], the rest is copied
-// from the RRset. Sign returns a non-nill error when the signing went OK.
+// from the RRset. Sign returns a non-nil error when the signing went OK.
 // There is no check if RRSet is a proper (RFC 2181) RRSet.
 // Sign expect RRSIG to be initialized with [NewRRSIG]. Sign will skip RRSIG records, and return nil in that case.
 func (rr *RRSIG) Sign(k crypto.Signer, rrset []RR, options *SignOption) error {
@@ -220,6 +208,11 @@ func (rr *RRSIG) Sign(k crypto.Signer, rrset []RR, options *SignOption) error {
 	if rr.KeyTag == 0 || len(rr.SignerName) == 0 || rr.Algorithm == 0 {
 		return ErrKey
 	}
+
+	if rr.Algorithm == RSAMD5 || rr.Algorithm == DSA || rr.Algorithm == DSANSEC3SHA1 {
+		return ErrAlg
+	}
+
 	if options.Pooler == nil {
 		options.Pooler = pool.NewNoop(defaultBufSize)
 	}
@@ -257,16 +250,9 @@ func (rr *RRSIG) Sign(k crypto.Signer, rrset []RR, options *SignOption) error {
 
 	var h hash.Hash
 	hash, ok := AlgorithmToHash[rr.Algorithm]
-	if !ok && rr.Algorithm != ED25519 {
-		return ErrAlg
-	}
-
-	switch rr.Algorithm {
-	case RSAMD5, DSA, DSANSEC3SHA1:
-		// See RFC 6944.
-		return ErrAlg
-
-	case ED25519:
+	// Some newer algorithms do their own hashing, i.e. ED25519 (maybe all elliptic curve ones do), so no hash
+	// is OK.
+	if !ok {
 		signature, err := sign(k, signdata, hash, rr.Algorithm)
 		if err != nil {
 			return err
@@ -274,19 +260,19 @@ func (rr *RRSIG) Sign(k crypto.Signer, rrset []RR, options *SignOption) error {
 
 		rr.Signature = unpack.Base64(signature)
 		return nil
-
-	default:
-		h = hash.New()
-		h.Write(signdata)
-
-		signature, err := sign(k, h.Sum(nil), hash, rr.Algorithm)
-		if err != nil {
-			return err
-		}
-
-		rr.Signature = unpack.Base64(signature)
-		return nil
 	}
+
+	// older algorithms with explicit hashing
+	h = hash.New()
+	h.Write(signdata)
+
+	signature, err := sign(k, h.Sum(nil), hash, rr.Algorithm)
+	if err != nil {
+		return err
+	}
+
+	rr.Signature = unpack.Base64(signature)
+	return nil
 }
 
 func sign(k crypto.Signer, hashed []byte, hash crypto.Hash, alg uint8) ([]byte, error) {
@@ -296,8 +282,6 @@ func sign(k crypto.Signer, hashed []byte, hash crypto.Hash, alg uint8) ([]byte, 
 	}
 
 	switch alg {
-	case RSASHA1, RSASHA1NSEC3SHA1, RSASHA256, RSASHA512, ED25519:
-		return signature, nil
 	case ECDSAP256SHA256, ECDSAP384SHA384:
 		ecdsaSignature := &struct {
 			R, S *big.Int
@@ -317,8 +301,9 @@ func sign(k crypto.Signer, hashed []byte, hash crypto.Hash, alg uint8) ([]byte, 
 		signature := intToBytes(ecdsaSignature.R, intlen)
 		signature = append(signature, intToBytes(ecdsaSignature.S, intlen)...)
 		return signature, nil
+
 	default:
-		return nil, ErrAlg
+		return signature, nil
 	}
 }
 
@@ -329,7 +314,10 @@ func sign(k crypto.Signer, hashed []byte, hash crypto.Hash, alg uint8) ([]byte, 
 //
 // This function copies the rdata of some RRs (to lowercase domain names) for the validation to work.
 // It also checks that the Zone Key bit (RFC 4034 2.1.1) is set on the DNSKEY
-// and that the Protocol field is set to 3 (RFC 4034 2.1.2). Options can not be nil
+// and that the Protocol field is set to 3 (RFC 4034 2.1.2). Options can not be nil.
+//
+// See the documentation of the [SignOption]'s VerifyFunc if you want to use a algorithm that is not supported
+// by this package.
 func (rr *RRSIG) Verify(k *DNSKEY, rrset []RR, options *SignOption) error {
 	if rr.KeyTag != k.KeyTag() || rr.Hdr.Class != k.Hdr.Class || rr.Algorithm != k.Algorithm {
 		return ErrKey
@@ -374,10 +362,7 @@ func (rr *RRSIG) Verify(k *DNSKEY, rrset []RR, options *SignOption) error {
 	sigbuf, _ := pack.Base64([]byte(rr.Signature))
 
 	var h hash.Hash
-	hash, ok := AlgorithmToHash[rr.Algorithm]
-	if !ok && rr.Algorithm != ED25519 {
-		return ErrAlg
-	}
+	hash, _ := AlgorithmToHash[rr.Algorithm] // newer alg do their own hashing, ignore...
 
 	switch rr.Algorithm {
 	case RSASHA1, RSASHA1NSEC3SHA1, RSASHA256, RSASHA512:
@@ -417,7 +402,14 @@ func (rr *RRSIG) Verify(k *DNSKEY, rrset []RR, options *SignOption) error {
 			return nil
 		}
 		return ErrSig
+
 	default:
+		if options.VerifyFunc != nil {
+			if options.VerifyFunc(k, signeddata, sigbuf) {
+				return nil
+			}
+			return ErrSig
+		}
 		return ErrAlg
 	}
 }
@@ -445,6 +437,16 @@ type SignOption struct {
 	// If Pooler is set is will be used for all memory allocations. If nil the default pooler will be used and
 	// the buffers size used will be defaultBufSize
 	pool.Pooler
+
+	// If VerifyFunc is non-nil it will be used to verify a signture in [RRSIG.Verify]. This is useful when
+	// you are using a external (to this package) cryptographic algorithm. For this you also need add your
+	// algorithm to [AlgorithmToString]. In the case of ed448 this could like:
+	//
+	//   func(k *dns.DNSKEY, message, sig []byte) bool {
+	//      pub, _ := base64.StdEncoding.DecodeString(k.PublicKey)
+	//      return ed448.Verify(ed448.PublicKey(pub), message, sig, "")
+	//   }
+	VerifyFunc func(k *DNSKEY, message, sig []byte) bool
 }
 
 const defaultBufSize = 8192
