@@ -79,7 +79,7 @@ func (plugin *PluginCache) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 		return nil
 	}
 	expiration := cached.expiration
-	synth := cached.msg.Copy()
+	synth := cloneMsg(cached.msg)
 
 	synth.ID = msg.ID
 	synth.Response = true
@@ -141,7 +141,7 @@ func (plugin *PluginCacheResponse) Eval(pluginsState *PluginsState, msg *dns.Msg
 	)
 	cachedResponse := CachedResponse{
 		expiration: time.Now().Add(ttl),
-		msg:        msg.Copy(),
+		msg:        cloneMsg(msg),
 	}
 	var cacheInitError error
 	cachedResponses.cacheOnce.Do(func() {
