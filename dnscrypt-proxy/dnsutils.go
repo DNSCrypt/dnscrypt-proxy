@@ -550,7 +550,7 @@ func _dnsExchange(
 		if proxyDialer == nil {
 			pc, err = net.DialTimeout("tcp", upstreamAddr.String(), proxy.timeout)
 		} else {
-			pc, err = (*proxyDialer).Dial("tcp", tcpAddr.String())
+			pc, err = (*proxyDialer).Dial("tcp", upstreamAddr.String())
 		}
 		if err != nil {
 			return DNSExchangeResponse{err: err}
