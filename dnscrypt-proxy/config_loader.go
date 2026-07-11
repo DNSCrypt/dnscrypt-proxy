@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"flag"
 	"fmt"
 	"net"
 	"net/http"
@@ -463,9 +464,11 @@ func configureSourceRestrictions(proxy *Proxy, flags *ConfigFlags, config *Confi
 // determineNetprobeAddress - Determines the address to use for network probing
 func determineNetprobeAddress(flags *ConfigFlags, config *Config) (string, int) {
 	netprobeTimeout := config.NetprobeTimeout
-	if flags.NetprobeTimeoutOverride != nil {
-		netprobeTimeout = *flags.NetprobeTimeoutOverride
-	}
+	flag.Visit(func(commandLineFlag *flag.Flag) {
+		if commandLineFlag.Name == "netprobe-timeout" && flags.NetprobeTimeoutOverride != nil {
+			netprobeTimeout = *flags.NetprobeTimeoutOverride
+		}
+	})
 
 	netprobeAddress := DefaultNetprobeAddress
 	if len(config.NetprobeAddress) > 0 {
