@@ -539,6 +539,8 @@ func (xTransport *XTransport) resolveUsingResolver(
 		queryType = append(queryType, dns.TypeAAAA)
 	}
 	var rrTTL uint32
+	rrTTLSet := false
+	var lastErr error
 	ctx, cancel := context.WithTimeout(context.Background(), ResolverReadTimeout)
 	defer cancel()
 	for _, rrType := range queryType {
@@ -559,15 +561,21 @@ func (xTransport *XTransport) resolveUsingResolver(
 					case dns.TypeAAAA:
 						ips = append(ips, answer.(*dns.AAAA).AAAA.Addr.AsSlice())
 					}
-					rrTTL = answer.Header().TTL
+					if answerTTL := answer.Header().TTL; !rrTTLSet || answerTTL < rrTTL {
+						rrTTL = answerTTL
+						rrTTLSet = true
+					}
 				}
 			}
+		} else {
+			lastErr = err
 		}
 	}
 	if len(ips) > 0 {
 		ttl = time.Duration(rrTTL) * time.Second
+		return ips, ttl, nil
 	}
-	return ips, ttl, err
+	return nil, 0, lastErr
 }
 
 func (xTransport *XTransport) resolveUsingServers(
