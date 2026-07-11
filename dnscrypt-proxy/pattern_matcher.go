@@ -102,14 +102,10 @@ func (patternMatcher *PatternMatcher) Add(pattern string, val any, position int)
 	switch patternType {
 	case PatternTypeSubstring:
 		patternMatcher.substrings = append(patternMatcher.substrings, pattern)
-		if val != nil {
-			patternMatcher.indirectVals[pattern] = val
-		}
+		patternMatcher.indirectVals[pattern] = val
 	case PatternTypePattern:
 		patternMatcher.patterns = append(patternMatcher.patterns, pattern)
-		if val != nil {
-			patternMatcher.indirectVals[pattern] = val
-		}
+		patternMatcher.indirectVals[pattern] = val
 	case PatternTypePrefix:
 		patternMatcher.prefixes.Insert([]byte(pattern), val)
 	case PatternTypeSuffix:
@@ -127,7 +123,7 @@ func (patternMatcher *PatternMatcher) Eval(qName string) (reject bool, reason st
 		return false, "", nil
 	}
 
-	if xval := patternMatcher.exact[qName]; xval != nil {
+	if xval, found := patternMatcher.exact[qName]; found {
 		return true, qName, xval
 	}
 
