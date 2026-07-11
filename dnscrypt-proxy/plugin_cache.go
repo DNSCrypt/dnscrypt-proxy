@@ -41,6 +41,9 @@ func computeCacheKey(pluginsState *PluginsState, msg *dns.Msg) [32]byte {
 	if pluginsState.dnssec {
 		tmp[4] = 1
 	}
+	if msg.CheckingDisabled {
+		tmp[4] |= 2
+	}
 	h.Write(tmp[:])
 	normalizedRawQName := []byte(question.Header().Name)
 	NormalizeRawQName(&normalizedRawQName)
