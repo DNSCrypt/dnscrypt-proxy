@@ -72,22 +72,21 @@ func (handler localDoHHandler) ServeHTTP(writer http.ResponseWriter, request *ht
 		writer.WriteHeader(500)
 		return
 	}
-	msg := dns.Msg{Data: packet}
+	msg := dns.Msg{Data: response}
 	if err := msg.Unpack(); err != nil {
 		writer.WriteHeader(400)
 		return
 	}
-	responseLen := len(response)
-	paddedLen := dohPaddedLen(responseLen)
-	padLen := paddedLen - responseLen
 	if hasEDNS0Padding {
-		response, err = addEDNS0PaddingIfNoneFound(&msg, response, padLen)
+		response, err = addLocalDoHResponsePadding(&msg)
 		if err != nil {
 			dlog.Critical(err)
 			writer.WriteHeader(500)
 			return
 		}
 	} else {
+		responseLen := len(response)
+		padLen := dohPaddedLen(responseLen) - responseLen
 		pad := strings.Repeat("X", padLen)
 		writer.Header().Set("X-Pad", pad)
 	}
@@ -95,6 +94,37 @@ func (handler localDoHHandler) ServeHTTP(writer http.ResponseWriter, request *ht
 	writer.Header().Set("Content-Length", fmt.Sprint(len(response)))
 	writer.WriteHeader(200)
 	writer.Write(response)
+}
+
+func addLocalDoHResponsePadding(msg *dns.Msg) ([]byte, error) {
+	original := append([]byte(nil), msg.Data...)
+	if msg.UDPSize == 0 {
+		msg.UDPSize = uint16(MaxDNSPacketSize)
+	}
+	var paddingRR *dns.PADDING
+	for _, rr := range msg.Pseudo {
+		if padding, ok := rr.(*dns.PADDING); ok {
+			paddingRR = padding
+			paddingRR.Padding = ""
+			break
+		}
+	}
+	if paddingRR == nil {
+		paddingRR = &dns.PADDING{}
+		msg.Pseudo = append(msg.Pseudo, paddingRR)
+	}
+	if err := msg.Pack(); err != nil {
+		return nil, err
+	}
+	if len(msg.Data) > MaxDNSPacketSize {
+		return original, nil
+	}
+	paddingLen := dohPaddedLen(len(msg.Data)) - len(msg.Data)
+	paddingRR.Padding = strings.Repeat("58", paddingLen)
+	if err := msg.Pack(); err != nil {
+		return nil, err
+	}
+	return msg.Data, nil
 }
 
 func (proxy *Proxy) localDoHListener(acceptPc *net.TCPListener) {
