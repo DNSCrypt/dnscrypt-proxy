@@ -677,6 +677,7 @@ func (proxy *Proxy) exchangeWithUDPServerViaProxy(
 		proxy.prepareForRelay(serverInfo.UDPAddr.IP, serverInfo.UDPAddr.Port, &encryptedQuery)
 	}
 	encryptedResponse := make([]byte, MaxDNSPacketSize)
+	var readErr error
 	for tries := 2; tries > 0; tries-- {
 		if _, err := pc.Write(encryptedQuery); err != nil {
 			return nil, err
@@ -684,9 +685,14 @@ func (proxy *Proxy) exchangeWithUDPServerViaProxy(
 		length, err := pc.Read(encryptedResponse)
 		if err == nil {
 			encryptedResponse = encryptedResponse[:length]
+			readErr = nil
 			break
 		}
+		readErr = err
 		dlog.Debugf("[%v] Retry on timeout", serverInfo.Name)
+	}
+	if readErr != nil {
+		return nil, readErr
 	}
 	return proxy.Decrypt(serverInfo, sharedKey, encryptedResponse, clientNonce, queryEpoch)
 }
