@@ -121,6 +121,10 @@ func FetchCurrentDNSCryptCert(
 			continue
 		}
 		isPQ := cryptoConstruction == XWingPQ
+		if isPQ && !proxy.pqDNSCrypt {
+			dlog.Debugf("[%v] ignoring post-quantum certificate, disabled in the configuration", *serverName)
+			continue
+		}
 		if isPQ && len(binCert) < 1320 {
 			dlog.Warnf("[%v] PQ certificate too short", *serverName)
 			continue

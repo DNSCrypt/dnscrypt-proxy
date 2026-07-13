@@ -282,6 +282,14 @@ cert_refresh_delay = 240
 # dnscrypt_ephemeral_keys = false
 
 
+## PQDNSCrypt (DNSCrypt 2026): use post-quantum cryptography when supported
+## by the server.
+## This protects the confidentiality of your queries against future quantum
+## computers ("harvest now, decrypt later").
+
+# pqdnscrypt = true
+
+
 ## DoH: Disable TLS session tickets - increases privacy but also latency
 
 # tls_disable_session_tickets = false

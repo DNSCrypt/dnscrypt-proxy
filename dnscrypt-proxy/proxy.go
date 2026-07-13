@@ -97,6 +97,7 @@ type Proxy struct {
 	ephemeralKeys                 bool
 	pluginBlockUnqualified        bool
 	showCerts                     bool
+	pqDNSCrypt                    bool
 	certIgnoreTimestamp           bool
 	skipAnonIncompatibleResolvers bool
 	anonDirectCertFallback        bool
