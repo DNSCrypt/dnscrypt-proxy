@@ -5,6 +5,42 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.13.0] - 2026-07-10
+
+### ➖ Removed
+
+- Remove all external dependencies by vendoring internal packages by @powerman in [fc0ee30]
+
+### 🚀 Added
+
+- Add SortEqual/Subset/FileExists/DirExists checkers by @powerman in [1fc5301]
+
+### 🔔 Changed
+
+- Redesign primary API around New/Must constructors and TB type by @powerman in [fa7f376]
+- Refactor color detection and redirect stats output to stderr by @powerman in [4a0f9d8]
+
+### 🐛 Fixed
+
+- Prevent panic on unexported map keys in dump output by @powerman in [28ad172]
+
+### 📚 Documentation
+
+- Expand README with rationale, comparisons, and runnable examples by @powerman in [c6a515e]
+
+### 📦️ Dependencies
+
+- **(deps)** Bump github.com/powerman/deepequal from v0.1.0 to v0.2.0 by @powerman in [47e80d7]
+
+[1.13.0]: https://github.com/powerman/check/compare/v1.12.0..v1.13.0
+[fa7f376]: https://github.com/powerman/check/commit/fa7f376c311067d43ea420f2f721acbe4e56cf37
+[1fc5301]: https://github.com/powerman/check/commit/1fc5301664f9ea2d14963d011dad69ed3d325428
+[47e80d7]: https://github.com/powerman/check/commit/47e80d73242a070ab7205c0157223822236373b2
+[fc0ee30]: https://github.com/powerman/check/commit/fc0ee3015f34db305788c8c5858307abbbd4ac42
+[4a0f9d8]: https://github.com/powerman/check/commit/4a0f9d83ed80f8a09e0a0ae805b5e3a220471ecf
+[c6a515e]: https://github.com/powerman/check/commit/c6a515e6dec783e77debf32dbb528664980d4c12
+[28ad172]: https://github.com/powerman/check/commit/28ad17252706f81daf82f983510d55da2fdc9b16
+
 ## [1.12.0] - 2026-07-10
 
 ### 🔔 Changed

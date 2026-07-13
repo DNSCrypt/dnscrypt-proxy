@@ -2,18 +2,19 @@ package check
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
+	"os"
 	"reflect"
 	"regexp"
-	"slices"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/powerman/deepequal"
+	"github.com/powerman/check/internal/deepequal"
 )
 
 //nolint:gochecknoglobals // Const.
@@ -25,16 +26,25 @@ var (
 
 // C wraps [*testing.T] to make it convenient to call checkers in test.
 type C struct {
+	// C is a thin [*testing.T]-only compatibility shell built on the same machinery as [TB]:
+	// it embeds [*testing.T] (its sole, unambiguous [testing.TB] source -
+	// so Helper/Cleanup/Log/... and friends stay genuinely zero-cost)
+	// and *checks (which provides the wide checker API for free
+	// and never collides with [*testing.T]'s own method names).
+	// Error, Errorf, Fatal, Fatalf, Fail, FailNow and Context are the one exception:
+	// check needs to intercept them (for statistics/TODO/Must and the merged Context),
+	// so each gets a short explicit override below - direct declarations always win
+	// over promoted ones, so this doesn't reintroduce any ambiguity.
+	*checks
 	*testing.T
-
-	todo bool
-	must bool
 }
 
 const (
 	nameActual   = "Actual"
 	nameExpected = "Expected"
 )
+
+var _ testing.TB = (*C)(nil)
 
 // T creates and returns new *C, which wraps given tt and supposed to be
 // used inplace of it, providing you with access to many useful helpers in
@@ -47,258 +57,108 @@ const (
 //		t := check.T(tt)
 //		// use only t in test and don't touch tt anymore
 //	}
+//
+// T is a soft-mode, [*testing.T]-only legacy constructor kept for backward compatibility.
+// For new tests prefer [Must], which also works with [*testing.B] and [*testing.F].
 func T(tt *testing.T) *C { //nolint:thelper // With check we name it tt!
-	return &C{T: tt}
+	return &C{checks: &checks{tb: tt}, T: tt}
 }
 
-// TODO creates and returns new *C, which have only one difference from
-// original one: every passing check is now handled as failed and vice
-// versa (this doesn't affect boolean value returned by check).
-// You can continue using both old and new *C at same time.
-//
-// Swapping passed/failed gives you ability to temporary mark some failed
-// test as passed. For example, this may be useful to avoid broken builds
-// in CI. This is often better than commenting, deleting or skipping
-// broken test because it will continue to execute, and eventually when
-// reason why it fails will be fixed this test will became failed again -
-// notifying you the mark can and should be removed from this test now.
-//
-//	func TestSomething(tt *testing.T) {
-//		t := check.T(tt)
-//		// Normal tests.
-//		t.True(true)
-//		// If you need to mark just one/few broken tests:
-//		t.TODO().True(false)
-//		t.True(true)
-//		// If there are several broken tests mixed with working ones:
-//		todo := t.TODO()
-//		t.True(true)
-//		todo.True(false)
-//		t.True(true)
-//		if todo.True(false) {
-//			panic("never here")
-//		}
-//		// If all tests below this point are broken:
-//		t = t.TODO()
-//		t.True(false)
-//		...
-//	}
+// TODO is like [TB.TODO], but keeps working with *C and [*testing.T].
 func (t *C) TODO() *C {
-	return &C{T: t.T, todo: true, must: t.must}
+	return &C{checks: t.withTODO(), T: t.T}
 }
 
-// MustAll creates and returns new *C, which have only one difference from
-// original one: every failed check will interrupt test using t.FailNow.
-// You can continue using both old and new *C at same time.
-//
-// This provides an easy way to turn all checks into assertion.
+// MustAll is like [TB.MustAll], but keeps working with *C and [*testing.T].
 func (t *C) MustAll() *C {
-	return &C{T: t.T, todo: t.todo, must: true}
+	return &C{checks: t.withMustAll(), T: t.T}
 }
 
-func (t *C) pass() {
-	statsMu.Lock()
-	defer statsMu.Unlock()
-
-	if stats[t.T] == nil {
-		stats[t.T] = newTestStat(t.Name(), false)
-	}
-	if t.todo {
-		stats[t.T].forged.value++
-	} else {
-		stats[t.T].passed.value++
-	}
+// Context returns the context associated with t:
+// the context merged in by the most recent [C.MergeContext] call if any,
+// otherwise the standard [*testing.T.Context]().
+func (t *C) Context() context.Context {
+	return t.context()
 }
 
-func (t *C) fail() {
-	statsMu.Lock()
-	defer statsMu.Unlock()
-
-	if stats[t.T] == nil {
-		stats[t.T] = newTestStat(t.Name(), false)
-	}
-	stats[t.T].failed.value++
+// MergeContext is like [TB.MergeContext], but keeps working with *C and [*testing.T].
+func (t *C) MergeContext(ctx context.Context) *C {
+	merged, cancel := t.mergeContext(ctx)
+	t.Cleanup(cancel)
+	return &C{checks: merged, T: t.T}
 }
 
-func (t *C) report(ok bool, msg []any, checker string, name []string, args []any) bool { //nolint:revive // False positive.
+// Error is equivalent to Log followed by Fail.
+//
+// It is like t.Errorf with TODO() and statistics support.
+func (t *C) Error(args ...any) {
 	t.Helper()
+	t.report0(args, false)
+}
 
-	if ok != t.todo {
-		t.pass()
-		return ok
+// Errorf is equivalent to Logf followed by Fail.
+//
+// It is like t.Errorf with TODO() and statistics support.
+func (t *C) Errorf(format string, args ...any) {
+	t.Helper()
+	t.report0(append([]any{format}, args...), false)
+}
+
+// Fatal is equivalent to Log followed by FailNow.
+//
+// It is like t.Fatal with TODO() and statistics support.
+func (t *C) Fatal(args ...any) {
+	t.Helper()
+	t.report0(args, false)
+	if !t.todo {
+		t.T.FailNow() // Already counted above: bypass the counting FailNow wrapper.
 	}
+}
 
-	if t.todo {
-		checker = "TODO " + checker
+// Fatalf is equivalent to Logf followed by FailNow.
+//
+// It is like t.Fatalf with TODO() and statistics support.
+func (t *C) Fatalf(format string, args ...any) {
+	t.Helper()
+	t.report0(append([]any{format}, args...), false)
+	if !t.todo {
+		t.T.FailNow() // Already counted above: bypass the counting FailNow wrapper.
 	}
+}
 
-	dump := make([]dump, 0, len(args))
-	for _, arg := range args {
-		dump = append(dump, newDump(arg))
-	}
-
-	failure := new(bytes.Buffer)
-	fmt.Fprintf(failure, "%s\nChecker:  %s%s%s\n",
-		format(msg...),
-		ansiYellow, checker, ansiReset,
-	)
-	// Reverse order to show Actual: last.
-	for i, v := range slices.Backward(dump) {
-		fmt.Fprintf(failure, "%-10s", name[i]+":")
-		switch name[i] {
-		case nameActual:
-			fmt.Fprint(failure, ansiRed)
-		default:
-			fmt.Fprint(failure, ansiGreen)
-		}
-		fmt.Fprintf(failure, "%s%s", v, ansiReset)
-	}
-
-	wantDiff := len(dump) == 2 && name[0] == nameActual && name[1] == nameExpected
-	if wantDiff {
-		fmt.Fprintf(failure, "\n%s", colouredDiff(dump[0].diff(dump[1])))
-	}
-	t.T.Errorf("%s\n", failure)
-
+// Fail marks the function as having failed but continues execution.
+//
+// Unlike plain [*testing.T.Fail], calling it directly (rather than through a checker)
+// is still counted in check's pass/fail statistics.
+func (t *C) Fail() {
 	t.fail()
-
-	if t.must {
-		t.FailNow()
-	}
-	return ok
+	t.T.Fail()
 }
 
-func (t *C) reportShould1(funcName string, actual any, msg []any, ok bool) bool {
-	t.Helper()
-	return t.report(ok, msg,
-		"Should "+funcName,
-		[]string{nameActual},
-		[]any{actual})
-}
-
-func (t *C) reportShould2(funcName string, actual, expected any, msg []any, ok bool) bool {
-	t.Helper()
-	return t.report(ok, msg,
-		"Should "+funcName,
-		[]string{nameActual, nameExpected},
-		[]any{actual, expected})
-}
-
-func (t *C) report0(msg []any, ok bool) bool {
-	t.Helper()
-	return t.report(ok, msg,
-		callerFuncName(1),
-		[]string{},
-		[]any{})
-}
-
-func (t *C) report1(actual any, msg []any, ok bool) bool {
-	t.Helper()
-	return t.report(ok, msg,
-		callerFuncName(1),
-		[]string{nameActual},
-		[]any{actual})
-}
-
-func (t *C) report2(actual, expected any, msg []any, ok bool) bool {
-	t.Helper()
-	checker, arg2Name := callerFuncName(1), nameExpected
-	if strings.Contains(checker, "Match") {
-		arg2Name = "Regex"
-	}
-	return t.report(ok, msg,
-		checker,
-		[]string{nameActual, arg2Name},
-		[]any{actual, expected})
-}
-
-func (t *C) report3(actual, expected1, expected2 any, msg []any, ok bool) bool {
-	t.Helper()
-	checker, arg2Name, arg3Name := callerFuncName(1), "arg1", "arg2"
-	switch {
-	case strings.Contains(checker, "Between"):
-		arg2Name, arg3Name = "Min", "Max"
-	case strings.Contains(checker, "Delta"):
-		arg2Name, arg3Name = nameExpected, "Delta"
-	case strings.Contains(checker, "SMAPE"):
-		arg2Name, arg3Name = nameExpected, "SMAPE"
-	}
-	return t.report(ok, msg,
-		checker,
-		[]string{nameActual, arg2Name, arg3Name},
-		[]any{actual, expected1, expected2})
-}
-
-// Must interrupt test using t.FailNow if called with false value.
+// FailNow marks the function as having failed and stops its execution.
 //
-// This provides an easy way to turn any check into assertion:
-//
-//	t.Must(t.Nil(err))
-func (t *C) Must(continueTest bool, msg ...any) { //nolint:revive // False positive.
-	t.Helper()
-	t.report0(msg, continueTest)
-	if !continueTest {
-		t.FailNow()
-	}
+// Unlike plain [*testing.T.FailNow], calling it directly (rather than through a checker)
+// is still counted in check's pass/fail statistics.
+func (t *C) FailNow() {
+	t.fail()
+	t.T.FailNow()
 }
 
-type (
-	// ShouldFunc1 is like Nil or Zero.
-	ShouldFunc1 func(t *C, actual any) bool
-	// ShouldFunc2 is like Equal or Match.
-	ShouldFunc2 func(t *C, actual, expected any) bool
-)
-
-// Should use user-provided check function to do actual check.
+// Should is like [TB.Should], but keeps working with *C and [*testing.T].
 //
-// anyShouldFunc must have type ShouldFunc1 or ShouldFunc2. It should
-// return true if check was successful. There is no need to call t.Error
-// in anyShouldFunc - this will be done automatically when it returns.
-//
-// args must contain at least 1 element for ShouldFunc1 and at least
-// 2 elements for ShouldFunc2.
-// Rest of elements will be processed as usual msg ...interface{} param.
-//
-// Example:
-//
-//	func bePositive(_ *check.C, actual interface{}) bool {
-//		return actual.(int) > 0
-//	}
-//	func TestCustomCheck(tt *testing.T) {
-//		t := check.T(tt)
-//		t.Should(bePositive, 42, "custom check!!!")
-//	}
+// [ShouldFunc1]/[ShouldFunc2] callbacks always receive a *[TB] (never *C):
+// there's only one pair of callback types, shared by TB and C alike.
 func (t *C) Should(anyShouldFunc any, args ...any) bool {
 	t.Helper()
+	tb := &TB{TB: t.T, checks: t.checks}
 	switch f := anyShouldFunc.(type) {
-	case func(t *C, actual any) bool:
-		return t.should1(f, args...)
-	case func(t *C, actual, expected any) bool:
-		return t.should2(f, args...)
+	case func(t *TB, actual any) bool:
+		return tb.should1(f, args...)
+	case func(t *TB, actual, expected any) bool:
+		return tb.should2(f, args...)
 	default:
 		panic("anyShouldFunc is not a ShouldFunc1 or ShouldFunc2")
 	}
-}
-
-func (t *C) should1(f ShouldFunc1, args ...any) bool {
-	t.Helper()
-	if len(args) < 1 {
-		panic("not enough params for " + funcName(f))
-	}
-	actual, msg := args[0], args[1:]
-	return t.reportShould1(funcName(f), actual, msg,
-		f(t, actual))
-}
-
-func (t *C) should2(f ShouldFunc2, args ...any) bool {
-	t.Helper()
-	const minArgs = 2
-	if len(args) < minArgs {
-		panic("not enough params for " + funcName(f))
-	}
-	actual, expected, msg := args[0], args[1], args[2:]
-	return t.reportShould2(funcName(f), actual, expected, msg,
-		f(t, actual, expected))
 }
 
 // Nil checks for actual == nil.
@@ -335,8 +195,8 @@ func (t *C) should2(f ShouldFunc2, args ...any) bool {
 // really, so Nil(uintptr(0)) will fail. Nil(unsafe.Pointer(nil)) will
 // also fail, for the same reason. Please do not use this and consider
 // this behaviour undefined, because it may change in the future.
-func (t *C) Nil(actual any, msg ...any) bool {
-	t.Helper()
+func (t *checks) Nil(actual any, msg ...any) bool {
+	t.tb.Helper()
 	return t.report1(actual, msg,
 		isNil(actual))
 }
@@ -361,48 +221,10 @@ func isNil(actual any) bool {
 // NotNil checks for actual != nil.
 //
 // See Nil about subtle case in check logic.
-func (t *C) NotNil(actual any, msg ...any) bool {
-	t.Helper()
+func (t *checks) NotNil(actual any, msg ...any) bool {
+	t.tb.Helper()
 	return t.report0(msg,
 		!isNil(actual))
-}
-
-// Error is equivalent to Log followed by Fail.
-//
-// It is like t.Errorf with TODO() and statistics support.
-func (t *C) Error(msg ...any) {
-	t.Helper()
-	t.report0(msg, false)
-}
-
-// Errorf is equivalent to Logf followed by Fail.
-//
-// It is like t.Errorf with TODO() and statistics support.
-func (t *C) Errorf(format string, args ...any) {
-	t.Helper()
-	t.report0(append([]any{format}, args...), false)
-}
-
-// Fatal is equivalent to Log followed by FailNow.
-//
-// It is like t.Fatal with TODO() and statistics support.
-func (t *C) Fatal(args ...any) {
-	t.Helper()
-	t.report0(args, false)
-	if !t.todo {
-		t.FailNow()
-	}
-}
-
-// Fatalf is equivalent to Logf followed by FailNow.
-//
-// It is like t.Fatalf with TODO() and statistics support.
-func (t *C) Fatalf(format string, args ...any) {
-	t.Helper()
-	t.report0(append([]any{format}, args...), false)
-	if !t.todo {
-		t.FailNow()
-	}
 }
 
 // True checks for cond == true.
@@ -414,15 +236,15 @@ func (t *C) Fatalf(format string, args ...any) {
 //	if !cond {
 //		t.Errorf(msg...)
 //	}
-func (t *C) True(cond bool, msg ...any) bool {
-	t.Helper()
+func (t *checks) True(cond bool, msg ...any) bool {
+	t.tb.Helper()
 	return t.report0(msg,
 		cond)
 }
 
 // False checks for cond == false.
-func (t *C) False(cond bool, msg ...any) bool {
-	t.Helper()
+func (t *checks) False(cond bool, msg ...any) bool {
+	t.tb.Helper()
 	return t.report0(msg,
 		!cond)
 }
@@ -430,8 +252,8 @@ func (t *C) False(cond bool, msg ...any) bool {
 // Equal checks for actual == expected.
 //
 // Note: For [time.Time] it uses actual.Equal(expected) instead.
-func (t *C) Equal(actual, expected any, msg ...any) bool {
-	t.Helper()
+func (t *checks) Equal(actual, expected any, msg ...any) bool {
+	t.tb.Helper()
 	return t.report2(actual, expected, msg,
 		isEqual(actual, expected))
 }
@@ -446,29 +268,29 @@ func isEqual(actual, expected any) bool {
 }
 
 // EQ is a synonym for Equal.
-func (t *C) EQ(actual, expected any, msg ...any) bool {
-	t.Helper()
+func (t *checks) EQ(actual, expected any, msg ...any) bool {
+	t.tb.Helper()
 	return t.Equal(actual, expected, msg...)
 }
 
 // NotEqual checks for actual != expected.
-func (t *C) NotEqual(actual, expected any, msg ...any) bool {
-	t.Helper()
+func (t *checks) NotEqual(actual, expected any, msg ...any) bool {
+	t.tb.Helper()
 	return t.report2(actual, expected, msg,
 		!isEqual(actual, expected))
 }
 
 // NE is a synonym for NotEqual.
-func (t *C) NE(actual, expected any, msg ...any) bool {
-	t.Helper()
+func (t *checks) NE(actual, expected any, msg ...any) bool {
+	t.tb.Helper()
 	return t.NotEqual(actual, expected, msg...)
 }
 
 // BytesEqual checks for [bytes.Equal](actual, expected).
 //
 // Hint: BytesEqual([]byte{}, []byte(nil)) is true (unlike DeepEqual).
-func (t *C) BytesEqual(actual, expected []byte, msg ...any) bool {
-	t.Helper()
+func (t *checks) BytesEqual(actual, expected []byte, msg ...any) bool {
+	t.tb.Helper()
 	return t.report2(actual, expected, msg,
 		bytes.Equal(actual, expected))
 }
@@ -476,8 +298,8 @@ func (t *C) BytesEqual(actual, expected []byte, msg ...any) bool {
 // NotBytesEqual checks for !bytes.Equal(actual, expected).
 //
 // Hint: NotBytesEqual([]byte{}, []byte(nil)) is false (unlike NotDeepEqual).
-func (t *C) NotBytesEqual(actual, expected []byte, msg ...any) bool {
-	t.Helper()
+func (t *checks) NotBytesEqual(actual, expected []byte, msg ...any) bool {
+	t.tb.Helper()
 	return t.report1(actual, msg,
 		!bytes.Equal(actual, expected))
 }
@@ -497,8 +319,8 @@ func hasMethod(v any, name string) bool {
 // (e.g. [time.Time], decimal.Decimal, etc.).
 //
 // Custom equal checkers registered via [RegisterEqualChecker] run first.
-func (t *C) DeepEqual(actual, expected any, msg ...any) bool {
-	t.Helper()
+func (t *checks) DeepEqual(actual, expected any, msg ...any) bool {
+	t.tb.Helper()
 	equal, claimed := runEqualCheckers(actual, expected)
 	if !claimed {
 		if hasMethod(actual, "ProtoReflect") || hasMethod(expected, "ProtoReflect") {
@@ -515,8 +337,8 @@ func (t *C) DeepEqual(actual, expected any, msg ...any) bool {
 // (e.g. [time.Time], decimal.Decimal, etc.).
 //
 // Custom equal checkers registered via [RegisterEqualChecker] run first.
-func (t *C) NotDeepEqual(actual, expected any, msg ...any) bool {
-	t.Helper()
+func (t *checks) NotDeepEqual(actual, expected any, msg ...any) bool {
+	t.tb.Helper()
 	equal, claimed := runEqualCheckers(actual, expected)
 	if claimed {
 		return t.report1(actual, msg, !equal)
@@ -540,8 +362,8 @@ func (t *C) NotDeepEqual(actual, expected any, msg ...any) bool {
 //   - [fmt.Stringer] - will match with actual.String()
 //   - error        - will match with actual.Error()
 //   - nil          - will not match (even with empty regex)
-func (t *C) Match(actual, regex any, msg ...any) bool {
-	t.Helper()
+func (t *checks) Match(actual, regex any, msg ...any) bool {
+	t.tb.Helper()
 	ok := isMatch(&actual, regex)
 	return t.report2(actual, regex, msg,
 		ok)
@@ -596,8 +418,8 @@ func stringify(arg *any) bool {
 // NotMatch checks for !regex.MatchString(actual).
 //
 // See Match about supported actual/regex types and check logic.
-func (t *C) NotMatch(actual, regex any, msg ...any) bool {
-	t.Helper()
+func (t *checks) NotMatch(actual, regex any, msg ...any) bool {
+	t.tb.Helper()
 	ok := !isMatch(&actual, regex)
 	return t.report2(actual, regex, msg,
 		ok)
@@ -615,8 +437,8 @@ func (t *C) NotMatch(actual, regex any, msg ...any) bool {
 //
 // Hint: In a map it looks for a value, if you need to look for a key -
 // use HasKey instead.
-func (t *C) Contains(actual, expected any, msg ...any) bool {
-	t.Helper()
+func (t *checks) Contains(actual, expected any, msg ...any) bool {
+	t.tb.Helper()
 	return t.report2(actual, expected, msg,
 		isContains(actual, expected))
 }
@@ -658,15 +480,15 @@ func isContains(actual, expected any) (found bool) {
 // NotContains checks is actual not contains substring/element expected.
 //
 // See Contains about supported actual/expected types and check logic.
-func (t *C) NotContains(actual, expected any, msg ...any) bool {
-	t.Helper()
+func (t *checks) NotContains(actual, expected any, msg ...any) bool {
+	t.tb.Helper()
 	return t.report2(actual, expected, msg,
 		!isContains(actual, expected))
 }
 
 // HasKey checks is actual has key expected.
-func (t *C) HasKey(actual, expected any, msg ...any) bool {
-	t.Helper()
+func (t *checks) HasKey(actual, expected any, msg ...any) bool {
+	t.tb.Helper()
 	return t.report2(actual, expected, msg,
 		hasKey(actual, expected))
 }
@@ -676,15 +498,15 @@ func hasKey(actual, expected any) bool {
 }
 
 // NotHasKey checks is actual has no key expected.
-func (t *C) NotHasKey(actual, expected any, msg ...any) bool {
-	t.Helper()
+func (t *checks) NotHasKey(actual, expected any, msg ...any) bool {
+	t.tb.Helper()
 	return t.report2(actual, expected, msg,
 		!hasKey(actual, expected))
 }
 
 // Zero checks is actual is zero value of it's type.
-func (t *C) Zero(actual any, msg ...any) bool {
-	t.Helper()
+func (t *checks) Zero(actual any, msg ...any) bool {
+	t.tb.Helper()
 	return t.report1(actual, msg,
 		isZero(actual))
 }
@@ -710,23 +532,23 @@ func isZero(actual any) bool {
 }
 
 // NotZero checks is actual is not zero value of it's type.
-func (t *C) NotZero(actual any, msg ...any) bool {
-	t.Helper()
+func (t *checks) NotZero(actual any, msg ...any) bool {
+	t.tb.Helper()
 	return t.report1(actual, msg,
 		!isZero(actual))
 }
 
 // Len checks is len(actual) == expected.
-func (t *C) Len(actual any, expected int, msg ...any) bool {
-	t.Helper()
+func (t *checks) Len(actual any, expected int, msg ...any) bool {
+	t.tb.Helper()
 	l := reflect.ValueOf(actual).Len()
 	return t.report2(l, expected, msg,
 		l == expected)
 }
 
 // NotLen checks is len(actual) != expected.
-func (t *C) NotLen(actual any, expected int, msg ...any) bool {
-	t.Helper()
+func (t *checks) NotLen(actual any, expected int, msg ...any) bool {
+	t.tb.Helper()
 	l := reflect.ValueOf(actual).Len()
 	return t.report2(l, expected, msg,
 		l != expected)
@@ -746,8 +568,8 @@ func (t *C) NotLen(actual any, expected int, msg ...any) bool {
 // on the original actual (not the unwrapped one).
 //
 // Checking for nil is okay, but using Nil(actual) instead is more clean.
-func (t *C) Err(actual, expected error, msg ...any) bool {
-	t.Helper()
+func (t *checks) Err(actual, expected error, msg ...any) bool {
+	t.tb.Helper()
 	equal, claimed := runCheckers(actual, expected)
 	if !claimed {
 		actual2 := unwrapErr(actual)
@@ -811,8 +633,8 @@ func unwrapErr(err error) (actual error) {
 // same error, and so is both nil.
 //
 // Finally it'll use ![errors.Is]().
-func (t *C) NotErr(actual, expected error, msg ...any) bool {
-	t.Helper()
+func (t *checks) NotErr(actual, expected error, msg ...any) bool {
+	t.tb.Helper()
 	equal, claimed := runCheckers(actual, expected)
 	var notEqual bool
 	if claimed {
@@ -839,8 +661,8 @@ func (t *C) NotErr(actual, expected error, msg ...any) bool {
 //
 // See Err for value-equality checks. ErrIs is preferred when you want
 // the standard Go unwrapping semantics without value comparison.
-func (t *C) ErrIs(actual, expected error, msg ...any) bool {
-	t.Helper()
+func (t *checks) ErrIs(actual, expected error, msg ...any) bool {
+	t.tb.Helper()
 	return t.report2(actual, expected, msg,
 		errors.Is(actual, expected))
 }
@@ -849,8 +671,8 @@ func (t *C) ErrIs(actual, expected error, msg ...any) bool {
 //
 // See ErrIs for details. Note that nil is not matched by [errors.Is]
 // against any non-nil error, so NotErrIs(nil, [io.EOF]) passes.
-func (t *C) NotErrIs(actual, expected error, msg ...any) bool {
-	t.Helper()
+func (t *checks) NotErrIs(actual, expected error, msg ...any) bool {
+	t.tb.Helper()
 	return t.report1(actual, msg,
 		!errors.Is(actual, expected))
 }
@@ -860,8 +682,8 @@ func (t *C) NotErrIs(actual, expected error, msg ...any) bool {
 // target must be a non-nil pointer to an error type or to an interface,
 // as required by [errors.As]. On success target is filled
 // with the matched error value. See [errors.As] documentation for details.
-func (t *C) ErrAs(actual error, target any, msg ...any) bool {
-	t.Helper()
+func (t *checks) ErrAs(actual error, target any, msg ...any) bool {
+	t.tb.Helper()
 	return t.report2(actual, target, msg,
 		errors.As(actual, target))
 }
@@ -872,8 +694,8 @@ func (t *C) ErrAs(actual error, target any, msg ...any) bool {
 // as required by [errors.As]. Note that [errors.As] may still fill target
 // with a matched error even when this check returns true,
 // because [errors.As] is always called regardless of the negated result.
-func (t *C) NotErrAs(actual error, target any, msg ...any) bool {
-	t.Helper()
+func (t *checks) NotErrAs(actual error, target any, msg ...any) bool {
+	t.tb.Helper()
 	return t.report1(actual, msg,
 		!errors.As(actual, target))
 }
@@ -881,8 +703,8 @@ func (t *C) NotErrAs(actual error, target any, msg ...any) bool {
 // Panic checks is actual() panics.
 //
 // It is able to detect panic(nil)… but you should try to avoid using this.
-func (t *C) Panic(actual func(), msg ...any) bool {
-	t.Helper()
+func (t *checks) Panic(actual func(), msg ...any) bool {
+	t.tb.Helper()
 	didPanic := true
 	func() {
 		defer func() { _ = recover() }()
@@ -896,8 +718,8 @@ func (t *C) Panic(actual func(), msg ...any) bool {
 // NotPanic checks is actual() don't panics.
 //
 // It is able to detect panic(nil)… but you should try to avoid using this.
-func (t *C) NotPanic(actual func(), msg ...any) bool {
-	t.Helper()
+func (t *checks) NotPanic(actual func(), msg ...any) bool {
+	t.tb.Helper()
 	didPanic := true
 	func() {
 		defer func() { _ = recover() }()
@@ -913,8 +735,8 @@ func (t *C) NotPanic(actual func(), msg ...any) bool {
 // Regex type can be either [*regexp.Regexp] or string.
 //
 // In case of panic(nil) it will match like panic("<nil>").
-func (t *C) PanicMatch(actual func(), regex any, msg ...any) bool {
-	t.Helper()
+func (t *checks) PanicMatch(actual func(), regex any, msg ...any) bool {
+	t.tb.Helper()
 	var panicVal any
 	didPanic := true
 	func() {
@@ -943,8 +765,8 @@ func (t *C) PanicMatch(actual func(), regex any, msg ...any) bool {
 // Regex type can be either [*regexp.Regexp] or string.
 //
 // In case of panic(nil) it will match like panic("<nil>").
-func (t *C) PanicNotMatch(actual func(), regex any, msg ...any) bool {
-	t.Helper()
+func (t *checks) PanicNotMatch(actual func(), regex any, msg ...any) bool {
+	t.tb.Helper()
 	var panicVal any
 	didPanic := true
 	func() {
@@ -976,8 +798,8 @@ func (t *C) PanicNotMatch(actual func(), regex any, msg ...any) bool {
 //   - floats
 //   - strings
 //   - [time.Time]
-func (t *C) Less(actual, expected any, msg ...any) bool {
-	t.Helper()
+func (t *checks) Less(actual, expected any, msg ...any) bool {
+	t.tb.Helper()
 	return t.report2(actual, expected, msg,
 		isLess(actual, expected))
 }
@@ -1001,8 +823,8 @@ func isLess(actual, expected any) bool {
 }
 
 // LT is a synonym for Less.
-func (t *C) LT(actual, expected any, msg ...any) bool {
-	t.Helper()
+func (t *checks) LT(actual, expected any, msg ...any) bool {
+	t.tb.Helper()
 	return t.Less(actual, expected, msg...)
 }
 
@@ -1014,8 +836,8 @@ func (t *C) LT(actual, expected any, msg ...any) bool {
 //   - floats
 //   - strings
 //   - [time.Time]
-func (t *C) LessOrEqual(actual, expected any, msg ...any) bool {
-	t.Helper()
+func (t *checks) LessOrEqual(actual, expected any, msg ...any) bool {
+	t.tb.Helper()
 	return t.report2(actual, expected, msg,
 		!isGreater(actual, expected))
 }
@@ -1039,8 +861,8 @@ func isGreater(actual, expected any) bool {
 }
 
 // LE is a synonym for LessOrEqual.
-func (t *C) LE(actual, expected any, msg ...any) bool {
-	t.Helper()
+func (t *checks) LE(actual, expected any, msg ...any) bool {
+	t.tb.Helper()
 	return t.LessOrEqual(actual, expected, msg...)
 }
 
@@ -1052,15 +874,15 @@ func (t *C) LE(actual, expected any, msg ...any) bool {
 //   - floats
 //   - strings
 //   - [time.Time]
-func (t *C) Greater(actual, expected any, msg ...any) bool {
-	t.Helper()
+func (t *checks) Greater(actual, expected any, msg ...any) bool {
+	t.tb.Helper()
 	return t.report2(actual, expected, msg,
 		isGreater(actual, expected))
 }
 
 // GT is a synonym for Greater.
-func (t *C) GT(actual, expected any, msg ...any) bool {
-	t.Helper()
+func (t *checks) GT(actual, expected any, msg ...any) bool {
+	t.tb.Helper()
 	return t.Greater(actual, expected, msg...)
 }
 
@@ -1072,15 +894,15 @@ func (t *C) GT(actual, expected any, msg ...any) bool {
 //   - floats
 //   - strings
 //   - [time.Time]
-func (t *C) GreaterOrEqual(actual, expected any, msg ...any) bool {
-	t.Helper()
+func (t *checks) GreaterOrEqual(actual, expected any, msg ...any) bool {
+	t.tb.Helper()
 	return t.report2(actual, expected, msg,
 		!isLess(actual, expected))
 }
 
 // GE is a synonym for GreaterOrEqual.
-func (t *C) GE(actual, expected any, msg ...any) bool {
-	t.Helper()
+func (t *checks) GE(actual, expected any, msg ...any) bool {
+	t.tb.Helper()
 	return t.GreaterOrEqual(actual, expected, msg...)
 }
 
@@ -1092,8 +914,8 @@ func (t *C) GE(actual, expected any, msg ...any) bool {
 //   - floats
 //   - strings
 //   - [time.Time]
-func (t *C) Between(actual, minimum, maximum any, msg ...any) bool {
-	t.Helper()
+func (t *checks) Between(actual, minimum, maximum any, msg ...any) bool {
+	t.tb.Helper()
 	return t.report3(actual, minimum, maximum, msg,
 		isBetween(actual, minimum, maximum))
 }
@@ -1126,8 +948,8 @@ func isBetween(actual, minimum, maximum any) bool {
 //   - floats
 //   - strings
 //   - [time.Time]
-func (t *C) NotBetween(actual, minimum, maximum any, msg ...any) bool {
-	t.Helper()
+func (t *checks) NotBetween(actual, minimum, maximum any, msg ...any) bool {
+	t.tb.Helper()
 	return t.report3(actual, minimum, maximum, msg,
 		!isBetween(actual, minimum, maximum))
 }
@@ -1140,8 +962,8 @@ func (t *C) NotBetween(actual, minimum, maximum any, msg ...any) bool {
 //   - floats
 //   - strings
 //   - [time.Time]
-func (t *C) BetweenOrEqual(actual, minimum, maximum any, msg ...any) bool {
-	t.Helper()
+func (t *checks) BetweenOrEqual(actual, minimum, maximum any, msg ...any) bool {
+	t.tb.Helper()
 	return t.report3(actual, minimum, maximum, msg,
 		isBetween(actual, minimum, maximum) || isEqual(actual, minimum) || isEqual(actual, maximum))
 }
@@ -1154,8 +976,8 @@ func (t *C) BetweenOrEqual(actual, minimum, maximum any, msg ...any) bool {
 //   - floats
 //   - strings
 //   - [time.Time]
-func (t *C) NotBetweenOrEqual(actual, minimum, maximum any, msg ...any) bool {
-	t.Helper()
+func (t *checks) NotBetweenOrEqual(actual, minimum, maximum any, msg ...any) bool {
+	t.tb.Helper()
 	return t.report3(actual, minimum, maximum, msg,
 		!isBetween(actual, minimum, maximum) && !isEqual(actual, minimum) && !isEqual(actual, maximum))
 }
@@ -1167,8 +989,8 @@ func (t *C) NotBetweenOrEqual(actual, minimum, maximum any, msg ...any) bool {
 //   - unsigned integers
 //   - floats
 //   - [time.Time] (in this case delta must be [time.Duration])
-func (t *C) InDelta(actual, expected, delta any, msg ...any) bool {
-	t.Helper()
+func (t *checks) InDelta(actual, expected, delta any, msg ...any) bool {
+	t.tb.Helper()
 	return t.report3(actual, expected, delta, msg,
 		isInDelta(actual, expected, delta))
 }
@@ -1220,8 +1042,8 @@ func isInDelta(actual, expected, delta any) bool {
 //   - unsigned integers
 //   - floats
 //   - [time.Time] (in this case delta must be [time.Duration])
-func (t *C) NotInDelta(actual, expected, delta any, msg ...any) bool {
-	t.Helper()
+func (t *checks) NotInDelta(actual, expected, delta any, msg ...any) bool {
+	t.tb.Helper()
 	return t.report3(actual, expected, delta, msg,
 		!isInDelta(actual, expected, delta))
 }
@@ -1247,8 +1069,8 @@ func (t *C) NotInDelta(actual, expected, delta any, msg ...any) bool {
 //   - 99.0+ when actual and expected differs in 200+ times
 //   - 100.0 when only one of actual or expected is 0 or one of them is
 //     positive while another is negative
-func (t *C) InSMAPE(actual, expected any, smape float64, msg ...any) bool {
-	t.Helper()
+func (t *checks) InSMAPE(actual, expected any, smape float64, msg ...any) bool {
+	t.tb.Helper()
 	return t.report3(actual, expected, smape, msg,
 		isInSMAPE(actual, expected, smape))
 }
@@ -1270,8 +1092,8 @@ func isInSMAPE(actual, expected any, smape float64) bool {
 // smape.
 //
 // See InSMAPE about supported actual/expected types and check logic.
-func (t *C) NotInSMAPE(actual, expected any, smape float64, msg ...any) bool {
-	t.Helper()
+func (t *checks) NotInSMAPE(actual, expected any, smape float64, msg ...any) bool {
+	t.tb.Helper()
 	return t.report3(actual, expected, smape, msg,
 		!isInSMAPE(actual, expected, smape))
 }
@@ -1285,8 +1107,8 @@ func (t *C) NotInSMAPE(actual, expected any, smape float64, msg ...any) bool {
 //   - [fmt.Stringer] - will convert with actual.String()
 //   - error        - will convert with actual.Error()
 //   - nil          - check will always fail
-func (t *C) HasPrefix(actual, expected any, msg ...any) bool {
-	t.Helper()
+func (t *checks) HasPrefix(actual, expected any, msg ...any) bool {
+	t.tb.Helper()
 	ok := isHasPrefix(&actual, &expected)
 	return t.report2(actual, expected, msg,
 		ok)
@@ -1310,8 +1132,8 @@ func isHasPrefix(actual, expected *any) bool {
 // NotHasPrefix checks for !strings.HasPrefix(actual, expected).
 //
 // See HasPrefix about supported actual/expected types and check logic.
-func (t *C) NotHasPrefix(actual, expected any, msg ...any) bool {
-	t.Helper()
+func (t *checks) NotHasPrefix(actual, expected any, msg ...any) bool {
+	t.tb.Helper()
 	ok := !isHasPrefix(&actual, &expected)
 	return t.report2(actual, expected, msg,
 		ok)
@@ -1326,8 +1148,8 @@ func (t *C) NotHasPrefix(actual, expected any, msg ...any) bool {
 //   - [fmt.Stringer] - will convert with actual.String()
 //   - error        - will convert with actual.Error()
 //   - nil          - check will always fail
-func (t *C) HasSuffix(actual, expected any, msg ...any) bool {
-	t.Helper()
+func (t *checks) HasSuffix(actual, expected any, msg ...any) bool {
+	t.tb.Helper()
 	ok := isHasSuffix(&actual, &expected)
 	return t.report2(actual, expected, msg,
 		ok)
@@ -1351,8 +1173,8 @@ func isHasSuffix(actual, expected *any) bool {
 // NotHasSuffix checks for !strings.HasSuffix(actual, expected).
 //
 // See HasSuffix about supported actual/expected types and check logic.
-func (t *C) NotHasSuffix(actual, expected any, msg ...any) bool {
-	t.Helper()
+func (t *checks) NotHasSuffix(actual, expected any, msg ...any) bool {
+	t.tb.Helper()
 	ok := !isHasSuffix(&actual, &expected)
 	return t.report2(actual, expected, msg,
 		ok)
@@ -1370,8 +1192,8 @@ func (t *C) NotHasSuffix(actual, expected any, msg ...any) bool {
 //
 // In case any of actual or expected is nil or empty or (for string or
 // []byte) is invalid JSON - check will fail.
-func (t *C) JSONEqual(actual, expected any, msg ...any) bool {
-	t.Helper()
+func (t *checks) JSONEqual(actual, expected any, msg ...any) bool {
+	t.tb.Helper()
 	ok := isJSONEqual(actual, expected)
 	if !ok {
 		if buf := jsonify(actual); len(buf) != 0 {
@@ -1418,15 +1240,15 @@ func jsonify(arg any) json.RawMessage {
 }
 
 // HasType checks is actual has same type as expected.
-func (t *C) HasType(actual, expected any, msg ...any) bool {
-	t.Helper()
+func (t *checks) HasType(actual, expected any, msg ...any) bool {
+	t.tb.Helper()
 	return t.report2(actual, expected, msg,
 		reflect.TypeOf(actual) == reflect.TypeOf(expected))
 }
 
 // NotHasType checks is actual has not same type as expected.
-func (t *C) NotHasType(actual, expected any, msg ...any) bool {
-	t.Helper()
+func (t *checks) NotHasType(actual, expected any, msg ...any) bool {
+	t.tb.Helper()
 	return t.report2(actual, expected, msg,
 		reflect.TypeOf(actual) != reflect.TypeOf(expected))
 }
@@ -1436,8 +1258,8 @@ func (t *C) NotHasType(actual, expected any, msg ...any) bool {
 // You must use pointer to interface type in expected:
 //
 //	t.Implements(os.Stdin, (*io.Reader)(nil))
-func (t *C) Implements(actual, expected any, msg ...any) bool {
-	t.Helper()
+func (t *checks) Implements(actual, expected any, msg ...any) bool {
+	t.tb.Helper()
 	return t.report2(actual, expected, msg,
 		isImplements(actual, expected))
 }
@@ -1455,8 +1277,156 @@ func isImplements(actual, expected any) bool {
 // You must use pointer to interface type in expected:
 //
 //	t.NotImplements(os.Stdin, (*fmt.Stringer)(nil))
-func (t *C) NotImplements(actual, expected any, msg ...any) bool {
-	t.Helper()
+func (t *checks) NotImplements(actual, expected any, msg ...any) bool {
+	t.tb.Helper()
 	return t.report2(actual, expected, msg,
 		!isImplements(actual, expected))
+}
+
+// SortEqual checks that actual and expected contain the same elements,
+// ignoring order (multiset equality, duplicates counted).
+//
+// Both actual and expected must be slices or arrays.
+// Elements need not be sortable and are compared like DeepEqual.
+// Nil and empty slices are equal (like BytesEqual, unlike DeepEqual).
+func (t *checks) SortEqual(actual, expected any, msg ...any) bool {
+	t.tb.Helper()
+	return t.report2(actual, expected, msg,
+		isSortEqual(actual, expected))
+}
+
+// NotSortEqual checks !SortEqual(actual, expected).
+//
+// See SortEqual about supported actual/expected types and check logic.
+func (t *checks) NotSortEqual(actual, expected any, msg ...any) bool {
+	t.tb.Helper()
+	return t.report1(actual, msg,
+		!isSortEqual(actual, expected))
+}
+
+func isSortEqual(actual, expected any) bool {
+	va, ve := reflect.ValueOf(actual), reflect.ValueOf(expected)
+	if va.Kind() != reflect.Slice && va.Kind() != reflect.Array {
+		panic("actual is not a slice or array")
+	}
+	if ve.Kind() != reflect.Slice && ve.Kind() != reflect.Array {
+		panic("expected is not a slice or array")
+	}
+	if va.Len() != ve.Len() {
+		return false
+	}
+	return isMultisetIn(va, ve)
+}
+
+// isMultisetIn reports whether every element of small has a distinct,
+// not-yet-used matching element in big, i.e. small is a multiset-subset of big.
+func isMultisetIn(small, big reflect.Value) bool {
+	used := make([]bool, big.Len())
+	for i := range small.Len() {
+		found := false
+		for j := range big.Len() {
+			if !used[j] && elemEqual(small.Index(i).Interface(), big.Index(j).Interface()) {
+				used[j], found = true, true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
+}
+
+// Subset checks that actual contains all elements of expected:
+// for slices/arrays - as multisets (duplicates counted), ignoring order;
+// for maps - every key of expected exists in actual with an equal value.
+//
+// actual and expected must both be slices/arrays or both be maps.
+// Elements/values are compared like DeepEqual.
+// An empty/nil expected is a subset of anything of the same kind.
+//
+// Note: unlike testify's Subset, duplicates are counted, so [1,1] is not a subset of [1].
+func (t *checks) Subset(actual, expected any, msg ...any) bool {
+	t.tb.Helper()
+	return t.report2(actual, expected, msg,
+		isSubset(actual, expected))
+}
+
+// NotSubset checks !Subset(actual, expected).
+//
+// See Subset about supported actual/expected types and check logic.
+func (t *checks) NotSubset(actual, expected any, msg ...any) bool {
+	t.tb.Helper()
+	return t.report1(actual, msg,
+		!isSubset(actual, expected))
+}
+
+func isSubset(actual, expected any) bool {
+	va, ve := reflect.ValueOf(actual), reflect.ValueOf(expected)
+	switch ve.Kind() { //nolint:exhaustive // Covered by default case.
+	case reflect.Map:
+		if va.Kind() != reflect.Map {
+			panic("actual is not a map")
+		}
+		return isMapSubset(va, ve)
+	case reflect.Slice, reflect.Array:
+		if va.Kind() != reflect.Slice && va.Kind() != reflect.Array {
+			panic("actual is not a slice or array")
+		}
+		return isMultisetIn(ve, va)
+	default:
+		panic("expected is not a slice, array or map")
+	}
+}
+
+func isMapSubset(actual, expected reflect.Value) bool {
+	iter := expected.MapRange()
+	for iter.Next() {
+		v := actual.MapIndex(iter.Key())
+		if !v.IsValid() || !elemEqual(v.Interface(), iter.Value().Interface()) {
+			return false
+		}
+	}
+	return true
+}
+
+// FileExists checks that path exists and is not a directory.
+//
+// A Stat error other than "not exists" (e.g. permission denied)
+// counts as "does not exist", same as testify.
+func (t *checks) FileExists(path string, msg ...any) bool {
+	t.tb.Helper()
+	fi, err := os.Stat(path)
+	return t.report1(path, msg,
+		err == nil && !fi.IsDir())
+}
+
+// NotFileExists checks that path does not exist or is a directory.
+//
+// See FileExists about Stat error handling.
+func (t *checks) NotFileExists(path string, msg ...any) bool {
+	t.tb.Helper()
+	fi, err := os.Stat(path)
+	return t.report1(path, msg,
+		err != nil || fi.IsDir())
+}
+
+// DirExists checks that path exists and is a directory.
+//
+// See FileExists about Stat error handling.
+func (t *checks) DirExists(path string, msg ...any) bool {
+	t.tb.Helper()
+	fi, err := os.Stat(path)
+	return t.report1(path, msg,
+		err == nil && fi.IsDir())
+}
+
+// NotDirExists checks that path does not exist or is not a directory.
+//
+// See FileExists about Stat error handling.
+func (t *checks) NotDirExists(path string, msg ...any) bool {
+	t.tb.Helper()
+	fi, err := os.Stat(path)
+	return t.report1(path, msg,
+		err != nil || !fi.IsDir())
 }

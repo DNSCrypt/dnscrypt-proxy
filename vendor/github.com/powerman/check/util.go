@@ -8,9 +8,21 @@ import (
 	"strings"
 )
 
+// callerFuncName returns the unqualified checker name for the caller
+// at the given stack depth, stripping any "(*Receiver)." prefix.
+// Checker methods currently live on *checks,
+// but strip generically rather than pinning to one receiver type,
+// since report0/1/2/3 are also reachable through *TB (Error/Errorf/Fatal/Fatalf)
+// and *C (their delegators).
 func callerFuncName(stack int) string {
 	pc, _, _, _ := runtime.Caller(stack + 1)
-	return strings.TrimPrefix(funcNameAt(pc), "(*C).")
+	name := funcNameAt(pc)
+	if strings.HasPrefix(name, "(*") {
+		if i := strings.Index(name, ")."); i != -1 {
+			name = name[i+2:]
+		}
+	}
+	return name
 }
 
 func funcName(f any) string {

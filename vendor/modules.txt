@@ -39,7 +39,6 @@ github.com/coreos/go-systemd/activation
 github.com/coreos/go-systemd/daemon
 # github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
 ## explicit
-github.com/davecgh/go-spew/spew
 # github.com/dchest/safefile v0.0.0-20151022103144-855e8d98f185
 ## explicit
 github.com/dchest/safefile
@@ -105,13 +104,13 @@ github.com/lifenjoiner/dhcpdns
 github.com/miekg/dns
 # github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2
 ## explicit
-github.com/pmezard/go-difflib/difflib
-# github.com/powerman/check v1.12.0
+# github.com/powerman/check v1.13.0
 ## explicit; go 1.25.0
 github.com/powerman/check
-# github.com/powerman/deepequal v0.1.0
-## explicit; go 1.16
-github.com/powerman/deepequal
+github.com/powerman/check/internal/contextx
+github.com/powerman/check/internal/deepequal
+github.com/powerman/check/internal/difflib
+github.com/powerman/check/internal/spew
 # github.com/quic-go/qpack v0.6.0
 ## explicit; go 1.24
 github.com/quic-go/qpack
