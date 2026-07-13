@@ -6,3 +6,4 @@
 # na/**/me  - apply (* doesn't match /) to file "na/me", "na/*/me", "na/*/*/me", …
 go.sum binary
 *.*.go binary
+testdata/dump_golden.txt -text

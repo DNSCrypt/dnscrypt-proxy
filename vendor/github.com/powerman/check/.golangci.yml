@@ -415,6 +415,9 @@ linters:
         text: should have a godoc \("(String|Error|Format|(Marshal|Unmarshal)(Text|JSON))"\)
     paths:
       - \.[\w-]+\.go$ # Use this pattern to name auto-generated files.
+      - internal/spew/ # Vendored, keep upstream code unchanged.
+      - internal/difflib/ # Vendored, keep upstream code unchanged.
+      - internal/deepequal/ # Vendored, keep upstream code unchanged.
 formatters:
   enable:
     - gci
@@ -444,6 +447,9 @@ formatters:
     generated: strict
     paths:
       - \.[\w-]+\.go$ # Use this pattern to name auto-generated files.
+      - internal/spew/ # Vendored, keep upstream code unchanged.
+      - internal/difflib/ # Vendored, keep upstream code unchanged.
+      - internal/deepequal/ # Vendored, keep upstream code unchanged.
 issues:
   max-issues-per-linter: 0
   max-same-issues: 0

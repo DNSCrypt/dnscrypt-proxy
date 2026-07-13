@@ -9,8 +9,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/davecgh/go-spew/spew"
-	"github.com/pmezard/go-difflib/difflib"
+	"github.com/powerman/check/internal/difflib"
+	"github.com/powerman/check/internal/spew"
 )
 
 //nolint:gochecknoglobals // Const.

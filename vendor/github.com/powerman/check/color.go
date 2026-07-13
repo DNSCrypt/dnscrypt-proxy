@@ -14,19 +14,39 @@ var (
 )
 
 func init() { //nolint:gochecknoinits // By design.
-	if !wantColor() {
+	if !wantColor(os.Getenv, isTerminal()) {
 		ansiGreen, ansiYellow, ansiRed, ansiReset = "", "", "", ""
 	}
 }
 
 func isTerminal() bool {
-	fi, err := os.Stdout.Stat()
+	fi, err := os.Stderr.Stat()
 	return err == nil && fi.Mode()&os.ModeCharDevice != 0
 }
 
-func wantColor() bool {
-	return strings.Contains(os.Getenv("TERM"), "color") &&
-		(isTerminal() || os.Getenv("GO_TEST_COLOR") != "")
+// wantColor reports whether coloured output should be enabled.
+//
+// Precedence (first match wins):
+//  1. NO_COLOR set (any non-empty value) → no colour.
+//  2. CLICOLOR_FORCE set and not "0"    → colour.
+//  3. FORCE_COLOR set and not "0"       → colour.
+//  4. GO_TEST_COLOR set (any non-empty) → colour (legacy; superseded by FORCE_COLOR).
+//  5. isTTY and TERM != "dumb" and TERM != "" → colour.
+//  6. Otherwise → no colour.
+func wantColor(getenv func(string) string, isTTY bool) bool {
+	switch {
+	case getenv("NO_COLOR") != "":
+		return false
+	case getenv("CLICOLOR_FORCE") != "" && getenv("CLICOLOR_FORCE") != "0":
+		return true
+	case getenv("FORCE_COLOR") != "" && getenv("FORCE_COLOR") != "0":
+		return true
+	case getenv("GO_TEST_COLOR") != "":
+		return true
+	default:
+		term := getenv("TERM")
+		return isTTY && term != "dumb" && term != ""
+	}
 }
 
 func colouredDiff(diff string) string {
