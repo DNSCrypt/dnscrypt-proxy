@@ -35,6 +35,8 @@ type MonitoringUIConfig struct {
 	PrometheusPath     string `toml:"prometheus_path"`       // Path for Prometheus metrics endpoint (default: /metrics)
 }
 
+const maxTopDomains = 1000
+
 // MetricsCollector - Collects and stores metrics for the monitoring UI
 type MetricsCollector struct {
 	// Split locks for better concurrency
@@ -361,6 +363,9 @@ func (ui *MonitoringUI) UpdateMetrics(pluginsState PluginsState, msg *dns.Msg) {
 		// Store domain name directly - no sanitization needed for internal metrics
 		domainName := pluginsState.qName
 		mc.domainMutex.Lock()
+		if _, found := mc.topDomains[domainName]; !found && len(mc.topDomains) >= maxTopDomains {
+			mc.pruneTopDomainsLocked()
+		}
 		mc.topDomains[domainName]++
 		mc.domainMutex.Unlock()
 	}
@@ -447,6 +452,26 @@ func (ui *MonitoringUI) UpdateMetrics(pluginsState PluginsState, msg *dns.Msg) {
 
 	// Broadcast updates to WebSocket clients (rate limited)
 	ui.scheduleBroadcast()
+}
+
+func (mc *MetricsCollector) pruneTopDomainsLocked() {
+	type domainCount struct {
+		domain string
+		count  uint64
+	}
+	counts := make([]domainCount, 0, len(mc.topDomains))
+	for domain, hits := range mc.topDomains {
+		counts = append(counts, domainCount{domain, hits})
+	}
+	sort.Slice(counts, func(i, j int) bool {
+		if counts[i].count != counts[j].count {
+			return counts[i].count > counts[j].count
+		}
+		return counts[i].domain < counts[j].domain
+	})
+	for _, dc := range counts[maxTopDomains/2:] {
+		delete(mc.topDomains, dc.domain)
+	}
 }
 
 // generatePrometheusMetrics - Generates Prometheus-formatted metrics
