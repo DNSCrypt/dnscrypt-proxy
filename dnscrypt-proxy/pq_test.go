@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
@@ -117,8 +118,8 @@ func TestPQAppendix3Vectors(t *testing.T) {
 	}
 }
 
-func TestPQResumptionStateEpoch(t *testing.T) {
-	state := newPqResumptionState(XWingPQ)
+func TestPQSessionResumptionEpoch(t *testing.T) {
+	state := newPqSessionState(XWingPQ)
 	ticket := []byte("ticket")
 	var resumeSecret [32]byte
 	resumeSecret[0] = 42
@@ -142,25 +143,74 @@ func TestPQResumptionStateEpoch(t *testing.T) {
 	}
 }
 
+// TestEncryptPQReusesEncapsulation checks that post-quantum queries reuse a
+// single X-Wing key exchange instead of running a fresh one every time, and
+// that a network change forces a new one.
+func TestEncryptPQReusesEncapsulation(t *testing.T) {
+	monitor := newNetworkMonitor()
+	monitor.epochValue.Store(1)
+	proxy := &Proxy{netMonitor: monitor}
+
+	_, pk := xwing.DeriveKeyPair(iotaBytes(32, 0x20))
+	pkb, _ := pk.MarshalBinary()
+	serverInfo := &ServerInfo{
+		Name:               "test",
+		CryptoConstruction: XWingPQ,
+		PqPublicKey:        pkb,
+		PqCertContext:      iotaBytes(48, 0x01),
+		MagicQuery:         [8]byte{1, 2, 3, 4, 5, 6, 7, 8},
+		pqSession:          newPqSessionState(XWingPQ),
+	}
+	query := mustHex("12340100000100000000000003777777076578616d706c6503636f6d0000010001")
+
+	ctOf := func(out []byte) []byte {
+		return out[PQClientMagicLen : PQClientMagicLen+PQXWingCiphertextSize]
+	}
+
+	key1, out1, _, _, err := proxy.encryptPQ(serverInfo, query, "udp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	key2, out2, _, _, err := proxy.encryptPQ(serverInfo, query, "udp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(ctOf(out1), ctOf(out2)) {
+		t.Fatal("expected the X-Wing ciphertext to be reused across queries")
+	}
+	if *key1 != *key2 {
+		t.Fatal("expected the shared key to be reused across queries")
+	}
+
+	monitor.epochValue.Store(2)
+	_, out3, _, _, err := proxy.encryptPQ(serverInfo, query, "udp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Equal(ctOf(out1), ctOf(out3)) {
+		t.Fatal("expected a new key exchange after a network change")
+	}
+}
+
 func TestPQProcessControlDiscardsTicketAfterNetworkChange(t *testing.T) {
 	monitor := newNetworkMonitor()
 	monitor.epochValue.Store(2)
 	proxy := &Proxy{netMonitor: monitor}
 	serverInfo := &ServerInfo{
-		Name:         "test",
-		pqResumption: newPqResumptionState(XWingPQ),
+		Name:      "test",
+		pqSession: newPqSessionState(XWingPQ),
 	}
 	sharedKey := &[32]byte{1, 2, 3}
 	clientNonce := []byte("abcdefghijkl")
 	control := buildTestPQControl([]byte("ticket"), 60)
 
 	proxy.pqProcessControl(serverInfo, sharedKey, clientNonce, control, 1)
-	if _, _, ok := serverInfo.pqResumption.get(2); ok {
+	if _, _, ok := serverInfo.pqSession.get(2); ok {
 		t.Fatal("expected ticket from old epoch to be discarded")
 	}
 
 	proxy.pqProcessControl(serverInfo, sharedKey, clientNonce, control, 2)
-	if ticket, _, ok := serverInfo.pqResumption.get(2); !ok || string(ticket) != "ticket" {
+	if ticket, _, ok := serverInfo.pqSession.get(2); !ok || string(ticket) != "ticket" {
 		t.Fatal("expected ticket to be stored when query epoch still matches")
 	}
 }

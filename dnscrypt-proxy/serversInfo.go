@@ -62,7 +62,7 @@ type ServerInfo struct {
 	MagicQuery         [8]byte
 	PqPublicKey        []byte
 	PqCertContext      []byte
-	pqResumption       *pqResumptionState
+	pqSession          *pqSessionState
 	knownBugs          ServerBugs
 	Proto              stamps.StampProtoType
 	useGet             bool
@@ -914,7 +914,7 @@ func fetchDNSCryptServerInfo(proxy *Proxy, name string, stamp stamps.ServerStamp
 		CryptoConstruction: certInfo.CryptoConstruction,
 		PqPublicKey:        certInfo.PqPublicKey,
 		PqCertContext:      certInfo.PqCertContext,
-		pqResumption:       newPqResumptionState(certInfo.CryptoConstruction),
+		pqSession:          newPqSessionState(certInfo.CryptoConstruction),
 		Name:               name,
 		Timeout:            proxy.timeout,
 		UDPAddr:            remoteUDPAddr,

@@ -131,23 +131,26 @@ func pqEncapsulate(pk []byte) (kemSS, ct []byte, err error) {
 	return xwing.Encapsulate(pk, nil)
 }
 
-// pqResumptionState holds the most recent resumption ticket for a server.
-type pqResumptionState struct {
+// pqSessionState holds a server's reusable PQ key material.
+type pqSessionState struct {
 	mu           sync.Mutex
 	ticket       []byte
 	resumeSecret [32]byte
 	expiry       time.Time
 	epoch        uint64
+	encap        []byte
+	encapKey     [32]byte
+	encapEpoch   uint64
 }
 
-func newPqResumptionState(c CryptoConstruction) *pqResumptionState {
+func newPqSessionState(c CryptoConstruction) *pqSessionState {
 	if c != XWingPQ {
 		return nil
 	}
-	return &pqResumptionState{}
+	return &pqSessionState{}
 }
 
-func (s *pqResumptionState) store(ticket []byte, resumeSecret [32]byte, expiry time.Time, epoch uint64) {
+func (s *pqSessionState) store(ticket []byte, resumeSecret [32]byte, expiry time.Time, epoch uint64) {
 	if s == nil {
 		return
 	}
@@ -159,7 +162,7 @@ func (s *pqResumptionState) store(ticket []byte, resumeSecret [32]byte, expiry t
 	s.epoch = epoch
 }
 
-func (s *pqResumptionState) get(currentEpoch uint64) (ticket []byte, resumeSecret [32]byte, ok bool) {
+func (s *pqSessionState) get(currentEpoch uint64) (ticket []byte, resumeSecret [32]byte, ok bool) {
 	if s == nil {
 		return nil, [32]byte{}, false
 	}
@@ -177,8 +180,37 @@ func (s *pqResumptionState) get(currentEpoch uint64) (ticket []byte, resumeSecre
 	return append([]byte(nil), s.ticket...), s.resumeSecret, true
 }
 
+func (s *pqSessionState) getCachedEncapsulation(currentEpoch uint64) (ct []byte, key [32]byte, ok bool) {
+	if s == nil {
+		return nil, [32]byte{}, false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.encap == nil {
+		return nil, [32]byte{}, false
+	}
+	if s.encapEpoch != currentEpoch {
+		s.encap = nil
+		s.encapKey = [32]byte{}
+		return nil, [32]byte{}, false
+	}
+	return append([]byte(nil), s.encap...), s.encapKey, true
+}
+
+func (s *pqSessionState) storeEncapsulation(ct []byte, key [32]byte, epoch uint64) {
+	if s == nil {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.encap = append([]byte(nil), ct...)
+	s.encapKey = key
+	s.encapEpoch = epoch
+}
+
 // encryptPQ builds a PQ query: a resumed query when a valid ticket is held,
-// otherwise a query that carries a fresh X-Wing ciphertext.
+// otherwise a query that carries an X-Wing ciphertext, reusing the cached
+// encapsulation when one is available for the current network epoch.
 func (proxy *Proxy) encryptPQ(
 	serverInfo *ServerInfo,
 	packet []byte,
@@ -192,7 +224,7 @@ func (proxy *Proxy) encryptPQ(
 	}
 	copy(nonce, clientNonce)
 
-	if ticket, resumeSecret, ok := serverInfo.pqResumption.get(queryEpoch); ok {
+	if ticket, resumeSecret, ok := serverInfo.pqSession.get(queryEpoch); ok {
 		key := pqResumedSharedKey(resumeSecret, serverInfo.MagicQuery, clientNonce, ticket)
 		padded := pqPad(packet, 256)
 		ct := xsecretbox.Seal(nil, nonce, padded, key[:])
@@ -207,11 +239,15 @@ func (proxy *Proxy) encryptPQ(
 		return &key, out, clientNonce, queryEpoch, nil
 	}
 
-	kemSS, ctKem, err := pqEncapsulate(serverInfo.PqPublicKey)
-	if err != nil {
-		return nil, nil, nil, queryEpoch, err
+	ctKem, key, ok := serverInfo.pqSession.getCachedEncapsulation(queryEpoch)
+	if !ok {
+		var kemSS []byte
+		if kemSS, ctKem, err = pqEncapsulate(serverInfo.PqPublicKey); err != nil {
+			return nil, nil, nil, queryEpoch, err
+		}
+		key = pqDeriveSharedKey(kemSS, serverInfo.MagicQuery, serverInfo.PqCertContext, ctKem)
+		serverInfo.pqSession.storeEncapsulation(ctKem, key, queryEpoch)
 	}
-	key := pqDeriveSharedKey(kemSS, serverInfo.MagicQuery, serverInfo.PqCertContext, ctKem)
 	padded := pqPad(packet, 64)
 	ct := xsecretbox.Seal(nil, nonce, padded, key[:])
 	out := make([]byte, 0, PQClientMagicLen+len(ctKem)+HalfNonceSize+len(ct))
@@ -269,6 +305,6 @@ func (proxy *Proxy) pqProcessControl(
 	}
 	resumeSecret := pqResumeSecret(*sharedKey, serverInfo.MagicQuery, clientNonce)
 	expiry := time.Now().Add(time.Duration(lifetime) * time.Second)
-	serverInfo.pqResumption.store(ticket, resumeSecret, expiry, queryEpoch)
+	serverInfo.pqSession.store(ticket, resumeSecret, expiry, queryEpoch)
 	dlog.Debugf("[%v] stored a PQ resumption ticket (lifetime %ds)", serverInfo.Name, lifetime)
 }
