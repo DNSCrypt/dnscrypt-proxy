@@ -1129,6 +1129,7 @@ func _fetchODoHTargetInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, i
 	}
 
 	workingConfigs := make([]ODoHTargetConfig, 0)
+	var lastProbeErr error
 	rand.Shuffle(len(odohTargetConfigs), func(i, j int) {
 		odohTargetConfigs[i], odohTargetConfigs[j] = odohTargetConfigs[j], odohTargetConfigs[i]
 	})
@@ -1137,13 +1138,23 @@ func _fetchODoHTargetInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, i
 
 		odohQuery, err := odohTargetConfig.encryptQuery(dohTestPacket(0xcafe).Data)
 		if err != nil {
+			lastProbeErr = fmt.Errorf("failed to encrypt ODoH probe: %w", err)
 			continue
 		}
 
 		useGet := false
-		if _, _, _, _, err := proxy.xTransport.ObliviousDoHQuery(useGet, url, odohQuery.odohMessage, proxy.timeout); err != nil {
+		_, postStatusCode, _, _, postErr := proxy.xTransport.ObliviousDoHQuery(useGet, url, odohQuery.odohMessage, proxy.timeout)
+		if postErr != nil {
 			useGet = true
-			if _, _, _, _, err := proxy.xTransport.ObliviousDoHQuery(useGet, url, odohQuery.odohMessage, proxy.timeout); err != nil {
+			_, getStatusCode, _, _, getErr := proxy.xTransport.ObliviousDoHQuery(useGet, url, odohQuery.odohMessage, proxy.timeout)
+			if getErr != nil {
+				lastProbeErr = fmt.Errorf(
+					"ODoH relay probe via POST and GET failed: POST HTTP status %d: %w; GET HTTP status %d: %w",
+					postStatusCode,
+					postErr,
+					getStatusCode,
+					getErr,
+				)
 				continue
 			}
 			dlog.Debugf("Server [%s] doesn't appear to support POST; falling back to GET requests", name)
@@ -1152,6 +1163,7 @@ func _fetchODoHTargetInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, i
 		queryMsg := dohNXTestPacket(0xcafe)
 		odohQuery, err = odohTargetConfig.encryptQuery(queryMsg.Data)
 		if err != nil {
+			lastProbeErr = fmt.Errorf("failed to encrypt ODoH DNS probe: %w", err)
 			continue
 		}
 
@@ -1162,14 +1174,20 @@ func _fetchODoHTargetInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, i
 			proxy.timeout,
 		)
 		if err != nil {
+			lastProbeErr = fmt.Errorf("ODoH DNS probe failed with HTTP status %d: %w", responseCode, err)
 			continue
 		}
 		if responseCode == 401 {
-			return ServerInfo{}, fmt.Errorf("Configuration changed during a probe")
+			return ServerInfo{}, fmt.Errorf("configuration changed during ODoH probe")
+		}
+		if responseCode < 200 || responseCode >= 300 {
+			lastProbeErr = fmt.Errorf("ODoH DNS probe returned HTTP status %d", responseCode)
+			continue
 		}
 		serverResponse, err := odohQuery.decryptResponse(responseBody)
 		if err != nil {
 			dlog.Warnf("Unable to decrypt response from [%v]: [%v]", name, err)
+			lastProbeErr = fmt.Errorf("failed to decrypt ODoH DNS probe response: %w", err)
 			continue
 		}
 		workingConfigs = append(workingConfigs, odohTargetConfig)
@@ -1259,7 +1277,10 @@ func _fetchODoHTargetInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, i
 			odohTargetConfigs: workingConfigs,
 		}, nil
 	}
-	return ServerInfo{}, fmt.Errorf("No valid network configuration for [%v]", name)
+	if lastProbeErr != nil {
+		return ServerInfo{}, fmt.Errorf("ODoH initialization probe failed for [%v]: %w", name, lastProbeErr)
+	}
+	return ServerInfo{}, fmt.Errorf("no valid ODoH configuration for [%v]", name)
 }
 
 func fetchODoHTargetInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, isNew bool) (ServerInfo, error) {
@@ -1270,7 +1291,9 @@ func fetchODoHTargetInfo(proxy *Proxy, name string, stamp stamps.ServerStamp, is
 		if err == nil {
 			break
 		}
-		dlog.Infof("Trying to fetch the [%v] configuration again", name)
+		if i < 2 {
+			dlog.Infof("Retrying ODoH initialization for [%v] after failure: [%v]", name, err)
+		}
 	}
 	return serverInfo, err
 }

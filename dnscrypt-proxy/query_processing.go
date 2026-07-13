@@ -210,6 +210,14 @@ func processODoHQuery(
 
 		return response, nil
 	} else if responseCode == 401 || (responseCode == 200 && len(responseBody) == 0) {
+		dlog.Warnf(
+			"ODoH request for [%v] needs a key refresh via [%v]: HTTP status [%d], response length: %d, transport error: [%v]",
+			serverInfo.Name,
+			targetURL,
+			responseCode,
+			len(responseBody),
+			err,
+		)
 		if responseCode == 200 {
 			dlog.Warnf("ODoH relay for [%v] is buggy and returns a 200 status code instead of 401 after a key update", serverInfo.Name)
 		}
@@ -231,7 +239,23 @@ func processODoHQuery(
 			}
 		}
 	} else {
-		dlog.Warnf("Failed to receive successful response from [%v]", serverInfo.Name)
+		if err != nil {
+			dlog.Warnf(
+				"ODoH request for [%v] failed via [%v]: HTTP status [%d], transport error: [%v]",
+				serverInfo.Name,
+				targetURL,
+				responseCode,
+				err,
+			)
+		} else {
+			dlog.Warnf(
+				"ODoH request for [%v] failed via [%v]: HTTP status [%d], response length: %d",
+				serverInfo.Name,
+				targetURL,
+				responseCode,
+				len(responseBody),
+			)
+		}
 	}
 
 	pluginsState.returnCode = PluginsReturnCodeNetworkError
