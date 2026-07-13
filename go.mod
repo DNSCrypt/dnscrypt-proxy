@@ -25,7 +25,7 @@ require (
 	github.com/kardianos/service v1.3.0
 	github.com/lifenjoiner/dhcpdns v0.0.7
 	github.com/miekg/dns v1.1.72
-	github.com/powerman/check v1.12.0
+	github.com/powerman/check v1.13.0
 	github.com/quic-go/quic-go v0.60.0
 	golang.org/x/crypto v0.54.0
 	golang.org/x/net v0.57.0
@@ -40,7 +40,6 @@ require (
 	github.com/hashicorp/go-uuid v1.0.3 // indirect
 	github.com/hashicorp/golang-lru v1.0.2 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
-	github.com/powerman/deepequal v0.1.0 // indirect
 	github.com/quic-go/qpack v0.6.0 // indirect
 	go.uber.org/mock v0.6.0 // indirect
 	golang.org/x/mod v0.38.0 // indirect
