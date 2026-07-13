@@ -275,7 +275,7 @@ cert_refresh_delay = 240
 # cert_ignore_timestamp = false
 
 
-## DNSCrypt: Create a new, unique key for every single DNS query
+## DNSCrypt: Create a new, unique X25519 key pair for every single DNS query
 ## This may improve privacy but can also have a significant impact on CPU usage
 ## Only enable if you don't have a lot of network load
 
