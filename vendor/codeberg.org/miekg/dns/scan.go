@@ -331,7 +331,7 @@ func (zp *ZoneParser) Next() (RR, bool) {
 				zp.h.Name = name
 
 				if !zp.c.Blank() {
-					return zp.setParseError("no blank after owner", l)
+					return zp.setParseError("no blank after owner name", l)
 				}
 
 				st = zExpectAny

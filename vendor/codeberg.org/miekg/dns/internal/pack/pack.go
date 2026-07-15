@@ -71,7 +71,7 @@ func Uint64(i uint64, msg []byte, off int) (off1 int, err error) {
 // StringAny packs a string as-is, no decoding or length bytes are written.
 func StringAny(s string, msg []byte, off int) (int, error) {
 	if off+len(s) > len(msg) {
-		return len(msg), &Error{"overflow string anything"}
+		return len(msg), &Error{"overflow string"}
 	}
 	copy(msg[off:off+len(s)], s)
 	off += len(s)
@@ -139,7 +139,7 @@ func String(s string, msg []byte, off int) (int, error) {
 	}
 	l := off - lenByteoff - 1
 	if l > 255 {
-		return len(msg), &Error{"string exceeded 255 bytes in txt"}
+		return len(msg), &Error{"string TXT exceeded 255 bytes"}
 	}
 	msg[lenByteoff] = byte(l)
 	return off, nil
@@ -147,7 +147,10 @@ func String(s string, msg []byte, off int) (int, error) {
 
 func A(a netip.Addr, msg []byte, off int) (int, error) {
 	if off+net.IPv4len > len(msg) {
-		return len(msg), &Error{"overflow a"}
+		return len(msg), &Error{"overflow A Addr"}
+	}
+	if !a.Is4() {
+		return len(msg), &Error{"bad A Addr"}
 	}
 	val := a.As4()
 	_ = msg[off+net.IPv4len-1]
@@ -160,7 +163,7 @@ func A(a netip.Addr, msg []byte, off int) (int, error) {
 
 func AAAA(aaaa netip.Addr, msg []byte, off int) (int, error) {
 	if off+net.IPv6len > len(msg) {
-		return len(msg), &Error{"overflow aaaa"}
+		return len(msg), &Error{"overflow AAAA Addr"}
 	}
 	val := aaaa.As16()
 	_ = msg[off+net.IPv6len-1]
@@ -260,10 +263,10 @@ func MName(s string, msg []byte, off int) (off1 int, err error) {
 		return off + 1, nil
 	}
 	if ls > 1 && s[0] == '.' { // leading dots are not legal except for the root zone
-		return len(msg), &Error{"leading dot in name"}
+		return len(msg), &Error{"leading dot in mname"}
 	}
 	if s[ls-1] != '.' {
-		return len(msg), &Error{"name must be fully qualified"}
+		return len(msg), &Error{"mname must be fully qualified"}
 	}
 
 	// Each dot ends a segment of the name. We trade each dot byte for a length byte.
@@ -284,7 +287,7 @@ func MName(s string, msg []byte, off int) (off1 int, err error) {
 		escape = 0
 		if i > 0 && s[begin+i-1] == '\\' { // escaped dot
 			if begin+i+2 > ls {
-				return lenmsg, &Error{"overflow name after escape"}
+				return lenmsg, &Error{"overflow mname after escape"}
 			}
 			j := strings.IndexByte(s[begin+i+1:], '.') // search ahead for another dot
 			if j == -1 {
@@ -299,15 +302,15 @@ func MName(s string, msg []byte, off int) (off1 int, err error) {
 		labelLen = i - begin - escape
 
 		if labelLen >= 1<<6 { // top two bits of length must be clear
-			return lenmsg, &Error{"illegal label type in name"}
+			return lenmsg, &Error{"illegal label type in mname"}
 		}
 		if labelLen == 0 {
-			return lenmsg, &Error{"consecutive dots in name"}
+			return lenmsg, &Error{"consecutive dots in mname"}
 		}
 
 		// off can already (we're in a loop) be bigger than len(msg)
 		if off+labelLen >= lenmsg {
-			return lenmsg, &Error{"overflow name"}
+			return lenmsg, &Error{"overflow mname"}
 		}
 
 		msg[off] = byte(labelLen)
@@ -332,7 +335,7 @@ func MName(s string, msg []byte, off int) (off1 int, err error) {
 	}
 
 	if off >= lenmsg {
-		return lenmsg, &Error{"overflow name"}
+		return lenmsg, &Error{"overflow mname"}
 	}
 
 	msg[off] = 0
