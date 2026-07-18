@@ -74,7 +74,7 @@ func FetchCurrentDNSCryptCert(
 	}
 	if in.Truncated && proto != "tcp" {
 		dlog.Debugf("[%v] certificate response was truncated, retrying over TCP", *serverName)
-		if inTCP, rttTCP, _, errTCP := DNSExchange(
+		if inTCP, _, _, errTCP := DNSExchange(
 			proxy,
 			"tcp",
 			query,
@@ -83,7 +83,9 @@ func FetchCurrentDNSCryptCert(
 			serverName,
 			false,
 		); errTCP == nil {
-			in, rtt = inTCP, rttTCP
+			// TCP completed the certificate set; the UDP RTT still represents
+			// normal query latency when force_tcp is disabled.
+			in = inTCP
 		}
 	}
 	now := uint32(time.Now().Unix())
