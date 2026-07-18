@@ -7,6 +7,11 @@ import (
 	"strings"
 )
 
+// Parse parses the value b into the [Info] i. Basic usage:
+//
+//	infoFn := deleg.KeyToInfo(deleg.StringToKey(key))
+//	info := infoFn()
+//	err := deleg.Parse(info, b, origin)
 func Parse(i Info, b, o string) error {
 	switch x := i.(type) {
 	case *SERVERIPV6:

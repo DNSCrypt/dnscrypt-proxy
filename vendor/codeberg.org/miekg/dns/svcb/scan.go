@@ -11,6 +11,11 @@ import (
 	"codeberg.org/miekg/dns/internal/pack"
 )
 
+// Parse parses the value b into the [Pair] p. Basic usage:
+//
+//	pairFn := svcb.KeyToPair(svcb.StringToKey(key))
+//	pair := pairFn()
+//	err := svcb.Parse(pair, b, origin)
 func Parse(p Pair, b, o string) error {
 	switch x := p.(type) {
 	case *MANDATORY:

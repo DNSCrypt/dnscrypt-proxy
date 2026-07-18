@@ -503,6 +503,7 @@ const (
 	ExtendedErrorInvalidQueryType // RFC 9824
 	ExtendedErrorRateLimited
 	ExtendedErrorOverQuota
+	ExtendedErrorNegativeTrustAnchor
 )
 
 // ExtendedErrorToString maps extended error info codes to a human readable description. This is used inside
@@ -539,6 +540,9 @@ var ExtendedErrorToString = map[uint16]string{
 	ExtendedErrorUnableToConformToPolicy:     "Unable To Conform To Policy",
 	ExtendedErrorSynthesized:                 "Synthesized",
 	ExtendedErrorInvalidQueryType:            "Invalid Query Type",
+	ExtendedErrorRateLimited:                 "Rate Limited",
+	ExtendedErrorOverQuota:                   "Over Quota",
+	ExtendedErrorNegativeTrustAnchor:         "Negative Trust Anchor",
 }
 
 // StringToExtendedError is a map from human readable descriptions to extended error info codes.
