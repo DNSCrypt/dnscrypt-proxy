@@ -13,7 +13,7 @@
 ## =example.com             | blocks example.com but not *.example.com
 ## [a-z0-9\-_]*.example.com | blocks *.example.com but not example.com
 ## *sex*                    | matches any name containing that substring
-## ads[0-9]*                | matches "ads" followed by one or more digits
+## ads[0-9]*                | matches "ads" followed by a digit and anything else
 ## ads*.example*            | *, ? and [] can be used anywhere, but prefixes/suffixes are faster
 
 ad.*

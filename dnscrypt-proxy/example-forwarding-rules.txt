@@ -6,6 +6,11 @@
 ## The general format is:
 ## <domain> <server address>[:port] [, <server address>[:port]...]
 ## IPv6 addresses can be specified by enclosing the address in square brackets.
+##
+## When multiple plain server addresses are listed, one of them is picked at
+## random for every query. Keywords such as $DHCP or $BOOTSTRAP, on the other
+## hand, act as fallbacks: they are only tried, in order, after the entries
+## listed before them have failed.
 
 ## The following keywords can also be used instead of a server address:
 ## $BOOTSTRAP to use the default bootstrap resolvers
