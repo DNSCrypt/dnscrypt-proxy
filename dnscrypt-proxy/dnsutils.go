@@ -474,6 +474,19 @@ func DNSExchange(
 	}
 }
 
+type firstReadConn struct {
+	net.Conn
+	firstReadAt time.Time
+}
+
+func (c *firstReadConn) Read(p []byte) (int, error) {
+	n, err := c.Conn.Read(p)
+	if n > 0 && c.firstReadAt.IsZero() {
+		c.firstReadAt = time.Now()
+	}
+	return n, err
+}
+
 func _dnsExchange(
 	proxy *Proxy,
 	proto string,
@@ -563,11 +576,12 @@ func _dnsExchange(
 		if _, err := pc.Write(binQuery); err != nil {
 			return DNSExchangeResponse{err: err}
 		}
-		packet, err = ReadPrefixed(&pc)
+		timedPc := &firstReadConn{Conn: pc}
+		packet, err = ReadPrefixed(timedPc)
 		if err != nil {
 			return DNSExchangeResponse{err: err}
 		}
-		rtt = time.Since(now)
+		rtt = timedPc.firstReadAt.Sub(now)
 	}
 	msg := dns.Msg{Data: packet}
 	if err := msg.Unpack(); err != nil {

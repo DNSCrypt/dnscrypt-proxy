@@ -67,11 +67,11 @@ func PrefixWithSize(packet []byte) ([]byte, error) {
 	return packet, nil
 }
 
-func ReadPrefixed(conn *net.Conn) ([]byte, error) {
+func ReadPrefixed(conn net.Conn) ([]byte, error) {
 	buf := make([]byte, 2+MaxDNSPacketSize)
 	packetLength, pos := -1, 0
 	for {
-		readnb, err := (*conn).Read(buf[pos:])
+		readnb, err := conn.Read(buf[pos:])
 		if err != nil {
 			return buf, err
 		}
