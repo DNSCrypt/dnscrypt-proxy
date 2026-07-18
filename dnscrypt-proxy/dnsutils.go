@@ -512,7 +512,6 @@ func _dnsExchange(
 			proxy.prepareForRelay(udpAddr.IP, udpAddr.Port, &binQuery)
 			upstreamAddr = relay.RelayUDPAddr
 		}
-		now := time.Now()
 		pc, err := net.DialTimeout("udp", upstreamAddr.String(), proxy.timeout)
 		if err != nil {
 			return DNSExchangeResponse{err: err}
@@ -521,6 +520,7 @@ func _dnsExchange(
 		if err := pc.SetDeadline(time.Now().Add(proxy.timeout)); err != nil {
 			return DNSExchangeResponse{err: err}
 		}
+		now := time.Now()
 		if _, err := pc.Write(binQuery); err != nil {
 			return DNSExchangeResponse{err: err}
 		}
@@ -554,7 +554,6 @@ func _dnsExchange(
 			proxy.prepareForRelay(tcpAddr.IP, tcpAddr.Port, &binQuery)
 			upstreamAddr = relay.RelayTCPAddr
 		}
-		now := time.Now()
 		var pc net.Conn
 		proxyDialer := proxy.xTransport.proxyDialer
 		if proxyDialer == nil {
@@ -573,6 +572,7 @@ func _dnsExchange(
 		if err != nil {
 			return DNSExchangeResponse{err: err}
 		}
+		now := time.Now()
 		if _, err := pc.Write(binQuery); err != nil {
 			return DNSExchangeResponse{err: err}
 		}
