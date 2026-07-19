@@ -1092,7 +1092,8 @@ func (ui *MonitoringUI) handleRoot(w http.ResponseWriter, r *http.Request) {
 	// Don't cache: ensures the browser revalidates auth before the JS issues /api/metrics and WebSocket calls.
 	setDynamicCacheHeaders(w)
 	w.Header().Set("Content-Type", "text/html")
-	w.Write([]byte(MainHTMLTemplate))
+	body := strings.ReplaceAll(MainHTMLTemplate, "{{VERSION}}", AppVersion)
+	w.Write([]byte(body))
 }
 
 // handleMetrics - Handles the metrics API endpoint
