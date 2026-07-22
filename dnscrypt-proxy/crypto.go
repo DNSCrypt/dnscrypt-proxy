@@ -146,7 +146,11 @@ func (proxy *Proxy) Encrypt(
 	proto string,
 ) (sharedKey *[32]byte, encrypted []byte, clientNonce []byte, queryEpoch uint64, err error) {
 	if serverInfo.CryptoConstruction == XWingPQ {
-		return proxy.encryptPQ(serverInfo, packet, proto)
+		sharedKey, encrypted, clientNonce, queryEpoch, err = proxy.encryptPQ(serverInfo, packet, proto)
+		if err == nil && proto == "udp" && len(encrypted) > pqUDPPacketLimit(serverInfo) {
+			err = errors.New("Question too large; cannot be padded")
+		}
+		return sharedKey, encrypted, clientNonce, queryEpoch, err
 	}
 	nonce, clientNonce := make([]byte, NonceSize), make([]byte, HalfNonceSize)
 	if _, err := crypto_rand.Read(clientNonce); err != nil {

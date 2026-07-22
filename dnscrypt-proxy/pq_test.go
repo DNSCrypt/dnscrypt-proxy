@@ -28,6 +28,33 @@ func mustHex(s string) []byte {
 	return b
 }
 
+func newTestPQProxy(epoch uint64) *Proxy {
+	monitor := newNetworkMonitor()
+	monitor.epochValue.Store(epoch)
+	proxy := &Proxy{netMonitor: monitor}
+	proxy.questionSizeEstimator = NewQuestionSizeEstimator()
+	return proxy
+}
+
+func newTestPQServerInfo() *ServerInfo {
+	_, pk := xwing.DeriveKeyPair(iotaBytes(32, 0x20))
+	pkb, _ := pk.MarshalBinary()
+	return &ServerInfo{
+		Name:               "test",
+		CryptoConstruction: XWingPQ,
+		PqPublicKey:        pkb,
+		PqCertContext:      iotaBytes(48, 0x01),
+		MagicQuery:         [8]byte{1, 2, 3, 4, 5, 6, 7, 8},
+		pqSession:          newPqSessionState(XWingPQ),
+	}
+}
+
+// maxStorableTicketLen is the largest resumption ticket pqProcessControl
+// accepts; one byte more and a resumed query cannot fit a UDP datagram.
+func maxStorableTicketLen() int {
+	return MaxDNSUDPPacketSize - PQResumedPaddingFloor - pqResumedOverhead(0)
+}
+
 // TestPQAppendix3Vectors checks the client's PQ crypto against the pinned
 // values of Appendix 3 of the draft, the same anchor the server validates.
 func TestPQAppendix3Vectors(t *testing.T) {
@@ -147,20 +174,8 @@ func TestPQSessionResumptionEpoch(t *testing.T) {
 // single X-Wing key exchange instead of running a fresh one every time, and
 // that a network change forces a new one.
 func TestEncryptPQReusesEncapsulation(t *testing.T) {
-	monitor := newNetworkMonitor()
-	monitor.epochValue.Store(1)
-	proxy := &Proxy{netMonitor: monitor}
-
-	_, pk := xwing.DeriveKeyPair(iotaBytes(32, 0x20))
-	pkb, _ := pk.MarshalBinary()
-	serverInfo := &ServerInfo{
-		Name:               "test",
-		CryptoConstruction: XWingPQ,
-		PqPublicKey:        pkb,
-		PqCertContext:      iotaBytes(48, 0x01),
-		MagicQuery:         [8]byte{1, 2, 3, 4, 5, 6, 7, 8},
-		pqSession:          newPqSessionState(XWingPQ),
-	}
+	proxy := newTestPQProxy(1)
+	serverInfo := newTestPQServerInfo()
 	query := mustHex("12340100000100000000000003777777076578616d706c6503636f6d0000010001")
 
 	ctOf := func(out []byte) []byte {
@@ -182,7 +197,7 @@ func TestEncryptPQReusesEncapsulation(t *testing.T) {
 		t.Fatal("expected the shared key to be reused across queries")
 	}
 
-	monitor.epochValue.Store(2)
+	proxy.netMonitor.epochValue.Store(2)
 	_, out3, _, _, err := proxy.encryptPQ(serverInfo, query, "udp")
 	if err != nil {
 		t.Fatal(err)
@@ -192,14 +207,54 @@ func TestEncryptPQReusesEncapsulation(t *testing.T) {
 	}
 }
 
-func TestPQProcessControlDiscardsTicketAfterNetworkChange(t *testing.T) {
-	monitor := newNetworkMonitor()
-	monitor.epochValue.Store(2)
-	proxy := &Proxy{netMonitor: monitor}
-	serverInfo := &ServerInfo{
-		Name:      "test",
-		pqSession: newPqSessionState(XWingPQ),
+// TestPQResumedQueryMeetsUDPSizeTarget checks that a resumed query sent over
+// UDP is padded up to the regular question size target, since the resolver
+// cannot send a UDP response larger than the query. Servers that cannot
+// receive fragmented datagrams keep the classic reduced cap, and over TCP
+// the smaller fixed floor is kept.
+func TestPQResumedQueryMeetsUDPSizeTarget(t *testing.T) {
+	proxy := newTestPQProxy(1)
+	serverInfo := newTestPQServerInfo()
+	ticket := iotaBytes(130, 0x24)
+	serverInfo.pqSession.store(ticket, [32]byte{42}, time.Now().Add(time.Minute), 1)
+	query := mustHex("12340100000100000000000003777777076578616d706c6503636f6d0000010001")
+	overhead := pqResumedOverhead(len(ticket))
+
+	_, udpOut, _, _, err := proxy.encryptPQ(serverInfo, query, "udp")
+	if err != nil {
+		t.Fatal(err)
 	}
+	if len(udpOut) < InitialMinQuestionSize {
+		t.Fatalf("resumed UDP query is only %d bytes, below the %d response budget", len(udpOut), InitialMinQuestionSize)
+	}
+	if plaintextLen := len(udpOut) - overhead; plaintextLen%64 != 0 {
+		t.Fatalf("resumed UDP query padding is not a multiple of 64: %d", plaintextLen)
+	}
+
+	_, tcpOut, _, _, err := proxy.encryptPQ(serverInfo, query, "tcp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if expected := overhead + PQResumedPaddingFloor; len(tcpOut) != expected {
+		t.Fatalf("resumed TCP query length %d, expected %d", len(tcpOut), expected)
+	}
+
+	serverInfo.knownBugs.fragmentsBlocked = true
+	for i := 0; i < 3; i++ {
+		proxy.questionSizeEstimator.blindAdjust()
+	}
+	_, safeOut, _, _, err := proxy.encryptPQ(serverInfo, query, "udp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(safeOut) > MaxDNSUDPSafePacketSize {
+		t.Fatalf("resumed UDP query is %d bytes despite the fragmentation workaround", len(safeOut))
+	}
+}
+
+func TestPQProcessControlDiscardsTicketAfterNetworkChange(t *testing.T) {
+	proxy := newTestPQProxy(2)
+	serverInfo := newTestPQServerInfo()
 	sharedKey := &[32]byte{1, 2, 3}
 	clientNonce := []byte("abcdefghijkl")
 	control := buildTestPQControl([]byte("ticket"), 60)
@@ -212,6 +267,41 @@ func TestPQProcessControlDiscardsTicketAfterNetworkChange(t *testing.T) {
 	proxy.pqProcessControl(serverInfo, sharedKey, clientNonce, control, 2)
 	if ticket, _, ok := serverInfo.pqSession.get(2); !ok || string(ticket) != "ticket" {
 		t.Fatal("expected ticket to be stored when query epoch still matches")
+	}
+}
+
+func TestPQQueryTooLargeForUDPFallsBackToTCP(t *testing.T) {
+	proxy := newTestPQProxy(1)
+	serverInfo := newTestPQServerInfo()
+
+	hugeQuery := iotaBytes(3000, 0x02)
+	if _, _, _, _, err := proxy.Encrypt(serverInfo, hugeQuery, "udp"); err == nil {
+		t.Fatal("expected an error for a full query that cannot fit in a UDP datagram")
+	}
+	if _, _, _, _, err := proxy.Encrypt(serverInfo, hugeQuery, "tcp"); err != nil {
+		t.Fatal(err)
+	}
+
+	ticket := iotaBytes(maxStorableTicketLen(), 0x01)
+	serverInfo.pqSession.store(ticket, [32]byte{42}, time.Now().Add(time.Minute), 1)
+	query := iotaBytes(300, 0x02)
+	if _, _, _, _, err := proxy.Encrypt(serverInfo, query, "udp"); err == nil {
+		t.Fatal("expected an error for a resumed query that cannot fit in a UDP datagram")
+	}
+	if _, _, _, _, err := proxy.Encrypt(serverInfo, query, "tcp"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestPQProcessControlDiscardsOversizedTicket(t *testing.T) {
+	proxy := newTestPQProxy(1)
+	serverInfo := newTestPQServerInfo()
+	oversized := iotaBytes(maxStorableTicketLen()+1, 0x01)
+	control := buildTestPQControl(oversized, 60)
+
+	proxy.pqProcessControl(serverInfo, &[32]byte{1}, []byte("abcdefghijkl"), control, 1)
+	if _, _, ok := serverInfo.pqSession.get(1); ok {
+		t.Fatal("expected an oversized ticket to be discarded")
 	}
 }
 

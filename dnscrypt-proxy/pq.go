@@ -25,6 +25,7 @@ const (
 	PQExtVersion          = 0x01
 	PQKdfID               = 0x01
 	PQAeadID              = 0x01
+	PQResumedPaddingFloor = 256
 )
 
 var (
@@ -113,16 +114,13 @@ func pqResumedSharedKey(resumeSecret [32]byte, clientMagic [8]byte, clientNonce,
 // pqPad applies ISO/IEC 7816-4 padding to the next multiple of 64, with a
 // minimum floor (itself a multiple of 64).
 func pqPad(packet []byte, floor int) []byte {
-	padded := make([]byte, len(packet), len(packet)+64)
-	copy(padded, packet)
-	padded = append(padded, 0x80)
-	target := (len(padded) + 63) &^ 63
+	target := (len(packet) + 1 + 63) &^ 63
 	if target < floor {
 		target = floor
 	}
-	for len(padded) < target {
-		padded = append(padded, 0)
-	}
+	padded := make([]byte, target)
+	copy(padded, packet)
+	padded[len(packet)] = 0x80
 	return padded
 }
 
@@ -208,13 +206,41 @@ func (s *pqSessionState) storeEncapsulation(ct []byte, key [32]byte, epoch uint6
 	s.encapEpoch = epoch
 }
 
+// pqResumedOverhead is the wire size of a resumed query around its encrypted
+// padded payload.
+func pqResumedOverhead(ticketLen int) int {
+	return len(PQResumeMagic) + 2 + ticketLen + HalfNonceSize + TagSize
+}
+
+// pqUDPPacketLimit is the largest UDP datagram worth sending to this server,
+// honoring the same fragmentation workaround as the classic path.
+func pqUDPPacketLimit(serverInfo *ServerInfo) int {
+	if serverInfo.knownBugs.fragmentsBlocked {
+		return MaxDNSUDPSafePacketSize
+	}
+	return MaxDNSUDPPacketSize
+}
+
+// pqResumedPaddingFloor returns the padding floor for a resumed query. Over
+// UDP, the encrypted response can never be larger than the query, so the
+// query is grown to the regular UDP question size target, leaving the
+// resolver the same response budget as a classic query.
+func (proxy *Proxy) pqResumedPaddingFloor(serverInfo *ServerInfo, ticketLen int, proto string) int {
+	if proto != "udp" {
+		return PQResumedPaddingFloor
+	}
+	overhead := pqResumedOverhead(ticketLen)
+	want := proxy.questionSizeEstimator.MinQuestionSize() - overhead
+	return Max(PQResumedPaddingFloor, Min((want+63)&^63, (pqUDPPacketLimit(serverInfo)-overhead)&^63))
+}
+
 // encryptPQ builds a PQ query: a resumed query when a valid ticket is held,
 // otherwise a query that carries an X-Wing ciphertext, reusing the cached
 // encapsulation when one is available for the current network epoch.
 func (proxy *Proxy) encryptPQ(
 	serverInfo *ServerInfo,
 	packet []byte,
-	_ string,
+	proto string,
 ) (sharedKey *[32]byte, encrypted []byte, clientNonce []byte, queryEpoch uint64, err error) {
 	queryEpoch = proxy.networkEpoch()
 	nonce := make([]byte, NonceSize)
@@ -226,7 +252,7 @@ func (proxy *Proxy) encryptPQ(
 
 	if ticket, resumeSecret, ok := serverInfo.pqSession.get(queryEpoch); ok {
 		key := pqResumedSharedKey(resumeSecret, serverInfo.MagicQuery, clientNonce, ticket)
-		padded := pqPad(packet, 256)
+		padded := pqPad(packet, proxy.pqResumedPaddingFloor(serverInfo, len(ticket), proto))
 		ct := xsecretbox.Seal(nil, nonce, padded, key[:])
 		out := make([]byte, 0, len(PQResumeMagic)+2+len(ticket)+HalfNonceSize+len(ct))
 		out = append(out, PQResumeMagic[:]...)
@@ -299,6 +325,10 @@ func (proxy *Proxy) pqProcessControl(
 		return
 	}
 	ticket := control[11 : 11+ticketLen]
+	if pqResumedOverhead(len(ticket))+PQResumedPaddingFloor > MaxDNSUDPPacketSize {
+		dlog.Debugf("[%v] discarded an oversized PQ resumption ticket (%d bytes)", serverInfo.Name, len(ticket))
+		return
+	}
 	if queryEpoch != proxy.networkEpoch() {
 		dlog.Debugf("[%v] discarded a PQ resumption ticket after a network change", serverInfo.Name)
 		return
