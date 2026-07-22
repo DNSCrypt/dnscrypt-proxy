@@ -181,6 +181,7 @@ func configureServerParams(proxy *Proxy, config *Config) {
 		dlog.Warnf("timeout_load_reduction must be between 0.0 and 1.0, using default 0.75")
 		proxy.timeoutLoadReduction = 0.75
 	}
+	proxy.forceTCP = config.ForceTCP
 	proxy.xTransport.mainProto = "udp"
 	if config.ForceTCP {
 		proxy.xTransport.mainProto = "tcp"

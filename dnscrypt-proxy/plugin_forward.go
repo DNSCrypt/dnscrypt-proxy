@@ -46,6 +46,7 @@ type PluginForward struct {
 	bootstrapResolvers []string
 	dhcpdns            []*dhcpdns.Detector
 	proxyDialer        netproxy.Dialer
+	forceTCP           bool
 
 	// Hot-reloading support
 	rwLock        sync.RWMutex
@@ -66,6 +67,7 @@ func (plugin *PluginForward) Init(proxy *Proxy) error {
 	plugin.configFile = proxy.forwardFile
 	dlog.Noticef("Loading the set of forwarding rules from [%s]", plugin.configFile)
 
+	plugin.forceTCP = proxy.forceTCP
 	if proxy.xTransport != nil {
 		plugin.bootstrapResolvers = proxy.xTransport.bootstrapResolvers
 		if proxy.xTransport.proxyDialer != nil {
@@ -423,8 +425,12 @@ func (plugin *PluginForward) Eval(pluginsState *PluginsState, msg *dns.Msg) erro
 			dlog.Debugf("Forwarding [%s] to [%s] using DNS-over-TCP through the configured proxy", qName, server)
 			respMsg, err = plugin.exchangeViaProxy(forwardMsg, server, pluginsState.timeout)
 		} else {
+			proto := "udp"
+			if sequence[i].typ == Bootstrap && plugin.forceTCP {
+				proto = "tcp"
+			}
 			dlog.Debugf("Forwarding [%s] to [%s]", qName, server)
-			respMsg, err = plugin.exchangeDirect(forwardMsg, pluginsState.serverProto, server, pluginsState.timeout)
+			respMsg, err = plugin.exchangeDirect(forwardMsg, proto, server, pluginsState.timeout)
 		}
 		if err != nil {
 			continue
@@ -450,17 +456,17 @@ func (plugin *PluginForward) Eval(pluginsState *PluginsState, msg *dns.Msg) erro
 	return err
 }
 
-// exchangeDirect sends a query to the selected upstream server using the current
-// protocol, retrying a truncated UDP response over TCP.
+// exchangeDirect sends a query to the selected upstream server, starting with
+// the given protocol and retrying a truncated UDP response over TCP.
 func (plugin *PluginForward) exchangeDirect(
 	forwardMsg *dns.Msg,
-	serverProto string,
+	proto string,
 	server string,
 	timeout time.Duration,
 ) (*dns.Msg, error) {
 	client := dns.Client{}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	respMsg, _, err := client.Exchange(ctx, forwardMsg, serverProto, server)
+	respMsg, _, err := client.Exchange(ctx, forwardMsg, proto, server)
 	cancel()
 	if err != nil && (respMsg == nil || !respMsg.Truncated) {
 		return nil, err
