@@ -203,7 +203,7 @@ func (t *Transport) roundTripOpt(req *http.Request, opt RoundTripOpt) (*http.Res
 		}
 		for _, v := range vv {
 			if !httpguts.ValidHeaderFieldValue(v) {
-				return nil, fmt.Errorf("http3: invalid http header field value %q for key %v", v, k)
+				return nil, fmt.Errorf("http3: invalid http header field value for key %q", k)
 			}
 		}
 	}

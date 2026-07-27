@@ -47,10 +47,9 @@ func addSessionStateExtraPrefix(b []byte) []byte {
 func findSessionStateExtraData(extras [][]byte) []byte {
 	prefix := []byte(extraPrefix)
 	for _, extra := range extras {
-		if len(extra) < len(prefix) || !bytes.Equal(prefix, extra[:len(prefix)]) {
-			continue
+		if data, ok := bytes.CutPrefix(extra, prefix); ok {
+			return data
 		}
-		return extra[len(prefix):]
 	}
 	return nil
 }

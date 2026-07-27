@@ -1,4 +1,4 @@
-package flowcontrol
+package quic
 
 import (
 	"fmt"
@@ -10,36 +10,38 @@ import (
 )
 
 type streamFlowController struct {
-	baseFlowController
+	receiveFlowController
+
+	bytesSent     protocol.ByteCount
+	sendWindow    protocol.ByteCount
+	lastBlockedAt protocol.ByteCount
 
 	streamID protocol.StreamID
 
-	connection connectionFlowControllerI
+	connection *connectionFlowController
 
 	receivedFinalOffset bool
 }
 
-var _ StreamFlowController = &streamFlowController{}
-
-// NewStreamFlowController gets a new flow controller for a stream
-func NewStreamFlowController(
+// newStreamFlowController gets a new flow controller for a stream.
+func newStreamFlowController(
 	streamID protocol.StreamID,
-	cfc ConnectionFlowController,
+	cfc *connectionFlowController,
 	receiveWindow protocol.ByteCount,
 	maxReceiveWindow protocol.ByteCount,
 	initialSendWindow protocol.ByteCount,
 	rttStats *utils.RTTStats,
 	logger utils.Logger,
-) StreamFlowController {
+) *streamFlowController {
 	return &streamFlowController{
 		streamID:   streamID,
-		connection: cfc.(connectionFlowControllerI),
-		baseFlowController: baseFlowController{
+		connection: cfc,
+		sendWindow: initialSendWindow,
+		receiveFlowController: receiveFlowController{
 			rttStats:             rttStats,
 			receiveWindow:        receiveWindow,
 			receiveWindowSize:    receiveWindow,
 			maxReceiveWindowSize: maxReceiveWindow,
-			sendWindow:           initialSendWindow,
 			logger:               logger,
 		},
 	}
@@ -117,18 +119,55 @@ func (c *streamFlowController) Abandon() {
 	}
 }
 
-func (c *streamFlowController) AddBytesSent(n protocol.ByteCount) {
-	c.baseFlowController.AddBytesSent(n)
-	c.connection.AddBytesSent(n)
+func (c *streamFlowController) UpdateSendWindow(offset protocol.ByteCount) (updated bool) {
+	if offset > c.sendWindow {
+		c.sendWindow = offset
+		return true
+	}
+	return false
+}
+
+// TryAddBytesSent adds n bytes if sufficient stream- and connection-level send credit is available.
+func (c *streamFlowController) TryAddBytesSent(n protocol.ByteCount) bool {
+	if c.bytesSent > c.sendWindow || n > c.sendWindow-c.bytesSent {
+		return false
+	}
+	if !c.connection.TryAddBytesSent(n) {
+		return false
+	}
+	c.bytesSent += n
+	return true
+}
+
+// AddBytesSentWithLimiter adds the limiter-approved portion of the available stream- and connection-level send credit.
+func (c *streamFlowController) AddBytesSentWithLimiter(
+	n protocol.ByteCount,
+	limiter func(int) int,
+) (protocol.ByteCount, bool) {
+	if c.bytesSent >= c.sendWindow {
+		return 0, false
+	}
+	n = min(n, c.sendWindow-c.bytesSent)
+	added, limited := c.connection.AddBytesSentWithLimiter(n, limiter)
+	c.bytesSent += added
+	return added, limited
 }
 
 func (c *streamFlowController) SendWindowSize() protocol.ByteCount {
-	return min(c.baseFlowController.SendWindowSize(), c.connection.SendWindowSize())
+	return min(c.sendWindow-c.bytesSent, c.connection.SendWindowSize())
 }
 
 func (c *streamFlowController) IsNewlyBlocked() bool {
-	blocked, _ := c.baseFlowController.IsNewlyBlocked()
+	blocked, _ := c.isNewlyBlocked()
 	return blocked
+}
+
+func (c *streamFlowController) isNewlyBlocked() (bool, protocol.ByteCount) {
+	if c.bytesSent < c.sendWindow || c.sendWindow == c.lastBlockedAt {
+		return false, 0
+	}
+	c.lastBlockedAt = c.sendWindow
+	return true, c.sendWindow
 }
 
 func (c *streamFlowController) shouldQueueWindowUpdate() bool {
@@ -148,7 +187,10 @@ func (c *streamFlowController) GetWindowUpdate(now monotime.Time) protocol.ByteC
 	offset := c.getWindowUpdate(now)
 	if c.receiveWindowSize > oldWindowSize { // auto-tuning enlarged the window size
 		c.logger.Debugf("Increasing receive flow control window for stream %d to %d", c.streamID, c.receiveWindowSize)
-		c.connection.EnsureMinimumWindowSize(protocol.ByteCount(float64(c.receiveWindowSize)*protocol.ConnectionFlowControlMultiplier), now)
+		c.connection.EnsureMinimumWindowSize(
+			protocol.ByteCount(float64(c.receiveWindowSize)*protocol.ConnectionFlowControlMultiplier),
+			now,
+		)
 	}
 	return offset
 }

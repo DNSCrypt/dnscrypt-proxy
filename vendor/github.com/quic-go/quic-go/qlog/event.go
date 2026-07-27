@@ -212,14 +212,14 @@ func (e ConnectionClosed) Encode(enc *jsontext.Encoder, _ time.Time) error {
 }
 
 type PacketSent struct {
-	Header            PacketHeader
-	Raw               RawInfo
-	DatagramID        DatagramID
-	Frames            []Frame
-	ECN               ECN
-	IsCoalesced       bool
-	Trigger           string
-	SupportedVersions []Version
+	Header                  PacketHeader
+	Raw                     RawInfo
+	DatagramPayloadChecksum DatagramPayloadChecksum
+	Frames                  []Frame
+	ECN                     ECN
+	IsCoalesced             bool
+	Trigger                 string
+	SupportedVersions       []Version
 }
 
 func (e PacketSent) Name() string { return "transport:packet_sent" }
@@ -235,9 +235,9 @@ func (e PacketSent) Encode(enc *jsontext.Encoder, _ time.Time) error {
 	if err := e.Raw.encode(enc); err != nil {
 		return err
 	}
-	if e.DatagramID != 0 {
-		h.WriteToken(jsontext.String("datagram_id"))
-		h.WriteToken(jsontext.Uint(uint64(e.DatagramID)))
+	if e.DatagramPayloadChecksum != 0 {
+		h.WriteToken(jsontext.String("datagram_payload_checksum"))
+		h.WriteToken(jsontext.Uint(uint64(e.DatagramPayloadChecksum)))
 	}
 	if len(e.Frames) > 0 {
 		h.WriteToken(jsontext.String("frames"))
@@ -262,13 +262,13 @@ func (e PacketSent) Encode(enc *jsontext.Encoder, _ time.Time) error {
 }
 
 type PacketReceived struct {
-	Header      PacketHeader
-	Raw         RawInfo
-	DatagramID  DatagramID
-	Frames      []Frame
-	ECN         ECN
-	IsCoalesced bool
-	Trigger     string
+	Header                  PacketHeader
+	Raw                     RawInfo
+	DatagramPayloadChecksum DatagramPayloadChecksum
+	Frames                  []Frame
+	ECN                     ECN
+	IsCoalesced             bool
+	Trigger                 string
 }
 
 func (e PacketReceived) Name() string { return "transport:packet_received" }
@@ -284,9 +284,9 @@ func (e PacketReceived) Encode(enc *jsontext.Encoder, _ time.Time) error {
 	if err := e.Raw.encode(enc); err != nil {
 		return err
 	}
-	if e.DatagramID != 0 {
-		h.WriteToken(jsontext.String("datagram_id"))
-		h.WriteToken(jsontext.Uint(uint64(e.DatagramID)))
+	if e.DatagramPayloadChecksum != 0 {
+		h.WriteToken(jsontext.String("datagram_payload_checksum"))
+		h.WriteToken(jsontext.Uint(uint64(e.DatagramPayloadChecksum)))
 	}
 	if len(e.Frames) > 0 {
 		h.WriteToken(jsontext.String("frames"))
@@ -355,9 +355,9 @@ func (e VersionNegotiationSent) Encode(enc *jsontext.Encoder, _ time.Time) error
 }
 
 type PacketBuffered struct {
-	Header     PacketHeader
-	Raw        RawInfo
-	DatagramID DatagramID
+	Header                  PacketHeader
+	Raw                     RawInfo
+	DatagramPayloadChecksum DatagramPayloadChecksum
 }
 
 func (e PacketBuffered) Name() string { return "transport:packet_buffered" }
@@ -373,9 +373,9 @@ func (e PacketBuffered) Encode(enc *jsontext.Encoder, _ time.Time) error {
 	if err := e.Raw.encode(enc); err != nil {
 		return err
 	}
-	if e.DatagramID != 0 {
-		h.WriteToken(jsontext.String("datagram_id"))
-		h.WriteToken(jsontext.Uint(uint64(e.DatagramID)))
+	if e.DatagramPayloadChecksum != 0 {
+		h.WriteToken(jsontext.String("datagram_payload_checksum"))
+		h.WriteToken(jsontext.Uint(uint64(e.DatagramPayloadChecksum)))
 	}
 	h.WriteToken(jsontext.String("trigger"))
 	h.WriteToken(jsontext.String("keys_unavailable"))
@@ -385,10 +385,10 @@ func (e PacketBuffered) Encode(enc *jsontext.Encoder, _ time.Time) error {
 
 // PacketDropped is the transport:packet_dropped event.
 type PacketDropped struct {
-	Header     PacketHeader
-	Raw        RawInfo
-	DatagramID DatagramID
-	Trigger    PacketDropReason
+	Header                  PacketHeader
+	Raw                     RawInfo
+	DatagramPayloadChecksum DatagramPayloadChecksum
+	Trigger                 PacketDropReason
 }
 
 func (e PacketDropped) Name() string { return "transport:packet_dropped" }
@@ -404,9 +404,9 @@ func (e PacketDropped) Encode(enc *jsontext.Encoder, _ time.Time) error {
 	if err := e.Raw.encode(enc); err != nil {
 		return err
 	}
-	if e.DatagramID != 0 {
-		h.WriteToken(jsontext.String("datagram_id"))
-		h.WriteToken(jsontext.Uint(uint64(e.DatagramID)))
+	if e.DatagramPayloadChecksum != 0 {
+		h.WriteToken(jsontext.String("datagram_payload_checksum"))
+		h.WriteToken(jsontext.Uint(uint64(e.DatagramPayloadChecksum)))
 	}
 	h.WriteToken(jsontext.String("trigger"))
 	h.WriteToken(jsontext.String(string(e.Trigger)))
