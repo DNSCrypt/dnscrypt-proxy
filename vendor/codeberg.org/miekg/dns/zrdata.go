@@ -807,6 +807,17 @@ func parseData(r io.Reader, rrtype uint16, o string) (RDATA, error) {
 		return rd, nil
 
 	}
+
+	if newFn, ok := TypeToRR[rrtype]; ok {
+		rr := newFn()
+		if _, ok := rr.(Parser); ok {
+			if err := parse(rr, c, o); err != nil {
+				return rr.Data(), err
+			}
+			return rr.Data(), nil
+		}
+	}
+
 	rd := rdata.RFC3597{}
 	pe := parseRFC3597(&rd, c, o)
 	if pe != nil {

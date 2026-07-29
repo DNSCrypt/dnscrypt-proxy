@@ -265,7 +265,7 @@ func MName(s string, msg []byte, off int) (off1 int, err error) {
 	if ls > 1 && s[0] == '.' { // leading dots are not legal except for the root zone
 		return len(msg), &Error{"leading dot in mname"}
 	}
-	if s[ls-1] != '.' {
+	if ls > 0 && s[ls-1] != '.' {
 		return len(msg), &Error{"mname must be fully qualified"}
 	}
 

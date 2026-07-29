@@ -33,6 +33,11 @@ Everything from <https://github.com/miekg/dns> works. See
 [README-v1-to-v2.md](https://codeberg.org/miekg/dns/src/branch/main/_doc/README-v1-to-v2.md)
 for the differences, if you are porting your application, in `cookbook.go` are some common recipes.
 
+Note that a design choice has been made to not supported `\DDD` and `\x` syntax in domain names. This archeic
+way of encoding names was useful way-back-when, nowadays DNS is pretty much a 7-bit protocol and things like
+[Punycode](https://en.wikipedia.org/wiki/Punycode) had to be invented. There is one exception to this and that
+is the SOA's mname can contain a `\.`, for the rest it is ignore and interpreted as `\` and `.`.
+
 ## Performance
 
 The performance should be roughly 2x across the board compared to v1 (also see below).
