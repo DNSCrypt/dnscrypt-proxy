@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/quic-go/quic-go/internal/ackhandler"
-	"github.com/quic-go/quic-go/internal/flowcontrol"
 	"github.com/quic-go/quic-go/internal/monotime"
 	"github.com/quic-go/quic-go/internal/protocol"
 	"github.com/quic-go/quic-go/internal/qerr"
@@ -22,8 +21,9 @@ type ReceiveStream struct {
 
 	sender streamSender
 
-	frameQueue  *frameSorter
-	finalOffset protocol.ByteCount
+	frameQueue               *frameSorter
+	finalOffset              protocol.ByteCount
+	receiveFinalSizeCallback func(int64)
 
 	currentFrame       []byte
 	currentFrameDone   func()
@@ -49,7 +49,7 @@ type ReceiveStream struct {
 	readOnce chan struct{} // cap: 1, to protect against concurrent use of Read
 	deadline monotime.Time
 
-	flowController flowcontrol.StreamFlowController
+	flowController *streamFlowController
 }
 
 var (
@@ -60,7 +60,7 @@ var (
 func newReceiveStream(
 	streamID protocol.StreamID,
 	sender streamSender,
-	flowController flowcontrol.StreamFlowController,
+	flowController *streamFlowController,
 ) *ReceiveStream {
 	return &ReceiveStream{
 		streamID:       streamID,
@@ -74,8 +74,37 @@ func newReceiveStream(
 }
 
 // StreamID returns the stream ID.
-func (s *ReceiveStream) StreamID() protocol.StreamID {
+func (s *ReceiveStream) StreamID() StreamID {
 	return s.streamID
+}
+
+// SetReceiveFinalSizeCallback sets a callback that is called when the receive stream's final size is known.
+// The final size is learned from a FIN or RESET_STREAM frame.
+// Most applications don't need this. It is mainly useful for protocol layers
+// that need exact stream final sizes, such as WebTransport flow control accounting.
+// If the final size is already known, the callback is called before this method returns.
+// When the final size is learned later, the callback is called from the connection's event loop and must not block.
+// The callback is not called if the connection is closed before the final size is known.
+// Setting a nil callback removes it if the final size is not yet known.
+func (s *ReceiveStream) SetReceiveFinalSizeCallback(callback func(int64)) {
+	s.mutex.Lock()
+	size := s.finalOffset
+
+	// final size is already known
+	if size != protocol.MaxByteCount {
+		s.mutex.Unlock()
+		if callback != nil {
+			callback(int64(size))
+		}
+		return
+	}
+
+	if s.closeForShutdownErr != nil {
+		s.mutex.Unlock()
+		return
+	}
+	s.receiveFinalSizeCallback = callback
+	s.mutex.Unlock()
 }
 
 // Read reads data from the stream.
@@ -404,16 +433,23 @@ func (s *ReceiveStream) handleStreamFrame(frame *wire.StreamFrame, now monotime.
 	s.mutex.Lock()
 	err := s.handleStreamFrameImpl(frame, now)
 	completed := s.isNewlyCompleted()
+	size, callback := s.takeReceiveFinalSizeCallback()
 	s.mutex.Unlock()
 
 	if completed {
 		s.flowController.Abandon()
 		s.sender.onStreamCompleted(s.streamID)
 	}
+	if callback != nil {
+		callback(size)
+	}
 	return err
 }
 
 func (s *ReceiveStream) handleStreamFrameImpl(frame *wire.StreamFrame, now monotime.Time) error {
+	if s.closeForShutdownErr != nil {
+		return nil
+	}
 	maxOffset := frame.Offset + frame.DataLen()
 	if err := s.flowController.UpdateHighestReceived(maxOffset, frame.Fin, now); err != nil {
 		return err
@@ -435,10 +471,14 @@ func (s *ReceiveStream) handleResetStreamFrame(frame *wire.ResetStreamFrame, now
 	s.mutex.Lock()
 	err := s.handleResetStreamFrameImpl(frame, now)
 	completed := s.isNewlyCompleted()
+	size, callback := s.takeReceiveFinalSizeCallback()
 	s.mutex.Unlock()
 
 	if completed {
 		s.sender.onStreamCompleted(s.streamID)
+	}
+	if callback != nil {
+		callback(size)
 	}
 	return err
 }
@@ -473,6 +513,15 @@ func (s *ReceiveStream) handleResetStreamFrameImpl(frame *wire.ResetStreamFrame,
 	s.cancelErr = &StreamError{StreamID: s.streamID, ErrorCode: frame.ErrorCode, Remote: true}
 	s.signalRead()
 	return nil
+}
+
+func (s *ReceiveStream) takeReceiveFinalSizeCallback() (int64, func(int64)) {
+	if s.finalOffset == protocol.MaxByteCount {
+		return 0, nil
+	}
+	callback := s.receiveFinalSizeCallback
+	s.receiveFinalSizeCallback = nil
+	return int64(s.finalOffset), callback
 }
 
 func (s *ReceiveStream) getControlFrame(now monotime.Time) (_ ackhandler.Frame, ok, hasMore bool) {
@@ -515,6 +564,7 @@ func (s *ReceiveStream) SetReadDeadline(t time.Time) error {
 func (s *ReceiveStream) closeForShutdown(err error) {
 	s.mutex.Lock()
 	s.closeForShutdownErr = err
+	s.receiveFinalSizeCallback = nil
 	s.mutex.Unlock()
 	s.signalRead()
 }

@@ -79,17 +79,17 @@ func (s StreamNum) StreamID(stype StreamType, pers Perspective) StreamID {
 // A StreamID in QUIC
 type StreamID int64
 
-// InitiatedBy says if the stream was initiated by the client or by the server
-func (s StreamID) InitiatedBy() Perspective {
-	if s%2 == 0 {
+// StreamInitiator says if the stream was initiated by the client or by the server.
+func StreamInitiator(id StreamID) Perspective {
+	if id%2 == 0 {
 		return PerspectiveClient
 	}
 	return PerspectiveServer
 }
 
-// Type says if this is a unidirectional or bidirectional stream
-func (s StreamID) Type() StreamType {
-	if s%4 >= 2 {
+// StreamTypeOf says if this is a unidirectional or bidirectional stream.
+func StreamTypeOf(id StreamID) StreamType {
+	if id%4 >= 2 {
 		return StreamTypeUni
 	}
 	return StreamTypeBidi

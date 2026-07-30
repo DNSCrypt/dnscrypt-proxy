@@ -54,7 +54,9 @@ func newRawServerConn(
 	}
 	c.rawConn = *newRawConn(conn, enableDatagrams, c.onStreamsEmpty, nil, qlogger, logger)
 	if idleTimeout > 0 {
-		c.idleTimer = time.AfterFunc(idleTimeout, c.onIdleTimer)
+		c.idleTimer = time.AfterFunc(idleTimeout, func() {
+			conn.CloseWithError(quic.ApplicationErrorCode(ErrCodeNoError), "idle timeout")
+		})
 	}
 	return c
 }
@@ -63,10 +65,6 @@ func (c *RawServerConn) onStreamsEmpty() {
 	if c.idleTimeout > 0 {
 		c.idleTimer.Reset(c.idleTimeout)
 	}
-}
-
-func (c *RawServerConn) onIdleTimer() {
-	c.CloseWithError(quic.ApplicationErrorCode(ErrCodeNoError), "idle timeout")
 }
 
 // CloseWithError closes the connection with the given error code and message.

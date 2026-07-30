@@ -70,7 +70,8 @@ type ClientConn struct {
 
 	streamMx     sync.Mutex
 	maxStreamID  quic.StreamID // set once a GOAWAY frame is received
-	lastStreamID quic.StreamID // the highest stream ID that was opened
+	goAwayCtx    context.Context
+	goAwayCancel context.CancelFunc
 
 	qlogger qlogwriter.Recorder
 	logger  *slog.Logger
@@ -97,11 +98,11 @@ func newClientConn(
 		additionalSettings: additionalSettings,
 		disableCompression: disableCompression,
 		maxStreamID:        invalidStreamID,
-		lastStreamID:       invalidStreamID,
 		logger:             logger,
 		qlogger:            qlogger,
 		decoder:            qpack.NewDecoder(),
 	}
+	c.goAwayCtx, c.goAwayCancel = context.WithCancel(context.Background())
 	if maxResponseHeaderBytes <= 0 {
 		c.maxResponseHeaderBytes = defaultMaxResponseHeaderBytes
 	} else {
@@ -146,38 +147,27 @@ func (c *ClientConn) openRequestStream(
 	disableCompression bool,
 	maxHeaderBytes int,
 ) (*RequestStream, error) {
-	c.streamMx.Lock()
-	maxStreamID := c.maxStreamID
-	var nextStreamID quic.StreamID
-	if c.lastStreamID == invalidStreamID {
-		nextStreamID = 0
-	} else {
-		nextStreamID = c.lastStreamID + 4
-	}
-	c.streamMx.Unlock()
-	// Streams with stream ID equal to or greater than the stream ID carried in the GOAWAY frame
-	// will be rejected, see section 5.2 of RFC 9114.
-	if maxStreamID != invalidStreamID && nextStreamID >= maxStreamID {
+	// RFC 9114 Section 5.2 prohibits opening any new request streams after GOAWAY.
+	// The stream ID only identifies requests that were already in flight and might still be processed.
+	if c.goAwayCtx.Err() != nil {
 		return nil, errGoAway
 	}
 
-	str, err := c.conn.OpenStreamSync(ctx)
+	openCtx, cancel := context.WithCancelCause(ctx)
+	// A request blocked in OpenStreamSync has no request stream yet, so it is not in flight.
+	stop := context.AfterFunc(c.goAwayCtx, func() { cancel(errGoAway) })
+	str, err := c.conn.OpenStreamSync(openCtx)
+	stop()
+	cancel(nil)
 	if err != nil {
+		if context.Cause(openCtx) == errGoAway {
+			return nil, errGoAway
+		}
 		return nil, err
 	}
 
-	c.streamMx.Lock()
-	// take the maximum here, as multiple OpenStreamSync calls might have returned concurrently
-	if c.lastStreamID == invalidStreamID {
-		c.lastStreamID = str.StreamID()
-	} else {
-		c.lastStreamID = max(c.lastStreamID, str.StreamID())
-	}
-	// check again, in case a (or another) GOAWAY frame was received
-	maxStreamID = c.maxStreamID
-	c.streamMx.Unlock()
-
-	if maxStreamID != invalidStreamID && str.StreamID() >= maxStreamID {
+	// Check again in case GOAWAY raced with OpenStreamSync.
+	if c.goAwayCtx.Err() != nil {
 		str.CancelRead(quic.StreamErrorCode(ErrCodeRequestCanceled))
 		str.CancelWrite(quic.StreamErrorCode(ErrCodeRequestCanceled))
 		return nil, errGoAway
@@ -240,6 +230,7 @@ func (c *ClientConn) handleControlStream(str *quic.ReceiveStream, fp *frameParse
 			return
 		}
 		c.maxStreamID = goaway.StreamID
+		c.goAwayCancel()
 		c.streamMx.Unlock()
 
 		hasActiveStreams := c.rawConn.hasActiveStreams()
