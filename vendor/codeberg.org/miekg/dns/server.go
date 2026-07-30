@@ -194,7 +194,7 @@ func (srv *Server) ListenAndServe() error {
 		if srv.ListenFunc != nil {
 			srv.ListenFunc(srv)
 		}
-		srv.listenTCP(l)
+		srv.listenTCP(srv.Listener)
 		return nil
 	case "udp", "udp4", "udp6":
 		l, err := listenUDP(srv.Net, addr, srv.ReusePort, srv.ReuseAddr)
@@ -210,7 +210,7 @@ func (srv *Server) ListenAndServe() error {
 		if srv.ListenFunc != nil {
 			srv.ListenFunc(srv)
 		}
-		srv.listenUDP(u)
+		srv.listenUDP(srv.PacketConn)
 		return nil
 	}
 	return &Error{err: "bad network"}
