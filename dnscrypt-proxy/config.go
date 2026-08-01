@@ -530,16 +530,6 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	return nil
 }
 
-// GetRefusedFlag - Returns whether the config has defined refused_code_in_responses
-func (config *Config) GetRefusedFlag(configFile string) (bool, bool) {
-	var refused bool
-	md, err := toml.DecodeFile(configFile, &refused)
-	if err != nil {
-		return false, false
-	}
-	return refused, md.IsDefined("refused_code_in_responses")
-}
-
 // configureBrokenImplementations - Helper function for IsDefined check
 func configureBrokenImplementations(proxy *Proxy, config *Config) {
 	// Backwards compatibility

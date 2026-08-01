@@ -293,16 +293,13 @@ func (plugin *PluginForward) CancelReload() {
 
 // Reload implements hot-reloading for the plugin
 func (plugin *PluginForward) Reload() error {
-	dlog.Noticef("Reloading configuration for plugin [%s]", plugin.Name())
-
-	// Prepare the new configuration
-	if err := plugin.PrepareReload(); err != nil {
-		plugin.CancelReload()
-		return err
-	}
-
-	// Apply the new configuration
-	return plugin.ApplyReload()
+	return StandardReloadPattern(plugin.Name(), func() error {
+		if err := plugin.PrepareReload(); err != nil {
+			plugin.CancelReload()
+			return err
+		}
+		return plugin.ApplyReload()
+	})
 }
 
 // GetConfigPath returns the path to the plugin's configuration file

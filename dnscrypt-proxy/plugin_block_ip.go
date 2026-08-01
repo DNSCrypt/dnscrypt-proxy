@@ -50,7 +50,7 @@ func (plugin *PluginBlockIP) Init(proxy *Proxy) error {
 	plugin.blockedIPs = make(map[string]any)
 	plugin.blockedNetworks = critbitgo.NewNet()
 
-	plugin.blockedPrefixes, err = plugin.loadRules(lines, plugin.blockedPrefixes, plugin.blockedIPs, plugin.blockedNetworks)
+	plugin.blockedPrefixes, err = LoadIPRules(lines, plugin.blockedPrefixes, plugin.blockedIPs, plugin.blockedNetworks)
 	if err != nil {
 		return err
 	}
@@ -59,11 +59,6 @@ func (plugin *PluginBlockIP) Init(proxy *Proxy) error {
 	plugin.ipCryptConfig = proxy.ipCryptConfig
 
 	return nil
-}
-
-// loadRules parses and loads IP rules into the provided tree, map, and network table
-func (plugin *PluginBlockIP) loadRules(lines string, prefixes *iradix.Tree, ips map[string]any, networks *critbitgo.Net) (*iradix.Tree, error) {
-	return LoadIPRules(lines, prefixes, ips, networks)
 }
 
 func (plugin *PluginBlockIP) Drop() error {
@@ -83,7 +78,7 @@ func (plugin *PluginBlockIP) PrepareReload() error {
 
 		// Load rules into staging structures
 		var err error
-		plugin.stagingPrefixes, err = plugin.loadRules(lines, plugin.stagingPrefixes, plugin.stagingIPs, plugin.stagingNetworks)
+		plugin.stagingPrefixes, err = LoadIPRules(lines, plugin.stagingPrefixes, plugin.stagingIPs, plugin.stagingNetworks)
 		return err
 	})
 }

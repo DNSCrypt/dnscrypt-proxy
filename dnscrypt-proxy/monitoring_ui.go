@@ -326,9 +326,10 @@ func (ui *MonitoringUI) UpdateMetrics(pluginsState PluginsState, msg *dns.Msg) {
 	// Update query types - separate lock
 	if msg != nil && len(msg.Question) > 0 {
 		question := msg.Question[0]
-		qType, ok := dns.TypeToString[dns.RRToType(question)]
+		rrType := dns.RRToType(question)
+		qType, ok := dns.TypeToString[rrType]
 		if !ok {
-			qType = fmt.Sprintf("%d", dns.RRToType(question))
+			qType = fmt.Sprintf("%d", rrType)
 		}
 		mc.queryTypesMutex.Lock()
 		mc.queryTypes[qType]++
