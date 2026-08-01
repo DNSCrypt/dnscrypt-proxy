@@ -109,7 +109,8 @@ func (patternMatcher *PatternMatcher) Add(pattern string, val any, position int)
 	case PatternTypePrefix:
 		patternMatcher.prefixes.Insert([]byte(pattern), val)
 	case PatternTypeSuffix:
-		patternMatcher.suffixes.Insert([]byte(StringReverse(pattern)), val)
+		// The trie key gets an extra dot to mark the label boundary.
+		patternMatcher.suffixes.Insert([]byte(StringReverse(pattern)+"."), val)
 	case PatternTypeExact:
 		patternMatcher.exact[pattern] = val
 	default:
@@ -127,21 +128,9 @@ func (patternMatcher *PatternMatcher) Eval(qName string) (reject bool, reason st
 		return true, qName, xval
 	}
 
-	revQname := StringReverse(qName)
+	revQname := StringReverse(qName) + "."
 	if match, xval, found := patternMatcher.suffixes.LongestPrefix([]byte(revQname)); found {
-		if len(match) == len(revQname) || revQname[len(match)] == '.' {
-			return true, "*." + StringReverse(string(match)), xval
-		}
-		if len(match) < len(revQname) && len(revQname) > 0 {
-			if i := strings.LastIndex(revQname, "."); i > 0 {
-				pName := revQname[:i]
-				if match, xval2, found := patternMatcher.suffixes.LongestPrefix([]byte(pName)); found {
-					if len(match) == len(pName) || pName[len(match)] == '.' {
-						return true, "*." + StringReverse(string(match)), xval2
-					}
-				}
-			}
-		}
+		return true, "*." + StringReverse(string(match[:len(match)-1])), xval
 	}
 
 	if match, xval, found := patternMatcher.prefixes.LongestPrefix([]byte(qName)); found {
