@@ -13,6 +13,8 @@ stats.*             # test inline comment with trailing spaces
 tag.*
 telemetry.*
 tracker.*
+example.org
+ads.example.org
 *.local
 eth0.me
 *.workgroup

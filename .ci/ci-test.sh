@@ -81,6 +81,9 @@ section
 t || dig -p${DNS_PORT} telemetry.example @127.0.0.1 | grep -Fq 'locally blocked' || fail $LINENO
 
 section
+t || dig -p${DNS_PORT} www.xads.example.org @127.0.0.1 | grep -Fq 'locally blocked' || fail $LINENO
+
+section
 t || dig -p${DNS_PORT} dns.google @127.0.0.1 | grep -Fq 'locally blocked' || fail $LINENO
 
 section
@@ -104,6 +107,8 @@ t || grep -Fq 'telemetry.example' blocked-names.log || fail $LINENO
 t || grep -Fq 'telemetry.*' blocked-names.log || fail $LINENO
 t || grep -Fq 'tracker.xdebian.org' blocked-names.log || fail $LINENO
 t || grep -Fq 'tracker.*' blocked-names.log || fail $LINENO
+t || grep -Fq 'www.xads.example.org' blocked-names.log || fail $LINENO
+t || grep -Fq '*.example.org' blocked-names.log || fail $LINENO
 
 section
 t || grep -Fq 'dns.google' blocked-ips.log || fail $LINENO
@@ -129,6 +134,7 @@ t || grep -Eq 'www.cloakedunregistered2.com.*CLOAK' query.log || fail $LINENO
 t || grep -Eq 'www.dnscrypt-test.*CLOAK' query.log || fail $LINENO
 t || grep -Eq 'a.www.dnscrypt-test.*NXDOMAIN' query.log || fail $LINENO
 t || grep -Eq 'telemetry.example.*REJECT' query.log || fail $LINENO
+t || grep -Eq 'www.xads.example.org.*REJECT' query.log || fail $LINENO
 t || grep -Eq 'dns.google.*REJECT' query.log || fail $LINENO
 t || grep -Eq 'tracker.xdebian.org.*REJECT' query.log || fail $LINENO
 t || grep -Eq 'tracker.debian.org.*PASS' query.log || fail $LINENO
