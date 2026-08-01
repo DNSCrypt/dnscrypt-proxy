@@ -127,21 +127,20 @@ func (patternMatcher *PatternMatcher) Eval(qName string) (reject bool, reason st
 		return true, qName, xval
 	}
 
+	// Suffix rules are stored reversed, so the longest matching byte prefix is
+	// not necessarily aligned on a label boundary. When it isn't, retry against
+	// the shorter rules instead of giving up. Rules are never empty, so the
+	// candidate always shrinks.
 	revQname := StringReverse(qName)
-	if match, xval, found := patternMatcher.suffixes.LongestPrefix([]byte(revQname)); found {
+	for candidate := revQname; len(candidate) > 0; {
+		match, xval, found := patternMatcher.suffixes.LongestPrefix([]byte(candidate))
+		if !found {
+			break
+		}
 		if len(match) == len(revQname) || revQname[len(match)] == '.' {
 			return true, "*." + StringReverse(string(match)), xval
 		}
-		if len(match) < len(revQname) && len(revQname) > 0 {
-			if i := strings.LastIndex(revQname, "."); i > 0 {
-				pName := revQname[:i]
-				if match, xval2, found := patternMatcher.suffixes.LongestPrefix([]byte(pName)); found {
-					if len(match) == len(pName) || pName[len(match)] == '.' {
-						return true, "*." + StringReverse(string(match)), xval2
-					}
-				}
-			}
-		}
+		candidate = candidate[:len(match)-1]
 	}
 
 	if match, xval, found := patternMatcher.prefixes.LongestPrefix([]byte(qName)); found {
