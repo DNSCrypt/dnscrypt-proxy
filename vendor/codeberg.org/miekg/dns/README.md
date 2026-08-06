@@ -33,6 +33,11 @@ Everything from <https://github.com/miekg/dns> works. See
 [README-v1-to-v2.md](https://codeberg.org/miekg/dns/src/branch/main/_doc/README-v1-to-v2.md)
 for the differences, if you are porting your application, in `cookbook.go` are some common recipes.
 
+Note that a design choice has been made to not supported `\DDD` and `\x` syntax in domain names. This archeic
+way of encoding names was useful way-back-when, nowadays DNS is pretty much a 7-bit protocol and things like
+[Punycode](https://en.wikipedia.org/wiki/Punycode) had to be invented. There is one exception to this and that
+is the SOA's mname can contain a `\.`, for the rest it is ignore and interpreted as `\` and `.`.
+
 ## Performance
 
 The performance should be roughly 2x across the board compared to v1 (also see below).
@@ -56,7 +61,7 @@ For developers please read the
   - Pacakge _deleg_ holds details for the DELEG record.
   - Many helper/debug functions are moved into _internal_ packages, making the top-level much, much cleaner.
 - Fast.
-  - recvmmsg(2) and TCP pipe=lining support.
+  - recvmmsg(2) and TCP pipe-lining support.
   - The `cmd/reflect` server does ~420K/340K qps UDP/TCP respectively on the right hardware.
     - Since a46996c I can get ~400K (UDP) qps on my laptop (M2/Asahi Linux), also see 1766e44, 86b53fe and 06e5e0f.
     - On my Dell XPS 17 (Intel) it is similar-ish (~310K/250K qps UDP/TCP).
@@ -218,6 +223,7 @@ _all of them_ and _then some_
 - 9606 - DNS Resolver Information
 - 9660 - Zone version
 - 9715 - IP Fragmentation Avoidance in DNS over UDP
+- 9824 - Compact Denial of Existence in DNSSEC
 - 9859 - DSYNC RR
 - draft-ietf-compact-denial - CO bit
 - draft-ietf-deleg - DELEG RR

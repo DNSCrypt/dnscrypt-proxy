@@ -35,9 +35,9 @@ func dnsutilLabels(s string) (labels int) {
 // will cause a panic. The bool end is true when the end of the string has been reached. For `www.miek.nl.`
 // this returns:
 //
-// Next("www.miek.nl.", 0) -> 4, false
-// Next("www.miek.nl.", 4) -> 9, false
-// Next("www.miek.nl.", 9) -> 12, true
+//	Next("www.miek.nl.", 0) -> 4, false
+//	Next("www.miek.nl.", 4) -> 9, false
+//	Next("www.miek.nl.", 9) -> 12, true
 //
 // s must be a fully qualified domain name. Also see [Prev].
 func dnsutilNext(s string, offset int) (i int, end bool) {
@@ -58,9 +58,9 @@ func dnsutilNext(s string, offset int) (i int, end bool) {
 // then the string will cause a panic. The bool start is true when the beginning of the string has been
 // reached. For `www.miek.nl.` this returns:
 //
-// Prev("www.miek.nl.", 12) -> 9, false
-// Prev("www.miek.nl.", 9)  -> 4, false
-// Prev("www.miek.nl.", 4)  -> 0, true
+//	Prev("www.miek.nl.", 12) -> 9, false
+//	Prev("www.miek.nl.", 9)  -> 4, false
+//	Prev("www.miek.nl.", 4)  -> 0, true
 //
 // s must be a fully qualified domain name. Also see [Next].
 func dnsutilPrev(s string, offset int) (i int, start bool) {

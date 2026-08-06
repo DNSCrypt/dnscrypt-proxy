@@ -12,691 +12,691 @@ import (
 
 func (rr *NULL) Clone() RR {
 	return &NULL{
-		rr.Hdr,
-		rdata.NULL{
-			rr.Null,
+		Hdr: rr.Hdr,
+		NULL: rdata.NULL{
+			Null: rr.Null,
 		},
 	}
 }
 
 func (rr *CNAME) Clone() RR {
 	return &CNAME{
-		rr.Hdr,
-		rdata.CNAME{
-			rr.Target,
+		Hdr: rr.Hdr,
+		CNAME: rdata.CNAME{
+			Target: rr.Target,
 		},
 	}
 }
 
 func (rr *HINFO) Clone() RR {
 	return &HINFO{
-		rr.Hdr,
-		rdata.HINFO{
-			rr.Cpu,
-			rr.Os,
+		Hdr: rr.Hdr,
+		HINFO: rdata.HINFO{
+			Cpu: rr.Cpu,
+			Os:  rr.Os,
 		},
 	}
 }
 
 func (rr *MB) Clone() RR {
 	return &MB{
-		rr.Hdr,
-		rdata.MB{
-			rr.Mb,
+		Hdr: rr.Hdr,
+		MB: rdata.MB{
+			Mb: rr.Mb,
 		},
 	}
 }
 
 func (rr *MG) Clone() RR {
 	return &MG{
-		rr.Hdr,
-		rdata.MG{
-			rr.Mg,
+		Hdr: rr.Hdr,
+		MG: rdata.MG{
+			Mg: rr.Mg,
 		},
 	}
 }
 
 func (rr *MINFO) Clone() RR {
 	return &MINFO{
-		rr.Hdr,
-		rdata.MINFO{
-			rr.Rmail,
-			rr.Email,
+		Hdr: rr.Hdr,
+		MINFO: rdata.MINFO{
+			Rmail: rr.Rmail,
+			Email: rr.Email,
 		},
 	}
 }
 
 func (rr *MR) Clone() RR {
 	return &MR{
-		rr.Hdr,
-		rdata.MR{
-			rr.Mr,
+		Hdr: rr.Hdr,
+		MR: rdata.MR{
+			Mr: rr.Mr,
 		},
 	}
 }
 
 func (rr *MF) Clone() RR {
 	return &MF{
-		rr.Hdr,
-		rdata.MF{
-			rr.Mf,
+		Hdr: rr.Hdr,
+		MF: rdata.MF{
+			Mf: rr.Mf,
 		},
 	}
 }
 
 func (rr *MD) Clone() RR {
 	return &MD{
-		rr.Hdr,
-		rdata.MD{
-			rr.Md,
+		Hdr: rr.Hdr,
+		MD: rdata.MD{
+			Md: rr.Md,
 		},
 	}
 }
 
 func (rr *MX) Clone() RR {
 	return &MX{
-		rr.Hdr,
-		rdata.MX{
-			rr.Preference,
-			rr.Mx,
+		Hdr: rr.Hdr,
+		MX: rdata.MX{
+			Preference: rr.Preference,
+			Mx:         rr.Mx,
 		},
 	}
 }
 
 func (rr *AFSDB) Clone() RR {
 	return &AFSDB{
-		rr.Hdr,
-		rdata.AFSDB{
-			rr.Subtype,
-			rr.Hostname,
+		Hdr: rr.Hdr,
+		AFSDB: rdata.AFSDB{
+			Subtype:  rr.Subtype,
+			Hostname: rr.Hostname,
 		},
 	}
 }
 
 func (rr *X25) Clone() RR {
 	return &X25{
-		rr.Hdr,
-		rdata.X25{
-			rr.PSDNAddress,
+		Hdr: rr.Hdr,
+		X25: rdata.X25{
+			PSDNAddress: rr.PSDNAddress,
 		},
 	}
 }
 
 func (rr *ISDN) Clone() RR {
 	return &ISDN{
-		rr.Hdr,
-		rdata.ISDN{
-			rr.Address,
-			rr.SubAddress,
+		Hdr: rr.Hdr,
+		ISDN: rdata.ISDN{
+			Address:    rr.Address,
+			SubAddress: rr.SubAddress,
 		},
 	}
 }
 
 func (rr *RT) Clone() RR {
 	return &RT{
-		rr.Hdr,
-		rdata.RT{
-			rr.Preference,
-			rr.Host,
+		Hdr: rr.Hdr,
+		RT: rdata.RT{
+			Preference: rr.Preference,
+			Host:       rr.Host,
 		},
 	}
 }
 
 func (rr *NS) Clone() RR {
 	return &NS{
-		rr.Hdr,
-		rdata.NS{
-			rr.Ns,
+		Hdr: rr.Hdr,
+		NS: rdata.NS{
+			Ns: rr.Ns,
 		},
 	}
 }
 
 func (rr *PTR) Clone() RR {
 	return &PTR{
-		rr.Hdr,
-		rdata.PTR{
-			rr.Ptr,
+		Hdr: rr.Hdr,
+		PTR: rdata.PTR{
+			Ptr: rr.Ptr,
 		},
 	}
 }
 
 func (rr *RP) Clone() RR {
 	return &RP{
-		rr.Hdr,
-		rdata.RP{
-			rr.Mbox,
-			rr.Txt,
+		Hdr: rr.Hdr,
+		RP: rdata.RP{
+			Mbox: rr.Mbox,
+			Txt:  rr.Txt,
 		},
 	}
 }
 
 func (rr *SOA) Clone() RR {
 	return &SOA{
-		rr.Hdr,
-		rdata.SOA{
-			rr.Ns,
-			rr.Mbox,
-			rr.Serial,
-			rr.Refresh,
-			rr.Retry,
-			rr.Expire,
-			rr.Minttl,
+		Hdr: rr.Hdr,
+		SOA: rdata.SOA{
+			Ns:      rr.Ns,
+			Mbox:    rr.Mbox,
+			Serial:  rr.Serial,
+			Refresh: rr.Refresh,
+			Retry:   rr.Retry,
+			Expire:  rr.Expire,
+			Minttl:  rr.Minttl,
 		},
 	}
 }
 
 func (rr *TXT) Clone() RR {
 	return &TXT{
-		rr.Hdr,
-		rdata.TXT{
-			slices.Clone(rr.Txt),
+		Hdr: rr.Hdr,
+		TXT: rdata.TXT{
+			Txt: slices.Clone(rr.Txt),
 		},
 	}
 }
 
 func (rr *IPN) Clone() RR {
 	return &IPN{
-		rr.Hdr,
-		rdata.IPN{
-			rr.Node,
+		Hdr: rr.Hdr,
+		IPN: rdata.IPN{
+			Node: rr.Node,
 		},
 	}
 }
 
 func (rr *SRV) Clone() RR {
 	return &SRV{
-		rr.Hdr,
-		rdata.SRV{
-			rr.Priority,
-			rr.Weight,
-			rr.Port,
-			rr.Target,
+		Hdr: rr.Hdr,
+		SRV: rdata.SRV{
+			Priority: rr.Priority,
+			Weight:   rr.Weight,
+			Port:     rr.Port,
+			Target:   rr.Target,
 		},
 	}
 }
 
 func (rr *NAPTR) Clone() RR {
 	return &NAPTR{
-		rr.Hdr,
-		rdata.NAPTR{
-			rr.Order,
-			rr.Preference,
-			rr.Flags,
-			rr.Service,
-			rr.Regexp,
-			rr.Replacement,
+		Hdr: rr.Hdr,
+		NAPTR: rdata.NAPTR{
+			Order:       rr.Order,
+			Preference:  rr.Preference,
+			Flags:       rr.Flags,
+			Service:     rr.Service,
+			Regexp:      rr.Regexp,
+			Replacement: rr.Replacement,
 		},
 	}
 }
 
 func (rr *CERT) Clone() RR {
 	return &CERT{
-		rr.Hdr,
-		rdata.CERT{
-			rr.Type,
-			rr.KeyTag,
-			rr.Algorithm,
-			rr.Certificate,
+		Hdr: rr.Hdr,
+		CERT: rdata.CERT{
+			Type:        rr.Type,
+			KeyTag:      rr.KeyTag,
+			Algorithm:   rr.Algorithm,
+			Certificate: rr.Certificate,
 		},
 	}
 }
 
 func (rr *DNAME) Clone() RR {
 	return &DNAME{
-		rr.Hdr,
-		rdata.DNAME{
-			rr.Target,
+		Hdr: rr.Hdr,
+		DNAME: rdata.DNAME{
+			Target: rr.Target,
 		},
 	}
 }
 
 func (rr *A) Clone() RR {
 	return &A{
-		rr.Hdr,
-		rdata.A{
-			rr.Addr,
+		Hdr: rr.Hdr,
+		A: rdata.A{
+			Addr: rr.Addr,
 		},
 	}
 }
 
 func (rr *AAAA) Clone() RR {
 	return &AAAA{
-		rr.Hdr,
-		rdata.AAAA{
-			rr.Addr,
+		Hdr: rr.Hdr,
+		AAAA: rdata.AAAA{
+			Addr: rr.Addr,
 		},
 	}
 }
 
 func (rr *PX) Clone() RR {
 	return &PX{
-		rr.Hdr,
-		rdata.PX{
-			rr.Preference,
-			rr.Map822,
-			rr.Mapx400,
+		Hdr: rr.Hdr,
+		PX: rdata.PX{
+			Preference: rr.Preference,
+			Map822:     rr.Map822,
+			Mapx400:    rr.Mapx400,
 		},
 	}
 }
 
 func (rr *GPOS) Clone() RR {
 	return &GPOS{
-		rr.Hdr,
-		rdata.GPOS{
-			rr.Longitude,
-			rr.Latitude,
-			rr.Altitude,
+		Hdr: rr.Hdr,
+		GPOS: rdata.GPOS{
+			Longitude: rr.Longitude,
+			Latitude:  rr.Latitude,
+			Altitude:  rr.Altitude,
 		},
 	}
 }
 
 func (rr *LOC) Clone() RR {
 	return &LOC{
-		rr.Hdr,
-		rdata.LOC{
-			rr.Version,
-			rr.Size,
-			rr.HorizPre,
-			rr.VertPre,
-			rr.Latitude,
-			rr.Longitude,
-			rr.Altitude,
+		Hdr: rr.Hdr,
+		LOC: rdata.LOC{
+			Version:   rr.Version,
+			Size:      rr.Size,
+			HorizPre:  rr.HorizPre,
+			VertPre:   rr.VertPre,
+			Latitude:  rr.Latitude,
+			Longitude: rr.Longitude,
+			Altitude:  rr.Altitude,
 		},
 	}
 }
 
 func (rr *RRSIG) Clone() RR {
 	return &RRSIG{
-		rr.Hdr,
-		rdata.RRSIG{
-			rr.TypeCovered,
-			rr.Algorithm,
-			rr.Labels,
-			rr.OrigTTL,
-			rr.Expiration,
-			rr.Inception,
-			rr.KeyTag,
-			rr.SignerName,
-			rr.Signature,
+		Hdr: rr.Hdr,
+		RRSIG: rdata.RRSIG{
+			TypeCovered: rr.TypeCovered,
+			Algorithm:   rr.Algorithm,
+			Labels:      rr.Labels,
+			OrigTTL:     rr.OrigTTL,
+			Expiration:  rr.Expiration,
+			Inception:   rr.Inception,
+			KeyTag:      rr.KeyTag,
+			SignerName:  rr.SignerName,
+			Signature:   rr.Signature,
 		},
 	}
 }
 
 func (rr *NSEC) Clone() RR {
 	return &NSEC{
-		rr.Hdr,
-		rdata.NSEC{
-			rr.NextDomain,
-			slices.Clone(rr.TypeBitMap),
+		Hdr: rr.Hdr,
+		NSEC: rdata.NSEC{
+			NextDomain: rr.NextDomain,
+			TypeBitMap: slices.Clone(rr.TypeBitMap),
 		},
 	}
 }
 
 func (rr *DS) Clone() RR {
 	return &DS{
-		rr.Hdr,
-		rdata.DS{
-			rr.KeyTag,
-			rr.Algorithm,
-			rr.DigestType,
-			rr.Digest,
+		Hdr: rr.Hdr,
+		DS: rdata.DS{
+			KeyTag:     rr.KeyTag,
+			Algorithm:  rr.Algorithm,
+			DigestType: rr.DigestType,
+			Digest:     rr.Digest,
 		},
 	}
 }
 
 func (rr *KX) Clone() RR {
 	return &KX{
-		rr.Hdr,
-		rdata.KX{
-			rr.Preference,
-			rr.Exchanger,
+		Hdr: rr.Hdr,
+		KX: rdata.KX{
+			Preference: rr.Preference,
+			Exchanger:  rr.Exchanger,
 		},
 	}
 }
 
 func (rr *TA) Clone() RR {
 	return &TA{
-		rr.Hdr,
-		rdata.TA{
-			rr.KeyTag,
-			rr.Algorithm,
-			rr.DigestType,
-			rr.Digest,
+		Hdr: rr.Hdr,
+		TA: rdata.TA{
+			KeyTag:     rr.KeyTag,
+			Algorithm:  rr.Algorithm,
+			DigestType: rr.DigestType,
+			Digest:     rr.Digest,
 		},
 	}
 }
 
 func (rr *TALINK) Clone() RR {
 	return &TALINK{
-		rr.Hdr,
-		rdata.TALINK{
-			rr.PreviousName,
-			rr.NextName,
+		Hdr: rr.Hdr,
+		TALINK: rdata.TALINK{
+			PreviousName: rr.PreviousName,
+			NextName:     rr.NextName,
 		},
 	}
 }
 
 func (rr *SSHFP) Clone() RR {
 	return &SSHFP{
-		rr.Hdr,
-		rdata.SSHFP{
-			rr.Algorithm,
-			rr.Type,
-			rr.FingerPrint,
+		Hdr: rr.Hdr,
+		SSHFP: rdata.SSHFP{
+			Algorithm:   rr.Algorithm,
+			Type:        rr.Type,
+			FingerPrint: rr.FingerPrint,
 		},
 	}
 }
 
 func (rr *DNSKEY) Clone() RR {
 	return &DNSKEY{
-		rr.Hdr,
-		rdata.DNSKEY{
-			rr.Flags,
-			rr.Protocol,
-			rr.Algorithm,
-			rr.PublicKey,
-			rr.Tag,
+		Hdr: rr.Hdr,
+		DNSKEY: rdata.DNSKEY{
+			Flags:     rr.Flags,
+			Protocol:  rr.Protocol,
+			Algorithm: rr.Algorithm,
+			PublicKey: rr.PublicKey,
+			Tag:       rr.Tag,
 		},
 	}
 }
 
 func (rr *RKEY) Clone() RR {
 	return &RKEY{
-		rr.Hdr,
-		rdata.RKEY{
-			rr.Flags,
-			rr.Protocol,
-			rr.Algorithm,
-			rr.PublicKey,
+		Hdr: rr.Hdr,
+		RKEY: rdata.RKEY{
+			Flags:     rr.Flags,
+			Protocol:  rr.Protocol,
+			Algorithm: rr.Algorithm,
+			PublicKey: rr.PublicKey,
 		},
 	}
 }
 
 func (rr *NSAPPTR) Clone() RR {
 	return &NSAPPTR{
-		rr.Hdr,
-		rdata.NSAPPTR{
-			rr.Ptr,
+		Hdr: rr.Hdr,
+		NSAPPTR: rdata.NSAPPTR{
+			Ptr: rr.Ptr,
 		},
 	}
 }
 
 func (rr *NSEC3) Clone() RR {
 	return &NSEC3{
-		rr.Hdr,
-		rdata.NSEC3{
-			rr.Hash,
-			rr.Flags,
-			rr.Iterations,
-			rr.SaltLength,
-			rr.Salt,
-			rr.HashLength,
-			rr.NextDomain,
-			slices.Clone(rr.TypeBitMap),
+		Hdr: rr.Hdr,
+		NSEC3: rdata.NSEC3{
+			Hash:       rr.Hash,
+			Flags:      rr.Flags,
+			Iterations: rr.Iterations,
+			SaltLength: rr.SaltLength,
+			Salt:       rr.Salt,
+			HashLength: rr.HashLength,
+			NextDomain: rr.NextDomain,
+			TypeBitMap: slices.Clone(rr.TypeBitMap),
 		},
 	}
 }
 
 func (rr *NSEC3PARAM) Clone() RR {
 	return &NSEC3PARAM{
-		rr.Hdr,
-		rdata.NSEC3PARAM{
-			rr.Hash,
-			rr.Flags,
-			rr.Iterations,
-			rr.SaltLength,
-			rr.Salt,
+		Hdr: rr.Hdr,
+		NSEC3PARAM: rdata.NSEC3PARAM{
+			Hash:       rr.Hash,
+			Flags:      rr.Flags,
+			Iterations: rr.Iterations,
+			SaltLength: rr.SaltLength,
+			Salt:       rr.Salt,
 		},
 	}
 }
 
 func (rr *TKEY) Clone() RR {
 	return &TKEY{
-		rr.Hdr,
-		rdata.TKEY{
-			rr.Algorithm,
-			rr.Inception,
-			rr.Expiration,
-			rr.Mode,
-			rr.Error,
-			rr.KeySize,
-			rr.Key,
-			rr.OtherLen,
-			rr.OtherData,
+		Hdr: rr.Hdr,
+		TKEY: rdata.TKEY{
+			Algorithm:  rr.Algorithm,
+			Inception:  rr.Inception,
+			Expiration: rr.Expiration,
+			Mode:       rr.Mode,
+			Error:      rr.Error,
+			KeySize:    rr.KeySize,
+			Key:        rr.Key,
+			OtherLen:   rr.OtherLen,
+			OtherData:  rr.OtherData,
 		},
 	}
 }
 
 func (rr *RFC3597) Clone() RR {
 	return &RFC3597{
-		rr.Hdr,
-		rdata.RFC3597{
-			rr.RRType,
-			rr.RFC3597.Data,
+		Hdr: rr.Hdr,
+		RFC3597: rdata.RFC3597{
+			RRType: rr.RRType,
+			Data:   rr.RFC3597.Data,
 		},
 	}
 }
 
 func (rr *URI) Clone() RR {
 	return &URI{
-		rr.Hdr,
-		rdata.URI{
-			rr.Priority,
-			rr.Weight,
-			rr.Target,
+		Hdr: rr.Hdr,
+		URI: rdata.URI{
+			Priority: rr.Priority,
+			Weight:   rr.Weight,
+			Target:   rr.Target,
 		},
 	}
 }
 
 func (rr *DHCID) Clone() RR {
 	return &DHCID{
-		rr.Hdr,
-		rdata.DHCID{
-			rr.Digest,
+		Hdr: rr.Hdr,
+		DHCID: rdata.DHCID{
+			Digest: rr.Digest,
 		},
 	}
 }
 
 func (rr *TLSA) Clone() RR {
 	return &TLSA{
-		rr.Hdr,
-		rdata.TLSA{
-			rr.Usage,
-			rr.Selector,
-			rr.MatchingType,
-			rr.Certificate,
+		Hdr: rr.Hdr,
+		TLSA: rdata.TLSA{
+			Usage:        rr.Usage,
+			Selector:     rr.Selector,
+			MatchingType: rr.MatchingType,
+			Certificate:  rr.Certificate,
 		},
 	}
 }
 
 func (rr *SMIMEA) Clone() RR {
 	return &SMIMEA{
-		rr.Hdr,
-		rdata.SMIMEA{
-			rr.Usage,
-			rr.Selector,
-			rr.MatchingType,
-			rr.Certificate,
+		Hdr: rr.Hdr,
+		SMIMEA: rdata.SMIMEA{
+			Usage:        rr.Usage,
+			Selector:     rr.Selector,
+			MatchingType: rr.MatchingType,
+			Certificate:  rr.Certificate,
 		},
 	}
 }
 
 func (rr *HIP) Clone() RR {
 	return &HIP{
-		rr.Hdr,
-		rdata.HIP{
-			rr.HitLength,
-			rr.PublicKeyAlgorithm,
-			rr.PublicKeyLength,
-			rr.Hit,
-			rr.PublicKey,
-			slices.Clone(rr.RendezvousServers),
+		Hdr: rr.Hdr,
+		HIP: rdata.HIP{
+			HitLength:          rr.HitLength,
+			PublicKeyAlgorithm: rr.PublicKeyAlgorithm,
+			PublicKeyLength:    rr.PublicKeyLength,
+			Hit:                rr.Hit,
+			PublicKey:          rr.PublicKey,
+			RendezvousServers:  slices.Clone(rr.RendezvousServers),
 		},
 	}
 }
 
 func (rr *NINFO) Clone() RR {
 	return &NINFO{
-		rr.Hdr,
-		rdata.NINFO{
-			slices.Clone(rr.ZSData),
+		Hdr: rr.Hdr,
+		NINFO: rdata.NINFO{
+			ZSData: slices.Clone(rr.ZSData),
 		},
 	}
 }
 
 func (rr *NID) Clone() RR {
 	return &NID{
-		rr.Hdr,
-		rdata.NID{
-			rr.Preference,
-			rr.NodeID,
+		Hdr: rr.Hdr,
+		NID: rdata.NID{
+			Preference: rr.Preference,
+			NodeID:     rr.NodeID,
 		},
 	}
 }
 
 func (rr *L32) Clone() RR {
 	return &L32{
-		rr.Hdr,
-		rdata.L32{
-			rr.Preference,
-			rr.Locator32,
+		Hdr: rr.Hdr,
+		L32: rdata.L32{
+			Preference: rr.Preference,
+			Locator32:  rr.Locator32,
 		},
 	}
 }
 
 func (rr *L64) Clone() RR {
 	return &L64{
-		rr.Hdr,
-		rdata.L64{
-			rr.Preference,
-			rr.Locator64,
+		Hdr: rr.Hdr,
+		L64: rdata.L64{
+			Preference: rr.Preference,
+			Locator64:  rr.Locator64,
 		},
 	}
 }
 
 func (rr *LP) Clone() RR {
 	return &LP{
-		rr.Hdr,
-		rdata.LP{
-			rr.Preference,
-			rr.Fqdn,
+		Hdr: rr.Hdr,
+		LP: rdata.LP{
+			Preference: rr.Preference,
+			Fqdn:       rr.Fqdn,
 		},
 	}
 }
 
 func (rr *EUI48) Clone() RR {
 	return &EUI48{
-		rr.Hdr,
-		rdata.EUI48{
-			rr.Address,
+		Hdr: rr.Hdr,
+		EUI48: rdata.EUI48{
+			Address: rr.Address,
 		},
 	}
 }
 
 func (rr *EUI64) Clone() RR {
 	return &EUI64{
-		rr.Hdr,
-		rdata.EUI64{
-			rr.Address,
+		Hdr: rr.Hdr,
+		EUI64: rdata.EUI64{
+			Address: rr.Address,
 		},
 	}
 }
 
 func (rr *CAA) Clone() RR {
 	return &CAA{
-		rr.Hdr,
-		rdata.CAA{
-			rr.Flag,
-			rr.Tag,
-			rr.Value,
+		Hdr: rr.Hdr,
+		CAA: rdata.CAA{
+			Flag:  rr.Flag,
+			Tag:   rr.Tag,
+			Value: rr.Value,
 		},
 	}
 }
 
 func (rr *UID) Clone() RR {
 	return &UID{
-		rr.Hdr,
-		rdata.UID{
-			rr.Uid,
+		Hdr: rr.Hdr,
+		UID: rdata.UID{
+			Uid: rr.Uid,
 		},
 	}
 }
 
 func (rr *GID) Clone() RR {
 	return &GID{
-		rr.Hdr,
-		rdata.GID{
-			rr.Gid,
+		Hdr: rr.Hdr,
+		GID: rdata.GID{
+			Gid: rr.Gid,
 		},
 	}
 }
 
 func (rr *UINFO) Clone() RR {
 	return &UINFO{
-		rr.Hdr,
-		rdata.UINFO{
-			rr.Uinfo,
+		Hdr: rr.Hdr,
+		UINFO: rdata.UINFO{
+			Uinfo: rr.Uinfo,
 		},
 	}
 }
 
 func (rr *EID) Clone() RR {
 	return &EID{
-		rr.Hdr,
-		rdata.EID{
-			rr.Endpoint,
+		Hdr: rr.Hdr,
+		EID: rdata.EID{
+			Endpoint: rr.Endpoint,
 		},
 	}
 }
 
 func (rr *NIMLOC) Clone() RR {
 	return &NIMLOC{
-		rr.Hdr,
-		rdata.NIMLOC{
-			rr.Locator,
+		Hdr: rr.Hdr,
+		NIMLOC: rdata.NIMLOC{
+			Locator: rr.Locator,
 		},
 	}
 }
 
 func (rr *OPENPGPKEY) Clone() RR {
 	return &OPENPGPKEY{
-		rr.Hdr,
-		rdata.OPENPGPKEY{
-			rr.PublicKey,
+		Hdr: rr.Hdr,
+		OPENPGPKEY: rdata.OPENPGPKEY{
+			PublicKey: rr.PublicKey,
 		},
 	}
 }
 
 func (rr *CSYNC) Clone() RR {
 	return &CSYNC{
-		rr.Hdr,
-		rdata.CSYNC{
-			rr.Serial,
-			rr.Flags,
-			slices.Clone(rr.TypeBitMap),
+		Hdr: rr.Hdr,
+		CSYNC: rdata.CSYNC{
+			Serial:     rr.Serial,
+			Flags:      rr.Flags,
+			TypeBitMap: slices.Clone(rr.TypeBitMap),
 		},
 	}
 }
 
 func (rr *ZONEMD) Clone() RR {
 	return &ZONEMD{
-		rr.Hdr,
-		rdata.ZONEMD{
-			rr.Serial,
-			rr.Scheme,
-			rr.Hash,
-			rr.Digest,
+		Hdr: rr.Hdr,
+		ZONEMD: rdata.ZONEMD{
+			Serial: rr.Serial,
+			Scheme: rr.Scheme,
+			Hash:   rr.Hash,
+			Digest: rr.Digest,
 		},
 	}
 }
 
 func (rr *SVCB) Clone() RR {
 	return &SVCB{
-		rr.Hdr,
-		rdata.SVCB{
-			rr.Priority,
-			rr.Target,
-			func() []svcb.Pair {
+		Hdr: rr.Hdr,
+		SVCB: rdata.SVCB{
+			Priority: rr.Priority,
+			Target:   rr.Target,
+			Value: func() []svcb.Pair {
 				pairs := make([]svcb.Pair, len(rr.Value))
 				for i, p := range rr.Value {
 					pairs[i] = p.Clone()
@@ -709,9 +709,9 @@ func (rr *SVCB) Clone() RR {
 
 func (rr *DELEG) Clone() RR {
 	return &DELEG{
-		rr.Hdr,
-		rdata.DELEG{
-			func() []deleg.Info {
+		Hdr: rr.Hdr,
+		DELEG: rdata.DELEG{
+			Value: func() []deleg.Info {
 				infos := make([]deleg.Info, len(rr.Value))
 				for i, p := range rr.Value {
 					infos[i] = p.Clone()
@@ -724,36 +724,36 @@ func (rr *DELEG) Clone() RR {
 
 func (rr *DSYNC) Clone() RR {
 	return &DSYNC{
-		rr.Hdr,
-		rdata.DSYNC{
-			rr.Type,
-			rr.Scheme,
-			rr.Port,
-			rr.Target,
+		Hdr: rr.Hdr,
+		DSYNC: rdata.DSYNC{
+			Type:   rr.Type,
+			Scheme: rr.Scheme,
+			Port:   rr.Port,
+			Target: rr.Target,
 		},
 	}
 }
 
 func (rr *TSIG) Clone() RR {
 	return &TSIG{
-		rr.Hdr,
-		rdata.TSIG{
-			rr.Algorithm,
-			rr.TimeSigned,
-			rr.Fudge,
-			rr.MACSize,
-			rr.MAC,
-			rr.OrigID,
-			rr.Error,
-			rr.OtherLen,
-			rr.OtherData,
+		Hdr: rr.Hdr,
+		TSIG: rdata.TSIG{
+			Algorithm:  rr.Algorithm,
+			TimeSigned: rr.TimeSigned,
+			Fudge:      rr.Fudge,
+			MACSize:    rr.MACSize,
+			MAC:        rr.MAC,
+			OrigID:     rr.OrigID,
+			Error:      rr.Error,
+			OtherLen:   rr.OtherLen,
+			OtherData:  rr.OtherData,
 		},
 	}
 }
 
 func (rr *NXNAME) Clone() RR {
 	return &NXNAME{
-		rr.Hdr,
+		Hdr: rr.Hdr,
 	}
 }
 
@@ -789,8 +789,8 @@ func (rr *CDNSKEY) Clone() RR {
 }
 func (rr *OPT) Clone() RR {
 	return &OPT{
-		rr.Hdr,
-		slices.Clone(rr.Options),
+		Hdr:     rr.Hdr,
+		Options: slices.Clone(rr.Options),
 	}
 }
 
@@ -805,157 +805,157 @@ func (rr *DELEGPARAM) Clone() RR {
 }
 func (rr *ANY) Clone() RR {
 	return &ANY{
-		rr.Hdr,
+		Hdr: rr.Hdr,
 	}
 }
 
 func (rr *AXFR) Clone() RR {
 	return &AXFR{
-		rr.Hdr,
+		Hdr: rr.Hdr,
 	}
 }
 
 func (rr *IXFR) Clone() RR {
 	return &IXFR{
-		rr.Hdr,
+		Hdr: rr.Hdr,
 	}
 }
 
 func (rr *LLQ) Clone() RR {
 	return &LLQ{
-		rr.Version,
-		rr.Opcode,
-		rr.Error,
-		rr.ID,
-		rr.LeaseLife,
+		Version:   rr.Version,
+		Opcode:    rr.Opcode,
+		Error:     rr.Error,
+		ID:        rr.ID,
+		LeaseLife: rr.LeaseLife,
 	}
 }
 
 func (rr *UPDATELEASE) Clone() RR {
 	return &UPDATELEASE{
-		rr.Lease,
-		rr.KeyLease,
+		Lease:    rr.Lease,
+		KeyLease: rr.KeyLease,
 	}
 }
 
 func (rr *REPORTING) Clone() RR {
 	return &REPORTING{
-		rr.AgentDomain,
+		AgentDomain: rr.AgentDomain,
 	}
 }
 
 func (rr *COOKIE) Clone() RR {
 	return &COOKIE{
-		rr.Cookie,
+		Cookie: rr.Cookie,
 	}
 }
 
 func (rr *NSID) Clone() RR {
 	return &NSID{
-		rr.Nsid,
+		Nsid: rr.Nsid,
 	}
 }
 
 func (rr *PADDING) Clone() RR {
 	return &PADDING{
-		rr.Padding,
+		Padding: rr.Padding,
 	}
 }
 
 func (rr *EXPIRE) Clone() RR {
 	return &EXPIRE{
-		rr.Expire,
+		Expire: rr.Expire,
 	}
 }
 
 func (rr *DAU) Clone() RR {
 	return &DAU{
-		slices.Clone(rr.AlgCode),
+		AlgCode: slices.Clone(rr.AlgCode),
 	}
 }
 
 func (rr *DHU) Clone() RR {
 	return &DHU{
-		slices.Clone(rr.AlgCode),
+		AlgCode: slices.Clone(rr.AlgCode),
 	}
 }
 
 func (rr *N3U) Clone() RR {
 	return &N3U{
-		slices.Clone(rr.AlgCode),
+		AlgCode: slices.Clone(rr.AlgCode),
 	}
 }
 
 func (rr *TCPKEEPALIVE) Clone() RR {
 	return &TCPKEEPALIVE{
-		rr.Timeout,
+		Timeout: rr.Timeout,
 	}
 }
 
 func (rr *EDE) Clone() RR {
 	return &EDE{
-		rr.InfoCode,
-		rr.ExtraText,
+		InfoCode:  rr.InfoCode,
+		ExtraText: rr.ExtraText,
 	}
 }
 
 func (rr *SUBNET) Clone() RR {
 	return &SUBNET{
-		rr.Family,
-		rr.Netmask,
-		rr.Scope,
-		rr.Address,
+		Family:  rr.Family,
+		Netmask: rr.Netmask,
+		Scope:   rr.Scope,
+		Address: rr.Address,
 	}
 }
 
 func (rr *ESU) Clone() RR {
 	return &ESU{
-		rr.URI,
+		URI: rr.URI,
 	}
 }
 
 func (rr *ZONEVERSION) Clone() RR {
 	return &ZONEVERSION{
-		rr.Labels,
-		rr.Type,
-		slices.Clone(rr.Version),
+		Labels:  rr.Labels,
+		Type:    rr.Type,
+		Version: slices.Clone(rr.Version),
 	}
 }
 
 func (rr *MQQUERY) Clone() RR {
 	return &MQQUERY{
-		slices.Clone(rr.Types),
+		Types: slices.Clone(rr.Types),
 	}
 }
 
 func (rr *MQRESPONSE) Clone() RR {
 	return &MQRESPONSE{
-		slices.Clone(rr.Types),
+		Types: slices.Clone(rr.Types),
 	}
 }
 
 func (rr *ERFC3597) Clone() RR {
 	return &ERFC3597{
-		rr.EDNS0Code,
-		rr.Code,
+		EDNS0Code: rr.EDNS0Code,
+		Code:      rr.Code,
 	}
 }
 
 func (rr *KEEPALIVE) Clone() RR {
 	return &KEEPALIVE{
-		rr.Timeout,
-		rr.Interval,
+		Timeout:  rr.Timeout,
+		Interval: rr.Interval,
 	}
 }
 
 func (rr *RETRYDELAY) Clone() RR {
 	return &RETRYDELAY{
-		rr.Delay,
+		Delay: rr.Delay,
 	}
 }
 
 func (rr *DPADDING) Clone() RR {
 	return &DPADDING{
-		rr.Padding,
+		Padding: rr.Padding,
 	}
 }

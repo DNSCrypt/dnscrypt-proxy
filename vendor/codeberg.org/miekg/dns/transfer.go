@@ -252,8 +252,8 @@ func (c *Client) transferInIXFR(ctx context.Context, m *Msg, ch chan<- *Envelope
 				return
 			}
 			serial = r.Answer[0].(*SOA).Serial
-			// If we requested a higher serial, we are already up to date.
-			if m.Ns[0].(*SOA).Serial >= serial { // TODO(miek): serial arithmetic
+			// If client serial >= server serial per RFC 1982, we are already up to date.
+			if CompareSerial(m.Ns[0].(*SOA).Serial, serial) >= 0 {
 				ch <- &Envelope{Answer: []RR{r.Answer[0]}}
 				return
 			}
