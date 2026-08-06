@@ -5,7 +5,6 @@ import (
 	"net"
 	"slices"
 	"testing"
-	"time"
 )
 
 func TestNetworkInterfaceFingerprintIsStable(t *testing.T) {
@@ -112,275 +111,140 @@ func TestSnapshotNetworkAddressPreservesHost(t *testing.T) {
 	}
 }
 
-func TestNetworkMonitorPassiveChangeWakesProbesBeforeCallbackReturns(t *testing.T) {
-	now := time.Unix(1_000_000, 0)
+func TestNetworkMonitorNotifiesOnInterfaceChange(t *testing.T) {
 	interfaces := testNetworkMonitorInterfaces(t)
-	failing := true
-	events := make([]string, 0, 3)
+	changes := 0
 	monitor := newNetworkMonitor()
-	monitor.now = func() time.Time { return now }
 	monitor.interfaces = func() ([]networkInterfaceSnapshot, error) { return interfaces, nil }
-	monitor.probe = func(address string) (net.IP, error) {
-		if address == monitor.probes[0].address {
-			events = append(events, "ipv4")
-			if failing {
-				return nil, errors.New("IPv4 unavailable")
-			}
-			return net.ParseIP("192.168.1.10"), nil
-		}
-		events = append(events, "ipv6")
-		if failing {
-			return nil, errors.New("IPv6 unavailable")
-		}
-		return net.ParseIP("2001:db8:1::10"), nil
-	}
 	monitor.onChange = func() {
-		events = append(events, "change")
-		if got := monitor.epoch(); got != 1 {
-			t.Errorf("epoch in callback = %d, want 1", got)
+		changes++
+		if got := monitor.epoch(); got != uint64(changes) {
+			t.Errorf("epoch in callback = %d, want %d", got, changes)
 		}
-		monitor.check()
 	}
 
 	monitor.init()
-	now = now.Add(5 * time.Second)
 	monitor.check()
-	now = now.Add(5 * time.Second)
+	if changes != 0 || monitor.epoch() != 0 {
+		t.Fatalf("stable network produced %d callbacks and epoch %d", changes, monitor.epoch())
+	}
+
 	interfaces = append(cloneNetworkMonitorInterfaces(interfaces), networkInterfaceSnapshot{
 		Name:  "vpn0",
 		Index: 8,
 		Flags: net.FlagUp | net.FlagPointToPoint,
-		Addrs: []*net.IPNet{testNetworkMonitorIPNet(t, "fe80::8/64")},
+		Addrs: []*net.IPNet{testNetworkMonitorIPNet(t, "10.8.0.2/24")},
 	})
-	failing = false
-	events = events[:0]
-	monitor.check()
-
-	wantEvents := []string{"change", "ipv4", "ipv6"}
-	if !slices.Equal(events, wantEvents) {
-		t.Fatalf("events = %v, want %v", events, wantEvents)
-	}
-	if got := monitor.epoch(); got != 1 {
-		t.Fatalf("epoch = %d, want 1", got)
-	}
-	now = now.Add(5 * time.Second)
-	monitor.check()
-	if got := monitor.epoch(); got != 1 {
-		t.Fatalf("stable check changed epoch to %d", got)
-	}
-}
-
-func TestNetworkMonitorBacksOffFailedFamilyIndependently(t *testing.T) {
-	testErrors := []struct {
-		name string
-		err  error
-	}{
-		{"plain error", errors.New("unavailable")},
-		{"wrapped network error", &net.OpError{Op: "dial", Net: "udp", Err: errors.New("unavailable")}},
-	}
-	for _, testError := range testErrors {
-		t.Run(testError.name, func(t *testing.T) {
-			now := time.Unix(1_000_000, 0)
-			ipv4Calls := 0
-			ipv6Calls := 0
-			monitor := newNetworkMonitor()
-			monitor.now = func() time.Time { return now }
-			monitor.interfaces = func() ([]networkInterfaceSnapshot, error) {
-				return testNetworkMonitorInterfaces(t), nil
-			}
-			monitor.probe = func(address string) (net.IP, error) {
-				if address == monitor.probes[0].address {
-					ipv4Calls++
-					return net.ParseIP("192.168.1.10"), nil
-				}
-				ipv6Calls++
-				return nil, testError.err
-			}
-
-			monitor.init()
-			for _, elapsed := range []time.Duration{5, 10, 15, 20, 35} {
-				now = time.Unix(1_000_000, 0).Add(elapsed * time.Second)
-				monitor.check()
-			}
-			if ipv4Calls != 6 {
-				t.Fatalf("IPv4 probes = %d, want 6", ipv4Calls)
-			}
-			if ipv6Calls != 4 {
-				t.Fatalf("IPv6 probes = %d, want 4", ipv6Calls)
-			}
-		})
-	}
-}
-
-func TestNetworkMonitorBackoffStopsAtThirtySeconds(t *testing.T) {
-	now := time.Unix(1_000_000, 0)
-	monitor := newNetworkMonitor()
-	monitor.now = func() time.Time { return now }
-	monitor.interfaces = func() ([]networkInterfaceSnapshot, error) {
-		return testNetworkMonitorInterfaces(t), nil
-	}
-	monitor.probe = func(address string) (net.IP, error) {
-		if address == monitor.probes[0].address {
-			return net.ParseIP("192.168.1.10"), nil
-		}
-		return nil, errors.New("IPv6 unavailable")
-	}
-
-	monitor.init()
-	for _, want := range []time.Duration{
-		10 * time.Second,
-		20 * time.Second,
-		30 * time.Second,
-		30 * time.Second,
-	} {
-		now = monitor.probes[1].retryAt
-		monitor.check()
-		if got := monitor.probes[1].backoff; got != want {
-			t.Fatalf("backoff = %s, want %s", got, want)
-		}
-		if got := monitor.probes[1].retryAt.Sub(now); got != want {
-			t.Fatalf("retry delay = %s, want %s", got, want)
-		}
-	}
-}
-
-func TestNetworkMonitorKeepsProbingAfterInterfaceSnapshotError(t *testing.T) {
-	now := time.Unix(1_000_000, 0)
-	ipv6Failing := false
-	changes := 0
-	monitor := newNetworkMonitor()
-	monitor.now = func() time.Time { return now }
-	monitor.interfaces = func() ([]networkInterfaceSnapshot, error) {
-		return nil, errors.New("interfaces unavailable")
-	}
-	monitor.probe = func(address string) (net.IP, error) {
-		if address == monitor.probes[0].address {
-			return net.ParseIP("192.168.1.10"), nil
-		}
-		if ipv6Failing {
-			return nil, errors.New("IPv6 unavailable")
-		}
-		return net.ParseIP("2001:db8:1::10"), nil
-	}
-	monitor.onChange = func() { changes++ }
-
-	monitor.init()
-	ipv6Failing = true
-	now = now.Add(5 * time.Second)
 	monitor.check()
 	if changes != 1 || monitor.epoch() != 1 {
-		t.Fatalf("active change produced %d callbacks and epoch %d", changes, monitor.epoch())
+		t.Fatalf("interface change produced %d callbacks and epoch %d", changes, monitor.epoch())
+	}
+
+	monitor.check()
+	if changes != 1 || monitor.epoch() != 1 {
+		t.Fatalf("stable check produced %d callbacks and epoch %d", changes, monitor.epoch())
 	}
 }
 
-func TestNetworkMonitorProbeRecovery(t *testing.T) {
-	now := time.Unix(1_000_000, 0)
-	ipv6Failing := false
-	ipv6Calls := 0
+func TestNetworkMonitorFirstCheckOnlyRecordsBaseline(t *testing.T) {
+	interfaces := testNetworkMonitorInterfaces(t)
 	changes := 0
 	monitor := newNetworkMonitor()
-	monitor.now = func() time.Time { return now }
-	monitor.interfaces = func() ([]networkInterfaceSnapshot, error) {
-		return testNetworkMonitorInterfaces(t), nil
-	}
-	monitor.probe = func(address string) (net.IP, error) {
-		if address == monitor.probes[0].address {
-			return net.ParseIP("192.168.1.10"), nil
-		}
-		ipv6Calls++
-		if ipv6Failing {
-			return nil, errors.New("IPv6 unavailable")
-		}
-		return net.ParseIP("2001:db8:1::10"), nil
-	}
+	monitor.interfaces = func() ([]networkInterfaceSnapshot, error) { return interfaces, nil }
 	monitor.onChange = func() { changes++ }
-	monitor.init()
 
-	ipv6Failing = true
-	now = now.Add(5 * time.Second)
 	monitor.check()
-	now = now.Add(5 * time.Second)
-	monitor.check()
-	now = now.Add(5 * time.Second)
-	monitor.check()
-	if changes != 1 || ipv6Calls != 3 {
-		t.Fatalf("during failure: changes = %d, IPv6 probes = %d, want 1 and 3", changes, ipv6Calls)
+	if changes != 0 || monitor.epoch() != 0 {
+		t.Fatalf("first check produced %d callbacks and epoch %d", changes, monitor.epoch())
 	}
-
-	ipv6Failing = false
-	now = now.Add(5 * time.Second)
+	interfaces = cloneNetworkMonitorInterfaces(interfaces)
+	interfaces[0].Addrs[0].IP = net.ParseIP("192.168.1.20")
 	monitor.check()
-	if changes != 2 || ipv6Calls != 4 {
-		t.Fatalf("after recovery: changes = %d, IPv6 probes = %d, want 2 and 4", changes, ipv6Calls)
-	}
-	now = now.Add(5 * time.Second)
-	monitor.check()
-	if changes != 2 {
-		t.Fatalf("stable recovery changed callback count to %d", changes)
-	}
-
-	ipv6Failing = true
-	now = now.Add(5 * time.Second)
-	monitor.check()
-	now = now.Add(5 * time.Second)
-	monitor.check()
-	if changes != 3 || ipv6Calls != 7 {
-		t.Fatalf("after reset: changes = %d, IPv6 probes = %d, want 3 and 7", changes, ipv6Calls)
+	if changes != 1 || monitor.epoch() != 1 {
+		t.Fatalf("change after the baseline produced %d callbacks and epoch %d", changes, monitor.epoch())
 	}
 }
 
-func TestNetworkMonitorCoalescesFamilyChanges(t *testing.T) {
-	now := time.Unix(1_000_000, 0)
+func TestNetworkMonitorIgnoresInterfaceSnapshotErrors(t *testing.T) {
+	interfaces := testNetworkMonitorInterfaces(t)
 	failing := false
 	changes := 0
 	monitor := newNetworkMonitor()
-	monitor.now = func() time.Time { return now }
 	monitor.interfaces = func() ([]networkInterfaceSnapshot, error) {
-		return testNetworkMonitorInterfaces(t), nil
-	}
-	monitor.probe = func(address string) (net.IP, error) {
 		if failing {
-			return nil, errors.New("unavailable")
+			return nil, errors.New("interfaces unavailable")
 		}
-		if address == monitor.probes[0].address {
-			return net.ParseIP("192.168.1.10"), nil
-		}
-		return net.ParseIP("2001:db8:1::10"), nil
+		return interfaces, nil
 	}
 	monitor.onChange = func() { changes++ }
-	monitor.init()
 
+	monitor.init()
 	failing = true
-	now = now.Add(5 * time.Second)
+	monitor.check()
+	if changes != 0 || monitor.epoch() != 0 {
+		t.Fatalf("snapshot error produced %d callbacks and epoch %d", changes, monitor.epoch())
+	}
+
+	failing = false
+	monitor.check()
+	if changes != 0 || monitor.epoch() != 0 {
+		t.Fatalf("recovery from a snapshot error produced %d callbacks and epoch %d", changes, monitor.epoch())
+	}
+
+	// A failed enumeration keeps the last known fingerprint around, so a change
+	// that happens while we are blind is still reported once we can see again.
+	failing = true
+	monitor.check()
+	interfaces = cloneNetworkMonitorInterfaces(interfaces)
+	interfaces[0].Addrs[0].IP = net.ParseIP("192.168.1.20")
+	monitor.check()
+	failing = false
 	monitor.check()
 	if changes != 1 || monitor.epoch() != 1 {
-		t.Fatalf("simultaneous failure produced %d callbacks and epoch %d", changes, monitor.epoch())
+		t.Fatalf("change during a snapshot error produced %d callbacks and epoch %d", changes, monitor.epoch())
 	}
-	failing = false
-	now = now.Add(5 * time.Second)
+}
+
+func TestNetworkMonitorIgnoresReentrantChecks(t *testing.T) {
+	interfaces := testNetworkMonitorInterfaces(t)
+	snapshots := 0
+	changes := 0
+	monitor := newNetworkMonitor()
+	monitor.interfaces = func() ([]networkInterfaceSnapshot, error) {
+		snapshots++
+		return interfaces, nil
+	}
+	monitor.onChange = func() {
+		changes++
+		monitor.check()
+	}
+
+	monitor.init()
+	interfaces = cloneNetworkMonitorInterfaces(interfaces)
+	interfaces[0].Addrs[0].IP = net.ParseIP("192.168.1.20")
 	monitor.check()
-	if changes != 2 || monitor.epoch() != 2 {
-		t.Fatalf("simultaneous recovery produced %d callbacks and epoch %d", changes, monitor.epoch())
+	if changes != 1 || monitor.epoch() != 1 {
+		t.Fatalf("reentrant check produced %d callbacks and epoch %d", changes, monitor.epoch())
+	}
+	if snapshots != 2 {
+		t.Fatalf("interfaces were sampled %d times, want 2", snapshots)
 	}
 }
 
 func TestNetworkMonitorInitializationIsIdempotent(t *testing.T) {
-	probeCalls := 0
+	snapshots := 0
 	callbackCalls := 0
 	monitor := newNetworkMonitor()
 	monitor.interfaces = func() ([]networkInterfaceSnapshot, error) {
+		snapshots++
 		return testNetworkMonitorInterfaces(t), nil
-	}
-	monitor.probe = func(string) (net.IP, error) {
-		probeCalls++
-		return nil, errors.New("unavailable")
 	}
 	monitor.onChange = func() { callbackCalls++ }
 
 	monitor.init()
 	monitor.init()
-	if probeCalls != 2 {
-		t.Fatalf("initialization made %d probes, want 2", probeCalls)
+	if snapshots != 1 {
+		t.Fatalf("initialization sampled the interfaces %d times, want 1", snapshots)
 	}
 	if callbackCalls != 0 || monitor.epoch() != 0 {
 		t.Fatalf("initialization produced %d callbacks and epoch %d", callbackCalls, monitor.epoch())

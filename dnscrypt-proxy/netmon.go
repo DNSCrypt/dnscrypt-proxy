@@ -14,11 +14,7 @@ import (
 	"github.com/jedisct1/dlog"
 )
 
-const (
-	defaultNetworkMonitorInterval = 5 * time.Second
-	maxNetworkMonitorBackoff      = 30 * time.Second
-	offlineNetworkFingerprint     = "offline"
-)
+const defaultNetworkMonitorInterval = 60 * time.Second
 
 type networkInterfaceSnapshot struct {
 	Name         string
@@ -29,35 +25,17 @@ type networkInterfaceSnapshot struct {
 	Addrs        []*net.IPNet
 }
 
-type networkMonitorProbeState struct {
-	address string
-	retryAt time.Time
-	backoff time.Duration
-}
-
 type networkMonitor struct {
 	epochValue     atomic.Uint64
 	sampling       atomic.Bool
 	initialized    bool
 	lastInterfaces string
-	lastRoutes     string
-	probes         [2]networkMonitorProbeState
-	now            func() time.Time
 	interfaces     func() ([]networkInterfaceSnapshot, error)
-	probe          func(string) (net.IP, error)
 	onChange       func()
 }
 
 func newNetworkMonitor() *networkMonitor {
-	return &networkMonitor{
-		probes: [2]networkMonitorProbeState{
-			{address: "192.0.2.1:9"},
-			{address: "[2001:db8::1]:9"},
-		},
-		now:        time.Now,
-		interfaces: snapshotNetworkInterfaces,
-		probe:      probeNetworkMonitorLocalIP,
-	}
+	return &networkMonitor{interfaces: snapshotNetworkInterfaces}
 }
 
 func (monitor *networkMonitor) epoch() uint64 {
@@ -120,27 +98,13 @@ func (monitor *networkMonitor) check() {
 
 func (monitor *networkMonitor) sample(notify bool) {
 	interfaces, err := monitor.interfaces()
-	interfacesChanged := false
-	if err == nil {
-		interfaceFingerprint := buildNetworkInterfaceFingerprint(interfaces)
-		interfacesChanged = monitor.lastInterfaces != "" && monitor.lastInterfaces != interfaceFingerprint
-		monitor.lastInterfaces = interfaceFingerprint
-		if interfacesChanged {
-			for i := range monitor.probes {
-				monitor.probes[i].retryAt = time.Time{}
-				monitor.probes[i].backoff = 0
-			}
-			if notify {
-				monitor.notifyNetworkChange()
-			}
-		}
+	if err != nil {
+		return
 	}
-
-	localIPs := monitor.discoverLocalIPs(monitor.now())
-	routeFingerprint := buildNetworkFingerprint(localIPs)
-	routesChanged := monitor.lastRoutes != "" && monitor.lastRoutes != routeFingerprint
-	monitor.lastRoutes = routeFingerprint
-	if notify && routesChanged && !interfacesChanged {
+	fingerprint := buildNetworkInterfaceFingerprint(interfaces)
+	changed := monitor.lastInterfaces != "" && monitor.lastInterfaces != fingerprint
+	monitor.lastInterfaces = fingerprint
+	if changed && notify {
 		monitor.notifyNetworkChange()
 	}
 }
@@ -151,53 +115,6 @@ func (monitor *networkMonitor) notifyNetworkChange() {
 	if monitor.onChange != nil {
 		monitor.onChange()
 	}
-}
-
-func (monitor *networkMonitor) discoverLocalIPs(now time.Time) []net.IP {
-	localIPs := make([]net.IP, 0, len(monitor.probes))
-	seen := make(map[string]struct{}, len(monitor.probes))
-	for i := range monitor.probes {
-		state := &monitor.probes[i]
-		if !state.retryAt.IsZero() && now.Before(state.retryAt) {
-			continue
-		}
-		ip, err := monitor.probe(state.address)
-		if err != nil {
-			if state.backoff == 0 {
-				state.backoff = defaultNetworkMonitorInterval
-			} else {
-				state.backoff = min(state.backoff*2, maxNetworkMonitorBackoff)
-			}
-			state.retryAt = now.Add(state.backoff)
-			continue
-		}
-		state.retryAt = time.Time{}
-		state.backoff = 0
-		if ip == nil || ip.IsUnspecified() {
-			continue
-		}
-		ip = append(net.IP(nil), ip...)
-		key := ip.String()
-		if _, ok := seen[key]; ok {
-			continue
-		}
-		seen[key] = struct{}{}
-		localIPs = append(localIPs, ip)
-	}
-	return localIPs
-}
-
-func probeNetworkMonitorLocalIP(address string) (net.IP, error) {
-	conn, err := net.DialTimeout("udp", address, time.Second)
-	if err != nil {
-		return nil, err
-	}
-	defer conn.Close()
-	localAddr, ok := conn.LocalAddr().(*net.UDPAddr)
-	if !ok || localAddr.IP == nil || localAddr.IP.IsUnspecified() {
-		return nil, net.InvalidAddrError("missing local IP")
-	}
-	return append(net.IP(nil), localAddr.IP...), nil
 }
 
 func snapshotNetworkInterfaces() ([]networkInterfaceSnapshot, error) {
@@ -295,24 +212,6 @@ func buildNetworkInterfaceFingerprint(interfaces []networkInterfaceSnapshot) str
 			"|index=" + strconv.Itoa(iface.Index) +
 			"|addrs=" + strings.Join(addresses, ",")
 		parts = append(parts, part)
-	}
-	return hashNetworkFingerprint(parts)
-}
-
-func buildNetworkFingerprint(localIPs []net.IP) string {
-	if len(localIPs) == 0 {
-		return offlineNetworkFingerprint
-	}
-	parts := make([]string, 0, len(localIPs))
-	for _, ip := range localIPs {
-		if ip == nil || ip.IsUnspecified() {
-			continue
-		}
-		ip = append(net.IP(nil), ip...)
-		parts = append(parts, "ip="+ip.String())
-	}
-	if len(parts) == 0 {
-		return offlineNetworkFingerprint
 	}
 	return hashNetworkFingerprint(parts)
 }
