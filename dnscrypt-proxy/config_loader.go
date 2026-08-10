@@ -201,23 +201,38 @@ func configureServerParams(proxy *Proxy, config *Config) {
 func configureLoadBalancing(proxy *Proxy, config *Config) {
 	lbStrategy := LBStrategy(DefaultLBStrategy)
 	switch lbStrategyStr := strings.ToLower(config.LBStrategy); lbStrategyStr {
+
 	case "":
 		// default - WP2 is now the default strategy
 		dlog.Noticef("Using default Weighted Power of Two (WP2) load balancing strategy")
+
 	case "p2":
 		lbStrategy = LBStrategyP2{}
 	case "ph":
 		lbStrategy = LBStrategyPH{}
-	case "fastest":
+	case "fastest", "first":
 		// "fastest" kept for backward compatibility with older configs
-		fallthrough
-	case "first":
 		lbStrategy = LBStrategyFirst{}
 	case "random":
 		lbStrategy = LBStrategyRandom{}
 	case "wp2":
 		lbStrategy = LBStrategyWP2{}
+	case "wph":
+		lbStrategy = LBStrategyWPH{}
+
 	default:
+		// Support wpN (e.g. wp3) -> LBStrategyWPN{n}
+		if after, ok := strings.CutPrefix(lbStrategyStr, "wp"); ok {
+			n, err := strconv.ParseInt(after, 10, 32)
+			if err != nil || n <= 0 {
+				dlog.Warnf("Invalid load balancing strategy: [%s]", config.LBStrategy)
+			} else {
+				lbStrategy = LBStrategyWPN{n: int(n)}
+			}
+			break
+		}
+
+		// Support pN (e.g. p3) -> LBStrategyPN{n}
 		if after, ok := strings.CutPrefix(lbStrategyStr, "p"); ok {
 			n, err := strconv.ParseInt(after, 10, 32)
 			if err != nil || n <= 0 {
@@ -229,9 +244,11 @@ func configureLoadBalancing(proxy *Proxy, config *Config) {
 			dlog.Warnf("Unknown load balancing strategy: [%s]", config.LBStrategy)
 		}
 	}
+
 	proxy.serversInfo.lbStrategy = lbStrategy
 	proxy.serversInfo.lbEstimator = config.LBEstimator
 }
+
 
 // configurePlugins - Configures DNS plugins
 func configurePlugins(proxy *Proxy, config *Config) {
