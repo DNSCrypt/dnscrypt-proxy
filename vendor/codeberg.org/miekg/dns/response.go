@@ -1,7 +1,6 @@
 package dns
 
 import (
-	"crypto/tls"
 	"io"
 	"net"
 	"sync/atomic"
@@ -55,44 +54,16 @@ func (w *response) Conn() net.Conn                    { return w.conn }
 func (w *response) Session() *Session                 { return w.session }
 func (w *response) Write(p []byte) (n int, err error) { return w.conn.Write(p) }
 func (w *response) Read(p []byte) (n int, err error)  { return w.conn.Read(p) }
-
-// LocalAddr implements the ResponseWriter.LocalAddr method.
-func (w *response) LocalAddr() net.Addr {
-	switch sock := w.conn.(type) {
-	case *net.UDPConn:
-		return sock.LocalAddr()
-	case *net.TCPConn:
-		return sock.LocalAddr()
-	case *tls.Conn:
-		return sock.LocalAddr()
-	case *net.UnixConn:
-		return sock.LocalAddr()
-	default:
-		panic("dns: internal error: no sock 🧦 in response")
-	}
-}
+func (w *response) LocalAddr() net.Addr               { return w.conn.LocalAddr() }
+func (w *response) Hijack()                           { w.hijacked.Store(true) }
 
 // RemoteAddr implements the ResponseWriter.RemoteAddr method.
 func (w *response) RemoteAddr() net.Addr {
-	if w.conn == nil {
-		panic("dns: internal error, no writer in response")
-	}
-	switch sock := w.conn.(type) {
-	case *net.UDPConn:
+	if _, ok := w.conn.(*net.UDPConn); ok {
 		return w.Session().Addr
-	case *net.TCPConn:
-		return sock.RemoteAddr()
-	case *tls.Conn:
-		return sock.RemoteAddr()
-	case *net.UnixConn:
-		return sock.RemoteAddr()
-	default:
-		panic("dns: internal error: no sock 🧦 in response")
 	}
+	return w.conn.RemoteAddr()
 }
-
-// Hijack implements the ResponseWriter.Hijack method.
-func (w *response) Hijack() { w.hijacked.Store(true) }
 
 func (w *response) Close() error {
 	if sock, ok := w.conn.(io.Closer); ok {

@@ -29,8 +29,8 @@ const (
 	CodeEDE          uint16 = 0xF  // Extended DNS errors (see RFC 8914).
 	CodeREPORTING    uint16 = 0x12 // EDNS0 reporting (see RFC 9567).
 	CodeZONEVERSION  uint16 = 0x13 // Zone version (see RFC 9660).
-	CodeMQQUERY      uint16 = 0x14 // MQTYPE-Query (see ietf-dnssd-multi-qtypes-14).
-	CodeMQRESPONSE   uint16 = 0x15 // MQTYPE-Response (see ietf-dnssd-multi-qtypes-14).
+	CodeMQQUERY      uint16 = 0x14 // MQTYPE-Query (see RFC 10029)
+	CodeMQRESPONSE   uint16 = 0x15 // MQTYPE-Response (see RFC 10029)
 
 	CodeLOCALSTART uint16 = 0xFDE9 // Beginning of range reserved for local/experimental use (see RFC 6891).
 	CodeLOCALEND   uint16 = 0xFFFE // End of range reserved for local/experimental use (see RFC 6891).
@@ -429,8 +429,24 @@ type MQQUERY struct {
 func (o *MQQUERY) Len() int    { return tlv + len(o.Types)*2 }
 func (o *MQQUERY) Data() RDATA { return o }
 func (o *MQQUERY) String() string {
-	// TODO(miekg)
-	return ""
+	sb := sprintOptionHeader(o)
+	defer builderPool.Put(*sb)
+
+	switch len(o.Types) {
+	case 0:
+		return sb.String()
+	case 1:
+		sb.WriteString(typeToString(o.Types[0]))
+		return sb.String()
+	default:
+		typeToString(o.Types[0])
+	}
+	for _, t := range o.Types[1:] {
+		sb.WriteByte(' ')
+		sb.WriteString(typeToString(t))
+	}
+
+	return sb.String()
 }
 
 type MQRESPONSE struct {
@@ -440,8 +456,24 @@ type MQRESPONSE struct {
 func (o *MQRESPONSE) Len() int    { return tlv + len(o.Types)*2 }
 func (o *MQRESPONSE) Data() RDATA { return o }
 func (o *MQRESPONSE) String() string {
-	// TODO(miekg)
-	return ""
+	sb := sprintOptionHeader(o)
+	defer builderPool.Put(*sb)
+
+	switch len(o.Types) {
+	case 0:
+		return sb.String()
+	case 1:
+		sb.WriteString(typeToString(o.Types[0]))
+		return sb.String()
+	default:
+		typeToString(o.Types[0])
+	}
+	for _, t := range o.Types[1:] {
+		sb.WriteByte(' ')
+		sb.WriteString(typeToString(t))
+	}
+
+	return sb.String()
 }
 
 // ERFC3597 is used to represent unknown EDNS0 options.
@@ -578,6 +610,10 @@ func unpackOptionCode(option EDNS0, s *cryptobyte.String) error {
 		return x.unpack(s)
 	case *ZONEVERSION:
 		return x.unpack(s)
+	case *MQQUERY:
+		return x.unpack(s)
+	case *MQRESPONSE:
+		return x.unpack(s)
 	case *ERFC3597:
 		return x.unpack(s)
 	}
@@ -617,6 +653,10 @@ func packOptionCode(option EDNS0, msg []byte, off int) (int, error) {
 	case *ESU:
 		return x.pack(msg, off)
 	case *ZONEVERSION:
+		return x.pack(msg, off)
+	case *MQQUERY:
+		return x.pack(msg, off)
+	case *MQRESPONSE:
 		return x.pack(msg, off)
 	case *ERFC3597:
 		return x.pack(msg, off)

@@ -52,16 +52,20 @@ func (t *Transport) dial(ctx context.Context, network, address string) (net.Conn
 }
 
 // isEOFOrClosedNetwork returns true if the error err is an io.EOF or a *net.OpError with the
-// text 'use of closed network connection'.
+// text 'use of closed network connection' or a time out has been reached.
 func isEOFOrClosedNetwork(err error) bool {
 	if errors.Is(err, io.EOF) {
 		return true
 	}
-	if _, ok := err.(*net.OpError); ok {
-		if strings.Contains(err.Error(), "use of closed network connection") {
-			return true
-		}
+
+	if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+		return true
 	}
+
+	if _, ok := err.(*net.OpError); ok && strings.Contains(err.Error(), "use of closed network connection") {
+		return true
+	}
+
 	return false
 }
 

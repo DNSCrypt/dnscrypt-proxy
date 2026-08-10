@@ -434,8 +434,8 @@ func (rr *RRSIG) ValidPeriod(t time.Time) bool {
 
 // SignOption are options that are given to the signer and verifier.
 type SignOption struct {
-	// If Pooler is set is will be used for all memory allocations. If nil the default pooler will be used and
-	// the buffers size used will be defaultBufSize
+	// If Pooler is set it will be used for all memory allocations. If nil the [pool.Noop] pooler will be
+	// used.
 	pool.Pooler
 
 	// If VerifyFunc is non-nil it will be used to verify a signture in [RRSIG.Verify]. This is useful when

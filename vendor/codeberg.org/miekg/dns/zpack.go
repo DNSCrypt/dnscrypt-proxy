@@ -8,6 +8,7 @@ import (
 	"golang.org/x/crypto/cryptobyte"
 )
 
+// zpack calls the pack methods for each RR.
 func zpack(rr RR, msg []byte, off int, compression map[string]uint16) (int, error) {
 	switch x := rr.(type) {
 	case *TSIG:
@@ -190,6 +191,7 @@ func zpack(rr RR, msg []byte, off int, compression map[string]uint16) (int, erro
 	return 0, fmt.Errorf("dns: no pack defined")
 }
 
+// zunpack calls the unpack methods for each RR.
 func zunpack(rr RR, data cryptobyte.String, msgBuf []byte) error {
 	switch x := rr.(type) {
 	case *TSIG:

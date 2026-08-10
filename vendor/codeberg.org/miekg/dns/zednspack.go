@@ -363,3 +363,45 @@ func (o *ERFC3597) unpack(s *cryptobyte.String) error {
 	o.Code = hex.EncodeToString(*s)
 	return nil
 }
+
+func (o *MQRESPONSE) pack(msg []byte, off int) (int, error) {
+	var err error
+	for _, t := range o.Types {
+		if off, err = pack.Uint16(t, msg, off); err != nil {
+			return len(msg), err
+		}
+	}
+	return off, nil
+}
+
+func (o *MQRESPONSE) unpack(s *cryptobyte.String) error {
+	for !s.Empty() {
+		var t uint16
+		if !s.ReadUint16(&t) {
+			return unpack.ErrTrailingData
+		}
+		o.Types = append(o.Types, t)
+	}
+	return nil
+}
+
+func (o *MQQUERY) pack(msg []byte, off int) (int, error) {
+	var err error
+	for _, t := range o.Types {
+		if off, err = pack.Uint16(t, msg, off); err != nil {
+			return len(msg), err
+		}
+	}
+	return off, nil
+}
+
+func (o *MQQUERY) unpack(s *cryptobyte.String) error {
+	for !s.Empty() {
+		var t uint16
+		if !s.ReadUint16(&t) {
+			return unpack.ErrTrailingData
+		}
+		o.Types = append(o.Types, t)
+	}
+	return nil
+}

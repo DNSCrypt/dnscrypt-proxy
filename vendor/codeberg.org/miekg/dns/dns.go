@@ -206,7 +206,7 @@ type MsgHeader struct {
 
 	// Extended DNS
 	Security       bool // Security is the DNSSEC OK bit, see RFC 403{3,4,5}.
-	CompactAnswers bool // Compact Answers OK, https://datatracker.ietf.org/doc/draft-ietf-dnsop-compact-denial-of-existence/.
+	CompactAnswers bool // Compact Answers OK, see RFC 9824.
 	Delegation     bool // Delegation is the DELEG OK bit, see https://datatracker.ietf.org/doc/draft-ietf-deleg/.
 
 }
