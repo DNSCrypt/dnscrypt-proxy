@@ -145,6 +145,32 @@ func (LBStrategyWP2) getActiveCount(serversCount int) int {
 	return serversCount // All servers are considered active for WP2
 }
 
+type LBStrategyWPH struct{}
+
+func (LBStrategyWPH) getCandidate(serversCount int) int {
+	if serversCount <= 1 {
+		return 0
+	}
+	return rand.Intn((serversCount + 1) / 2)
+}
+
+func (LBStrategyWPH) getActiveCount(serversCount int) int {
+	return (serversCount + 1) / 2
+}
+
+type LBStrategyWPN struct{ n int }
+
+func (s LBStrategyWPN) getCandidate(serversCount int) int {
+	if serversCount <= 1 {
+		return 0
+	}
+	return rand.Intn(Min(serversCount, s.n))
+}
+
+func (s LBStrategyWPN) getActiveCount(serversCount int) int {
+	return Min(serversCount, s.n)
+}
+
 var DefaultLBStrategy = LBStrategyWP2{}
 
 type DNSCryptRelay struct {
@@ -460,9 +486,20 @@ func (serversInfo *ServersInfo) getOne() *ServerInfo {
 
 	var candidate int
 
-	// Check if using WP2 strategy
-	if _, isWP2 := serversInfo.lbStrategy.(LBStrategyWP2); isWP2 {
-		candidate = serversInfo.getWeightedCandidate(serversCount)
+	// Weighted Power strategies select two candidates from their active pool
+	// and choose the one with the better performance score.
+	weightedCount := 0
+	switch strategy := serversInfo.lbStrategy.(type) {
+	case LBStrategyWP2:
+		weightedCount = serversCount
+	case LBStrategyWPH:
+		weightedCount = strategy.getActiveCount(serversCount)
+	case LBStrategyWPN:
+		weightedCount = strategy.getActiveCount(serversCount)
+	}
+
+	if weightedCount > 0 {
+		candidate = serversInfo.getWeightedCandidate(weightedCount)
 	} else {
 		candidate = serversInfo.lbStrategy.getCandidate(serversCount)
 		if serversInfo.lbEstimator {
