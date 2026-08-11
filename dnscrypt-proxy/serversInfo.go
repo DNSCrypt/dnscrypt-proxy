@@ -133,8 +133,8 @@ func (LBStrategyRandom) getActiveCount(serversCount int) int {
 type LBStrategyWP2 struct{}
 
 func (LBStrategyWP2) getCandidate(serversCount int) int {
-	// This function is not used for WP2 - getWeightedCandidate is used instead
-	// But we need to implement it to satisfy the LBStrategy interface
+	// This function is not used for WP2 - getWeightedCandidate is used instead.
+	// But we need to implement it to satisfy the LBStrategy interface.
 	if serversCount <= 1 {
 		return 0
 	}
@@ -145,12 +145,11 @@ func (LBStrategyWP2) getActiveCount(serversCount int) int {
 	return serversCount // All servers are considered active for WP2
 }
 
+// LBStrategyWPH is the weighted version of PH: it limits the candidate pool
+// to the first half of the servers, then applies the WP2 two-choice scoring.
 type LBStrategyWPH struct{}
 
 func (LBStrategyWPH) getCandidate(serversCount int) int {
-	if serversCount <= 1 {
-		return 0
-	}
 	return rand.Intn((serversCount + 1) / 2)
 }
 
@@ -158,12 +157,11 @@ func (LBStrategyWPH) getActiveCount(serversCount int) int {
 	return (serversCount + 1) / 2
 }
 
+// LBStrategyWPN is the weighted version of PN: it limits the candidate pool
+// to the first N servers, then applies the WP2 two-choice scoring.
 type LBStrategyWPN struct{ n int }
 
 func (s LBStrategyWPN) getCandidate(serversCount int) int {
-	if serversCount <= 1 {
-		return 0
-	}
 	return rand.Intn(Min(serversCount, s.n))
 }
 
@@ -486,21 +484,16 @@ func (serversInfo *ServersInfo) getOne() *ServerInfo {
 
 	var candidate int
 
-	// Weighted Power strategies select two candidates from their active pool
-	// and choose the one with the better performance score.
-	weightedCount := 0
+	// WP2, WPH, and WPN all use the weighted two-choice algorithm.
+	// WPH/WPN restrict the pool using their PH/PN active-count semantics.
 	switch strategy := serversInfo.lbStrategy.(type) {
 	case LBStrategyWP2:
-		weightedCount = serversCount
+		candidate = serversInfo.getWeightedCandidate(strategy.getActiveCount(serversCount))
 	case LBStrategyWPH:
-		weightedCount = strategy.getActiveCount(serversCount)
+		candidate = serversInfo.getWeightedCandidate(strategy.getActiveCount(serversCount))
 	case LBStrategyWPN:
-		weightedCount = strategy.getActiveCount(serversCount)
-	}
-
-	if weightedCount > 0 {
-		candidate = serversInfo.getWeightedCandidate(weightedCount)
-	} else {
+		candidate = serversInfo.getWeightedCandidate(strategy.getActiveCount(serversCount))
+	default:
 		candidate = serversInfo.lbStrategy.getCandidate(serversCount)
 		if serversInfo.lbEstimator {
 			serversInfo.estimatorUpdate(candidate)
@@ -517,7 +510,8 @@ func (serversInfo *ServersInfo) getOne() *ServerInfo {
 	return serverInfo
 }
 
-// getWeightedCandidate implements the WP2 algorithm
+// getWeightedCandidate applies the WP2 two-choice algorithm within the
+// specified active server pool.
 func (serversInfo *ServersInfo) getWeightedCandidate(serversCount int) int {
 	if serversCount <= 1 {
 		return 0
