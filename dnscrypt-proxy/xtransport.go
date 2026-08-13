@@ -722,8 +722,9 @@ func (xTransport *XTransport) Fetch(
 		timeout = xTransport.timeout
 	}
 	client := http.Client{
-		Transport: xTransport.transport,
-		Timeout:   timeout,
+		Transport:     xTransport.transport,
+		Timeout:       timeout,
+		CheckRedirect: rejectRedirect,
 	}
 	host, port := ExtractHostAndPort(url.Host, 443)
 	hasAltSupport := false
@@ -900,6 +901,10 @@ func (xTransport *XTransport) Fetch(
 		return nil, statusCode, tls, rtt, err
 	}
 	return bin, statusCode, tls, rtt, err
+}
+
+func rejectRedirect(_ *http.Request, _ []*http.Request) error {
+	return http.ErrUseLastResponse
 }
 
 func (xTransport *XTransport) GetWithCompression(
