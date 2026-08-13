@@ -97,6 +97,7 @@ type Config struct {
 	TLSKeyLogFile            string                      `toml:"tls_key_log_file"`
 	NetprobeAddress          string                      `toml:"netprobe_address"`
 	NetprobeTimeout          int                         `toml:"netprobe_timeout"`
+	OutgoingInterface        string                      `toml:"outgoing_interface"`
 	OfflineMode              bool                        `toml:"offline_mode"`
 	HTTPProxyURL             string                      `toml:"http_proxy"`
 	RefusedCodeInResponses   bool                        `toml:"refused_code_in_responses"`

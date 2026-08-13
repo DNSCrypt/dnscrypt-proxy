@@ -96,6 +96,18 @@ func configureXTransport(proxy *Proxy, config *Config) error {
 	proxy.xTransport.useIPv6 = config.SourceIPv6
 	proxy.xTransport.keepAlive = time.Duration(config.KeepAlive) * time.Second
 
+	outgoing, err := newOutgoingSource(config.OutgoingInterface)
+	if err != nil {
+		return err
+	}
+	if outgoing != nil && (len(config.Proxy) > 0 || len(config.HTTPProxyURL) > 0) {
+		dlog.Warn("outgoing_interface has no effect on connections made through a proxy")
+	}
+	proxy.xTransport.outgoing = outgoing
+	if outgoing != nil {
+		outgoing.onRefresh = proxy.udpConnPool.Flush
+	}
+
 	// Configure HTTP proxy URL if specified
 	if len(config.HTTPProxyURL) > 0 {
 		httpProxyURL, err := url.Parse(config.HTTPProxyURL)

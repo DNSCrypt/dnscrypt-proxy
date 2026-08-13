@@ -98,6 +98,7 @@ type XTransport struct {
 	tlsDisableSessionTickets bool
 	tlsPreferRSA             bool
 	proxyDialer              *netproxy.Dialer
+	outgoing                 *outgoingSource
 	httpProxyFunction        func(*http.Request) (*url.URL, error)
 	tlsClientCreds           DOHClientCreds
 	keyLogWriter             io.Writer
@@ -324,7 +325,12 @@ func (xTransport *XTransport) rebuildTransport() {
 			dial := func(address string) (net.Conn, error) {
 				if xTransport.proxyDialer == nil {
 					dialer := &net.Dialer{Timeout: timeout, KeepAlive: xTransport.keepAlive, DualStack: true}
-					return dialer.DialContext(ctx, network, address)
+					if err := xTransport.outgoing.applyToErr(dialer, network, hostIP(address)); err != nil {
+						return nil, err
+					}
+					conn, err := dialer.DialContext(ctx, network, address)
+					xTransport.outgoing.noteDialError(err)
+					return conn, err
 				}
 				return (*xTransport.proxyDialer).Dial(network, address)
 			}
@@ -479,7 +485,16 @@ func (xTransport *XTransport) rebuildTransport() {
 					}
 					continue
 				}
-				udpConn, err := net.ListenUDP(target.network, nil)
+				laddr, err := xTransport.outgoing.udpLocalFor(udpAddr.IP)
+				if err != nil {
+					lastErr = err
+					if idx < len(targets)-1 {
+						dlog.Debugf("H3: no outgoing source address for [%s] on %s: %v", target.addr, target.network, err)
+					}
+					continue
+				}
+				udpConn, err := net.ListenUDP(target.network, laddr)
+				xTransport.outgoing.noteDialError(err)
 				if err != nil {
 					lastErr = err
 					if idx < len(targets)-1 {
@@ -529,7 +544,15 @@ func (xTransport *XTransport) resolveUsingResolver(
 	returnIPv4, returnIPv6 bool,
 ) (ips []net.IP, ttl time.Duration, err error) {
 	transport := dns.NewTransport()
+	// dns.NewTransport() aliases the package-global default Dialer. Replace it
+	// before binding, or applyToErr below would bind every dns.Client in the
+	// process, including plugin_forward.go's.
+	localDialer := *transport.Dialer
+	transport.Dialer = &localDialer
 	transport.ReadTimeout = ResolverReadTimeout
+	if err = xTransport.outgoing.applyToErr(transport.Dialer, proto, hostIP(resolver)); err != nil {
+		return nil, 0, err
+	}
 	dnsClient := dns.Client{Transport: transport}
 	queryType := make([]uint16, 0, 2)
 	if returnIPv4 {
@@ -570,6 +593,7 @@ func (xTransport *XTransport) resolveUsingResolver(
 		} else {
 			lastErr = err
 		}
+		xTransport.outgoing.noteDialError(err)
 	}
 	if len(ips) > 0 {
 		ttl = time.Duration(rrTTL) * time.Second

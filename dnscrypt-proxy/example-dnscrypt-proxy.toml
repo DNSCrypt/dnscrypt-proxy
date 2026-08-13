@@ -384,6 +384,14 @@ netprobe_timeout = 60
 
 netprobe_address = '9.9.9.9:53'
 
+## Source address for outgoing queries.
+## Accepts an interface name, or a literal IP address to pick a specific
+## address when an interface has several. Empty means the OS decides.
+## Forwarding rules, the network probe, connections through a proxy, and
+## queries to loopback destinations are all left unaffected.
+
+# outgoing_interface = 'eth0'
+
 
 ## Offline mode - Do not use any remote encrypted servers.
 ## The proxy will remain fully functional to respond to queries that

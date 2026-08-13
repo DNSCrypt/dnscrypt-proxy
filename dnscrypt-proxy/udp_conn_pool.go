@@ -91,7 +91,7 @@ func (p *UDPConnPool) cleanupStale() {
 	}
 }
 
-func (p *UDPConnPool) Get(addr *net.UDPAddr) (*net.UDPConn, error) {
+func (p *UDPConnPool) Get(addr *net.UDPAddr, laddr *net.UDPAddr) (*net.UDPConn, error) {
 	addrStr := addr.String()
 	shard := p.getShard(addrStr)
 
@@ -107,7 +107,7 @@ func (p *UDPConnPool) Get(addr *net.UDPAddr) (*net.UDPConn, error) {
 	}
 	shard.Unlock()
 
-	return net.DialUDP("udp", nil, addr)
+	return net.DialUDP("udp", laddr, addr)
 }
 
 func (p *UDPConnPool) Put(addr *net.UDPAddr, conn *net.UDPConn) {
@@ -152,7 +152,11 @@ func (p *UDPConnPool) Close() {
 		close(p.stopCh)
 	})
 	atomic.StoreInt32(&p.closed, 1)
+	p.Flush()
+	dlog.Debug("UDP connection pool closed")
+}
 
+func (p *UDPConnPool) Flush() {
 	for i := range p.shards {
 		shard := &p.shards[i]
 		shard.Lock()
@@ -164,7 +168,6 @@ func (p *UDPConnPool) Close() {
 		}
 		shard.Unlock()
 	}
-	dlog.Debug("UDP connection pool closed")
 }
 
 func (p *UDPConnPool) Stats() (totalConns int, addrCount int) {

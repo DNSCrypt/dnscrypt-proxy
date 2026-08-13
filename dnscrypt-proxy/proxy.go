@@ -134,6 +134,11 @@ func (proxy *Proxy) registerLocalDoHListener(listener *net.TCPListener) {
 }
 
 func (proxy *Proxy) handleNetworkChange() {
+	if outgoing := proxy.xTransport.outgoing; outgoing != nil {
+		if err := outgoing.refreshLocked(); err != nil {
+			dlog.Warnf("Unable to refresh the outgoing source address: %v", err)
+		}
+	}
 	if proxy.ephemeralKeys {
 		return
 	}
@@ -617,7 +622,12 @@ func (proxy *Proxy) exchangeWithUDPServer(
 		return proxy.exchangeWithUDPServerViaProxy(serverInfo, sharedKey, encryptedQuery, clientNonce, queryEpoch, upstreamAddr, proxyDialer)
 	}
 
-	pc, err := proxy.udpConnPool.Get(upstreamAddr)
+	laddr, err := proxy.xTransport.outgoing.udpLocalFor(upstreamAddr.IP)
+	if err != nil {
+		return nil, err
+	}
+	pc, err := proxy.udpConnPool.Get(upstreamAddr, laddr)
+	proxy.xTransport.outgoing.noteDialError(err)
 	if err != nil {
 		return nil, err
 	}
@@ -716,7 +726,7 @@ func (proxy *Proxy) exchangeWithTCPServer(
 	var pc net.Conn
 	proxyDialer := proxy.xTransport.proxyDialer
 	if proxyDialer == nil {
-		pc, err = net.DialTimeout("tcp", upstreamAddr.String(), serverInfo.Timeout)
+		pc, err = proxy.xTransport.outgoing.dialTimeout("tcp", upstreamAddr.String(), serverInfo.Timeout)
 	} else {
 		pc, err = (*proxyDialer).Dial("tcp", upstreamAddr.String())
 	}

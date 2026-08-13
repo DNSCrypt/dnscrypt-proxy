@@ -17,7 +17,7 @@ func TestUDPConnPool_Basic(t *testing.T) {
 		t.Fatalf("Failed to resolve address: %v", err)
 	}
 
-	conn, err := pool.Get(addr)
+	conn, err := pool.Get(addr, nil)
 	if err != nil {
 		t.Fatalf("Failed to get connection: %v", err)
 	}
@@ -27,7 +27,7 @@ func TestUDPConnPool_Basic(t *testing.T) {
 
 	pool.Put(addr, conn)
 
-	conn2, err := pool.Get(addr)
+	conn2, err := pool.Get(addr, nil)
 	if err != nil {
 		t.Fatalf("Failed to get connection second time: %v", err)
 	}
@@ -54,7 +54,7 @@ func TestUDPConnPool_MaxConns(t *testing.T) {
 
 	var conns []*net.UDPConn
 	for i := range UDPPoolMaxConnsPerAddr + 2 {
-		conn, err := pool.Get(addr)
+		conn, err := pool.Get(addr, nil)
 		if err != nil {
 			t.Fatalf("Failed to get connection %d: %v", i, err)
 		}
@@ -77,7 +77,7 @@ func TestUDPConnPool_Discard(t *testing.T) {
 
 	addr, _ := net.ResolveUDPAddr("udp", "127.0.0.1:53")
 
-	conn, err := pool.Get(addr)
+	conn, err := pool.Get(addr, nil)
 	if err != nil {
 		t.Fatalf("Failed to get connection: %v", err)
 	}
@@ -102,7 +102,7 @@ func TestUDPConnPool_Concurrent(t *testing.T) {
 	for range 10 {
 		wg.Go(func() {
 			for range iterations {
-				conn, err := pool.Get(addr)
+				conn, err := pool.Get(addr, nil)
 				if err != nil {
 					t.Errorf("Failed to get connection: %v", err)
 					return
@@ -128,8 +128,8 @@ func TestUDPConnPool_MultipleAddresses(t *testing.T) {
 	addr1, _ := net.ResolveUDPAddr("udp", "127.0.0.1:53")
 	addr2, _ := net.ResolveUDPAddr("udp", "127.0.0.1:5353")
 
-	conn1, _ := pool.Get(addr1)
-	conn2, _ := pool.Get(addr2)
+	conn1, _ := pool.Get(addr1, nil)
+	conn2, _ := pool.Get(addr2, nil)
 
 	pool.Put(addr1, conn1)
 	pool.Put(addr2, conn2)
@@ -148,12 +148,12 @@ func TestUDPConnPool_Close(t *testing.T) {
 
 	addr, _ := net.ResolveUDPAddr("udp", "127.0.0.1:53")
 
-	conn, _ := pool.Get(addr)
+	conn, _ := pool.Get(addr, nil)
 	pool.Put(addr, conn)
 
 	pool.Close()
 
-	conn2, err := pool.Get(addr)
+	conn2, err := pool.Get(addr, nil)
 	if err != nil {
 		t.Fatalf("Get after close should still work: %v", err)
 	}
@@ -172,12 +172,12 @@ func BenchmarkUDPConnPool_GetPut(b *testing.B) {
 
 	addr, _ := net.ResolveUDPAddr("udp", "127.0.0.1:53")
 
-	conn, _ := pool.Get(addr)
+	conn, _ := pool.Get(addr, nil)
 	pool.Put(addr, conn)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		conn, _ := pool.Get(addr)
+		conn, _ := pool.Get(addr, nil)
 		pool.Put(addr, conn)
 	}
 }
@@ -198,13 +198,13 @@ func BenchmarkUDPConnPool_Contention(b *testing.B) {
 
 	addr, _ := net.ResolveUDPAddr("udp", "127.0.0.1:53")
 
-	conn, _ := pool.Get(addr)
+	conn, _ := pool.Get(addr, nil)
 	pool.Put(addr, conn)
 
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			conn, _ := pool.Get(addr)
+			conn, _ := pool.Get(addr, nil)
 			pool.Put(addr, conn)
 		}
 	})
@@ -217,7 +217,7 @@ func BenchmarkUDPConnPool_MultiAddrContention(b *testing.B) {
 	addrs := make([]*net.UDPAddr, 16)
 	for i := range addrs {
 		addrs[i], _ = net.ResolveUDPAddr("udp", fmt.Sprintf("127.0.0.1:%d", 5300+i))
-		conn, _ := pool.Get(addrs[i])
+		conn, _ := pool.Get(addrs[i], nil)
 		pool.Put(addrs[i], conn)
 	}
 
@@ -226,7 +226,7 @@ func BenchmarkUDPConnPool_MultiAddrContention(b *testing.B) {
 		i := 0
 		for pb.Next() {
 			addr := addrs[i%len(addrs)]
-			conn, _ := pool.Get(addr)
+			conn, _ := pool.Get(addr, nil)
 			pool.Put(addr, conn)
 			i++
 		}
