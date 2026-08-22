@@ -31,11 +31,17 @@ type UDPConnPool struct {
 	closed   int32 // atomic
 	stopOnce sync.Once
 	stopCh   chan struct{}
+	policy   *outboundSourcePolicy
 }
 
-func NewUDPConnPool() *UDPConnPool {
+func NewUDPConnPool(policy ...*outboundSourcePolicy) *UDPConnPool {
 	pool := &UDPConnPool{
 		stopCh: make(chan struct{}),
+	}
+	if len(policy) > 0 {
+		pool.policy = policy[0]
+	} else {
+		pool.policy = &outboundSourcePolicy{}
 	}
 	for i := range pool.shards {
 		pool.shards[i].conns = make(map[string][]*pooledConn)

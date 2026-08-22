@@ -380,7 +380,7 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	proxy.userName = config.UserName
 	proxy.child = *flags.Child
 	proxy.enableHotReload = config.EnableHotReload
-	proxy.xTransport = NewXTransport()
+	proxy.xTransport = NewXTransport(&proxy.outboundSource)
 
 	// Configure logging
 	configureLogging(proxy, flags, &config)

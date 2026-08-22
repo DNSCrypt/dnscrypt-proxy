@@ -101,9 +101,10 @@ type XTransport struct {
 	httpProxyFunction        func(*http.Request) (*url.URL, error)
 	tlsClientCreds           DOHClientCreds
 	keyLogWriter             io.Writer
+	outboundSource           *outboundSourcePolicy
 }
 
-func NewXTransport() *XTransport {
+func NewXTransport(policy ...*outboundSourcePolicy) *XTransport {
 	if err := isIPAndPort(DefaultBootstrapResolver); err != nil {
 		panic("DefaultBootstrapResolver does not parse")
 	}
@@ -121,6 +122,11 @@ func NewXTransport() *XTransport {
 		tlsDisableSessionTickets: false,
 		tlsPreferRSA:             false,
 		keyLogWriter:             nil,
+	}
+	if len(policy) > 0 {
+		xTransport.outboundSource = policy[0]
+	} else {
+		xTransport.outboundSource = &outboundSourcePolicy{}
 	}
 	return &xTransport
 }
@@ -323,7 +329,7 @@ func (xTransport *XTransport) rebuildTransport() {
 
 			dial := func(address string) (net.Conn, error) {
 				if xTransport.proxyDialer == nil {
-					dialer := &net.Dialer{Timeout: timeout, KeepAlive: xTransport.keepAlive, DualStack: true}
+					dialer := &net.Dialer{Timeout: timeout, KeepAlive: xTransport.keepAlive}
 					return dialer.DialContext(ctx, network, address)
 				}
 				return (*xTransport.proxyDialer).Dial(network, address)

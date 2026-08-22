@@ -113,6 +113,7 @@ type Proxy struct {
 	ipCryptConfig                 *IPCryptConfig
 	udpConnPool                   *UDPConnPool
 	netMonitor                    *networkMonitor
+	outboundSource                outboundSourcePolicy
 }
 
 func (proxy *Proxy) registerUDPListener(conn *net.UDPConn) {
@@ -939,8 +940,7 @@ func (proxy *Proxy) processIncomingQuery(
 }
 
 func NewProxy() *Proxy {
-	return &Proxy{
-		serversInfo: NewServersInfo(),
-		udpConnPool: NewUDPConnPool(),
-	}
+	proxy := &Proxy{serversInfo: NewServersInfo()}
+	proxy.udpConnPool = NewUDPConnPool(&proxy.outboundSource)
+	return proxy
 }
