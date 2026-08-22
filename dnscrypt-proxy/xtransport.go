@@ -10,10 +10,12 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"math/rand"
 	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"os"
 	"strconv"
@@ -102,6 +104,58 @@ type XTransport struct {
 	tlsClientCreds           DOHClientCreds
 	keyLogWriter             io.Writer
 	outboundSource           *outboundSourcePolicy
+}
+
+type sourceAwareProxyForwardDialer struct {
+	xTransport *XTransport
+}
+
+var _ netproxy.Dialer = (*sourceAwareProxyForwardDialer)(nil)
+var _ netproxy.ContextDialer = (*sourceAwareProxyForwardDialer)(nil)
+
+func (dialer *sourceAwareProxyForwardDialer) Dial(network, address string) (net.Conn, error) {
+	return dialer.DialContext(context.Background(), network, address)
+}
+
+func (dialer *sourceAwareProxyForwardDialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
+	if network != "tcp" && network != "tcp4" && network != "tcp6" {
+		return nil, fmt.Errorf("unsupported proxy forward network %q", network)
+	}
+	host, portStr, err := net.SplitHostPort(address)
+	if err != nil {
+		return nil, err
+	}
+	port, err := strconv.Atoi(portStr)
+	if err != nil || port < 0 || port > 65535 {
+		return nil, fmt.Errorf("invalid proxy endpoint port %q", portStr)
+	}
+	var ips []net.IP
+	if literal := ParseIP(host); literal != nil {
+		ips = []net.IP{literal}
+	} else {
+		ips, _, err = dialer.xTransport.resolve(host, dialer.xTransport.useIPv4, dialer.xTransport.useIPv6)
+		if err != nil {
+			return nil, fmt.Errorf("unable to resolve proxy endpoint %q: %w", host, err)
+		}
+	}
+	var lastErr error
+	for _, ip := range ips {
+		target := &net.TCPAddr{IP: ip, Port: port}
+		conn, err := dialer.xTransport.outboundSource.dialTCPContext(
+			ctx,
+			target,
+			dialer.xTransport.timeout,
+			dialer.xTransport.keepAlive,
+		)
+		if err == nil {
+			return conn, nil
+		}
+		lastErr = err
+	}
+	if lastErr == nil {
+		lastErr = fmt.Errorf("proxy endpoint %q has no usable IP addresses", host)
+	}
+	return nil, lastErr
 }
 
 func NewXTransport(policy ...*outboundSourcePolicy) *XTransport {
@@ -318,6 +372,23 @@ func (xTransport *XTransport) rebuildTransport() {
 			}
 
 			cachedIPs, _, _ := xTransport.loadCachedIPs(host)
+			if xTransport.outboundSource.enabled() && xTransport.proxyDialer == nil && len(cachedIPs) == 0 {
+				if literal := ParseIP(host); literal != nil {
+					cachedIPs = []net.IP{literal}
+				} else {
+					resolved, ttl, err := xTransport.resolve(host, xTransport.useIPv4, xTransport.useIPv6)
+					if err != nil {
+						return nil, fmt.Errorf("unable to resolve covered HTTP destination %q: %w", host, err)
+					}
+					cachedIPs = resolved
+					if len(resolved) > 0 {
+						xTransport.saveCachedIPs(host, resolved, ttl)
+					}
+				}
+				if len(cachedIPs) == 0 {
+					return nil, fmt.Errorf("covered HTTP destination %q has no usable IP addresses", host)
+				}
+			}
 			targets := make([]string, 0, len(cachedIPs))
 			for _, ip := range cachedIPs {
 				targets = append(targets, formatEndpoint(ip))
@@ -328,11 +399,21 @@ func (xTransport *XTransport) rebuildTransport() {
 			}
 
 			dial := func(address string) (net.Conn, error) {
-				if xTransport.proxyDialer == nil {
+				if xTransport.proxyDialer != nil {
+					if contextDialer, ok := (*xTransport.proxyDialer).(netproxy.ContextDialer); ok {
+						return contextDialer.DialContext(ctx, network, address)
+					}
+					return (*xTransport.proxyDialer).Dial(network, address)
+				}
+				if !xTransport.outboundSource.enabled() {
 					dialer := &net.Dialer{Timeout: timeout, KeepAlive: xTransport.keepAlive}
 					return dialer.DialContext(ctx, network, address)
 				}
-				return (*xTransport.proxyDialer).Dial(network, address)
+				target, err := net.ResolveTCPAddr("tcp", address)
+				if err != nil {
+					return nil, err
+				}
+				return xTransport.outboundSource.dialTCPContext(ctx, target, timeout, xTransport.keepAlive)
 			}
 
 			var lastErr error
@@ -466,6 +547,23 @@ func (xTransport *XTransport) rebuildTransport() {
 			}
 
 			cachedIPs, _, _ := xTransport.loadCachedIPs(host)
+			if xTransport.outboundSource.enabled() && len(cachedIPs) == 0 {
+				if literal := ParseIP(host); literal != nil {
+					cachedIPs = []net.IP{literal}
+				} else {
+					resolved, ttl, err := xTransport.resolve(host, xTransport.useIPv4, xTransport.useIPv6)
+					if err != nil {
+						return nil, fmt.Errorf("unable to resolve covered HTTP/3 destination %q: %w", host, err)
+					}
+					cachedIPs = resolved
+					if len(resolved) > 0 {
+						xTransport.saveCachedIPs(host, resolved, ttl)
+					}
+				}
+				if len(cachedIPs) == 0 {
+					return nil, fmt.Errorf("covered HTTP/3 destination %q has no usable IP addresses", host)
+				}
+			}
 			targets := make([]udpTarget, 0, len(cachedIPs))
 			for _, ip := range cachedIPs {
 				targets = append(targets, buildAddr(ip))
@@ -485,7 +583,21 @@ func (xTransport *XTransport) rebuildTransport() {
 					}
 					continue
 				}
-				udpConn, err := net.ListenUDP(target.network, nil)
+				var udpConn *net.UDPConn
+				if xTransport.outboundSource.enabled() {
+					addrPort, addrErr := udpAddrPort(udpAddr)
+					if addrErr != nil {
+						lastErr = addrErr
+						continue
+					}
+					var normalized netip.Addr
+					udpConn, target.network, normalized, err = xTransport.outboundSource.listenUDP(addrPort.Addr())
+					if err == nil {
+						udpAddr = net.UDPAddrFromAddrPort(netip.AddrPortFrom(normalized, addrPort.Port()))
+					}
+				} else {
+					udpConn, err = net.ListenUDP(target.network, nil)
+				}
 				if err != nil {
 					lastErr = err
 					if idx < len(targets)-1 {
@@ -532,10 +644,15 @@ func (xTransport *XTransport) resolveUsingSystem(host string, returnIPv4, return
 func (xTransport *XTransport) resolveUsingResolver(
 	proto, host string,
 	resolver string,
+	covered bool,
 	returnIPv4, returnIPv6 bool,
 ) (ips []net.IP, ttl time.Duration, err error) {
-	transport := dns.NewTransport()
+	transport := newDNSTransport()
 	transport.ReadTimeout = ResolverReadTimeout
+	proto, resolver, err = xTransport.outboundSource.configureDNSTransport(transport, proto, resolver, covered)
+	if err != nil {
+		return nil, 0, err
+	}
 	dnsClient := dns.Client{Transport: transport}
 	queryType := make([]uint16, 0, 2)
 	if returnIPv4 {
@@ -574,7 +691,7 @@ func (xTransport *XTransport) resolveUsingResolver(
 				}
 			}
 		} else {
-			lastErr = err
+			lastErr = xTransport.outboundSource.wrapDNSError(err, strings.TrimRight(proto, "46"), resolver, covered)
 		}
 	}
 	if len(ips) > 0 {
@@ -587,6 +704,7 @@ func (xTransport *XTransport) resolveUsingResolver(
 func (xTransport *XTransport) resolveUsingServers(
 	proto, host string,
 	resolvers []string,
+	covered bool,
 	returnIPv4, returnIPv6 bool,
 ) (ips []net.IP, ttl time.Duration, err error) {
 	if len(resolvers) == 0 {
@@ -596,7 +714,7 @@ func (xTransport *XTransport) resolveUsingServers(
 	for i, resolver := range resolvers {
 		delay := resolverRetryInitialBackoff
 		for attempt := 1; attempt <= resolverRetryCount; attempt++ {
-			ips, ttl, err = xTransport.resolveUsingResolver(proto, host, resolver, returnIPv4, returnIPv6)
+			ips, ttl, err = xTransport.resolveUsingResolver(proto, host, resolver, covered, returnIPv4, returnIPv6)
 			if err == nil && len(ips) > 0 {
 				if i > 0 {
 					dlog.Infof("Resolution succeeded with resolver %s[%s]", proto, resolver)
@@ -635,7 +753,7 @@ func (xTransport *XTransport) resolve(host string, returnIPv4, returnIPv6 bool) 
 	if xTransport.ignoreSystemDNS {
 		if xTransport.internalResolverReady.Load() {
 			for _, proto := range protos {
-				ips, ttl, err = xTransport.resolveUsingServers(proto, host, xTransport.internalResolvers, returnIPv4, returnIPv6)
+				ips, ttl, err = xTransport.resolveUsingServers(proto, host, xTransport.internalResolvers, false, returnIPv4, returnIPv6)
 				if err == nil {
 					break
 				}
@@ -660,13 +778,13 @@ func (xTransport *XTransport) resolve(host string, returnIPv4, returnIPv6 bool) 
 					proto,
 				)
 			}
-			ips, ttl, err = xTransport.resolveUsingServers(proto, host, xTransport.bootstrapResolvers, returnIPv4, returnIPv6)
+			ips, ttl, err = xTransport.resolveUsingServers(proto, host, xTransport.bootstrapResolvers, true, returnIPv4, returnIPv6)
 			if err == nil {
 				break
 			}
 		}
 	}
-	if err != nil && xTransport.ignoreSystemDNS {
+	if err != nil && xTransport.ignoreSystemDNS && !xTransport.outboundSource.enabled() {
 		dlog.Noticef("Bootstrap resolvers didn't respond - Trying with the system resolver as a last resort")
 		ips, ttl, err = xTransport.resolveUsingSystem(host, returnIPv4, returnIPv6)
 	}

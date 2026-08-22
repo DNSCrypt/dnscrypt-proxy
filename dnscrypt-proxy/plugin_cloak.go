@@ -332,6 +332,7 @@ func (plugin *PluginCloak) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 			pluginsState.xTransport.mainProto,
 			target,
 			pluginsState.xTransport.internalResolvers,
+			false,
 			returnIPv4,
 			returnIPv6,
 		)

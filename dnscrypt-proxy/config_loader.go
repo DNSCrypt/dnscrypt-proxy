@@ -123,7 +123,11 @@ func configureXTransport(proxy *Proxy, config *Config) error {
 		if err != nil {
 			return fmt.Errorf("Unable to parse the proxy URL [%v]", config.Proxy)
 		}
-		proxyDialer, err := netproxy.FromURL(proxyDialerURL, netproxy.Direct)
+		forwardDialer := netproxy.Dialer(netproxy.Direct)
+		if proxy.outboundSource.enabled() {
+			forwardDialer = &sourceAwareProxyForwardDialer{xTransport: proxy.xTransport}
+		}
+		proxyDialer, err := netproxy.FromURL(proxyDialerURL, forwardDialer)
 		if err != nil {
 			return fmt.Errorf("Unable to use the proxy: [%v]", err)
 		}
