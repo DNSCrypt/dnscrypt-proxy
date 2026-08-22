@@ -33,6 +33,8 @@ type Config struct {
 	LocalDoH                 LocalDoHConfig     `toml:"local_doh"`
 	MonitoringUI             MonitoringUIConfig `toml:"monitoring_ui"`
 	UserName                 string             `toml:"user_name"`
+	OutboundSourceIPv4       string             `toml:"outbound_source_ipv4"`
+	OutboundSourceIPv6       string             `toml:"outbound_source_ipv6"`
 	ForceTCP                 bool               `toml:"force_tcp"`
 	HTTP3                    bool               `toml:"http3"`
 	HTTP3Probe               bool               `toml:"http3_probe"`
@@ -380,10 +382,15 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	proxy.userName = config.UserName
 	proxy.child = *flags.Child
 	proxy.enableHotReload = config.EnableHotReload
+	proxy.outboundSource, err = parseOutboundSourcePolicy(config.OutboundSourceIPv4, config.OutboundSourceIPv6)
+	if err != nil {
+		return err
+	}
 	proxy.xTransport = NewXTransport(&proxy.outboundSource)
 
 	// Configure logging
 	configureLogging(proxy, flags, &config)
+	logOutboundSourcePolicy(proxy, &config)
 
 	// Configure server parameters
 	configureServerParams(proxy, &config)

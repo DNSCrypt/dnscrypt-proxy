@@ -71,6 +71,21 @@ func configureLogging(proxy *Proxy, flags *ConfigFlags, config *Config) {
 	}
 }
 
+func logOutboundSourcePolicy(proxy *Proxy, config *Config) {
+	if !proxy.outboundSource.enabled() {
+		return
+	}
+	if !proxy.outboundSource.ipv4.IsValid() {
+		dlog.Infof("No outbound IPv4 source is configured. Covered IPv4 connections will fail.")
+	}
+	if !proxy.outboundSource.ipv6.IsValid() {
+		dlog.Infof("No outbound IPv6 source is configured. Covered IPv6 connections will fail.")
+	}
+	if !config.IgnoreSystemDNS {
+		dlog.Infof("Native system DNS does not use outbound source binding.")
+	}
+}
+
 // configureXTransport - Configures the XTransport
 func configureXTransport(proxy *Proxy, config *Config) error {
 	proxy.xTransport.tlsDisableSessionTickets = config.TLSDisableSessionTickets
