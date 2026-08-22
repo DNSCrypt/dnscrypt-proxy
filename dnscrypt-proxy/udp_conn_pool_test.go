@@ -113,7 +113,7 @@ func TestUDPConnPool_OutboundSourceBindFailure(t *testing.T) {
 }
 
 func TestUDPConnPool_Basic(t *testing.T) {
-	pool := NewUDPConnPool()
+	pool := NewUDPConnPool(nil)
 	defer pool.Close()
 
 	addr, err := net.ResolveUDPAddr("udp", "127.0.0.1:53")
@@ -151,7 +151,7 @@ func TestUDPConnPool_Basic(t *testing.T) {
 }
 
 func TestUDPConnPool_MaxConns(t *testing.T) {
-	pool := NewUDPConnPool()
+	pool := NewUDPConnPool(nil)
 	defer pool.Close()
 
 	addr, _ := net.ResolveUDPAddr("udp", "127.0.0.1:53")
@@ -176,7 +176,7 @@ func TestUDPConnPool_MaxConns(t *testing.T) {
 }
 
 func TestUDPConnPool_Discard(t *testing.T) {
-	pool := NewUDPConnPool()
+	pool := NewUDPConnPool(nil)
 	defer pool.Close()
 
 	addr, _ := net.ResolveUDPAddr("udp", "127.0.0.1:53")
@@ -195,7 +195,7 @@ func TestUDPConnPool_Discard(t *testing.T) {
 }
 
 func TestUDPConnPool_Concurrent(t *testing.T) {
-	pool := NewUDPConnPool()
+	pool := NewUDPConnPool(nil)
 	defer pool.Close()
 
 	addr, _ := net.ResolveUDPAddr("udp", "127.0.0.1:53")
@@ -226,7 +226,7 @@ func TestUDPConnPool_Concurrent(t *testing.T) {
 }
 
 func TestUDPConnPool_MultipleAddresses(t *testing.T) {
-	pool := NewUDPConnPool()
+	pool := NewUDPConnPool(nil)
 	defer pool.Close()
 
 	addr1, _ := net.ResolveUDPAddr("udp", "127.0.0.1:53")
@@ -248,7 +248,7 @@ func TestUDPConnPool_MultipleAddresses(t *testing.T) {
 }
 
 func TestUDPConnPool_Close(t *testing.T) {
-	pool := NewUDPConnPool()
+	pool := NewUDPConnPool(nil)
 
 	addr, _ := net.ResolveUDPAddr("udp", "127.0.0.1:53")
 
@@ -271,7 +271,7 @@ func TestUDPConnPool_Close(t *testing.T) {
 }
 
 func BenchmarkUDPConnPool_GetPut(b *testing.B) {
-	pool := NewUDPConnPool()
+	pool := NewUDPConnPool(nil)
 	defer pool.Close()
 
 	addr, _ := net.ResolveUDPAddr("udp", "127.0.0.1:53")
@@ -297,7 +297,7 @@ func BenchmarkUDPDial_NoPool(b *testing.B) {
 }
 
 func BenchmarkUDPConnPool_Contention(b *testing.B) {
-	pool := NewUDPConnPool()
+	pool := NewUDPConnPool(nil)
 	defer pool.Close()
 
 	addr, _ := net.ResolveUDPAddr("udp", "127.0.0.1:53")
@@ -315,7 +315,7 @@ func BenchmarkUDPConnPool_Contention(b *testing.B) {
 }
 
 func BenchmarkUDPConnPool_MultiAddrContention(b *testing.B) {
-	pool := NewUDPConnPool()
+	pool := NewUDPConnPool(nil)
 	defer pool.Close()
 
 	addrs := make([]*net.UDPAddr, 16)

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -513,7 +512,7 @@ func _dnsExchange(
 			proxy.prepareForRelay(udpAddr.IP, udpAddr.Port, &binQuery)
 			upstreamAddr = relay.RelayUDPAddr
 		}
-		pc, err := proxy.outboundSource.dialUDP(context.Background(), upstreamAddr, proxy.timeout)
+		pc, err := proxy.outboundSource.dialUDP(upstreamAddr)
 		if err != nil {
 			return DNSExchangeResponse{err: err}
 		}
@@ -559,7 +558,7 @@ func _dnsExchange(
 		var pc net.Conn
 		proxyDialer := proxy.xTransport.proxyDialer
 		if proxyDialer == nil {
-			pc, err = proxy.outboundSource.dialTCP(upstreamAddr, proxy.timeout, 0)
+			pc, err = proxy.outboundSource.dialTCP(upstreamAddr.AddrPort(), proxy.timeout, 0)
 		} else {
 			pc, err = (*proxyDialer).Dial("tcp", upstreamAddr.String())
 		}

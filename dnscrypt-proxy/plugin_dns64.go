@@ -26,7 +26,6 @@ type PluginDNS64 struct {
 	dns64Resolvers []string
 	ipv4Resolver   string
 	proxy          *Proxy
-	outboundSource *outboundSourcePolicy
 }
 
 func (plugin *PluginDNS64) Name() string {
@@ -44,7 +43,6 @@ func (plugin *PluginDNS64) Init(proxy *Proxy) error {
 	plugin.ipv4Resolver = proxy.listenAddresses[0] // query is sent to ourselves
 	plugin.pref64Mutex = new(sync.RWMutex)
 	plugin.proxy = proxy
-	plugin.outboundSource = &proxy.outboundSource
 
 	if len(proxy.dns64Prefixes) != 0 {
 		plugin.pref64Mutex.Lock()
@@ -203,16 +201,21 @@ func (plugin *PluginDNS64) fetchPref64(resolver string) error {
 	msg := dns.NewMsg(rfc7050WKN, dns.TypeAAAA)
 
 	transport := newDNSTransport()
-	proto, resolver, err := plugin.outboundSource.configureDNSTransport(transport, "udp", resolver, true)
+	network, resolver, target, err := plugin.proxy.outboundSource.configureDNSTransport(
+		transport,
+		"udp",
+		resolver,
+		true,
+	)
 	if err != nil {
 		return err
 	}
 	client := &dns.Client{Transport: transport}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	resp, _, err := client.Exchange(ctx, msg, proto, resolver)
+	resp, _, err := client.Exchange(ctx, msg, network, resolver)
 	if err != nil {
-		return plugin.outboundSource.wrapDNSError(err, "udp", resolver, true)
+		return target.wrapDialError("udp", err)
 	}
 
 	if resp == nil || resp.Rcode != dns.RcodeSuccess {

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
-	"strings"
 	"time"
 
 	"codeberg.org/miekg/dns"
@@ -18,9 +17,21 @@ const (
 	outboundSourceIPv6
 )
 
+var ipv4LimitedBroadcast = netip.AddrFrom4([4]byte{255, 255, 255, 255})
+
 type outboundSourcePolicy struct {
 	ipv4 netip.Addr
 	ipv6 netip.Addr
+}
+
+// outboundTarget is a destination matched against the policy.
+//
+// It carries the address to connect to and the source address to bind to.
+// The source stays invalid when the destination must not be bound.
+type outboundTarget struct {
+	destination netip.Addr
+	source      netip.Addr
+	family      outboundSourceFamily
 }
 
 func parseOutboundSourcePolicy(ipv4Str, ipv6Str string) (outboundSourcePolicy, error) {
@@ -46,8 +57,12 @@ func parseOutboundSource(setting, value string, family outboundSourceFamily) (ne
 	if family == outboundSourceIPv4 {
 		addr = addr.Unmap()
 	}
-	if addr.IsUnspecified() || addr.IsMulticast() || addr == netip.IPv4Unspecified() || addr == netip.AddrFrom4([4]byte{255, 255, 255, 255}) {
-		return netip.Addr{}, fmt.Errorf("invalid %s value %q: address cannot be unspecified, multicast, or limited broadcast", setting, value)
+	if addr.IsUnspecified() || addr.IsMulticast() || addr == ipv4LimitedBroadcast {
+		return netip.Addr{}, fmt.Errorf(
+			"invalid %s value %q: address cannot be unspecified, multicast, or limited broadcast",
+			setting,
+			value,
+		)
 	}
 	if family == outboundSourceIPv4 && !addr.Is4() {
 		return netip.Addr{}, fmt.Errorf("invalid %s value %q: expected an IPv4 address", setting, value)
@@ -62,22 +77,6 @@ func (policy *outboundSourcePolicy) enabled() bool {
 	return policy != nil && (policy.ipv4.IsValid() || policy.ipv6.IsValid())
 }
 
-func (family outboundSourceFamily) network(proto string) (string, error) {
-	switch proto {
-	case "tcp", "udp":
-	default:
-		return "", fmt.Errorf("unsupported outbound network %q", proto)
-	}
-	switch family {
-	case outboundSourceIPv4:
-		return proto + "4", nil
-	case outboundSourceIPv6:
-		return proto + "6", nil
-	default:
-		return "", fmt.Errorf("unknown outbound address family")
-	}
-}
-
 func (family outboundSourceFamily) setting() string {
 	if family == outboundSourceIPv4 {
 		return "outbound_source_ipv4"
@@ -85,249 +84,211 @@ func (family outboundSourceFamily) setting() string {
 	return "outbound_source_ipv6"
 }
 
-func (policy *outboundSourcePolicy) sourceFor(destination netip.Addr) (normalized, source netip.Addr, family outboundSourceFamily, bind bool, err error) {
+// bound reports whether the socket must be bound before it is used.
+func (target outboundTarget) bound() bool {
+	return target.source.IsValid()
+}
+
+// networkFor restricts a network to the address family of the destination.
+func (target outboundTarget) networkFor(proto string) string {
+	if target.family == outboundSourceIPv4 {
+		return proto + "4"
+	}
+	return proto + "6"
+}
+
+// dialError explains which setting selected the source address that failed.
+func (target outboundTarget) dialError(proto string, remote fmt.Stringer, err error) error {
+	return fmt.Errorf(
+		"%s=%s: %s connection to %s failed: %w",
+		target.family.setting(),
+		target.source,
+		target.networkFor(proto),
+		remote,
+		err,
+	)
+}
+
+// sourceFor picks the source address to use for a destination.
+//
+// The policy must be enabled. Loopback and unspecified destinations are left
+// unbound, because they never leave the host.
+func (policy *outboundSourcePolicy) sourceFor(destination netip.Addr) (outboundTarget, error) {
 	if !destination.IsValid() {
-		return netip.Addr{}, netip.Addr{}, 0, false, fmt.Errorf("invalid outbound destination address")
+		return outboundTarget{}, fmt.Errorf("invalid outbound destination address")
 	}
-	normalized = destination.Unmap()
-	if normalized.Is4() {
-		family = outboundSourceIPv4
-	} else if normalized.Is6() {
-		family = outboundSourceIPv6
-	} else {
-		return netip.Addr{}, netip.Addr{}, 0, false, fmt.Errorf("unknown outbound destination family for %s", destination)
+	target := outboundTarget{destination: destination.Unmap(), family: outboundSourceIPv6}
+	if target.destination.Is4() {
+		target.family = outboundSourceIPv4
 	}
-	if normalized.IsLoopback() || normalized.IsUnspecified() {
-		return normalized, netip.Addr{}, family, false, nil
+	if target.destination.IsLoopback() || target.destination.IsUnspecified() {
+		return target, nil
 	}
-	if !policy.enabled() {
-		return normalized, netip.Addr{}, family, false, nil
-	}
-	if family == outboundSourceIPv4 {
+	source := policy.ipv6
+	if target.family == outboundSourceIPv4 {
 		source = policy.ipv4
-	} else {
-		source = policy.ipv6
 	}
 	if !source.IsValid() {
-		return netip.Addr{}, netip.Addr{}, 0, false, fmt.Errorf("%s is not configured for destination %s", family.setting(), normalized)
+		return outboundTarget{}, fmt.Errorf(
+			"%s is not configured for destination %s",
+			target.family.setting(),
+			target.destination,
+		)
 	}
-	return normalized, source, family, true, nil
+	target.source = source
+	return target, nil
 }
 
-func netIPToAddr(ip net.IP, zone string) (netip.Addr, error) {
-	addr, ok := netip.AddrFromSlice(ip)
-	if !ok {
-		return netip.Addr{}, fmt.Errorf("invalid IP address %q", ip)
+func (policy *outboundSourcePolicy) dialTCPContext(
+	ctx context.Context,
+	destination netip.AddrPort,
+	timeout, keepAlive time.Duration,
+) (net.Conn, error) {
+	if !destination.IsValid() {
+		return nil, fmt.Errorf("invalid TCP destination")
 	}
-	if zone != "" {
-		addr = addr.WithZone(zone)
-	}
-	return addr, nil
-}
-
-func tcpAddrPort(addr *net.TCPAddr) (netip.AddrPort, error) {
-	if addr == nil {
-		return netip.AddrPort{}, fmt.Errorf("nil TCP destination")
-	}
-	if addr.Port < 0 || addr.Port > 65535 {
-		return netip.AddrPort{}, fmt.Errorf("invalid TCP destination port %d", addr.Port)
-	}
-	ip, err := netIPToAddr(addr.IP, addr.Zone)
-	if err != nil {
-		return netip.AddrPort{}, err
-	}
-	return netip.AddrPortFrom(ip, uint16(addr.Port)), nil
-}
-
-func udpAddrPort(addr *net.UDPAddr) (netip.AddrPort, error) {
-	if addr == nil {
-		return netip.AddrPort{}, fmt.Errorf("nil UDP destination")
-	}
-	if addr.Port < 0 || addr.Port > 65535 {
-		return netip.AddrPort{}, fmt.Errorf("invalid UDP destination port %d", addr.Port)
-	}
-	ip, err := netIPToAddr(addr.IP, addr.Zone)
-	if err != nil {
-		return netip.AddrPort{}, err
-	}
-	return netip.AddrPortFrom(ip, uint16(addr.Port)), nil
-}
-
-func (policy *outboundSourcePolicy) tcpDialer(destination netip.Addr, timeout, keepAlive time.Duration) (*net.Dialer, string, netip.Addr, error) {
+	destination = netip.AddrPortFrom(destination.Addr().Unmap(), destination.Port())
+	dialer := net.Dialer{Timeout: timeout, KeepAlive: keepAlive}
 	if !policy.enabled() {
-		return &net.Dialer{Timeout: timeout, KeepAlive: keepAlive}, "tcp", destination, nil
-	}
-	normalized, source, family, bind, err := policy.sourceFor(destination)
-	if err != nil {
-		return nil, "", netip.Addr{}, err
-	}
-	network := "tcp"
-	dialer := &net.Dialer{Timeout: timeout, KeepAlive: keepAlive}
-	if policy.enabled() {
-		if network, err = family.network("tcp"); err != nil {
-			return nil, "", netip.Addr{}, err
-		}
-		if bind {
-			dialer.LocalAddr = net.TCPAddrFromAddrPort(netip.AddrPortFrom(source, 0))
-		}
-	}
-	return dialer, network, normalized, nil
-}
-
-func (policy *outboundSourcePolicy) dialTCPContext(ctx context.Context, destination *net.TCPAddr, timeout, keepAlive time.Duration) (net.Conn, error) {
-	if !policy.enabled() {
-		dialer := net.Dialer{Timeout: timeout, KeepAlive: keepAlive}
 		return dialer.DialContext(ctx, "tcp", destination.String())
 	}
-	addrPort, err := tcpAddrPort(destination)
+	target, err := policy.sourceFor(destination.Addr())
 	if err != nil {
 		return nil, err
 	}
-	dialer, network, normalized, err := policy.tcpDialer(addrPort.Addr(), timeout, keepAlive)
-	if err != nil {
-		return nil, err
+	remote := netip.AddrPortFrom(target.destination, destination.Port())
+	network := target.networkFor("tcp")
+	if target.bound() {
+		dialer.LocalAddr = net.TCPAddrFromAddrPort(netip.AddrPortFrom(target.source, 0))
 	}
-	normalizedDestination := net.TCPAddrFromAddrPort(netip.AddrPortFrom(normalized, addrPort.Port()))
-	conn, err := dialer.DialContext(ctx, network, normalizedDestination.String())
-	if err != nil && policy.enabled() && dialer.LocalAddr != nil {
-		return nil, fmt.Errorf("%s=%s: %s connection to %s failed: %w", familySetting(normalized), dialer.LocalAddr, network, normalizedDestination, err)
+	conn, err := dialer.DialContext(ctx, network, remote.String())
+	if err != nil && target.bound() {
+		return nil, target.dialError("tcp", remote, err)
 	}
 	return conn, err
 }
 
-func (policy *outboundSourcePolicy) dialTCP(destination *net.TCPAddr, timeout, keepAlive time.Duration) (net.Conn, error) {
+func (policy *outboundSourcePolicy) dialTCP(
+	destination netip.AddrPort,
+	timeout, keepAlive time.Duration,
+) (net.Conn, error) {
 	return policy.dialTCPContext(context.Background(), destination, timeout, keepAlive)
 }
 
-func (policy *outboundSourcePolicy) dialUDP(ctx context.Context, destination *net.UDPAddr, timeout time.Duration) (*net.UDPConn, error) {
-	addrPort, err := udpAddrPort(destination)
-	if err != nil {
-		return nil, err
+// dialUDP connects a UDP socket to a destination.
+//
+// A UDP connect never waits for the peer, so no timeout is needed here.
+func (policy *outboundSourcePolicy) dialUDP(destination *net.UDPAddr) (*net.UDPConn, error) {
+	if destination == nil {
+		return nil, fmt.Errorf("nil UDP destination")
 	}
 	if !policy.enabled() {
-		dialer := net.Dialer{Timeout: timeout}
-		return dialer.DialUDP(ctx, "udp", netip.AddrPort{}, addrPort)
+		return net.DialUDP("udp", nil, destination)
 	}
-	normalized, source, family, bind, err := policy.sourceFor(addrPort.Addr())
+	addrPort := destination.AddrPort()
+	target, err := policy.sourceFor(addrPort.Addr())
 	if err != nil {
 		return nil, err
 	}
-	network := "udp"
-	local := netip.AddrPort{}
-	if policy.enabled() {
-		if network, err = family.network("udp"); err != nil {
-			return nil, err
-		}
-		if bind {
-			local = netip.AddrPortFrom(source, 0)
-		}
+	remote := netip.AddrPortFrom(target.destination, addrPort.Port())
+	network := target.networkFor("udp")
+	var local *net.UDPAddr
+	if target.bound() {
+		local = net.UDPAddrFromAddrPort(netip.AddrPortFrom(target.source, 0))
 	}
-	remote := netip.AddrPortFrom(normalized, addrPort.Port())
-	dialer := net.Dialer{Timeout: timeout}
-	conn, err := dialer.DialUDP(ctx, network, local, remote)
-	if err != nil && bind {
-		return nil, fmt.Errorf("%s=%s: %s connection to %s failed: %w", family.setting(), source, network, remote, err)
+	conn, err := net.DialUDP(network, local, net.UDPAddrFromAddrPort(remote))
+	if err != nil && target.bound() {
+		return nil, target.dialError("udp", remote, err)
 	}
 	return conn, err
 }
 
+// listenUDP opens an unconnected UDP socket suitable for a destination.
+//
+// It returns the network and the normalized destination, so that the caller
+// keeps talking to the same address family as the socket.
 func (policy *outboundSourcePolicy) listenUDP(destination netip.Addr) (*net.UDPConn, string, netip.Addr, error) {
 	if !policy.enabled() {
 		conn, err := net.ListenUDP("udp", nil)
 		return conn, "udp", destination, err
 	}
-	normalized, source, family, bind, err := policy.sourceFor(destination)
+	target, err := policy.sourceFor(destination)
 	if err != nil {
 		return nil, "", netip.Addr{}, err
 	}
-	network := "udp"
-	local := netip.AddrPort{}
-	if policy.enabled() {
-		if network, err = family.network("udp"); err != nil {
-			return nil, "", netip.Addr{}, err
-		}
-		if bind {
-			local = netip.AddrPortFrom(source, 0)
-		}
+	network := target.networkFor("udp")
+	var local *net.UDPAddr
+	if target.bound() {
+		local = net.UDPAddrFromAddrPort(netip.AddrPortFrom(target.source, 0))
 	}
-	conn, err := net.ListenUDP(network, net.UDPAddrFromAddrPort(local))
-	if err != nil && bind {
-		return nil, "", netip.Addr{}, fmt.Errorf("%s=%s: unable to bind %s socket for destination %s: %w", family.setting(), source, network, normalized, err)
+	conn, err := net.ListenUDP(network, local)
+	if err != nil && target.bound() {
+		return nil, "", netip.Addr{}, fmt.Errorf(
+			"%s=%s: unable to bind %s socket for destination %s: %w",
+			target.family.setting(),
+			target.source,
+			network,
+			target.destination,
+			err,
+		)
 	}
-	return conn, network, normalized, err
+	return conn, network, target.destination, err
 }
 
-func familySetting(addr netip.Addr) string {
-	if addr.Is4() {
-		return outboundSourceIPv4.setting()
-	}
-	return outboundSourceIPv6.setting()
-}
-
+// newDNSTransport returns a DNS transport that owns its dialer.
+//
+// dns.NewTransport copies the package default, so the dialer pointer is
+// shared. Callers that change the dialer must not touch the shared one.
 func newDNSTransport() *dns.Transport {
 	transport := dns.NewTransport()
-	transport.Dialer = newDNSDialer(5*time.Second, 3*time.Second, nil, nil)
+	dialer := *transport.Dialer
+	transport.Dialer = &dialer
 	return transport
 }
 
-func newDNSDialer(timeout, keepAlive time.Duration, resolver *net.Resolver, local net.Addr) *net.Dialer {
-	return &net.Dialer{Timeout: timeout, KeepAlive: keepAlive, Resolver: resolver, LocalAddr: local}
-}
-
-func (policy *outboundSourcePolicy) configureDNSTransport(transport *dns.Transport, proto, resolver string, covered bool) (string, string, error) {
+// configureDNSTransport binds a DNS transport to the configured source.
+//
+// It returns the network and resolver address to use for the exchange, plus
+// the matched target. The target is nil when the policy does not apply, and
+// wrapDialError then leaves errors untouched.
+func (policy *outboundSourcePolicy) configureDNSTransport(
+	transport *dns.Transport,
+	proto, resolver string,
+	covered bool,
+) (string, string, *outboundTarget, error) {
 	if transport == nil || transport.Dialer == nil {
-		return "", "", fmt.Errorf("DNS transport has no dialer")
+		return "", "", nil, fmt.Errorf("DNS transport has no dialer")
 	}
 	if !covered || !policy.enabled() {
-		return proto, resolver, nil
+		return proto, resolver, nil, nil
 	}
-	host, port, err := net.SplitHostPort(resolver)
+	endpoint, err := netip.ParseAddrPort(resolver)
 	if err != nil {
-		return "", "", err
+		return "", "", nil, fmt.Errorf("DNS resolver %q is not an IP address literal: %w", resolver, err)
 	}
-	destination, err := netip.ParseAddr(strings.Trim(host, "[]"))
+	target, err := policy.sourceFor(endpoint.Addr())
 	if err != nil {
-		return "", "", fmt.Errorf("DNS resolver %q is not an IP address literal: %w", resolver, err)
+		return "", "", nil, err
 	}
-	normalized, source, family, bind, err := policy.sourceFor(destination)
-	if err != nil {
-		return "", "", err
-	}
-	network, err := family.network(proto)
-	if err != nil {
-		return "", "", err
-	}
-	var local net.Addr
-	if bind {
+	dialer := *transport.Dialer
+	dialer.LocalAddr = nil
+	if target.bound() {
+		local := netip.AddrPortFrom(target.source, 0)
 		if proto == "udp" {
-			local = net.UDPAddrFromAddrPort(netip.AddrPortFrom(source, 0))
+			dialer.LocalAddr = net.UDPAddrFromAddrPort(local)
 		} else {
-			local = net.TCPAddrFromAddrPort(netip.AddrPortFrom(source, 0))
+			dialer.LocalAddr = net.TCPAddrFromAddrPort(local)
 		}
 	}
-	transport.Dialer = newDNSDialer(transport.Dialer.Timeout, transport.Dialer.KeepAlive, transport.Dialer.Resolver, local)
-	return network, net.JoinHostPort(normalized.String(), port), nil
+	transport.Dialer = &dialer
+	remote := netip.AddrPortFrom(target.destination, endpoint.Port())
+	return target.networkFor(proto), remote.String(), &target, nil
 }
 
-func (policy *outboundSourcePolicy) wrapDNSError(err error, proto, resolver string, covered bool) error {
-	if err == nil || !covered || !policy.enabled() {
+// wrapDialError adds the source address to an exchange error.
+func (target *outboundTarget) wrapDialError(proto string, err error) error {
+	if target == nil || err == nil || !target.bound() {
 		return err
 	}
-	host, _, splitErr := net.SplitHostPort(resolver)
-	if splitErr != nil {
-		return err
-	}
-	destination, parseErr := netip.ParseAddr(strings.Trim(host, "[]"))
-	if parseErr != nil {
-		return err
-	}
-	normalized, source, family, bind, sourceErr := policy.sourceFor(destination)
-	if sourceErr != nil || !bind {
-		return err
-	}
-	network, networkErr := family.network(proto)
-	if networkErr != nil {
-		return err
-	}
-	return fmt.Errorf("%s=%s: %s connection to %s failed: %w", family.setting(), source, network, normalized, err)
+	return target.dialError(proto, target.destination, err)
 }

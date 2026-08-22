@@ -390,7 +390,6 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 
 	// Configure logging
 	configureLogging(proxy, flags, &config)
-	logOutboundSourcePolicy(proxy, &config)
 
 	// Configure server parameters
 	configureServerParams(proxy, &config)
@@ -399,6 +398,7 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	if err := configureXTransport(proxy, &config); err != nil {
 		return err
 	}
+	logOutboundSourcePolicy(&proxy.outboundSource, proxy.xTransport.ignoreSystemDNS)
 
 	// Configure DoH client authentication
 	if err := configureDoHClientAuth(proxy, &config); err != nil {

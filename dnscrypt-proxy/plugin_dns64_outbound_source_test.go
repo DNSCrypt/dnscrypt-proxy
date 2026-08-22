@@ -43,9 +43,9 @@ func TestDNS64DiscoveryOutboundSource(t *testing.T) {
 		}
 	}()
 
-	plugin := PluginDNS64{pref64Mutex: new(sync.RWMutex), outboundSource: &policy}
+	plugin := PluginDNS64{pref64Mutex: new(sync.RWMutex), proxy: &Proxy{outboundSource: policy}}
 	port := listener.LocalAddr().(*net.UDPAddr).Port
-	resolver := net.JoinHostPort(sourceIP.String(), formatPort(port))
+	resolver := netip.AddrPortFrom(netip.MustParseAddr(sourceIP.String()), uint16(port)).String()
 	if err := plugin.fetchPref64(resolver); err != nil {
 		t.Fatal(err)
 	}

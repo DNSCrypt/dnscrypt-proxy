@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"net"
 	"net/netip"
 	"strings"
@@ -43,7 +42,7 @@ func TestOutboundSourceSocketHelpersLocalBypass(t *testing.T) {
 		}
 		acceptDone <- err
 	}()
-	tcpConn, err := policy.dialTCP(tcpListener.Addr().(*net.TCPAddr), time.Second, time.Second)
+	tcpConn, err := policy.dialTCP(tcpListener.Addr().(*net.TCPAddr).AddrPort(), time.Second, time.Second)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +59,7 @@ func TestOutboundSourceSocketHelpersLocalBypass(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer udpListener.Close()
-	udpConn, err := policy.dialUDP(context.Background(), udpListener.LocalAddr().(*net.UDPAddr), time.Second)
+	udpConn, err := policy.dialUDP(udpListener.LocalAddr().(*net.UDPAddr))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -168,20 +167,22 @@ func TestOutboundSourceFor(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			destination, source, family, bind, err := policy.sourceFor(test.destination)
+			target, err := policy.sourceFor(test.destination)
 			if err != nil {
 				t.Fatal(err)
 			}
 			gotSource := ""
-			if source.IsValid() {
-				gotSource = source.String()
+			if target.source.IsValid() {
+				gotSource = target.source.String()
 			}
-			if destination.String() != test.wantDest || gotSource != test.wantSource || family != test.wantFamily || bind != test.wantBind {
-				t.Fatalf("got destination=%s source=%s family=%d bind=%v", destination, source, family, bind)
+			if target.destination.String() != test.wantDest || gotSource != test.wantSource ||
+				target.family != test.wantFamily || target.bound() != test.wantBind {
+				t.Fatalf("got destination=%s source=%s family=%d bound=%v",
+					target.destination, target.source, target.family, target.bound())
 			}
 		})
 	}
-	if _, _, _, _, err := policy.sourceFor(netip.Addr{}); err == nil {
+	if _, err := policy.sourceFor(netip.Addr{}); err == nil {
 		t.Fatal("invalid destination was accepted")
 	}
 }
@@ -201,18 +202,19 @@ func TestOutboundSourceAddressRepresentations(t *testing.T) {
 	}
 	addresses := []net.IP{net.IPv4(9, 9, 9, 9), net.ParseIP("9.9.9.9"), tcpResolved.IP, udpResolved.IP}
 	for _, ip := range addresses {
-		addr, err := netIPToAddr(ip, "")
+		addr, ok := netip.AddrFromSlice(ip)
+		if !ok {
+			t.Fatalf("unusable address %v", ip)
+		}
+		target, err := policy.sourceFor(addr)
 		if err != nil {
 			t.Fatal(err)
 		}
-		normalized, source, family, bind, err := policy.sourceFor(addr)
-		if err != nil {
-			t.Fatal(err)
+		if target.destination.String() != "9.9.9.9" || target.source.String() != "192.0.2.10" ||
+			target.family != outboundSourceIPv4 || !target.bound() {
+			t.Fatalf("unexpected selection for %T(%v): %+v", ip, ip, target)
 		}
-		if normalized.String() != "9.9.9.9" || source.String() != "192.0.2.10" || family != outboundSourceIPv4 || !bind {
-			t.Fatalf("unexpected selection for %T(%v): %s %s %d %v", ip, ip, normalized, source, family, bind)
-		}
-		if normalized.Is4In6() {
+		if target.destination.Is4In6() {
 			t.Fatal("mapped destination reached the socket boundary")
 		}
 	}
@@ -223,16 +225,16 @@ func TestOutboundSourceDialerOptionsAndZones(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	dialer, network, destination, err := policy.tcpDialer(netip.MustParseAddr("2001:db8::20"), 7*time.Second, 11*time.Second)
+	target, err := policy.sourceFor(netip.MustParseAddr("2001:db8::20"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if network != "tcp6" || destination.String() != "2001:db8::20" || dialer.Timeout != 7*time.Second || dialer.KeepAlive != 11*time.Second {
-		t.Fatalf("unexpected dialer: network=%s destination=%s dialer=%+v", network, destination, dialer)
+	if target.networkFor("tcp") != "tcp6" || target.destination.String() != "2001:db8::20" {
+		t.Fatalf("unexpected target: %+v", target)
 	}
-	local, ok := dialer.LocalAddr.(*net.TCPAddr)
-	if !ok || local.Port != 0 || local.Zone != "en0" || !local.IP.Equal(net.ParseIP("fe80::1")) {
-		t.Fatalf("unexpected local address: %#v", dialer.LocalAddr)
+	local := net.TCPAddrFromAddrPort(netip.AddrPortFrom(target.source, 0))
+	if local.Port != 0 || local.Zone != "en0" || !local.IP.Equal(net.ParseIP("fe80::1")) {
+		t.Fatalf("unexpected local address: %#v", local)
 	}
 }
 
@@ -241,7 +243,7 @@ func TestOutboundSourceMissingFamily(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, _, _, _, err = policy.sourceFor(netip.MustParseAddr("2001:db8::1"))
+	_, err = policy.sourceFor(netip.MustParseAddr("2001:db8::1"))
 	if err == nil || !strings.Contains(err.Error(), "outbound_source_ipv6") {
 		t.Fatalf("error = %v", err)
 	}
@@ -269,7 +271,7 @@ func TestConfigureDNSTransport(t *testing.T) {
 	}
 	transport := newDNSTransport()
 	originalDialer := transport.Dialer
-	network, resolver, err := policy.configureDNSTransport(transport, "udp", "[::ffff:9.9.9.9]:53", true)
+	network, resolver, _, err := policy.configureDNSTransport(transport, "udp", "[::ffff:9.9.9.9]:53", true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -293,7 +295,7 @@ func TestConfigureDNSTransportLocalBypass(t *testing.T) {
 	transport := newDNSTransport()
 	transport.Dialer.LocalAddr = &net.UDPAddr{IP: net.ParseIP("192.0.2.10")}
 	originalDialer := transport.Dialer
-	network, resolver, err := policy.configureDNSTransport(transport, "udp", "127.0.0.1:53", true)
+	network, resolver, _, err := policy.configureDNSTransport(transport, "udp", "127.0.0.1:53", true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -302,43 +304,37 @@ func TestConfigureDNSTransportLocalBypass(t *testing.T) {
 	}
 }
 
-func TestOutboundSourceAddressPortValidation(t *testing.T) {
-	for _, port := range []int{-1, 65536} {
-		if _, err := tcpAddrPort(&net.TCPAddr{IP: net.IPv4(127, 0, 0, 1), Port: port}); err == nil {
-			t.Fatalf("TCP port %d was accepted", port)
-		}
-		if _, err := udpAddrPort(&net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: port}); err == nil {
-			t.Fatalf("UDP port %d was accepted", port)
-		}
-	}
-}
-
 func TestOutboundSourceDNSErrorContext(t *testing.T) {
 	policy, err := parseOutboundSourcePolicy("192.0.2.10", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = policy.wrapDNSError(net.ErrClosed, "udp", "9.9.9.9:53", true)
+	_, _, target, err := policy.configureDNSTransport(newDNSTransport(), "udp", "9.9.9.9:53", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wrapped := target.wrapDialError("udp", net.ErrClosed)
 	for _, want := range []string{"outbound_source_ipv4", "192.0.2.10", "udp4", "9.9.9.9"} {
-		if !strings.Contains(err.Error(), want) {
-			t.Fatalf("error %q does not contain %q", err, want)
+		if !strings.Contains(wrapped.Error(), want) {
+			t.Fatalf("error %q does not contain %q", wrapped, want)
 		}
 	}
-	if got := policy.wrapDNSError(net.ErrClosed, "udp", "127.0.0.1:53", true); got != net.ErrClosed {
+	_, _, local, err := policy.configureDNSTransport(newDNSTransport(), "udp", "127.0.0.1:53", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := local.wrapDialError("udp", net.ErrClosed); got != net.ErrClosed {
 		t.Fatalf("local error was wrapped: %v", got)
+	}
+	var uncovered *outboundTarget
+	if got := uncovered.wrapDialError("udp", net.ErrClosed); got != net.ErrClosed {
+		t.Fatalf("uncovered error was wrapped: %v", got)
 	}
 }
 
 func TestOutboundSourceDisabledHelpersDoNotNormalize(t *testing.T) {
 	policy := outboundSourcePolicy{}
 	mapped := netip.MustParseAddr("::ffff:9.9.9.9")
-	_, network, destination, err := policy.tcpDialer(mapped, time.Second, time.Second)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if network != "tcp" || destination != mapped {
-		t.Fatalf("disabled TCP helper changed destination: network=%s destination=%s", network, destination)
-	}
 	conn, network, destination, err := policy.listenUDP(mapped)
 	if err != nil {
 		t.Fatal(err)

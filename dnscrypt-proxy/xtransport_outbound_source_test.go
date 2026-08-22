@@ -42,7 +42,7 @@ func TestXTransportOutboundSourceDial(t *testing.T) {
 	}, time.Hour)
 	xTransport.rebuildTransport()
 	port := listener.Addr().(*net.TCPAddr).Port
-	conn, err := xTransport.transport.DialContext(context.Background(), "tcp", net.JoinHostPort("ordered.test", formatPort(port)))
+	conn, err := xTransport.transport.DialContext(context.Background(), "tcp", net.JoinHostPort("ordered.test", strconv.Itoa(port)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,7 +90,7 @@ func TestSourceAwareProxyForwardDialer(t *testing.T) {
 			}
 		}()
 		port := listener.Addr().(*net.TCPAddr).Port
-		conn, err := forward.DialContext(context.Background(), "tcp", net.JoinHostPort(sourceIP.String(), formatPort(port)))
+		conn, err := forward.DialContext(context.Background(), "tcp", net.JoinHostPort(sourceIP.String(), strconv.Itoa(port)))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -189,7 +189,7 @@ func startResolvingDNSServer(t *testing.T, proto string, destinationIP net.IP) (
 			}
 		}()
 		port := listener.LocalAddr().(*net.UDPAddr).Port
-		return net.JoinHostPort(destinationIP.String(), formatPort(port)), peerCh, func() { _ = listener.Close() }
+		return net.JoinHostPort(destinationIP.String(), strconv.Itoa(port)), peerCh, func() { _ = listener.Close() }
 	}
 	listener, err := net.ListenTCP("tcp4", &net.TCPAddr{IP: net.IPv4zero})
 	if err != nil {
@@ -212,9 +212,5 @@ func startResolvingDNSServer(t *testing.T, proto string, destinationIP net.IP) (
 		}
 	}()
 	port := listener.Addr().(*net.TCPAddr).Port
-	return net.JoinHostPort(destinationIP.String(), formatPort(port)), peerCh, func() { _ = listener.Close() }
-}
-
-func formatPort(port int) string {
-	return strconv.Itoa(port)
+	return net.JoinHostPort(destinationIP.String(), strconv.Itoa(port)), peerCh, func() { _ = listener.Close() }
 }

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -35,14 +34,10 @@ type UDPConnPool struct {
 	policy   *outboundSourcePolicy
 }
 
-func NewUDPConnPool(policy ...*outboundSourcePolicy) *UDPConnPool {
+func NewUDPConnPool(policy *outboundSourcePolicy) *UDPConnPool {
 	pool := &UDPConnPool{
 		stopCh: make(chan struct{}),
-	}
-	if len(policy) > 0 {
-		pool.policy = policy[0]
-	} else {
-		pool.policy = &outboundSourcePolicy{}
+		policy: policy,
 	}
 	for i := range pool.shards {
 		pool.shards[i].conns = make(map[string][]*pooledConn)
@@ -114,7 +109,7 @@ func (p *UDPConnPool) Get(addr *net.UDPAddr) (*net.UDPConn, error) {
 	}
 	shard.Unlock()
 
-	return p.policy.dialUDP(context.Background(), addr, 0)
+	return p.policy.dialUDP(addr)
 }
 
 func (p *UDPConnPool) Put(addr *net.UDPAddr, conn *net.UDPConn) {
