@@ -9,6 +9,22 @@ import (
 	"time"
 )
 
+func usableNonLoopbackIPv4(t *testing.T) net.IP {
+	t.Helper()
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		t.Skipf("unable to enumerate interface addresses: %v", err)
+	}
+	for _, interfaceAddr := range addrs {
+		ip, _, err := net.ParseCIDR(interfaceAddr.String())
+		if err == nil && ip.To4() != nil && !ip.IsLoopback() && !ip.IsUnspecified() && !ip.IsMulticast() {
+			return ip.To4()
+		}
+	}
+	t.Skip("host has no usable non-loopback IPv4 address")
+	return nil
+}
+
 func TestOutboundSourceSocketHelpersLocalBypass(t *testing.T) {
 	policy, err := parseOutboundSourcePolicy("192.0.2.10", "2001:db8::10")
 	if err != nil {

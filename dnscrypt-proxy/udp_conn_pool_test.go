@@ -3,10 +3,114 @@ package main
 import (
 	"fmt"
 	"net"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 )
+
+func TestUDPConnPool_OutboundSource(t *testing.T) {
+	sourceIP := usableNonLoopbackIPv4(t)
+	policy, err := parseOutboundSourcePolicy(sourceIP.String(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	listener, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4zero})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	destination := listener.LocalAddr().(*net.UDPAddr)
+	// net.ParseIP intentionally supplies the 16-byte mapped representation.
+	destination = &net.UDPAddr{IP: net.ParseIP(sourceIP.String()), Port: destination.Port}
+
+	pool := NewUDPConnPool(&policy)
+	defer pool.Close()
+	conn, err := pool.Get(destination)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := conn.LocalAddr().(*net.UDPAddr).IP; !got.Equal(sourceIP) {
+		t.Fatalf("source = %s, want %s", got, sourceIP)
+	}
+	if _, err := conn.Write([]byte{1}); err != nil {
+		t.Fatal(err)
+	}
+	packet := make([]byte, 1)
+	if err := listener.SetReadDeadline(time.Now().Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	_, peer, err := listener.ReadFromUDP(packet)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !peer.IP.Equal(sourceIP) {
+		t.Fatalf("peer source = %s, want %s", peer.IP, sourceIP)
+	}
+
+	pool.Put(destination, conn)
+	reused, err := pool.Get(destination)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reused != conn {
+		t.Fatal("pooled connection was not reused")
+	}
+	pool.Discard(reused)
+	replacement, err := pool.Get(destination)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if replacement == reused {
+		t.Fatal("discarded connection was reused")
+	}
+	pool.Discard(replacement)
+}
+
+func TestUDPConnPool_OutboundSourceLoopbackBypass(t *testing.T) {
+	policy, err := parseOutboundSourcePolicy("192.0.2.1", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	listener, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	pool := NewUDPConnPool(&policy)
+	defer pool.Close()
+	conn, err := pool.Get(listener.LocalAddr().(*net.UDPAddr))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pool.Discard(conn)
+	if !conn.LocalAddr().(*net.UDPAddr).IP.IsLoopback() {
+		t.Fatalf("loopback destination used configured source: %s", conn.LocalAddr())
+	}
+}
+
+func TestUDPConnPool_OutboundSourceBindFailure(t *testing.T) {
+	destinationIP := usableNonLoopbackIPv4(t)
+	configured := "192.0.2.1"
+	if destinationIP.Equal(net.ParseIP(configured)) {
+		configured = "198.51.100.1"
+	}
+	policy, err := parseOutboundSourcePolicy(configured, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pool := NewUDPConnPool(&policy)
+	defer pool.Close()
+	_, err = pool.Get(&net.UDPAddr{IP: destinationIP, Port: 53})
+	if err == nil {
+		t.Skipf("host permits binding non-local test address %s", configured)
+	}
+	for _, want := range []string{"outbound_source_ipv4", configured, "udp4", destinationIP.String()} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("error %q does not contain %q", err, want)
+		}
+	}
+}
 
 func TestUDPConnPool_Basic(t *testing.T) {
 	pool := NewUDPConnPool()

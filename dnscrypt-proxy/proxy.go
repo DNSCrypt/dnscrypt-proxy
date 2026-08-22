@@ -717,7 +717,7 @@ func (proxy *Proxy) exchangeWithTCPServer(
 	var pc net.Conn
 	proxyDialer := proxy.xTransport.proxyDialer
 	if proxyDialer == nil {
-		pc, err = net.DialTimeout("tcp", upstreamAddr.String(), serverInfo.Timeout)
+		pc, err = proxy.outboundSource.dialTCP(upstreamAddr, serverInfo.Timeout, 0)
 	} else {
 		pc, err = (*proxyDialer).Dial("tcp", upstreamAddr.String())
 	}

@@ -190,7 +190,7 @@ func (policy *outboundSourcePolicy) dialTCPContext(ctx context.Context, destinat
 	normalizedDestination := net.TCPAddrFromAddrPort(netip.AddrPortFrom(normalized, addrPort.Port()))
 	conn, err := dialer.DialContext(ctx, network, normalizedDestination.String())
 	if err != nil && policy.enabled() && dialer.LocalAddr != nil {
-		return nil, fmt.Errorf("%s=%s: unable to bind %s connection to %s: %w", familySetting(normalized), dialer.LocalAddr, network, normalizedDestination, err)
+		return nil, fmt.Errorf("%s=%s: %s connection to %s failed: %w", familySetting(normalized), dialer.LocalAddr, network, normalizedDestination, err)
 	}
 	return conn, err
 }
@@ -226,7 +226,7 @@ func (policy *outboundSourcePolicy) dialUDP(ctx context.Context, destination *ne
 	dialer := net.Dialer{Timeout: timeout}
 	conn, err := dialer.DialUDP(ctx, network, local, remote)
 	if err != nil && bind {
-		return nil, fmt.Errorf("%s=%s: unable to bind %s connection to %s: %w", family.setting(), source, network, remote, err)
+		return nil, fmt.Errorf("%s=%s: %s connection to %s failed: %w", family.setting(), source, network, remote, err)
 	}
 	return conn, err
 }

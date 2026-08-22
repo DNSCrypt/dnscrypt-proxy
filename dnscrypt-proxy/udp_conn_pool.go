@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -113,7 +114,7 @@ func (p *UDPConnPool) Get(addr *net.UDPAddr) (*net.UDPConn, error) {
 	}
 	shard.Unlock()
 
-	return net.DialUDP("udp", nil, addr)
+	return p.policy.dialUDP(context.Background(), addr, 0)
 }
 
 func (p *UDPConnPool) Put(addr *net.UDPAddr, conn *net.UDPConn) {
