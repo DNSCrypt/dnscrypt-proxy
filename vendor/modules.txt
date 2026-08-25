@@ -1,5 +1,5 @@
-# codeberg.org/miekg/dns v0.6.101
-## explicit; go 1.25.0
+# codeberg.org/miekg/dns v0.6.102
+## explicit; go 1.27.0
 codeberg.org/miekg/dns
 codeberg.org/miekg/dns/deleg
 codeberg.org/miekg/dns/dnsjson
@@ -98,9 +98,6 @@ github.com/kardianos/service
 # github.com/lifenjoiner/dhcpdns v0.0.7
 ## explicit; go 1.20
 github.com/lifenjoiner/dhcpdns
-# github.com/miekg/dns v1.1.73
-## explicit; go 1.25.0
-github.com/miekg/dns
 # github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2
 ## explicit
 # github.com/powerman/check v1.13.0
