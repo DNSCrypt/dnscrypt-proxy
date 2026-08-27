@@ -1,6 +1,7 @@
 package dns
 
 import (
+	"cmp"
 	"context"
 	"io"
 	"sync"
@@ -64,7 +65,7 @@ func (mux *ServeMux) match(q string, t, c uint16) (Handler, string) {
 	q = dnsutilCanonical(q)
 
 	var handler Handler
-	var ds, off, end = 0, 0, false
+	var off, ds, end = 0, 0, false
 	mux.RLock()
 	m, ok := mux.z[c] // get the class map
 	if !ok {
@@ -79,24 +80,18 @@ func (mux *ServeMux) match(q string, t, c uint16) (Handler, string) {
 				return h, q[off:]
 			}
 			// Continue for DS to see if we have a parent too, if so delegate to the parent.
+			// If we already found a DS target we should return the current handler as that
+			// should be a parent.
+			if handler != nil { // Set in previous iteration, we return "this one" (= h).
+				mux.RUnlock()
+				return h, q[off:]
+			}
 			handler = h
 			ds = off
 		}
 	}
-	if handler != nil {
-		mux.RUnlock()
-		return handler, q[ds:]
-	}
-
-	// Wildcard match, if we have found nothing try the root zone as a last resort.
-	// TODO(miek): is this really needed?
-	if h, ok := m["."]; ok {
-		mux.RUnlock()
-		return h, "."
-	}
-
 	mux.RUnlock()
-	return nil, ""
+	return handler, cmp.Or(q[ds:], "")
 }
 
 // Handle adds a handler to the ServeMux for pattern. Identical patterns silently overwrites earlier handlers.

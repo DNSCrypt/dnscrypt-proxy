@@ -4,6 +4,7 @@ import (
 	"crypto"
 	"crypto/ecdsa"
 	"crypto/ed25519"
+	"crypto/mldsa"
 	"crypto/rsa"
 	"math/big"
 	"strconv"
@@ -18,7 +19,7 @@ var bigIntOne = big.NewInt(1)
 // PrivateKeyString converts a PrivateKey to a string. This string has the same
 // format as the private-key-file of BIND9 (Private-key-format: v1.3).
 // It needs some info from the key (the algorithm), so its a method of the DNSKEY.
-// It supports *rsa.PrivateKey, *ecdsa.PrivateKey and ed25519.PrivateKey.
+// It supports *rsa.PrivateKey, *ecdsa.PrivateKey, ed25519.PrivateKey and *mldsa.PrivateKey.
 func (k *DNSKEY) PrivateKeyString(p crypto.PrivateKey) string {
 	algorithm := strconv.Itoa(int(k.Algorithm))
 	algorithm += " (" + AlgorithmToString[k.Algorithm] + ")"
@@ -69,6 +70,12 @@ func (k *DNSKEY) PrivateKeyString(p crypto.PrivateKey) string {
 
 	case ed25519.PrivateKey:
 		private := unpack.Base64(p.Seed())
+		return format +
+			"Algorithm: " + algorithm + "\n" +
+			"PrivateKey: " + private + "\n"
+
+	case *mldsa.PrivateKey:
+		private := unpack.Base64(p.Bytes())
 		return format +
 			"Algorithm: " + algorithm + "\n" +
 			"PrivateKey: " + private + "\n"

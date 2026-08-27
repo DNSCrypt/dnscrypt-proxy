@@ -4,6 +4,7 @@ import (
 	"crypto"
 	"crypto/ecdsa"
 	"crypto/ed25519"
+	"crypto/mldsa"
 	"crypto/rand"
 	"crypto/rsa"
 	_ "crypto/sha1"   // need its init function
@@ -34,12 +35,15 @@ const (
 	RSASHA256
 	_ // Skip 9, RFC 6725, section 2.1
 	RSASHA512
-	_ // Skip 11, RFC 6725, section 2.1
-	ECCGOST
+	_       // Skip 11, RFC 6725, section 2.1
+	ECCGOST // Deprecated.
 	ECDSAP256SHA256
 	ECDSAP384SHA384
 	ED25519
 	ED448
+	SM2SM3                // See RFC 9563.
+	MLDSA44               // See draft-westerbaan-dnssec-mldsa.
+	ECCGOST12  uint8 = 23 // See RFC 9558
 	INDIRECT   uint8 = 252
 	PRIVATEDNS uint8 = 253 // Private (experimental keys).
 	PRIVATEOID uint8 = 254
@@ -60,13 +64,16 @@ var AlgorithmToString = map[uint8]string{
 	ECDSAP384SHA384:  "ECDSAP384SHA384",
 	ED25519:          "ED25519",
 	ED448:            "ED448",
+	SM2SM3:           "SM2SM3",
+	MLDSA44:          "MLDSA44",
+	ECCGOST12:        "ECC-GOST12",
 	INDIRECT:         "INDIRECT",
 	PRIVATEDNS:       "PRIVATEDNS",
 	PRIVATEOID:       "PRIVATEOID",
 }
 
 // AlgorithmToHash is a map of algorithm crypto hash IDs to crypto.Hash's.
-// Newer algorithm that do their own hashing (i.e. ED25519) are not present here.
+// Newer algorithm that do their own hashing (i.e. ED25519 and MLDSA44) are not present here.
 var AlgorithmToHash = map[uint8]crypto.Hash{
 	RSAMD5:           crypto.MD5, // Deprecated in RFC 6725.
 	DSA:              crypto.SHA1,
@@ -399,6 +406,18 @@ func (rr *RRSIG) Verify(k *DNSKEY, rrset []RR, options *SignOption) error {
 		}
 
 		if ed25519.Verify(pubkey, signeddata, sigbuf) {
+			return nil
+		}
+		return ErrSig
+
+	case MLDSA44:
+		pubkey := k.publicKeyMLDSA44()
+		if pubkey == nil {
+			return ErrKey
+		}
+
+		// Nil options selects pure ML-DSA with an empty context, see draft-westerbaan-dnssec-mldsa.
+		if mldsa.Verify(pubkey, signeddata, sigbuf, nil) == nil {
 			return nil
 		}
 		return ErrSig

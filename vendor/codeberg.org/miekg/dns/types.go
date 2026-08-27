@@ -716,7 +716,7 @@ func (rr *RRSIG) String() string {
 // origin (which must be in canonical form) is set as the signers name. The name of the RRSIG is set while
 // signing.
 func NewRRSIG(origin string, algorithm uint8, keytag uint16, incepexp ...uint32) *RRSIG {
-	s := &RRSIG{RRSIG: rdata.RRSIG{Algorithm: algorithm, KeyTag: keytag, SignerName: origin}}
+	s := &RRSIG{Algorithm: algorithm, KeyTag: keytag, SignerName: origin}
 	if len(incepexp) == 0 {
 		now := time.Now().Unix()
 		s.Expiration = uint32(now + (14 * 86400))

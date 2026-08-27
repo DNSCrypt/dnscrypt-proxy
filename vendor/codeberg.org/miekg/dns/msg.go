@@ -161,9 +161,6 @@ func (m *Msg) Reset() {
 }
 
 func (m *Msg) Pack() error {
-	if len(m.Question) != 1 {
-		return pack.Errorf(": %s", "there must be a single question")
-	}
 	if l := m.Len(); cap(m.Data) < l {
 		m.Data = make([]byte, l)
 	} else {
@@ -207,7 +204,7 @@ func (m *Msg) Pack() error {
 	}
 
 	isPseudo := m.isPseudo()
-	counts := uint64(1)<<48 |
+	counts := uint64(len(m.Question))<<48 |
 		uint64(len(m.Answer))<<32 |
 		uint64(len(m.Ns))<<16 |
 		uint64(len(m.Extra)+isPseudo)
@@ -223,8 +220,10 @@ func (m *Msg) Pack() error {
 		compression = make(map[string]uint16, l+3) // 3 is randomly chosen, as that much rdata might be compressable...
 	}
 
-	if off, err = packQuestion(m.Question[0], m.Data, off, compression); err != nil {
-		return err
+	if len(m.Question) > 0 {
+		if off, err = packQuestion(m.Question[0], m.Data, off, compression); err != nil {
+			return err
+		}
 	}
 
 	for i := range m.Answer {
