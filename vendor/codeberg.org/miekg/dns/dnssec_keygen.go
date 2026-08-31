@@ -5,6 +5,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/ed25519"
 	"crypto/elliptic"
+	"crypto/mldsa"
 	"crypto/rand"
 	"crypto/rsa"
 	"math/big"
@@ -15,6 +16,7 @@ import (
 // Generate generates a DNSKEY of the given bit size. The public part is put inside the DNSKEY record.
 // The Algorithm in the key must be set as this will define what kind of DNSKEY will be generated.
 // Some algorithms imply a fixed key size, in that case bits should be set to the size of the algorithm.
+// For MLDSA44 bits must be 256, the size of the seed the key pair is derived from.
 func (k *DNSKEY) Generate(bits int) (crypto.PrivateKey, error) {
 	switch k.Algorithm {
 	case RSASHA1, RSASHA256, RSASHA1NSEC3SHA1:
@@ -33,7 +35,7 @@ func (k *DNSKEY) Generate(bits int) (crypto.PrivateKey, error) {
 		if bits != 384 {
 			return nil, ErrKeySize
 		}
-	case ED25519:
+	case ED25519, MLDSA44:
 		if bits != 256 {
 			return nil, ErrKeySize
 		}
@@ -69,6 +71,13 @@ func (k *DNSKEY) Generate(bits int) (crypto.PrivateKey, error) {
 			return nil, err
 		}
 		k.setPublicKeyED25519(pub)
+		return priv, nil
+	case MLDSA44:
+		priv, err := mldsa.GenerateKey(mldsa.MLDSA44())
+		if err != nil {
+			return nil, err
+		}
+		k.setPublicKeyMLDSA44(priv.PublicKey())
 		return priv, nil
 	default:
 		return nil, ErrAlg
@@ -108,6 +117,15 @@ func (k *DNSKEY) setPublicKeyED25519(_K ed25519.PublicKey) bool {
 		return false
 	}
 	k.PublicKey = unpack.Base64(_K)
+	return true
+}
+
+// Set the public key for ML-DSA-44
+func (k *DNSKEY) setPublicKeyMLDSA44(_K *mldsa.PublicKey) bool {
+	if _K == nil {
+		return false
+	}
+	k.PublicKey = unpack.Base64(_K.Bytes())
 	return true
 }
 

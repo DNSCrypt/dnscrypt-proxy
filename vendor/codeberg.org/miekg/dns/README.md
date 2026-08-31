@@ -9,15 +9,16 @@ Complete and usable DNS library. All Resource Records are supported, including t
 lean and mean philosophy. Server side and client side programming is supported, i.e. you can build servers and
 resolvers with it.
 
+We try to keep the _main_ branch as sane as possible and at the bleeding edge of standards, avoiding
+breaking changes wherever reasonable. We rigorously follow upstream Go versions and use bleeding edge Go
+language features. But because this version is young, we allow ourselves some more headroom for
+making backwards incompatible changes.
+
 Many convenience functions are included in _dns_, _dnstest_ or otherwise in _dnsutils_. The RR's resource data
 (RDATA) is split off into its own package: _rdata_. This means accessing the RR's header and rdata is much
 simpler now. [^a]
 
 [^a]: A function is put in _dnsutils_, unless (due to cyclic imports) it is utterly impossible to put it there. Only then it is put in the main _dns_ package.
-
-We try to keep the "main" branch as sane as possible and at the bleeding edge of standards, avoiding breaking
-changes wherever reasonable. But because this version is young, we allow ourselves some more headroom for
-making backwards incompatible changes.
 
 Example programs are included _and_ benchmarked in
 [`cmd`](https://codeberg.org/miekg/dns/src/branch/main/cmd). And
@@ -36,7 +37,7 @@ Everything from <https://github.com/miekg/dns> works. See
 [README-v1-to-v2.md](https://codeberg.org/miekg/dns/src/branch/main/_doc/README-v1-to-v2.md)
 for the differences, if you are porting your application, in `cookbook.go` are some common recipes.
 
-Note that a design choice has been made to not supported `\DDD` and `\x` syntax in domain names. This archeic
+Note that a design choice has been made to not supported `\DDD` and `\x` syntax in domain names. This archaic
 way of encoding names was useful way-back-when, nowadays DNS is pretty much a 7-bit protocol and things like
 [Punycode](https://en.wikipedia.org/wiki/Punycode) had to be invented. There is one exception to this and that
 is the SOA's mname can contain a `\.`, for the rest it is ignore and interpreted as `\` and `.`.
@@ -112,7 +113,7 @@ What users say:
 - Server side programming (mimicking the net/http package), with `dns.Handle` and `dns.HandleFunc` allowing
   for middleware servers.
 - Client side programming.
-- DNSSEC: signing, validating and key generation for DSA, RSA, ECDSA and Ed25519.
+- DNSSEC: signing, validating and key generation for DSA, RSA, ECDSA, Ed25519 and ML-DSA-44.
 - EDNS0, NSID, Cookies, etc, as pseudo RRs in the (fake) pseudo section.
 - AXFR/IXFR.
 - TSIG, SIG(0).
@@ -210,10 +211,12 @@ _all of them_ and _then some_
 - 7871 - EDNS0 Client Subnet
 - 7873 - Domain Name System (DNS) Cookies
 - 8080 - EdDSA for DNSSEC
+- 8145 - EDNS0 key tag
 - 8427 - Representing DNS Messages in JSON
 - 8482 - Minimal Answers for ANY
 - 8484 - DOH
 - 8499 - DNS Terminology
+- 8509 - DNSSEC Trusted Key Sentinel
 - 8659 - DNS Certification Authority Authorization (CAA) Resource Record
 - 8777 - DNS Reverse IP Automatic Multicast Tunneling (AMT) Discovery
 - 8914 - Extended DNS Errors
@@ -223,6 +226,8 @@ _all of them_ and _then some_
 - 9462 - Discovery of Designated Resolvers
 - 9460 - SVCB and HTTPS Records
 - 9499 - DNS Terminology
+- 9558 - GOST 2012 for DNSSEC
+- 9563 - SM2 for DNSSEC
 - 9567 - DNS Error Reporting
 - 9606 - DNS Resolver Information
 - 9660 - Zone version
@@ -230,3 +235,4 @@ _all of them_ and _then some_
 - 9824 - Compact Denial of Existence in DNSSEC
 - 9859 - DSYNC RR
 - draft-ietf-deleg - DELEG RR
+- draft-westerbaan-dnssec-mldsa-04 - MLDSA for DNSSEC
