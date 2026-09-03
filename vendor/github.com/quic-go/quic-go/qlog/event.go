@@ -414,6 +414,31 @@ func (e PacketDropped) Encode(enc *jsontext.Encoder, _ time.Time) error {
 	return h.err
 }
 
+// StreamPriorityUpdated closely follows the http3:priority_updated event from
+// draft-ietf-quic-qlog-h3-events.
+type StreamPriorityUpdated struct {
+	StreamID    StreamID
+	Urgency     int8
+	Incremental bool
+}
+
+func (e StreamPriorityUpdated) Name() string { return "transport:priority_updated" }
+
+func (e StreamPriorityUpdated) Encode(enc *jsontext.Encoder, _ time.Time) error {
+	h := encoderHelper{enc: enc}
+	h.WriteToken(jsontext.BeginObject)
+	h.WriteToken(jsontext.String("stream_id"))
+	h.WriteToken(jsontext.Int(int64(e.StreamID)))
+	h.WriteToken(jsontext.String("new"))
+	newPriority := fmt.Sprintf("u=%d", e.Urgency)
+	if e.Incremental {
+		newPriority += ", i"
+	}
+	h.WriteToken(jsontext.String(newPriority))
+	h.WriteToken(jsontext.EndObject)
+	return h.err
+}
+
 type MTUUpdated struct {
 	Value int
 	Done  bool
@@ -434,7 +459,7 @@ func (e MTUUpdated) Encode(enc *jsontext.Encoder, _ time.Time) error {
 
 // MetricsUpdated logs RTT and congestion metrics as defined in the
 // recovery:metrics_updated event.
-// The PTO count is logged via PTOCountUpdated.
+// The PTO count is logged via [PTOCountUpdated].
 type MetricsUpdated struct {
 	MinRTT           time.Duration
 	SmoothedRTT      time.Duration

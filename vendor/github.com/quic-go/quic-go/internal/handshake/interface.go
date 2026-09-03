@@ -69,9 +69,12 @@ const (
 	EventWriteInitialData
 	// EventWriteHandshakeData contains new CRYPTO data to send at the Handshake encryption level
 	EventWriteHandshakeData
-	// EventReceivedReadKeys signals that new decryption keys are available.
-	// It doesn't say which encryption level those keys are for.
-	EventReceivedReadKeys
+	// EventReceived0RTTReadKeys signals that 0-RTT decryption keys are available.
+	EventReceived0RTTReadKeys
+	// EventReceivedHandshakeReadKeys signals that Handshake decryption keys are available.
+	EventReceivedHandshakeReadKeys
+	// EventReceived1RTTReadKeys signals that 1-RTT decryption keys are available.
+	EventReceived1RTTReadKeys
 	// EventDiscard0RTTKeys signals that the Handshake keys were discarded.
 	EventDiscard0RTTKeys
 	// EventReceivedTransportParameters contains the transport parameters sent by the peer.
@@ -91,8 +94,12 @@ func (k EventKind) String() string {
 		return "EventWriteInitialData"
 	case EventWriteHandshakeData:
 		return "EventWriteHandshakeData"
-	case EventReceivedReadKeys:
-		return "EventReceivedReadKeys"
+	case EventReceived0RTTReadKeys:
+		return "EventReceived0RTTReadKeys"
+	case EventReceivedHandshakeReadKeys:
+		return "EventReceivedHandshakeReadKeys"
+	case EventReceived1RTTReadKeys:
+		return "EventReceived1RTTReadKeys"
 	case EventDiscard0RTTKeys:
 		return "EventDiscard0RTTKeys"
 	case EventReceivedTransportParameters:

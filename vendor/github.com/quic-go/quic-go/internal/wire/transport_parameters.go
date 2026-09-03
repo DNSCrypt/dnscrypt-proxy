@@ -458,6 +458,8 @@ func (p *TransportParameters) Marshal(pers protocol.Perspective) []byte {
 	if p.EnableResetStreamAt {
 		b = quicvarint.Append(b, uint64(resetStreamAtParameterID))
 		b = quicvarint.Append(b, 0)
+		b = quicvarint.Append(b, uint64(legacyResetStreamAtParameterID))
+		b = quicvarint.Append(b, 0)
 	}
 	if p.MinAckDelay != nil {
 		b = p.marshalVarintParam(b, minAckDelayParameterID, uint64(*p.MinAckDelay/time.Microsecond))

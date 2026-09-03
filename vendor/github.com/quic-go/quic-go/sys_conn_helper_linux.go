@@ -96,8 +96,7 @@ func appendUDPSegmentSizeMsg(b []byte, size uint16) []byte {
 }
 
 func isGSOError(err error) bool {
-	var serr *os.SyscallError
-	if errors.As(err, &serr) {
+	if serr, ok := errors.AsType[*os.SyscallError](err); ok {
 		// EIO is returned by udp_send_skb() if the device driver does not have tx checksums enabled,
 		// which is a hard requirement of UDP_SEGMENT. See:
 		// https://git.kernel.org/pub/scm/docs/man-pages/man-pages.git/tree/man7/udp.7?id=806eabd74910447f21005160e90957bde4db0183#n228
@@ -111,8 +110,7 @@ func isGSOError(err error) bool {
 // It's not clear why this happens.
 // See https://github.com/golang/go/issues/63322.
 func isPermissionError(err error) bool {
-	var serr *os.SyscallError
-	if errors.As(err, &serr) {
+	if serr, ok := errors.AsType[*os.SyscallError](err); ok {
 		return serr.Syscall == "sendmsg" && serr.Err == unix.EPERM
 	}
 	return false

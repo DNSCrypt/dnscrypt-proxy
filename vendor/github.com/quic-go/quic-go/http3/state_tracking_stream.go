@@ -100,6 +100,14 @@ func (s *stateTrackingStream) Write(b []byte) (int, error) {
 	return n, err
 }
 
+func (s *stateTrackingStream) TryWriteAll(b []byte) error {
+	err := s.Stream.TryWriteAll(b)
+	if err != nil && !errors.Is(err, quic.ErrWouldBlock) {
+		s.closeSend(err)
+	}
+	return err
+}
+
 func (s *stateTrackingStream) CancelRead(e quic.StreamErrorCode) {
 	s.closeReceive(&quic.StreamError{StreamID: s.StreamID(), ErrorCode: e})
 	s.Stream.CancelRead(e)

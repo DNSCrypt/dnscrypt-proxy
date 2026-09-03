@@ -60,7 +60,7 @@ func DialAddrEarly(ctx context.Context, addr string, tlsConf *tls.Config, conf *
 	return conn, nil
 }
 
-// DialEarly establishes a new 0-RTT QUIC connection to a server using a net.PacketConn.
+// DialEarly establishes a new 0-RTT QUIC connection to a server using a [net.PacketConn].
 // See [Dial] for more details.
 func DialEarly(ctx context.Context, c net.PacketConn, addr net.Addr, tlsConf *tls.Config, conf *Config) (*Conn, error) {
 	dl, err := setupTransport(c, tlsConf, false)
@@ -75,11 +75,11 @@ func DialEarly(ctx context.Context, c net.PacketConn, addr net.Addr, tlsConf *tl
 	return conn, nil
 }
 
-// Dial establishes a new QUIC connection to a server using a net.PacketConn.
+// Dial establishes a new QUIC connection to a server using a [net.PacketConn].
 // If the PacketConn satisfies the [OOBCapablePacketConn] interface (as a [net.UDPConn] does),
-// ECN and packet info support will be enabled. In this case, ReadMsgUDP and WriteMsgUDP
-// will be used instead of ReadFrom and WriteTo to read/write packets.
-// The [tls.Config] must define an application protocol (using tls.Config.NextProtos).
+// ECN and packet info support will be enabled. In this case, packets will be read in batches,
+// and [OOBCapablePacketConn.WriteMsgUDP] will be used instead of [net.PacketConn.WriteTo].
+// The [tls.Config] must define an application protocol using [tls.Config.NextProtos].
 //
 // This is a convenience function. More advanced use cases should instantiate a [Transport],
 // which offers configuration options for a more fine-grained control of the connection establishment,

@@ -202,8 +202,12 @@ func (c *ClientConn) handleControlStream(str *quic.ReceiveStream, fp *frameParse
 	for {
 		f, err := fp.ParseNext(c.qlogger)
 		if err != nil {
-			var serr *quic.StreamError
-			if err == io.EOF || errors.As(err, &serr) {
+			if errors.Is(err, errPriorityUpdateForPush) {
+				c.conn.CloseWithError(quic.ApplicationErrorCode(ErrCodeFrameUnexpected), "")
+				return
+			}
+			_, isStreamError := errors.AsType[*quic.StreamError](err)
+			if err == io.EOF || isStreamError {
 				c.conn.CloseWithError(quic.ApplicationErrorCode(ErrCodeClosedCriticalStream), "")
 				return
 			}
@@ -335,13 +339,13 @@ func (c *ClientConn) roundTrip(req *http.Request) (*http.Response, error) {
 }
 
 // ReceivedSettings returns a channel that is closed once the server's HTTP/3 settings were received.
-// Settings can be obtained from the Settings method after the channel was closed.
+// The settings can be obtained from [ClientConn.Settings] after the channel is closed.
 func (c *ClientConn) ReceivedSettings() <-chan struct{} {
 	return c.rawConn.ReceivedSettings()
 }
 
 // Settings returns the HTTP/3 settings for this connection.
-// It is only valid to call this function after the channel returned by ReceivedSettings was closed.
+// It is only valid to call this method after the channel returned by [ClientConn.ReceivedSettings] is closed.
 func (c *ClientConn) Settings() *Settings {
 	return c.rawConn.Settings()
 }

@@ -11,8 +11,8 @@ import (
 	"github.com/quic-go/quic-go/internal/wire"
 )
 
-// StreamLimitReachedError is returned from Conn.OpenStream and Conn.OpenUniStream
-// when it is not possible to open a new stream because the number of opens streams reached
+// StreamLimitReachedError is returned from [Conn.OpenStream] and [Conn.OpenUniStream]
+// when it is not possible to open a new stream because the number of open streams has reached
 // the peer's stream limit.
 type StreamLimitReachedError struct{}
 

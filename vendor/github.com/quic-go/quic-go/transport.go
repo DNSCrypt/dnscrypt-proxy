@@ -18,7 +18,8 @@ import (
 	"github.com/quic-go/quic-go/qlogwriter"
 )
 
-// ErrTransportClosed is returned by the [Transport]'s Listen or Dial method after it was closed.
+// ErrTransportClosed is returned by [Transport.Listen], [Transport.ListenEarly], [Transport.Dial],
+// or [Transport.DialEarly] after [Transport.Close] is called.
 var ErrTransportClosed = &errTransportClosed{}
 
 type errTransportClosed struct {
@@ -51,14 +52,14 @@ type closePacket struct {
 // QUIC demultiplexes connections based on their QUIC Connection IDs, not based on the 4-tuple.
 // This means that a single UDP socket can be used for listening for incoming connections, as well as
 // for dialing an arbitrary number of outgoing connections.
-// A Transport handles a single net.PacketConn, and offers a range of configuration options
+// A Transport handles a single [net.PacketConn], and offers a range of configuration options
 // compared to the simple helper functions like [Listen] and [Dial] that this package provides.
 type Transport struct {
-	// A single net.PacketConn can only be handled by one Transport.
+	// A single [net.PacketConn] can only be handled by one Transport.
 	// Bad things will happen if passed to multiple Transports.
 	//
-	// A number of optimizations will be enabled if the connections implements the OOBCapablePacketConn interface,
-	// as a *net.UDPConn does.
+	// A number of optimizations will be enabled if the connection implements [OOBCapablePacketConn],
+	// as a [net.UDPConn] does.
 	// 1. It enables the Don't Fragment (DF) bit on the IP header.
 	//    This is required to run DPLPMTUD (Path MTU Discovery, RFC 8899).
 	// 2. It enables reading of the ECN bits from the IP header.
@@ -66,7 +67,9 @@ type Transport struct {
 	// 3. It uses batched syscalls (recvmmsg) to more efficiently receive packets from the socket.
 	// 4. It uses Generic Segmentation Offload (GSO) to efficiently send batches of packets (on Linux).
 	//
-	// After passing the connection to the Transport, it's invalid to call ReadFrom or WriteTo on the connection.
+	// After passing the connection to the Transport, it's invalid to call [net.PacketConn.ReadFrom],
+	// [net.PacketConn.WriteTo], [OOBCapablePacketConn.ReadMsgUDP], or
+	// [OOBCapablePacketConn.WriteMsgUDP] on the connection.
 	Conn net.PacketConn
 
 	// The length of the connection ID in bytes.
@@ -123,15 +126,15 @@ type Transport struct {
 	// The context is closed when the connection is closed, or when the handshake fails for any reason.
 	// The context returned from the callback is used to derive every other context used during the
 	// lifetime of the connection:
-	// * the context passed to crypto/tls (and used on the tls.ClientHelloInfo)
-	// * the context used in Config.QlogTrace
-	// * the context returned from Conn.Context
-	// * the context returned from SendStream.Context
+	// * the context passed to crypto/tls (and used on the [tls.ClientHelloInfo])
+	// * the context used by [Config.Tracer]
+	// * the context returned from [Conn.Context]
+	// * the context returned from [SendStream.Context]
 	// It is not used for dialed connections.
 	ConnContext func(context.Context, *ClientInfo) (context.Context, error)
 
 	// A Tracer traces events that don't belong to a single QUIC connection.
-	// Recorder.Close is called when the transport is closed.
+	// The [qlogwriter.Recorder] is closed when the transport is closed.
 	Tracer qlogwriter.Recorder
 
 	mutex       sync.Mutex
@@ -324,8 +327,7 @@ func (t *Transport) doDial(
 	recreateChan := make(chan errCloseForRecreating, 1)
 	go func() {
 		err := conn.run()
-		var recreateErr *errCloseForRecreating
-		if errors.As(err, &recreateErr) {
+		if recreateErr, ok := errors.AsType[*errCloseForRecreating](err); ok {
 			recreateChan <- *recreateErr
 			return
 		}
@@ -450,7 +452,7 @@ func (t *Transport) runSendQueue() {
 	}
 }
 
-// Close stops listening for UDP datagrams on the Transport.Conn.
+// Close stops listening for UDP datagrams on [Transport.Conn].
 // It abruptly terminates all existing connections, without sending a CONNECTION_CLOSE
 // to the peers. It is the application's responsibility to cleanly terminate existing
 // connections prior to calling Close.

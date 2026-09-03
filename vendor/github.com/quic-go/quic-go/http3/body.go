@@ -12,10 +12,10 @@ import (
 // Settingser allows waiting for and retrieving the peer's HTTP/3 settings.
 type Settingser interface {
 	// ReceivedSettings returns a channel that is closed once the peer's SETTINGS frame was received.
-	// Settings can be obtained from the Settings method after the channel was closed.
+	// The settings can be obtained from [Settingser.Settings] after the channel is closed.
 	ReceivedSettings() <-chan struct{}
 	// Settings returns the settings received on this connection.
-	// It is only valid to call this function after the channel returned by ReceivedSettings was closed.
+	// It is only valid to call this method after the channel returned by [Settingser.ReceivedSettings] is closed.
 	Settings() *Settings
 }
 
