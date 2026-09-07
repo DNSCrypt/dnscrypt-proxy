@@ -24,7 +24,11 @@ func TestDNSExchangeOutboundSource(t *testing.T) {
 				name = proto + "-relayed"
 			}
 			t.Run(name, func(t *testing.T) {
-				serverAddress, relayAddress, peerCh, closeServer := startSourceObservingDNSServer(t, proto, sourceIP, relayed)
+				relayAddress, peerCh, closeServer := startOutboundDNSServer(t, proto, sourceIP, relayed, nil)
+				serverAddress := relayAddress.String()
+				if relayed {
+					serverAddress = "9.9.9.9:53"
+				}
 				defer closeServer()
 				var relay *DNSCryptRelay
 				if relayed {
@@ -49,9 +53,26 @@ func TestDNSExchangeOutboundSource(t *testing.T) {
 	}
 }
 
-func startSourceObservingDNSServer(t *testing.T, proto string, destinationIP net.IP, relayed bool) (string, net.Addr, <-chan net.IP, func()) {
+func startOutboundDNSServer(t *testing.T, proto string, destinationIP net.IP, relayed bool, answer func(*dns.Msg)) (net.Addr, <-chan net.IP, func()) {
 	t.Helper()
 	peerCh := make(chan net.IP, 1)
+	respond := func(packet []byte) []byte {
+		if relayed {
+			packet = packet[anonymizedDNSHeaderSize:]
+		}
+		msg := dns.Msg{Data: packet}
+		if msg.Unpack() != nil {
+			return nil
+		}
+		msg.Response = true
+		if answer != nil {
+			answer(&msg)
+		}
+		if msg.Pack() != nil {
+			return nil
+		}
+		return msg.Data
+	}
 	if proto == "udp" {
 		listener, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4zero})
 		if err != nil {
@@ -60,32 +81,14 @@ func startSourceObservingDNSServer(t *testing.T, proto string, destinationIP net
 		go func() {
 			packet := make([]byte, MaxDNSPacketSize)
 			length, peer, err := listener.ReadFromUDP(packet)
-			if err != nil {
-				return
+			if err == nil {
+				peerCh <- peer.IP
+				_, _ = listener.WriteToUDP(respond(packet[:length]), peer)
 			}
-			peerCh <- peer.IP
-			if relayed {
-				packet = packet[anonymizedDNSHeaderSize:]
-				length -= anonymizedDNSHeaderSize
-			}
-			msg := dns.Msg{Data: packet[:length]}
-			if msg.Unpack() != nil {
-				return
-			}
-			msg.Response = true
-			if msg.Pack() != nil {
-				return
-			}
-			_, _ = listener.WriteToUDP(msg.Data, peer)
 		}()
 		port := listener.LocalAddr().(*net.UDPAddr).Port
-		relayAddress := &net.UDPAddr{IP: destinationIP, Port: port}
-		if !relayed {
-			return relayAddress.String(), relayAddress, peerCh, func() { _ = listener.Close() }
-		}
-		return "9.9.9.9:53", relayAddress, peerCh, func() { _ = listener.Close() }
+		return &net.UDPAddr{IP: destinationIP, Port: port}, peerCh, func() { _ = listener.Close() }
 	}
-
 	listener, err := net.ListenTCP("tcp4", &net.TCPAddr{IP: net.IPv4zero})
 	if err != nil {
 		t.Fatal(err)
@@ -101,26 +104,11 @@ func startSourceObservingDNSServer(t *testing.T, proto string, destinationIP net
 		if err != nil {
 			return
 		}
-		if relayed {
-			packet = packet[anonymizedDNSHeaderSize:]
-		}
-		msg := dns.Msg{Data: packet}
-		if msg.Unpack() != nil {
-			return
-		}
-		msg.Response = true
-		if msg.Pack() != nil {
-			return
-		}
-		packet, err = PrefixWithSize(msg.Data)
+		packet, err = PrefixWithSize(respond(packet))
 		if err == nil {
 			_, _ = conn.Write(packet)
 		}
 	}()
 	port := listener.Addr().(*net.TCPAddr).Port
-	relayAddress := &net.TCPAddr{IP: destinationIP, Port: port}
-	if !relayed {
-		return relayAddress.String(), relayAddress, peerCh, func() { _ = listener.Close() }
-	}
-	return "9.9.9.9:53", relayAddress, peerCh, func() { _ = listener.Close() }
+	return &net.TCPAddr{IP: destinationIP, Port: port}, peerCh, func() { _ = listener.Close() }
 }

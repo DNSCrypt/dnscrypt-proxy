@@ -166,60 +166,13 @@ func startResolvingDNSServer(t *testing.T, proto string, destinationIP net.IP) (
 
 func startResolvingDNSServerWithAnswer(t *testing.T, proto string, destinationIP net.IP, answer netip.Addr) (string, <-chan net.IP, func()) {
 	t.Helper()
-	peerCh := make(chan net.IP, 1)
-	respond := func(packet []byte) []byte {
-		msg := dns.Msg{Data: packet}
-		if msg.Unpack() != nil {
-			return nil
-		}
-		msg.Response = true
+	addr, peers, closeServer := startOutboundDNSServer(t, proto, destinationIP, false, func(msg *dns.Msg) {
 		msg.Answer = []dns.RR{&dns.A{
 			Hdr: dns.Header{Name: msg.Question[0].Header().Name, Class: dns.ClassINET, TTL: 60},
 			A:   rdata.A{Addr: answer},
 		}}
-		if msg.Pack() != nil {
-			return nil
-		}
-		return msg.Data
-	}
-	if proto == "udp" {
-		listener, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4zero})
-		if err != nil {
-			t.Fatal(err)
-		}
-		go func() {
-			packet := make([]byte, MaxDNSPacketSize)
-			length, peer, err := listener.ReadFromUDP(packet)
-			if err == nil {
-				peerCh <- peer.IP
-				_, _ = listener.WriteToUDP(respond(packet[:length]), peer)
-			}
-		}()
-		port := listener.LocalAddr().(*net.UDPAddr).Port
-		return net.JoinHostPort(destinationIP.String(), strconv.Itoa(port)), peerCh, func() { _ = listener.Close() }
-	}
-	listener, err := net.ListenTCP("tcp4", &net.TCPAddr{IP: net.IPv4zero})
-	if err != nil {
-		t.Fatal(err)
-	}
-	go func() {
-		conn, err := listener.AcceptTCP()
-		if err != nil {
-			return
-		}
-		defer conn.Close()
-		peerCh <- conn.RemoteAddr().(*net.TCPAddr).IP
-		packet, err := ReadPrefixed(conn)
-		if err != nil {
-			return
-		}
-		packet, err = PrefixWithSize(respond(packet))
-		if err == nil {
-			_, _ = conn.Write(packet)
-		}
-	}()
-	port := listener.Addr().(*net.TCPAddr).Port
-	return net.JoinHostPort(destinationIP.String(), strconv.Itoa(port)), peerCh, func() { _ = listener.Close() }
+	})
+	return addr.String(), peers, closeServer
 }
 
 func TestProxyEndpointResolutionDoesNotQueryItself(t *testing.T) {

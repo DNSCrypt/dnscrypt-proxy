@@ -328,9 +328,11 @@ func (plugin *PluginCloak) Eval(pluginsState *PluginsState, msg *dns.Msg) error 
 		plugin.RUnlock()
 		returnIPv4 := qtype == dns.TypeA
 		returnIPv6 := qtype == dns.TypeAAAA
-		foundIPs, _, err := pluginsState.xTransport.resolveUsingInternalResolvers(
+		foundIPs, _, err := pluginsState.xTransport.resolveUsingServers(
 			pluginsState.xTransport.mainProto,
 			target,
+			pluginsState.xTransport.internalResolvers,
+			false,
 			returnIPv4,
 			returnIPv6,
 		)

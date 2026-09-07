@@ -1,7 +1,6 @@
 package main
 
 import (
-	"net"
 	"net/netip"
 	"sync"
 	"testing"
@@ -16,37 +15,16 @@ func TestDNS64DiscoveryOutboundSource(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	listener, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4zero})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer listener.Close()
-	peerCh := make(chan net.IP, 1)
-	go func() {
-		packet := make([]byte, MaxDNSPacketSize)
-		length, peer, err := listener.ReadFromUDP(packet)
-		if err != nil {
-			return
-		}
-		peerCh <- peer.IP
-		msg := dns.Msg{Data: packet[:length]}
-		if msg.Unpack() != nil {
-			return
-		}
-		msg.Response = true
+	resolver, peerCh, closeServer := startOutboundDNSServer(t, "udp", sourceIP, false, func(msg *dns.Msg) {
 		msg.Answer = []dns.RR{&dns.AAAA{
 			Hdr:  dns.Header{Name: rfc7050WKN, Class: dns.ClassINET, TTL: 60},
 			AAAA: rdata.AAAA{Addr: netip.MustParseAddr("64:ff9b::c000:aa")},
 		}}
-		if msg.Pack() == nil {
-			_, _ = listener.WriteToUDP(msg.Data, peer)
-		}
-	}()
+	})
+	defer closeServer()
 
 	plugin := PluginDNS64{pref64Mutex: new(sync.RWMutex), proxy: &Proxy{outboundSource: policy}}
-	port := listener.LocalAddr().(*net.UDPAddr).Port
-	resolver := netip.AddrPortFrom(netip.MustParseAddr(sourceIP.String()), uint16(port)).String()
-	if err := plugin.fetchPref64(resolver); err != nil {
+	if err := plugin.fetchPref64(resolver.String()); err != nil {
 		t.Fatal(err)
 	}
 	if peer := <-peerCh; !peer.Equal(sourceIP) {

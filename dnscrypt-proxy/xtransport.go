@@ -648,7 +648,11 @@ func (xTransport *XTransport) resolveUsingResolver(
 ) (ips []net.IP, ttl time.Duration, err error) {
 	transport := newDNSTransport()
 	transport.ReadTimeout = ResolverReadTimeout
-	network, resolver, target, err := xTransport.outboundSource.configureDNSTransport(transport, proto, resolver, covered)
+	policy := xTransport.outboundSource
+	if !covered {
+		policy = nil
+	}
+	network, resolver, target, err := policy.configureDialer(transport.Dialer, proto, resolver)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -744,22 +748,6 @@ func (xTransport *XTransport) resolveUsingServers(
 	return nil, 0, lastErr
 }
 
-// resolveUsingInternalResolvers leaves queries to the proxy itself unbound.
-func (xTransport *XTransport) resolveUsingInternalResolvers(
-	proto, host string,
-	returnIPv4, returnIPv6 bool,
-) ([]net.IP, time.Duration, error) {
-	return xTransport.resolveUsingServers(proto, host, xTransport.internalResolvers, false, returnIPv4, returnIPv6)
-}
-
-// resolveUsingBootstrapResolvers applies source binding to bootstrap DNS queries.
-func (xTransport *XTransport) resolveUsingBootstrapResolvers(
-	proto, host string,
-	returnIPv4, returnIPv6 bool,
-) ([]net.IP, time.Duration, error) {
-	return xTransport.resolveUsingServers(proto, host, xTransport.bootstrapResolvers, true, returnIPv4, returnIPv6)
-}
-
 func (xTransport *XTransport) resolve(host string, returnIPv4, returnIPv6 bool) ([]net.IP, time.Duration, error) {
 	return xTransport.resolveHost(host, returnIPv4, returnIPv6, true)
 }
@@ -779,7 +767,7 @@ func (xTransport *XTransport) resolveHost(host string, returnIPv4, returnIPv6, u
 			err = errors.New("proxy endpoint requires bootstrap resolution")
 		} else if xTransport.internalResolverReady.Load() {
 			for _, proto := range protos {
-				ips, ttl, err = xTransport.resolveUsingInternalResolvers(proto, host, returnIPv4, returnIPv6)
+				ips, ttl, err = xTransport.resolveUsingServers(proto, host, xTransport.internalResolvers, false, returnIPv4, returnIPv6)
 				if err == nil {
 					break
 				}
@@ -804,7 +792,7 @@ func (xTransport *XTransport) resolveHost(host string, returnIPv4, returnIPv6, u
 					proto,
 				)
 			}
-			ips, ttl, err = xTransport.resolveUsingBootstrapResolvers(proto, host, returnIPv4, returnIPv6)
+			ips, ttl, err = xTransport.resolveUsingServers(proto, host, xTransport.bootstrapResolvers, true, returnIPv4, returnIPv6)
 			if err == nil {
 				break
 			}

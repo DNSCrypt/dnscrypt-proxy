@@ -201,12 +201,7 @@ func (plugin *PluginDNS64) fetchPref64(resolver string) error {
 	msg := dns.NewMsg(rfc7050WKN, dns.TypeAAAA)
 
 	transport := newDNSTransport()
-	network, resolver, target, err := plugin.proxy.outboundSource.configureDNSTransport(
-		transport,
-		"udp",
-		resolver,
-		true,
-	)
+	network, resolver, target, err := plugin.proxy.outboundSource.configureDialer(transport.Dialer, "udp", resolver)
 	if err != nil {
 		return err
 	}

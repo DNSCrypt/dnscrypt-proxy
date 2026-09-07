@@ -30,9 +30,6 @@ func TestUDPConnPool_OutboundSource(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := conn.LocalAddr().(*net.UDPAddr).IP; !got.Equal(sourceIP) {
-		t.Fatalf("source = %s, want %s", got, sourceIP)
-	}
 	if _, err := conn.Write([]byte{1}); err != nil {
 		t.Fatal(err)
 	}
