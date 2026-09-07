@@ -129,21 +129,22 @@ func (dialer *sourceAwareProxyForwardDialer) DialContext(ctx context.Context, ne
 	if err != nil || port < 0 || port > 65535 {
 		return nil, fmt.Errorf("invalid proxy endpoint port %q", portStr)
 	}
-	var ips []net.IP
-	if literal := ParseIP(host); literal != nil {
-		ips = []net.IP{literal}
+	var addresses []netip.Addr
+	if literal, err := netip.ParseAddr(host); err == nil {
+		addresses = []netip.Addr{literal}
 	} else {
-		ips, _, err = dialer.xTransport.resolve(host, dialer.xTransport.useIPv4, dialer.xTransport.useIPv6)
+		ips, _, err := dialer.xTransport.resolveProxyEndpoint(host)
 		if err != nil {
 			return nil, fmt.Errorf("unable to resolve proxy endpoint %q: %w", host, err)
 		}
+		for _, ip := range ips {
+			if addr, ok := netip.AddrFromSlice(ip); ok {
+				addresses = append(addresses, addr)
+			}
+		}
 	}
 	var lastErr error
-	for _, ip := range ips {
-		addr, ok := netip.AddrFromSlice(ip)
-		if !ok {
-			continue
-		}
+	for _, addr := range addresses {
 		conn, err := dialer.xTransport.outboundSource.dialTCPContext(
 			ctx,
 			netip.AddrPortFrom(addr, uint16(port)),
@@ -598,14 +599,19 @@ func (xTransport *XTransport) rebuildTransport() {
 	}
 }
 
-// coveredDestinationIPs resolves a destination that the outbound source
-// policy covers. The dialer cannot do it, because a system lookup would
-// leave from the wrong source address.
+// coveredDestinationIPs resolves through the configured DNS policy before source binding.
 func (xTransport *XTransport) coveredDestinationIPs(host, kind string) ([]net.IP, error) {
 	if literal := ParseIP(host); literal != nil {
 		return []net.IP{literal}, nil
 	}
-	ips, ttl, err := xTransport.resolve(host, xTransport.useIPv4, xTransport.useIPv6)
+	var ips []net.IP
+	var ttl time.Duration
+	var err error
+	if xTransport.httpProxyFunction != nil && kind == "HTTP" {
+		ips, ttl, err = xTransport.resolveProxyEndpoint(host)
+	} else {
+		ips, ttl, err = xTransport.resolve(host, xTransport.useIPv4, xTransport.useIPv6)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("unable to resolve covered %s destination %q: %w", kind, host, err)
 	}
@@ -738,8 +744,7 @@ func (xTransport *XTransport) resolveUsingServers(
 	return nil, 0, lastErr
 }
 
-// resolveUsingInternalResolvers queries the proxy itself. These queries never
-// leave the host, so the outbound source policy does not apply to them.
+// resolveUsingInternalResolvers leaves queries to the proxy itself unbound.
 func (xTransport *XTransport) resolveUsingInternalResolvers(
 	proto, host string,
 	returnIPv4, returnIPv6 bool,
@@ -747,8 +752,7 @@ func (xTransport *XTransport) resolveUsingInternalResolvers(
 	return xTransport.resolveUsingServers(proto, host, xTransport.internalResolvers, false, returnIPv4, returnIPv6)
 }
 
-// resolveUsingBootstrapResolvers queries the configured bootstrap resolvers.
-// They are remote, so the outbound source policy covers them.
+// resolveUsingBootstrapResolvers applies source binding to bootstrap DNS queries.
 func (xTransport *XTransport) resolveUsingBootstrapResolvers(
 	proto, host string,
 	returnIPv4, returnIPv6 bool,
@@ -756,13 +760,24 @@ func (xTransport *XTransport) resolveUsingBootstrapResolvers(
 	return xTransport.resolveUsingServers(proto, host, xTransport.bootstrapResolvers, true, returnIPv4, returnIPv6)
 }
 
-func (xTransport *XTransport) resolve(host string, returnIPv4, returnIPv6 bool) (ips []net.IP, ttl time.Duration, err error) {
+func (xTransport *XTransport) resolve(host string, returnIPv4, returnIPv6 bool) ([]net.IP, time.Duration, error) {
+	return xTransport.resolveHost(host, returnIPv4, returnIPv6, true)
+}
+
+// resolveProxyEndpoint avoids depending on the proxy to resolve its own address.
+func (xTransport *XTransport) resolveProxyEndpoint(host string) ([]net.IP, time.Duration, error) {
+	return xTransport.resolveHost(host, xTransport.useIPv4, xTransport.useIPv6, false)
+}
+
+func (xTransport *XTransport) resolveHost(host string, returnIPv4, returnIPv6, useInternal bool) (ips []net.IP, ttl time.Duration, err error) {
 	protos := []string{"udp", "tcp"}
 	if xTransport.mainProto == "tcp" {
 		protos = []string{"tcp", "udp"}
 	}
 	if xTransport.ignoreSystemDNS {
-		if xTransport.internalResolverReady.Load() {
+		if !useInternal {
+			err = errors.New("proxy endpoint requires bootstrap resolution")
+		} else if xTransport.internalResolverReady.Load() {
 			for _, proto := range protos {
 				ips, ttl, err = xTransport.resolveUsingInternalResolvers(proto, host, returnIPv4, returnIPv6)
 				if err == nil {

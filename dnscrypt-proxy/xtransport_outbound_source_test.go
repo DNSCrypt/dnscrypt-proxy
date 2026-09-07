@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"net"
+	"net/http"
 	"net/netip"
+	"net/url"
 	"strconv"
 	"strings"
 	"testing"
@@ -159,6 +161,11 @@ func TestXTransportResolverOutboundSource(t *testing.T) {
 
 func startResolvingDNSServer(t *testing.T, proto string, destinationIP net.IP) (string, <-chan net.IP, func()) {
 	t.Helper()
+	return startResolvingDNSServerWithAnswer(t, proto, destinationIP, netip.MustParseAddr("203.0.113.5"))
+}
+
+func startResolvingDNSServerWithAnswer(t *testing.T, proto string, destinationIP net.IP, answer netip.Addr) (string, <-chan net.IP, func()) {
+	t.Helper()
 	peerCh := make(chan net.IP, 1)
 	respond := func(packet []byte) []byte {
 		msg := dns.Msg{Data: packet}
@@ -167,8 +174,8 @@ func startResolvingDNSServer(t *testing.T, proto string, destinationIP net.IP) (
 		}
 		msg.Response = true
 		msg.Answer = []dns.RR{&dns.A{
-			Hdr: dns.Header{Name: "example.org.", Class: dns.ClassINET, TTL: 60},
-			A:   rdata.A{Addr: netip.MustParseAddr("203.0.113.5")},
+			Hdr: dns.Header{Name: msg.Question[0].Header().Name, Class: dns.ClassINET, TTL: 60},
+			A:   rdata.A{Addr: answer},
 		}}
 		if msg.Pack() != nil {
 			return nil
@@ -213,4 +220,96 @@ func startResolvingDNSServer(t *testing.T, proto string, destinationIP net.IP) (
 	}()
 	port := listener.Addr().(*net.TCPAddr).Port
 	return net.JoinHostPort(destinationIP.String(), strconv.Itoa(port)), peerCh, func() { _ = listener.Close() }
+}
+
+func TestProxyEndpointResolutionDoesNotQueryItself(t *testing.T) {
+	for _, kind := range []string{"SOCKS", "HTTP"} {
+		t.Run(kind, func(t *testing.T) {
+			loopback := net.IPv4(127, 0, 0, 1)
+			answer := netip.MustParseAddr("127.0.0.1")
+			internal, internalQueries, closeInternal := startResolvingDNSServerWithAnswer(t, "udp", loopback, answer)
+			defer closeInternal()
+			bootstrap, bootstrapQueries, closeBootstrap := startResolvingDNSServerWithAnswer(t, "udp", loopback, answer)
+			defer closeBootstrap()
+			listener, err := net.ListenTCP("tcp4", &net.TCPAddr{IP: loopback})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer listener.Close()
+			go func() {
+				conn, err := listener.AcceptTCP()
+				if err == nil {
+					_ = conn.Close()
+				}
+			}()
+			policy, err := parseOutboundSourcePolicy("192.0.2.10", "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			xTransport := NewXTransport(&policy)
+			xTransport.ignoreSystemDNS = true
+			xTransport.useIPv6 = false
+			xTransport.internalResolverReady.Store(true)
+			xTransport.internalResolvers = []string{internal}
+			xTransport.bootstrapResolvers = []string{bootstrap}
+			endpoint := net.JoinHostPort("proxy.test", strconv.Itoa(listener.Addr().(*net.TCPAddr).Port))
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			var conn net.Conn
+			if kind == "SOCKS" {
+				forward := &sourceAwareProxyForwardDialer{xTransport: xTransport}
+				conn, err = forward.DialContext(ctx, "tcp", endpoint)
+			} else {
+				proxyURL, parseErr := url.Parse("http://" + endpoint)
+				if parseErr != nil {
+					t.Fatal(parseErr)
+				}
+				xTransport.httpProxyFunction = http.ProxyURL(proxyURL)
+				xTransport.rebuildTransport()
+				conn, err = xTransport.transport.DialContext(ctx, "tcp", endpoint)
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			_ = conn.Close()
+			select {
+			case <-internalQueries:
+				t.Fatal("proxy endpoint lookup used the proxy itself, creating a circular dependency")
+			default:
+			}
+			select {
+			case <-bootstrapQueries:
+			default:
+				t.Fatal("proxy endpoint lookup did not use the bootstrap resolver")
+			}
+		})
+	}
+}
+
+func TestSourceAwareProxyForwardDialerScopedLiteral(t *testing.T) {
+	listener, err := net.ListenTCP("tcp6", &net.TCPAddr{IP: net.IPv6loopback})
+	if err != nil {
+		t.Skipf("IPv6 loopback is unavailable: %v", err)
+	}
+	defer listener.Close()
+	go func() {
+		conn, err := listener.AcceptTCP()
+		if err == nil {
+			_ = conn.Close()
+		}
+	}()
+	policy, err := parseOutboundSourcePolicy("192.0.2.10", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	xTransport := NewXTransport(&policy)
+	xTransport.ignoreSystemDNS = true
+	xTransport.bootstrapResolvers = nil
+	forward := &sourceAwareProxyForwardDialer{xTransport: xTransport}
+	endpoint := net.JoinHostPort("::1%1", strconv.Itoa(listener.Addr().(*net.TCPAddr).Port))
+	conn, err := forward.DialContext(context.Background(), "tcp", endpoint)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = conn.Close()
 }

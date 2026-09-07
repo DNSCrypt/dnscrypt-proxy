@@ -94,38 +94,29 @@ disabled_server_names = []
 #                           Connection Settings                                #
 ###############################################################################
 
-## Optional source addresses for covered outbound connections. Values must be
-## literal addresses of the named family, not hostnames, CIDRs, interface names,
-## or address-and-port pairs. IPv4-mapped IPv6 input is accepted for the IPv4
-## setting, and a scoped IPv6 address may include a zone (such as `%eth0`).
+## Optional source addresses for covered outbound connections.
+## Values must be literal addresses of the named family, not hostnames, CIDRs, interface names, or address-and-port pairs.
+## IPv4-mapped IPv6 input is accepted for the IPv4 setting, and a scoped IPv6 address may include a zone (such as `%eth0`).
 ## Covered TCP, UDP, and QUIC sockets always use ephemeral source ports.
 ##
 ## Leaving both values empty preserves the default kernel-selected source.
-## Setting either one enables source binding. Covered non-local connections for
-## a family with no configured source then fail; they are never retried unbound.
+## Setting either one enables source binding.
+## Covered non-local connections for a family with no configured source then fail; they are never retried unbound.
 ##
-## Covered traffic includes DNSCrypt queries and certificate probes (direct or
-## relayed), DoH/ODoH and remote source downloads, HTTP/3, bootstrap/fallback
-## DNS, DNS64 discovery, and the client-to-proxy connection. A remote HTTP or
-## SOCKS proxy sees the configured source; the proxy's onward connection is
-## outside this setting. Private, ULA, and same-subnet next hops remain covered.
+## Covered traffic includes DNSCrypt queries and certificate probes (direct or relayed), DoH/ODoH and remote source downloads, HTTP/3, bootstrap/fallback DNS, DNS64 discovery, and the client-to-proxy connection.
+## A remote HTTP or SOCKS proxy sees the configured source; the proxy's onward connection is outside this setting.
+## Private, ULA, and same-subnet next hops remain covered.
 ##
-## Native system DNS, local system logging, direct forwarding rules (including
-## public targets and DHCP discovery), the startup netprobe, `-resolve`, inbound
-## and local control sockets, loopback/unspecified destinations, and known
-## self-resolution queries remain unbound. Direct forwarding has no opt-in for
-## source binding. With binding enabled, `ignore_system_dns = true` also disables
-## the last-resort native system-DNS fallback; `false` retains native OS lookup
-## semantics and those lookup sockets remain unbound. The unbound netprobe may
-## permit startup before the configured source is usable.
+## Native system DNS, local system logging, direct forwarding rules (including public targets and DHCP discovery), the startup netprobe, `-resolve`, inbound and local control sockets, loopback/unspecified destinations, and known self-resolution queries remain unbound.
+## Direct forwarding has no opt-in for source binding.
+## With binding enabled, `ignore_system_dns = true` also disables the last-resort native system-DNS fallback; `false` retains native OS lookup semantics and those lookup sockets remain unbound.
+## The unbound netprobe may permit startup before the configured source is usable.
 ##
-## Changes require a restart. If a configured address temporarily disappears,
-## covered connections fail until that same address returns; a different new
-## address requires updating this setting and restarting. Source binding does
-## not select an interface or route. Policy routing may be required (for example,
-## a Linux `ip rule from <source>`) to prevent asymmetric routing or uRPF drops.
-## Outbound NAT can still rewrite the source, so add an appropriate NAT exemption
-## if the peer must observe the configured literal.
+## Changes require a restart.
+## If a configured address temporarily disappears, covered connections fail until that same address returns; a different new address requires updating this setting and restarting.
+## Source binding does not select an interface or route.
+## Policy routing may be required (for example, a Linux `ip rule from <source>`) to prevent asymmetric routing or uRPF drops.
+## Outbound NAT can still rewrite the source, so add an appropriate NAT exemption if the peer must observe the configured literal.
 
 # outbound_source_ipv4 = '192.0.2.10'
 # outbound_source_ipv6 = '2001:db8::10'

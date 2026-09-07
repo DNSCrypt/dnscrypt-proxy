@@ -71,19 +71,16 @@ func configureLogging(proxy *Proxy, flags *ConfigFlags, config *Config) {
 	}
 }
 
-// logOutboundSourcePolicy reports what the configured policy does not cover.
-//
-// It reads the effective ignoreSystemDNS, not the raw setting, because the
-// setting only takes effect when bootstrap resolvers are configured.
+// logOutboundSourcePolicy reports missing source families and effective system DNS exclusions.
 func logOutboundSourcePolicy(policy *outboundSourcePolicy, ignoreSystemDNS bool) {
 	if !policy.enabled() {
 		return
 	}
 	if !policy.ipv4.IsValid() {
-		dlog.Info("No outbound IPv4 source is configured. Covered IPv4 connections will fail.")
+		dlog.Info("No outbound IPv4 source is configured. Covered non-local IPv4 connections will fail.")
 	}
 	if !policy.ipv6.IsValid() {
-		dlog.Info("No outbound IPv6 source is configured. Covered IPv6 connections will fail.")
+		dlog.Info("No outbound IPv6 source is configured. Covered non-local IPv6 connections will fail.")
 	}
 	if !ignoreSystemDNS {
 		dlog.Info("Native system DNS does not use outbound source binding.")

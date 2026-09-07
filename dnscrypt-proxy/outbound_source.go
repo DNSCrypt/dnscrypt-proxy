@@ -24,10 +24,7 @@ type outboundSourcePolicy struct {
 	ipv6 netip.Addr
 }
 
-// outboundTarget is a destination matched against the policy.
-//
-// It carries the address to connect to and the source address to bind to.
-// The source stays invalid when the destination must not be bound.
+// outboundTarget selects source binding for a destination; an invalid source leaves it unbound.
 type outboundTarget struct {
 	destination netip.Addr
 	source      netip.Addr
@@ -84,7 +81,6 @@ func (family outboundSourceFamily) setting() string {
 	return "outbound_source_ipv6"
 }
 
-// bound reports whether the socket must be bound before it is used.
 func (target outboundTarget) bound() bool {
 	return target.source.IsValid()
 }
@@ -109,10 +105,7 @@ func (target outboundTarget) dialError(proto string, remote fmt.Stringer, err er
 	)
 }
 
-// sourceFor picks the source address to use for a destination.
-//
-// The policy must be enabled. Loopback and unspecified destinations are left
-// unbound, because they never leave the host.
+// sourceFor applies an enabled policy, leaving loopback and unspecified destinations unbound.
 func (policy *outboundSourcePolicy) sourceFor(destination netip.Addr) (outboundTarget, error) {
 	if !destination.IsValid() {
 		return outboundTarget{}, fmt.Errorf("invalid outbound destination address")
@@ -175,9 +168,7 @@ func (policy *outboundSourcePolicy) dialTCP(
 	return policy.dialTCPContext(context.Background(), destination, timeout, keepAlive)
 }
 
-// dialUDP connects a UDP socket to a destination.
-//
-// A UDP connect never waits for the peer, so no timeout is needed here.
+// dialUDP binds a connected UDP socket without waiting for the peer.
 func (policy *outboundSourcePolicy) dialUDP(destination *net.UDPAddr) (*net.UDPConn, error) {
 	if destination == nil {
 		return nil, fmt.Errorf("nil UDP destination")
@@ -203,10 +194,7 @@ func (policy *outboundSourcePolicy) dialUDP(destination *net.UDPAddr) (*net.UDPC
 	return conn, err
 }
 
-// listenUDP opens an unconnected UDP socket suitable for a destination.
-//
-// It returns the network and the normalized destination, so that the caller
-// keeps talking to the same address family as the socket.
+// listenUDP binds an unconnected socket and keeps its destination in the same address family.
 func (policy *outboundSourcePolicy) listenUDP(destination netip.Addr) (*net.UDPConn, string, netip.Addr, error) {
 	if !policy.enabled() {
 		conn, err := net.ListenUDP("udp", nil)
@@ -235,10 +223,7 @@ func (policy *outboundSourcePolicy) listenUDP(destination netip.Addr) (*net.UDPC
 	return conn, network, target.destination, err
 }
 
-// newDNSTransport returns a DNS transport that owns its dialer.
-//
-// dns.NewTransport copies the package default, so the dialer pointer is
-// shared. Callers that change the dialer must not touch the shared one.
+// newDNSTransport isolates dialer changes from the shared DNS defaults.
 func newDNSTransport() *dns.Transport {
 	transport := dns.NewTransport()
 	dialer := *transport.Dialer
@@ -246,11 +231,7 @@ func newDNSTransport() *dns.Transport {
 	return transport
 }
 
-// configureDNSTransport binds a DNS transport to the configured source.
-//
-// It returns the network and resolver address to use for the exchange, plus
-// the matched target. The target is nil when the policy does not apply, and
-// wrapDialError then leaves errors untouched.
+// configureDNSTransport applies source binding and returns the matching exchange destination and error context.
 func (policy *outboundSourcePolicy) configureDNSTransport(
 	transport *dns.Transport,
 	proto, resolver string,
