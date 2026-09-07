@@ -4,6 +4,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/ed25519"
 	"crypto/elliptic"
+	"crypto/mldsa"
 	"crypto/rsa"
 	"math/big"
 	"sort"
@@ -171,6 +172,18 @@ func (k *DNSKEY) publicKeyED25519() ed25519.PublicKey {
 		return nil
 	}
 	return keybuf
+}
+
+func (k *DNSKEY) publicKeyMLDSA44() *mldsa.PublicKey {
+	keybuf, err := pack.Base64([]byte(k.PublicKey))
+	if err != nil {
+		return nil
+	}
+	pubkey, err := mldsa.NewPublicKey(mldsa.MLDSA44(), keybuf)
+	if err != nil {
+		return nil
+	}
+	return pubkey
 }
 
 // Return the raw signature data.

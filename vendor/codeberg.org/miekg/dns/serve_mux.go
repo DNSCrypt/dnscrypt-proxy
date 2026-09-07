@@ -64,7 +64,7 @@ func (mux *ServeMux) match(q string, t, c uint16) (Handler, string) {
 	q = dnsutilCanonical(q)
 
 	var handler Handler
-	var ds, off, end = 0, 0, false
+	var off, ds, end = 0, 0, false
 	mux.RLock()
 	m, ok := mux.z[c] // get the class map
 	if !ok {
@@ -79,23 +79,20 @@ func (mux *ServeMux) match(q string, t, c uint16) (Handler, string) {
 				return h, q[off:]
 			}
 			// Continue for DS to see if we have a parent too, if so delegate to the parent.
+			// If we already found a DS target we should return the current handler as that
+			// should be a parent.
+			if handler != nil { // Set in previous iteration, we return "this one" (= h).
+				mux.RUnlock()
+				return h, q[off:]
+			}
 			handler = h
 			ds = off
 		}
 	}
+	mux.RUnlock()
 	if handler != nil {
-		mux.RUnlock()
 		return handler, q[ds:]
 	}
-
-	// Wildcard match, if we have found nothing try the root zone as a last resort.
-	// TODO(miek): is this really needed?
-	if h, ok := m["."]; ok {
-		mux.RUnlock()
-		return h, "."
-	}
-
-	mux.RUnlock()
 	return nil, ""
 }
 
@@ -143,14 +140,17 @@ func (mux *ServeMux) HandleRemove(pattern string, class ...uint16) {
 // ServeDNS dispatches the request to the handler whose pattern most closely matches the request message.
 //
 // ServeDNS is DNSSEC aware, meaning that queries for the DS record are redirected to the parent zone (if
-// that is also registered), otherwise the child gets the query.
+// that is also registered), otherwise the current zone gets the query.
 //
 // If no handler is found a standard REFUSED message is returned. No checks are made on the request message.
 func (mux *ServeMux) ServeDNS(ctx context.Context, w ResponseWriter, req *Msg) {
-	h, zone := mux.match(req.Question[0].Header().Name, req.qtype, req.qclass)
-	if h != nil {
-		ctx = context.WithValue(ctx, contextKeyZone, zone)
-		h.ServeDNS(ctx, w, req)
+	if req.qtype == 0 { // this is an implicit check that we've at least seen something resembling a question
+		refuse(w, req)
+		return
+	}
+
+	if h, zone := mux.match(req.Question[0].Header().Name, req.qtype, req.qclass); h != nil {
+		h.ServeDNS(context.WithValue(ctx, contextKeyZone, zone), w, req)
 		return
 	}
 

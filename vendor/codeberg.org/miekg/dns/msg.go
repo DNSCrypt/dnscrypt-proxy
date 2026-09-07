@@ -161,9 +161,6 @@ func (m *Msg) Reset() {
 }
 
 func (m *Msg) Pack() error {
-	if len(m.Question) != 1 {
-		return pack.Errorf(": %s", "there must be a single question")
-	}
 	if l := m.Len(); cap(m.Data) < l {
 		m.Data = make([]byte, l)
 	} else {
@@ -207,7 +204,7 @@ func (m *Msg) Pack() error {
 	}
 
 	isPseudo := m.isPseudo()
-	counts := uint64(1)<<48 |
+	counts := uint64(len(m.Question))<<48 |
 		uint64(len(m.Answer))<<32 |
 		uint64(len(m.Ns))<<16 |
 		uint64(len(m.Extra)+isPseudo)
@@ -223,8 +220,10 @@ func (m *Msg) Pack() error {
 		compression = make(map[string]uint16, l+3) // 3 is randomly chosen, as that much rdata might be compressable...
 	}
 
-	if off, err = packQuestion(m.Question[0], m.Data, off, compression); err != nil {
-		return err
+	if len(m.Question) > 0 {
+		if off, err = packQuestion(m.Question[0], m.Data, off, compression); err != nil {
+			return err
+		}
 	}
 
 	for i := range m.Answer {
@@ -746,16 +745,13 @@ func (m *Msg) ReadFrom(r io.Reader) (int64, error) {
 
 	if sock, ok := r.(*net.UDPConn); ok {
 		n, err := sock.Read(m.Data)
-		if err != nil {
-			return 0, err
-		}
 		m.Data = m.Data[:n]
-		return int64(n), nil
+		return int64(n), err
 	}
 
 	// When doing io.Copy that underlaying type we get from net is net.tcpConnWithoutWriteTo, not a
 	// net.TCPConn.For udp this seems not to be the case, so the fallthrough when things are not UDP like
-	// is too assume TCP.
+	// is to assume TCP.
 
 	l := uint16(0)
 	if err := binary.Read(r, binary.BigEndian, &l); err != nil {
@@ -764,7 +760,7 @@ func (m *Msg) ReadFrom(r io.Reader) (int64, error) {
 	li := int(l)
 	if li < MsgHeaderSize {
 		io.Copy(io.Discard, io.LimitReader(r, int64(li))) // discard the remaining octets
-		return 0, fmt.Errorf("dns: message size %d, can not be smaller than %d", li, MsgHeaderSize)
+		return int64(li), fmt.Errorf("dns: message size %d, can not be smaller than %d", li, MsgHeaderSize)
 	}
 
 	if len(m.Data) < li {
@@ -773,10 +769,10 @@ func (m *Msg) ReadFrom(r io.Reader) (int64, error) {
 		m.Data = m.Data[:li]
 	}
 	n, err := io.ReadFull(r, m.Data)
-	if err == nil && n != li {
-		return 0, fmt.Errorf("dns: message size %d does not match prefix %d", li, n)
-	}
 	m.Data = m.Data[:n]
+	if err == nil && n != li {
+		return int64(n), fmt.Errorf("dns: message size %d does not match prefix %d", li, n)
+	}
 	return int64(n), err
 }
 
