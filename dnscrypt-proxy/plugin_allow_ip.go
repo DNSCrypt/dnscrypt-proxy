@@ -156,7 +156,7 @@ func (plugin *PluginAllowedIP) Eval(pluginsState *PluginsState, msg *dns.Msg) er
 		if rrtype == dns.TypeA {
 			ipStr = answer.(*dns.A).A.Addr.String()
 		} else if rrtype == dns.TypeAAAA {
-			ipStr = answer.(*dns.AAAA).AAAA.Addr.String() // IPv4-mapped IPv6 addresses are converted to IPv4
+			ipStr = answer.(*dns.AAAA).AAAA.Addr.Unmap().String() // IPv4-mapped IPv6 addresses are converted to IPv4
 		}
 		if _, found := plugin.allowedIPs[ipStr]; found {
 			allowed, reason = true, ipStr

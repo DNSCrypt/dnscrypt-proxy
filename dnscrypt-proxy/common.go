@@ -281,7 +281,7 @@ func ParseIPRule(line string, lineNo int) (cleanLine string, trailingStar bool, 
 	trailingStar = strings.HasSuffix(line, "*")
 
 	if len(line) < 2 || (ip != nil && trailingStar) {
-		return "", false, fmt.Errorf("suspicious IP rule [%s] at line %d", line, lineNo)
+		return "", false, fmt.Errorf("suspicious IP rule [%s] at line %d", line, 1+lineNo)
 	}
 
 	cleanLine = line
@@ -292,10 +292,10 @@ func ParseIPRule(line string, lineNo int) (cleanLine string, trailingStar bool, 
 		cleanLine = cleanLine[:len(cleanLine)-1]
 	}
 	if len(cleanLine) == 0 {
-		return "", false, fmt.Errorf("empty IP rule at line %d", lineNo)
+		return "", false, fmt.Errorf("empty IP rule at line %d", 1+lineNo)
 	}
 	if strings.Contains(cleanLine, "*") {
-		return "", false, fmt.Errorf("invalid rule: [%s] - wildcards can only be used as a suffix at line %d", line, lineNo)
+		return "", false, fmt.Errorf("invalid rule: [%s] - wildcards can only be used as a suffix at line %d", line, 1+lineNo)
 	}
 
 	return strings.ToLower(cleanLine), trailingStar, nil
@@ -323,11 +323,11 @@ func LoadIPRules(lines string, prefixes *iradix.Tree, ips map[string]any, networ
 	err := ProcessConfigLines(lines, func(line string, lineNo int) error {
 		if strings.Contains(line, "/") {
 			if networks == nil {
-				dlog.Errorf("CIDR rule [%s] at line %d but no network table provided", line, lineNo)
+				dlog.Errorf("CIDR rule [%s] at line %d but no network table provided", line, 1+lineNo)
 				return nil
 			}
 			if err := networks.AddCIDR(line, true); err != nil {
-				dlog.Errorf("Invalid CIDR rule [%s] at line %d: %v", line, lineNo, err)
+				dlog.Errorf("Invalid CIDR rule [%s] at line %d: %v", line, 1+lineNo, err)
 			}
 			return nil
 		}
