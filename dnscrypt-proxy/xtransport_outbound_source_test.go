@@ -16,9 +16,9 @@ import (
 	"codeberg.org/miekg/dns/rdata"
 )
 
-func TestXTransportOutboundSourceDial(t *testing.T) {
-	sourceIP := usableNonLoopbackIPv4(t)
-	policy, err := parseOutboundSourcePolicy(sourceIP.String(), "")
+func TestXTransportSourceBinding(t *testing.T) {
+	sourceIP := nonLoopbackIPv4(t)
+	policy, err := parseOutboundSources(sourceIP.String(), "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,8 +54,8 @@ func TestXTransportOutboundSourceDial(t *testing.T) {
 	}
 }
 
-func TestXTransportOutboundSourceMissingFamily(t *testing.T) {
-	policy, err := parseOutboundSourcePolicy("192.0.2.10", "")
+func TestXTransportMissingSource(t *testing.T) {
+	policy, err := parseOutboundSources("192.0.2.10", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,15 +67,15 @@ func TestXTransportOutboundSourceMissingFamily(t *testing.T) {
 	}
 }
 
-func TestSourceAwareProxyForwardDialer(t *testing.T) {
-	sourceIP := usableNonLoopbackIPv4(t)
-	policy, err := parseOutboundSourcePolicy(sourceIP.String(), "")
+func TestProxyDialer(t *testing.T) {
+	sourceIP := nonLoopbackIPv4(t)
+	policy, err := parseOutboundSources(sourceIP.String(), "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	xTransport := NewXTransport(&policy)
 	xTransport.timeout = time.Second
-	forward := &sourceAwareProxyForwardDialer{xTransport: xTransport}
+	forward := &proxyDialer{xTransport: xTransport}
 
 	t.Run("remote", func(t *testing.T) {
 		listener, err := net.ListenTCP("tcp4", &net.TCPAddr{IP: net.IPv4zero})
@@ -134,16 +134,16 @@ func TestSourceAwareProxyForwardDialer(t *testing.T) {
 	})
 }
 
-func TestXTransportResolverOutboundSource(t *testing.T) {
-	sourceIP := usableNonLoopbackIPv4(t)
-	policy, err := parseOutboundSourcePolicy(sourceIP.String(), "")
+func TestResolverSourceBinding(t *testing.T) {
+	sourceIP := nonLoopbackIPv4(t)
+	policy, err := parseOutboundSources(sourceIP.String(), "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	xTransport := NewXTransport(&policy)
 	for _, proto := range []string{"udp", "tcp"} {
 		t.Run(proto, func(t *testing.T) {
-			resolver, peerCh, closeServer := startResolvingDNSServer(t, proto, sourceIP)
+			resolver, peerCh, closeServer := startTestResolver(t, proto, sourceIP)
 			defer closeServer()
 			ips, _, err := xTransport.resolveUsingResolver(proto, "example.org", resolver, true, true, false)
 			if err != nil {
@@ -159,14 +159,14 @@ func TestXTransportResolverOutboundSource(t *testing.T) {
 	}
 }
 
-func startResolvingDNSServer(t *testing.T, proto string, destinationIP net.IP) (string, <-chan net.IP, func()) {
+func startTestResolver(t *testing.T, proto string, destinationIP net.IP) (string, <-chan net.IP, func()) {
 	t.Helper()
-	return startResolvingDNSServerWithAnswer(t, proto, destinationIP, netip.MustParseAddr("203.0.113.5"))
+	return startTestResolverWithIP(t, proto, destinationIP, netip.MustParseAddr("203.0.113.5"))
 }
 
-func startResolvingDNSServerWithAnswer(t *testing.T, proto string, destinationIP net.IP, answer netip.Addr) (string, <-chan net.IP, func()) {
+func startTestResolverWithIP(t *testing.T, proto string, destinationIP net.IP, answer netip.Addr) (string, <-chan net.IP, func()) {
 	t.Helper()
-	addr, peers, closeServer := startOutboundDNSServer(t, proto, destinationIP, false, func(msg *dns.Msg) {
+	addr, peers, closeServer := startTestDNS(t, proto, destinationIP, false, func(msg *dns.Msg) {
 		msg.Answer = []dns.RR{&dns.A{
 			Hdr: dns.Header{Name: msg.Question[0].Header().Name, Class: dns.ClassINET, TTL: 60},
 			A:   rdata.A{Addr: answer},
@@ -175,14 +175,14 @@ func startResolvingDNSServerWithAnswer(t *testing.T, proto string, destinationIP
 	return addr.String(), peers, closeServer
 }
 
-func TestProxyEndpointResolutionDoesNotQueryItself(t *testing.T) {
+func TestProxyResolveNoRecursion(t *testing.T) {
 	for _, kind := range []string{"SOCKS", "HTTP"} {
 		t.Run(kind, func(t *testing.T) {
 			loopback := net.IPv4(127, 0, 0, 1)
 			answer := netip.MustParseAddr("127.0.0.1")
-			internal, internalQueries, closeInternal := startResolvingDNSServerWithAnswer(t, "udp", loopback, answer)
+			internal, internalQueries, closeInternal := startTestResolverWithIP(t, "udp", loopback, answer)
 			defer closeInternal()
-			bootstrap, bootstrapQueries, closeBootstrap := startResolvingDNSServerWithAnswer(t, "udp", loopback, answer)
+			bootstrap, bootstrapQueries, closeBootstrap := startTestResolverWithIP(t, "udp", loopback, answer)
 			defer closeBootstrap()
 			listener, err := net.ListenTCP("tcp4", &net.TCPAddr{IP: loopback})
 			if err != nil {
@@ -195,7 +195,7 @@ func TestProxyEndpointResolutionDoesNotQueryItself(t *testing.T) {
 					_ = conn.Close()
 				}
 			}()
-			policy, err := parseOutboundSourcePolicy("192.0.2.10", "")
+			policy, err := parseOutboundSources("192.0.2.10", "")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -210,7 +210,7 @@ func TestProxyEndpointResolutionDoesNotQueryItself(t *testing.T) {
 			defer cancel()
 			var conn net.Conn
 			if kind == "SOCKS" {
-				forward := &sourceAwareProxyForwardDialer{xTransport: xTransport}
+				forward := &proxyDialer{xTransport: xTransport}
 				conn, err = forward.DialContext(ctx, "tcp", endpoint)
 			} else {
 				proxyURL, parseErr := url.Parse("http://" + endpoint)
@@ -239,7 +239,7 @@ func TestProxyEndpointResolutionDoesNotQueryItself(t *testing.T) {
 	}
 }
 
-func TestSourceAwareProxyForwardDialerScopedLiteral(t *testing.T) {
+func TestProxyDialerIPv6Zone(t *testing.T) {
 	listener, err := net.ListenTCP("tcp6", &net.TCPAddr{IP: net.IPv6loopback})
 	if err != nil {
 		t.Skipf("IPv6 loopback is unavailable: %v", err)
@@ -251,14 +251,14 @@ func TestSourceAwareProxyForwardDialerScopedLiteral(t *testing.T) {
 			_ = conn.Close()
 		}
 	}()
-	policy, err := parseOutboundSourcePolicy("192.0.2.10", "")
+	policy, err := parseOutboundSources("192.0.2.10", "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	xTransport := NewXTransport(&policy)
 	xTransport.ignoreSystemDNS = true
 	xTransport.bootstrapResolvers = nil
-	forward := &sourceAwareProxyForwardDialer{xTransport: xTransport}
+	forward := &proxyDialer{xTransport: xTransport}
 	endpoint := net.JoinHostPort("::1%1", strconv.Itoa(listener.Addr().(*net.TCPAddr).Port))
 	conn, err := forward.DialContext(context.Background(), "tcp", endpoint)
 	if err != nil {

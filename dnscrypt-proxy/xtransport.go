@@ -106,18 +106,18 @@ type XTransport struct {
 	outboundSource           *outboundSourcePolicy
 }
 
-type sourceAwareProxyForwardDialer struct {
+type proxyDialer struct {
 	xTransport *XTransport
 }
 
-var _ netproxy.Dialer = (*sourceAwareProxyForwardDialer)(nil)
-var _ netproxy.ContextDialer = (*sourceAwareProxyForwardDialer)(nil)
+var _ netproxy.Dialer = (*proxyDialer)(nil)
+var _ netproxy.ContextDialer = (*proxyDialer)(nil)
 
-func (dialer *sourceAwareProxyForwardDialer) Dial(network, address string) (net.Conn, error) {
+func (dialer *proxyDialer) Dial(network, address string) (net.Conn, error) {
 	return dialer.DialContext(context.Background(), network, address)
 }
 
-func (dialer *sourceAwareProxyForwardDialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
+func (dialer *proxyDialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
 	if network != "tcp" && network != "tcp4" && network != "tcp6" {
 		return nil, fmt.Errorf("unsupported proxy forward network %q", network)
 	}
@@ -133,7 +133,7 @@ func (dialer *sourceAwareProxyForwardDialer) DialContext(ctx context.Context, ne
 	if literal, err := netip.ParseAddr(host); err == nil {
 		addresses = []netip.Addr{literal}
 	} else {
-		ips, _, err := dialer.xTransport.resolveProxyEndpoint(host)
+		ips, _, err := dialer.xTransport.resolveProxy(host)
 		if err != nil {
 			return nil, fmt.Errorf("unable to resolve proxy endpoint %q: %w", host, err)
 		}
@@ -373,7 +373,7 @@ func (xTransport *XTransport) rebuildTransport() {
 
 			cachedIPs, _, _ := xTransport.loadCachedIPs(host)
 			if xTransport.outboundSource.enabled() && xTransport.proxyDialer == nil && len(cachedIPs) == 0 {
-				resolved, err := xTransport.coveredDestinationIPs(host, "HTTP")
+				resolved, err := xTransport.resolveDialIPs(host, "HTTP")
 				if err != nil {
 					return nil, err
 				}
@@ -538,7 +538,7 @@ func (xTransport *XTransport) rebuildTransport() {
 
 			cachedIPs, _, _ := xTransport.loadCachedIPs(host)
 			if xTransport.outboundSource.enabled() && len(cachedIPs) == 0 {
-				resolved, err := xTransport.coveredDestinationIPs(host, "HTTP/3")
+				resolved, err := xTransport.resolveDialIPs(host, "HTTP/3")
 				if err != nil {
 					return nil, err
 				}
@@ -599,8 +599,8 @@ func (xTransport *XTransport) rebuildTransport() {
 	}
 }
 
-// coveredDestinationIPs resolves through the configured DNS policy before source binding.
-func (xTransport *XTransport) coveredDestinationIPs(host, kind string) ([]net.IP, error) {
+// resolveDialIPs resolves through the configured DNS policy before source binding.
+func (xTransport *XTransport) resolveDialIPs(host, kind string) ([]net.IP, error) {
 	if literal := ParseIP(host); literal != nil {
 		return []net.IP{literal}, nil
 	}
@@ -608,7 +608,7 @@ func (xTransport *XTransport) coveredDestinationIPs(host, kind string) ([]net.IP
 	var ttl time.Duration
 	var err error
 	if xTransport.httpProxyFunction != nil && kind == "HTTP" {
-		ips, ttl, err = xTransport.resolveProxyEndpoint(host)
+		ips, ttl, err = xTransport.resolveProxy(host)
 	} else {
 		ips, ttl, err = xTransport.resolve(host, xTransport.useIPv4, xTransport.useIPv6)
 	}
@@ -752,8 +752,8 @@ func (xTransport *XTransport) resolve(host string, returnIPv4, returnIPv6 bool) 
 	return xTransport.resolveHost(host, returnIPv4, returnIPv6, true)
 }
 
-// resolveProxyEndpoint avoids depending on the proxy to resolve its own address.
-func (xTransport *XTransport) resolveProxyEndpoint(host string) ([]net.IP, time.Duration, error) {
+// resolveProxy avoids depending on the proxy to resolve its own address.
+func (xTransport *XTransport) resolveProxy(host string) ([]net.IP, time.Duration, error) {
 	return xTransport.resolveHost(host, xTransport.useIPv4, xTransport.useIPv6, false)
 }
 

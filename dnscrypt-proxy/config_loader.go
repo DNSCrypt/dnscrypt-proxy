@@ -71,8 +71,8 @@ func configureLogging(proxy *Proxy, flags *ConfigFlags, config *Config) {
 	}
 }
 
-// logOutboundSourcePolicy reports missing source families and effective system DNS exclusions.
-func logOutboundSourcePolicy(policy *outboundSourcePolicy, ignoreSystemDNS bool) {
+// logOutboundSources reports missing source families and effective system DNS exclusions.
+func logOutboundSources(policy *outboundSourcePolicy, ignoreSystemDNS bool) {
 	if !policy.enabled() {
 		return
 	}
@@ -141,7 +141,7 @@ func configureXTransport(proxy *Proxy, config *Config) error {
 		}
 		forwardDialer := netproxy.Dialer(netproxy.Direct)
 		if proxy.outboundSource.enabled() {
-			forwardDialer = &sourceAwareProxyForwardDialer{xTransport: proxy.xTransport}
+			forwardDialer = &proxyDialer{xTransport: proxy.xTransport}
 		}
 		proxyDialer, err := netproxy.FromURL(proxyDialerURL, forwardDialer)
 		if err != nil {

@@ -382,7 +382,7 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	proxy.userName = config.UserName
 	proxy.child = *flags.Child
 	proxy.enableHotReload = config.EnableHotReload
-	proxy.outboundSource, err = parseOutboundSourcePolicy(config.OutboundSourceIPv4, config.OutboundSourceIPv6)
+	proxy.outboundSource, err = parseOutboundSources(config.OutboundSourceIPv4, config.OutboundSourceIPv6)
 	if err != nil {
 		return err
 	}
@@ -398,7 +398,7 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	if err := configureXTransport(proxy, &config); err != nil {
 		return err
 	}
-	logOutboundSourcePolicy(&proxy.outboundSource, proxy.xTransport.ignoreSystemDNS)
+	logOutboundSources(&proxy.outboundSource, proxy.xTransport.ignoreSystemDNS)
 
 	// Configure DoH client authentication
 	if err := configureDoHClientAuth(proxy, &config); err != nil {

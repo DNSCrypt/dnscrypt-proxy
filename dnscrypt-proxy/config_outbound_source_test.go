@@ -7,7 +7,7 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
-func TestOutboundSourceConfigTOML(t *testing.T) {
+func TestOutboundSourceConfig(t *testing.T) {
 	tests := []struct {
 		name      string
 		toml      string
@@ -40,7 +40,7 @@ func TestOutboundSourceConfigTOML(t *testing.T) {
 			if _, err := toml.Decode(test.toml, &config); err != nil {
 				t.Fatal(err)
 			}
-			policy, err := parseOutboundSourcePolicy(config.OutboundSourceIPv4, config.OutboundSourceIPv6)
+			policy, err := parseOutboundSources(config.OutboundSourceIPv4, config.OutboundSourceIPv6)
 			if test.wantError != "" {
 				if err == nil || !strings.Contains(err.Error(), test.wantError) {
 					t.Fatalf("error = %v, want containing %q", err, test.wantError)

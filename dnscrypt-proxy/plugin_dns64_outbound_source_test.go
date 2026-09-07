@@ -9,13 +9,13 @@ import (
 	"codeberg.org/miekg/dns/rdata"
 )
 
-func TestDNS64DiscoveryOutboundSource(t *testing.T) {
-	sourceIP := usableNonLoopbackIPv4(t)
-	policy, err := parseOutboundSourcePolicy(sourceIP.String(), "")
+func TestDNS64SourceBinding(t *testing.T) {
+	sourceIP := nonLoopbackIPv4(t)
+	policy, err := parseOutboundSources(sourceIP.String(), "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	resolver, peerCh, closeServer := startOutboundDNSServer(t, "udp", sourceIP, false, func(msg *dns.Msg) {
+	resolver, peerCh, closeServer := startTestDNS(t, "udp", sourceIP, false, func(msg *dns.Msg) {
 		msg.Answer = []dns.RR{&dns.AAAA{
 			Hdr:  dns.Header{Name: rfc7050WKN, Class: dns.ClassINET, TTL: 60},
 			AAAA: rdata.AAAA{Addr: netip.MustParseAddr("64:ff9b::c000:aa")},

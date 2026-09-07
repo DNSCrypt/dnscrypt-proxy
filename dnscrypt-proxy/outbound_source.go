@@ -21,7 +21,7 @@ type outboundTarget struct {
 	source      netip.Addr
 }
 
-func parseOutboundSourcePolicy(ipv4Str, ipv6Str string) (outboundSourcePolicy, error) {
+func parseOutboundSources(ipv4Str, ipv6Str string) (outboundSourcePolicy, error) {
 	var policy outboundSourcePolicy
 	for _, field := range []struct {
 		family int

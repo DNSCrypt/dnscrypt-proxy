@@ -9,9 +9,9 @@ import (
 	"time"
 )
 
-func TestUDPConnPool_OutboundSource(t *testing.T) {
-	sourceIP := usableNonLoopbackIPv4(t)
-	policy, err := parseOutboundSourcePolicy(sourceIP.String(), "")
+func TestUDPConnPool_SourceBinding(t *testing.T) {
+	sourceIP := nonLoopbackIPv4(t)
+	policy, err := parseOutboundSources(sourceIP.String(), "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,8 +64,8 @@ func TestUDPConnPool_OutboundSource(t *testing.T) {
 	pool.Discard(replacement)
 }
 
-func TestUDPConnPool_OutboundSourceLoopbackBypass(t *testing.T) {
-	policy, err := parseOutboundSourcePolicy("192.0.2.1", "")
+func TestUDPConnPool_Loopback(t *testing.T) {
+	policy, err := parseOutboundSources("192.0.2.1", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,13 +86,13 @@ func TestUDPConnPool_OutboundSourceLoopbackBypass(t *testing.T) {
 	}
 }
 
-func TestUDPConnPool_OutboundSourceBindFailure(t *testing.T) {
-	destinationIP := usableNonLoopbackIPv4(t)
+func TestUDPConnPool_BindFailure(t *testing.T) {
+	destinationIP := nonLoopbackIPv4(t)
 	configured := "192.0.2.1"
 	if destinationIP.Equal(net.ParseIP(configured)) {
 		configured = "198.51.100.1"
 	}
-	policy, err := parseOutboundSourcePolicy(configured, "")
+	policy, err := parseOutboundSources(configured, "")
 	if err != nil {
 		t.Fatal(err)
 	}

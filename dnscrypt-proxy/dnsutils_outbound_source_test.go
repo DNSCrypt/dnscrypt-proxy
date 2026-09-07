@@ -9,8 +9,8 @@ import (
 )
 
 func TestDNSExchangeOutboundSource(t *testing.T) {
-	sourceIP := usableNonLoopbackIPv4(t)
-	policy, err := parseOutboundSourcePolicy(sourceIP.String(), "")
+	sourceIP := nonLoopbackIPv4(t)
+	policy, err := parseOutboundSources(sourceIP.String(), "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -24,7 +24,7 @@ func TestDNSExchangeOutboundSource(t *testing.T) {
 				name = proto + "-relayed"
 			}
 			t.Run(name, func(t *testing.T) {
-				relayAddress, peerCh, closeServer := startOutboundDNSServer(t, proto, sourceIP, relayed, nil)
+				relayAddress, peerCh, closeServer := startTestDNS(t, proto, sourceIP, relayed, nil)
 				serverAddress := relayAddress.String()
 				if relayed {
 					serverAddress = "9.9.9.9:53"
@@ -53,7 +53,7 @@ func TestDNSExchangeOutboundSource(t *testing.T) {
 	}
 }
 
-func startOutboundDNSServer(t *testing.T, proto string, destinationIP net.IP, relayed bool, answer func(*dns.Msg)) (net.Addr, <-chan net.IP, func()) {
+func startTestDNS(t *testing.T, proto string, destinationIP net.IP, relayed bool, answer func(*dns.Msg)) (net.Addr, <-chan net.IP, func()) {
 	t.Helper()
 	peerCh := make(chan net.IP, 1)
 	respond := func(packet []byte) []byte {

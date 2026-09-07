@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-func usableNonLoopbackIPv4(t *testing.T) net.IP {
+func nonLoopbackIPv4(t *testing.T) net.IP {
 	t.Helper()
 	addrs, err := net.InterfaceAddrs()
 	if err != nil {
@@ -24,8 +24,8 @@ func usableNonLoopbackIPv4(t *testing.T) net.IP {
 	return nil
 }
 
-func TestOutboundSourceUDPListenerLocalBypass(t *testing.T) {
-	policy, err := parseOutboundSourcePolicy("192.0.2.10", "2001:db8::10")
+func TestListenUDPLoopback(t *testing.T) {
+	policy, err := parseOutboundSources("192.0.2.10", "2001:db8::10")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -41,7 +41,7 @@ func TestOutboundSourceUDPListenerLocalBypass(t *testing.T) {
 }
 
 func TestOutboundSourceFor(t *testing.T) {
-	policy, err := parseOutboundSourcePolicy("192.0.2.10", "2001:db8::10")
+	policy, err := parseOutboundSources("192.0.2.10", "2001:db8::10")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,8 +83,8 @@ func TestOutboundSourceFor(t *testing.T) {
 	}
 }
 
-func TestOutboundSourceDialerOptionsAndZones(t *testing.T) {
-	policy, err := parseOutboundSourcePolicy("192.0.2.10", "fe80::1%en0")
+func TestSourceDialerOptions(t *testing.T) {
+	policy, err := parseOutboundSources("192.0.2.10", "fe80::1%en0")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +105,7 @@ func TestOutboundSourceDialerOptionsAndZones(t *testing.T) {
 	}
 }
 
-func TestNewDNSTransportHasIndependentDialer(t *testing.T) {
+func TestDNSTransportDialerIsolation(t *testing.T) {
 	first := newDNSTransport()
 	second := newDNSTransport()
 	if first.Dialer.Timeout != 5*time.Second || first.Dialer.KeepAlive != 3*time.Second {
@@ -117,8 +117,8 @@ func TestNewDNSTransportHasIndependentDialer(t *testing.T) {
 	}
 }
 
-func TestConfigureOutboundDialer(t *testing.T) {
-	policy, err := parseOutboundSourcePolicy("192.0.2.10", "2001:db8::10")
+func TestSourceDialer(t *testing.T) {
+	policy, err := parseOutboundSources("192.0.2.10", "2001:db8::10")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,8 +136,8 @@ func TestConfigureOutboundDialer(t *testing.T) {
 	}
 }
 
-func TestOutboundSourceDNSErrorContext(t *testing.T) {
-	policy, err := parseOutboundSourcePolicy("192.0.2.10", "")
+func TestSourceDNSError(t *testing.T) {
+	policy, err := parseOutboundSources("192.0.2.10", "")
 	if err != nil {
 		t.Fatal(err)
 	}
