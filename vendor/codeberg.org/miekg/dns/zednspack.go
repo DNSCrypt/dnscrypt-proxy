@@ -405,3 +405,24 @@ func (o *MQQUERY) unpack(s *cryptobyte.String) error {
 	}
 	return nil
 }
+
+func (o *KEYTAG) pack(msg []byte, off int) (int, error) {
+	var err error
+	for _, t := range o.Types {
+		if off, err = pack.Uint16(t, msg, off); err != nil {
+			return len(msg), err
+		}
+	}
+	return off, nil
+}
+
+func (o *KEYTAG) unpack(s *cryptobyte.String) error {
+	for !s.Empty() {
+		var t uint16
+		if !s.ReadUint16(&t) {
+			return unpack.ErrTrailingData
+		}
+		o.Types = append(o.Types, t)
+	}
+	return nil
+}

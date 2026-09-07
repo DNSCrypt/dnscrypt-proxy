@@ -72,7 +72,8 @@ const (
 )
 
 // A StreamError is used to signal stream cancellations.
-// It is returned from the Read and Write methods of the [ReceiveStream], [SendStream] and [Stream].
+// It can be returned by stream methods such as [ReceiveStream.Read], [SendStream.Write],
+// [Stream.Read], and [Stream.Write].
 type StreamError struct {
 	StreamID  StreamID
 	ErrorCode StreamErrorCode
@@ -92,7 +93,7 @@ func (e *StreamError) Error() string {
 	return fmt.Sprintf("stream %d canceled by %s with error code %d", e.StreamID, pers, e.ErrorCode)
 }
 
-// DatagramTooLargeError is returned from Conn.SendDatagram if the payload is too large to be sent.
+// DatagramTooLargeError is returned from [Conn.SendDatagram] if the payload is too large to be sent.
 type DatagramTooLargeError struct {
 	MaxDatagramPayloadSize int64
 }

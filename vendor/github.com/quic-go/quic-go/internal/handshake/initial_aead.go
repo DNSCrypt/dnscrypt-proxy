@@ -2,6 +2,7 @@ package handshake
 
 import (
 	"crypto"
+	"crypto/fips140"
 	"crypto/hkdf"
 	"crypto/tls"
 	"fmt"
@@ -31,7 +32,7 @@ func NewInitialAEAD(connID protocol.ConnectionID, pers protocol.Perspective, v p
 	// By design, the Initial encryption level provides no confidentiality against any attacker who has read the RFC.
 	// Its sole purpose is integrity protection. The Initial encryption level is therefore out of scope for FIPS 140.
 	// See also this thread on the IETF QUIC mailing list: https://mailarchive.ietf.org/arch/msg/quic/k2kl2W_n5WDEZBbt3O31Ef2XBbM.
-	withoutFIPSEnforcement(func() {
+	fips140.WithoutEnforcement(func() {
 		clientSecret, serverSecret := computeSecrets(connID, v)
 		var mySecret, otherSecret []byte
 		if pers == protocol.PerspectiveClient {

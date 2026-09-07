@@ -257,8 +257,8 @@ func Name(s string, msg []byte, off int, compression map[string]uint16, compress
 	return off + 1, nil
 }
 
-// MName packs the string s into msg taking escaped dots into account. Only xxx\.yyy is allowed, \. can never
-// be at the start of the string.
+// MName packs the string s into msg taking escaped dots into account. A label may hold any number of
+// escaped dots, \. can never be at the start of the string.
 func MName(s string, msg []byte, off int) (off1 int, err error) {
 	lenmsg := len(msg)
 	ls := len(s)
@@ -291,22 +291,22 @@ func MName(s string, msg []byte, off int) (off1 int, err error) {
 		if i == -1 {
 			break
 		}
+		i += begin
 
 		escape = 0
-		if i > 0 && s[begin+i-1] == '\\' { // escaped dot
-			if begin+i+2 > ls {
+		for i > begin && s[i-1] == '\\' { // escaped dot, a label may hold several
+			if i+2 > ls {
 				return lenmsg, &Error{"overflow mname after escape"}
 			}
-			j := strings.IndexByte(s[begin+i+1:], '.') // search ahead for another dot
+			j := strings.IndexByte(s[i+1:], '.') // search ahead for another dot
 			if j == -1 {
-				break // no dot found, break as above
+				return lenmsg, &Error{"overflow mname after escape"}
 			}
 			// i is the end of the label, 1 for \
 			i += 1 + j
-			escape = 1
+			escape++
 		}
 
-		i += begin
 		labelLen = i - begin - escape
 
 		if labelLen >= 1<<6 { // top two bits of length must be clear

@@ -60,14 +60,14 @@ func (m *cryptoStreamManager) GetPostHandshakeData(maxSize protocol.ByteCount) *
 	return m.oneRTTStream.PopCryptoFrame(maxSize)
 }
 
-func (m *cryptoStreamManager) Drop(encLevel protocol.EncryptionLevel) error {
-	//nolint:exhaustive // 1-RTT keys should never get dropped.
+func (m *cryptoStreamManager) Finish(encLevel protocol.EncryptionLevel) error {
+	//nolint:exhaustive // The 1-RTT CRYPTO stream is never finished.
 	switch encLevel {
 	case protocol.EncryptionInitial:
 		return m.initialStream.Finish()
 	case protocol.EncryptionHandshake:
 		return m.handshakeStream.Finish()
 	default:
-		panic(fmt.Sprintf("dropped unexpected encryption level: %s", encLevel))
+		panic(fmt.Sprintf("finished unexpected encryption level: %s", encLevel))
 	}
 }

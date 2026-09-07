@@ -36,6 +36,8 @@ func (o *MQQUERY) Header() *Header      { return &Header{Name: "."} }
 func (o *MQQUERY) Pseudo() bool         { return true }
 func (o *MQRESPONSE) Header() *Header   { return &Header{Name: "."} }
 func (o *MQRESPONSE) Pseudo() bool      { return true }
+func (o *KEYTAG) Header() *Header       { return &Header{Name: "."} }
+func (o *KEYTAG) Pseudo() bool          { return true }
 func (o *ERFC3597) Header() *Header     { return &Header{Name: "."} }
 func (o *ERFC3597) Pseudo() bool        { return true }
 
@@ -58,6 +60,7 @@ var CodeToRR = map[uint16]func() EDNS0{
 	CodeZONEVERSION:  func() EDNS0 { return new(ZONEVERSION) },
 	CodeMQQUERY:      func() EDNS0 { return new(MQQUERY) },
 	CodeMQRESPONSE:   func() EDNS0 { return new(MQRESPONSE) },
+	CodeKEYTAG:       func() EDNS0 { return new(KEYTAG) },
 }
 
 // RRToCode is the reverse of CodeToRR, implemented as a function.
@@ -97,6 +100,8 @@ func RRToCode(o EDNS0) uint16 {
 		return CodeMQQUERY
 	case *MQRESPONSE:
 		return CodeMQRESPONSE
+	case *KEYTAG:
+		return CodeKEYTAG
 	}
 	if x, ok := o.(Typer); ok {
 		return x.Type()
@@ -123,4 +128,5 @@ var CodeToString = map[uint16]string{
 	CodeZONEVERSION:  "ZONEVERSION",
 	CodeMQQUERY:      "MQQUERY",
 	CodeMQRESPONSE:   "MQRESPONSE",
+	CodeKEYTAG:       "KEYTAG",
 }

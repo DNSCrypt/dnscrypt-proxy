@@ -49,7 +49,7 @@ func Exchange(ctx context.Context, m *Msg, network, address string) (r *Msg, err
 // fall back to the historic limit of 512 octets (bytes).
 //
 // The full binary data is included in the (decoded) message as r.Data. If the Data buffer in m is empty
-// client.Exchange calls m.Pack().
+// client.Exchange calls m.Pack(), the buffer (in m) will be reset.
 //
 // An error is returned if:
 //   - if the message returned does not have the same ID as the message sent.
@@ -88,8 +88,8 @@ func (c *Client) ExchangeWithConn(ctx context.Context, m *Msg, conn net.Conn) (r
 		return nil, time.Since(t), err
 	}
 
-	r = new(Msg)
-	r.Data = m.Data
+	r = &Msg{Data: m.Data}
+	m.Data = m.Data[:0]
 	if len(r.Data) < int(m.UDPSize) {
 		r.Data = append(r.Data, make([]byte, (int(m.UDPSize)-len(r.Data)))...)
 	}

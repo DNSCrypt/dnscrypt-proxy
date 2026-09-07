@@ -269,9 +269,9 @@ func (s *ReceiveStream) isRemoteCancellationEffective() bool {
 
 // Peek fills b with stream data, without consuming the stream data.
 // It blocks until len(b) bytes are available, or an error occurs.
-// It respects the stream deadline set by SetReadDeadline.
+// It respects the stream deadline set by [ReceiveStream.SetReadDeadline].
 // If the stream ends before len(b) bytes are available,
-// it returns the number of bytes peeked along with io.EOF.
+// it returns the number of bytes peeked along with [io.EOF].
 func (s *ReceiveStream) Peek(b []byte) (int, error) {
 	if len(b) == 0 {
 		return 0, nil
@@ -395,8 +395,8 @@ func (s *ReceiveStream) dequeueNextFrame() {
 
 // CancelRead aborts receiving on this stream.
 // It instructs the peer to stop transmitting stream data.
-// Read will unblock immediately, and future Read calls will fail.
-// When called multiple times or after reading the io.EOF it is a no-op.
+// [ReceiveStream.Read] will unblock immediately, and future calls to it will fail.
+// When called multiple times or after [ReceiveStream.Read] returns [io.EOF], it is a no-op.
 func (s *ReceiveStream) CancelRead(errorCode StreamErrorCode) {
 	s.mutex.Lock()
 	queuedNewControlFrame := s.cancelReadImpl(errorCode)
@@ -547,9 +547,9 @@ func (s *ReceiveStream) getControlFrame(now monotime.Time) (_ ackhandler.Frame, 
 	}, true, false
 }
 
-// SetReadDeadline sets the deadline for future Read calls and
-// any currently-blocked Read call.
-// A zero value for t means Read will not time out.
+// SetReadDeadline sets the deadline for future [ReceiveStream.Read] calls and
+// any currently blocked call.
+// A zero value for t means [ReceiveStream.Read] will not time out.
 func (s *ReceiveStream) SetReadDeadline(t time.Time) error {
 	s.mutex.Lock()
 	s.deadline = monotime.FromTime(t)

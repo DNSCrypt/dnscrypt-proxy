@@ -15,9 +15,9 @@ import (
 )
 
 var (
-	// ErrPathClosed is returned when trying to switch to a path that has been closed.
+	// ErrPathClosed can be returned by [Path.Probe] or [Path.Switch] after the path has been closed.
 	ErrPathClosed = errors.New("path closed")
-	// ErrPathNotValidated is returned when trying to use a path before path probing has completed.
+	// ErrPathNotValidated is returned by [Path.Switch] when the path has not yet been validated.
 	ErrPathNotValidated = errors.New("path not yet validated")
 )
 
@@ -88,7 +88,7 @@ func (p *Path) Switch() error {
 
 // Close abandons a path.
 // It is not possible to close the path that’s currently active.
-// After closing, it is not possible to probe this path again.
+// After closing, the path cannot be successfully probed again with [Path.Probe].
 func (p *Path) Close() error {
 	select {
 	case <-p.abandon:
@@ -188,13 +188,10 @@ func (pm *pathManagerOutgoing) removePathImpl(id pathID) error {
 	if id == pm.activePath {
 		return errors.New("cannot close active path")
 	}
-	p, ok := pm.paths[id]
-	if !ok {
+	if _, ok := pm.paths[id]; !ok {
 		return nil
 	}
-	if len(p.pathChallenges) > 0 {
-		pm.retireConnID(id)
-	}
+	pm.retireConnID(id)
 	delete(pm.paths, id)
 	return nil
 }

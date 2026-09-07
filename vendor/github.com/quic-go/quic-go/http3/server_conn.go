@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"runtime"
 	"strconv"
+	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/quic-go/qpack"
@@ -27,7 +29,8 @@ type RawServerConn struct {
 	requestHandler http.Handler
 	maxHeaderBytes int
 
-	decoder *qpack.Decoder
+	decoder       *qpack.Decoder
+	priorityAware atomic.Bool // whether the client sent an RFC 9218 priority signal
 
 	qlogger qlogwriter.Recorder
 	logger  *slog.Logger
@@ -52,7 +55,7 @@ func newRawServerConn(
 		qlogger:        qlogger,
 		logger:         logger,
 	}
-	c.rawConn = *newRawConn(conn, enableDatagrams, c.onStreamsEmpty, nil, qlogger, logger)
+	c.rawConn = *newRawConn(conn, enableDatagrams, c.onStreamsEmpty, c.handleControlStream, qlogger, logger)
 	if idleTimeout > 0 {
 		c.idleTimer = time.AfterFunc(idleTimeout, func() {
 			conn.CloseWithError(quic.ApplicationErrorCode(ErrCodeNoError), "idle timeout")
@@ -76,7 +79,7 @@ func (c *RawServerConn) CloseWithError(code quic.ApplicationErrorCode, msg strin
 }
 
 // HandleRequestStream handles an HTTP/3 request on a bidirectional request stream.
-// The stream can either be obtained by calling AcceptStream on the underlying QUIC connection,
+// The stream can either be obtained by calling [quic.Conn.AcceptStream] on the underlying QUIC connection,
 // or (internally) by using the server's stream accept loop.
 func (c *RawServerConn) HandleRequestStream(str *quic.Stream) {
 	hstr := c.rawConn.TrackStream(str)
@@ -110,6 +113,10 @@ func (c *RawServerConn) handleRequestStream(str *stateTrackingStream) {
 	fp := &frameParser{closeConn: conn.CloseWithError, r: str, streamID: str.StreamID()}
 	frame, err := fp.ParseNext(qlogger)
 	if err != nil {
+		if errors.Is(err, errPriorityUpdateForPush) {
+			conn.CloseWithError(quic.ApplicationErrorCode(ErrCodeFrameUnexpected), "")
+			return
+		}
 		str.CancelRead(quic.StreamErrorCode(ErrCodeRequestIncomplete))
 		str.CancelWrite(quic.StreamErrorCode(ErrCodeRequestIncomplete))
 		return
@@ -153,8 +160,7 @@ func (c *RawServerConn) handleRequestStream(str *stateTrackingStream) {
 		}
 
 		errCode := ErrCodeMessageError
-		var qpackErr *qpackError
-		if errors.As(err, &qpackErr) {
+		if _, ok := errors.AsType[*qpackError](err); ok {
 			errCode = ErrCodeQPACKDecompressionFailed
 		}
 		str.CancelRead(quic.StreamErrorCode(errCode))
@@ -180,6 +186,21 @@ func (c *RawServerConn) handleRequestStream(str *stateTrackingStream) {
 		req.Trailer = trailers
 		return nil
 	}, qlogger)
+
+	// We only use the client's priority for local scheduling.
+	// A Priority response header is only transmitted so that potential intermediaries can use it,
+	// it doesn't affect local scheduling.
+	// This mirrors the behavior of HTTP/2, see https://github.com/golang/go/issues/75500.
+	var urgency int8
+	var incremental bool
+	if values, ok := req.Header["Priority"]; !ok {
+		urgency, incremental = defaultPriorityUrgency, !c.priorityAware.Load()
+	} else {
+		c.priorityAware.Store(true)
+		urgency, incremental = parsePriority(strings.Join(values, ","))
+	}
+	hstr.SetPriority(urgency, incremental)
+
 	body := newRequestBody(hstr, contentLength, connCtx, conn.ReceivedSettings(), conn.Settings)
 	req.Body = body
 
@@ -243,6 +264,42 @@ func (c *RawServerConn) handleRequestStream(str *stateTrackingStream) {
 	// If the EOF was read by the handler, CancelRead() is a no-op.
 	str.CancelRead(quic.StreamErrorCode(ErrCodeNoError))
 	str.Close()
+}
+
+func (c *RawServerConn) handleControlStream(_ *quic.ReceiveStream, fp *frameParser) {
+	for {
+		f, err := fp.ParseNext(c.qlogger)
+		if err != nil {
+			if errors.Is(err, errPriorityUpdateForPush) {
+				// Server push is not supported. Since we never send PUSH_PROMISE frames,
+				// the client can't reference a valid push ID.
+				c.CloseWithError(quic.ApplicationErrorCode(ErrCodeIDError), "")
+				return
+			}
+			_, isStreamError := errors.AsType[*quic.StreamError](err)
+			if err == io.EOF || isStreamError {
+				c.CloseWithError(quic.ApplicationErrorCode(ErrCodeClosedCriticalStream), "")
+				return
+			}
+			c.CloseWithError(quic.ApplicationErrorCode(ErrCodeFrameError), "")
+			return
+		}
+		switch frame := f.(type) {
+		case *priorityUpdateFrame:
+			if frame.ElementID%4 != 0 {
+				c.CloseWithError(quic.ApplicationErrorCode(ErrCodeIDError), "")
+				return
+			}
+			c.priorityAware.Store(true)
+			urgency, incremental := parsePriority(frame.PriorityFieldValue)
+			c.rawConn.UpdateStreamPriority(quic.StreamID(frame.ElementID), urgency, incremental)
+		case *goAwayFrame:
+			// Server push is not supported, so there is no push state to update.
+		default:
+			c.CloseWithError(quic.ApplicationErrorCode(ErrCodeFrameUnexpected), "")
+			return
+		}
+	}
 }
 
 func (c *RawServerConn) rejectWithHeaderFieldsTooLarge(str *stateTrackingStream) {

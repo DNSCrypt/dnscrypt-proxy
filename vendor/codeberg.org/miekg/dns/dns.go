@@ -326,11 +326,10 @@ func (rr *RFC3597) ToRFC3597(r RR) error {
 		return err
 	}
 	buf = buf[:off]
-
 	*rr = RFC3597{Hdr: *r.Header()}
-	rr.RRType = uint16(off - headerEnd)
+	rr.RRType = RRToType(r)
 
-	if rr.RRType == 0 {
+	if off-headerEnd == 0 { // rdlength
 		return nil
 	}
 

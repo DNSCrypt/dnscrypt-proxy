@@ -24,17 +24,19 @@ func unpackHeader(h *Header, msg *cryptobyte.String, msgBuf []byte) (typ, rdleng
 	return typ, rdlength, nil
 }
 
+const rrHeaderSize = 10 // RR's header size: 2 (type) + 2 (class) + 4 (ttl) + 2 (rdlength)
+
 // packHeader packs an RR header, returning the off to the end of the header.
-// See PackName for documentation about the compression.
+// See [pack.Name] for documentation about the compression.
 func (h Header) packHeader(msg []byte, off int, rrtype uint16, compress map[string]uint16) (int, error) {
 	off, err := pack.Name(h.Name, msg, off, compress, true)
 	if err != nil {
 		return len(msg), err
 	}
-	if len(msg)-off < 11 {
+	if len(msg)-off < rrHeaderSize {
 		return len(msg), &pack.Error{Err: "overflow RR header"}
 	}
-	_ = msg[off+10]
+	_ = msg[off+rrHeaderSize-1] // preempt oob check
 
 	off, _ = pack.Uint16(rrtype, msg, off)
 	off, _ = pack.Uint16(h.Class, msg, off)

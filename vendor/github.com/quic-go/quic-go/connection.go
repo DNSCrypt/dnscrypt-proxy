@@ -162,7 +162,7 @@ type Conn struct {
 	unpacker      unpacker
 	frameParser   wire.FrameParser
 	packer        packer
-	mtuDiscoverer mtuDiscoverer // initialized when the transport parameters are received
+	mtuDiscoverer *mtuFinder // initialized when the transport parameters are received
 
 	maxPayloadSizeEstimate atomic.Uint32
 
@@ -745,7 +745,7 @@ runLoop:
 	c.sendQueue.Close() // close the send queue before sending the CONNECTION_CLOSE
 	c.handleCloseError(closeErr)
 	if c.qlogger != nil {
-		if e := (&errCloseForRecreating{}); !errors.As(closeErr.err, &e) {
+		if _, ok := errors.AsType[*errCloseForRecreating](closeErr.err); !ok {
 			c.qlogger.Close()
 		}
 	}
@@ -981,12 +981,8 @@ func (c *Conn) handleHandshakeConfirmed(now monotime.Time) error {
 	// On the client side, this should have happened when sending the first Handshake packet,
 	// but this is not guaranteed if the server misbehaves.
 	// See CVE-2025-59530 for more details.
-	if err := c.dropEncryptionLevel(protocol.EncryptionInitial, now); err != nil {
-		return err
-	}
-	if err := c.dropEncryptionLevel(protocol.EncryptionHandshake, now); err != nil {
-		return err
-	}
+	c.dropEncryptionLevel(protocol.EncryptionInitial, now)
+	c.dropEncryptionLevel(protocol.EncryptionHandshake, now)
 
 	c.handshakeConfirmed = true
 	c.cryptoStreamHandler.SetHandshakeConfirmed()
@@ -1061,7 +1057,7 @@ func (c *Conn) handleOnePacket(rp receivedPacket, datagramPayloadChecksum qlog.D
 	p := rp
 	for len(data) > 0 {
 		if counter > 0 {
-			p = *(p.Clone())
+			p = *p.Clone()
 			p.data = data
 
 			destConnID, err := wire.ParseConnectionID(p.data, c.srcConnIDLen)
@@ -1435,8 +1431,7 @@ func (c *Conn) handleUnpackError(err error, p receivedPacket, pt qlog.PacketType
 		c.logger.Debugf("Dropping %s packet (%d bytes) that could not be unpacked. Error: %s", pt, p.Size(), err)
 		return false, nil
 	default:
-		var headerErr *headerParseError
-		if errors.As(err, &headerErr) {
+		if _, ok := errors.AsType[*headerParseError](err); ok {
 			// This might be a packet injected by an attacker. Drop it.
 			if c.qlogger != nil {
 				connID, _ := wire.ParseConnectionID(p.data, c.srcConnIDLen)
@@ -1697,9 +1692,7 @@ func (c *Conn) handleUnpackedLongHeaderPacket(
 		!c.droppedInitialKeys {
 		// On the server side, Initial keys are dropped as soon as the first Handshake packet is received.
 		// See Section 4.9.1 of RFC 9001.
-		if err := c.dropEncryptionLevel(protocol.EncryptionInitial, rcvTime); err != nil {
-			return err
-		}
+		c.dropEncryptionLevel(protocol.EncryptionInitial, rcvTime)
 	}
 
 	c.lastPacketReceivedTime = rcvTime
@@ -2027,12 +2020,21 @@ func (c *Conn) handleHandshakeEvents(now monotime.Time) error {
 		case handshake.EventRestoredTransportParameters:
 			c.restoreTransportParameters(ev.TransportParameters)
 			close(c.earlyConnReadyChan)
-		case handshake.EventReceivedReadKeys:
+		case handshake.EventReceived0RTTReadKeys,
+			handshake.EventReceivedHandshakeReadKeys,
+			handshake.EventReceived1RTTReadKeys:
+			//nolint:exhaustive // only Handshake and 1-RTT require finishing the previous CRYPTO stream
+			switch ev.Kind {
+			case handshake.EventReceivedHandshakeReadKeys:
+				err = c.cryptoStreamManager.Finish(protocol.EncryptionInitial)
+			case handshake.EventReceived1RTTReadKeys:
+				err = c.cryptoStreamManager.Finish(protocol.EncryptionHandshake)
+			}
 			// queue all previously undecryptable packets
 			c.undecryptablePacketsToProcess = append(c.undecryptablePacketsToProcess, c.undecryptablePackets...)
 			c.undecryptablePackets = nil
 		case handshake.EventDiscard0RTTKeys:
-			err = c.dropEncryptionLevel(protocol.Encryption0RTT, now)
+			c.dropEncryptionLevel(protocol.Encryption0RTT, now)
 		case handshake.EventWriteInitialData:
 			_, err = c.initialStream.Write(ev.Data)
 		case handshake.EventWriteHandshakeData:
@@ -2300,7 +2302,7 @@ func (c *Conn) handleCloseError(closeErr *closeError) {
 	c.connIDGenerator.ReplaceWithClosed(connClosePacket, 3*c.rttStats.PTO(false))
 }
 
-func (c *Conn) dropEncryptionLevel(encLevel protocol.EncryptionLevel, now monotime.Time) error {
+func (c *Conn) dropEncryptionLevel(encLevel protocol.EncryptionLevel, now monotime.Time) {
 	c.sentPacketHandler.DropPackets(encLevel, now)
 	c.receivedPacketHandler.DropPackets(encLevel)
 	//nolint:exhaustive // only Initial and 0-RTT need special treatment
@@ -2311,9 +2313,8 @@ func (c *Conn) dropEncryptionLevel(encLevel protocol.EncryptionLevel, now monoti
 	case protocol.Encryption0RTT:
 		c.streamsMap.ResetFor0RTT()
 		c.framer.Handle0RTTRejection()
-		return c.connFlowController.Reset()
+		c.connFlowController.Reset()
 	}
-	return c.cryptoStreamManager.Drop(encLevel)
 }
 
 // is called for the client, when restoring transport parameters saved for 0-RTT
@@ -2811,9 +2812,7 @@ func (c *Conn) sendPackedCoalescedPacket(packet *coalescedPacket, ecn protocol.E
 			!c.droppedInitialKeys {
 			// On the client side, Initial keys are dropped as soon as the first Handshake packet is sent.
 			// See Section 4.9.1 of RFC 9001.
-			if err := c.dropEncryptionLevel(protocol.EncryptionInitial, now); err != nil {
-				return err
-			}
+			c.dropEncryptionLevel(protocol.EncryptionInitial, now)
 		}
 	}
 	if p := packet.shortHdrPacket; p != nil {
@@ -2845,11 +2844,9 @@ func (c *Conn) sendPackedCoalescedPacket(packet *coalescedPacket, ecn protocol.E
 func (c *Conn) sendConnectionClose(e error) ([]byte, error) {
 	var packet *coalescedPacket
 	var err error
-	var transportErr *qerr.TransportError
-	var applicationErr *qerr.ApplicationError
-	if errors.As(e, &transportErr) {
+	if transportErr, ok := errors.AsType[*qerr.TransportError](e); ok {
 		packet, err = c.packer.PackConnectionClose(transportErr, c.maxPacketSize(), c.version)
-	} else if errors.As(e, &applicationErr) {
+	} else if applicationErr, ok := errors.AsType[*qerr.ApplicationError](e); ok {
 		packet, err = c.packer.PackApplicationClose(applicationErr, c.maxPacketSize(), c.version)
 	} else {
 		packet, err = c.packer.PackConnectionClose(&qerr.TransportError{
@@ -3006,6 +3003,11 @@ func (c *Conn) onHasStreamData(id protocol.StreamID, str *SendStream) {
 	c.scheduleSending()
 }
 
+func (c *Conn) onHasStreamRetransmission(id protocol.StreamID, str *SendStream) {
+	c.framer.AddStreamWithRetransmission(id, str)
+	c.scheduleSending()
+}
+
 func (c *Conn) onHasStreamControlFrame(id protocol.StreamID, str streamControlFrameGetter) {
 	c.framer.AddStreamWithControlFrames(id, str)
 	c.scheduleSending()
@@ -3018,12 +3020,27 @@ func (c *Conn) onStreamCompleted(id protocol.StreamID) {
 	c.framer.RemoveActiveStream(id)
 }
 
+func (c *Conn) updateStreamPriority(id protocol.StreamID) {
+	c.framer.UpdateStreamPriority(id)
+	c.scheduleSending()
+}
+
+func (c *Conn) recordStreamPriorityUpdated(id protocol.StreamID, urgency int8, incremental bool) {
+	if c.qlogger != nil {
+		c.qlogger.RecordEvent(qlog.StreamPriorityUpdated{
+			StreamID:    id,
+			Urgency:     urgency,
+			Incremental: incremental,
+		})
+	}
+}
+
 // SendDatagram sends a message using a QUIC datagram, as specified in RFC 9221,
 // if the peer enabled datagram support.
 // There is no delivery guarantee for DATAGRAM frames, they are not retransmitted if lost.
 // The payload of the datagram needs to fit into a single QUIC packet.
 // In addition, a datagram may be dropped before being sent out if the available packet size suddenly decreases.
-// If the payload is too large to be sent at the current time, a DatagramTooLargeError is returned.
+// If the payload is too large to be sent at the current time, a [DatagramTooLargeError] is returned.
 func (c *Conn) SendDatagram(p []byte) error {
 	if !c.supportsDatagrams() {
 		return errors.New("datagram support disabled")
@@ -3136,10 +3153,11 @@ func (c *Conn) NextConnection(ctx context.Context) (*Conn, error) {
 	case <-ctx.Done():
 		return nil, context.Cause(ctx)
 	case <-c.Context().Done():
+		return nil, context.Cause(c.Context())
 	case <-c.HandshakeComplete():
 		c.streamsMap.UseResetMaps()
+		return c, nil
 	}
-	return c, nil
 }
 
 // estimateMaxPayloadSize estimates the maximum payload size for short header packets.

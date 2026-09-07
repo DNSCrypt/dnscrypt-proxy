@@ -19,7 +19,7 @@ func (*noCopy) Lock()   {}
 func (*noCopy) Unlock() {}
 
 // CapsuleParser parses a sequence of capsules.
-// A capsule's contents must be fully consumed or discarded before calling Next again.
+// A capsule's contents must be fully consumed or discarded before calling [CapsuleParser.Next] again.
 type CapsuleParser struct {
 	noCopy noCopy
 
@@ -40,7 +40,7 @@ var (
 )
 
 // Next returns the type and contents of the next capsule.
-// The previous capsule's contents must be fully consumed or discarded before calling Next.
+// The previous capsule's contents must be fully consumed or discarded before calling this method again.
 func (p *CapsuleParser) Next() (CapsuleType, CapsuleReader, error) {
 	if p.remaining > 0 {
 		return 0, CapsuleReader{}, errCapsuleNotConsumed
@@ -71,7 +71,7 @@ func (p *CapsuleParser) Next() (CapsuleType, CapsuleReader, error) {
 }
 
 // CapsuleReader reads the contents of a capsule.
-// It becomes invalid when the parser advances to the next capsule.
+// It becomes invalid after [CapsuleParser.Next] successfully advances to the next capsule.
 type CapsuleReader struct {
 	parser     *CapsuleParser
 	generation uint64

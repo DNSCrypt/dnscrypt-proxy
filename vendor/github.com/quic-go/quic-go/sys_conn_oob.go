@@ -37,28 +37,6 @@ type batchConn interface {
 	ReadBatch(ms []ipv4.Message, flags int) (int, error)
 }
 
-func inspectReadBuffer(c syscall.RawConn) (int, error) {
-	var size int
-	var serr error
-	if err := c.Control(func(fd uintptr) {
-		size, serr = unix.GetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_RCVBUF)
-	}); err != nil {
-		return 0, err
-	}
-	return size, serr
-}
-
-func inspectWriteBuffer(c syscall.RawConn) (int, error) {
-	var size int
-	var serr error
-	if err := c.Control(func(fd uintptr) {
-		size, serr = unix.GetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_SNDBUF)
-	}); err != nil {
-		return 0, err
-	}
-	return size, serr
-}
-
 func isECNDisabledUsingEnv() bool {
 	disabled, err := strconv.ParseBool(os.Getenv("QUIC_GO_DISABLE_ECN"))
 	return err == nil && disabled
@@ -132,6 +110,9 @@ func newConn(c OOBCapablePacketConn, supportsDF bool) (*oobConn, error) {
 	if ibc, ok := c.(batchConn); ok {
 		bc = ibc
 	} else {
+		if _, ok := c.(net.Conn); !ok {
+			return nil, errors.New("quic: OOBCapablePacketConn must implement net.Conn or ReadBatch")
+		}
 		bc = ipv4.NewPacketConn(c)
 	}
 

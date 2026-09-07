@@ -7,8 +7,9 @@ import (
 	"github.com/quic-go/quic-go"
 )
 
-// Error is returned from the round tripper (for HTTP clients)
-// and inside the HTTP handler (for HTTP servers) if an HTTP/3 error occurs.
+// Error is returned by [Transport.RoundTrip], [Transport.RoundTripOpt], and
+// [ClientConn.RoundTrip] for HTTP clients, and from request-body reads and response
+// writes inside HTTP handlers for HTTP servers, when an HTTP/3 error occurs.
 // See section 8 of RFC 9114.
 type Error struct {
 	Remote       bool

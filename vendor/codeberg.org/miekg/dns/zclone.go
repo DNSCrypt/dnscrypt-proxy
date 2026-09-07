@@ -934,6 +934,12 @@ func (rr *MQRESPONSE) Clone() RR {
 	}
 }
 
+func (rr *KEYTAG) Clone() RR {
+	return &KEYTAG{
+		Types: slices.Clone(rr.Types),
+	}
+}
+
 func (rr *ERFC3597) Clone() RR {
 	return &ERFC3597{
 		EDNS0Code: rr.EDNS0Code,

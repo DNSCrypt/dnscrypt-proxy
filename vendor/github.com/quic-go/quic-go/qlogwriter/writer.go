@@ -28,16 +28,16 @@ type Trace interface {
 // It is safe for concurrent use by multiple goroutines.
 type Recorder interface {
 	// RecordEvent records a single Event to the trace.
-	// It must not be called after Close.
+	// It must not be called after the recorder has been closed.
 	RecordEvent(Event)
 	// Close signals that this producer is done recording events.
 	// When all producers are closed, the underlying trace is closed.
-	// It must not be called concurrently with RecordEvent.
+	// It must not be called concurrently with [Recorder.RecordEvent].
 	io.Closer
 }
 
 // Event represents a qlog event that can be encoded to JSON.
-// Each event must provide its name and a method to encode itself using a jsontext.Encoder.
+// Each event must implement [Event.Name] and [Event.Encode].
 type Event interface {
 	// Name returns the name of the event, as it should appear in the qlog output
 	Name() string
@@ -59,7 +59,7 @@ const eventChanSize = 50
 
 // FileSeq represents a qlog trace using the JSON-SEQ format,
 // https://www.ietf.org/archive/id/draft-ietf-quic-qlog-main-schema-12.html#section-5
-// qlog event producers can be created by calling AddProducer.
+// qlog event producers can be created by calling [FileSeq.AddProducer].
 // The underlying io.WriteCloser is closed when the last producer is removed.
 type FileSeq struct {
 	w             io.WriteCloser

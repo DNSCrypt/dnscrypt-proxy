@@ -1,6 +1,7 @@
 package http3
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"errors"
@@ -42,24 +43,61 @@ type QUICListener interface {
 
 var _ QUICListener = &quic.EarlyListener{}
 
-// ConfigureTLSConfig creates a new tls.Config which can be used
-// to create a quic.Listener meant for serving HTTP/3.
+// ConfigureTLSConfig creates a new [tls.Config] which can be used
+// to create a [quic.Listener] meant for serving HTTP/3.
 func ConfigureTLSConfig(tlsConf *tls.Config) *tls.Config {
+	return configureTLSConfig(tlsConf, nil)
+}
+
+func configureTLSConfig(tlsConf *tls.Config, configure func(*tls.Config)) *tls.Config {
 	// Workaround for https://github.com/golang/go/issues/60506.
 	// This initializes the session tickets _before_ cloning the config.
 	_, _ = tlsConf.DecryptTicket(nil, tls.ConnectionState{})
 	config := tlsConf.Clone()
 	config.NextProtos = []string{NextProtoH3}
+	if configure != nil {
+		configure(config)
+	}
 	if gfc := config.GetConfigForClient; gfc != nil {
 		config.GetConfigForClient = func(ch *tls.ClientHelloInfo) (*tls.Config, error) {
 			conf, err := gfc(ch)
 			if conf == nil || err != nil {
 				return conf, err
 			}
-			return ConfigureTLSConfig(conf), nil
+			return configureTLSConfig(conf, configure), nil
 		}
 	}
 	return config
+}
+
+func (s *Server) configureTLSConfig(tlsConf *tls.Config) *tls.Config {
+	settings := s.settings()
+	settingsExtra := settingsForSessionTicket(settings)
+	return configureTLSConfig(tlsConf, func(config *tls.Config) {
+		wrapSession := config.WrapSession
+		if wrapSession == nil {
+			wrapSession = config.EncryptTicket
+		}
+		config.WrapSession = func(cs tls.ConnectionState, ss *tls.SessionState) ([]byte, error) {
+			ss.Extra = append(ss.Extra, bytes.Clone(settingsExtra))
+			return wrapSession(cs, ss)
+		}
+		unwrapSession := config.UnwrapSession
+		if unwrapSession == nil {
+			unwrapSession = config.DecryptTicket
+		}
+		config.UnwrapSession = func(identity []byte, cs tls.ConnectionState) (*tls.SessionState, error) {
+			ss, err := unwrapSession(identity, cs)
+			if err != nil || ss == nil || !ss.EarlyData {
+				return ss, err
+			}
+			settingsData, ok := settingsDataFromSessionTicket(ss.Extra)
+			if !ok || !settingsCompatibleFor0RTT(settingsData, settings) {
+				ss.EarlyData = false
+			}
+			return ss, nil
+		}
+	})
 }
 
 // contextKey is a value for use with context.WithValue. It's used as
@@ -71,15 +109,15 @@ type contextKey struct {
 func (k *contextKey) String() string { return "quic-go/http3 context value " + k.name }
 
 // ServerContextKey is a context key. It can be used in HTTP
-// handlers with Context.Value to access the server that
+// handlers with [context.Context.Value] to access the server that
 // started the handler. The associated value will be of
-// type *http3.Server.
+// type [*Server].
 var ServerContextKey = &contextKey{"http3-server"}
 
 // RemoteAddrContextKey is a context key. It can be used in
-// HTTP handlers with Context.Value to access the remote
+// HTTP handlers with [context.Context.Value] to access the remote
 // address of the connection. The associated value will be of
-// type net.Addr.
+// type [net.Addr].
 //
 // Use this value instead of [http.Request.RemoteAddr] if you
 // require access to the remote address of the connection rather
@@ -100,16 +138,16 @@ type Server struct {
 	// Addr optionally specifies the UDP address for the server to listen on,
 	// in the form "host:port".
 	//
-	// When used by ListenAndServe and ListenAndServeTLS methods, if empty,
-	// ":https" (port 443) is used. See net.Dial for details of the address
+	// When used by [Server.ListenAndServe] and [Server.ListenAndServeTLS], if empty,
+	// ":https" (port 443) is used. See [net.Dial] for details of the address
 	// format.
 	//
 	// Otherwise, if Port is not set and underlying QUIC listeners do not
 	// have valid port numbers, the port part is used in Alt-Svc headers set
-	// with SetQUICHeaders.
+	// with [Server.SetQUICHeaders].
 	Addr string
 
-	// Port is used in Alt-Svc response headers set with SetQUICHeaders. If
+	// Port is used in Alt-Svc response headers set with [Server.SetQUICHeaders]. If
 	// needed Port can be manually set when the Server is created.
 	//
 	// This is useful when a Layer 4 firewall is redirecting UDP traffic and
@@ -118,26 +156,23 @@ type Server struct {
 	Port int
 
 	// TLSConfig provides a TLS configuration for use by server. It must be
-	// set for ListenAndServe and Serve methods.
+	// set for [Server.ListenAndServe] and [Server.Serve].
 	TLSConfig *tls.Config
 
-	// QUICConfig provides the parameters for QUIC connection created with Serve.
+	// QUICConfig provides the parameters for QUIC connections created with [Server.Serve].
 	// If nil, it uses reasonable default values.
-	//
-	// Configured versions are also used in Alt-Svc response header set with SetQUICHeaders.
 	QUICConfig *quic.Config
 
-	// Handler is the HTTP request handler to use. If not set, defaults to
-	// http.NotFound.
+	// Handler is the HTTP request handler. If nil, [http.DefaultServeMux] is used.
 	Handler http.Handler
 
 	// EnableDatagrams enables support for HTTP/3 datagrams (RFC 9297).
-	// If set to true, QUICConfig.EnableDatagrams will be set.
+	// For connections created by the server, this also enables [quic.Config.EnableDatagrams].
 	EnableDatagrams bool
 
 	// MaxHeaderBytes controls the maximum number of bytes the server will
 	// read parsing the request HEADERS frame. It does not limit the size of
-	// the request body. If zero or negative, http.DefaultMaxHeaderBytes is
+	// the request body. If zero or negative, [http.DefaultMaxHeaderBytes] is
 	// used.
 	MaxHeaderBytes int
 
@@ -171,9 +206,10 @@ type Server struct {
 	altSvcHeader string
 }
 
-// ListenAndServe listens on the UDP address s.Addr and calls s.Handler to handle HTTP/3 requests on incoming connections.
+// ListenAndServe listens on the UDP address [Server.Addr] and calls [Server.Handler]
+// to handle HTTP/3 requests on incoming connections.
 //
-// If s.Addr is blank, ":https" is used.
+// If [Server.Addr] is blank, ":https" is used.
 func (s *Server) ListenAndServe() error {
 	ln, err := s.setupListenerForConn(s.TLSConfig, nil)
 	if err != nil {
@@ -184,9 +220,10 @@ func (s *Server) ListenAndServe() error {
 	return s.serveListener(*ln)
 }
 
-// ListenAndServeTLS listens on the UDP address s.Addr and calls s.Handler to handle HTTP/3 requests on incoming connections.
+// ListenAndServeTLS listens on the UDP address [Server.Addr] and calls [Server.Handler]
+// to handle HTTP/3 requests on incoming connections.
 //
-// If s.Addr is blank, ":https" is used.
+// If [Server.Addr] is blank, ":https" is used.
 func (s *Server) ListenAndServeTLS(certFile, keyFile string) error {
 	var err error
 	certs := make([]tls.Certificate, 1)
@@ -252,10 +289,10 @@ func (s *Server) ServeQUICConn(conn *quic.Conn) error {
 }
 
 // ServeListener serves an existing QUIC listener.
-// Make sure you use http3.ConfigureTLSConfig to configure a tls.Config
-// and use it to construct a http3-friendly QUIC listener.
-// Closing the server does not close the listener. It is the application's responsibility to close them.
-// ServeListener always returns a non-nil error. After Shutdown or Close, the returned error is http.ErrServerClosed.
+// Use [ConfigureTLSConfig] to configure a [tls.Config] for the QUIC listener.
+// Closing the server does not close the listener; closing the listener is the application's responsibility.
+// ServeListener always returns a non-nil error. After [Server.Shutdown] or [Server.Close],
+// it returns [http.ErrServerClosed].
 func (s *Server) ServeListener(ln QUICListener) error {
 	s.mutex.Lock()
 	if err := s.addListener(&ln, false); err != nil {
@@ -297,7 +334,7 @@ func (s *Server) setupListenerForConn(tlsConf *tls.Config, conn net.PacketConn) 
 		return nil, errServerWithoutTLSConfig
 	}
 
-	baseConf := ConfigureTLSConfig(tlsConf)
+	baseConf := s.configureTLSConfig(tlsConf)
 	quicConf := s.QUICConfig
 	if quicConf == nil {
 		quicConf = &quic.Config{Allow0RTT: true}
@@ -453,16 +490,20 @@ func (s *Server) newRawServerConn(conn *quic.Conn) (*RawServerConn, *quic.SendSt
 
 	// open the control stream and send a SETTINGS frame, it's also used to send a GOAWAY frame later
 	// when the server is gracefully closed
-	ctrlStr, err := hconn.openControlStream(&settingsFrame{
-		MaxFieldSectionSize: int64(s.maxHeaderBytes()),
-		Datagram:            s.EnableDatagrams,
-		ExtendedConnect:     true,
-		Other:               s.AdditionalSettings,
-	})
+	ctrlStr, err := hconn.openControlStream(s.settings())
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("opening the control stream failed: %w", err)
 	}
 	return hconn, ctrlStr, qlogger, nil
+}
+
+func (s *Server) settings() *settings {
+	return &settings{
+		MaxFieldSectionSize: int64(s.maxHeaderBytes()),
+		Datagram:            s.EnableDatagrams,
+		ExtendedConnect:     true,
+		Other:               s.AdditionalSettings,
+	}
 }
 
 // handleConn handles the HTTP/3 exchange on a QUIC connection.
@@ -499,8 +540,8 @@ func (s *Server) handleConn(conn *quic.Conn) error {
 		if err != nil {
 			// the underlying connection was closed (by either side)
 			if conn.Context().Err() != nil {
-				var appErr *quic.ApplicationError
-				if !errors.As(err, &appErr) || appErr.ErrorCode != quic.ApplicationErrorCode(ErrCodeNoError) {
+				appErr, ok := errors.AsType[*quic.ApplicationError](err)
+				if !ok || appErr.ErrorCode != quic.ApplicationErrorCode(ErrCodeNoError) {
 					handleErr = fmt.Errorf("accepting stream failed: %w", err)
 				}
 				break
@@ -513,8 +554,8 @@ func (s *Server) handleConn(conn *quic.Conn) error {
 			}
 			inGracefulShutdown = s.graceCtx.Err() != nil
 			if !inGracefulShutdown {
-				var appErr *quic.ApplicationError
-				if !errors.As(err, &appErr) || appErr.ErrorCode != quic.ApplicationErrorCode(ErrCodeNoError) {
+				appErr, ok := errors.AsType[*quic.ApplicationError](err)
+				if !ok || appErr.ErrorCode != quic.ApplicationErrorCode(ErrCodeNoError) {
 					handleErr = fmt.Errorf("accepting stream failed: %w", err)
 				}
 				break
@@ -561,9 +602,10 @@ func (s *Server) maxHeaderBytes() int {
 	return s.MaxHeaderBytes
 }
 
-// Close the server immediately, aborting requests and sending CONNECTION_CLOSE frames to connected clients.
-// Close in combination with ListenAndServe() (instead of Serve()) may race if it is called before a UDP socket is established.
-// It is the caller's responsibility to close any connection passed to ServeQUICConn.
+// Close closes the server immediately, aborting requests and sending CONNECTION_CLOSE frames to connected clients.
+// Calling Close concurrently with [Server.ListenAndServe] may race with UDP socket creation;
+// use [Server.Serve] to avoid this.
+// It is the caller's responsibility to close any connection passed to [Server.ServeQUICConn].
 func (s *Server) Close() error {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
@@ -592,9 +634,9 @@ func (s *Server) Close() error {
 }
 
 // Shutdown gracefully shuts down the server without interrupting any active connections.
-// The server sends a GOAWAY frame first, then or for all running requests to complete.
-// Shutdown in combination with ListenAndServe may race if it is called before a UDP socket is established.
-// It is recommended to use Serve instead.
+// The server sends a GOAWAY frame first, then waits for all running requests to complete.
+// Calling Shutdown concurrently with [Server.ListenAndServe] may race with UDP socket creation;
+// use [Server.Serve] to avoid this.
 func (s *Server) Shutdown(ctx context.Context) error {
 	s.mutex.Lock()
 	s.closed = true
@@ -637,17 +679,17 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	}
 }
 
-// ErrNoAltSvcPort is the error returned by SetQUICHeaders when no port was found
-// for Alt-Svc to announce. This can happen if listening on a PacketConn without a port
-// (UNIX socket, for example) and no port is specified in Server.Port or Server.Addr.
+// ErrNoAltSvcPort is returned by [Server.SetQUICHeaders] when no port was found
+// for Alt-Svc to announce. This can happen if listening on a [net.PacketConn] without a port
+// (UNIX socket, for example) and no port is specified in [Server.Port] or [Server.Addr].
 var ErrNoAltSvcPort = errors.New("no port can be announced, specify it explicitly using Server.Port or Server.Addr")
 
 // SetQUICHeaders can be used to set the proper headers that announce that this server supports HTTP/3.
 // The values set by default advertise all the ports the server is listening on, but can be
-// changed to a specific port by setting Server.Port before launching the server.
-// If no listener's Addr().String() returns an address with a valid port, Server.Addr will be used
-// to extract the port, if specified.
-// For example, a server launched using ListenAndServe on an address with port 443 would set:
+// changed to a specific port by setting [Server.Port] before launching the server.
+// If none of the server's listeners report a valid port through [QUICListener.Addr],
+// [Server.Addr] is used to extract the port, if specified.
+// For example, a server launched using [Server.ListenAndServe] on an address with port 443 would set:
 //
 //	Alt-Svc: h3=":443"; ma=2592000
 func (s *Server) SetQUICHeaders(hdr http.Header) error {
@@ -663,7 +705,7 @@ func (s *Server) SetQUICHeaders(hdr http.Header) error {
 }
 
 // ListenAndServeQUIC listens on the UDP network address addr and calls the
-// handler for HTTP/3 requests on incoming connections. http.DefaultServeMux is
+// handler for HTTP/3 requests on incoming connections. [http.DefaultServeMux] is
 // used when handler is nil.
 func ListenAndServeQUIC(addr, certFile, keyFile string, handler http.Handler) error {
 	server := &Server{
@@ -675,7 +717,7 @@ func ListenAndServeQUIC(addr, certFile, keyFile string, handler http.Handler) er
 
 // ListenAndServeTLS listens on the given network address for both TLS/TCP and QUIC
 // connections in parallel. It returns if one of the two returns an error.
-// http.DefaultServeMux is used when handler is nil.
+// [http.DefaultServeMux] is used when handler is nil.
 // The correct Alt-Svc headers for QUIC are set.
 func ListenAndServeTLS(addr, certFile, keyFile string, handler http.Handler) error {
 	// Load certs

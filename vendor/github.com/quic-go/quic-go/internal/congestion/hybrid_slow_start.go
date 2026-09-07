@@ -15,6 +15,7 @@ const hybridStartMinSamples = uint32(8)
 
 // Exit slow start if the min rtt has increased by more than 1/8th.
 const hybridStartDelayFactorExp = 3 // 2^3 = 8
+
 // The original paper specifies 2 and 8ms, but those have changed over time.
 const (
 	hybridStartDelayMinThresholdUs = int64(4000)

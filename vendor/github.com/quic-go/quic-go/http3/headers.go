@@ -38,7 +38,8 @@ type header struct {
 	Protocol string
 	// parsed and deduplicated. -1 if no Content-Length header is sent
 	ContentLength int64
-	// all non-pseudo headers
+	// all non-pseudo headers.
+	// Some pseudo-header keys with nil values are temporarily added to track presence.
 	Headers http.Header
 }
 
@@ -53,7 +54,7 @@ var invalidHeaderFields = [...]string{
 
 func parseHeaders(decodeFn qpack.DecodeFunc, isRequest bool, sizeLimit int, headerFields *[]qpack.HeaderField) (header, error) {
 	hdr := header{Headers: make(http.Header)}
-	var readFirstRegularHeader, readContentLength bool
+	var readFirstRegularHeader, readContentLength, hasMethod, hasStatus bool
 	var contentLengthStr string
 	for {
 		h, err := decodeFn()
@@ -85,22 +86,29 @@ func parseHeaders(decodeFn qpack.DecodeFunc, isRequest bool, sizeLimit int, head
 			var isDuplicatePseudoHeader bool // pseudo headers are allowed to appear exactly once
 			switch h.Name {
 			case ":path":
-				isDuplicatePseudoHeader = hdr.Path != ""
+				_, isDuplicatePseudoHeader = hdr.Headers[h.Name]
+				hdr.Headers[h.Name] = nil
 				hdr.Path = h.Value
 			case ":method":
-				isDuplicatePseudoHeader = hdr.Method != ""
+				isDuplicatePseudoHeader = hasMethod
+				hasMethod = true
 				hdr.Method = h.Value
 			case ":authority":
-				isDuplicatePseudoHeader = hdr.Authority != ""
+				_, isDuplicatePseudoHeader = hdr.Headers[h.Name]
+				hdr.Headers[h.Name] = nil
 				hdr.Authority = h.Value
 			case ":protocol": // RFC 9220
-				isDuplicatePseudoHeader = hdr.Protocol != ""
+				_, isDuplicatePseudoHeader = hdr.Headers[h.Name]
+				hdr.Headers[h.Name] = nil
 				hdr.Protocol = h.Value
 			case ":scheme":
-				isDuplicatePseudoHeader = hdr.Scheme != ""
-				hdr.Scheme = h.Value
+				_, isDuplicatePseudoHeader = hdr.Headers[h.Name]
+				hdr.Headers[h.Name] = nil
+				// URI schemes are case-insensitive and canonically lowercase, see section 3.1 of RFC 3986
+				hdr.Scheme = strings.ToLower(h.Value)
 			case ":status":
-				isDuplicatePseudoHeader = hdr.Status != ""
+				isDuplicatePseudoHeader = hasStatus
+				hasStatus = true
 				hdr.Status = h.Value
 				isResponsePseudoHeader = true
 			default:
@@ -221,12 +229,47 @@ func requestFromHeaders(decodeFn qpack.DecodeFunc, sizeLimit int, headerFields *
 	if err != nil {
 		return nil, err
 	}
+	_, hasPath := hdr.Headers[":path"]
+	_, hasAuthority := hdr.Headers[":authority"]
+	_, hasScheme := hdr.Headers[":scheme"]
+	_, hasProtocol := hdr.Headers[":protocol"]
+	delete(hdr.Headers, ":path")
+	delete(hdr.Headers, ":authority")
+	delete(hdr.Headers, ":scheme")
+	delete(hdr.Headers, ":protocol")
+
+	if hdr.Method == "" {
+		return nil, errors.New(":method must not be empty")
+	}
+	if !validMethod(hdr.Method) {
+		return nil, fmt.Errorf("invalid :method: %q", hdr.Method)
+	}
+
+	// RFC 9114, Section 4.3.1 allows Host as an alternative to :authority.
+	hosts := hdr.Headers["Host"]
+	if len(hosts) > 1 {
+		return nil, errors.New("too many Host headers")
+	}
+	host := hdr.Headers.Get("Host")
+	// If both are present, they must contain the same value.
+	if hasAuthority && len(hosts) > 0 && hdr.Authority != host {
+		return nil, errors.New(":authority and Host header field values do not match")
+	}
+	isConnect := hdr.Method == http.MethodConnect
+	// If :authority is missing, use Host as a fallback for HTTP(S) requests.
+	// CONNECT requests are excluded since they must provide :authority (RFC 9114, Section 4.4).
+	if !isConnect && !hasAuthority && (hdr.Scheme == "http" || hdr.Scheme == "https") {
+		hdr.Authority = host
+	}
+	if strings.Contains(hdr.Authority, "@") && (hdr.Scheme == "http" || hdr.Scheme == "https") {
+		return nil, errors.New("userinfo is not allowed in :authority")
+	}
+
 	// concatenate cookie headers, see https://tools.ietf.org/html/rfc6265#section-5.4
 	if len(hdr.Headers["Cookie"]) > 0 {
 		hdr.Headers.Set("Cookie", strings.Join(hdr.Headers["Cookie"], "; "))
 	}
 
-	isConnect := hdr.Method == http.MethodConnect
 	// Extended CONNECT, see https://datatracker.ietf.org/doc/html/rfc8441#section-4
 	isExtendedConnected := isConnect && hdr.Protocol != ""
 	if isExtendedConnected {
@@ -237,15 +280,15 @@ func requestFromHeaders(decodeFn qpack.DecodeFunc, sizeLimit int, headerFields *
 			return nil, errors.New("extended CONNECT: :scheme, :path and :authority must not be empty")
 		}
 	} else if isConnect {
-		if hdr.Path != "" || hdr.Authority == "" { // normal CONNECT
-			return nil, errors.New(":path must be empty and :authority must not be empty")
+		if hasScheme || hasPath || hdr.Authority == "" { // normal CONNECT
+			return nil, errors.New(":scheme and :path must be omitted and :authority must not be empty")
 		}
-	} else if len(hdr.Path) == 0 || len(hdr.Authority) == 0 || len(hdr.Method) == 0 {
-		return nil, errors.New(":path, :authority and :method must not be empty")
+	} else if len(hdr.Path) == 0 || len(hdr.Authority) == 0 {
+		return nil, errors.New(":path and :authority must not be empty")
 	}
 
-	if !isExtendedConnected && len(hdr.Protocol) > 0 {
-		return nil, errors.New(":protocol must be empty")
+	if !isExtendedConnected && hasProtocol {
+		return nil, errors.New(":protocol must be omitted")
 	}
 
 	var u *url.URL

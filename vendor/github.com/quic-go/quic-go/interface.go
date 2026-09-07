@@ -50,10 +50,10 @@ type TokenStore interface {
 	Put(key string, token *ClientToken)
 }
 
-// Err0RTTRejected is the returned from:
-//   - Open{Uni}Stream{Sync}
-//   - Accept{Uni}Stream
-//   - Stream.Read and Stream.Write
+// Err0RTTRejected can be returned by methods such as:
+//   - [Conn.OpenStream], [Conn.OpenStreamSync], [Conn.OpenUniStream], and [Conn.OpenUniStreamSync]
+//   - [Conn.AcceptStream] and [Conn.AcceptUniStream]
+//   - [Stream.Read] and [Stream.Write]
 //
 // when the server rejects a 0-RTT connection attempt.
 var Err0RTTRejected = errors.New("0-RTT rejected")
@@ -65,7 +65,7 @@ var ErrWouldBlock = errors.New("operation would block")
 var ErrWriteLimitReached = errors.New("write limit reached")
 
 // QUICVersionContextKey can be used to find out the QUIC version of a TLS handshake from the
-// context returned by tls.Config.ClientInfo.Context.
+// context returned by [tls.ClientHelloInfo.Context].
 var QUICVersionContextKey = handshake.QUICVersionContextKey
 
 // StatelessResetKey is a key used to derive stateless reset tokens.
@@ -190,9 +190,10 @@ type ClientInfo struct {
 	// RemoteAddr is the remote address on the Initial packet.
 	// Unless AddrVerified is set, the address is not yet verified, and could be a spoofed IP address.
 	RemoteAddr net.Addr
-	// AddrVerified says if the remote address was verified using QUIC's Retry mechanism.
-	// Note that the Retry mechanism costs one network roundtrip,
-	// and is not performed unless Transport.MaxUnvalidatedHandshakes is surpassed.
+	// AddrVerified reports whether the remote address was verified by a valid address validation token,
+	// including a token received in a NEW_TOKEN frame.
+	// The Retry mechanism costs one network roundtrip and is only used when
+	// [Transport.VerifySourceAddress] requests it.
 	AddrVerified bool
 }
 

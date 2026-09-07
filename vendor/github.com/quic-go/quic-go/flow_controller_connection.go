@@ -1,7 +1,6 @@
 package quic
 
 import (
-	"errors"
 	"fmt"
 	"sync"
 
@@ -169,18 +168,11 @@ func (c *connectionFlowController) EnsureMinimumWindowSize(inc protocol.ByteCoun
 // Reset rests the flow controller. This happens when 0-RTT is rejected.
 // All stream data is invalidated, it's as if we had never opened a stream and never sent any data.
 // At that point, we only have sent stream data, but we didn't have the keys to open 1-RTT keys yet.
-func (c *connectionFlowController) Reset() error {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-
-	if c.bytesRead > 0 || c.highestReceived > 0 || !c.epochStartTime.IsZero() {
-		return errors.New("flow controller reset after reading data")
-	}
+func (c *connectionFlowController) Reset() {
 	c.sendMutex.Lock()
 	defer c.sendMutex.Unlock()
 
 	c.bytesSent = 0
 	c.lastBlockedAt = 0
 	c.sendWindow = 0
-	return nil
 }
