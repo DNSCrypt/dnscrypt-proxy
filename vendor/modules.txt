@@ -98,9 +98,6 @@ github.com/kardianos/service
 # github.com/lifenjoiner/dhcpdns v0.0.7
 ## explicit; go 1.20
 github.com/lifenjoiner/dhcpdns
-# github.com/miekg/dns v1.1.73
-## explicit; go 1.25.0
-github.com/miekg/dns
 # github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2
 ## explicit
 # github.com/powerman/check v1.13.0
@@ -134,8 +131,8 @@ github.com/quic-go/quic-go/qlogwriter/jsontext
 github.com/quic-go/quic-go/quicvarint
 # go.uber.org/mock v0.6.0
 ## explicit; go 1.23.0
-# golang.org/x/crypto v0.55.0
-## explicit; go 1.25.0
+# golang.org/x/crypto v0.56.0
+## explicit; go 1.26.0
 golang.org/x/crypto/blake2b
 golang.org/x/crypto/chacha20
 golang.org/x/crypto/chacha20poly1305
