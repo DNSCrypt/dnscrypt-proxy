@@ -67,6 +67,8 @@ const (
 	TypeSVCB       uint16 = 64
 	TypeHTTPS      uint16 = 65
 	TypeDSYNC      uint16 = 66
+	TypeUNECE      uint16 = 69 // Not implemented, see https://www.ietf.org/archive/id/draft-woodcock-faltstrom-external-registry-rrtypes-01.html.
+	TypeISO        uint16 = 70 // Not implemented, see https://www.ietf.org/archive/id/draft-woodcock-faltstrom-external-registry-rrtypes-01.html.
 	TypeSPF        uint16 = 99
 	TypeUINFO      uint16 = 100
 	TypeUID        uint16 = 101
