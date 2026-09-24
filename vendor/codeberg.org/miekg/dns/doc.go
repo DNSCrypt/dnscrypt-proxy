@@ -66,7 +66,7 @@ Domain names are converted to presentation form as-is, there is no conversion of
 
 TXT character strings are converted to presentation form both when unpacked and when converted to strings.
 Tabs, carriage returns and line feeds will be converted to \t, \r and \n respectively. Back slashes and
-quotations marks will be escaped. Bytes below 32 and above 127 will be converted to \DDD form.
+quotations marks will be escaped. Bytes below 32 and above 126 will be converted to \DDD form.
 
 # DNSSEC
 
