@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.14.0] - 2026-09-21
+
+### 🚀 Added
+
+- Support Go 1.27 by @powerman in [#152]
+
+### 📚 Documentation
+
+- Remove TODO section from README by @powerman in [6c45842]
+
+[1.14.0]: https://github.com/powerman/check/compare/v1.13.0..v1.14.0
+[6c45842]: https://github.com/powerman/check/commit/6c45842969b6b3db260953a1eb29c165c0bf7cd5
+[#152]: https://github.com/powerman/check/pull/152
+
 ## [1.13.0] - 2026-07-10
 
 ### ➖ Removed
