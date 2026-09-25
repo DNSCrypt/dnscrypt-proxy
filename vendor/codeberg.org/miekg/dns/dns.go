@@ -205,11 +205,11 @@ type MsgHeader struct {
 	AuthenticatedData  bool
 	CheckingDisabled   bool
 
-	// Extended DNS
-	Security       bool // Security is the DNSSEC OK bit, see RFC 403{3,4,5}.
-	CompactAnswers bool // Compact Answers OK, see RFC 9824.
-	Delegation     bool // Delegation is the DELEG OK bit, see https://datatracker.ietf.org/doc/draft-ietf-deleg/.
-
+	// Extended DNS.
+	Security       bool   // Security is the DNSSEC OK bit, see RFC 403{3,4,5}, see [OPT.security].
+	CompactAnswers bool   // Compact Answers OK, see RFC 9824, see [OPT.compactAnswers].
+	Delegation     bool   // Delegation is the DELEG OK bit, see https://datatracker.ietf.org/doc/draft-ietf-deleg/ and [OPT.delegation].
+	Z              uint16 // Z holds the OPT's unassigned Z bits, see [OPT.z].
 }
 
 // Msg is a DNS message. Each message has a Data field that contains the binary data buffer. This is filled when

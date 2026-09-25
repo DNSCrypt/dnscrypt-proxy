@@ -15,7 +15,7 @@ import (
 // Default maximum number of TCP queries before we close the socket.
 const MaxTCPQueries = 1024
 
-// ListenAndServe Starts a server on address and network specified and invokes handler for incoming queries.
+// ListenAndServe starts a server on address and network specified and invokes handler for incoming queries.
 func ListenAndServe(addr, network string, handler Handler) error {
 	server := NewServer()
 	server.Addr = addr
@@ -68,7 +68,7 @@ func DefaultMsgAcceptFunc(m *Msg) MsgAcceptAction {
 
 // InvalidMsgFunc is a listener hook for observing incoming messages that were discarded
 // because they could not be parsed or an earlier error in the server.
-// Every message that is read by a Reader will eventually be provided to the Handler, or passed to this function.
+// Every message that is read by a Reader will eventually be provided to the [Handler], or passed to this function.
 type InvalidMsgFunc func(m *Msg, err error)
 
 // DefaultMsgInvalidFunc is the default function used in case no InvalidMsgFunc is set. It is defined to be a noop.
@@ -183,9 +183,9 @@ func (srv *Server) ListenAndServe() error {
 	}
 	srv.init()
 
-	// some sanity checks
 	buf := srv.MsgPool.Get()
 	if len(buf) < srv.UDPSize {
+		srv.once.Do(func() { close(srv.exited) })
 		return &Error{err: fmt.Sprintf("MsgPool size (%d) should be larger or equal to UDPSize (%d)", len(buf), srv.UDPSize)}
 	}
 	srv.MsgPool.Put(buf)
@@ -203,6 +203,7 @@ func (srv *Server) ListenAndServe() error {
 	case "tcp", "tcp4", "tcp6":
 		l, err := listenTCP(srv.Net, addr, srv.ReusePort, srv.ReuseAddr)
 		if err != nil {
+			srv.once.Do(func() { close(srv.exited) })
 			return err
 		}
 		if srv.TLSConfig != nil {
@@ -217,6 +218,7 @@ func (srv *Server) ListenAndServe() error {
 	case "udp", "udp4", "udp6":
 		l, err := listenUDP(srv.Net, addr, srv.ReusePort, srv.ReuseAddr)
 		if err != nil {
+			srv.once.Do(func() { close(srv.exited) })
 			return err
 		}
 		u := l.(*net.UDPConn)
@@ -325,6 +327,7 @@ func (srv *Server) serveTCP(wg *sync.WaitGroup, conn net.Conn) {
 		readtimeout = srv.IdleTimeout
 	}
 
+	hijacked = hijacked || w.hijacked.Load()
 	if !hijacked {
 		w.Close()
 	}

@@ -42,8 +42,8 @@ type Lex struct {
 	Token  string // text of the token
 	As     uint8  // create an RR (asRR), an EDNS0 (asCode) or DSO RR (asStateful)
 	Value  uint8  // value: String, Blank, etc.
-	Line   uint32 // line in the file
-	Column uint16 // column in the file
+	Line   int    // line in the file
+	Column int    // column in the file
 	Torc   uint16 // type or class as parsed in the lexer, we only need to look this up in the grammar
 }
 
@@ -56,8 +56,8 @@ const (
 // Lexer tokenizes the zone data, so that the grammar implemented in ZoneParser can parse RRs out of an RFC
 // 1035 styled text file.
 type Lexer struct {
-	line   uint32 // yes this overflows for insane zone files...
-	column uint16
+	line   int
+	column int
 	brace  uint8
 	keys   uint8 // bit0: kQuote, bit1: kSpace, bit2: kCommt, bit3: kRRtype, bit4: kOwner, bit5: kNextL, bit6: kEol
 	tok    []byte
