@@ -170,12 +170,11 @@ func NetProbeSingle(
 		if err != nil {
 			msg := ""
 			var dnsErr *net.DNSError
-			errors.As(err, &dnsErr)
 
 			switch {
 			case ctx.Err() != nil:
 				msg = ""
-			case dnsErr != nil && (dnsErr.Timeout() || dnsErr.IsNotFound):
+			case errors.As(err, &dnsErr) && (dnsErr.Timeout() || dnsErr.IsNotFound):
 				msg = fmt.Sprintf(
 					"(%s) Name resolution error: %v",
 					host_port,
