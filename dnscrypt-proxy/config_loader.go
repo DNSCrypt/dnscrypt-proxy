@@ -487,7 +487,7 @@ func determineNetprobeAddresses(
 	if len(config.NetprobeAddressLegacy) > 0 {
 		if len(netprobeAddresses) <= 0 {
 			dlog.Warn(
-				"netprobe_address was changed to a netprobe_addresses, a list - Please update your configuration",
+				"netprobe_address was changed to a netprobe_addresses, a list -- Please update your configuration",
 			)
 			netprobeAddresses = append(netprobeAddresses, config.NetprobeAddressLegacy)
 		} else {
