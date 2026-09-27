@@ -127,7 +127,6 @@ func NetProbeSingle(
 	if ctx.Err() != nil {
 		return false, ctx.Err()
 	}
-
 	if _, _, err := net.SplitHostPort(host_port); err != nil {
 		return false, err
 	}
