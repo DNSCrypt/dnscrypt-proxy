@@ -492,7 +492,7 @@ func determineNetprobeAddresses(
 			netprobeAddresses = append(netprobeAddresses, config.NetprobeAddressLegacy)
 		} else {
 			dlog.Error(
-				"Can't use a list of netprobe_addresses at the same time as a netprobe_address",
+				"'netprobe_address' ignored -- Can't use a list of netprobe_addresses at the same time as a netprobe_address",
 			)
 
 		}
