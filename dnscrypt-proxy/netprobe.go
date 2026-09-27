@@ -103,7 +103,7 @@ func NetProbe(
 				return nil
 			} else if !errors.Is(res.err, context.Canceled) &&
 					  !errors.Is(res.err, context.DeadlineExceeded) {
-				dlog.Debugf("(%s) %v", res.host, res.err)
+				dlog.Noticef("(%s) %v", res.host, res.err)
 			}
 
 			probesPending--
@@ -126,6 +126,10 @@ func NetProbeSingle(
 	}
 	if ctx.Err() != nil {
 		return false, ctx.Err()
+	}
+
+	if _, _, err := net.SplitHostPort(host_port); err != nil {
+		return false, err
 	}
 
 	loggedMessages := make(map[string]struct{})
