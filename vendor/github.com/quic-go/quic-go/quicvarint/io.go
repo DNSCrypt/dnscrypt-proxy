@@ -15,15 +15,17 @@ var _ Reader = &bytes.Reader{}
 
 // A Peeker can peek bytes without consuming them.
 type Peeker interface {
+	// Peek must return a non-nil error if it copies fewer than len(b) bytes
 	Peek(b []byte) (int, error)
 }
 
 // Peek reads a number in the QUIC varint format without consuming bytes.
+// If an error is returned, the returned number is invalid.
 func Peek(p Peeker) (uint64, error) {
 	var b [8]byte
 
 	// first peek 1 byte to determine the varint length
-	if _, err := p.Peek(b[:1]); err != nil {
+	if n, err := p.Peek(b[:1]); n < 1 && err != nil {
 		return 0, err
 	}
 
@@ -31,7 +33,7 @@ func Peek(p Peeker) (uint64, error) {
 	if l == 1 {
 		return uint64(b[0] & 0b00111111), nil
 	}
-	if _, err := p.Peek(b[:l]); err != nil {
+	if n, err := p.Peek(b[:l]); n < l && err != nil {
 		return 0, err
 	}
 	val, _, err := Parse(b[:l])
@@ -58,11 +60,13 @@ func (r *byteReader) ReadByte() (byte, error) {
 	var b [1]byte
 	var n int
 	var err error
+	// don't turn an empty read into a zero byte
 	for n == 0 && err == nil {
 		n, err = r.Read(b[:])
 	}
 
-	if n == 1 && err == io.EOF {
+	// a byte returned with an error (incl. EOF) is still valid
+	if n == 1 {
 		err = nil
 	}
 	return b[0], err

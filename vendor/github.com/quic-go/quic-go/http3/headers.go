@@ -290,23 +290,26 @@ func requestFromHeaders(decodeFn qpack.DecodeFunc, sizeLimit int, headerFields *
 	if !isExtendedConnected && hasProtocol {
 		return nil, errors.New(":protocol must be omitted")
 	}
+	// url.ParseRequestURI accepts absolute URIs and "*", so validate :path before parsing.
+	validPath := strings.HasPrefix(hdr.Path, "/") || (hdr.Method == http.MethodOptions && hdr.Path == "*")
+	if (!isConnect || isExtendedConnected) && !validPath {
+		return nil, fmt.Errorf("invalid :path: %q", hdr.Path)
+	}
 
 	var u *url.URL
 	var requestURI string
 
 	protocol := "HTTP/3.0"
 
-	if isConnect {
-		u = &url.URL{}
-		if isExtendedConnected {
-			u, err = url.ParseRequestURI(hdr.Path)
-			if err != nil {
-				return nil, err
-			}
-			protocol = hdr.Protocol
-		} else {
-			u.Path = hdr.Path
+	if isExtendedConnected {
+		u, err = url.ParseRequestURI(hdr.Path)
+		if err != nil {
+			return nil, err
 		}
+		requestURI = hdr.Path
+		protocol = hdr.Protocol
+	} else if isConnect {
+		u = &url.URL{Host: hdr.Authority}
 		requestURI = hdr.Authority
 	} else {
 		u, err = url.ParseRequestURI(hdr.Path)
@@ -315,8 +318,6 @@ func requestFromHeaders(decodeFn qpack.DecodeFunc, sizeLimit int, headerFields *
 		}
 		requestURI = hdr.Path
 	}
-	u.Scheme = hdr.Scheme
-	u.Host = hdr.Authority
 
 	req := &http.Request{
 		Method:        hdr.Method,
