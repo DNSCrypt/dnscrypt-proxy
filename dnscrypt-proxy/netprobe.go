@@ -11,10 +11,10 @@ import (
 	"github.com/jedisct1/dlog"
 )
 
-// DeadlineIntervals - Determines an interval that should finish at least margin before deadline
+// determineNetprobeIntervals - Determines an interval that should finish at least margin before deadline
 //
 // mostly useful with a context.Context deadline
-func DeadlineIntervals(
+func determineNetprobeIntervals(
 	ideal time.Duration,
 	deadline time.Time,
 	margin time.Duration,
@@ -142,7 +142,7 @@ func NetProbeSingle(
 	interval := time.Second
 
 	if deadlineOk {
-		if i, _, ok := DeadlineIntervals(
+		if i, _, ok := determineNetprobeIntervals(
 			time.Second,
 			deadline,
 			10*time.Millisecond,
