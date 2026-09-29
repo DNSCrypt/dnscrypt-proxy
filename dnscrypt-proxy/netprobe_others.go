@@ -20,7 +20,7 @@ func NetProbe(proxy *Proxy, address string, timeout int) error {
 	} else {
 		dlog.Critical(err)
 	}
-	remoteUDPAddr, err := net.ResolveUDPAddr("udp", address)
+	remoteUDPAddrs, err := resolveNetprobeAddresses(address)
 	if err != nil {
 		return err
 	}
@@ -31,7 +31,15 @@ func NetProbe(proxy *Proxy, address string, timeout int) error {
 		timeout = Min(MaxTimeout, timeout)
 	}
 	for tries := timeout; tries > 0; tries-- {
-		pc, err := net.DialTimeout("udp", remoteUDPAddr.String(), proxy.timeout)
+		var err error
+		for _, remoteUDPAddr := range remoteUDPAddrs {
+			var pc net.Conn
+			pc, err = net.DialTimeout("udp", remoteUDPAddr.String(), proxy.timeout)
+			if err == nil {
+				pc.Close()
+				break
+			}
+		}
 		if err != nil {
 			if !retried {
 				retried = true
@@ -41,7 +49,6 @@ func NetProbe(proxy *Proxy, address string, timeout int) error {
 			time.Sleep(1 * time.Second)
 			continue
 		}
-		pc.Close()
 		dlog.Notice("Network connectivity detected")
 		return nil
 	}

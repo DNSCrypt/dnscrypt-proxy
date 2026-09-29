@@ -381,6 +381,9 @@ netprobe_timeout = 60
 ## when the system starts.
 ## On other operating systems, the connection will be initialized
 ## but nothing will be sent at all.
+## Multiple comma-separated addresses can be given, for example to support
+## both IPv4-only and IPv6-only networks. Connectivity is detected as soon
+## as any of them works: '9.9.9.9:53,[2620:fe::fe]:53'
 
 netprobe_address = '9.9.9.9:53'
 
