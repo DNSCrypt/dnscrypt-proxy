@@ -821,147 +821,147 @@ func (rr *IXFR) Clone() RR {
 	}
 }
 
-func (rr *LLQ) Clone() RR {
+func (o *LLQ) Clone() RR {
 	return &LLQ{
-		Version:   rr.Version,
-		Opcode:    rr.Opcode,
-		Error:     rr.Error,
-		ID:        rr.ID,
-		LeaseLife: rr.LeaseLife,
+		Version:   o.Version,
+		Opcode:    o.Opcode,
+		Error:     o.Error,
+		ID:        o.ID,
+		LeaseLife: o.LeaseLife,
 	}
 }
 
-func (rr *UPDATELEASE) Clone() RR {
+func (o *UPDATELEASE) Clone() RR {
 	return &UPDATELEASE{
-		Lease:    rr.Lease,
-		KeyLease: rr.KeyLease,
+		Lease:    o.Lease,
+		KeyLease: o.KeyLease,
 	}
 }
 
-func (rr *REPORTING) Clone() RR {
+func (o *REPORTING) Clone() RR {
 	return &REPORTING{
-		AgentDomain: rr.AgentDomain,
+		AgentDomain: o.AgentDomain,
 	}
 }
 
-func (rr *COOKIE) Clone() RR {
+func (o *COOKIE) Clone() RR {
 	return &COOKIE{
-		Cookie: rr.Cookie,
+		Cookie: o.Cookie,
 	}
 }
 
-func (rr *NSID) Clone() RR {
+func (o *NSID) Clone() RR {
 	return &NSID{
-		Nsid: rr.Nsid,
+		Nsid: o.Nsid,
 	}
 }
 
-func (rr *PADDING) Clone() RR {
+func (o *PADDING) Clone() RR {
 	return &PADDING{
-		Padding: rr.Padding,
+		Padding: o.Padding,
 	}
 }
 
-func (rr *EXPIRE) Clone() RR {
+func (o *EXPIRE) Clone() RR {
 	return &EXPIRE{
-		Expire: rr.Expire,
+		Expire: o.Expire,
 	}
 }
 
-func (rr *DAU) Clone() RR {
+func (o *DAU) Clone() RR {
 	return &DAU{
-		AlgCode: slices.Clone(rr.AlgCode),
+		AlgCode: slices.Clone(o.AlgCode),
 	}
 }
 
-func (rr *DHU) Clone() RR {
+func (o *DHU) Clone() RR {
 	return &DHU{
-		AlgCode: slices.Clone(rr.AlgCode),
+		AlgCode: slices.Clone(o.AlgCode),
 	}
 }
 
-func (rr *N3U) Clone() RR {
+func (o *N3U) Clone() RR {
 	return &N3U{
-		AlgCode: slices.Clone(rr.AlgCode),
+		AlgCode: slices.Clone(o.AlgCode),
 	}
 }
 
-func (rr *TCPKEEPALIVE) Clone() RR {
+func (o *TCPKEEPALIVE) Clone() RR {
 	return &TCPKEEPALIVE{
-		Timeout: rr.Timeout,
+		Timeout: o.Timeout,
 	}
 }
 
-func (rr *EDE) Clone() RR {
+func (o *EDE) Clone() RR {
 	return &EDE{
-		InfoCode:  rr.InfoCode,
-		ExtraText: rr.ExtraText,
+		InfoCode:  o.InfoCode,
+		ExtraText: o.ExtraText,
 	}
 }
 
-func (rr *SUBNET) Clone() RR {
+func (o *SUBNET) Clone() RR {
 	return &SUBNET{
-		Family:  rr.Family,
-		Netmask: rr.Netmask,
-		Scope:   rr.Scope,
-		Address: rr.Address,
+		Family:  o.Family,
+		Netmask: o.Netmask,
+		Scope:   o.Scope,
+		Address: o.Address,
 	}
 }
 
-func (rr *ESU) Clone() RR {
+func (o *ESU) Clone() RR {
 	return &ESU{
-		URI: rr.URI,
+		URI: o.URI,
 	}
 }
 
-func (rr *ZONEVERSION) Clone() RR {
+func (o *ZONEVERSION) Clone() RR {
 	return &ZONEVERSION{
-		Labels:  rr.Labels,
-		Type:    rr.Type,
-		Version: slices.Clone(rr.Version),
+		Labels:  o.Labels,
+		Type:    o.Type,
+		Version: slices.Clone(o.Version),
 	}
 }
 
-func (rr *MQQUERY) Clone() RR {
+func (o *MQQUERY) Clone() RR {
 	return &MQQUERY{
-		Types: slices.Clone(rr.Types),
+		Types: slices.Clone(o.Types),
 	}
 }
 
-func (rr *MQRESPONSE) Clone() RR {
+func (o *MQRESPONSE) Clone() RR {
 	return &MQRESPONSE{
-		Types: slices.Clone(rr.Types),
+		Types: slices.Clone(o.Types),
 	}
 }
 
-func (rr *KEYTAG) Clone() RR {
+func (o *KEYTAG) Clone() RR {
 	return &KEYTAG{
-		Types: slices.Clone(rr.Types),
+		Types: slices.Clone(o.Types),
 	}
 }
 
-func (rr *ERFC3597) Clone() RR {
+func (o *ERFC3597) Clone() RR {
 	return &ERFC3597{
-		EDNS0Code: rr.EDNS0Code,
-		Code:      rr.Code,
+		EDNS0Code: o.EDNS0Code,
+		Code:      o.Code,
 	}
 }
 
-func (rr *KEEPALIVE) Clone() RR {
+func (o *KEEPALIVE) Clone() RR {
 	return &KEEPALIVE{
-		Timeout:  rr.Timeout,
-		Interval: rr.Interval,
+		Timeout:  o.Timeout,
+		Interval: o.Interval,
 	}
 }
 
-func (rr *RETRYDELAY) Clone() RR {
+func (o *RETRYDELAY) Clone() RR {
 	return &RETRYDELAY{
-		Delay: rr.Delay,
+		Delay: o.Delay,
 	}
 }
 
-func (rr *DPADDING) Clone() RR {
+func (o *DPADDING) Clone() RR {
 	return &DPADDING{
-		Padding: rr.Padding,
+		Padding: o.Padding,
 	}
 }

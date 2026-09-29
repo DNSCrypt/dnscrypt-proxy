@@ -40,7 +40,7 @@ Read:
 		case <-srv.shutdown:
 			pc.Close()
 			wg.Wait()
-			srv.once.Do(func() { close(srv.exited) })
+			close(srv.exited)
 			return
 		}
 	}

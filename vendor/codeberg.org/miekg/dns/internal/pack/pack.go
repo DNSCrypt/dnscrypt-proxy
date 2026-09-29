@@ -198,11 +198,14 @@ func Name(s string, msg []byte, off int, compression map[string]uint16, compress
 	ls := len(s)
 
 	if ls == 1 && s[0] == '.' {
+		if off >= lenmsg {
+			return lenmsg, &Error{"overflow name"}
+		}
 		msg[off] = 0
 		return off + 1, nil
 	}
 	if ls > 0 && s[ls-1] != '.' {
-		return len(msg), &Error{"name must be fully qualified"}
+		return lenmsg, &Error{"name must be fully qualified"}
 	}
 
 	// Each dot ends a segment of the name. We trade each dot byte for a length byte.
@@ -264,17 +267,20 @@ func MName(s string, msg []byte, off int) (off1 int, err error) {
 	ls := len(s)
 
 	if ls == 1 && s[0] == '.' {
+		if off >= lenmsg {
+			return lenmsg, &Error{"overflow name"}
+		}
 		msg[off] = 0
 		return off + 1, nil
 	}
 	if ls > 1 && s[0] == '.' { // leading dots are not legal except for the root zone
-		return len(msg), &Error{"leading dot in mname"}
+		return lenmsg, &Error{"leading dot in mname"}
 	}
 	if ls > 2 && s[0] == '\\' && s[1] == '.' { // disallow \. too
-		return len(msg), &Error{"leading dot in mname"}
+		return lenmsg, &Error{"leading dot in mname"}
 	}
 	if ls > 0 && s[ls-1] != '.' {
-		return len(msg), &Error{"mname must be fully qualified"}
+		return lenmsg, &Error{"mname must be fully qualified"}
 	}
 
 	// Each dot ends a segment of the name. We trade each dot byte for a length byte.

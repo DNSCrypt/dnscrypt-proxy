@@ -227,13 +227,6 @@ func (h *sentPacketHistory) cleanupStart() {
 	h.firstPacketNumber = protocol.InvalidPacketNumber
 }
 
-func (h *sentPacketHistory) LowestPacketNumber() protocol.PacketNumber {
-	if len(h.packets) == 0 {
-		return protocol.InvalidPacketNumber
-	}
-	return h.firstPacketNumber
-}
-
 func (h *sentPacketHistory) DeclareLost(pn protocol.PacketNumber) {
 	idx, ok := h.getIndex(pn)
 	if !ok {

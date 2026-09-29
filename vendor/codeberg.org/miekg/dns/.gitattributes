@@ -5,3 +5,5 @@ z*.go linguist-generated=true
 **/z*.go linguist-generated=true
 zednspack.go !linguist-generated
 cmd/atomdns/internal/conffile/zoneclass.go !linguist-generated
+zonemd.go !linguist-generated
+zonemd_test.go !linguist-generated

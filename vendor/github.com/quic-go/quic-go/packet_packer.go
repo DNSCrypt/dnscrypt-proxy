@@ -253,7 +253,7 @@ func (p *packetPacker) packConnectionClose(
 		if encLevel == protocol.Encryption1RTT {
 			connID = p.getDestConnID()
 			oneRTTPacketNumber, oneRTTPacketNumberLen = p.pnManager.PeekPacketNumber(protocol.Encryption1RTT)
-			size += p.shortHeaderPacketLength(connID, oneRTTPacketNumberLen, pl)
+			size += p.shortHeaderPacketLength(connID, oneRTTPacketNumberLen, pl) + protocol.ByteCount(sealer.Overhead())
 		} else {
 			hdr = p.getLongHeader(encLevel, v)
 			hdrs[i] = hdr

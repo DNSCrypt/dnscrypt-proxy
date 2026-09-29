@@ -69,8 +69,8 @@ func isEOFOrClosedNetwork(err error) bool {
 	return false
 }
 
-// Tranfer defines the signing parameters that are used during a zone transfer.
-type Transfer struct {
+// TranferOption defines the signing and other parameters that are used during a zone transfer.
+type TransferOption struct {
 	// If non zero, TSIG signing and verification is done on messages that have a TSIG record in the pseudo section.
 	TSIGSigner
 	// If non zero SIG0 signing and verification is done on messages that have a SIG0 record in the pseudo section.

@@ -15,7 +15,7 @@ import (
 // Default maximum number of TCP queries before we close the socket.
 const MaxTCPQueries = 1024
 
-// ListenAndServe Starts a server on address and network specified and invokes handler for incoming queries.
+// ListenAndServe starts a server on address and network specified and invokes handler for incoming queries.
 func ListenAndServe(addr, network string, handler Handler) error {
 	server := NewServer()
 	server.Addr = addr
@@ -68,7 +68,7 @@ func DefaultMsgAcceptFunc(m *Msg) MsgAcceptAction {
 
 // InvalidMsgFunc is a listener hook for observing incoming messages that were discarded
 // because they could not be parsed or an earlier error in the server.
-// Every message that is read by a Reader will eventually be provided to the Handler, or passed to this function.
+// Every message that is read by a Reader will eventually be provided to the [Handler], or passed to this function.
 type InvalidMsgFunc func(m *Msg, err error)
 
 // DefaultMsgInvalidFunc is the default function used in case no InvalidMsgFunc is set. It is defined to be a noop.
@@ -128,8 +128,6 @@ type Server struct {
 	exited   chan struct{}
 	shutdown chan bool
 
-	once sync.Once
-
 	// Whether to set the SO_REUSEPORT socket option, allowing multiple listeners to be bound to a single address.
 	// It is only supported on certain GOOSes and when using ListenAndServe.
 	ReusePort bool
@@ -176,17 +174,23 @@ func (srv *Server) init() {
 
 // ListenAndServe starts a nameserver on the configured address in *Server. If TLS config is available a TLS
 // listener will be started.
-func (srv *Server) ListenAndServe() error {
+func (srv *Server) ListenAndServe() (err error) {
 	addr := srv.Addr
 	if addr == "" {
 		addr = ":domain"
 	}
 	srv.init()
 
-	// some sanity checks
+	defer func() {
+		if err != nil {
+			close(srv.exited)
+		}
+	}()
+
 	buf := srv.MsgPool.Get()
 	if len(buf) < srv.UDPSize {
-		return &Error{err: fmt.Sprintf("MsgPool size (%d) should be larger or equal to UDPSize (%d)", len(buf), srv.UDPSize)}
+		err = &Error{err: fmt.Sprintf("MsgPool size (%d) should be larger or equal to UDPSize (%d)", len(buf), srv.UDPSize)}
+		return err
 	}
 	srv.MsgPool.Put(buf)
 
@@ -201,8 +205,8 @@ func (srv *Server) ListenAndServe() error {
 
 	switch srv.Net {
 	case "tcp", "tcp4", "tcp6":
-		l, err := listenTCP(srv.Net, addr, srv.ReusePort, srv.ReuseAddr)
-		if err != nil {
+		var l net.Listener
+		if l, err = listenTCP(srv.Net, addr, srv.ReusePort, srv.ReuseAddr); err != nil {
 			return err
 		}
 		if srv.TLSConfig != nil {
@@ -215,12 +219,12 @@ func (srv *Server) ListenAndServe() error {
 		srv.listenTCP(srv.Listener)
 		return nil
 	case "udp", "udp4", "udp6":
-		l, err := listenUDP(srv.Net, addr, srv.ReusePort, srv.ReuseAddr)
-		if err != nil {
+		var l net.PacketConn
+		if l, err = listenUDP(srv.Net, addr, srv.ReusePort, srv.ReuseAddr); err != nil {
 			return err
 		}
 		u := l.(*net.UDPConn)
-		if err := setUDPSocketOptions(u); err != nil {
+		if err = setUDPSocketOptions(u); err != nil {
 			u.Close()
 			return err
 		}
@@ -231,7 +235,8 @@ func (srv *Server) ListenAndServe() error {
 		srv.listenUDP(srv.PacketConn)
 		return nil
 	}
-	return &Error{err: "bad network"}
+	err = &Error{err: "bad network"}
+	return err
 }
 
 // Shutdown shuts down a server. After a call to Shutdown, ListenAndServe will return.
@@ -271,7 +276,7 @@ func (srv *Server) listenTCP(ln net.Listener) {
 		case <-srv.shutdown:
 			ln.Close()
 			wg.Wait() // this has a data race because we slump &wg in the server... this _only_ this on shutdown though...
-			srv.once.Do(func() { close(srv.exited) })
+			close(srv.exited)
 			return
 		}
 	}
@@ -325,6 +330,7 @@ func (srv *Server) serveTCP(wg *sync.WaitGroup, conn net.Conn) {
 		readtimeout = srv.IdleTimeout
 	}
 
+	hijacked = hijacked || w.hijacked.Load()
 	if !hijacked {
 		w.Close()
 	}

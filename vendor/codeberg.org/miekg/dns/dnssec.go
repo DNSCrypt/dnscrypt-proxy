@@ -318,7 +318,8 @@ func sign(k crypto.Signer, hashed []byte, hash crypto.Hash, alg uint8) ([]byte, 
 // [codeberg.org/miekg/dns/dnsutil.IsRRset], and neither is checked if the RRSIG's TypeCovered matches the
 // type in rrset.
 //
-// This function copies the rdata of some RRs (to lowercase domain names) for the validation to work.
+// This function overwrites the rdata of some RRs (to lowercase domain names) for the validation to work. If
+// you need
 // It also checks that the Zone Key bit (RFC 4034 2.1.1) is set on the DNSKEY
 // and that the Protocol field is set to 3 (RFC 4034 2.1.2). Options can not be nil.
 //
@@ -368,7 +369,7 @@ func (rr *RRSIG) Verify(k *DNSKEY, rrset []RR, options *SignOption) error {
 	sigbuf, _ := pack.Base64([]byte(rr.Signature))
 
 	var h hash.Hash
-	hash, _ := AlgorithmToHash[rr.Algorithm] // newer alg do their own hashing, ignore...
+	hash := AlgorithmToHash[rr.Algorithm] // newer alg do their own hashing, ignore...
 
 	switch rr.Algorithm {
 	case RSASHA1, RSASHA1NSEC3SHA1, RSASHA256, RSASHA512:

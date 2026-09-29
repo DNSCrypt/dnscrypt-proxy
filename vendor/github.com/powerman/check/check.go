@@ -393,6 +393,21 @@ func stringify(arg *any) bool {
 	switch v := (*arg).(type) {
 	case nil:
 		return false
+	case json.RawMessage:
+		// Go 1.27 made json.RawMessage an alias for jsontext.Value, which
+		// (unlike the pre-1.27 json.RawMessage) implements fmt.Stringer.
+		// Handle it explicitly to keep behavior identical across Go versions:
+		// json.RawMessage stays supported (as a []byte), *json.RawMessage stays not.
+		// This also covers a directly used jsontext.Value/*jsontext.Value, since
+		// on Go 1.27 it's the exact same type as json.RawMessage/*json.RawMessage.
+		//
+		// encoding/json/jsontext only exists once GOEXPERIMENT=jsonv2 is the
+		// default (Go 1.27+), so once support for Go 1.26 is dropped, these two
+		// cases could import encoding/json/jsontext and match jsontext.Value /
+		// *jsontext.Value directly instead, which would read more naturally.
+		*arg = string(v)
+	case *json.RawMessage:
+		return false
 	case error:
 		*arg = v.Error()
 	case fmt.Stringer:
@@ -1214,7 +1229,7 @@ func isJSONEqual(actual, expected any) bool {
 }
 
 func jsonify(arg any) json.RawMessage {
-	switch v := (arg).(type) {
+	switch v := arg.(type) {
 	case nil:
 		return nil
 	case json.RawMessage:

@@ -94,7 +94,21 @@ func newDump(i any) (d dump) { //nolint:gocyclo,gocognit,funlen,cyclop // By des
 		v := val.Bytes()
 		var buf bytes.Buffer
 		if json.Indent(&buf, v, "", "  ") == nil {
-			d.dump = fmt.Sprintf("(%T) (len=%d) '\n%s\n'\n", i, len(v), buf.String())
+			// Go 1.27 made json.RawMessage an alias for jsontext.Value, so %T
+			// would print "jsontext.Value" there instead of "json.RawMessage".
+			// Use a hardcoded name to keep dump output identical across Go versions
+			// (this also covers a directly used jsontext.Value, which is the exact
+			// same type as json.RawMessage on Go 1.27).
+			//
+			// Once support for Go 1.26 is dropped, it would make more sense to
+			// rename this to "jsontext.Value"/"*jsontext.Value", since that's the
+			// name Go itself now treats as canonical (encoding/json/jsontext only
+			// exists once GOEXPERIMENT=jsonv2 is the default, i.e. Go 1.27+).
+			name := "json.RawMessage"
+			if reflect.TypeOf(i).Kind() == reflect.Pointer {
+				name = "*json.RawMessage"
+			}
+			d.dump = fmt.Sprintf("(%s) (len=%d) '\n%s\n'\n", name, len(v), buf.String())
 		}
 
 	case kind == reflect.Uint8:

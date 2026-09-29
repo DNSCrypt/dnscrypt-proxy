@@ -13,8 +13,6 @@ import (
 // A Client is a DNS client. It is safe to use a client from multiple goroutines.
 type Client struct {
 	*Transport // If Transport is nil it gets a [NewTransport].
-
-	*Transfer // If a transfer is attempted, this holds the optional signing settings.
 }
 
 // NewClient returns a client with the transport set to [NewTransport].

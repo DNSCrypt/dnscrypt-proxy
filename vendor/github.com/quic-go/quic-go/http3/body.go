@@ -68,7 +68,7 @@ func (r *body) Read(b []byte) (int, error) {
 	if err := r.checkContentLengthViolation(); err != nil {
 		return n, err
 	}
-	return n, maybeReplaceError(err)
+	return n, err
 }
 
 func (r *body) Close() error {
@@ -118,7 +118,7 @@ func (r *hijackableBody) Read(b []byte) (int, error) {
 	if err != nil {
 		r.requestDone()
 	}
-	return n, maybeReplaceError(err)
+	return n, err
 }
 
 func (r *hijackableBody) requestDone() {

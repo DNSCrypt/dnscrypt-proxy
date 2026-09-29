@@ -322,6 +322,43 @@ func parseHIP(rd *rdata.HIP, c *dnslex.Lexer, o string) error {
 	return nil
 }
 
+func parseCERT(rd *rdata.CERT, c *dnslex.Lexer, o string) (err error) {
+	l, _ := c.Next()
+	certTypeOk := true
+	rd.Type, err = dnsstring.AtoiUint16(l.Token)
+	if l.Value == dnslex.Error || err != nil {
+		rd.Type, certTypeOk = upperLookup(l.Token, StringToCertType)
+	}
+	if !certTypeOk {
+		return &ParseError{err: "bad CERT Type", lex: l}
+	}
+
+	c.Next() // dnslex.Blank
+
+	l, _ = c.Next()
+	rd.KeyTag, err = dnsstring.AtoiUint16(l.Token)
+	if l.Value == dnslex.Error || err != nil {
+		return &ParseError{err: "bad CERT KeyTag", lex: l}
+	}
+
+	c.Next() // dnslex.Blank
+
+	l, _ = c.Next()
+	algOk := true
+	rd.Algorithm, err = dnsstring.AtoiUint8(l.Token)
+	if l.Value == dnslex.Error || err != nil {
+		rd.Algorithm, algOk = upperLookup(l.Token, StringToAlgorithm)
+	}
+	if !algOk {
+		return &ParseError{err: "bad CERT Algorithm", lex: l}
+	}
+
+	c.Next() // dnslex.Blank
+
+	rd.Certificate, err = remainder(c, "bad CERT Certificate")
+	return err
+}
+
 func parseCSYNC(rd *rdata.CSYNC, c *dnslex.Lexer, _ string) error {
 	var err error
 	l, _ := c.Next()
@@ -941,7 +978,7 @@ func parseDSYNC(rd *rdata.DSYNC, c *dnslex.Lexer, o string) error {
 
 // upperLookup will defer strings.ToUpper in the map lookup, until after the lookup has occurred and nothing
 // was found.
-func upperLookup(s string, m map[string]uint8) (uint8, bool) {
+func upperLookup[V uint8 | uint16](s string, m map[string]V) (V, bool) {
 	// Duplicated in dnsex/lex.go
 	if t, ok := m[s]; ok {
 		return t, true
