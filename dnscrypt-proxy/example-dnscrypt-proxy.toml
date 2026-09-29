@@ -373,7 +373,7 @@ ignore_system_dns = true
 
 netprobe_timeout = 60
 
-## Addresses with port to try initializing a connection to, just to check
+## Address and port pairs to try initializing a connection to, just to check
 ## if the network is up. It can be any address and any port, even if
 ## there is nothing answering these on the other side. Just don't use
 ## a local address, as the goal is to check for Internet connectivity.
