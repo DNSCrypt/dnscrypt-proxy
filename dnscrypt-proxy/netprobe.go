@@ -177,7 +177,7 @@ func NetProbeSingle(
 			switch {
 			case ctx.Err() != nil:
 				msg = ""
-			case errors.As(err, &dnsErr) && (dnsErr.Timeout() || dnsErr.IsNotFound):
+			case errors.As(err, &dnsErr):
 				msg = fmt.Sprintf(
 					"(%s) Name resolution error: %v",
 					host_port,
