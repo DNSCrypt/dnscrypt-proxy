@@ -152,7 +152,7 @@ func NetProbeSingle(
 	}
 
 	for {
-		startTimer := time.NewTimer(interval)
+		retryLimitTimer := time.NewTimer(interval)
 
 		pc, err := dialer.DialContext(
 			ctx,
@@ -209,7 +209,7 @@ func NetProbeSingle(
 					host_port,
 				)
 				return false, ctx.Err()
-			case <-startTimer.C:
+			case <-retryLimitTimer.C:
 			}
 
 			continue
