@@ -1,4 +1,4 @@
-# codeberg.org/miekg/dns v0.6.109
+# codeberg.org/miekg/dns v0.6.117
 ## explicit; go 1.27.0
 codeberg.org/miekg/dns
 codeberg.org/miekg/dns/deleg
@@ -54,9 +54,8 @@ github.com/hashicorp/go-immutable-radix/v2
 # github.com/hashicorp/go-syslog v1.0.0
 ## explicit
 github.com/hashicorp/go-syslog
-# github.com/hashicorp/golang-lru/v2 v2.0.7
+# github.com/hashicorp/golang-lru/v2 v2.0.0
 ## explicit; go 1.18
-github.com/hashicorp/golang-lru/v2/internal
 github.com/hashicorp/golang-lru/v2/simplelru
 # github.com/hectane/go-acl v1.0.0
 ## explicit; go 1.25.0
@@ -95,11 +94,8 @@ github.com/kardianos/service
 # github.com/lifenjoiner/dhcpdns v0.0.7
 ## explicit; go 1.20
 github.com/lifenjoiner/dhcpdns
-# github.com/miekg/dns v1.1.72
-## explicit; go 1.24.0
-github.com/miekg/dns
-# github.com/powerman/check v1.13.0
-## explicit; go 1.25.0
+# github.com/powerman/check v1.14.0
+## explicit; go 1.26.0
 github.com/powerman/check
 github.com/powerman/check/internal/contextx
 github.com/powerman/check/internal/deepequal
@@ -108,7 +104,7 @@ github.com/powerman/check/internal/spew
 # github.com/quic-go/qpack v0.6.0
 ## explicit; go 1.24
 github.com/quic-go/qpack
-# github.com/quic-go/quic-go v0.62.0
+# github.com/quic-go/quic-go v0.63.0
 ## explicit; go 1.26.0
 github.com/quic-go/quic-go
 github.com/quic-go/quic-go/http3
@@ -128,8 +124,6 @@ github.com/quic-go/quic-go/qlog
 github.com/quic-go/quic-go/qlogwriter
 github.com/quic-go/quic-go/qlogwriter/jsontext
 github.com/quic-go/quic-go/quicvarint
-# go.uber.org/mock v0.6.0
-## explicit; go 1.23.0
 # golang.org/x/crypto v0.57.0
 ## explicit; go 1.26.0
 golang.org/x/crypto/blake2b
@@ -148,9 +142,6 @@ golang.org/x/crypto/pbkdf2
 golang.org/x/crypto/poly1305
 golang.org/x/crypto/salsa20/salsa
 golang.org/x/crypto/scrypt
-# golang.org/x/mod v0.41.0
-## explicit; go 1.26.0
-golang.org/x/mod/semver
 # golang.org/x/net v0.59.0
 ## explicit; go 1.26.0
 golang.org/x/net/bpf
@@ -166,9 +157,6 @@ golang.org/x/net/internal/socks
 golang.org/x/net/ipv4
 golang.org/x/net/ipv6
 golang.org/x/net/proxy
-# golang.org/x/sync v0.23.0
-## explicit; go 1.26.0
-golang.org/x/sync/errgroup
 # golang.org/x/sys v0.48.0
 ## explicit; go 1.26.0
 golang.org/x/sys/cpu
@@ -184,26 +172,6 @@ golang.org/x/text/secure/bidirule
 golang.org/x/text/transform
 golang.org/x/text/unicode/bidi
 golang.org/x/text/unicode/norm
-# golang.org/x/tools v0.49.0
-## explicit; go 1.25.0
-golang.org/x/tools/go/ast/edge
-golang.org/x/tools/go/ast/inspector
-golang.org/x/tools/go/gcexportdata
-golang.org/x/tools/go/packages
-golang.org/x/tools/go/types/objectpath
-golang.org/x/tools/internal/aliases
-golang.org/x/tools/internal/event
-golang.org/x/tools/internal/event/core
-golang.org/x/tools/internal/event/keys
-golang.org/x/tools/internal/event/label
-golang.org/x/tools/internal/gcimporter
-golang.org/x/tools/internal/gocommand
-golang.org/x/tools/internal/moremaps
-golang.org/x/tools/internal/packagesinternal
-golang.org/x/tools/internal/pkgbits
-golang.org/x/tools/internal/stdlib
-golang.org/x/tools/internal/typesinternal
-golang.org/x/tools/internal/versions
 # gopkg.in/natefinch/lumberjack.v2 v2.2.1
 ## explicit; go 1.13
 gopkg.in/natefinch/lumberjack.v2

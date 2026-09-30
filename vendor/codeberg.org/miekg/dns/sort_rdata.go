@@ -32,6 +32,9 @@ func comparename(a, b string) int {
 
 	abuf := comparePool.Get()
 	bbuf := comparePool.Get()
+	resize(&abuf, len(a)+1)
+	resize(&bbuf, len(b)+1)
+
 	aoff, _ := pack.Name(a, abuf, 0, nil, false)
 	boff, _ := pack.Name(b, bbuf, 0, nil, false)
 
@@ -45,6 +48,9 @@ func comparename(a, b string) int {
 func comparebase64(a, b string) int {
 	abuf := comparePool.Get()
 	bbuf := comparePool.Get()
+	resize(&abuf, base64.StdEncoding.EncodedLen(len(a)))
+	resize(&bbuf, base64.StdEncoding.EncodedLen(len(b)))
+
 	aoff, _ := base64.StdEncoding.Decode(abuf, []byte(a))
 	boff, _ := base64.StdEncoding.Decode(bbuf, []byte(b))
 
@@ -58,6 +64,9 @@ func comparebase64(a, b string) int {
 func comparebase32(a, b string) int {
 	abuf := comparePool.Get()
 	bbuf := comparePool.Get()
+	resize(&abuf, base32.HexEncoding.EncodedLen(len(a)))
+	resize(&bbuf, base32.HexEncoding.EncodedLen(len(b)))
+
 	aoff, _ := base32.HexEncoding.WithPadding(base32.NoPadding).Decode(abuf, []byte(a))
 	boff, _ := base32.HexEncoding.WithPadding(base32.NoPadding).Decode(bbuf, []byte(b))
 
@@ -71,6 +80,9 @@ func comparebase32(a, b string) int {
 func comparehex(a, b string) int {
 	abuf := comparePool.Get()
 	bbuf := comparePool.Get()
+	resize(&abuf, hex.EncodedLen(len(a)))
+	resize(&bbuf, hex.EncodedLen(len(b)))
+
 	aoff, _ := hex.Decode(abuf, []byte(a))
 	boff, _ := hex.Decode(bbuf, []byte(b))
 
@@ -84,6 +96,18 @@ func comparehex(a, b string) int {
 func comparepair(a, b []svcb.Pair) int {
 	abuf := comparePool.Get()
 	bbuf := comparePool.Get()
+
+	size := 0
+	for i := range a {
+		size += a[i].Len()
+	}
+	resize(&abuf, size)
+	size = 0
+	for i := range b {
+		size += b[i].Len()
+	}
+	resize(&bbuf, size)
+
 	aoff, _ := svcb.Pack(a, abuf, 0)
 	boff, _ := svcb.Pack(b, bbuf, 0)
 
@@ -97,6 +121,17 @@ func comparepair(a, b []svcb.Pair) int {
 func compareinfo(a, b []deleg.Info) int {
 	abuf := comparePool.Get()
 	bbuf := comparePool.Get()
+	size := 0
+	for i := range a {
+		size += a[i].Len()
+	}
+	resize(&abuf, size)
+	size = 0
+	for i := range b {
+		size += b[i].Len()
+	}
+	resize(&bbuf, size)
+
 	aoff, _ := deleg.Pack(a, abuf, 0)
 	boff, _ := deleg.Pack(b, bbuf, 0)
 
@@ -107,4 +142,14 @@ func compareinfo(a, b []deleg.Info) int {
 	return x
 }
 
-var comparePool = pool.New(DefaultMsgSize)
+var comparePool = pool.New(4096)
+
+// resize resized the buffer we got from the pool to the size needed.
+// If we resize beyond the comparepool's size it will not be put back into
+// the pool, but with 4096 those odds should be small.
+func resize(buf *[]byte, size int) {
+	if cap(*buf) >= size {
+		return
+	}
+	*buf = make([]byte, size)
+}

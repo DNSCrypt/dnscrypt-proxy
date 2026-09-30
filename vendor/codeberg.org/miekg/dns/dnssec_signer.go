@@ -186,24 +186,28 @@ func (k *DNSKEY) publicKeyMLDSA44() *mldsa.PublicKey {
 	return pubkey
 }
 
-// Return the raw signature data.
+// Return the raw signature data. TTL and original ownername are restored.
 func rawSignatureData(buf []byte, rrset []RR, s *RRSIG) (off int, err error) {
 	for _, rr := range rrset {
+		ttl := rr.Header().TTL
+		defer func() { rr.Header().TTL = ttl }()
 		rr.Header().TTL = s.OrigTTL
 		labels := dnsutilLabels(rr.Header().Name)
 		if skip := labels - int(s.Labels); skip > 0 {
 			orig := rr.Header().Name
+			defer func() { rr.Header().Name = orig }()
 			// 6.2. Canonical RR Form. (4) - wildcards
 			// Wildcard, trim to s.Labels from the left and substitute '*'
-			stop := false
+			cut, stop := 0, false
 			for range skip {
-				off, stop = dnsutilNext(rr.Header().Name, off)
+				cut, stop = dnsutilNext(rr.Header().Name, cut)
 			}
+			off = cut
 			if !stop { // if stop we jumped past
 				rr.Header().Name = "*." + rr.Header().Name[off:]
-				defer func() { rr.Header().Name = orig }()
 			}
 		}
+
 		canonicalize(rr)
 	}
 

@@ -542,7 +542,7 @@ func (s *Server) handleConn(conn *quic.Conn) error {
 			if conn.Context().Err() != nil {
 				appErr, ok := errors.AsType[*quic.ApplicationError](err)
 				if !ok || appErr.ErrorCode != quic.ApplicationErrorCode(ErrCodeNoError) {
-					handleErr = fmt.Errorf("accepting stream failed: %w", err)
+					handleErr = fmt.Errorf("accepting stream failed: %w", maybeReplaceError(err))
 				}
 				break
 			}
@@ -556,7 +556,7 @@ func (s *Server) handleConn(conn *quic.Conn) error {
 			if !inGracefulShutdown {
 				appErr, ok := errors.AsType[*quic.ApplicationError](err)
 				if !ok || appErr.ErrorCode != quic.ApplicationErrorCode(ErrCodeNoError) {
-					handleErr = fmt.Errorf("accepting stream failed: %w", err)
+					handleErr = fmt.Errorf("accepting stream failed: %w", maybeReplaceError(err))
 				}
 				break
 			}

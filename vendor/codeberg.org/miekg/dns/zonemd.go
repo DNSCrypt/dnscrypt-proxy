@@ -24,7 +24,7 @@ func (rr *ZONEMD) Sign(zone []RR, options *ZONEMDOption) error {
 		return fmt.Errorf("bad ZONEMD Scheme")
 	}
 	if options.Pooler == nil {
-		options.Pooler = pool.NewNoop(DefaultMsgSize)
+		options.Pooler = pool.NewNoop(defaultBufSize)
 	}
 
 	var hash crypto.Hash
@@ -50,12 +50,14 @@ func (rr *ZONEMD) Sign(zone []RR, options *ZONEMDOption) error {
 		if s, ok := zone[i].(*SOA); ok {
 			rr.Serial = s.Serial
 		}
+		orig := rr.Header().Name
 		canonicalize(zone[i])
 		_, off, err := packRR(zone[i], rrdata, 0, nil)
 		if err != nil {
 			return err
 		}
 		s.Write(rrdata[:off])
+		rr.Header().Name = orig
 	}
 	rr.Digest = hex.EncodeToString(s.Sum(nil))
 	return nil

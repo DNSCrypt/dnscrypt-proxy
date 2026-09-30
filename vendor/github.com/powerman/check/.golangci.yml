@@ -22,6 +22,8 @@ linters:
     - wsl # Questionable (too much style differences, hard to consider).
     - wsl_v5 # Questionable (too much style differences, hard to consider).
   settings:
+    copyloopvar:
+      check-alias: true
     decorder:
       disable-init-func-first-check: false # `init` funcs have to be declared before all other functions.
     depguard:
@@ -46,6 +48,21 @@ linters:
               desc: Should be replaced by github.com/grpc-ecosystem/go-grpc-middleware/v2
             - pkg: github.com/grpc-ecosystem/go-grpc-prometheus
               desc: Should be replaced by github.com/grpc-ecosystem/go-grpc-middleware/providers/prometheus
+        no-test-libs-in-prod:
+          files:
+            - $all
+            - '!$test'
+            - '!**/*test/**'
+            - '!**/test*/**'
+            # This project is a testing library.
+            - '!**/*.go'
+          deny:
+            - pkg: testing
+              desc: test-only; production code must not import it
+            - pkg: github.com/powerman/check
+              desc: test-only; production code must not import it
+            - pkg: go.uber.org/mock/gomock
+              desc: test-only; production code must not import it
     dupl:
       threshold: 100
     embeddedstructfieldcheck:
@@ -140,6 +157,7 @@ linters:
         - opaque # Identifies functions that return interfaces, but the actual returned value is always a single concrete implementation.
         - unexported # Identifies interfaces that are not exported but are used in exported functions or methods.
     importas:
+      no-unaliased: true
       alias:
         - pkg: errors
           alias: ""
@@ -153,6 +171,7 @@ linters:
     nestif:
       min-complexity: 4
     nilnil:
+      only-two: false
       detect-opposite: true
     nolintlint:
       require-explanation: true # Disable linters this way: //nolint:first,second // Reason here.
@@ -163,6 +182,8 @@ linters:
       patterns:
         - .* # Check all global variables.
     revive:
+      directives:
+        - name: specify-disable-reason
       rules:
         - name: add-constant
           disabled: true # Duplicates goconst and mnd linters.
@@ -189,7 +210,7 @@ linters:
         - name: constant-logical-expr
         - name: context-as-argument
           arguments:
-            - allowTypesBefore: '*testing.T,*check.C' # Test helpers keep t first.
+            - allowTypesBefore: '*testing.T,*check.TB,*check.C' # Test helpers keep t first.
         - name: context-keys-type
         - name: cyclomatic
           disabled: true # Duplicates cyclop and gocyclo linters.
@@ -315,6 +336,26 @@ linters:
         - msg # Used by standard slog.JSONHandler or slog.TextHandler.
         - source # Used by standard slog.JSONHandler or slog.TextHandler.
       key-naming-case: snake
+    spancheck:
+      checks:
+        - end
+        - record-error
+        - set-status
+    staticcheck:
+      checks:
+        - all
+        - -ST1000 # Duplicates revive:package-comments.
+        - -ST1001 # Duplicates revive:dot-imports.
+        - -ST1003 # Duplicates revive:var-naming, revive:error-naming, revive:package-naming, revive:import-alias-naming.
+        - -ST1005 # Duplicates revive:string-format and revive:error-strings.
+        - -ST1006 # Duplicates revive:receiver-naming.
+        - -ST1008 # Duplicates revive:error-return.
+        - -ST1012 # Duplicates errname linter.
+        - -ST1016 # Duplicates revive:receiver-naming (consistency).
+        - -ST1019 # Duplicates revive:duplicated-imports.
+        - -ST1020 # Duplicates godoclint.
+        - -ST1021 # Duplicates godoclint.
+        - -ST1022 # Duplicates godoclint.
     tagalign:
       order:
         - json
@@ -367,6 +408,12 @@ linters:
       default-rpc-path: true
       sql-isolation-level: true
       tls-signature-scheme: true
+    usetesting:
+      os-temp-dir: true
+      context-background: true
+      context-todo: true
+    unqueryvet:
+      check-tx-leaks: true
     wrapcheck:
       report-internal-errors: true
   exclusions:
@@ -415,9 +462,10 @@ linters:
         text: should have a godoc \("(String|Error|Format|(Marshal|Unmarshal)(Text|JSON))"\)
     paths:
       - \.[\w-]+\.go$ # Use this pattern to name auto-generated files.
-      - internal/spew/ # Vendored, keep upstream code unchanged.
-      - internal/difflib/ # Vendored, keep upstream code unchanged.
+      - internal/contextx/ # Vendored, keep upstream code unchanged.
       - internal/deepequal/ # Vendored, keep upstream code unchanged.
+      - internal/difflib/ # Vendored, keep upstream code unchanged.
+      - internal/spew/ # Vendored, keep upstream code unchanged.
 formatters:
   enable:
     - gci
@@ -447,9 +495,10 @@ formatters:
     generated: strict
     paths:
       - \.[\w-]+\.go$ # Use this pattern to name auto-generated files.
-      - internal/spew/ # Vendored, keep upstream code unchanged.
-      - internal/difflib/ # Vendored, keep upstream code unchanged.
+      - internal/contextx/ # Vendored, keep upstream code unchanged.
       - internal/deepequal/ # Vendored, keep upstream code unchanged.
+      - internal/difflib/ # Vendored, keep upstream code unchanged.
+      - internal/spew/ # Vendored, keep upstream code unchanged.
 issues:
   max-issues-per-linter: 0
   max-same-issues: 0

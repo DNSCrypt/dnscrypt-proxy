@@ -29,6 +29,7 @@ func (e *varintLengthError) Error() string {
 }
 
 // Read reads a number in the QUIC varint format from r.
+// If an error is returned, the returned number is invalid.
 func Read(r io.ByteReader) (uint64, error) {
 	firstByte, err := r.ReadByte()
 	if err != nil {

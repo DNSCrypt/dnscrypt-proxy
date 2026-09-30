@@ -299,11 +299,3 @@ to make it check's default, or call it ad hoc with `t.True(cmp.Equal(got, want))
   `net/http/httptest` plus check's own checkers already cover that ground, e.g.
   `t.Match(rec.Body.String(), pattern)` or `t.Equal(rec.Code, http.StatusOK)`.
 - No mocking - pair check with whatever mocking library you already use.
-
-## TODO
-
-- Questionable:
-  - [ ] Provide a way to force binary dump for utf8.Valid `string`/`[]byte`?
-  - [ ] Count skipped tests (will have to overload `Skip`, `Skipf`, `SkipNow`)?
-- Complicated:
-  - [ ] Show line of source_test.go with failed test.

@@ -3,7 +3,7 @@ lockfile = true # DO NOT FORGET TO `touch mise.lock` if mise.lock does not exist
 
 
 [tools]
-go = 'latest'
+go = ['latest', '1.26']
 
 #--- Format
 # Opinionated Code Formatter.
@@ -79,6 +79,10 @@ run = 'prettier --check "**/*.md"'
 
 [tasks.'lint:go']
 description = 'Lint Go files'
+# golangci-lint 2.12.2 (built with go1.26.2) fails to typecheck against the
+# go1.27 GOROOT (e.g. internal/poll/splice_linux.go), so pin go1.26 here until
+# golangci-lint is upgraded to a version that supports go1.27.
+tools = { go = '1.26' }
 run = 'golangci-lint run'
 
 [tasks.'lint:go-compile-windows']
@@ -90,9 +94,21 @@ description = 'Run Go tests for a whole project'
 wait_for = ['lint:*']                            # Avoid interleaved output with linters.
 run = 'gotestsum -- -race -timeout=60s ./...'
 
+[tasks.'test:go-1_26']
+description = 'Run Go tests for a whole project using the oldest supported Go version'
+wait_for = ['lint:*']
+tools = { go = '1.26' }
+run = 'gotestsum -- -race -timeout=60s ./...'
+
 [tasks.'test:go-submodule']
 description = 'Run Go tests in the test/ submodule'
 wait_for = ['lint:*']
+run = 'cd test && gotestsum -- -race -timeout=60s ./...'
+
+[tasks.'test:go-submodule-1_26']
+description = 'Run Go tests in the test/ submodule using the oldest supported Go version'
+wait_for = ['lint:*']
+tools = { go = '1.26' }
 run = 'cd test && gotestsum -- -race -timeout=60s ./...'
 
 [tasks.'cover:go:total']

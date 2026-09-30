@@ -20,10 +20,13 @@ func (o *ZONEVERSION) parse(c *dnslex.Lexer, _ string) error {
 	c.Next()
 	l, _ = c.Next()
 	// type, can be TYPEXXX, or SOA-SERIAL - we only accept SOA-SERIAL
-	if l.Token == "SOA-SERIAL" {
-		o.Type = 0
-		o.Version = make([]byte, 4)
+	if l.Token != "SOA-SERIAL" {
+		return &ParseError{err: "add ZONEVERSION Type", lex: l}
 	}
+
+	o.Type = 0
+	o.Version = make([]byte, 4)
+
 	c.Next()
 	l, _ = c.Next()
 	i, err = strconv.ParseUint(l.Token, 10, 32)
