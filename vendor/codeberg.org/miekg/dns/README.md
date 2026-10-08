@@ -223,6 +223,7 @@ _all of them_ and _then some_
 - 8777 - DNS Reverse IP Automatic Multicast Tunneling (AMT) Discovery
 - 8914 - Extended DNS Errors
 - 8976 - Message Digest for DNS Zones (ZONEMD RR)
+- 9267 - Common Implementation Anti-Patterns
 - 9250 - DOQ (not implemented, waiting until Go supports QUIC)
 - 9461 - Service Binding Mapping for DNS Servers
 - 9462 - Discovery of Designated Resolvers
