@@ -33,7 +33,8 @@ const (
 )
 
 const (
-	MaxHTTPBodyLength = 1000000
+	MaxHTTPBodyLength          = 1000000
+	MaxHTTPResponseHeaderBytes = 4096
 )
 
 var (

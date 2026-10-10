@@ -295,7 +295,7 @@ func (xTransport *XTransport) rebuildTransport() {
 		IdleConnTimeout:        DefaultIdleConnTimeout,
 		ResponseHeaderTimeout:  timeout,
 		ExpectContinueTimeout:  timeout,
-		MaxResponseHeaderBytes: 4096,
+		MaxResponseHeaderBytes: MaxHTTPResponseHeaderBytes,
 		DialContext: func(ctx context.Context, network, addrStr string) (net.Conn, error) {
 			host, port := ExtractHostAndPort(addrStr, stamps.DefaultPort)
 			formatEndpoint := func(ip net.IP) string {
@@ -500,7 +500,12 @@ func (xTransport *XTransport) rebuildTransport() {
 			}
 			return nil, lastErr
 		}
-		h3Transport := &http3.Transport{DisableCompression: true, TLSClientConfig: &tlsClientConfig, Dial: dial}
+		h3Transport := &http3.Transport{
+			DisableCompression:     true,
+			TLSClientConfig:        &tlsClientConfig,
+			MaxResponseHeaderBytes: MaxHTTPResponseHeaderBytes,
+			Dial:                   dial,
+		}
 		xTransport.h3Transport = h3Transport
 	}
 }
