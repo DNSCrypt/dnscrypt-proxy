@@ -93,8 +93,8 @@ func ParseAllWeeklyRanges(allWeeklyRangesStr map[string]WeeklyRangesStr) (*map[s
 	return &allWeeklyRanges, nil
 }
 
-func (weeklyRanges *WeeklyRanges) Match() bool {
-	now := time.Now().Local()
+// Match reports whether a local time falls within the ranges.
+func (weeklyRanges *WeeklyRanges) Match(now time.Time) bool {
 	day := now.Weekday()
 	weeklyRange := weeklyRanges.ranges[day]
 	if len(weeklyRange) == 0 {

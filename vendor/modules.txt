@@ -97,6 +97,9 @@ github.com/lifenjoiner/dhcpdns
 # github.com/miekg/dns v1.1.73
 ## explicit; go 1.25.0
 github.com/miekg/dns
+# github.com/oneregex/revera/go v0.0.0-20261014081440-64b07f96fe82
+## explicit; go 1.27.0
+github.com/oneregex/revera/go
 # github.com/powerman/check v1.14.0
 ## explicit; go 1.26.0
 github.com/powerman/check

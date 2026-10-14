@@ -11,16 +11,16 @@ import (
 
 type PluginAllowName struct {
 	allWeeklyRanges *map[string]WeeklyRanges
-	patternMatcher  *PatternMatcher
+	nameList        *NameList
 	logger          io.Writer
 	format          string
 	ipCryptConfig   *IPCryptConfig
 
 	// Hot-reloading support
-	rwLock         sync.RWMutex
-	configFile     string
-	configWatcher  *ConfigWatcher
-	stagingMatcher *PatternMatcher // Used during reload
+	rwLock          sync.RWMutex
+	configFile      string
+	configWatcher   *ConfigWatcher
+	stagingNameList *NameList // Used during reload
 }
 
 func (plugin *PluginAllowName) Name() string {
@@ -41,33 +41,17 @@ func (plugin *PluginAllowName) Init(proxy *Proxy) error {
 	}
 
 	plugin.allWeeklyRanges = proxy.allWeeklyRanges
-	plugin.patternMatcher = NewPatternMatcher()
 
-	if err := plugin.loadPatterns(lines, plugin.patternMatcher); err != nil {
+	nameList, err := LoadNameList(plugin.configFile, lines, plugin.allWeeklyRanges)
+	if err != nil {
 		return err
 	}
+	plugin.nameList = nameList
 
 	plugin.logger, plugin.format = InitializePluginLogger(proxy.allowNameLogFile, proxy.allowNameFormat, proxy.logMaxSize, proxy.logMaxAge, proxy.logMaxBackups)
 	plugin.ipCryptConfig = proxy.ipCryptConfig
 
 	return nil
-}
-
-// loadPatterns parses and loads patterns into the provided pattern matcher
-func (plugin *PluginAllowName) loadPatterns(lines string, patternMatcher *PatternMatcher) error {
-	return ProcessConfigLines(lines, func(line string, lineNo int) error {
-		rulePart, weeklyRanges, err := ParseTimeBasedRule(line, lineNo, plugin.allWeeklyRanges)
-		if err != nil {
-			dlog.Error(err)
-			return nil
-		}
-
-		if err := patternMatcher.Add(rulePart, weeklyRanges, lineNo+1); err != nil {
-			dlog.Error(err)
-			return nil
-		}
-		return nil
-	})
 }
 
 func (plugin *PluginAllowName) Drop() error {
@@ -77,28 +61,27 @@ func (plugin *PluginAllowName) Drop() error {
 	return nil
 }
 
-// PrepareReload loads new patterns into the staging matcher but doesn't apply them yet
+// PrepareReload loads new patterns into the staging list but doesn't apply them yet
 func (plugin *PluginAllowName) PrepareReload() error {
+	plugin.stagingNameList = nil
 	return StandardPrepareReloadPattern(plugin.Name(), plugin.configFile, func(lines string) error {
-		// Create a new pattern matcher for staged changes
-		plugin.stagingMatcher = NewPatternMatcher()
-
-		// Load patterns into the staging matcher
-		return plugin.loadPatterns(lines, plugin.stagingMatcher)
+		var err error
+		plugin.stagingNameList, err = LoadNameList(plugin.configFile, lines, plugin.allWeeklyRanges)
+		return err
 	})
 }
 
-// ApplyReload atomically replaces the active pattern matcher with the staging one
+// ApplyReload atomically replaces the active name list with the staging one
 func (plugin *PluginAllowName) ApplyReload() error {
 	return StandardApplyReloadPattern(plugin.Name(), func() error {
-		if plugin.stagingMatcher == nil {
+		if plugin.stagingNameList == nil {
 			return errors.New("no staged configuration to apply")
 		}
 
-		// Use write lock to swap pattern matchers
+		// Use write lock to swap name lists
 		plugin.rwLock.Lock()
-		plugin.patternMatcher = plugin.stagingMatcher
-		plugin.stagingMatcher = nil
+		plugin.nameList = plugin.stagingNameList
+		plugin.stagingNameList = nil
 		plugin.rwLock.Unlock()
 
 		return nil
@@ -107,7 +90,7 @@ func (plugin *PluginAllowName) ApplyReload() error {
 
 // CancelReload cleans up any staging resources
 func (plugin *PluginAllowName) CancelReload() {
-	plugin.stagingMatcher = nil
+	plugin.stagingNameList = nil
 }
 
 // Reload implements hot-reloading for the plugin
@@ -137,19 +120,14 @@ func (plugin *PluginAllowName) SetConfigWatcher(watcher *ConfigWatcher) {
 func (plugin *PluginAllowName) Eval(pluginsState *PluginsState, msg *dns.Msg) error {
 	qName := pluginsState.qName
 
-	// Use read lock for thread-safe access to patternMatcher
+	// Use read lock for thread-safe access to nameList
 	plugin.rwLock.RLock()
-	allowList, reason, xweeklyRanges := plugin.patternMatcher.Eval(qName)
+	nameList := plugin.nameList
 	plugin.rwLock.RUnlock()
 
-	var weeklyRanges *WeeklyRanges
-	if xweeklyRanges != nil {
-		weeklyRanges = xweeklyRanges.(*WeeklyRanges)
-	}
-
-	// If time-based restrictions exist and don't match current time, don't allow
-	if allowList && weeklyRanges != nil && !weeklyRanges.Match() {
-		allowList = false
+	allowList, reason, err := nameList.Eval(qName)
+	if err != nil {
+		return err
 	}
 
 	if allowList {

@@ -25,6 +25,7 @@ require (
 	github.com/kardianos/service v1.3.0
 	github.com/lifenjoiner/dhcpdns v0.0.7
 	github.com/miekg/dns v1.1.73
+	github.com/oneregex/revera/go v0.0.0-20261014081440-64b07f96fe82
 	github.com/powerman/check v1.14.0
 	github.com/quic-go/quic-go v0.63.0
 	golang.org/x/crypto v0.58.0

@@ -15,6 +15,10 @@
 ## *sex*                    | matches any name containing that substring
 ## ads[0-9]*                | matches "ads" followed by a digit and anything else
 ## ads*.example*            | *, ? and [] can be used anywhere, but prefixes/suffixes are faster
+## regex: `^ads[0-9]+\.`    | regular expression (POSIX ERE), slower than other patterns
+##
+## Expressions match anywhere in a name unless anchored with ^ and $.
+## The file is rejected if a regex rule is invalid or too slow.
 
 
 # That one may be blocked due to 'tracker' being in the name.

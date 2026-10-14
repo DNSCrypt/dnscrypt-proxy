@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"codeberg.org/miekg/dns"
@@ -53,8 +54,13 @@ func SafeReadTextFile(filePath string) (string, error) {
 	return content, nil
 }
 
+// reloadLock prevents SIGHUP and the file watcher from reloading at the same time
+var reloadLock sync.Mutex
+
 // StandardReloadPattern implements the common reload pattern used by most plugins
 func StandardReloadPattern(pluginName string, reloadFunc func() error) error {
+	reloadLock.Lock()
+	defer reloadLock.Unlock()
 	dlog.Noticef("Reloading configuration for plugin [%s]", pluginName)
 
 	// Execute the reload function

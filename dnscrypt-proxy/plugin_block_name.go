@@ -11,7 +11,7 @@ import (
 
 type BlockedNames struct {
 	allWeeklyRanges *map[string]WeeklyRanges
-	patternMatcher  *PatternMatcher
+	nameList        *NameList
 	logger          io.Writer
 	format          string
 	ipCryptConfig   *IPCryptConfig
@@ -26,21 +26,12 @@ var (
 )
 
 func (blockedNames *BlockedNames) check(pluginsState *PluginsState, qName string, aliasFor *string) (bool, error) {
-	reject, reason, xweeklyRanges := blockedNames.patternMatcher.Eval(qName)
+	reject, reason, err := blockedNames.nameList.Eval(qName)
+	if err != nil || !reject {
+		return false, err
+	}
 	if aliasFor != nil {
 		reason = reason + " (alias for [" + *aliasFor + "])"
-	}
-	var weeklyRanges *WeeklyRanges
-	if xweeklyRanges != nil {
-		weeklyRanges = xweeklyRanges.(*WeeklyRanges)
-	}
-	if reject {
-		if weeklyRanges != nil && !weeklyRanges.Match() {
-			reject = false
-		}
-	}
-	if !reject {
-		return false, nil
 	}
 	pluginsState.action = PluginsActionReject
 	pluginsState.returnCode = PluginsReturnCodeReject
@@ -84,14 +75,15 @@ func (plugin *PluginBlockName) Init(proxy *Proxy) error {
 		return err
 	}
 
-	xBlockedNames := BlockedNames{
-		allWeeklyRanges: proxy.allWeeklyRanges,
-		patternMatcher:  NewPatternMatcher(),
-		ipCryptConfig:   proxy.ipCryptConfig,
+	nameList, err := LoadNameList(plugin.configFile, lines, proxy.allWeeklyRanges)
+	if err != nil {
+		return err
 	}
 
-	if err := plugin.loadRules(lines, &xBlockedNames); err != nil {
-		return err
+	xBlockedNames := BlockedNames{
+		allWeeklyRanges: proxy.allWeeklyRanges,
+		nameList:        nameList,
+		ipCryptConfig:   proxy.ipCryptConfig,
 	}
 
 	xBlockedNames.logger, xBlockedNames.format = InitializePluginLogger(proxy.blockNameLogFile, proxy.blockNameFormat, proxy.logMaxSize, proxy.logMaxAge, proxy.logMaxBackups)
@@ -103,23 +95,6 @@ func (plugin *PluginBlockName) Init(proxy *Proxy) error {
 	return nil
 }
 
-// loadRules parses and loads name patterns into the BlockedNames
-func (plugin *PluginBlockName) loadRules(lines string, blockedNamesObj *BlockedNames) error {
-	return ProcessConfigLines(lines, func(line string, lineNo int) error {
-		rulePart, weeklyRanges, err := ParseTimeBasedRule(line, lineNo, blockedNamesObj.allWeeklyRanges)
-		if err != nil {
-			dlog.Error(err)
-			return nil
-		}
-
-		if err := blockedNamesObj.patternMatcher.Add(rulePart, weeklyRanges, lineNo+1); err != nil {
-			dlog.Error(err)
-			return nil
-		}
-		return nil
-	})
-}
-
 func (plugin *PluginBlockName) Drop() error {
 	if plugin.configWatcher != nil {
 		plugin.configWatcher.RemoveFile(plugin.configFile)
@@ -129,6 +104,7 @@ func (plugin *PluginBlockName) Drop() error {
 
 // PrepareReload loads new patterns into staging structure but doesn't apply them yet
 func (plugin *PluginBlockName) PrepareReload() error {
+	plugin.stagingBlocked = nil
 	return StandardPrepareReloadPattern(plugin.Name(), plugin.configFile, func(lines string) error {
 		// Get current BlockedNames to access allWeeklyRanges and log settings
 		blockedNamesLock.RLock()
@@ -139,17 +115,20 @@ func (plugin *PluginBlockName) PrepareReload() error {
 			return errors.New("no existing blocked names configuration to base reload on")
 		}
 
+		nameList, err := LoadNameList(plugin.configFile, lines, currentBlockedNames.allWeeklyRanges)
+		if err != nil {
+			return err
+		}
+
 		// Create staging structure
 		plugin.stagingBlocked = &BlockedNames{
 			allWeeklyRanges: currentBlockedNames.allWeeklyRanges,
-			patternMatcher:  NewPatternMatcher(),
+			nameList:        nameList,
 			logger:          currentBlockedNames.logger,
 			format:          currentBlockedNames.format,
 			ipCryptConfig:   currentBlockedNames.ipCryptConfig,
 		}
-
-		// Load rules into staging structure
-		return plugin.loadRules(lines, plugin.stagingBlocked)
+		return nil
 	})
 }
 
