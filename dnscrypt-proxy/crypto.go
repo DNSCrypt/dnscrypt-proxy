@@ -188,7 +188,7 @@ func (proxy *Proxy) Encrypt(
 		if _, err := crypto_rand.Read(xpad[:]); err != nil {
 			return nil, nil, nil, queryEpoch, err
 		}
-		minQuestionSize += int(xpad[0])
+		minQuestionSize += int(xpad[0]&3) * 64
 	}
 	paddedLength := Min(MaxDNSUDPPacketSize, (Max(minQuestionSize, QueryOverhead)+1+63) & ^63)
 	if serverInfo.knownBugs.fragmentsBlocked && proto == "udp" {
