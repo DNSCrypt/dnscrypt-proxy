@@ -1,9 +1,0 @@
-cmd/atomdns/man/*.7 linguist-generated=true
-cmd/atomdns/man/*.1 linguist-generated=true
-cmd/atomdns/man/*.5 linguist-generated=true
-z*.go linguist-generated=true
-**/z*.go linguist-generated=true
-zednspack.go !linguist-generated
-cmd/atomdns/internal/conffile/zoneclass.go !linguist-generated
-zonemd.go !linguist-generated
-zonemd_test.go !linguist-generated
