@@ -1,0 +1,155 @@
+package dns
+
+import (
+	"bytes"
+	"encoding/base32"
+	"encoding/base64"
+	"encoding/hex"
+
+	"codeberg.org/miekg/dns/deleg"
+	"codeberg.org/miekg/dns/internal/pack"
+	"codeberg.org/miekg/dns/pkg/pool"
+	"codeberg.org/miekg/dns/svcb"
+)
+
+// comparename compares owernames in rdata, which is a difference compare that canonical because the
+// actual wire data needs to be looked up, so we pack the names and compare them both.
+func comparename(a, b string) int {
+	if a == "" && b == "" {
+		return 0
+	}
+	// optimize: before getting to the wiredata compare first label length, if not equal we already
+	// have a sorting. We only care about equal.
+	// TODO(miek): we might get away with no allocations and no wire data here...?
+	an, _ := dnsutilNext(a, 0)
+	bn, _ := dnsutilNext(b, 0)
+	if an < bn {
+		return -1
+	}
+	if an > bn {
+		return +1
+	}
+
+	abuf := comparePool.Get()
+	bbuf := comparePool.Get()
+	resize(&abuf, len(a)+1)
+	resize(&bbuf, len(b)+1)
+
+	aoff, _ := pack.Name(a, abuf, 0, nil, false)
+	boff, _ := pack.Name(b, bbuf, 0, nil, false)
+
+	x := bytes.Compare(abuf[:aoff], bbuf[:boff])
+
+	comparePool.Put(abuf)
+	comparePool.Put(bbuf)
+	return x
+}
+
+func comparebase64(a, b string) int {
+	abuf := comparePool.Get()
+	bbuf := comparePool.Get()
+	resize(&abuf, base64.StdEncoding.EncodedLen(len(a)))
+	resize(&bbuf, base64.StdEncoding.EncodedLen(len(b)))
+
+	aoff, _ := base64.StdEncoding.Decode(abuf, []byte(a))
+	boff, _ := base64.StdEncoding.Decode(bbuf, []byte(b))
+
+	x := bytes.Compare(abuf[:aoff], bbuf[:boff])
+
+	comparePool.Put(abuf)
+	comparePool.Put(bbuf)
+	return x
+}
+
+func comparebase32(a, b string) int {
+	abuf := comparePool.Get()
+	bbuf := comparePool.Get()
+	resize(&abuf, base32.HexEncoding.EncodedLen(len(a)))
+	resize(&bbuf, base32.HexEncoding.EncodedLen(len(b)))
+
+	aoff, _ := base32.HexEncoding.WithPadding(base32.NoPadding).Decode(abuf, []byte(a))
+	boff, _ := base32.HexEncoding.WithPadding(base32.NoPadding).Decode(bbuf, []byte(b))
+
+	x := bytes.Compare(abuf[:aoff], bbuf[:boff])
+
+	comparePool.Put(abuf)
+	comparePool.Put(bbuf)
+	return x
+}
+
+func comparehex(a, b string) int {
+	abuf := comparePool.Get()
+	bbuf := comparePool.Get()
+	resize(&abuf, hex.EncodedLen(len(a)))
+	resize(&bbuf, hex.EncodedLen(len(b)))
+
+	aoff, _ := hex.Decode(abuf, []byte(a))
+	boff, _ := hex.Decode(bbuf, []byte(b))
+
+	x := bytes.Compare(abuf[:aoff], bbuf[:boff])
+
+	comparePool.Put(abuf)
+	comparePool.Put(bbuf)
+	return x
+}
+
+func comparepair(a, b []svcb.Pair) int {
+	abuf := comparePool.Get()
+	bbuf := comparePool.Get()
+
+	size := 0
+	for i := range a {
+		size += a[i].Len()
+	}
+	resize(&abuf, size)
+	size = 0
+	for i := range b {
+		size += b[i].Len()
+	}
+	resize(&bbuf, size)
+
+	aoff, _ := svcb.Pack(a, abuf, 0)
+	boff, _ := svcb.Pack(b, bbuf, 0)
+
+	x := bytes.Compare(abuf[:aoff], bbuf[:boff])
+
+	comparePool.Put(abuf)
+	comparePool.Put(bbuf)
+	return x
+}
+
+func compareinfo(a, b []deleg.Info) int {
+	abuf := comparePool.Get()
+	bbuf := comparePool.Get()
+	size := 0
+	for i := range a {
+		size += a[i].Len()
+	}
+	resize(&abuf, size)
+	size = 0
+	for i := range b {
+		size += b[i].Len()
+	}
+	resize(&bbuf, size)
+
+	aoff, _ := deleg.Pack(a, abuf, 0)
+	boff, _ := deleg.Pack(b, bbuf, 0)
+
+	x := bytes.Compare(abuf[:aoff], bbuf[:boff])
+
+	comparePool.Put(abuf)
+	comparePool.Put(bbuf)
+	return x
+}
+
+var comparePool = pool.New(4096)
+
+// resize resized the buffer we got from the pool to the size needed.
+// If we resize beyond the comparepool's size it will not be put back into
+// the pool, but with 4096 those odds should be small.
+func resize(buf *[]byte, size int) {
+	if cap(*buf) >= size {
+		return
+	}
+	*buf = make([]byte, size)
+}

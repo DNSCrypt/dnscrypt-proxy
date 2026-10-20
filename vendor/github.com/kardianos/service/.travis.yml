@@ -1,0 +1,20 @@
+arch:
+  - ppc64le
+  - amd64
+language: go
+go_import_path: github.com/kardianos/service
+sudo: required
+
+go:
+  - 1.12.x
+  - 1.14.x
+  - master
+
+before_install:
+  - go get github.com/mattn/goveralls
+  - go get golang.org/x/tools/cmd/cover
+
+script:
+  - chmod +x linux-test-su.sh
+  - sudo ./linux-test-su.sh $GOPATH `which go`
+  - $GOPATH/bin/goveralls -service=travis-ci

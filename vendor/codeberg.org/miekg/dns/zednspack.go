@@ -1,0 +1,428 @@
+package dns
+
+// should be generated, it is not...
+
+import (
+	"encoding/hex"
+	"net"
+	"net/netip"
+
+	"codeberg.org/miekg/dns/internal/pack"
+	"codeberg.org/miekg/dns/internal/unpack"
+	"golang.org/x/crypto/cryptobyte"
+)
+
+func (o *LLQ) pack(msg []byte, off int) (off1 int, err error) {
+	off, err = pack.Uint16(o.Version, msg, off)
+	if err != nil {
+		return off, err
+	}
+	off, err = pack.Uint16(o.Opcode, msg, off)
+	if err != nil {
+		return off, err
+	}
+	off, err = pack.Uint16(o.Error, msg, off)
+	if err != nil {
+		return off, err
+	}
+	off, err = pack.Uint64(o.ID, msg, off)
+	if err != nil {
+		return off, err
+	}
+	off, err = pack.Uint32(o.LeaseLife, msg, off)
+	if err != nil {
+		return off, err
+	}
+	return off, nil
+}
+
+func (o *LLQ) unpack(s *cryptobyte.String) error {
+	if !s.ReadUint16(&o.Version) {
+		return unpack.ErrOverflow
+	}
+	if !s.ReadUint16(&o.Opcode) {
+		return unpack.ErrOverflow
+	}
+	if !s.ReadUint16(&o.Error) {
+		return unpack.ErrOverflow
+	}
+	if !s.ReadUint64(&o.ID) {
+		return unpack.ErrOverflow
+	}
+	if !s.ReadUint32(&o.LeaseLife) {
+		return unpack.ErrOverflow
+	}
+	return nil
+}
+
+func (o *UPDATELEASE) pack(msg []byte, off int) (int, error) {
+	off, err := pack.Uint32(o.Lease, msg, off)
+	if err != nil {
+		return off, err
+	}
+	off, err = pack.Uint32(o.KeyLease, msg, off)
+	if err != nil {
+		return off, err
+	}
+	return off, nil
+}
+
+func (o *UPDATELEASE) unpack(s *cryptobyte.String) error {
+	if !s.ReadUint32(&o.Lease) {
+		return unpack.ErrOverflow
+	}
+	if !s.ReadUint32(&o.KeyLease) {
+		return unpack.ErrOverflow
+	}
+	return nil
+}
+
+func (o *NSID) unpack(s *cryptobyte.String) error {
+	o.Nsid = hex.EncodeToString(*s)
+	return nil
+}
+
+func (o *NSID) pack(msg []byte, off int) (int, error) {
+	return hex.Decode(msg[off:], []byte(o.Nsid))
+}
+
+func (o *COOKIE) pack(msg []byte, off int) (int, error) {
+	return hex.Decode(msg[off:], []byte(o.Cookie))
+}
+
+func (o *COOKIE) unpack(s *cryptobyte.String) error {
+	o.Cookie = hex.EncodeToString(*s)
+	return nil
+}
+
+func (o *PADDING) unpack(s *cryptobyte.String) error {
+	o.Padding = hex.EncodeToString(*s)
+	return nil
+}
+
+func (o *PADDING) pack(msg []byte, off int) (int, error) {
+	return hex.Decode(msg[off:], []byte(o.Padding))
+}
+
+func (o *DAU) pack(msg []byte, off int) (off1 int, err error) {
+	for i := range o.AlgCode {
+		if off, err = pack.Uint8(o.AlgCode[i], msg, off); err != nil {
+			return off, err
+		}
+	}
+	return off, nil
+}
+
+func (o *DAU) unpack(s *cryptobyte.String) error {
+	for !s.Empty() {
+		var a uint8
+		s.ReadUint8(&a)
+		o.AlgCode = append(o.AlgCode, a)
+	}
+	return nil
+}
+
+func (o *DHU) pack(msg []byte, off int) (off1 int, err error) {
+	for i := range o.AlgCode {
+		if off, err = pack.Uint8(o.AlgCode[i], msg, off); err != nil {
+			return off, err
+		}
+	}
+	return off, nil
+}
+
+func (o *DHU) unpack(s *cryptobyte.String) error {
+	for !s.Empty() {
+		var a uint8
+		s.ReadUint8(&a)
+		o.AlgCode = append(o.AlgCode, a)
+	}
+	return nil
+}
+
+func (o *N3U) pack(msg []byte, off int) (off1 int, err error) {
+	for i := range o.AlgCode {
+		if off, err = pack.Uint8(o.AlgCode[i], msg, off); err != nil {
+			return off, err
+		}
+	}
+	return off, nil
+}
+
+func (o *N3U) unpack(s *cryptobyte.String) error {
+	for !s.Empty() {
+		var a uint8
+		s.ReadUint8(&a)
+		o.AlgCode = append(o.AlgCode, a)
+	}
+	return nil
+}
+
+func (o *EDE) unpack(s *cryptobyte.String) (err error) {
+	if !s.ReadUint16(&o.InfoCode) {
+		return unpack.ErrOverflow
+	}
+	if o.ExtraText, err = unpack.StringAny(s, len(*s)); err != nil {
+		return unpack.Errorf("overflow EDE option")
+	}
+	return nil
+}
+
+func (o *EDE) pack(msg []byte, off int) (int, error) {
+	off, err := pack.Uint16(o.InfoCode, msg, off)
+	if err != nil {
+		return off, err
+	}
+	copy(msg[off:], []byte(o.ExtraText))
+	return off + len(o.ExtraText), nil
+}
+
+func (e *REPORTING) unpack(s *cryptobyte.String) (err error) {
+	e.AgentDomain, err = unpack.Name(s, nil) // TODO: unpackNAme with nil buffer, no compression pointers..
+	if err != nil {
+		return unpack.Errorf("overflow REPORTING AgentDomain")
+	}
+	return nil
+}
+
+func (e *REPORTING) pack(msg []byte, off int) (int, error) {
+	return pack.Name(e.AgentDomain, msg, off, nil, false)
+}
+
+func (o *EXPIRE) pack(msg []byte, off int) (int, error) {
+	if o.Expire == 0 {
+		return off, nil
+	}
+	return pack.Uint32(o.Expire, msg, off)
+}
+
+func (o *EXPIRE) unpack(s *cryptobyte.String) error {
+	if s.Empty() { // zero-length EXPIRE query, see RFC 7314 Section 2
+		o.Expire = 0
+		return nil
+	}
+	if !s.ReadUint32(&o.Expire) {
+		return unpack.ErrOverflow
+	}
+	return nil
+}
+
+func (o *TCPKEEPALIVE) pack(msg []byte, off int) (int, error) {
+	if o.Timeout > 0 {
+		return pack.Uint16(o.Timeout, msg, off)
+	}
+	return off, nil
+}
+
+func (o *TCPKEEPALIVE) unpack(s *cryptobyte.String) error {
+	if s.Empty() {
+		return nil
+	}
+	if !s.ReadUint16(&o.Timeout) {
+		return unpack.ErrOverflow
+	}
+	return nil
+}
+
+func (o *SUBNET) pack(msg []byte, off int) (int, error) {
+	var err error
+	if off, err = pack.Uint16(o.Family, msg, off); err != nil {
+		return off, err
+	}
+	if off, err = pack.Uint8(o.Netmask, msg, off); err != nil {
+		return off, err
+	}
+	if off, err = pack.Uint8(o.Scope, msg, off); err != nil {
+		return off, err
+	}
+
+	n := int((o.Netmask + 7) / 8)
+	switch o.Family {
+	case 1:
+		if n > net.IPv4len {
+			return off, pack.Errorf("overflow SUBNET a Netmask")
+		}
+		if n == 0 {
+			return off, nil
+		}
+		addr := o.Address.Unmap()
+		if !addr.IsValid() || !addr.Is4() {
+			return off, pack.Errorf("bad address family")
+		}
+		if off+n > len(msg) {
+			return len(msg), pack.ErrBuf
+		}
+		a := addr.As4()
+		copy(msg[off:off+n], a[:n])
+		off += n
+	case 2:
+		if n > net.IPv6len {
+			return off, pack.Errorf("overflow SUBNET aaaa Netmask")
+		}
+		if n == 0 {
+			return off, nil
+		}
+		if !o.Address.IsValid() || !o.Address.Is6() {
+			return off, pack.Errorf("bad address family")
+		}
+		if off+n > len(msg) {
+			return len(msg), pack.ErrBuf
+		}
+		a := o.Address.As16()
+		copy(msg[off:off+n], a[:n])
+		off += n
+	default:
+		return off, pack.Errorf("bad address family")
+	}
+	return off, nil
+}
+
+func (o *SUBNET) unpack(s *cryptobyte.String) (err error) {
+	if !s.ReadUint16(&o.Family) {
+		return unpack.ErrOverflow
+	}
+	if !s.ReadUint8(&o.Netmask) {
+		return unpack.ErrOverflow
+	}
+	if !s.ReadUint8(&o.Scope) {
+		return unpack.ErrOverflow
+	}
+	n := o.Netmask / 8
+	switch o.Family {
+	case 0:
+		// TODO(miek): make something that does not do a full parse.
+		o.Address = netip.MustParseAddr("0.0.0.0")
+	case 1:
+		if n > net.IPv4len {
+			return unpack.Errorf("overflow SUBNET a Netmask")
+		}
+		in := make([]byte, net.IPv4len)
+		if !s.CopyBytes(in[:n]) {
+			return unpack.Errorf("overflow SUBNET a")
+		}
+		var ok bool
+		if o.Address, ok = netip.AddrFromSlice(in); !ok {
+			return unpack.Errorf("overflow SUBNET a")
+		}
+	case 2:
+		if n > net.IPv6len {
+			return unpack.Errorf("overflow SUBNET aaaa Netmask")
+		}
+		in := make([]byte, net.IPv6len)
+		if !s.CopyBytes(in[:n]) {
+			return unpack.Errorf("overflow SUBNET aaaa")
+		}
+		var ok bool
+		if o.Address, ok = netip.AddrFromSlice(in); !ok {
+			return unpack.Errorf("overflow SUBNET aaaa")
+		}
+	default:
+		return unpack.Errorf("bad address family")
+	}
+	return nil
+}
+
+func (o *ESU) pack(msg []byte, off int) (int, error) {
+	return pack.StringAny(o.URI, msg, off)
+}
+
+func (o *ESU) unpack(s *cryptobyte.String) (err error) {
+	o.URI, err = unpack.StringAny(s, len(*s))
+	return err
+}
+
+func (o *ZONEVERSION) pack(msg []byte, off int) (int, error) {
+	off, err := pack.Uint8(o.Labels, msg, off)
+	if err != nil {
+		return off, err
+	}
+	off, err = pack.Uint8(o.Type, msg, off)
+	if err != nil {
+		return off, err
+	}
+	return pack.StringAny(string(o.Version), msg, off)
+}
+
+func (o *ZONEVERSION) unpack(s *cryptobyte.String) (err error) {
+	if !s.ReadUint8(&o.Labels) {
+		return unpack.ErrOverflow
+	}
+	if !s.ReadUint8(&o.Type) {
+		return unpack.ErrOverflow
+	}
+	v, err := unpack.StringAny(s, len(*s))
+	o.Version = []byte(v)
+	return err
+}
+
+func (o *ERFC3597) pack(msg []byte, off int) (int, error) {
+	return hex.Decode(msg[off:], []byte(o.Code))
+}
+
+func (o *ERFC3597) unpack(s *cryptobyte.String) error {
+	o.Code = hex.EncodeToString(*s)
+	return nil
+}
+
+func (o *MQRESPONSE) pack(msg []byte, off int) (int, error) {
+	var err error
+	for _, t := range o.Types {
+		if off, err = pack.Uint16(t, msg, off); err != nil {
+			return len(msg), err
+		}
+	}
+	return off, nil
+}
+
+func (o *MQRESPONSE) unpack(s *cryptobyte.String) error {
+	for !s.Empty() {
+		var t uint16
+		if !s.ReadUint16(&t) {
+			return unpack.ErrTrailingData
+		}
+		o.Types = append(o.Types, t)
+	}
+	return nil
+}
+
+func (o *MQQUERY) pack(msg []byte, off int) (int, error) {
+	var err error
+	for _, t := range o.Types {
+		if off, err = pack.Uint16(t, msg, off); err != nil {
+			return len(msg), err
+		}
+	}
+	return off, nil
+}
+
+func (o *MQQUERY) unpack(s *cryptobyte.String) error {
+	for !s.Empty() {
+		var t uint16
+		if !s.ReadUint16(&t) {
+			return unpack.ErrTrailingData
+		}
+		o.Types = append(o.Types, t)
+	}
+	return nil
+}
+
+func (o *KEYTAG) pack(msg []byte, off int) (int, error) {
+	var err error
+	for _, t := range o.Types {
+		if off, err = pack.Uint16(t, msg, off); err != nil {
+			return len(msg), err
+		}
+	}
+	return off, nil
+}
+
+func (o *KEYTAG) unpack(s *cryptobyte.String) error {
+	for !s.Empty() {
+		var t uint16
+		if !s.ReadUint16(&t) {
+			return unpack.ErrTrailingData
+		}
+		o.Types = append(o.Types, t)
+	}
+	return nil
+}

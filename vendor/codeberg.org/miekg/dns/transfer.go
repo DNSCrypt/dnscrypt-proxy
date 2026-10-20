@@ -1,0 +1,376 @@
+package dns
+
+import (
+	"context"
+	"fmt"
+	"io"
+	"net"
+	"time"
+)
+
+// Envelope is used when doing a zone transfer with a remote server.
+type Envelope struct {
+	Answer []RR  // The RRs as returned by the remote server, or the ones to be send to the remote.
+	Error  error // If something went wrong, this contains the error.
+}
+
+// TransferIn performs a zone transfer with address over TCP, the message m is used to ask for the transfer and
+// should have an [AXFR] or [IXFR] RR in the question section.  For doing an IXFR a SOA record needs to be
+// present in the [Ns] section of the [Msg], see RFC 1995.
+//
+// If the pseudo section contains a (stub) TSIG  recrods, TSIG signing is performed, see [NewTSIG] on how create such RRs. For
+// this [TransferOption] needs a [TSIGSigner]. In the future SIG0 may be implemented as well.
+//
+// On the returned channel the received RRs are returned (and a non-nil error in case of an error). These RRs
+// are as they were found, i.e. including the starting and ending SOA RRs.
+//
+// If m's buffer is empty TransferIn will call m.Pack(). If the clients's transport is nil [NewDefaultTransport] will
+// be set and used.
+//
+// Setting up a transfer is done as follows:
+//
+//	c := dns.NewClient()
+//	m := dns.NewMsg("example.org.", dns.TypeAXFR)
+//	options := &dns.TransferOption{TSIGSigner: dns.HmacTSIG{[]byte("secret")}} // optionally set up a TSIG with hmac
+//	env, err := c.TransferIn(context.TODO(), m, addr, options)
+//	if err != nil {
+//	   return fmt.Errorf("failed to setup zone transfer in", err)
+//	}
+//
+//	for e := range env {
+//		if e.Error != nil {
+//			// ...
+//		}
+//		// do things with e.Answer
+//	}
+func (c *Client) TransferIn(ctx context.Context, m *Msg, address string, options *TransferOption) (<-chan *Envelope, error) {
+	if c.Transport == nil {
+		c.Transport = NewTransport()
+	}
+	conn, err := c.dial(ctx, "tcp", address)
+	if err != nil {
+		return nil, err
+	}
+	return c.TransferInWithConn(ctx, m, conn, options)
+}
+
+// TransferInWithConn behaves like [client.TransferIn], but with a supplied (TCP) connection.
+func (c *Client) TransferInWithConn(ctx context.Context, m *Msg, conn net.Conn, options *TransferOption) (<-chan *Envelope, error) {
+	if _, ok := conn.(*net.UDPConn); ok {
+		return nil, &Error{err: "bad network"}
+	}
+	_, axfr := m.Question[0].(*AXFR)
+	_, ixfr := m.Question[0].(*IXFR)
+	if !axfr && !ixfr {
+		return nil, &Error{err: "unsupported transfer type"}
+	}
+	if ixfr {
+		if len(m.Ns) == 0 {
+			return nil, fmt.Errorf("%w: %s", ErrSOA, "empty Ns")
+		}
+		if _, ok := m.Ns[0].(*SOA); !ok {
+			return nil, fmt.Errorf("%w: %s", ErrSOA, "bad Ns")
+		}
+	}
+
+	if len(m.Data) == 0 {
+		if err := m.Pack(); err != nil {
+			return nil, err
+		}
+	}
+
+	if options != nil && options.TSIGSigner != nil && hasTSIG(m) != nil {
+		if err := TSIGSign(m, options.TSIGSigner, &TSIGOption{}); err != nil {
+			return nil, err
+		}
+	}
+	// if options.SIG0Signer != nil {} // TODO(miek): implement the whole SIG0 dance
+
+	remote := &response{conn: conn} // for Session() call in msg.go#L926
+	if _, err := io.Copy(remote, m); err != nil {
+		return nil, err
+	}
+
+	ch := make(chan *Envelope)
+	if axfr {
+		go c.transferInAXFR(ctx, m, ch, conn, options)
+	}
+	if ixfr {
+		go c.transferInIXFR(ctx, m, ch, conn, options)
+	}
+	return ch, nil
+}
+
+func (c *Client) transferInAXFR(ctx context.Context, m *Msg, ch chan<- *Envelope, conn net.Conn, options *TransferOption) {
+	defer func() {
+		// First close the connection, then the channel. This allows functions blocked on the channel to
+		// assume that the connection is closed and no further operations are pending when they resume.
+		conn.Close()
+		close(ch)
+	}()
+
+	tsigOptions := TSIGOption{}
+	t := hasTSIG(m)
+	if t != nil {
+		tsigOptions.RequestMAC = t.MAC
+	}
+
+	r := &Msg{}
+	for {
+		r.Options = MsgOptionUnpackHeader
+		conn.SetReadDeadline(time.Now().Add(c.ReadTimeout))
+		if _, err := io.Copy(r, conn); err != nil {
+			// the response writer or actual conn is closed, just return, or some other error, we may
+			// not be sure someone is still listening on this channel.
+			return
+		}
+		if err := ctx.Err(); err != nil {
+			ch <- &Envelope{Error: err}
+			return
+		}
+
+		if err := r.Unpack(); err != nil {
+			ch <- &Envelope{Error: err}
+			return
+		}
+
+		if m.ID != r.ID {
+			ch <- &Envelope{Error: fmt.Errorf("%w: %d != %d", ErrID, m.ID, r.ID)}
+			return
+		}
+
+		if r.Rcode != RcodeSuccess {
+			ch <- &Envelope{Error: fmt.Errorf("%w: %s", ErrRcode, rcodeToString(r.Rcode))}
+			return
+		}
+
+		r.Options = MsgOptionUnpack
+		err := r.Unpack()
+		if err != nil {
+			ch <- &Envelope{Answer: r.Answer, Error: err}
+			return
+		}
+
+		// On first loop first be need to see a SOA RR.
+		if !tsigOptions.TimersOnly {
+			if len(r.Answer) == 0 {
+				ch <- &Envelope{Error: fmt.Errorf("%w: %s", ErrSOA, "empty answer")}
+				return
+			}
+			if _, ok := r.Answer[0].(*SOA); !ok {
+				ch <- &Envelope{Error: ErrSOA}
+				return
+			}
+		}
+
+		if options != nil && options.TSIGSigner != nil && t != nil { // Original request had tsig, so we need to check that.
+			if err := TSIGVerify(r, options.TSIGSigner, &tsigOptions); err != nil {
+				ch <- &Envelope{Answer: r.Answer, Error: err}
+				return
+			}
+		}
+
+		ch <- &Envelope{Answer: r.Answer}
+
+		// If there is a SOA RR as the last we're done
+		if tsigOptions.TimersOnly {
+			if len(r.Answer) > 0 {
+				if _, ok := r.Answer[len(r.Answer)-1].(*SOA); ok {
+					return
+				}
+			}
+		}
+
+		tsigOptions.TimersOnly = true
+		if t != nil {
+			// r must have tsig, otherwise errored out above
+			tsigOptions.RequestMAC = hasTSIG(r).MAC
+		}
+	}
+}
+
+// ixfr is similar, but different enough to warrant its own function. Doing this in the axfr-loop is possible,
+// but make that more brittle. Although ifxr also needs to support axfr...
+func (c *Client) transferInIXFR(ctx context.Context, m *Msg, ch chan<- *Envelope, conn net.Conn, options *TransferOption) {
+	defer func() {
+		conn.Close()
+		close(ch)
+	}()
+
+	tsigOptions := TSIGOption{}
+	t := hasTSIG(m)
+	if t != nil {
+		tsigOptions.RequestMAC = t.MAC
+	}
+	// serial is the serial of the first SOA, it used to determine when we seen all the RRs.
+	serial := uint32(0)
+	// assume incremental transfer, which implies seeing the 2n SOA with serial 'serial',
+	expectSOA := 1 // we ignore the first one and assume we get an axfr instead of ixfr, if the first msg indicates we do ifxr with +1 this.
+
+	r := &Msg{}
+	for {
+		r.Options = MsgOptionUnpackHeader
+		conn.SetReadDeadline(time.Now().Add(c.ReadTimeout))
+		if _, err := io.Copy(r, conn); err != nil {
+			// the response writer or actual conn is closed, just return, or some other error, we may
+			// not be sure someone is still listening on this channel.
+			return
+		}
+		if err := ctx.Err(); err != nil {
+			ch <- &Envelope{Error: err}
+			return
+		}
+
+		if err := r.Unpack(); err != nil {
+			ch <- &Envelope{Error: err}
+			return
+		}
+
+		if m.ID != r.ID {
+			ch <- &Envelope{Error: fmt.Errorf("%w: %d != %d", ErrID, m.ID, r.ID)}
+			return
+		}
+
+		if r.Rcode != RcodeSuccess {
+			ch <- &Envelope{Error: fmt.Errorf("%w: %s", ErrRcode, rcodeToString(r.Rcode))}
+			return
+		}
+
+		r.Options = MsgOptionUnpack
+		err := r.Unpack()
+		if err != nil {
+			ch <- &Envelope{Answer: r.Answer, Error: err}
+			return
+		}
+
+		// On first loop first be need to see a SOA RR and check that with the request serial.
+		if !tsigOptions.TimersOnly {
+			if len(r.Answer) == 0 {
+				ch <- &Envelope{Error: fmt.Errorf("%w: %s", ErrSOA, "empty answer")}
+				return
+			}
+			if _, ok := r.Answer[0].(*SOA); !ok {
+				ch <- &Envelope{Error: ErrSOA}
+				return
+			}
+			serial = r.Answer[0].(*SOA).Serial
+			// If client serial >= server serial per RFC 1982, we are already up to date.
+			if CompareSerial(m.Ns[0].(*SOA).Serial, serial) >= 0 {
+				ch <- &Envelope{Answer: []RR{r.Answer[0]}}
+				return
+			}
+			if len(r.Answer) > 2 {
+				if _, ok := r.Answer[1].(*SOA); ok {
+					expectSOA++
+				}
+			}
+		}
+
+		if options != nil && options.TSIGSigner != nil && t != nil { // Original request had tsig, so we need to check that.
+			if err := TSIGVerify(r, options.TSIGSigner, &tsigOptions); err != nil {
+				ch <- &Envelope{Answer: r.Answer, Error: err}
+				return
+			}
+		}
+
+		ch <- &Envelope{Answer: r.Answer}
+
+		// On the first message, skip index 0 (the opening SOA) — it is not the
+		// terminal SOA. On subsequent messages start from 0 so nothing is missed.
+		start := 0
+		if !tsigOptions.TimersOnly {
+			start = 1
+		}
+
+		// If we see the first SOA's serial expectSOA times we need to stop.
+		for i := start; i < len(r.Answer); i++ {
+			if s, ok := r.Answer[i].(*SOA); ok && s.Serial == serial {
+				expectSOA--
+				if expectSOA == 0 {
+					return
+				}
+			}
+		}
+
+		tsigOptions.TimersOnly = true
+		if t != nil {
+			// r must have tsig, otherwise errored out above
+			tsigOptions.RequestMAC = hasTSIG(r).MAC
+		}
+	}
+}
+
+// TransferOut performs an outgoing transfer with the client connecting in w, r is the request
+// that initiates the transfer and is used for TSIG/SIG0.
+//
+// Example setup from within a dns.HandleFunc:
+//
+//	r.Unpack()
+//	w.Hijack() // hijack the connection as we should close when done
+//	env := make(chan *dns.Envelope)
+//	c := dns.NewClient()
+//	var wg sync.WaitGroup
+//	wg.Go(func() {
+//	    c.TransferOut(w, r, env)
+//	    w.Close()
+//	})
+//	env <- &dns.Envelope{Answer: []dns.RR{...}}
+//	close(env)
+//
+// The server is responsible for sending the correct sequence of RRs through the channel env.
+// If the clients's transport is nil [NewDefaultTransport] will be set and used.
+func (c *Client) TransferOut(w ResponseWriter, r *Msg, env <-chan *Envelope, options *TransferOption) (err error) {
+	if _, ok := w.RemoteAddr().(*net.UDPAddr); ok {
+		return &Error{err: "bad network"}
+	}
+	if c.Transport == nil {
+		c.Transport = NewTransport()
+	}
+	defer func() {
+		// drain channel reads
+		for range env {
+		}
+	}()
+
+	tsigOptions := TSIGOption{}
+	t := hasTSIG(r)
+	if t != nil {
+		tsigOptions.RequestMAC = t.MAC
+	}
+	m := new(Msg)
+	m.Authoritative = true
+	// dnsutil.SetReply as used here, but led to all kinds of cyclic imports, just use that very static code here.
+	m.ID, m.Rcode = r.ID, RcodeSuccess
+	m.Response, m.Opcode = true, r.Opcode
+	m.RecursionDesired = r.RecursionDesired
+	m.CheckingDisabled = r.CheckingDisabled
+	m.Security = r.Security
+	m.Question = r.Question
+
+	for e := range env {
+		m.Reset()
+		m.Answer = e.Answer
+		if t != nil {
+			m.Pseudo = []RR{t} // will overwrite the bits that matter
+		}
+		if err = m.Pack(); err != nil {
+			return err
+		}
+		if options != nil && options.TSIGSigner != nil && t != nil {
+			if err = TSIGSign(m, options.TSIGSigner, &tsigOptions); err != nil {
+				return err
+			}
+		}
+
+		if _, err = io.Copy(w, m); err != nil {
+			return err
+		}
+
+		tsigOptions.TimersOnly = true
+		if t != nil {
+			// m must have tsig, otherwise errored out above
+			tsigOptions.RequestMAC = hasTSIG(m).MAC
+		}
+	}
+	return nil
+}

@@ -1,0 +1,471 @@
+package dns
+
+import (
+	"crypto"
+	"crypto/ecdsa"
+	"crypto/ed25519"
+	"crypto/mldsa"
+	"crypto/rand"
+	"crypto/rsa"
+	_ "crypto/sha1"   // need its init function
+	_ "crypto/sha256" // need its init function
+	_ "crypto/sha512" // need its init function
+	"encoding/asn1"
+	"encoding/hex"
+	"hash"
+	"math/big"
+	"strings"
+	"time"
+
+	"codeberg.org/miekg/dns/internal/pack"
+	"codeberg.org/miekg/dns/internal/unpack"
+	"codeberg.org/miekg/dns/pkg/pool"
+)
+
+// DNSSEC encryption algorithm codes.
+const (
+	_      uint8 = iota
+	RSAMD5       // Deprecated.
+	DH
+	DSA
+	_ // Skip 4, RFC 6725, section 2.1
+	RSASHA1
+	DSANSEC3SHA1
+	RSASHA1NSEC3SHA1
+	RSASHA256
+	_ // Skip 9, RFC 6725, section 2.1
+	RSASHA512
+	_       // Skip 11, RFC 6725, section 2.1
+	ECCGOST // Deprecated.
+	ECDSAP256SHA256
+	ECDSAP384SHA384
+	ED25519
+	ED448
+	SM2SM3                // See RFC 9563.
+	MLDSA44               // See draft-westerbaan-dnssec-mldsa.
+	ECCGOST12  uint8 = 23 // See RFC 9558
+	INDIRECT   uint8 = 252
+	PRIVATEDNS uint8 = 253 // Private (experimental keys).
+	PRIVATEOID uint8 = 254
+)
+
+// AlgorithmToString is a map of algorithm IDs to algorithm names.
+var AlgorithmToString = map[uint8]string{
+	RSAMD5:           "RSAMD5",
+	DH:               "DH",
+	DSA:              "DSA",
+	RSASHA1:          "RSASHA1",
+	DSANSEC3SHA1:     "DSA-NSEC3-SHA1",
+	RSASHA1NSEC3SHA1: "RSASHA1-NSEC3-SHA1",
+	RSASHA256:        "RSASHA256",
+	RSASHA512:        "RSASHA512",
+	ECCGOST:          "ECC-GOST",
+	ECDSAP256SHA256:  "ECDSAP256SHA256",
+	ECDSAP384SHA384:  "ECDSAP384SHA384",
+	ED25519:          "ED25519",
+	ED448:            "ED448",
+	SM2SM3:           "SM2SM3",
+	MLDSA44:          "MLDSA44",
+	ECCGOST12:        "ECC-GOST12",
+	INDIRECT:         "INDIRECT",
+	PRIVATEDNS:       "PRIVATEDNS",
+	PRIVATEOID:       "PRIVATEOID",
+}
+
+// AlgorithmToHash is a map of algorithm crypto hash IDs to crypto.Hash's.
+// Newer algorithm that do their own hashing (i.e. ED25519 and MLDSA44) are not present here.
+var AlgorithmToHash = map[uint8]crypto.Hash{
+	RSAMD5:           crypto.MD5, // Deprecated in RFC 6725.
+	DSA:              crypto.SHA1,
+	RSASHA1:          crypto.SHA1,
+	RSASHA1NSEC3SHA1: crypto.SHA1,
+	RSASHA256:        crypto.SHA256,
+	ECDSAP256SHA256:  crypto.SHA256,
+	ECDSAP384SHA384:  crypto.SHA384,
+	RSASHA512:        crypto.SHA512,
+}
+
+// DNSSEC hashing algorithm codes.
+const (
+	SHA1     uint8 = 1 // RFC 4034.
+	SHA256   uint8 = 2 // RFC 4509.
+	GOST94   uint8 = 3 // RFC 5933.
+	SHA384   uint8 = 4 // RFC 6605.
+	GOST2012 uint8 = 5 // RFC 9558.
+	SM3      uint8 = 6 // RFC 9563.
+)
+
+// HashToString is a map of hash IDs to names.
+var HashToString = map[uint8]string{
+	SHA1:     "SHA1",
+	SHA256:   "SHA256",
+	GOST94:   "GOST94",
+	SHA384:   "SHA384",
+	GOST2012: "GOST2012",
+	SM3:      "SM3",
+}
+
+// DNSKEY flag values.
+const (
+	FlagSEP    = 1
+	FlagREVOKE = 1 << 7
+	FlagZONE   = 1 << 8
+	FlagDELEG  = 1 << 14
+)
+
+// KeyTag returns the keytag (or key-id) of the DNSKEY. If k.Tag is not zero, that value is returned instead,
+// otherwise the tag is calculated, set and returned.
+func (k *DNSKEY) KeyTag() uint16 {
+	if k.Tag > 0 {
+		return k.Tag
+	}
+	keytag := 0
+	wire := make([]byte, defaultBufSize/2)
+	n, err := k.pack(wire, 0, nil)
+	if err != nil {
+		return 0
+	}
+	wire = wire[:n]
+	for i, v := range wire {
+		if i&1 != 0 {
+			keytag += int(v) // must be larger than uint32
+		} else {
+			keytag += int(v) << 8
+		}
+	}
+	keytag += keytag >> 16 & 0xFFFF
+	keytag &= 0xFFFF
+
+	k.Tag = uint16(keytag)
+	return k.Tag
+}
+
+// ToDS converts a DNSKEY record to a DS record.
+func (k *DNSKEY) ToDS(h uint8) *DS {
+	if k == nil {
+		return nil
+	}
+	ds := new(DS)
+	ds.Hdr.Name = k.Hdr.Name
+	ds.Hdr.Class = k.Hdr.Class
+	ds.Hdr.TTL = k.Hdr.TTL
+	ds.Algorithm = k.Algorithm
+	ds.DigestType = h
+	ds.KeyTag = k.KeyTag()
+
+	wire := make([]byte, defaultBufSize/2)
+	n, err := k.pack(wire, 0, nil)
+	if err != nil {
+		return nil
+	}
+	wire = wire[:n]
+
+	owner := make([]byte, len(k.Hdr.Name)+1)
+	off, err1 := pack.Name(dnsutilCanonical(k.Hdr.Name), owner, 0, nil, false)
+	if err1 != nil {
+		return nil
+	}
+	owner = owner[:off]
+	// RFC4034:
+	// digest = digest_algorithm( DNSKEY owner name | DNSKEY RDATA);
+	// "|" denotes concatenation
+	// DNSKEY RDATA = Flags | Protocol | Algorithm | Public Key.
+
+	var hash crypto.Hash
+	switch h {
+	case SHA1:
+		hash = crypto.SHA1
+	case SHA256:
+		hash = crypto.SHA256
+	case SHA384:
+		hash = crypto.SHA384
+	default:
+		return nil
+	}
+
+	s := hash.New()
+	s.Write(owner)
+	s.Write(wire)
+	ds.Digest = hex.EncodeToString(s.Sum(nil))
+	return ds
+}
+
+// ToCDNSKEY converts a DNSKEY record to a CDNSKEY record.
+func (k *DNSKEY) ToCDNSKEY() *CDNSKEY {
+	c := &CDNSKEY{DNSKEY: *k}
+	c.Hdr = k.Hdr
+	return c
+}
+
+// ToCDS converts a DS record to a CDS record.
+func (d *DS) ToCDS() *CDS {
+	c := &CDS{DS: *d}
+	c.Hdr = d.Hdr
+	return c
+}
+
+// Sign signs an RRset. The signature needs to be filled in with the values:
+// Inception, Expiration, KeyTag, SignerName and Algorithm. See [NewRRSIG], the rest is copied
+// from the RRset. Sign returns a non-nil error when the signing went OK.
+// There is no check if RRSet is a proper (RFC 2181) RRSet.
+// Sign expect RRSIG to be initialized with [NewRRSIG]. Sign will skip RRSIG records, and return nil in that case.
+func (rr *RRSIG) Sign(k crypto.Signer, rrset []RR, options *SignOption) error {
+	// s.Inception and s.Expiration may be 0 (rollover etc.), the rest must be set
+	if rr.KeyTag == 0 || len(rr.SignerName) == 0 || rr.Algorithm == 0 {
+		return ErrKey
+	}
+
+	if rr.Algorithm == RSAMD5 || rr.Algorithm == DSA || rr.Algorithm == DSANSEC3SHA1 {
+		return ErrAlg
+	}
+
+	if options.Pooler == nil {
+		options.Pooler = pool.NewNoop(defaultBufSize)
+	}
+
+	h0 := rrset[0].Header()
+	t0 := RRToType(rrset[0])
+	if t0 == TypeRRSIG {
+		return nil
+	}
+	rr.Hdr.Name = h0.Name
+	rr.Hdr.TTL = h0.TTL
+	rr.Hdr.Class = h0.Class
+	rr.OrigTTL = h0.TTL
+	rr.TypeCovered = t0
+	rr.Labels = uint8(dnsutilLabels(h0.Name))
+	if strings.HasPrefix(h0.Name, "*.") {
+		rr.Labels-- // wildcard, remove from label count
+	}
+	rr.Signature = ""
+
+	// Create the desired binary blob
+	signdata := options.Get()
+	defer options.Put(signdata)
+
+	n, err := rr.pack(signdata, 0, nil)
+	if err != nil {
+		return err
+	}
+	m, err := rawSignatureData(signdata[n:], rrset, rr)
+	if err != nil {
+		return err
+	}
+
+	signdata = signdata[:m+n]
+
+	var h hash.Hash
+	hash, ok := AlgorithmToHash[rr.Algorithm]
+	// Some newer algorithms do their own hashing, i.e. ED25519 (maybe all elliptic curve ones do), so no hash
+	// is OK.
+	if !ok {
+		signature, err := sign(k, signdata, hash, rr.Algorithm)
+		if err != nil {
+			return err
+		}
+
+		rr.Signature = unpack.Base64(signature)
+		return nil
+	}
+
+	// older algorithms with explicit hashing
+	h = hash.New()
+	h.Write(signdata)
+
+	signature, err := sign(k, h.Sum(nil), hash, rr.Algorithm)
+	if err != nil {
+		return err
+	}
+
+	rr.Signature = unpack.Base64(signature)
+	return nil
+}
+
+func sign(k crypto.Signer, hashed []byte, hash crypto.Hash, alg uint8) ([]byte, error) {
+	signature, err := k.Sign(rand.Reader, hashed, hash)
+	if err != nil {
+		return nil, err
+	}
+
+	switch alg {
+	case ECDSAP256SHA256, ECDSAP384SHA384:
+		ecdsaSignature := &struct {
+			R, S *big.Int
+		}{}
+		if _, err := asn1.Unmarshal(signature, ecdsaSignature); err != nil {
+			return nil, err
+		}
+
+		var intlen int
+		switch alg {
+		case ECDSAP256SHA256:
+			intlen = 32
+		case ECDSAP384SHA384:
+			intlen = 48
+		}
+
+		signature := intToBytes(ecdsaSignature.R, intlen)
+		signature = append(signature, intToBytes(ecdsaSignature.S, intlen)...)
+		return signature, nil
+
+	default:
+		return signature, nil
+	}
+}
+
+// Verify validates an RRSet with the signature and key. This is only the cryptographic test, the signature
+// validity period must be checked separately. The rrset is not checked for actually being an rrset. See
+// [codeberg.org/miekg/dns/dnsutil.IsRRset], and neither is checked if the RRSIG's TypeCovered matches the
+// type in rrset.
+//
+// This function overwrites the rdata of some RRs (to lowercase domain names) for the validation to work. If
+// you need
+// It also checks that the Zone Key bit (RFC 4034 2.1.1) is set on the DNSKEY
+// and that the Protocol field is set to 3 (RFC 4034 2.1.2). Options can not be nil.
+//
+// See the documentation of the [SignOption]'s VerifyFunc if you want to use a algorithm that is not supported
+// by this package.
+func (rr *RRSIG) Verify(k *DNSKEY, rrset []RR, options *SignOption) error {
+	if rr.KeyTag != k.KeyTag() || rr.Hdr.Class != k.Hdr.Class || rr.Algorithm != k.Algorithm {
+		return ErrKey
+	}
+	// RFC 4034 2.1.1 If bit 7 has value 0, then the DNSKEY record holds some
+	// other type of DNS public key and MUST NOT be used to verify RRSIGs that
+	// cover RRsets.
+	if k.Flags&FlagZONE == 0 {
+		return ErrKey
+	}
+
+	if k.Protocol != 3 || !EqualName(rr.SignerName, k.Hdr.Name) {
+		return ErrKey
+	}
+
+	if options.Pooler == nil {
+		options.Pooler = pool.NewNoop(defaultBufSize)
+	}
+
+	rr.Hdr.Name = rrset[0].Header().Name
+
+	signeddata := options.Get()
+	defer options.Put(signeddata)
+
+	// RFC 4035 5.3.2. Reconstructing the Signed Data
+	// Remove signature to get correct wiredata, and then set it again
+	signature := rr.Signature
+	rr.Signature = ""
+	n, err := rr.pack(signeddata, 0, nil)
+	if err != nil {
+		return err
+	}
+
+	rr.Signature = signature
+
+	m, err := rawSignatureData(signeddata[n:], rrset, rr)
+	if err != nil {
+		return err
+	}
+	signeddata = signeddata[:m+n]
+
+	sigbuf, _ := pack.Base64([]byte(rr.Signature))
+
+	var h hash.Hash
+	hash := AlgorithmToHash[rr.Algorithm] // newer alg do their own hashing, ignore...
+
+	switch rr.Algorithm {
+	case RSASHA1, RSASHA1NSEC3SHA1, RSASHA256, RSASHA512:
+		pubkey := k.publicKeyRSA()
+		if pubkey == nil {
+			return ErrKey
+		}
+
+		h = hash.New()
+		h.Write(signeddata)
+		return rsa.VerifyPKCS1v15(pubkey, hash, h.Sum(nil), sigbuf)
+
+	case ECDSAP256SHA256, ECDSAP384SHA384:
+		pubkey := k.publicKeyECDSA()
+		if pubkey == nil {
+			return ErrKey
+		}
+
+		// Split sigbuf into the r and s coordinates
+		r := new(big.Int).SetBytes(sigbuf[:len(sigbuf)/2])
+		s := new(big.Int).SetBytes(sigbuf[len(sigbuf)/2:])
+
+		h = hash.New()
+		h.Write(signeddata)
+		if ecdsa.Verify(pubkey, h.Sum(nil), r, s) {
+			return nil
+		}
+		return ErrSig
+
+	case ED25519:
+		pubkey := k.publicKeyED25519()
+		if pubkey == nil {
+			return ErrKey
+		}
+
+		if ed25519.Verify(pubkey, signeddata, sigbuf) {
+			return nil
+		}
+		return ErrSig
+
+	case MLDSA44:
+		pubkey := k.publicKeyMLDSA44()
+		if pubkey == nil {
+			return ErrKey
+		}
+
+		// Nil options selects pure ML-DSA with an empty context, see draft-westerbaan-dnssec-mldsa.
+		if mldsa.Verify(pubkey, signeddata, sigbuf, nil) == nil {
+			return nil
+		}
+		return ErrSig
+
+	default:
+		if options.VerifyFunc != nil {
+			if options.VerifyFunc(k, signeddata, sigbuf) {
+				return nil
+			}
+			return ErrSig
+		}
+		return ErrAlg
+	}
+}
+
+// ValidPeriod uses RFC1982 serial arithmetic to calculate
+// if a signature period is valid. If t is the zero time, the
+// current time is taken other t is. Returns true if the signature
+// is valid at the given time, otherwise returns false.
+func (rr *RRSIG) ValidPeriod(t time.Time) bool {
+	var utc int64
+	if t.IsZero() {
+		utc = time.Now().UTC().Unix()
+	} else {
+		utc = t.UTC().Unix()
+	}
+	modi := (int64(rr.Inception) - utc) / MaxSerialIncrement
+	mode := (int64(rr.Expiration) - utc) / MaxSerialIncrement
+	ti := int64(rr.Inception) + modi*MaxSerialIncrement
+	te := int64(rr.Expiration) + mode*MaxSerialIncrement
+	return ti <= utc && utc <= te
+}
+
+// SignOption are options that are given to the signer and verifier.
+type SignOption struct {
+	// If Pooler is set it will be used for all memory allocations. If nil the [pool.Noop] pooler will be
+	// used.
+	pool.Pooler
+
+	// If VerifyFunc is non-nil it will be used to verify a signture in [RRSIG.Verify]. This is useful when
+	// you are using a external (to this package) cryptographic algorithm. For this you also need add your
+	// algorithm to [AlgorithmToString]. In the case of ed448 this could like:
+	//
+	//   func(k *dns.DNSKEY, message, sig []byte) bool {
+	//      pub, _ := base64.StdEncoding.DecodeString(k.PublicKey)
+	//      return ed448.Verify(ed448.PublicKey(pub), message, sig, "")
+	//   }
+	VerifyFunc func(k *DNSKEY, message, sig []byte) bool
+}
+
+const defaultBufSize = 8192

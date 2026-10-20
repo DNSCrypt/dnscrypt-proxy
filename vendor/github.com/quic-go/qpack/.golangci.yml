@@ -1,0 +1,22 @@
+version: "2"
+linters:
+  default: none
+  enable:
+    - asciicheck
+    - copyloopvar
+    - exhaustive
+    - govet
+    - ineffassign
+    - misspell
+    - nolintlint
+    - prealloc
+    - staticcheck
+    - unconvert
+    - unparam
+    - unused
+    - usetesting
+formatters:
+  enable:
+    - gofmt
+    - gofumpt
+    - goimports
