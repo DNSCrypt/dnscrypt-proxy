@@ -207,6 +207,9 @@ func buildNetworkInterfaceFingerprint(interfaces []networkInterfaceSnapshot) str
 			seenAddresses[address] = struct{}{}
 			addresses = append(addresses, address)
 		}
+		if len(addresses) == 0 {
+			continue
+		}
 		sort.Strings(addresses)
 		part := "name=" + iface.Name +
 			"|index=" + strconv.Itoa(iface.Index) +
