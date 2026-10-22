@@ -449,6 +449,16 @@ func (proxy *Proxy) updateRegisteredServers() error {
 	for _, registeredRelay := range proxy.registeredRelays {
 		proxy.serversInfo.registerRelay(registeredRelay.name, registeredRelay.stamp)
 	}
+	if proxy.xTransport.certHashes.Load() != nil {
+		certHashes := make(map[string][][]byte)
+		for _, registeredServer := range proxy.registeredServers {
+			if stamp := registeredServer.stamp; stamp.Proto == stamps.StampProtoTypeDoH {
+				key := certHashesHostKey(stamp.ProviderName)
+				certHashes[key] = append(certHashes[key], stamp.Hashes...)
+			}
+		}
+		proxy.xTransport.certHashes.Store(&certHashes)
+	}
 	return nil
 }
 

@@ -95,6 +95,7 @@ type Config struct {
 	TLSCipherSuite           []uint16                    `toml:"tls_cipher_suite"`
 	TLSPreferRSA             bool                        `toml:"tls_prefer_rsa"`
 	TLSKeyLogFile            string                      `toml:"tls_key_log_file"`
+	DoHCertHashesOnConnect   bool                        `toml:"doh_check_cert_hashes_on_connect"`
 	NetprobeAddress          string                      `toml:"netprobe_address"`
 	NetprobeTimeout          int                         `toml:"netprobe_timeout"`
 	OfflineMode              bool                        `toml:"offline_mode"`
@@ -161,6 +162,7 @@ func newConfig() Config {
 		TLSCipherSuite:           nil,
 		TLSPreferRSA:             false,
 		TLSKeyLogFile:            "",
+		DoHCertHashesOnConnect:   false,
 		NetprobeTimeout:          60,
 		OfflineMode:              false,
 		RefusedCodeInResponses:   false,

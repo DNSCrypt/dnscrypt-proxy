@@ -295,6 +295,15 @@ cert_refresh_delay = 240
 # tls_disable_session_tickets = false
 
 
+## DoH: Check the certificate hashes of server stamps on every new connection,
+## not only at startup and when certificates are reloaded.
+##
+## This improves security, but also increases the risks of downtime if you
+## don't use DNSCrypt servers in addition to DoH servers.
+
+# doh_check_cert_hashes_on_connect = false
+
+
 ## Prefer RSA certificates over ECDSA for TLS connections.
 ## When this is enabled, some servers may become impossible to use,
 ## or may stop working later as they upgrade their configuration.

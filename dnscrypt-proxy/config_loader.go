@@ -75,6 +75,9 @@ func configureLogging(proxy *Proxy, flags *ConfigFlags, config *Config) {
 func configureXTransport(proxy *Proxy, config *Config) error {
 	proxy.xTransport.tlsDisableSessionTickets = config.TLSDisableSessionTickets
 	proxy.xTransport.tlsPreferRSA = config.TLSPreferRSA
+	if config.DoHCertHashesOnConnect {
+		proxy.xTransport.certHashes.Store(&map[string][][]byte{})
+	}
 	proxy.xTransport.http3 = config.HTTP3
 	proxy.xTransport.http3Probe = config.HTTP3Probe
 
