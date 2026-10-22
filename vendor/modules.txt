@@ -1,4 +1,4 @@
-# codeberg.org/miekg/dns v0.6.118
+# codeberg.org/miekg/dns v0.6.119
 ## explicit; go 1.27.0
 codeberg.org/miekg/dns
 codeberg.org/miekg/dns/deleg
@@ -10,6 +10,7 @@ codeberg.org/miekg/dns/internal/jump
 codeberg.org/miekg/dns/internal/pack
 codeberg.org/miekg/dns/internal/reverse
 codeberg.org/miekg/dns/internal/unpack
+codeberg.org/miekg/dns/pkg/dnsnet
 codeberg.org/miekg/dns/pkg/pool
 codeberg.org/miekg/dns/rdata
 codeberg.org/miekg/dns/svcb
@@ -94,6 +95,9 @@ github.com/kardianos/service
 # github.com/lifenjoiner/dhcpdns v0.0.7
 ## explicit; go 1.20
 github.com/lifenjoiner/dhcpdns
+# github.com/miekg/dns v1.1.73
+## explicit; go 1.25.0
+github.com/miekg/dns
 # github.com/oneregex/revera/go v0.0.0-20261014081440-64b07f96fe82
 ## explicit; go 1.27.0
 github.com/oneregex/revera/go

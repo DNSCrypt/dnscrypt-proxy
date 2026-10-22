@@ -12,8 +12,8 @@ import (
 
 	"codeberg.org/miekg/dns/internal/pack"
 	"codeberg.org/miekg/dns/internal/unpack"
+	"codeberg.org/miekg/dns/pkg/dnsnet"
 	"codeberg.org/miekg/dns/rdata"
-	"golang.org/x/crypto/cryptobyte"
 )
 
 // ID by default returns a 16-bit random number to be used as a message id. The
@@ -118,23 +118,20 @@ func packRR(rr RR, msg []byte, off int, compression map[string]uint16) (headerEn
 	return headerEnd, len(msg), pack.Errorf("inconsistent rdata length")
 }
 
-func unpackRR(msg *cryptobyte.String, msgBuf []byte) (RR, error) {
+func unpackRR(msg *dnsnet.String, msgBuf []byte) (RR, error) {
 	h := &Header{}
 	typ, rdlength, err := unpackHeader(h, msg, msgBuf)
 	if err != nil {
 		return nil, err
 	}
 
-	// Directly use the existing buffer by slicing the cryptobyte.String
-	// 1. Verify sufficient bytes remain
-	if len(*msg) < int(rdlength) {
+	if len(msg.String) < int(rdlength) {
 		return nil, unpack.ErrTruncatedMessage
 	}
-
-	// was: msg.ReadBytes(&data, int(rdlength)), but we want to save the buffer we allocated for that.
-	data := (*msg)[:rdlength]
-	*msg = (*msg)[rdlength:]
-	msgBuf = msgBuf[:unpack.Offset(*msg, msgBuf)]
+	// Narrow msg to the rdata while it is unpacked.
+	rest := msg.String[rdlength:]
+	msg.String = msg.String[:rdlength]
+	msgBuf = msgBuf[:unpack.Offset(rest, msgBuf)]
 
 	var rr RR
 	if newFn, ok := TypeToRR[typ]; ok {
@@ -144,15 +141,11 @@ func unpackRR(msg *cryptobyte.String, msgBuf []byte) (RR, error) {
 		rr = &RFC3597{Hdr: *h, RRType: typ}
 	}
 
-	if rdlength == 0 {
-		return rr, nil
+	if rdlength > 0 {
+		err = zunpack(rr, msg, msgBuf)
 	}
-
-	if err := zunpack(rr, cryptobyte.String(data), msgBuf); err != nil {
-		return rr, err
-	}
-
-	return rr, nil
+	msg.String = rest
+	return rr, err
 }
 
 // Reset resets the message's answer, ns, extra and pseudo sections to a zero length slice, thereby emptying
@@ -306,7 +299,7 @@ func (m *Msg) Pack() error {
 }
 
 // We only allow a single question in the question section.
-func (m *Msg) unpackQuestion(msg *cryptobyte.String, msgBuf []byte) (RR, error) {
+func (m *Msg) unpackQuestion(msg *dnsnet.String, msgBuf []byte) (RR, error) {
 	name, err := unpack.Name(msg, msgBuf)
 	if err != nil {
 		return nil, err
@@ -328,7 +321,7 @@ func (m *Msg) unpackQuestion(msg *cryptobyte.String, msgBuf []byte) (RR, error) 
 	return rr, nil
 }
 
-func (m *Msg) unpackQuestions(cnt uint16, msg *cryptobyte.String, msgBuf []byte) ([]RR, error) {
+func (m *Msg) unpackQuestions(cnt uint16, msg *dnsnet.String, msgBuf []byte) ([]RR, error) {
 	// We don't preallocate dst according to cnt as that value may be attacker
 	// controlled. A malicious adversary could send us as 12-byte packet
 	// containing only the header that claims to contain 65535 questions. As
@@ -345,7 +338,7 @@ func (m *Msg) unpackQuestions(cnt uint16, msg *cryptobyte.String, msgBuf []byte)
 	return dst, nil
 }
 
-func unpackRRs(cnt uint16, msg *cryptobyte.String, msgBuf []byte) ([]RR, error) {
+func unpackRRs(cnt uint16, msg *dnsnet.String, msgBuf []byte) ([]RR, error) {
 	if cnt == 0 {
 		return nil, nil
 	}
@@ -364,7 +357,10 @@ func unpackRRs(cnt uint16, msg *cryptobyte.String, msgBuf []byte) ([]RR, error) 
 
 // Unpack unpacks a binary message that sits in m.Data to a Msg structure.
 func (m *Msg) Unpack() (err error) {
-	s := cryptobyte.String(m.Data)
+	if len(m.Data) < MsgHeaderSize {
+		return fmt.Errorf("dns: message size can not be smaller than %d", MsgHeaderSize)
+	}
+	s := dnsnet.New(m.Data)
 	var (
 		counts uint64 // read all counters into 64 bits and slice the 16 bits values out of it
 		bits   uint16
@@ -398,7 +394,7 @@ func (m *Msg) Unpack() (err error) {
 		return err
 	}
 	if m.Options > 0 && m.Options <= MsgOptionUnpackQuestion {
-		m.offset = uint16(len(m.Data) - len(s))
+		m.offset = uint16(len(m.Data) - len(s.String))
 		return nil
 	}
 
@@ -461,7 +457,7 @@ Rest:
 		}
 	}
 	if !s.Empty() {
-		return unpack.Errorf("%d more octets", len(s))
+		return unpack.Errorf("%d more octets", len(s.String))
 	}
 
 	// TODO(miek): might it be possible, to do this in the loop - I've tried, but switching elements while
@@ -774,10 +770,6 @@ func (m *Msg) ReadFrom(r io.Reader) (int64, error) {
 	l := uint16(0)
 	if err := binary.Read(r, binary.BigEndian, &l); err != nil {
 		return 0, err
-	}
-	if l < MsgHeaderSize {
-		// ignore remaining data
-		return int64(l), fmt.Errorf("dns: message size %d, can not be smaller than %d", l, MsgHeaderSize)
 	}
 
 	li := int(l)

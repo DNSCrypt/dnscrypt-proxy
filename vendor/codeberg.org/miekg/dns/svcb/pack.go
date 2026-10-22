@@ -6,6 +6,7 @@ import (
 
 	"codeberg.org/miekg/dns/internal/pack"
 	"codeberg.org/miekg/dns/internal/unpack"
+	"codeberg.org/miekg/dns/pkg/dnsnet"
 	"golang.org/x/crypto/cryptobyte"
 )
 
@@ -37,7 +38,7 @@ func _pack(p Pair, msg []byte, off int) (int, error) {
 }
 
 // _unpack converts wire-format to a pair. Only exported to make it available to the dns unpacker.
-func _unpack(p Pair, data *cryptobyte.String) error {
+func _unpack(p Pair, data *dnsnet.String) error {
 	switch x := p.(type) {
 	case *MANDATORY:
 		return x.unpack(data)
@@ -76,7 +77,7 @@ func (s *MANDATORY) pack(msg []byte, off int) (off1 int, err error) {
 	return off, nil
 }
 
-func (s *MANDATORY) unpack(sc *cryptobyte.String) error {
+func (s *MANDATORY) unpack(sc *dnsnet.String) error {
 	for !sc.Empty() {
 		var key uint16
 		if !sc.ReadUint16(&key) {
@@ -110,7 +111,7 @@ func (s *ALPN) pack(msg []byte, off int) (off1 int, err error) {
 	return off, nil
 }
 
-func (s *ALPN) unpack(sc *cryptobyte.String) error {
+func (s *ALPN) unpack(sc *dnsnet.String) error {
 	for !sc.Empty() {
 		var data cryptobyte.String
 		if !sc.ReadUint8LengthPrefixed(&data) {
@@ -126,7 +127,7 @@ func (s *NODEFAULTALPN) pack(msg []byte, off int) (int, error) {
 	return off, err
 }
 
-func (*NODEFAULTALPN) unpack(sc *cryptobyte.String) error {
+func (*NODEFAULTALPN) unpack(sc *dnsnet.String) error {
 	if !sc.Empty() {
 		return errors.New("dns: svcbnodefaultalpn: no-default-alpn must have no value")
 	}
@@ -142,7 +143,7 @@ func (s *PORT) pack(msg []byte, off int) (off1 int, err error) {
 	return off, err
 }
 
-func (s *PORT) unpack(sc *cryptobyte.String) error {
+func (s *PORT) unpack(sc *dnsnet.String) error {
 	if !sc.ReadUint16(&s.Port) {
 		return errors.New("dns: svcbport: port length is not exactly 2 octets")
 	}
@@ -163,7 +164,7 @@ func (s *IPV4HINT) pack(msg []byte, off int) (int, error) {
 	return off, nil
 }
 
-func (s *IPV4HINT) unpack(sc *cryptobyte.String) error {
+func (s *IPV4HINT) unpack(sc *dnsnet.String) error {
 	for !sc.Empty() {
 		ip, err := unpack.A(sc)
 		if err != nil {
@@ -186,8 +187,8 @@ func (s *ECHCONFIG) pack(msg []byte, off int) (int, error) {
 	return off + n, nil
 }
 
-func (s *ECHCONFIG) unpack(sc *cryptobyte.String) error {
-	s.ECH = make([]byte, len([]byte(*sc)))
+func (s *ECHCONFIG) unpack(sc *dnsnet.String) error {
+	s.ECH = make([]byte, len(sc.String))
 	if !sc.CopyBytes(s.ECH) {
 		return errors.New("dns: svcbechconfig overflow unpacking")
 	}
@@ -208,7 +209,7 @@ func (s *IPV6HINT) pack(msg []byte, off int) (int, error) {
 	return off, nil
 }
 
-func (s *IPV6HINT) unpack(sc *cryptobyte.String) error {
+func (s *IPV6HINT) unpack(sc *dnsnet.String) error {
 	for !sc.Empty() {
 		ip, err := unpack.AAAA(sc)
 		if err != nil {
@@ -227,8 +228,8 @@ func (s *DOHPATH) pack(msg []byte, off int) (int, error) {
 	return pack.StringAny(s.Template, msg, off)
 }
 
-func (s *DOHPATH) unpack(sc *cryptobyte.String) (err error) {
-	s.Template, err = unpack.StringAny(sc, len(*sc))
+func (s *DOHPATH) unpack(sc *dnsnet.String) (err error) {
+	s.Template, err = unpack.StringAny(sc, len(sc.String))
 	return err
 }
 
@@ -237,7 +238,7 @@ func (s *OHTTP) pack(msg []byte, off int) (int, error) {
 	return off, err
 }
 
-func (*OHTTP) unpack(sc *cryptobyte.String) error {
+func (*OHTTP) unpack(sc *dnsnet.String) error {
 	if !sc.Empty() {
 		return errors.New("dns: svcbotthp: svcbotthp must have no value")
 	}
@@ -257,9 +258,9 @@ func (s *LOCAL) pack(msg []byte, off int) (int, error) {
 	return off + n, nil
 }
 
-func (s *LOCAL) unpack(sc *cryptobyte.String) error {
+func (s *LOCAL) unpack(sc *dnsnet.String) error {
 	// keys also, custom TLV
-	s.Data = make([]byte, len(*sc))
+	s.Data = make([]byte, len(sc.String))
 	if !sc.CopyBytes(s.Data) {
 		return errors.New("dns: svcblocal overflow unpacking")
 	}

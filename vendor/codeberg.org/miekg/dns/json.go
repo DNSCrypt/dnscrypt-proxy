@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	"codeberg.org/miekg/dns/dnsjson"
-	"golang.org/x/crypto/cryptobyte"
+	"codeberg.org/miekg/dns/pkg/dnsnet"
 )
 
 // MarshalJSON returns the JSON (RFC 8427) representation of [RR] as defined in [dnsjson.RR]. If more than one
@@ -103,7 +103,8 @@ func UnmarshalJSON(data []byte) ([]RR, error) {
 		if err != nil {
 			return nil, err
 		}
-		if err := zunpack(rrs[0], cryptobyte.String(buf[:n]), nil); err != nil {
+		s := dnsnet.String{String: buf[:n]}
+		if err := zunpack(rrs[0], &s, nil); err != nil {
 			return nil, err
 		}
 	default:
@@ -122,7 +123,8 @@ func UnmarshalJSON(data []byte) ([]RR, error) {
 			if err != nil {
 				return nil, err
 			}
-			if err := zunpack(rrs[i], cryptobyte.String(buf[:n]), nil); err != nil {
+			s := dnsnet.String{String: buf[:n]}
+			if err := zunpack(rrs[i], &s, nil); err != nil {
 				return nil, err
 			}
 		}

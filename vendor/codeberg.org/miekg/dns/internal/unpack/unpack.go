@@ -9,6 +9,7 @@ import (
 	"net/netip"
 
 	"codeberg.org/miekg/dns/internal/ddd"
+	"codeberg.org/miekg/dns/pkg/dnsnet"
 	"codeberg.org/miekg/dns/pkg/pool"
 	"golang.org/x/crypto/cryptobyte"
 )
@@ -24,7 +25,7 @@ const (
 	maxNamePresentationLength = maxNameWireOctets - 1
 )
 
-func A(s *cryptobyte.String) (netip.Addr, error) {
+func A(s *dnsnet.String) (netip.Addr, error) {
 	var in []byte
 	if !s.ReadBytes(&in, net.IPv4len) {
 		return netip.Addr{}, &Error{"overflow A"}
@@ -32,7 +33,7 @@ func A(s *cryptobyte.String) (netip.Addr, error) {
 	return netip.AddrFrom4(*(*[4]byte)(in)), nil
 }
 
-func AAAA(s *cryptobyte.String) (netip.Addr, error) {
+func AAAA(s *dnsnet.String) (netip.Addr, error) {
 	var in []byte
 	if !s.ReadBytes(&in, net.IPv6len) {
 		return netip.Addr{}, &Error{"overflow AAAA"}
@@ -41,7 +42,7 @@ func AAAA(s *cryptobyte.String) (netip.Addr, error) {
 }
 
 // See [pack.StringAny].
-func StringAny(s *cryptobyte.String, len int) (string, error) {
+func StringAny(s *dnsnet.String, len int) (string, error) {
 	var b []byte
 	if !s.ReadBytes(&b, len) {
 		return "", &Error{"overflow string anything"}
@@ -49,7 +50,7 @@ func StringAny(s *cryptobyte.String, len int) (string, error) {
 	return string(b), nil
 }
 
-func Strings(s *cryptobyte.String) ([]string, error) {
+func Strings(s *dnsnet.String) ([]string, error) {
 	var strs []string
 	for !s.Empty() {
 		str, err := String(s)
@@ -61,7 +62,7 @@ func Strings(s *cryptobyte.String) ([]string, error) {
 	return strs, nil
 }
 
-func String(s *cryptobyte.String) (string, error) {
+func String(s *dnsnet.String) (string, error) {
 	var txt cryptobyte.String
 	if !s.ReadUint8LengthPrefixed(&txt) {
 		return "", &Error{"overflow string"}
@@ -105,13 +106,13 @@ func String(s *cryptobyte.String) (string, error) {
 // Note that if we jump elsewhere in the packet, we record the last offset we read from when we found the first pointer,
 // which is where the next record or record field will start. We enforce that pointers always point backwards into the message.
 
-// Name unpacks a name in a cryptobyte.String.
-func Name(s *cryptobyte.String, msgBuf []byte) (string, error) {
+// Name unpacks a name in s.
+func Name(s *dnsnet.String, msgBuf []byte) (string, error) {
 	name := make([]byte, 0, maxNamePresentationLength)
 	ptrs := uint8(0)
 
 	// If we never see a pointer, we need to ensure that we advance s to our final position.
-	cs := *s
+	cs := s.String
 
 	var c byte
 	for {
@@ -122,7 +123,7 @@ func Name(s *cryptobyte.String, msgBuf []byte) (string, error) {
 		case 0x00: // literal string
 			if c == 0 { // If we see a zero-length label (root label), this is the end of the name.
 				if ptrs == 0 {
-					*s = cs
+					s.String = cs
 				}
 				if len(name) == 0 {
 					return ".", nil
@@ -151,7 +152,7 @@ func Name(s *cryptobyte.String, msgBuf []byte) (string, error) {
 			}
 			// If this is the first pointer we've seen, we need to advance s to our current position.
 			if ptrs == 0 {
-				*s = cs
+				s.String = cs
 			}
 			// The pointer should always point backwards to an earlier part of the message. Technically it could work pointing
 			// forwards, but we choose not to support that as RFC 1035 specifically refers to a "prior
@@ -163,6 +164,9 @@ func Name(s *cryptobyte.String, msgBuf []byte) (string, error) {
 			if ptrs++; ptrs > maxCompressionPointers {
 				return "", &Error{"too many compression pointers"}
 			}
+			if !s.Follow() {
+				return "", &Error{"too many compression pointers in message"}
+			}
 			// Jump to the offset in msgBuf. We carry msgBuf around with us solely for this line.
 			cs = msgBuf[off:]
 
@@ -172,13 +176,13 @@ func Name(s *cryptobyte.String, msgBuf []byte) (string, error) {
 	}
 }
 
-// MName unpacks a name in a cryptobyte.String, while also taking care of escaped dots (\.).
-func MName(s *cryptobyte.String, msgBuf []byte) (string, error) {
+// MName unpacks a name in s, while also taking care of escaped dots (\.).
+func MName(s *dnsnet.String, msgBuf []byte) (string, error) {
 	name := make([]byte, 0, maxNamePresentationLength*2) // everything can be escaped...
 	ptrs := uint8(0)
 
 	// If we never see a pointer, we need to ensure that we advance s to our final position.
-	cs := *s
+	cs := s.String
 
 	var c byte
 	for {
@@ -189,7 +193,7 @@ func MName(s *cryptobyte.String, msgBuf []byte) (string, error) {
 		case 0x00: // literal string
 			if c == 0 { // If we see a zero-length label (root label), this is the end of the name.
 				if ptrs == 0 {
-					*s = cs
+					s.String = cs
 				}
 				if len(name) == 0 {
 					return ".", nil
@@ -238,7 +242,7 @@ func MName(s *cryptobyte.String, msgBuf []byte) (string, error) {
 			}
 			// If this is the first pointer we've seen, we need to advance s to our current position.
 			if ptrs == 0 {
-				*s = cs
+				s.String = cs
 			}
 			// The pointer should always point backwards to an earlier part of the message. Technically it could work pointing
 			// forwards, but we choose not to support that as RFC 1035 specifically refers to a "prior
@@ -249,6 +253,9 @@ func MName(s *cryptobyte.String, msgBuf []byte) (string, error) {
 			}
 			if ptrs++; ptrs > maxCompressionPointers {
 				return "", &Error{"too many compression pointers"}
+			}
+			if !s.Follow() {
+				return "", &Error{"too many compression pointers in message"}
 			}
 			// Jump to the offset in msgBuf. We carry msgBuf around with us solely for this line.
 			cs = msgBuf[off:]
@@ -262,7 +269,7 @@ func MName(s *cryptobyte.String, msgBuf []byte) (string, error) {
 // Offset reports the offset of data into buf.
 func Offset(data, buf []byte) int { return len(buf) - len(data) }
 
-func StringBase32(s *cryptobyte.String, len int) (string, error) {
+func StringBase32(s *dnsnet.String, len int) (string, error) {
 	var b []byte
 	if !s.ReadBytes(&b, len) {
 		return "", ErrOverflow
@@ -270,7 +277,7 @@ func StringBase32(s *cryptobyte.String, len int) (string, error) {
 	return Base32(b), nil
 }
 
-func StringBase64(s *cryptobyte.String, len int) (string, error) {
+func StringBase64(s *dnsnet.String, len int) (string, error) {
 	var b []byte
 	if !s.ReadBytes(&b, len) {
 		return "", ErrOverflow
@@ -283,7 +290,7 @@ func Base32(b []byte) string {
 }
 func Base64(b []byte) string { return base64.StdEncoding.EncodeToString(b) }
 
-func StringHex(s *cryptobyte.String, len int) (string, error) {
+func StringHex(s *dnsnet.String, len int) (string, error) {
 	var b []byte
 	if !s.ReadBytes(&b, len) {
 		return "", ErrOverflow
@@ -291,7 +298,7 @@ func StringHex(s *cryptobyte.String, len int) (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
-func Names(s *cryptobyte.String, msgBuf []byte) ([]string, error) {
+func Names(s *dnsnet.String, msgBuf []byte) ([]string, error) {
 	var names []string
 	for !s.Empty() {
 		name, err := Name(s, msgBuf)

@@ -3,7 +3,7 @@ module github.com/dnscrypt/dnscrypt-proxy
 go 1.27.2
 
 require (
-	codeberg.org/miekg/dns v0.6.118
+	codeberg.org/miekg/dns v0.6.119
 	github.com/BurntSushi/toml v1.6.0
 	github.com/VividCortex/ewma v1.2.0
 	github.com/cloudflare/circl v1.6.5
@@ -24,6 +24,7 @@ require (
 	github.com/k-sone/critbitgo v1.4.0
 	github.com/kardianos/service v1.3.0
 	github.com/lifenjoiner/dhcpdns v0.0.7
+	github.com/miekg/dns v1.1.73
 	github.com/oneregex/revera/go v0.0.0-20261014081440-64b07f96fe82
 	github.com/powerman/check v1.14.0
 	github.com/quic-go/quic-go v0.64.1

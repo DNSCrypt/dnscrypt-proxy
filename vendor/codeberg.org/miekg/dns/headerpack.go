@@ -3,14 +3,14 @@ package dns
 import (
 	"codeberg.org/miekg/dns/internal/pack"
 	"codeberg.org/miekg/dns/internal/unpack"
-	"golang.org/x/crypto/cryptobyte"
+	"codeberg.org/miekg/dns/pkg/dnsnet"
 )
 
 // helper functions called from the generated zmsg.go - among others
 // all need to move to internal/pack or internal/unpack
 
 // unpackHeader unpacks an RR header advancing msg.
-func unpackHeader(h *Header, msg *cryptobyte.String, msgBuf []byte) (typ, rdlength uint16, err error) {
+func unpackHeader(h *Header, msg *dnsnet.String, msgBuf []byte) (typ, rdlength uint16, err error) {
 	h.Name, err = unpack.Name(msg, msgBuf)
 	if err != nil {
 		return 0, 0, err

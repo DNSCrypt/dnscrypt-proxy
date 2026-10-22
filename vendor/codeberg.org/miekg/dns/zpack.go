@@ -5,7 +5,7 @@ package dns
 import (
 	"fmt"
 
-	"golang.org/x/crypto/cryptobyte"
+	"codeberg.org/miekg/dns/pkg/dnsnet"
 )
 
 // zpack calls the pack methods for each RR.
@@ -192,184 +192,184 @@ func zpack(rr RR, msg []byte, off int, compression map[string]uint16) (int, erro
 }
 
 // zunpack calls the unpack methods for each RR.
-func zunpack(rr RR, data cryptobyte.String, msgBuf []byte) error {
+func zunpack(rr RR, s *dnsnet.String, msgBuf []byte) error {
 	switch x := rr.(type) {
 	case *TSIG:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *DELEG:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *OPT:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *NSEC3:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *DNSKEY:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *DS:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *NSEC:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *RRSIG:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *AAAA:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *A:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *TXT:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *NS:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *MX:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *CNAME:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *NULL:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *NXNAME:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *HINFO:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *MB:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *MG:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *MINFO:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *MR:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *MF:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *MD:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *AFSDB:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *X25:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *ISDN:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *RT:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *PTR:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *RP:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *SOA:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *SPF:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *AVC:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *WALLET:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *CLA:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *IPN:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *SRV:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *NAPTR:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *CERT:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *DNAME:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *PX:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *GPOS:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *LOC:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *SIG:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *NXT:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *DLV:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *CDS:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *KX:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *TA:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *TALINK:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *SSHFP:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *KEY:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *CDNSKEY:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *RKEY:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *NSAPPTR:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *NSEC3PARAM:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *TKEY:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *RFC3597:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *URI:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *DHCID:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *TLSA:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *SMIMEA:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *HIP:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *NINFO:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *NID:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *L32:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *L64:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *LP:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *EUI48:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *EUI64:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *CAA:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *UID:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *GID:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *UINFO:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *EID:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *NIMLOC:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *OPENPGPKEY:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *CSYNC:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *ZONEMD:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *RESINFO:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *SVCB:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *HTTPS:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *DELEGPARAM:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *DSYNC:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *ANY:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *AXFR:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	case *IXFR:
-		return x.unpack(data, msgBuf)
+		return x.unpack(s, msgBuf)
 	}
 	// if here, we don't have the RR in our pkg, check if it does Packer.
 	if x, ok := rr.(Packer); ok {
-		return x.Unpack(data)
+		return x.Unpack(s.String)
 	}
 	return fmt.Errorf("dns: no unpack defined")
 }

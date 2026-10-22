@@ -86,8 +86,7 @@ func (c *Client) TransferInWithConn(ctx context.Context, m *Msg, conn net.Conn, 
 	}
 	// if options.SIG0Signer != nil {} // TODO(miek): implement the whole SIG0 dance
 
-	remote := &response{conn: conn} // for Session() call in msg.go#L926
-	if _, err := io.Copy(remote, m); err != nil {
+	if _, err := io.Copy(&response{conn: conn}, m); err != nil {
 		return nil, err
 	}
 

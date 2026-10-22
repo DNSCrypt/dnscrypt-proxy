@@ -5,15 +5,15 @@ import (
 
 	"codeberg.org/miekg/dns/internal/pack"
 	"codeberg.org/miekg/dns/internal/unpack"
-	"golang.org/x/crypto/cryptobyte"
+	"codeberg.org/miekg/dns/pkg/dnsnet"
 )
 
-func Unpack(s *cryptobyte.String) ([]Info, error) {
+func Unpack(s *dnsnet.String) ([]Info, error) {
 	var infos []Info
 	key := uint16(0)
 	for !s.Empty() {
-		var data cryptobyte.String
-		if !s.ReadUint16(&key) || !s.ReadUint16LengthPrefixed(&data) {
+		var data dnsnet.String
+		if !s.ReadUint16(&key) || !s.ReadUint16LengthPrefixed(&data.String) {
 			return nil, unpack.ErrOverflow
 		}
 		infoFn := KeyToInfo(key)

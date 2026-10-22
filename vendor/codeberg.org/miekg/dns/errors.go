@@ -1,11 +1,22 @@
 package dns
 
+import (
+	"codeberg.org/miekg/dns/internal/pack"
+	"codeberg.org/miekg/dns/internal/unpack"
+)
+
 // Error represents a DNS error.
 type Error struct {
 	err string
 }
 
 func (e *Error) Error() string { return "dns: " + e.err }
+
+// PackError represents a packing error.
+type PackError = pack.Error
+
+// UnpackError represents an unpacking error.
+type UnpackError = unpack.Error
 
 var (
 	ErrID      = &Error{err: "ID mismatch"}       // ErrID signals a mismatch with the sent message ID and the one returned.
