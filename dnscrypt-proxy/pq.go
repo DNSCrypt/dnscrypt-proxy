@@ -26,6 +26,7 @@ const (
 	PQKdfID               = 0x01
 	PQAeadID              = 0x01
 	PQResumedPaddingFloor = 256
+	PQQueryOverhead       = PQClientMagicLen + PQXWingCiphertextSize + HalfNonceSize + TagSize
 )
 
 var (
@@ -111,12 +112,11 @@ func pqResumedSharedKey(resumeSecret [32]byte, clientMagic [8]byte, clientNonce,
 	return key
 }
 
-// pqPad applies ISO/IEC 7816-4 padding to the next multiple of 64, with a
-// minimum floor (itself a multiple of 64).
+// pqPad applies ISO/IEC 7816-4 padding up to floor bytes, or to the next multiple of 64 if the packet does not fit.
 func pqPad(packet []byte, floor int) []byte {
-	target := (len(packet) + 1 + 63) &^ 63
-	if target < floor {
-		target = floor
+	target := floor
+	if len(packet) >= floor {
+		target = (len(packet) + 1 + 63) &^ 63
 	}
 	padded := make([]byte, target)
 	copy(padded, packet)
@@ -221,19 +221,6 @@ func pqUDPPacketLimit(serverInfo *ServerInfo) int {
 	return MaxDNSUDPPacketSize
 }
 
-// pqResumedPaddingFloor returns the padding floor for a resumed query. Over
-// UDP, the encrypted response can never be larger than the query, so the
-// query is grown to the regular UDP question size target, leaving the
-// resolver the same response budget as a classic query.
-func (proxy *Proxy) pqResumedPaddingFloor(serverInfo *ServerInfo, ticketLen int, proto string) int {
-	if proto != "udp" {
-		return PQResumedPaddingFloor
-	}
-	overhead := pqResumedOverhead(ticketLen)
-	want := proxy.questionSizeEstimator.MinQuestionSize() - overhead
-	return Max(PQResumedPaddingFloor, Min((want+63)&^63, (pqUDPPacketLimit(serverInfo)-overhead)&^63))
-}
-
 // encryptPQ builds a PQ query: a resumed query when a valid ticket is held,
 // otherwise a query that carries an X-Wing ciphertext, reusing the cached
 // encapsulation when one is available for the current network epoch.
@@ -252,16 +239,22 @@ func (proxy *Proxy) encryptPQ(
 
 	if ticket, resumeSecret, ok := serverInfo.pqSession.get(queryEpoch); ok {
 		key := pqResumedSharedKey(resumeSecret, serverInfo.MagicQuery, clientNonce, ticket)
-		padded := pqPad(packet, proxy.pqResumedPaddingFloor(serverInfo, len(ticket), proto))
-		ct := xsecretbox.Seal(nil, nonce, padded, key[:])
-		out := make([]byte, 0, len(PQResumeMagic)+2+len(ticket)+HalfNonceSize+len(ct))
+		overhead := pqResumedOverhead(len(ticket))
+		floor := Max(PQResumedPaddingFloor, minRelayedQuerySize(serverInfo, proto)-overhead)
+		if proto == "udp" {
+			// A UDP response can't be larger than its query, so this one gets the same size target as a classic query.
+			want := proxy.questionSizeEstimator.MinQuestionSize() - overhead
+			floor = Max(PQResumedPaddingFloor, Min((want+63)&^63, (pqUDPPacketLimit(serverInfo)-overhead)&^63))
+		}
+		padded := pqPad(packet, floor)
+		out := make([]byte, 0, overhead+len(padded))
 		out = append(out, PQResumeMagic[:]...)
 		var tl [2]byte
 		binary.BigEndian.PutUint16(tl[:], uint16(len(ticket)))
 		out = append(out, tl[:]...)
 		out = append(out, ticket...)
 		out = append(out, clientNonce...)
-		out = append(out, ct...)
+		out = xsecretbox.Seal(out, nonce, padded, key[:])
 		return &key, out, clientNonce, queryEpoch, nil
 	}
 
@@ -274,13 +267,12 @@ func (proxy *Proxy) encryptPQ(
 		key = pqDeriveSharedKey(kemSS, serverInfo.MagicQuery, serverInfo.PqCertContext, ctKem)
 		serverInfo.pqSession.storeEncapsulation(ctKem, key, queryEpoch)
 	}
-	padded := pqPad(packet, 64)
-	ct := xsecretbox.Seal(nil, nonce, padded, key[:])
-	out := make([]byte, 0, PQClientMagicLen+len(ctKem)+HalfNonceSize+len(ct))
+	padded := pqPad(packet, Max(64, minRelayedQuerySize(serverInfo, proto)-PQQueryOverhead))
+	out := make([]byte, 0, PQQueryOverhead+len(padded))
 	out = append(out, serverInfo.MagicQuery[:]...)
 	out = append(out, ctKem...)
 	out = append(out, clientNonce...)
-	out = append(out, ct...)
+	out = xsecretbox.Seal(out, nonce, padded, key[:])
 	return &key, out, clientNonce, queryEpoch, nil
 }
 

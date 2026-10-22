@@ -252,6 +252,30 @@ func TestPQResumedQueryMeetsUDPSizeTarget(t *testing.T) {
 	}
 }
 
+// A relay drops responses larger than the query, so PQ queries sent to it over TCP must use the maximum size.
+func TestPQRelayedTCPQueryLeavesRoomForResponse(t *testing.T) {
+	proxy := newTestPQProxy(1)
+	serverInfo := newTestPQServerInfo()
+	serverInfo.Relay = &Relay{Dnscrypt: &DNSCryptRelay{}}
+	query := mustHex("12340100000100000000000003777777076578616d706c6503636f6d0000010001")
+
+	// Over UDP, a truncated answer triggers a TCP retry, so the query keeps its regular size.
+	if _, out, _, _, err := proxy.Encrypt(serverInfo, query, "udp"); err != nil || len(out) != PQQueryOverhead+64 {
+		t.Fatalf("relayed UDP query is %d bytes (%v)", len(out), err)
+	}
+
+	_, out, _, _, err := proxy.Encrypt(serverInfo, query, "tcp")
+	if err != nil || len(out) != MaxDNSPacketSize {
+		t.Fatalf("relayed TCP query is %d bytes (%v)", len(out), err)
+	}
+
+	serverInfo.pqSession.store(iotaBytes(130, 0x24), [32]byte{42}, time.Now().Add(time.Minute), 1)
+	_, out, _, _, err = proxy.Encrypt(serverInfo, query, "tcp")
+	if err != nil || !bytes.HasPrefix(out, PQResumeMagic[:]) || len(out) != MaxDNSPacketSize {
+		t.Fatalf("relayed resumed TCP query is %d bytes (%v)", len(out), err)
+	}
+}
+
 func TestPQProcessControlDiscardsTicketAfterNetworkChange(t *testing.T) {
 	proxy := newTestPQProxy(2)
 	serverInfo := newTestPQServerInfo()
