@@ -124,7 +124,7 @@ func (plugin *PluginForward) parseForwardFile(lines string) (bool, []PluginForwa
 		}
 		if !ok {
 			return false, nil, fmt.Errorf(
-				"Syntax error for a forwarding rule at line %d. Expected syntax: example.com 9.9.9.9,8.8.8.8",
+				"Syntax error for a forwarding rule at line %d. Expected syntax: example.com 8.8.8.8,1.1.1.1",
 				1+lineNo,
 			)
 		}
