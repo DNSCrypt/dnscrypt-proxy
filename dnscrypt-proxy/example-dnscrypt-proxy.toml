@@ -355,7 +355,7 @@ cert_refresh_delay = 240
 ## not be sent there. If you're using DNSCrypt or Anonymized DNS and your
 ## lists are up to date, these resolvers will not even be used.
 
-bootstrap_resolvers = ['9.9.9.11:53', '8.8.8.8:53']
+bootstrap_resolvers = ['8.8.8.8:53', '1.1.1.1:53']
 
 
 ## When internal DNS resolution is required, for example to retrieve
@@ -392,9 +392,9 @@ netprobe_timeout = 60
 ## but nothing will be sent at all.
 ## Multiple comma-separated addresses can be given, for example to support
 ## both IPv4-only and IPv6-only networks. Connectivity is detected as soon
-## as any of them works: '9.9.9.9:53,[2620:fe::fe]:53'
+## as any of them works: '8.8.8.8:53,[2001:4860:4860::8888]:53'
 
-netprobe_address = '9.9.9.9:53'
+netprobe_address = '8.8.8.8:53'
 
 
 ## Offline mode - Do not use any remote encrypted servers.

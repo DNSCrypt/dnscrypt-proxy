@@ -37,7 +37,7 @@ var hasAESGCMHardwareSupport = cpu.X86.HasAES && cpu.X86.HasPCLMULQDQ ||
 	cpu.S390X.HasAES && cpu.S390X.HasAESGCM
 
 const (
-	DefaultBootstrapResolver    = "9.9.9.9:53"
+	DefaultBootstrapResolver    = "8.8.8.8:53"
 	DefaultKeepAlive            = 5 * time.Second
 	DefaultTimeout              = 30 * time.Second
 	DefaultIdleConnTimeout      = 90 * time.Second

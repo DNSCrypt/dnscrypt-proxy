@@ -19,7 +19,7 @@ import (
 
 const (
 	MaxTimeout             = 3600
-	DefaultNetprobeAddress = "9.9.9.9:53"
+	DefaultNetprobeAddress = "8.8.8.8:53"
 )
 
 type Config struct {
