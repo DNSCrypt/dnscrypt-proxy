@@ -1,3 +1,13 @@
+# Version 2.1.20
+  - Name lists now support `regex:` rules for matching domain names with
+regular expressions.
+  - Added `doh_check_cert_hashes_on_connect` to optionally check DoH certificate
+hashes from DNS stamps on every new connection, rather than only during probes.
+  - Fixed PQDNSCrypt TCP padding and padding delimiter handling.
+  - Network change detection now ignores non-global addresses.
+  - HTTP/3 DNS responses are now limited to 4 KB.
+  - Network probes now support multiple comma-separated addresses.
+
 # Version 2.1.19
   - Resumed PQDNSCrypt queries now use regular UDP padding, protecting their
 size and response budget. Oversized tickets are rejected, and oversized
