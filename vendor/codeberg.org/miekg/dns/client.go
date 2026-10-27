@@ -7,17 +7,60 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"sync"
 	"time"
 )
 
-// A Client is a DNS client. It is safe to use a client from multiple goroutines.
+// A Client is a DNS client. It is safe to use a client from multiple goroutines. It supports TCP query
+// pipelining and keeps track of in-flight requests on per ID, per connection basis. Use [Client.Err] to check
+// if there are still messages in-flight.
 type Client struct {
 	*Transport // If Transport is nil it gets a [NewTransport].
+
+	mu sync.Mutex
+
+	// inflight tracks the ID we've have sent, but not seen a reply for.
+	// TODO(miek): do we need export this to check if we still having outstanding ones?
+	inflight map[local]struct{}
+}
+
+// local tracks the oustanding message ID *and* the local address.
+type local struct {
+	id   uint16
+	addr net.Addr
 }
 
 // NewClient returns a client with the transport set to [NewTransport].
 func NewClient() *Client {
-	return &Client{Transport: NewTransport()}
+	return &Client{Transport: NewTransport(), inflight: make(map[local]struct{})}
+}
+
+// add must called under a lock. It adds an outstanding request to track.
+func (c *Client) add(m *Msg, r ResponseWriter) {
+	l := local{m.ID, r.LocalAddr()} // use addr as-is, it is different for a conn.
+	c.inflight[l] = struct{}{}
+}
+
+// done must called under a lock. It removes an outstanding request to track.
+func (c *Client) done(m *Msg, r ResponseWriter) bool {
+	l := local{m.ID, r.LocalAddr()}
+	_, ok := c.inflight[l]
+	if ok {
+		delete(c.inflight, l)
+	}
+	return ok
+}
+
+// Err returns an error if there are still responses considered in-flight.
+func (c *Client) Err() error {
+	// TODO(miek): should we allow cleaning, or just throw away your client?
+	c.mu.Lock()
+	l := len(c.inflight)
+	c.mu.Unlock()
+	if l > 0 {
+		return fmt.Errorf("%d in-flight requests remaining", l)
+	}
+	return nil
 }
 
 // Exchange performs a synchronous query over "network". It sends the message m to the address
@@ -59,6 +102,9 @@ func (c *Client) Exchange(ctx context.Context, m *Msg, network, address string) 
 	if c.Transport == nil {
 		c.Transport = NewTransport()
 	}
+	if c.inflight == nil {
+		c.inflight = make(map[local]struct{})
+	}
 
 	conn, err := c.dial(ctx, network, address)
 	if err != nil {
@@ -70,6 +116,9 @@ func (c *Client) Exchange(ctx context.Context, m *Msg, network, address string) 
 
 // ExchangeWithConn behaves like [client.Exchange], but with a supplied connection.
 func (c *Client) ExchangeWithConn(ctx context.Context, m *Msg, conn net.Conn) (r *Msg, rtt time.Duration, err error) {
+	if c.inflight == nil {
+		c.inflight = make(map[local]struct{})
+	}
 	if len(m.Data) == 0 {
 		if err := m.Pack(); err != nil {
 			return nil, 0, err
@@ -77,8 +126,17 @@ func (c *Client) ExchangeWithConn(ctx context.Context, m *Msg, conn net.Conn) (r
 	}
 
 	t := time.Now()
-	remote := &response{conn: conn} // for Session() call in msg.go#L750
-	if _, err := io.Copy(remote, m); err != nil {
+	w := &response{conn: conn} // for Session() call in msg.go
+	defer func() {
+		c.mu.Lock()
+		c.done(m, w)
+		c.mu.Unlock()
+	}()
+	c.mu.Lock()
+	c.add(m, w)
+	_, err = io.Copy(w, m)
+	c.mu.Unlock()
+	if err != nil {
 		return nil, time.Since(t), err
 	}
 
@@ -96,7 +154,10 @@ func (c *Client) ExchangeWithConn(ctx context.Context, m *Msg, conn net.Conn) (r
 	}
 
 	conn.SetReadDeadline(time.Now().Add(c.ReadTimeout))
-	if _, err := io.Copy(r, conn); err != nil {
+	c.mu.Lock()
+	_, err = io.Copy(r, conn)
+	c.mu.Unlock()
+	if err != nil {
 		return nil, time.Since(t), err
 	}
 
@@ -110,8 +171,13 @@ func (c *Client) ExchangeWithConn(ctx context.Context, m *Msg, conn net.Conn) (r
 	if !r.Response {
 		return r, time.Since(t), &Error{err: "response bit is not set"}
 	}
-	if r.ID != m.ID {
-		return r, time.Since(t), fmt.Errorf("%w: %d != %d", ErrID, r.ID, m.ID)
+
+	c.mu.Lock()
+	ok := c.done(m, w)
+	c.mu.Unlock()
+
+	if !ok {
+		return r, time.Since(t), fmt.Errorf("%w: response ID %d does not match", ErrID, m.ID)
 	}
 
 	return r, time.Since(t), nil

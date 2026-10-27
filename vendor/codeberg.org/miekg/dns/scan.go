@@ -788,13 +788,17 @@ func locCheckEast(token string, longitude uint32) (uint32, bool) {
 }
 
 // IncludeAllowFunc is a function that gets the full path of the original parsed file name and the included
-// file path and returns true if the include is allowed.
+// file path and returns true if the include is allowed. File can be empty.
 type IncludeAllowFunc func(file, include string) bool
 
 // DefaultIncludeAllowFunc returns true if the included file is on the same level or in a directory below.
+// If file is empty os.TempDir is used.
 var DefaultIncludeAllowFunc IncludeAllowFunc = defaultIncludeAllowFunc
 
 func defaultIncludeAllowFunc(file, include string) bool {
+	if file == "" {
+		file = os.TempDir()
+	}
 	up := ".." + string(os.PathSeparator)
 	rel, err := filepath.Rel(file, include)
 	if err != nil {
