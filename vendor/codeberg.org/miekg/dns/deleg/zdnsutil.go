@@ -214,10 +214,16 @@ func dnsutilAbsolute(s, origin string) string {
 	if origin == "" {
 		return ""
 	}
+
 	if origin == "." {
-		return s + origin
+		s += origin
+	} else {
+		s += "." + origin
 	}
-	return s + "." + origin
+	if dnsutilIsName(s) == false { // see above
+		return ""
+	}
+	return s
 }
 
 // maxSerialIncrement is the maximum difference between two serial numbers. See RFC 1982.

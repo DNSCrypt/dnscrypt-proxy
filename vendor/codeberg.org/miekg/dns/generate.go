@@ -92,11 +92,10 @@ func (zp *ZoneParser) generate(l dnslex.Lex) (RR, bool) {
 }
 
 type generateReader struct {
-	lex    *dnslex.Lex
-	s      string
-	si     int
-	escape bool
-	eof    bool
+	lex *dnslex.Lex
+	s   string
+	si  int
+	eof bool
 
 	cur   int64
 	start int64
@@ -143,20 +142,7 @@ func (r *generateReader) ReadByte() (byte, error) {
 	r.si++
 
 	switch r.s[si] {
-	case '\\':
-		if r.escape {
-			r.escape = false
-			return '\\', nil
-		}
-
-		r.escape = true
-		return r.ReadByte()
 	case '$':
-		if r.escape {
-			r.escape = false
-			return '$', nil
-		}
-
 		mod := "%d"
 
 		if si >= len(r.s)-1 {
@@ -196,11 +182,6 @@ func (r *generateReader) ReadByte() (byte, error) {
 		fmt.Fprintf(&r.mod, mod, r.cur+offset)
 		return r.mod.ReadByte()
 	default:
-		if r.escape { // Pretty useless here
-			r.escape = false
-			return r.ReadByte()
-		}
-
 		return r.s[si], nil
 	}
 }
