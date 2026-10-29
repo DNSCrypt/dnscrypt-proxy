@@ -287,7 +287,7 @@ func (o *SUBNET) unpack(s *dnsnet.String) (err error) {
 	if !s.ReadUint8(&o.Scope) {
 		return unpack.ErrOverflow
 	}
-	n := o.Netmask / 8
+	n := int((o.Netmask + 7) / 8)
 	switch o.Family {
 	case 0:
 		// TODO(miek): make something that does not do a full parse.

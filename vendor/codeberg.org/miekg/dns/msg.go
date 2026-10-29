@@ -625,9 +625,8 @@ func (m *Msg) Len() int {
 	l := MsgHeaderSize
 
 	for i := range m.Question {
-		// See Header.Len() too, we always add a +1, even if the name is the root label.
 		// 4 is for the type and class
-		l += len(m.Question[i].Header().Name) + 1 + 4
+		l += len(m.Question[i].Header().Name) + dnsutilIsRoot(m.Question[i].Header().Name) + 4
 		break
 	}
 	for i := range m.Answer {
@@ -698,11 +697,6 @@ func (m *Msg) Read(p []byte) (n int, err error) {
 // If the message has not be hijacked, and m was create by the server, the Data buffer is returned
 // to the server's pool and zeroed out in m.
 func (m *Msg) WriteTo(w io.Writer) (int64, error) {
-	r, ok := w.(ResponseWriter)
-	if !ok {
-		return 0, fmt.Errorf("dns: writer is not a ResponseWriter")
-	}
-
 	if len(m.Data) == 0 {
 		if err := m.Pack(); err != nil {
 			return 0, err
@@ -712,6 +706,8 @@ func (m *Msg) WriteTo(w io.Writer) (int64, error) {
 	if rc, ok := w.(ResponseController); ok {
 		rc.SetWriteDeadline()
 	}
+
+	r := w.(ResponseWriter) // panic if wrong, saves an if here, assume this always to be true
 
 	if sock, ok := r.Conn().(*net.UDPConn); ok {
 		sess := r.Session()
@@ -732,6 +728,10 @@ func (m *Msg) WriteTo(w io.Writer) (int64, error) {
 	l = append(l, m.Data...)
 	n, err := r.Write(l)
 	msgPut(m)
+	if err != nil {
+		// hit deadline or other troubles, close this conn.
+		r.Close()
+	}
 	return int64(n), err
 }
 
@@ -763,25 +763,21 @@ func (m *Msg) ReadFrom(r io.Reader) (int64, error) {
 		return int64(n), err
 	}
 
-	// When doing io.Copy that underlaying type we get from net is net.tcpConnWithoutWriteTo, not a
-	// net.TCPConn.For udp this seems not to be the case, so the fallthrough when things are not UDP like
-	// is to assume TCP.
-
-	l := uint16(0)
-	if err := binary.Read(r, binary.BigEndian, &l); err != nil {
-		return 0, err
+	var l [2]byte
+	if n, err := io.ReadFull(r, l[:]); err != nil {
+		return int64(n), err
 	}
+	ln := int(binary.BigEndian.Uint16(l[:]))
 
-	li := int(l)
-	if len(m.Data) < li {
-		m.Data = append(m.Data, make([]byte, li-len(m.Data))...)
+	if len(m.Data) < ln {
+		m.Data = append(m.Data, make([]byte, ln-len(m.Data))...)
 	} else {
-		m.Data = m.Data[:li]
+		m.Data = m.Data[:ln]
 	}
 	n, err := io.ReadFull(r, m.Data)
 	m.Data = m.Data[:n]
-	if err == nil && n != li {
-		return int64(n), fmt.Errorf("dns: message size %d does not match prefix %d", li, n)
+	if err == nil && n != ln {
+		return int64(n), fmt.Errorf("dns: message size %d does not match prefix %d", ln, n)
 	}
 	return int64(n), err
 }

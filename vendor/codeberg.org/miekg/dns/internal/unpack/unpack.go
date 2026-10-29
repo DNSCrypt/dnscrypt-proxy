@@ -223,7 +223,7 @@ func MName(s *dnsnet.String, msgBuf []byte) (string, error) {
 			// keeping track of the dots we saw.
 			name = name[:ln+int(c)+dots+1]
 			dot := 0
-			for k := ln + int(c); k > ln; k-- {
+			for k := ln + int(c); k >= ln; k-- {
 				name[k+dots-dot] = name[k]
 				if name[k] == '.' {
 					dot++

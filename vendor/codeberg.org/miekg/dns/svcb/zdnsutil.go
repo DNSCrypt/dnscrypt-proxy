@@ -107,7 +107,7 @@ func dnsutilCanonical(s string) string {
 	}, dnsutilFqdn(s))
 }
 
-// IsName checks if s is a valid domain name.  A non fully qualified domain name is considered valid.
+// IsName checks if s is a valid domain name. A non fully qualified domain name is considered valid.
 // Note that this function is extremely liberal; almost any string is a valid domain name as the DNS is 8 bit
 // protocol. It checks if each label fits in 63 characters and that the entire name will fit into the 255
 // octet wire-format limit.
@@ -214,10 +214,25 @@ func dnsutilAbsolute(s, origin string) string {
 	if origin == "" {
 		return ""
 	}
+
 	if origin == "." {
-		return s + origin
+		s += origin
+	} else {
+		s += "." + origin
 	}
-	return s + "." + origin
+	if dnsutilIsName(s) == false { // see above
+		return ""
+	}
+	return s
+}
+
+// IsRoot returns 0 if s is the root label, otherwise 1. This allows for accounting for the root label vs any
+// other labels in length calculations.
+func dnsutilIsRoot(s string) int {
+	if s == "." {
+		return 0
+	}
+	return 1
 }
 
 // maxSerialIncrement is the maximum difference between two serial numbers. See RFC 1982.

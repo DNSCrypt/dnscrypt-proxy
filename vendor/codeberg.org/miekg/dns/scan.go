@@ -66,12 +66,6 @@ func (e *ParseError) Error() (s string) {
 
 func (e *ParseError) Unwrap() error { return e.wrappedErr }
 
-const (
-	asRR       uint8 = iota // parse the string as an RR.
-	asCode                  // parse the string as an EDNS RR.
-	asStateful              // TODO, but parse the string as an DSO RR.
-)
-
 // ttlState describes the state necessary to fill in an omitted RR TTL.
 type ttlState struct {
 	ttl           uint32 // ttl is the current default TTL
@@ -82,8 +76,8 @@ type ttlState struct {
 // If s contains no records, New will return nil with no error.
 // The origin for resolving relative domain names defaults to the DNS root (.).
 //
-// The class defaults to IN and TTL defaults to 3600. The full zone file syntax
-// like $TTL, $ORIGIN, etc. is supported.
+// The class defaults to IN and TTL defaults to 3600. Directives like $TTL or $ORIGIN are not supported. Use
+// [ZoneParser] in that case.
 //
 // Note that building an RR directly from it Go structure is far more efficient, i.e.
 //
@@ -92,10 +86,6 @@ type ttlState struct {
 // instead of:
 //
 //	mx := New("miek.nl. 0 IN MX 10 mx.miek.nl.")
-//
-// In this library EDNS0 option codes have a presentation format, which you see when you print them. This
-// presentation format is also parsed back to EDNS0. In other words you can get an ENDS0 option code just from
-// a string.
 //
 // Or with [codeberg.org/miekg/dns/dnstest.New], if you are sure no error will occur.
 //
@@ -107,13 +97,13 @@ func New(s string) (RR, error) {
 	return read(dnsstring.NewReader(s), "")
 }
 
-// Read behaves like [New] but reads from an io.Reader. Note the reader must include an ending newline,
-// otherwise the parsing will fail.
+// Read behaves like [New] but reads from an io.Reader.
 func Read(r io.Reader) (RR, error) { return read(r, "") }
 
 func read(r io.Reader, file string) (RR, error) {
 	zp := NewZoneParser(r, ".", file)
 	zp.SetDefaultTTL(3600)
+	zp.Directives = false
 	rr, _ := zp.Next()
 	return rr, zp.Err()
 }
@@ -141,9 +131,10 @@ func readData(r io.Reader, rrtype uint16, origin ...string) (RDATA, error) {
 // ZoneParser is a parser for an RFC 1035 style zone file.
 //
 // Each parsed RR in the zone is returned sequentially from [ZoneParser.Next].
-// Also see [ZoneParser.All] which is an iterator.
+// See [ZoneParser.All] as an alternative for iterating over a zone.
 //
-// The directives $INCLUDE, $ORIGIN, $TTL and $GENERATE are all supported.
+// The directives $INCLUDE, $ORIGIN, $TTL and $GENERATE are all supported, but can be ignored when Directives
+// is false - the default is true.
 // Note that $GENERATE's range support up to a maximum of 65535 steps.
 //
 // Basic usage pattern when reading from a string (z) containing the zone data:
@@ -155,7 +146,7 @@ func readData(r io.Reader, rrtype uint16, origin ...string) (RDATA, error) {
 //	}
 //
 //	if err := zp.Err(); err != nil {
-//		// log.Println(err)
+//		log.Println(err)
 //	}
 //
 // Callers should not assume all returned data in a [RR] is
@@ -169,6 +160,10 @@ type ZoneParser struct {
 
 	r io.Reader
 	c *dnslex.Lexer
+
+	// Directives tells if $INCLUDE and $GENERATE directives should be interpreted. The default is true.
+	// When false the directives are skipped.
+	Directives bool
 
 	// IncludeAllowFunc tells if and how includes are allowed.
 	IncludeAllowFunc
@@ -216,8 +211,9 @@ func NewZoneParser(r io.Reader, origin, file string) *ZoneParser {
 	}
 
 	return &ZoneParser{
-		c:                dnslex.New(r, StringToType, StringToCode, StringToClass),
+		c:                dnslex.New(r, StringToType, StringToClass),
 		IncludeAllowFunc: DefaultIncludeAllowFunc,
+		Directives:       true,
 		parseErr:         pe,
 		origin:           origin,
 		file:             file,
@@ -339,6 +335,12 @@ func (zp *ZoneParser) Next() (RR, bool) {
 
 				st = zExpectAny
 			case dnslex.DirTTL:
+				if !zp.Directives {
+					dnslex.Ignore(zp.c)
+					st = zExpectOwnerDir
+					continue
+				}
+
 				if !zp.c.Blank() {
 					return zp.setParseError("no blank after $TTL-directive", l)
 				}
@@ -405,28 +407,18 @@ func (zp *ZoneParser) Next() (RR, bool) {
 				rr             RR
 				parseAsRFC3597 bool
 			)
-			switch l.As {
-			case asRR:
-				if newFn, ok := TypeToRR[zp.t]; ok {
-					rr = newFn()
-					*rr.Header() = zp.h
-
-					// We may be parsing a known RR type using the RFC3597 format. If so, we handle that here in a generic way.
-					// Custom RRs will need to be registered and will be called with processed []Tokens in
-					// parse.
-					if zp.c.Peek().Token == "\\#" {
-						parseAsRFC3597 = true
-					}
-				} else {
-					rr = &RFC3597{zp.h, rdata.RFC3597{RRType: zp.t}}
-				}
-			case asCode:
-				newFn, ok := CodeToRR[zp.t]
-				if !ok {
-					return zp.setParseError("unknown EDNS0 type", l)
-				}
+			if newFn, ok := TypeToRR[zp.t]; ok {
 				rr = newFn()
 				*rr.Header() = zp.h
+
+				// We may be parsing a known RR type using the RFC3597 format. If so, we handle that here in a generic way.
+				// Custom RRs will need to be registered and will be called with processed []Tokens in
+				// parse.
+				if zp.c.Peek().Token == "\\#" {
+					parseAsRFC3597 = true
+				}
+			} else {
+				rr = &RFC3597{zp.h, rdata.RFC3597{RRType: zp.t}}
 			}
 
 			if zp.c.Peek().Token == "" {
@@ -469,6 +461,12 @@ func (zp *ZoneParser) Next() (RR, bool) {
 
 			return rr, true
 		case zExpectDirInclude:
+			if !zp.Directives {
+				dnslex.Ignore(zp.c)
+				st = zExpectOwnerDir
+				continue
+			}
+
 			if l.Value != dnslex.String {
 				return zp.setParseError("expecting $INCLUDE value, not this...", l)
 			}
@@ -482,7 +480,6 @@ func (zp *ZoneParser) Next() (RR, bool) {
 					if name == "" {
 						return zp.setParseError("bad origin name", l)
 					}
-
 					neworigin = name
 				}
 			case dnslex.Newline, dnslex.EOF:
@@ -490,6 +487,8 @@ func (zp *ZoneParser) Next() (RR, bool) {
 			default:
 				return zp.setParseError("garbage after $INCLUDE", l)
 			}
+
+			// Directives here
 
 			if !zp.IncludeAllowFunc(zp.path, l.Token) {
 				return zp.setParseError("$INCLUDE directive not allowed", l)
@@ -541,6 +540,12 @@ func (zp *ZoneParser) Next() (RR, bool) {
 			return zp.subNext()
 
 		case zExpectDirTTL:
+			if !zp.Directives {
+				dnslex.Ignore(zp.c)
+				st = zExpectOwnerDir
+				continue
+			}
+
 			if l.Value != dnslex.String {
 				return zp.setParseError("expecting $TTL value, not this...", l)
 			}
@@ -558,6 +563,12 @@ func (zp *ZoneParser) Next() (RR, bool) {
 
 			st = zExpectOwnerDir
 		case zExpectDirOrigin:
+			if !zp.Directives {
+				dnslex.Ignore(zp.c)
+				st = zExpectOwnerDir
+				continue
+			}
+
 			if l.Value != dnslex.String {
 				return zp.setParseError("expecting $ORIGIN value, not this...", l)
 			}
@@ -575,6 +586,12 @@ func (zp *ZoneParser) Next() (RR, bool) {
 
 			st = zExpectOwnerDir
 		case zExpectDirGenerate:
+			if !zp.Directives {
+				dnslex.Ignore(zp.c)
+				st = zExpectOwnerDir
+				continue
+			}
+
 			if zp.generateDisallowed {
 				return zp.setParseError("nested $GENERATE directive not allowed", l)
 			}
@@ -654,11 +671,11 @@ func (zp *ZoneParser) All() iter.Seq2[RR, error] {
 	return func(yield func(RR, error) bool) {
 		for {
 			rr, ok := zp.Next()
-			if !yield(rr, zp.Err()) {
-				return
-			}
 			if !ok {
 				break
+			}
+			if !yield(rr, zp.Err()) {
+				return
 			}
 		}
 	}
@@ -788,13 +805,17 @@ func locCheckEast(token string, longitude uint32) (uint32, bool) {
 }
 
 // IncludeAllowFunc is a function that gets the full path of the original parsed file name and the included
-// file path and returns true if the include is allowed.
+// file path and returns true if the include is allowed. File can be empty.
 type IncludeAllowFunc func(file, include string) bool
 
 // DefaultIncludeAllowFunc returns true if the included file is on the same level or in a directory below.
+// If file is empty os.TempDir is used.
 var DefaultIncludeAllowFunc IncludeAllowFunc = defaultIncludeAllowFunc
 
 func defaultIncludeAllowFunc(file, include string) bool {
+	if file == "" {
+		file = os.TempDir()
+	}
 	up := ".." + string(os.PathSeparator)
 	rel, err := filepath.Rel(file, include)
 	if err != nil {
