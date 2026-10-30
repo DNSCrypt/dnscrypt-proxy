@@ -27,6 +27,8 @@ func unpackOPT(s *dnsnet.String) ([]EDNS0, error) {
 		if err := unpackOptionCode(option, &data); err != nil {
 			return nil, err
 		}
+		// TODO(miek): check if data is not empty; this leads to test failures, which may or may not have
+		// trailing data in the binary of the test.
 		edns0 = append(edns0, option)
 	}
 	return edns0, nil

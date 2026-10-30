@@ -212,6 +212,7 @@ _all of them_ and _then some_
 - 7858 - DNS over TLS: Initiation and Performance Considerations
 - 7871 - EDNS0 Client Subnet
 - 7873 - Domain Name System (DNS) Cookies
+- 8020 - NXDOMAIN: There Really Is Nothing Underneath
 - 8080 - EdDSA for DNSSEC
 - 8145 - EDNS0 key tag
 - 8427 - Representing DNS Messages in JSON

@@ -1,6 +1,7 @@
 package dns
 
-// should be generated, it is not...
+// Should be generated, it is not... and while adding to this file, it seems auto generating
+// becomes more and more a distant dream.
 
 import (
 	"encoding/hex"
@@ -287,7 +288,7 @@ func (o *SUBNET) unpack(s *dnsnet.String) (err error) {
 	if !s.ReadUint8(&o.Scope) {
 		return unpack.ErrOverflow
 	}
-	n := o.Netmask / 8
+	n := int((o.Netmask + 7) / 8)
 	switch o.Family {
 	case 0:
 		// TODO(miek): make something that does not do a full parse.
@@ -332,6 +333,9 @@ func (o *ESU) unpack(s *dnsnet.String) (err error) {
 }
 
 func (o *ZONEVERSION) pack(msg []byte, off int) (int, error) {
+	if o.empty() {
+		return off, nil
+	}
 	off, err := pack.Uint8(o.Labels, msg, off)
 	if err != nil {
 		return off, err
@@ -344,6 +348,9 @@ func (o *ZONEVERSION) pack(msg []byte, off int) (int, error) {
 }
 
 func (o *ZONEVERSION) unpack(s *dnsnet.String) (err error) {
+	if s.Empty() {
+		return nil
+	}
 	if !s.ReadUint8(&o.Labels) {
 		return unpack.ErrOverflow
 	}

@@ -75,7 +75,7 @@ func TSIGSign(m *Msg, k TSIGSigner, options *TSIGOption) error {
 }
 
 // TSIGVerify verifies the TSIG on a message. On success a nil error is returned. The TSIG record is removed
-// from m.Data, but left in the unpacked message m. TODO(miek): that a good plan?
+// from m.Data, but left in the unpacked message m.
 // When this function returns options.RequestMAC will have the MAC seen on the TSIG.
 func TSIGVerify(m *Msg, k TSIGSigner, options *TSIGOption) error {
 	if len(m.Data) == 0 {

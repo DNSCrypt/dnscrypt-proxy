@@ -708,8 +708,8 @@ func parseCAA(rd *rdata.CAA, c *dnslex.Lexer, _ string) error {
 		return &ParseError{err: "bad CAA Flag", lex: l}
 	}
 
-	c.Next()        // dnslex.Blank
-	l, _ = c.Next() // dnslex.String
+	c.Next() // dnslex.Blank
+	l, _ = c.Next()
 	if l.Value != dnslex.String {
 		return &ParseError{err: "bad CAA Tag", lex: l}
 	}
@@ -777,10 +777,17 @@ func parseSVCB(rd *rdata.SVCB, c *dnslex.Lexer, o string) error {
 		return &ParseError{file: l.Token, err: "bad SVCB Priority", lex: l}
 	}
 
-	c.Next()        // dnslex.Blank
-	l, _ = c.Next() // dnslex.String
-	rd.Target = l.Token
+	l, _ = c.Next()
+	if l.Value != dnslex.Blank {
+		return &ParseError{file: l.Token, err: "bad SVCB Target", lex: l}
+	}
 
+	l, _ = c.Next()
+	if l.Value != dnslex.String {
+		return &ParseError{file: l.Token, err: "bad SVCB Target", lex: l}
+	}
+
+	rd.Target = l.Token
 	rd.Target = dnsutilAbsolute(l.Token, o)
 	if l.Value == dnslex.Error || rd.Target == "" {
 		return &ParseError{file: l.Token, err: "bad SVCB Target", lex: l}
@@ -954,8 +961,8 @@ func parseDSYNC(rd *rdata.DSYNC, c *dnslex.Lexer, o string) error {
 	l, _ := c.Next()
 	rd.Type = StringToType[l.Token]
 
-	c.Next()        // dnslex.Blank
-	l, _ = c.Next() // dnslex.String
+	c.Next() // dnslex.Blank
+	l, _ = c.Next()
 	if strings.ToUpper(l.Token) == "NOTIFY" || l.Token == "1" {
 		rd.Scheme = 1
 	}
