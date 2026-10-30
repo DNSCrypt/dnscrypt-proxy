@@ -45,8 +45,8 @@ func (f HandlerFunc) ServeDNS(ctx context.Context, w ResponseWriter, r *Msg) { f
 // registered patterns add calls the handler for the pattern that most closely matches the zone name and
 // class.
 //
-// ServeMux is DNSSEC aware, meaning that queries for the DS record are redirected to the parent zone (if that
-// is also registered), otherwise the child gets the query.
+// ServeMux is DNSSEC aware, meaning that queries for the DS record of a registered pattern (the zone apex)
+// are redirected to the parent zone (if that is also registered), otherwise the child gets the query.
 //
 // ServeMux is also safe for concurrent access from multiple goroutines. The zero ServeMux is empty and ready for use.
 type ServeMux struct {
@@ -64,7 +64,7 @@ func (mux *ServeMux) match(q string, t, c uint16) (Handler, string) {
 	q = dnsutilCanonical(q)
 
 	var handler Handler
-	var off, ds, end = 0, 0, false
+	var off, end = 0, false
 	mux.RLock()
 	m, ok := mux.z[c] // get the class map
 	if !ok {
@@ -74,24 +74,19 @@ func (mux *ServeMux) match(q string, t, c uint16) (Handler, string) {
 	}
 	for ; !end; off, end = dnsutilNext(q, off) {
 		if h, ok := m[q[off:]]; ok {
-			if t != TypeDS {
+			// Only the DS of a zone apex (off == 0) lives in the parent. A match at off > 0 is either a name
+			// below the apex, which belongs to this zone, or the parent of the apex matched in the first iteration.
+			if t != TypeDS || off > 0 {
 				mux.RUnlock()
 				return h, q[off:]
 			}
 			// Continue for DS to see if we have a parent too, if so delegate to the parent.
-			// If we already found a DS target we should return the current handler as that
-			// should be a parent.
-			if handler != nil { // Set in previous iteration, we return "this one" (= h).
-				mux.RUnlock()
-				return h, q[off:]
-			}
 			handler = h
-			ds = off
 		}
 	}
 	mux.RUnlock()
-	if handler != nil {
-		return handler, q[ds:]
+	if handler != nil { // never found a parent, just give the DS query to this handler
+		return handler, q
 	}
 	return nil, ""
 }
@@ -139,8 +134,8 @@ func (mux *ServeMux) HandleRemove(pattern string, class ...uint16) {
 
 // ServeDNS dispatches the request to the handler whose pattern most closely matches the request message.
 //
-// ServeDNS is DNSSEC aware, meaning that queries for the DS record are redirected to the parent zone (if
-// that is also registered), otherwise the current zone gets the query.
+// ServeDNS is DNSSEC aware, meaning that queries for the DS record of a registered pattern (the zone apex)
+// are redirected to the parent zone (if that is also registered), otherwise the current zone gets the query.
 //
 // If no handler is found a standard REFUSED message is returned. No checks are made on the request message.
 func (mux *ServeMux) ServeDNS(ctx context.Context, w ResponseWriter, req *Msg) {

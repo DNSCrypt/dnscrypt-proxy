@@ -78,14 +78,8 @@ func StringAny(s string, msg []byte, off int) (int, error) {
 	return off, nil
 }
 
+// Strings packs the character-strings in s. An empty s packs nothing and needs no room in msg.
 func Strings(s []string, msg []byte, off int) (int, error) {
-	if len(s) == 0 {
-		if off >= len(msg) {
-			return len(msg), ErrBuf
-		}
-		msg[off] = 0
-		return off, nil
-	}
 	var err error
 	for i := range s {
 		off, err = String(s[i], msg, off)
@@ -338,7 +332,7 @@ func MName(s string, msg []byte, off int) (off1 int, err error) {
 		// slow(er) copy path to skip the escaped dot
 		l := 1
 		for k := begin; k < i; k++ {
-			if s[k] == '\\' {
+			if s[k] == '\\' && s[k+1] == '.' {
 				continue
 			}
 			msg[off+l] = s[k]
@@ -417,10 +411,10 @@ func StringHex(s string, msg []byte, off int) (int, error) {
 	return off, nil
 }
 
-func Names(names []string, msg []byte, off int, compress map[string]uint16) (int, error) {
+func Names(names []string, msg []byte, off int, compression map[string]uint16) (int, error) {
 	var err error
 	for i := range names {
-		off, err = Name(names[i], msg, off, compress, false)
+		off, err = Name(names[i], msg, off, compression, false)
 		if err != nil {
 			return len(msg), err
 		}

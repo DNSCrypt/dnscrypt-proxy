@@ -179,12 +179,6 @@ func parse(rr RR, c *dnslex.Lexer, o string) error {
 		return x.parse(c, o)
 	case *IXFR:
 		return x.parse(c, o)
-	case *ZONEVERSION:
-		return x.parse(c, o)
-	case *EDE:
-		return x.parse(c, o)
-	case *NSID:
-		return x.parse(c, o)
 	}
 	// if here, we don't have the RR in our pkg, check if it does Parser.
 	if x, ok := rr.(Parser); ok {

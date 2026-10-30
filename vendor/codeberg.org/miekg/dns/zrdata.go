@@ -179,7 +179,7 @@ func (rr AXFR) Data() RDATA        { return nil }
 func (rr IXFR) Data() RDATA        { return nil }
 func (rr *TSIG) Data() RDATA       { return rr.TSIG }
 func parseData(r io.Reader, rrtype uint16, o string) (RDATA, error) {
-	c := dnslex.New(r, StringToType, StringToCode, StringToClass)
+	c := dnslex.New(r, StringToType, StringToClass)
 
 	switch rrtype {
 	case TypeCNAME:

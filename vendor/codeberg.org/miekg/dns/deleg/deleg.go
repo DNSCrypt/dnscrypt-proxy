@@ -103,7 +103,7 @@ func (s *SERVERNAME) String() string { return strings.Join(s.Hostnames, ",") }
 func (s *SERVERNAME) Len() int {
 	l := tlv
 	for i := range s.Hostnames {
-		l += len(s.Hostnames[i]) + 1
+		l += len(s.Hostnames[i]) + dnsutilIsRoot(s.Hostnames[i])
 	}
 	return l
 }
@@ -118,7 +118,7 @@ func (s *INCLUDEDELEGPARAM) String() string { return strings.Join(s.Domains, ","
 func (s *INCLUDEDELEGPARAM) Len() int {
 	l := tlv
 	for i := range s.Domains {
-		l += len(s.Domains[i]) + 1
+		l += len(s.Domains[i]) + dnsutilIsRoot(s.Domains[i])
 	}
 	return l
 }

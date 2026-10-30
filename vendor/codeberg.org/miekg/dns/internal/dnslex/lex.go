@@ -40,18 +40,11 @@ const (
 
 type Lex struct {
 	Token  string // text of the token
-	As     uint8  // create an RR (asRR), an EDNS0 (asCode) or DSO RR (asStateful)
 	Value  uint8  // value: String, Blank, etc.
 	Line   int    // line in the file
 	Column int    // column in the file
 	Torc   uint16 // type or class as parsed in the lexer, we only need to look this up in the grammar
 }
-
-const (
-	asRR       uint8 = iota // parse the string as an RR.
-	asCode                  // parse the string as an EDNS RR.
-	asStateful              // TODO, but parse the string as an DSO RR.
-)
 
 // Lexer tokenizes the zone data, so that the grammar implemented in ZoneParser can parse RRs out of an RFC
 // 1035 styled text file.
@@ -70,7 +63,6 @@ type Lexer struct {
 	cachedL *Lex // used when finding a token, but delaying it's return.
 
 	stringToType  map[string]uint16
-	stringToCode  map[string]uint16
 	stringToClass map[string]uint16
 }
 
@@ -90,7 +82,7 @@ func (zl *Lexer) ClearKey(key uint8) { zl.keys &^= key }
 func (zl *Lexer) Key(key uint8) bool { return zl.keys&key != 0 }
 
 // New returns a pointer to a new Lexer.
-func New(r io.Reader, StringToType, StringToCode, StringToClass map[string]uint16) *Lexer {
+func New(r io.Reader, StringToType, StringToClass map[string]uint16) *Lexer {
 	br, ok := r.(io.ByteReader)
 	if !ok {
 		br = bufio.NewReaderSize(r, 1024)
@@ -101,7 +93,6 @@ func New(r io.Reader, StringToType, StringToCode, StringToClass map[string]uint1
 		tok:           make([]byte, 512),
 		line:          1,
 		stringToType:  StringToType,
-		stringToCode:  StringToCode,
 		stringToClass: StringToClass,
 	}
 	zl.SetKey(kOwner)
@@ -185,7 +176,6 @@ func (zl *Lexer) Next() (Lex, bool) {
 
 	zl.tok = zl.tok[:0]
 	escape := false
-	l.As = asRR
 
 	for x, ok := zl.readByte(); ok; x, ok = zl.readByte() {
 		l.Line, l.Column = zl.line, zl.column
@@ -455,6 +445,12 @@ func Discard(c *Lexer) *ScanError {
 	return nil
 }
 
+// Ignore ignores the rest of the line, i.e. Nexts until a [Newline] is seen.
+func Ignore(c *Lexer) {
+	for l, ok := c.Next(); l.Value != Newline && ok; l, ok = c.Next() {
+	}
+}
+
 // Tokens is used to gather up the remaining tokens and hand them to a custom Scan method for external RRs.
 func Tokens(c *Lexer) []string {
 	tokens := []string{}
@@ -518,14 +514,6 @@ func (zl *Lexer) typeOrCodeOrClass(l *Lex) {
 		}
 		l.Value = Class
 		l.Torc = t
-	}
-
-	if t, ok := zl.stringToCode[l.Token]; ok {
-		l.As = asCode
-		l.Value = Rrtype
-		l.Torc = t
-		zl.SetKey(kRRtype)
-		return
 	}
 }
 
