@@ -3,8 +3,8 @@
 regular expressions.
   - Added `doh_check_cert_hashes_on_connect` to optionally check DoH certificate
 hashes from DNS stamps on every new connection, rather than only during probes.
-  - Certificate hashes in DoH stamps can now match the root of the verified
-chain, such as one of the Let's Encrypt ISRG roots. Previously, only
+  - Certificate hashes in DoH stamps can now match root certificates from the
+local trust store, such as the Let's Encrypt roots. Previously, only
 certificates sent by the server could match.
   - Fixed PQDNSCrypt TCP padding and padding delimiter handling.
   - Network change detection now ignores non-global addresses.
