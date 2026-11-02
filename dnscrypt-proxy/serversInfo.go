@@ -633,7 +633,7 @@ func findFarthestRoute(proxy *Proxy, name string, relayStamps []stamps.ServerSta
 
 	// Anonymized DNSCrypt relays
 	serverAddrStr, _ := ExtractHostAndPort(server.stamp.ServerAddrStr, 443)
-	serverAddr := net.ParseIP(serverAddrStr)
+	serverAddr := ParseIP(serverAddrStr)
 	if serverAddr == nil {
 		return nil
 	}
@@ -647,7 +647,7 @@ func findFarthestRoute(proxy *Proxy, name string, relayStamps []stamps.ServerSta
 			continue
 		}
 		relayAddrStr, _ := ExtractHostAndPort(relayStamp.ServerAddrStr, 443)
-		relayAddr := net.ParseIP(relayAddrStr)
+		relayAddr := ParseIP(relayAddrStr)
 		if relayAddr == nil {
 			continue
 		}
