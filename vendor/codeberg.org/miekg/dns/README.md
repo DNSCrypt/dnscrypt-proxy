@@ -111,18 +111,19 @@ What users say:
 
 - UDP/TCP queries, recvmmsg(2), TCP query-pipelining, IPv4 and IPv6.
 - Fast.
-- RFC 1035 zone file parsing ($INCLUDE, $ORIGIN, $TTL and $GENERATE - for _all_ record types) is supported.
+- RFC 1035 zone file parsing ($INCLUDE, $ORIGIN, $TTL and $GENERATE - for _all_ record types) is supported,
+  but directives can also be ignored.
 - Server side programming (mimicking the net/http package), with `dns.Handle` and `dns.HandleFunc` allowing
   for middleware servers.
 - Client side programming.
 - DNSSEC: signing, validating and key generation for DSA, RSA, ECDSA, Ed25519 and ML-DSA-44.
 - EDNS0, NSID, Cookies, etc, as pseudo RRs in the (fake) pseudo section.
 - AXFR/IXFR.
-- TSIG, SIG(0).
+- TSIG.
 - DNS over TLS (DOT): encrypted connection between client and server over TCP.
 - DNS over HTTP (DOH), see the _dnshttp_ package.
 - Improved naming by embracing sub-packages.
-- Improved RRs, by having the rdata specified in an _rdata_ package.
+- Improved, and smaller, RRs, by having the rdata specified in an _rdata_ package.
 - Escapes (\DDD and \x) in domain names is not supported (anymore) - the overhead (50-100%) was too high.
 - Easy way for custom RRs and EDNS0 pseudo RRs.
 
@@ -135,8 +136,8 @@ of requests/issues usually get closed pretty swiftly.
 
 # Building/developing
 
-This library uses Go modules and uses semantic versioning. Getting the code and working with the library is
-done via:
+This library uses Go modules and uses semantic versioning (after 1.0.0 is released). Getting the code and
+working with the library is done via:
 
     git clone git@codeberg.org:miekg/dns  # use https if you don't have a codeberg account
     cd dns
@@ -148,8 +149,9 @@ and import codeberg.org/miekg/dns in your Go files.
 ## Examples
 
 A short "how to use the API" is at the beginning of `doc.go`. The cmd/ directory contains a reflect example
-program that is used for benchmarking, and further has atomdns which is full fledged DNS server that is
-developed in tandem with the library.
+program that is used for benchmarking, a cookbook is available in `cookbook_test.go`.
+Atomdns which is full fledged DNS server that is developed in tandem with the library, and can be found in
+`cmd/atomdns`.
 
 ## Supported RFCs
 
@@ -194,6 +196,7 @@ _all of them_ and _then some_
 - 5936 - AXFR
 - 5966 - TCP implementation recommendations
 - 6605 - ECDSA
+- 6055 - IAB Thoughts on Encodings for Internationalized Domain Names
 - 6672 - DNAME
 - 6725 - IANA Registry Update
 - 6742 - ILNP DNS
@@ -212,6 +215,7 @@ _all of them_ and _then some_
 - 7858 - DNS over TLS: Initiation and Performance Considerations
 - 7871 - EDNS0 Client Subnet
 - 7873 - Domain Name System (DNS) Cookies
+- 8020 - NXDOMAIN: There Really Is Nothing Underneath
 - 8080 - EdDSA for DNSSEC
 - 8145 - EDNS0 key tag
 - 8427 - Representing DNS Messages in JSON

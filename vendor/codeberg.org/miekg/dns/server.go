@@ -98,9 +98,10 @@ type Server struct {
 	// Default buffer size to use to read incoming UDP messages. If not set it defaults to DefaultMsgSize
 	// (1400 B).
 	UDPSize int
-	// The read timeout vaule for new connections, defaults to 2 * time.Second.
+	// The read timeout vaule for reading of a connection, defaults to 500 * [time.Millisecond].
 	ReadTimeout time.Duration
-	// TCP idle timeout for multiple queries, if nil, defaults to 8 * time.Second (RFC 5966).
+	// TCP idle timeout for multiple queries, if nil, defaults to 3 * [time.Second] (RFC 5966 recommends in
+	// the "order of seconds").
 	IdleTimeout time.Duration
 	// Maximum number of TCP queries before we close the socket. Default is [MaxTCPQueries], unlimited if -1.
 	// See [ResponseWriter.Hijack] on how a handler can bypass this.
@@ -158,10 +159,10 @@ func (srv *Server) init() {
 		srv.Handler = DefaultServeMux
 	}
 	if srv.ReadTimeout == 0 {
-		srv.ReadTimeout = 2 * time.Second
+		srv.ReadTimeout = 500 * time.Millisecond
 	}
 	if srv.IdleTimeout == 0 {
-		srv.IdleTimeout = 8 * time.Second
+		srv.IdleTimeout = 3 * time.Second
 	}
 	if srv.MsgPool == nil {
 		srv.MsgPool = pool.New(srv.UDPSize)

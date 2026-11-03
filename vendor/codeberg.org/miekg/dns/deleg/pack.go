@@ -105,7 +105,7 @@ func (s *SERVERNAME) pack(msg []byte, off int) (int, error) {
 }
 
 func (s *SERVERNAME) unpack(sc *dnsnet.String) error {
-	if !sc.Empty() {
+	for !sc.Empty() {
 		hostname, err := unpack.Name(sc, nil)
 		if err != nil {
 			return err
@@ -130,7 +130,7 @@ func (s *INCLUDEDELEGPARAM) pack(msg []byte, off int) (int, error) {
 }
 
 func (s *INCLUDEDELEGPARAM) unpack(sc *dnsnet.String) error {
-	if !sc.Empty() {
+	for !sc.Empty() {
 		domain, err := unpack.Name(sc, nil)
 		if err != nil {
 			return err
