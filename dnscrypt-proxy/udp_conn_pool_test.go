@@ -3,9 +3,12 @@ package main
 import (
 	"fmt"
 	"net"
+	"runtime"
 	"sync"
 	"testing"
 	"time"
+
+	"codeberg.org/miekg/dns"
 )
 
 func TestUDPConnPool_Basic(t *testing.T) {
@@ -231,4 +234,109 @@ func BenchmarkUDPConnPool_MultiAddrContention(b *testing.B) {
 			i++
 		}
 	})
+}
+
+func TestUDPListenerReplySource(t *testing.T) {
+	// Queries sent to a second local address catch replies coming from the wrong one
+	ipv4Targets := []string{"127.0.0.1"}
+	switch runtime.GOOS {
+	case "linux":
+		ipv4Targets = append(ipv4Targets, "127.0.0.2")
+	case "darwin":
+		addrs, _ := net.InterfaceAddrs()
+		for _, addr := range addrs {
+			if ipNet, ok := addr.(*net.IPNet); ok && ipNet.IP.To4() != nil && ipNet.IP.IsGlobalUnicast() {
+				ipv4Targets = append(ipv4Targets, ipNet.IP.String())
+				break
+			}
+		}
+	default:
+		t.Skip("only Linux and macOS reply from the queried address for both IPv4 and IPv6")
+	}
+	for _, tt := range []struct {
+		network, listen string
+		targets         []string
+	}{
+		{"udp4", "0.0.0.0", ipv4Targets},
+		{"udp", "::", append([]string{"::1"}, ipv4Targets...)},
+		{"udp4", "127.0.0.1", []string{"127.0.0.1"}},
+	} {
+		for _, maxClients := range []uint32{0, 16} {
+			t.Run(fmt.Sprintf("%s %s maxClients=%d", tt.network, tt.listen, maxClients), func(t *testing.T) {
+				proxy := NewProxy()
+				proxy.maxClients = maxClients
+				proxy.questionSizeEstimator = NewQuestionSizeEstimator()
+				proxy.xTransport = &XTransport{mainProto: "udp"}
+				proxy.pluginBlockIPv6 = true
+				if err := proxy.InitPluginsGlobals(); err != nil {
+					t.Fatal(err)
+				}
+				listener, err := net.ListenUDP(tt.network, &net.UDPAddr{IP: net.ParseIP(tt.listen)})
+				if err != nil {
+					if tt.network == "udp" {
+						t.Skipf("IPv6 unavailable: %v", err)
+					}
+					t.Fatal(err)
+				}
+				proxy.registerUDPListener(listener)
+				done := make(chan struct{})
+				go func() {
+					proxy.udpListener(listener)
+					close(done)
+				}()
+				t.Cleanup(func() {
+					listener.Close()
+					<-done
+				})
+				port := listener.LocalAddr().(*net.UDPAddr).Port
+
+				type query struct {
+					client *net.UDPConn
+					server *net.UDPAddr
+				}
+				var queries []query
+				for range 4 {
+					for _, target := range tt.targets {
+						server := &net.UDPAddr{IP: net.ParseIP(target), Port: port}
+						clientIP := net.IPv6loopback
+						if server.IP.To4() != nil {
+							clientIP = net.IPv4(127, 0, 0, 1)
+						}
+						client, err := net.ListenUDP("udp", &net.UDPAddr{IP: clientIP})
+						if err != nil {
+							t.Fatal(err)
+						}
+						t.Cleanup(func() { client.Close() })
+						client.SetDeadline(time.Now().Add(3 * time.Second))
+						msg := dns.NewMsg("example.com.", dns.TypeAAAA)
+						msg.ID = uint16(len(queries))
+						if err := msg.Pack(); err != nil {
+							t.Fatal(err)
+						}
+						if _, err := client.WriteToUDP(msg.Data, server); err != nil {
+							t.Fatal(err)
+						}
+						queries = append(queries, query{client, server})
+					}
+				}
+				for i, q := range queries {
+					buffer := make([]byte, MaxDNSPacketSize)
+					n, source, err := q.client.ReadFromUDP(buffer)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if !source.IP.Equal(q.server.IP) || source.Port != q.server.Port {
+						t.Errorf("reply from %s, want %s", source, q.server)
+					}
+					msg := &dns.Msg{Data: buffer[:n]}
+					if err := msg.Unpack(); err != nil {
+						t.Fatal(err)
+					}
+					if !msg.Response || msg.ID != uint16(i) || len(msg.Answer) == 0 {
+						t.Errorf("unexpected response: %v", msg)
+					}
+				}
+			})
+		}
+	}
 }

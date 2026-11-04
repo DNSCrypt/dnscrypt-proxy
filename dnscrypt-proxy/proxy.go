@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"net"
@@ -14,6 +15,8 @@ import (
 	"github.com/jedisct1/dlog"
 	clocksmith "github.com/jedisct1/go-clocksmith"
 	stamps "github.com/jedisct1/go-dnsstamps"
+	"golang.org/x/net/ipv4"
+	"golang.org/x/net/ipv6"
 	netproxy "golang.org/x/net/proxy"
 )
 
@@ -116,6 +119,10 @@ type Proxy struct {
 }
 
 func (proxy *Proxy) registerUDPListener(conn *net.UDPConn) {
+	if conn.LocalAddr().(*net.UDPAddr).IP.IsUnspecified() {
+		ipv6.NewPacketConn(conn).SetControlMessage(ipv6.FlagDst, true)
+		ipv4.NewPacketConn(conn).SetControlMessage(ipv4.FlagDst, true)
+	}
 	proxy.listenersMu.Lock()
 	proxy.udpListeners = append(proxy.udpListeners, conn)
 	proxy.listenersMu.Unlock()
@@ -462,15 +469,44 @@ func (proxy *Proxy) updateRegisteredServers() error {
 	return nil
 }
 
+// Sends replies from the address the client sent its query to
+type udpReplyConn struct {
+	*net.UDPConn
+	oob []byte
+}
+
+func (conn *udpReplyConn) WriteTo(packet []byte, addr net.Addr) (int, error) {
+	var dst net.IP
+	if cm := new(ipv6.ControlMessage); cm.Parse(conn.oob) == nil && cm.Dst != nil {
+		dst = cm.Dst
+	} else if cm := new(ipv4.ControlMessage); cm.Parse(conn.oob) == nil {
+		dst = cm.Dst
+	}
+	var source []byte
+	if dst.To4() != nil {
+		source = (&ipv4.ControlMessage{Src: dst}).Marshal()
+	} else if dst != nil {
+		source = (&ipv6.ControlMessage{Src: dst}).Marshal()
+	}
+	n, _, err := conn.WriteMsgUDP(packet, source, addr.(*net.UDPAddr))
+	return n, err
+}
+
 func (proxy *Proxy) udpListener(clientPc *net.UDPConn) {
 	defer clientPc.Close()
+	oob := make([]byte, len(ipv4.NewControlMessage(ipv4.FlagDst))+len(ipv6.NewControlMessage(ipv6.FlagDst)))
 	for {
 		buffer := make([]byte, MaxDNSPacketSize-1)
-		length, clientAddr, err := clientPc.ReadFrom(buffer)
+		length, oobLength, _, udpAddr, err := clientPc.ReadMsgUDP(buffer, oob)
 		if err != nil {
 			return
 		}
 		packet := buffer[:length]
+		var clientAddr net.Addr = udpAddr
+		var responsePc net.Conn = clientPc
+		if oobLength > 0 {
+			responsePc = &udpReplyConn{UDPConn: clientPc, oob: bytes.Clone(oob[:oobLength])}
+		}
 		if !proxy.clientsCountInc() {
 			dlog.Warnf("Too many incoming connections (max=%d)", proxy.maxClients)
 			dlog.Debugf("Number of goroutines: %d", runtime.NumGoroutine())
@@ -479,7 +515,7 @@ func (proxy *Proxy) udpListener(clientPc *net.UDPConn) {
 				proxy.xTransport.mainProto,
 				packet,
 				&clientAddr,
-				clientPc,
+				responsePc,
 				time.Now(),
 				true,
 			) // respond synchronously, but only to cached/synthesized queries
@@ -487,7 +523,7 @@ func (proxy *Proxy) udpListener(clientPc *net.UDPConn) {
 		}
 		go func() {
 			defer proxy.clientsCountDec()
-			proxy.processIncomingQuery("udp", proxy.xTransport.mainProto, packet, &clientAddr, clientPc, time.Now(), false)
+			proxy.processIncomingQuery("udp", proxy.xTransport.mainProto, packet, &clientAddr, responsePc, time.Now(), false)
 		}()
 	}
 }
