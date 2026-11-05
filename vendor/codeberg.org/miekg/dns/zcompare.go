@@ -190,13 +190,6 @@ func compare(a, b RR) int {
 }
 
 func (rr *NULL) compare(b RR) (x int) {
-	x = len(rr.Null) - len(b.(*NULL).Null)
-	if x != 0 {
-		if x < 0 {
-			return -1
-		}
-		return 1
-	}
 	x = strings.Compare(rr.Null, b.(*NULL).Null)
 	if x != 0 {
 		if x < 0 {
@@ -521,13 +514,7 @@ func (rr *SOA) compare(b RR) (x int) {
 }
 
 func (rr *TXT) compare(b RR) (x int) {
-	if len(rr.Txt) < len(b.(*TXT).Txt) {
-		return -1
-	}
-	if len(rr.Txt) > len(b.(*TXT).Txt) {
-		return 1
-	}
-	for i := range rr.Txt {
+	for i := range min(len(rr.Txt), len(b.(*TXT).Txt)) {
 		if x != 0 {
 			break
 		}
@@ -535,6 +522,9 @@ func (rr *TXT) compare(b RR) (x int) {
 		if x == 0 {
 			x = strings.Compare(rr.Txt[i], b.(*TXT).Txt[i])
 		}
+	}
+	if x == 0 {
+		x = len(rr.Txt) - len(b.(*TXT).Txt)
 	}
 	if x != 0 {
 		if x < 0 {
@@ -1321,13 +1311,6 @@ func (rr *URI) compare(b RR) (x int) {
 		}
 		return 1
 	}
-	x = len(rr.Target) - len(b.(*URI).Target)
-	if x != 0 {
-		if x < 0 {
-			return -1
-		}
-		return 1
-	}
 	x = strings.Compare(rr.Target, b.(*URI).Target)
 	if x != 0 {
 		if x < 0 {
@@ -1449,17 +1432,14 @@ func (rr *HIP) compare(b RR) (x int) {
 		}
 		return 1
 	}
-	if len(rr.RendezvousServers) < len(b.(*HIP).RendezvousServers) {
-		return -1
-	}
-	if len(rr.RendezvousServers) > len(b.(*HIP).RendezvousServers) {
-		return 1
-	}
-	for i := range rr.RendezvousServers {
+	for i := range min(len(rr.RendezvousServers), len(b.(*HIP).RendezvousServers)) {
 		if x != 0 {
 			break
 		}
 		x = comparename(rr.RendezvousServers[i], b.(*HIP).RendezvousServers[i])
+	}
+	if x == 0 {
+		x = len(rr.RendezvousServers) - len(b.(*HIP).RendezvousServers)
 	}
 	if x != 0 {
 		if x < 0 {
@@ -1471,13 +1451,7 @@ func (rr *HIP) compare(b RR) (x int) {
 }
 
 func (rr *NINFO) compare(b RR) (x int) {
-	if len(rr.ZSData) < len(b.(*NINFO).ZSData) {
-		return -1
-	}
-	if len(rr.ZSData) > len(b.(*NINFO).ZSData) {
-		return 1
-	}
-	for i := range rr.ZSData {
+	for i := range min(len(rr.ZSData), len(b.(*NINFO).ZSData)) {
 		if x != 0 {
 			break
 		}
@@ -1485,6 +1459,9 @@ func (rr *NINFO) compare(b RR) (x int) {
 		if x == 0 {
 			x = strings.Compare(rr.ZSData[i], b.(*NINFO).ZSData[i])
 		}
+	}
+	if x == 0 {
+		x = len(rr.ZSData) - len(b.(*NINFO).ZSData)
 	}
 	if x != 0 {
 		if x < 0 {
@@ -1591,13 +1568,6 @@ func (rr *CAA) compare(b RR) (x int) {
 		return 1
 	}
 	x = strings.Compare(rr.Tag, b.(*CAA).Tag)
-	if x != 0 {
-		if x < 0 {
-			return -1
-		}
-		return 1
-	}
-	x = len(rr.Value) - len(b.(*CAA).Value)
 	if x != 0 {
 		if x < 0 {
 			return -1

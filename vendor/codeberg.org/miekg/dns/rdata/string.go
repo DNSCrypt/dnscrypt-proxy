@@ -212,7 +212,7 @@ func (rd TXT) String() string {
 
 func (rd IPN) String() string {
 	sb := builderPool.Get()
-	sprintData(&sb, strconv.Itoa(int(rd.Node)))
+	sprintData(&sb, strconv.FormatUint(rd.Node, 10))
 	s := sb.String()
 	builderPool.Put(sb)
 	return s
@@ -588,7 +588,7 @@ func (rd CSYNC) String() string {
 
 func (rd ZONEMD) String() string {
 	sb := builderPool.Get()
-	sprintData(&sb, strconv.Itoa(int(rd.Serial)), strconv.Itoa(int(rd.Scheme)), strconv.Itoa(int(rd.Hash)), rd.Digest)
+	sprintData(&sb, strconv.FormatInt(int64(rd.Serial), 10), strconv.Itoa(int(rd.Scheme)), strconv.Itoa(int(rd.Hash)), rd.Digest)
 	s := sb.String()
 	builderPool.Put(sb)
 	return s
