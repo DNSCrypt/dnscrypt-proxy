@@ -15,7 +15,6 @@ import (
 
 	"github.com/quic-go/qpack"
 	"github.com/quic-go/quic-go"
-	"github.com/quic-go/quic-go/http3/qlog"
 	"github.com/quic-go/quic-go/qlogwriter"
 )
 
@@ -91,7 +90,7 @@ func newClientConn(
 	logger *slog.Logger,
 ) *ClientConn {
 	var qlogger qlogwriter.Recorder
-	if qlogTrace := conn.QlogTrace(); qlogTrace != nil && qlogTrace.SupportsSchemas(qlog.EventSchema) {
+	if qlogTrace := conn.QlogTrace(); qlogTrace != nil {
 		qlogger = qlogTrace.AddProducer()
 	}
 	c := &ClientConn{
@@ -298,11 +297,16 @@ func (c *ClientConn) roundTrip(req *http.Request) (*http.Response, error) {
 		case <-c.rawConn.ReceivedSettings():
 		case <-connCtx.Done():
 			return nil, context.Cause(connCtx)
+		case <-req.Context().Done():
+			return nil, req.Context().Err()
 		}
 		if !c.rawConn.Settings().EnableExtendedConnect {
 			return nil, errors.New("http3: server didn't enable Extended CONNECT")
 		}
 	}
+
+	c.rawConn.AddQlogProducer()
+	defer c.rawConn.RemoveQlogProducer()
 
 	reqDone := make(chan struct{})
 	str, err := c.openRequestStream(

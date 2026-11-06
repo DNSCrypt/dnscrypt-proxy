@@ -32,6 +32,8 @@ type streamSender interface {
 	recordStreamPriorityUpdated(protocol.StreamID, int8, bool)
 	// must be called without holding the mutex that is acquired by closeForShutdown
 	onStreamCompleted(protocol.StreamID)
+	// must be called without holding the mutex that is acquired by closeForShutdown
+	onStreamCreditReleased(protocol.StreamID)
 }
 
 // Each of the both stream halves gets its own uniStreamSender.
@@ -192,6 +194,14 @@ func (s *Stream) Context() context.Context {
 // It does not close the receive-direction of the stream.
 func (s *Stream) Close() error {
 	return s.sendStr.Close()
+}
+
+// ReleaseStreamCredit allows the peer to open a new stream in place of this one,
+// once both directions of the stream have completed.
+// See [ReceiveStream.ReleaseStreamCredit] for more details.
+// For streams opened by us, it is a no-op.
+func (s *Stream) ReleaseStreamCredit() {
+	s.sender.onStreamCreditReleased(s.StreamID())
 }
 
 func (s *Stream) handleResetStreamFrame(frame *wire.ResetStreamFrame, rcvTime monotime.Time) error {

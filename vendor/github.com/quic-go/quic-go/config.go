@@ -121,6 +121,7 @@ func populateConfig(config *Config) *Config {
 		AllowConnectionWindowIncrease:    config.AllowConnectionWindowIncrease,
 		MaxIncomingStreams:               maxIncomingStreams,
 		MaxIncomingUniStreams:            maxIncomingUniStreams,
+		RequireStreamCreditRelease:       config.RequireStreamCreditRelease,
 		TokenStore:                       config.TokenStore,
 		EnableDatagrams:                  config.EnableDatagrams,
 		InitialPacketSize:                config.InitialPacketSize,

@@ -1,6 +1,9 @@
 package qlog
 
 import (
+	"encoding/hex"
+	"unicode/utf8"
+
 	"github.com/quic-go/quic-go"
 	"github.com/quic-go/quic-go/qlogwriter/jsontext"
 )
@@ -10,49 +13,55 @@ type Frame struct {
 	Frame any
 }
 
-func (f Frame) encode(enc *jsontext.Encoder) error {
+func (f Frame) encode(enc *jsontext.Encoder, raw RawInfo) error {
+	h := encoderHelper{enc: enc}
+	h.WriteToken(jsontext.BeginObject)
+	if raw.HasValues() {
+		h.WriteToken(jsontext.String("raw"))
+		if err := raw.encode(enc); err != nil {
+			return err
+		}
+	}
 	switch frame := f.Frame.(type) {
 	case DataFrame:
-		return frame.encode(enc)
+		frame.encode(&h)
 	case HeadersFrame:
-		return frame.encode(enc)
+		frame.encode(&h)
 	case GoAwayFrame:
-		return frame.encode(enc)
+		frame.encode(&h)
 	case SettingsFrame:
-		return frame.encode(enc)
+		frame.encode(&h)
 	case PushPromiseFrame:
-		return frame.encode(enc)
+		frame.encode(&h)
 	case CancelPushFrame:
-		return frame.encode(enc)
+		frame.encode(&h)
 	case MaxPushIDFrame:
-		return frame.encode(enc)
+		frame.encode(&h)
 	case PriorityUpdateFrame:
-		return frame.encode(enc)
+		frame.encode(&h)
 	case ReservedFrame:
-		return frame.encode(enc)
+		frame.encode(&h)
 	case UnknownFrame:
-		return frame.encode(enc)
+		frame.encode(&h)
 	}
-	// This shouldn't happen if the code is correctly logging frames.
-	// Write a null token to produce valid JSON.
-	return enc.WriteToken(jsontext.Null)
+	h.WriteToken(jsontext.EndObject)
+	return h.err
 }
 
 // A DataFrame is a DATA frame
 type DataFrame struct{}
 
-func (f *DataFrame) encode(enc *jsontext.Encoder) error {
-	h := encoderHelper{enc: enc}
-	h.WriteToken(jsontext.BeginObject)
+func (f *DataFrame) encode(h *encoderHelper) {
 	h.WriteToken(jsontext.String("frame_type"))
 	h.WriteToken(jsontext.String("data"))
-	h.WriteToken(jsontext.EndObject)
-	return h.err
 }
 
 type HeaderField struct {
 	Name  string
 	Value string
+	// InvalidName and InvalidValue report character validation failures in HTTP/3.
+	InvalidName  bool
+	InvalidValue bool
 }
 
 // A HeadersFrame is a HEADERS frame
@@ -60,26 +69,31 @@ type HeadersFrame struct {
 	HeaderFields []HeaderField
 }
 
-func (f *HeadersFrame) encode(enc *jsontext.Encoder) error {
-	h := encoderHelper{enc: enc}
-	h.WriteToken(jsontext.BeginObject)
+func (f *HeadersFrame) encode(h *encoderHelper) {
 	h.WriteToken(jsontext.String("frame_type"))
 	h.WriteToken(jsontext.String("headers"))
-	if len(f.HeaderFields) > 0 {
-		h.WriteToken(jsontext.String("header_fields"))
-		h.WriteToken(jsontext.BeginArray)
-		for _, f := range f.HeaderFields {
-			h.WriteToken(jsontext.BeginObject)
+	h.WriteToken(jsontext.String("headers"))
+	h.WriteToken(jsontext.BeginArray)
+	for _, f := range f.HeaderFields {
+		h.WriteToken(jsontext.BeginObject)
+		if !f.InvalidName && utf8.ValidString(f.Name) {
 			h.WriteToken(jsontext.String("name"))
 			h.WriteToken(jsontext.String(f.Name))
+		} else {
+			h.WriteToken(jsontext.String("name_bytes"))
+			h.WriteToken(jsontext.String(hex.EncodeToString([]byte(f.Name))))
+		}
+		// HTTP permits non-UTF-8 bytes in field values.
+		if !f.InvalidValue && utf8.ValidString(f.Value) {
 			h.WriteToken(jsontext.String("value"))
 			h.WriteToken(jsontext.String(f.Value))
-			h.WriteToken(jsontext.EndObject)
+		} else {
+			h.WriteToken(jsontext.String("value_bytes"))
+			h.WriteToken(jsontext.String(hex.EncodeToString([]byte(f.Value))))
 		}
-		h.WriteToken(jsontext.EndArray)
+		h.WriteToken(jsontext.EndObject)
 	}
-	h.WriteToken(jsontext.EndObject)
-	return h.err
+	h.WriteToken(jsontext.EndArray)
 }
 
 // A GoAwayFrame is a GOAWAY frame
@@ -87,27 +101,21 @@ type GoAwayFrame struct {
 	StreamID quic.StreamID
 }
 
-func (f *GoAwayFrame) encode(enc *jsontext.Encoder) error {
-	h := encoderHelper{enc: enc}
-	h.WriteToken(jsontext.BeginObject)
+func (f *GoAwayFrame) encode(h *encoderHelper) {
 	h.WriteToken(jsontext.String("frame_type"))
 	h.WriteToken(jsontext.String("goaway"))
 	h.WriteToken(jsontext.String("id"))
 	h.WriteToken(jsontext.Uint(uint64(f.StreamID)))
-	h.WriteToken(jsontext.EndObject)
-	return h.err
 }
 
 type SettingsFrame struct {
-	MaxFieldSectionSize int64
-	Datagram            *bool
-	ExtendedConnect     *bool
+	MaxFieldSectionSize int64 // -1 if not set
+	Datagram            int64 // -1 if not set
+	ExtendedConnect     int64 // -1 if not set
 	Other               map[uint64]uint64
 }
 
-func (f *SettingsFrame) encode(enc *jsontext.Encoder) error {
-	h := encoderHelper{enc: enc}
-	h.WriteToken(jsontext.BeginObject)
+func (f *SettingsFrame) encode(h *encoderHelper) {
 	h.WriteToken(jsontext.String("frame_type"))
 	h.WriteToken(jsontext.String("settings"))
 	h.WriteToken(jsontext.String("settings"))
@@ -120,20 +128,20 @@ func (f *SettingsFrame) encode(enc *jsontext.Encoder) error {
 		h.WriteToken(jsontext.Uint(uint64(f.MaxFieldSectionSize)))
 		h.WriteToken(jsontext.EndObject)
 	}
-	if f.Datagram != nil {
+	if f.Datagram >= 0 {
 		h.WriteToken(jsontext.BeginObject)
 		h.WriteToken(jsontext.String("name"))
 		h.WriteToken(jsontext.String("settings_h3_datagram"))
 		h.WriteToken(jsontext.String("value"))
-		h.WriteToken(jsontext.Bool(*f.Datagram))
+		h.WriteToken(jsontext.Uint(uint64(f.Datagram)))
 		h.WriteToken(jsontext.EndObject)
 	}
-	if f.ExtendedConnect != nil {
+	if f.ExtendedConnect >= 0 {
 		h.WriteToken(jsontext.BeginObject)
 		h.WriteToken(jsontext.String("name"))
 		h.WriteToken(jsontext.String("settings_enable_connect_protocol"))
 		h.WriteToken(jsontext.String("value"))
-		h.WriteToken(jsontext.Bool(*f.ExtendedConnect))
+		h.WriteToken(jsontext.Uint(uint64(f.ExtendedConnect)))
 		h.WriteToken(jsontext.EndObject)
 	}
 	if len(f.Other) > 0 {
@@ -149,44 +157,30 @@ func (f *SettingsFrame) encode(enc *jsontext.Encoder) error {
 		}
 	}
 	h.WriteToken(jsontext.EndArray)
-	h.WriteToken(jsontext.EndObject)
-	return h.err
 }
 
 // A PushPromiseFrame is a PUSH_PROMISE frame
 type PushPromiseFrame struct{}
 
-func (f *PushPromiseFrame) encode(enc *jsontext.Encoder) error {
-	h := encoderHelper{enc: enc}
-	h.WriteToken(jsontext.BeginObject)
+func (f *PushPromiseFrame) encode(h *encoderHelper) {
 	h.WriteToken(jsontext.String("frame_type"))
 	h.WriteToken(jsontext.String("push_promise"))
-	h.WriteToken(jsontext.EndObject)
-	return h.err
 }
 
 // A CancelPushFrame is a CANCEL_PUSH frame
 type CancelPushFrame struct{}
 
-func (f *CancelPushFrame) encode(enc *jsontext.Encoder) error {
-	h := encoderHelper{enc: enc}
-	h.WriteToken(jsontext.BeginObject)
+func (f *CancelPushFrame) encode(h *encoderHelper) {
 	h.WriteToken(jsontext.String("frame_type"))
 	h.WriteToken(jsontext.String("cancel_push"))
-	h.WriteToken(jsontext.EndObject)
-	return h.err
 }
 
 // A MaxPushIDFrame is a MAX_PUSH_ID frame
 type MaxPushIDFrame struct{}
 
-func (f *MaxPushIDFrame) encode(enc *jsontext.Encoder) error {
-	h := encoderHelper{enc: enc}
-	h.WriteToken(jsontext.BeginObject)
+func (f *MaxPushIDFrame) encode(h *encoderHelper) {
 	h.WriteToken(jsontext.String("frame_type"))
 	h.WriteToken(jsontext.String("max_push_id"))
-	h.WriteToken(jsontext.EndObject)
-	return h.err
 }
 
 // A PriorityUpdateFrame is a PRIORITY_UPDATE frame for a request stream.
@@ -195,17 +189,13 @@ type PriorityUpdateFrame struct {
 	PriorityFieldValue string
 }
 
-func (f *PriorityUpdateFrame) encode(enc *jsontext.Encoder) error {
-	h := encoderHelper{enc: enc}
-	h.WriteToken(jsontext.BeginObject)
+func (f *PriorityUpdateFrame) encode(h *encoderHelper) {
 	h.WriteToken(jsontext.String("frame_type"))
 	h.WriteToken(jsontext.String("priority_update"))
 	h.WriteToken(jsontext.String("stream_id"))
 	h.WriteToken(jsontext.Uint(uint64(f.StreamID)))
 	h.WriteToken(jsontext.String("priority_field_value"))
 	h.WriteToken(jsontext.String(f.PriorityFieldValue))
-	h.WriteToken(jsontext.EndObject)
-	return h.err
 }
 
 // A ReservedFrame is one of the reserved frame types
@@ -213,15 +203,11 @@ type ReservedFrame struct {
 	Type uint64
 }
 
-func (f *ReservedFrame) encode(enc *jsontext.Encoder) error {
-	h := encoderHelper{enc: enc}
-	h.WriteToken(jsontext.BeginObject)
+func (f *ReservedFrame) encode(h *encoderHelper) {
 	h.WriteToken(jsontext.String("frame_type"))
 	h.WriteToken(jsontext.String("reserved"))
 	h.WriteToken(jsontext.String("frame_type_bytes"))
 	h.WriteToken(jsontext.Uint(f.Type))
-	h.WriteToken(jsontext.EndObject)
-	return h.err
 }
 
 // An UnknownFrame is an unknown frame type
@@ -229,13 +215,9 @@ type UnknownFrame struct {
 	Type uint64
 }
 
-func (f *UnknownFrame) encode(enc *jsontext.Encoder) error {
-	h := encoderHelper{enc: enc}
-	h.WriteToken(jsontext.BeginObject)
+func (f *UnknownFrame) encode(h *encoderHelper) {
 	h.WriteToken(jsontext.String("frame_type"))
 	h.WriteToken(jsontext.String("unknown"))
 	h.WriteToken(jsontext.String("frame_type_bytes"))
 	h.WriteToken(jsontext.Uint(f.Type))
-	h.WriteToken(jsontext.EndObject)
-	return h.err
 }

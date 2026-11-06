@@ -22,8 +22,9 @@ type streamsMap struct {
 	ctx         context.Context // not used for cancellations, but carries the values associated with the connection
 	perspective protocol.Perspective
 
-	maxIncomingBidiStreams uint64
-	maxIncomingUniStreams  uint64
+	maxIncomingBidiStreams     uint64
+	maxIncomingUniStreams      uint64
+	requireStreamCreditRelease bool
 
 	sender            streamSender
 	queueControlFrame func(wire.Frame)
@@ -45,16 +46,18 @@ func newStreamsMap(
 	newFlowController func(protocol.StreamID) *streamFlowController,
 	maxIncomingBidiStreams uint64,
 	maxIncomingUniStreams uint64,
+	requireStreamCreditRelease bool,
 	perspective protocol.Perspective,
 ) *streamsMap {
 	m := &streamsMap{
-		ctx:                    ctx,
-		perspective:            perspective,
-		queueControlFrame:      queueControlFrame,
-		newFlowController:      newFlowController,
-		maxIncomingBidiStreams: maxIncomingBidiStreams,
-		maxIncomingUniStreams:  maxIncomingUniStreams,
-		sender:                 sender,
+		ctx:                        ctx,
+		perspective:                perspective,
+		queueControlFrame:          queueControlFrame,
+		newFlowController:          newFlowController,
+		maxIncomingBidiStreams:     maxIncomingBidiStreams,
+		maxIncomingUniStreams:      maxIncomingUniStreams,
+		requireStreamCreditRelease: requireStreamCreditRelease,
+		sender:                     sender,
 	}
 	m.initMaps()
 	return m
@@ -75,6 +78,7 @@ func (m *streamsMap) initMaps() {
 			return newStream(m.ctx, id, m.sender, m.newFlowController(id), m.supportsResetStreamAt)
 		},
 		m.maxIncomingBidiStreams,
+		m.requireStreamCreditRelease,
 		m.queueControlFrame,
 		m.perspective,
 	)
@@ -92,6 +96,7 @@ func (m *streamsMap) initMaps() {
 			return newReceiveStream(id, m.sender, m.newFlowController(id))
 		},
 		m.maxIncomingUniStreams,
+		m.requireStreamCreditRelease,
 		m.queueControlFrame,
 		m.perspective,
 	)
@@ -177,6 +182,19 @@ func (m *streamsMap) DeleteStream(id protocol.StreamID) error {
 		return m.incomingBidiStreams.DeleteStream(id)
 	}
 	panic("")
+}
+
+func (m *streamsMap) ReleaseStreamCredit(id protocol.StreamID) {
+	// the stream credit for outgoing streams is issued by the peer
+	if protocol.StreamInitiator(id) == m.perspective {
+		return
+	}
+	switch protocol.StreamTypeOf(id) {
+	case protocol.StreamTypeUni:
+		m.incomingUniStreams.ReleaseStreamCredit(id)
+	case protocol.StreamTypeBidi:
+		m.incomingBidiStreams.ReleaseStreamCredit(id)
+	}
 }
 
 func (m *streamsMap) HandleMaxStreamsFrame(f *wire.MaxStreamsFrame) {

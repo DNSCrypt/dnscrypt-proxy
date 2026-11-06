@@ -41,14 +41,18 @@ type Stream struct {
 	conn        *rawConn
 	frameParser *frameParser
 
-	buf []byte // used as a temporary buffer when writing the HTTP/3 frame headers
-
 	bytesRemainingInFrame uint64
+
+	// the DATA frame being written: the unwritten part of its header, and the payload bytes still to write
+	frameHeader           []byte
+	bytesUnwrittenInFrame uint64
 
 	qlogger qlogwriter.Recorder
 
 	parseTrailer  func(io.Reader, *headersFrame) error
 	parsedTrailer bool
+
+	missingHeader bool // set if the stream was taken over before the response header was sent
 }
 
 func newStream(
@@ -61,7 +65,6 @@ func newStream(
 	return &Stream{
 		datagramStream: str,
 		conn:           conn,
-		buf:            make([]byte, 16),
 		qlogger:        qlogger,
 		parseTrailer:   parseTrailer,
 		frameParser: &frameParser{
@@ -73,6 +76,9 @@ func newStream(
 }
 
 func (s *Stream) Read(b []byte) (int, error) {
+	s.addQlogProducer()
+	defer s.removeQlogProducer()
+
 	if s.bytesRemainingInFrame == 0 {
 	parseLoop:
 		for {
@@ -121,40 +127,100 @@ func (s *Stream) hasMoreData() bool {
 	return s.bytesRemainingInFrame > 0
 }
 
+// hasUnfinishedFrame reports whether a Write failed partway through a DATA frame.
+func (s *Stream) hasUnfinishedFrame() bool {
+	return s.bytesUnwrittenInFrame > 0
+}
+
+// Write writes data to the stream.
+//
+// It can only be used after the response header has been sent.
 func (s *Stream) Write(b []byte) (int, error) {
-	s.buf = s.buf[:0]
-	s.buf = (&dataFrame{Length: uint64(len(b))}).Append(s.buf)
+	if !s.addQlogProducer() {
+		return s.writeUnframed(nil)
+	}
+	defer s.removeQlogProducer()
+
+	if s.missingHeader {
+		return 0, errors.New("http3: invalid use of Stream.Write before sending the response header")
+	}
+	// complete the DATA frame left unfinished by a Write that failed partway (e.g. when the write deadline expired)
+	var n int
+	if s.bytesUnwrittenInFrame > 0 {
+		var err error
+		if n, err = s.continueDataFrame(b); err != nil {
+			return n, err
+		}
+	}
+	if n == len(b) {
+		return n, nil
+	}
+
+	l := len(b) - n
+	s.frameHeader = (&dataFrame{Length: uint64(l)}).Append(s.frameHeader[:0])
+	s.bytesUnwrittenInFrame = uint64(l)
 	if s.qlogger != nil {
 		s.qlogger.RecordEvent(qlog.FrameCreated{
 			StreamID: s.StreamID(),
 			Raw: qlog.RawInfo{
-				Length:        len(s.buf) + len(b),
-				PayloadLength: len(b),
+				Length:        len(s.frameHeader) + l,
+				PayloadLength: l,
 			},
 			Frame: qlog.Frame{Frame: qlog.DataFrame{}},
 		})
 	}
-	if _, err := s.writeUnframed(s.buf); err != nil {
-		return 0, err
+	m, err := s.continueDataFrame(b[n:])
+	return n + m, err
+}
+
+// continueDataFrame writes the unwritten part of the DATA frame header,
+// followed by as much of b as fits into the frame's payload.
+func (s *Stream) continueDataFrame(b []byte) (int, error) {
+	if len(s.frameHeader) > 0 {
+		n, err := s.writeUnframed(s.frameHeader)
+		if err != nil {
+			s.frameHeader = s.frameHeader[n:]
+			return 0, err
+		}
+		s.frameHeader = s.frameHeader[:0]
 	}
-	return s.writeUnframed(b)
+	n, err := s.writeUnframed(b[:min(uint64(len(b)), s.bytesUnwrittenInFrame)])
+	s.bytesUnwrittenInFrame -= uint64(n)
+	return n, err
 }
 
 // TryWriteAll writes b in a DATA frame if the entire frame can be queued immediately.
 // It returns [quic.ErrWouldBlock] without queueing anything otherwise.
+// It can only be used after the response header has been sent.
 func (s *Stream) TryWriteAll(b []byte) error {
-	data := make([]byte, 0, frameHeaderLen+len(b))
-	data = (&dataFrame{Length: uint64(len(b))}).Append(data)
-	data = append(data, b...)
+	s.addQlogProducer()
+	defer s.removeQlogProducer()
+
+	if s.missingHeader {
+		return errors.New("http3: invalid use of Stream.TryWriteAll before sending the response header")
+	}
+	// complete the DATA frame left unfinished by a failed Write, then start a new one
+	completed := min(uint64(len(b)), s.bytesUnwrittenInFrame)
+	data := make([]byte, 0, len(s.frameHeader)+frameHeaderLen+len(b))
+	data = append(data, s.frameHeader...)
+	data = append(data, b[:completed]...)
+	frameStart := len(data)
+	rest := b[completed:]
+	if len(rest) > 0 {
+		data = (&dataFrame{Length: uint64(len(rest))}).Append(data)
+		data = append(data, rest...)
+	}
 	if err := s.datagramStream.TryWriteAll(data); err != nil {
 		return maybeReplaceError(err)
 	}
-	if s.qlogger != nil {
+	s.frameHeader = s.frameHeader[:0]
+	s.bytesUnwrittenInFrame -= completed
+	if s.qlogger != nil && len(rest) > 0 {
 		s.qlogger.RecordEvent(qlog.FrameCreated{
 			StreamID: s.StreamID(),
 			Raw: qlog.RawInfo{
-				Length:        len(data),
-				PayloadLength: len(b),
+				Length:        len(data) - frameStart,
+				PayloadLength: len(rest),
 			},
 			Frame: qlog.Frame{Frame: qlog.DataFrame{}},
 		})
@@ -165,6 +231,23 @@ func (s *Stream) TryWriteAll(b []byte) error {
 func (s *Stream) writeUnframed(b []byte) (int, error) {
 	n, err := s.datagramStream.Write(b)
 	return n, maybeReplaceError(err)
+}
+
+// addQlogProducer registers a call that may produce qlog events.
+// The application can make these calls at any time, also after the connection was closed.
+// It returns false once the qlogger was closed. All streams were shut down by then,
+// so a call that logs a frame before writing it must not create the frame.
+func (s *Stream) addQlogProducer() bool {
+	if s.qlogger == nil {
+		return true
+	}
+	return s.conn.AddQlogProducer()
+}
+
+func (s *Stream) removeQlogProducer() {
+	if s.qlogger != nil {
+		s.conn.RemoveQlogProducer()
+	}
 }
 
 func (s *Stream) StreamID() quic.StreamID {
@@ -178,6 +261,9 @@ func (s *Stream) QlogTrace() qlogwriter.Trace {
 }
 
 func (s *Stream) SendDatagram(b []byte) error {
+	s.addQlogProducer()
+	defer s.removeQlogProducer()
+
 	// TODO: reject if datagrams are not negotiated (yet)
 	return maybeReplaceError(s.datagramStream.SendDatagram(b))
 }
@@ -211,6 +297,7 @@ type RequestStream struct {
 	sentRequest   bool
 	requestedGzip bool
 	isConnect     bool
+	isHead        bool
 }
 
 func newRequestStream(
@@ -335,6 +422,12 @@ func (s *RequestStream) ReceiveDatagram(ctx context.Context) ([]byte, error) {
 // It can only be used for requests that don't have a request body.
 // It is invalid to call it more than once.
 func (s *RequestStream) SendRequestHeader(req *http.Request) error {
+	if !s.str.addQlogProducer() {
+		_, err := s.str.writeUnframed(nil)
+		return err
+	}
+	defer s.str.removeQlogProducer()
+
 	if req.Body != nil && req.Body != http.NoBody {
 		return errors.New("http3: invalid use of RequestStream.SendRequestHeader with a request that has a request body")
 	}
@@ -350,6 +443,7 @@ func (s *RequestStream) sendRequestHeader(req *http.Request) error {
 		s.requestedGzip = true
 	}
 	s.isConnect = req.Method == http.MethodConnect
+	s.isHead = req.Method == http.MethodHead
 	s.sentRequest = true
 	return maybeReplaceError(s.requestWriter.WriteRequestHeader(s.str.datagramStream, req, s.requestedGzip, s.str.StreamID(), s.str.qlogger))
 }
@@ -357,6 +451,12 @@ func (s *RequestStream) sendRequestHeader(req *http.Request) error {
 // sendRequestTrailer sends request trailers to the stream.
 // It should be called after the request body has been fully written.
 func (s *RequestStream) sendRequestTrailer(req *http.Request) error {
+	if !s.str.addQlogProducer() {
+		_, err := s.str.writeUnframed(nil)
+		return err
+	}
+	defer s.str.removeQlogProducer()
+
 	return maybeReplaceError(s.requestWriter.WriteRequestTrailer(s.str.datagramStream, req, s.str.StreamID(), s.str.qlogger))
 }
 
@@ -366,6 +466,9 @@ func (s *RequestStream) sendRequestTrailer(req *http.Request) error {
 // It is invalid to call it more than once.
 // It doesn't set [http.Response.Request] or [http.Response.TLS].
 func (s *RequestStream) ReadResponse() (*http.Response, error) {
+	s.str.addQlogProducer()
+	defer s.str.removeQlogProducer()
+
 	if !s.sentRequest {
 		return nil, errors.New("http3: invalid use of RequestStream.ReadResponse before SendRequestHeader")
 	}
@@ -405,7 +508,7 @@ func (s *RequestStream) ReadResponse() (*http.Response, error) {
 	res := s.response
 	err = updateResponseFromHeaders(res, decodeFn, s.maxHeaderBytes, &hfs)
 	if s.str.qlogger != nil {
-		qlogParsedHeadersFrame(s.str.qlogger, s.str.StreamID(), hf, hfs)
+		qlogParsedHeadersFrame(s.str.qlogger, s.str.StreamID(), hf, hfs, err)
 	}
 	if err != nil {
 		errCode := ErrCodeMessageError
@@ -417,14 +520,23 @@ func (s *RequestStream) ReadResponse() (*http.Response, error) {
 		return nil, fmt.Errorf("http3: invalid response: %w", err)
 	}
 
-	// Check that the server doesn't send more data in DATA frames than indicated by the Content-Length header (if set).
-	// See section 4.1.2 of RFC 9114.
-	respBody := newResponseBody(s.str, res.ContentLength, s.reqDone)
-
-	// Rules for when to set Content-Length are defined in https://tools.ietf.org/html/rfc7230#section-3.3.2.
 	isInformational := res.StatusCode >= 100 && res.StatusCode < 200
 	isNoContent := res.StatusCode == http.StatusNoContent
 	isSuccessfulConnect := s.isConnect && res.StatusCode >= 200 && res.StatusCode < 300
+
+	// Enforce the Content-Length (section 4.1.2 of RFC 9114).
+	contentLength := res.ContentLength
+	// Responses without content may declare a non-zero Content-Length.
+	if isInformational || isNoContent || res.StatusCode == http.StatusNotModified || s.isHead {
+		contentLength = 0
+	}
+	// A successful CONNECT response starts a tunnel, even if it's a 204.
+	if isSuccessfulConnect {
+		contentLength = res.ContentLength
+	}
+	respBody := newResponseBody(s.str, contentLength, s.reqDone)
+
+	// Rules for when to set Content-Length are defined in https://tools.ietf.org/html/rfc7230#section-3.3.2.
 	if (isInformational || isNoContent || isSuccessfulConnect) && res.ContentLength == -1 {
 		res.ContentLength = 0
 	}

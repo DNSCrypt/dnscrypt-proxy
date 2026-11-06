@@ -70,6 +70,9 @@ func (r *headerRedactingRecorder) redactFrame(frame Frame) {
 		if !strings.HasPrefix(name, ":") {
 			name = http.CanonicalHeaderKey(name)
 		}
-		hf.HeaderFields[i].Value = r.redact(name, f.Value)
+		if v := r.redact(name, f.Value); v != f.Value {
+			hf.HeaderFields[i].Value = v
+			hf.HeaderFields[i].InvalidValue = false
+		}
 	}
 }
