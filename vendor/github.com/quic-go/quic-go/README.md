@@ -72,6 +72,16 @@ quic-go always aims to support the latest two Go releases.
 
 We are always happy to welcome new contributors! We have a number of self-contained issues that are suitable for first-time contributors, they are tagged with [help wanted](https://github.com/quic-go/quic-go/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22). If you have any questions, please feel free to reach out by opening an issue or leaving a comment.
 
+## Supported by
+
+We are very grateful to the following organizations for supporting quic-go with free access to their tools:
+
+* [Codecov](https://app.codecov.io/gh/quic-go/quic-go): code coverage
+* [CodeRabbit](https://www.coderabbit.ai/): AI code review
+* [CodSpeed](https://app.codspeed.io/quic-go/quic-go): continuous benchmarking
+* [Macroscope](https://macroscope.com/): AI code review
+* [OSS-Fuzz](https://github.com/google/oss-fuzz/tree/master/projects/quic-go): continuous fuzzing
+
 ## License
 
 The code is licensed under the MIT license. The logo and brand assets are excluded from the MIT license. See [assets/LICENSE.md](https://github.com/quic-go/quic-go/tree/master/assets/LICENSE.md) for the full usage policy and details.

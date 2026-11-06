@@ -64,6 +64,7 @@ func newPathManager(
 
 // Returns a path challenge frame if one should be sent.
 // May return nil.
+// The path must have been created by GetOrCreatePath.
 func (pm *pathManager) HandlePacket(
 	remoteAddr net.Addr,
 	t monotime.Time,
@@ -79,7 +80,7 @@ func (pm *pathManager) HandlePacket(
 				path.rcvdNonProbing = true
 			}
 			if pm.logger.Debug() {
-				pm.logger.Debugf("received packet for path %s that was already probed, validated: %t", remoteAddr, path.validated)
+				pm.logger.Debugf("received packet for path %s, validated: %t", remoteAddr, path.validated)
 			}
 			shouldSwitch = path.validated && path.rcvdNonProbing
 			if i != len(pm.paths)-1 {
@@ -97,44 +98,14 @@ func (pm *pathManager) HandlePacket(
 		}
 	}
 
-	// new path while already at maxPaths
-	if p == nil && len(pm.paths) >= maxPaths {
-		// ignore it if the oldest path received a packet within pathTimeout
-		if pm.paths[0].lastPacketTime.Add(pathTimeout).After(t) {
-			if pm.logger.Debug() {
-				pm.logger.Debugf("received packet for previously unseen path %s, but already have %d paths", remoteAddr, len(pm.paths))
-			}
-			return protocol.ConnectionID{}, nil, shouldSwitch
-		}
-		// evict the oldest path, if the last packet was received more than pathTimeout ago
-		pm.retireConnID(pm.paths[0].id)
-		pm.paths = pm.paths[1:]
-	}
-
-	var pathID pathID
-	if p != nil {
-		pathID = p.id
-	} else {
-		pathID = pm.nextPathID
-	}
-
-	connID, ok := pm.getConnID(pathID)
-	if !ok {
-		pm.logger.Debugf("skipping validation of new path %s since no connection ID is available", remoteAddr)
+	if p == nil {
 		return protocol.ConnectionID{}, nil, shouldSwitch
 	}
 
-	if p == nil {
-		p = &path{
-			id:             pm.nextPathID,
-			addr:           remoteAddr,
-			lastPacketTime: t,
-			rcvdNonProbing: isNonProbing,
-			nextProbeTime:  t,
-			pathChallenges: make([][8]byte, 0, 2),
-		}
-		pm.nextPathID++
-		pm.paths = append(pm.paths, p)
+	connID, ok := pm.getConnID(p.id)
+	if !ok {
+		pm.logger.Debugf("skipping validation of new path %s since no connection ID is available", remoteAddr)
+		return protocol.ConnectionID{}, nil, shouldSwitch
 	}
 
 	frames := make([]ackhandler.Frame, 0, 2)
@@ -160,6 +131,41 @@ func (pm *pathManager) HandlePacket(
 		})
 	}
 	return connID, frames, shouldSwitch
+}
+
+// GetOrCreatePath returns the ID of the path for the remote address, creating the path if necessary.
+// It returns false if the path limit is reached.
+func (pm *pathManager) GetOrCreatePath(remoteAddr net.Addr, t monotime.Time) (_ pathID, isNew, ok bool) {
+	for _, p := range pm.paths {
+		if addrsEqual(p.addr, remoteAddr) {
+			return p.id, false, true
+		}
+	}
+
+	// new path while already at maxPaths
+	if len(pm.paths) >= maxPaths {
+		// ignore it if the oldest path received a packet within pathTimeout
+		if pm.paths[0].lastPacketTime.Add(pathTimeout).After(t) {
+			if pm.logger.Debug() {
+				pm.logger.Debugf("received packet for previously unseen path %s, but already have %d paths", remoteAddr, len(pm.paths))
+			}
+			return invalidPathID, false, false
+		}
+		// evict the oldest path, if the last packet was received more than pathTimeout ago
+		pm.retireConnID(pm.paths[0].id)
+		pm.paths = pm.paths[1:]
+	}
+
+	p := &path{
+		id:             pm.nextPathID,
+		addr:           remoteAddr,
+		lastPacketTime: t,
+		nextProbeTime:  t,
+		pathChallenges: make([][8]byte, 0, 2),
+	}
+	pm.nextPathID++
+	pm.paths = append(pm.paths, p)
+	return p.id, true, true
 }
 
 func (pm *pathManager) HandlePathResponseFrame(f *wire.PathResponseFrame) {

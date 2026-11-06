@@ -30,7 +30,7 @@ type Path struct {
 	tr          *Transport
 	initialRTT  time.Duration
 
-	enablePath func()
+	enablePath func(pathID)
 	validated  atomic.Bool
 	abandon    chan struct{}
 }
@@ -67,6 +67,7 @@ func (p *Path) Probe(ctx context.Context) error {
 
 // Switch switches the QUIC connection to this path.
 // It immediately stops sending on the old path, and sends on this new path.
+// It is possible to switch back to the old path without probing it again, until it is closed.
 func (p *Path) Switch() error {
 	if err := p.pathManager.switchToPath(p.id); err != nil {
 		switch {
@@ -109,7 +110,7 @@ type pathOutgoing struct {
 	isValidated    bool
 	probeSent      chan struct{} // receives when a PATH_CHALLENGE is sent
 	validated      chan struct{} // closed when the path the corresponding PATH_RESPONSE is received
-	enablePath     func()
+	enablePath     func(pathID)
 }
 
 func (p *pathOutgoing) ProbeSent() <-chan struct{} { return p.probeSent }
@@ -146,12 +147,15 @@ func newPathManagerOutgoing(
 	}
 }
 
-func (pm *pathManagerOutgoing) addPath(p *Path, enablePath func()) *pathOutgoing {
+func (pm *pathManagerOutgoing) addPath(p *Path, enablePath func(pathID)) *pathOutgoing {
 	pm.mx.Lock()
 	defer pm.mx.Unlock()
 
 	// path might already exist, and just being re-probed
 	if existingPath, ok := pm.paths[p.id]; ok {
+		// only a PATH_RESPONSE to a new PATH_CHALLENGE validates the path again
+		existingPath.isValidated = false
+		existingPath.pathChallenges = nil
 		existingPath.validated = make(chan struct{})
 		return existingPath
 	}
@@ -212,7 +216,7 @@ func (pm *pathManagerOutgoing) switchToPath(id pathID) error {
 	return nil
 }
 
-func (pm *pathManagerOutgoing) NewPath(t *Transport, initialRTT time.Duration, enablePath func()) *Path {
+func (pm *pathManagerOutgoing) NewPath(t *Transport, initialRTT time.Duration, enablePath func(pathID)) *Path {
 	pm.mx.Lock()
 	defer pm.mx.Unlock()
 
@@ -258,7 +262,7 @@ func (pm *pathManagerOutgoing) NextPathToProbe() (_ protocol.ConnectionID, _ ack
 	p.pathChallenges = append(p.pathChallenges, b)
 
 	pm.pathsToProbe = pm.pathsToProbe[1:]
-	p.enablePath()
+	p.enablePath(id)
 	select {
 	case p.probeSent <- struct{}{}:
 	default:
@@ -268,6 +272,19 @@ func (pm *pathManagerOutgoing) NextPathToProbe() (_ protocol.ConnectionID, _ ack
 		Handler: (*pathManagerOutgoingAckHandler)(pm),
 	}
 	return connID, frame, p.tr, true
+}
+
+// Transport returns the Transport of the path.
+// It returns false if the path is not being probed or used, e.g. because it was closed.
+func (pm *pathManagerOutgoing) Transport(id pathID) (*Transport, bool) {
+	pm.mx.Lock()
+	defer pm.mx.Unlock()
+
+	p, ok := pm.paths[id]
+	if !ok {
+		return nil, false
+	}
+	return p.tr, true
 }
 
 func (pm *pathManagerOutgoing) HandlePathResponseFrame(f *wire.PathResponseFrame) {
@@ -288,16 +305,16 @@ func (pm *pathManagerOutgoing) HandlePathResponseFrame(f *wire.PathResponseFrame
 	}
 }
 
-func (pm *pathManagerOutgoing) ShouldSwitchPath() (*Transport, bool) {
+func (pm *pathManagerOutgoing) ShouldSwitchPath() (pathID, *Transport, bool) {
 	pm.mx.Lock()
 	defer pm.mx.Unlock()
 
 	if pm.pathToSwitchTo == nil {
-		return nil, false
+		return invalidPathID, nil, false
 	}
 	p := pm.pathToSwitchTo
 	pm.pathToSwitchTo = nil
-	return p.tr, true
+	return pm.activePath, p.tr, true
 }
 
 type pathManagerOutgoingAckHandler pathManagerOutgoing

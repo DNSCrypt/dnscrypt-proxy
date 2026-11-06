@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"strings"
 	"sync/atomic"
 	"time"
 
@@ -381,14 +380,6 @@ func (h *cryptoSetup) GetSessionTicket() ([]byte, error) {
 		EarlyData: h.allow0RTT,
 		Extra:     [][]byte{addSessionStateExtraPrefix(h.getDataForSessionTicket())},
 	}); err != nil {
-		// Session tickets might be disabled by tls.Config.SessionTicketsDisabled.
-		// We can't check h.tlsConfig here, since the actual config might have been obtained from
-		// the GetConfigForClient callback.
-		// See https://github.com/golang/go/issues/62032.
-		// This error assertion can be removed once we drop support for Go 1.25.
-		if strings.Contains(err.Error(), "session ticket keys unavailable") {
-			return nil, nil
-		}
 		return nil, err
 	}
 	// If session tickets are disabled, NextEvent will immediately return QUICNoEvent,

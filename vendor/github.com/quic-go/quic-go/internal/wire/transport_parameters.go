@@ -86,7 +86,7 @@ type TransportParameters struct {
 
 	OriginalDestinationConnectionID protocol.ConnectionID
 	InitialSourceConnectionID       protocol.ConnectionID
-	RetrySourceConnectionID         *protocol.ConnectionID // use a pointer here to distinguish zero-length connection IDs from missing transport parameters
+	RetrySourceConnectionID         protocol.ConnectionID // invalid if not sent
 
 	StatelessResetToken     *protocol.StatelessResetToken
 	ActiveConnectionIDLimit uint64
@@ -206,9 +206,8 @@ func (p *TransportParameters) unmarshal(b []byte, sentBy protocol.Perspective, f
 			if paramLen > protocol.MaxConnIDLen {
 				return protocol.ErrInvalidConnectionIDLen
 			}
-			connID := protocol.ParseConnectionID(b[:paramLen])
+			p.RetrySourceConnectionID = protocol.ParseConnectionID(b[:paramLen])
 			b = b[paramLen:]
-			p.RetrySourceConnectionID = &connID
 		case resetStreamAtParameterID, legacyResetStreamAtParameterID:
 			if paramLen != 0 {
 				return fmt.Errorf("wrong length for reset_stream_at: %d (expected empty)", paramLen)
@@ -445,7 +444,7 @@ func (p *TransportParameters) Marshal(pers protocol.Perspective) []byte {
 	b = quicvarint.Append(b, uint64(p.InitialSourceConnectionID.Len()))
 	b = append(b, p.InitialSourceConnectionID.Bytes()...)
 	// retry_source_connection_id
-	if pers == protocol.PerspectiveServer && p.RetrySourceConnectionID != nil {
+	if pers == protocol.PerspectiveServer && p.RetrySourceConnectionID.Valid() {
 		b = quicvarint.Append(b, uint64(retrySourceConnectionIDParameterID))
 		b = quicvarint.Append(b, uint64(p.RetrySourceConnectionID.Len()))
 		b = append(b, p.RetrySourceConnectionID.Bytes()...)
@@ -570,7 +569,7 @@ func (p *TransportParameters) ValidForUpdate(saved *TransportParameters) bool {
 func (p *TransportParameters) String() string {
 	logString := "&wire.TransportParameters{OriginalDestinationConnectionID: %s, InitialSourceConnectionID: %s, "
 	logParams := []any{p.OriginalDestinationConnectionID, p.InitialSourceConnectionID}
-	if p.RetrySourceConnectionID != nil {
+	if p.RetrySourceConnectionID.Valid() {
 		logString += "RetrySourceConnectionID: %s, "
 		logParams = append(logParams, p.RetrySourceConnectionID)
 	}

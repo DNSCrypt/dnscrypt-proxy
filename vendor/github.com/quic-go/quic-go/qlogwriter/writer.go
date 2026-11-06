@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"slices"
 	"sync"
 	"time"
 
@@ -19,9 +18,6 @@ type Trace interface {
 	// AddProducer creates a new Recorder for this trace.
 	// Each Recorder can record events independently.
 	AddProducer() Recorder
-
-	// SupportsSchemas returns true if the trace supports the given schema.
-	SupportsSchemas(schema string) bool
 }
 
 // Recorder is used to record events to a qlog trace.
@@ -58,7 +54,7 @@ type event struct {
 const eventChanSize = 50
 
 // FileSeq represents a qlog trace using the JSON-SEQ format,
-// https://www.ietf.org/archive/id/draft-ietf-quic-qlog-main-schema-12.html#section-5
+// https://www.ietf.org/archive/id/draft-ietf-quic-qlog-main-schema-15.html#section-5
 // qlog event producers can be created by calling [FileSeq.AddProducer].
 // The underlying io.WriteCloser is closed when the last producer is removed.
 type FileSeq struct {
@@ -74,27 +70,27 @@ type FileSeq struct {
 	mx        sync.Mutex
 	producers int
 	closed    bool
-
-	eventSchemas []string
 }
 
 var _ Trace = &FileSeq{}
 
 // NewFileSeq creates a new JSON-SEQ qlog trace to log transport events.
+// The trace header declares all event schemas registered using [RegisterEventSchema].
 func NewFileSeq(w io.WriteCloser) *FileSeq {
-	return newFileSeq(w, "transport", nil, nil)
+	return newFileSeq(w, "transport", ConnectionID{})
 }
 
 // NewConnectionFileSeq creates a new qlog trace to log connection events.
-func NewConnectionFileSeq(w io.WriteCloser, isClient bool, odcid ConnectionID, eventSchemas []string) *FileSeq {
+// The trace header declares all event schemas registered using [RegisterEventSchema].
+func NewConnectionFileSeq(w io.WriteCloser, isClient bool, odcid ConnectionID) *FileSeq {
 	pers := "server"
 	if isClient {
 		pers = "client"
 	}
-	return newFileSeq(w, pers, &odcid, eventSchemas)
+	return newFileSeq(w, pers, odcid)
 }
 
-func newFileSeq(w io.WriteCloser, pers string, odcid *ConnectionID, eventSchemas []string) *FileSeq {
+func newFileSeq(w io.WriteCloser, pers string, odcid ConnectionID) *FileSeq {
 	now := time.Now()
 	buf := &bytes.Buffer{}
 	enc := jsontext.NewEncoder(buf)
@@ -105,7 +101,7 @@ func newFileSeq(w io.WriteCloser, pers string, odcid *ConnectionID, eventSchemas
 		VantagePointType: pers,
 		GroupID:          odcid,
 		ReferenceTime:    now,
-		EventSchemas:     eventSchemas,
+		EventSchemas:     registeredEventSchemas,
 	}).Encode(enc); err != nil {
 		panic(fmt.Sprintf("qlog encoding into a bytes.Buffer failed: %s", err))
 	}
@@ -119,12 +115,7 @@ func newFileSeq(w io.WriteCloser, pers string, odcid *ConnectionID, eventSchemas
 		encodeErr:     encodeErr,
 		events:        make(chan event, eventChanSize),
 		done:          make(chan struct{}),
-		eventSchemas:  eventSchemas,
 	}
-}
-
-func (t *FileSeq) SupportsSchemas(schema string) bool {
-	return slices.Contains(t.eventSchemas, schema)
 }
 
 func (t *FileSeq) AddProducer() Recorder {
@@ -139,16 +130,14 @@ func (t *FileSeq) AddProducer() Recorder {
 	return &Writer{t: t}
 }
 
-func (t *FileSeq) record(eventTime time.Time, details Event) {
+func (t *FileSeq) record(details Event) {
 	t.mx.Lock()
+	defer t.mx.Unlock()
 
 	if t.closed {
-		t.mx.Unlock()
 		return
 	}
-	t.mx.Unlock()
-
-	t.events <- event{Time: eventTime, Event: details}
+	t.events <- event{Time: time.Now(), Event: details}
 }
 
 func (t *FileSeq) Run() {
@@ -225,5 +214,5 @@ func (w *Writer) Close() error {
 }
 
 func (w *Writer) RecordEvent(ev Event) {
-	w.t.record(time.Now(), ev)
+	w.t.record(ev)
 }
