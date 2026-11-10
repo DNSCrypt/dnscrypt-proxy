@@ -29,11 +29,11 @@ type MsgAcceptAction int
 
 // Allowed returned values from a MsgAcceptFunc.
 const (
-	MsgAccept               MsgAcceptAction = iota // Accept the message.
-	MsgReject                                      // Reject the message with a [RcodeFormatError].
-	MsgRejectNotImplemented                        // Reject the message with a [RcodeNotImplemented].
-	MsgRejectRefused                               // Reject the message with a [RcodeRefused].
-	MsgIgnore                                      // Ignore the message and send nothing back.
+	MsgAccept               MsgAcceptAction = RcodeSuccess        // Accept the message.
+	MsgReject               MsgAcceptAction = RcodeFormatError    // Reject with a [RcodeFormatError].
+	MsgRejectNotImplemented MsgAcceptAction = RcodeNotImplemented // Reject with a [RcodeNotImplemented].
+	MsgRejectRefused        MsgAcceptAction = RcodeRefused        // Reject with a [RcodeRefused].
+	MsgIgnore               MsgAcceptAction = -1                  // Ignore the message and send nothing back.
 )
 
 // MsgAcceptFunc is used early in the server code to accept or reject a message with RcodeFormatError or
@@ -46,15 +46,21 @@ type MsgAcceptFunc func(m *Msg) MsgAcceptAction
 // DefaultMsgAcceptFunc checks the request and will reject if:
 //
 //   - Isn't a request, returns [MsgIgnore].
-//   - Has an opcode that isn't recognized, returns [MsgIgnore].
 //   - Has more than a single "RR" in the question section, returns [MsgReject].
+//   - Has an opcode that isn't recognized, returns [MsgRejectNotImplemented]. This also clears m's header
+//     bits.
 //   - Is a query for RRSIGs, returns [MsgRejectRefused].
+//
+// Note this function is called before the entire message is unpacked. We've seen the header and the question.
 func DefaultMsgAcceptFunc(m *Msg) MsgAcceptAction {
-	// see dnshttp.DefaultMsgAcceptFunc where this code is duplicated.
 	if m.Response {
 		return MsgIgnore
 	}
 	if _, ok := OpcodeToString[m.Opcode]; !ok {
+		m.RecursionDesired = false
+		m.AuthenticatedData = false
+		m.CheckingDisabled = false
+		m.Zero = false
 		return MsgRejectNotImplemented
 	}
 	if len(m.Question) != 1 {
@@ -98,9 +104,10 @@ type Server struct {
 	// Default buffer size to use to read incoming UDP messages. If not set it defaults to DefaultMsgSize
 	// (1400 B).
 	UDPSize int
-	// The read timeout vaule for new connections, defaults to 2 * time.Second.
+	// The read timeout vaule for reading of a connection, defaults to 500 * [time.Millisecond].
 	ReadTimeout time.Duration
-	// TCP idle timeout for multiple queries, if nil, defaults to 8 * time.Second (RFC 5966).
+	// TCP idle timeout for multiple queries, if nil, defaults to 3 * [time.Second] (RFC 5966 recommends in
+	// the "order of seconds").
 	IdleTimeout time.Duration
 	// Maximum number of TCP queries before we close the socket. Default is [MaxTCPQueries], unlimited if -1.
 	// See [ResponseWriter.Hijack] on how a handler can bypass this.
@@ -158,10 +165,10 @@ func (srv *Server) init() {
 		srv.Handler = DefaultServeMux
 	}
 	if srv.ReadTimeout == 0 {
-		srv.ReadTimeout = 2 * time.Second
+		srv.ReadTimeout = 500 * time.Millisecond
 	}
 	if srv.IdleTimeout == 0 {
-		srv.IdleTimeout = 8 * time.Second
+		srv.IdleTimeout = 3 * time.Second
 	}
 	if srv.MsgPool == nil {
 		srv.MsgPool = pool.New(srv.UDPSize)
@@ -311,11 +318,17 @@ func (srv *Server) serveTCP(wg *sync.WaitGroup, conn net.Conn) {
 			break
 		}
 
-		wg.Add(1) // no wg.Go to prevent defer usage
-		go func() {
+		if limit == 1 {
+			// This is the only query on this connection, serve it inline so a Hijack() done by the
+			// handler is visible before we decide to close the connection.
 			srv.serveDNS(w, r)
-			wg.Done()
-		}()
+		} else {
+			wg.Add(1) // no wg.Go to prevent defer usage
+			go func() {
+				srv.serveDNS(w, r)
+				wg.Done()
+			}()
+		}
 
 		hijacked = hijacked || w.hijacked.Load()
 		if hijacked {
@@ -348,13 +361,7 @@ func (srv *Server) serveDNS(w *response, r *Msg) {
 		return
 
 	case MsgReject, MsgRejectNotImplemented, MsgRejectRefused:
-		r.Rcode = RcodeFormatError
-		if action == MsgRejectNotImplemented {
-			r.Rcode = RcodeNotImplemented
-		}
-		if action == MsgRejectRefused {
-			r.Rcode = RcodeRefused
-		}
+		r.Rcode = uint16(action)
 		r.Authoritative = false
 		r.Response = true
 		r.Zero = false

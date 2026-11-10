@@ -21,9 +21,11 @@ func Unpack(s *dnsnet.String) ([]Pair, error) {
 			return nil, unpack.Errorf("bad SVCB key")
 		}
 		pair := pairFn()
-
 		if err := _unpack(pair, &data); err != nil {
 			return nil, err
+		}
+		if !data.Empty() {
+			return nil, unpack.ErrTrailingData
 		}
 		pairs = append(pairs, pair)
 	}
