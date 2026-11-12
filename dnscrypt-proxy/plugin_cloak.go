@@ -130,7 +130,7 @@ func (plugin *PluginCloak) loadRules(lines string, patternMatcher *PatternMatche
 			}
 			ptrLine = strings.TrimSuffix(reversed, ".")
 		} else {
-			reversed, err := reverseAddr(cloakedName.ipv6[0].String())
+			reversed, err := reverseAddr(ip.String())
 			if err != nil {
 				dlog.Errorf("Failed to reverse IPv6 address at line %d: %v", lineNo+1, err)
 				continue
