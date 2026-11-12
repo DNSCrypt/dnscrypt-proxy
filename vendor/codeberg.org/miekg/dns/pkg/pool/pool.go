@@ -56,9 +56,25 @@ type Builder struct {
 }
 
 // NewBuilder returns a new builder pool.
-func NewBuilder() *Builder {
-	return &Builder{New: func() any { return strings.Builder{} }}
-}
+func NewBuilder() *Builder { return &Builder{New: func() any { return strings.Builder{} }} }
 
 func (s *Builder) Get() strings.Builder   { return s.Pool.Get().(strings.Builder) }
 func (s *Builder) Put(sb strings.Builder) { sb.Reset(); s.Pool.Put(sb) }
+
+// Compression is a pool used by the Pack method.
+type Compression struct {
+	sync.Pool
+}
+
+// NewCompression returns a new compression pool.
+func NewCompression() *Compression {
+	// 10 is randomly choosen here. We did have the length of all sections + 3, so for short messages that
+	// would be 4 or some such. Just settle on 10, as we now re-use them anyway.
+	return &Compression{New: func() any { return make(map[string]uint16, 10) }}
+}
+
+func (c *Compression) Get() map[string]uint16 { return c.Pool.Get().(map[string]uint16) }
+func (c *Compression) Put(m map[string]uint16) {
+	clear(m)
+	c.Pool.Put(m)
+}

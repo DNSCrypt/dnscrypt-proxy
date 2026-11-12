@@ -25,12 +25,15 @@ func Name(msgBuf []byte, off int) int {
 }
 
 // Question jumps the question section that should start at msgBuf[off].
-func Question(msgBuf []byte, off int) int {
-	off = Name(msgBuf, off)
-	if off+4 >= len(msgBuf) || off == 0 {
-		return 0
+func Question(msgBuf []byte, off int, qdcount uint16) int {
+	for range qdcount {
+		off = Name(msgBuf, off)
+		if off+4 >= len(msgBuf) || off == 0 {
+			return 0
+		}
+		off += 4 // type + class
 	}
-	return off + 4 // type + class
+	return off
 }
 
 // RR jumps the RR that starts at msgBuf[off].
@@ -59,7 +62,7 @@ func To(i int, msgBuf []byte) int {
 	}
 	qdcount := binary.BigEndian.Uint16(msgBuf[4:])
 	if qdcount > 0 {
-		off = Question(msgBuf, off)
+		off = Question(msgBuf, off, qdcount)
 		if off >= len(msgBuf) {
 			return 0
 		}

@@ -163,6 +163,11 @@ type Config struct {
 	// If set to a negative value, it doesn't allow any unidirectional streams.
 	// Values larger than 2^60 will be clipped to that value.
 	MaxIncomingUniStreams int64
+	// RequireStreamCreditRelease requires the application to release the credit of streams opened by the peer.
+	// By default, the peer is allowed to open a new stream as soon as one of its streams completes.
+	// If set, a completed stream keeps counting towards MaxIncomingStreams and MaxIncomingUniStreams
+	// until the application calls ReleaseStreamCredit on it.
+	RequireStreamCreditRelease bool
 	// KeepAlivePeriod defines whether this peer will periodically send a packet to keep the connection alive.
 	// If set to 0, then no keep alive is sent. Otherwise, the keep alive is sent on that period (or at most
 	// every half of MaxIdleTimeout, whichever is smaller).
@@ -220,6 +225,8 @@ type ConnectionState struct {
 		// Local is true if support was enabled via Config.EnableStreamResetPartialDelivery.
 		Remote, Local bool
 	}
+	// RequireStreamCreditRelease is true if Config.RequireStreamCreditRelease was set.
+	RequireStreamCreditRelease bool
 	// Used0RTT says if 0-RTT resumption was used.
 	Used0RTT bool
 	// Version is the QUIC version of the QUIC connection.

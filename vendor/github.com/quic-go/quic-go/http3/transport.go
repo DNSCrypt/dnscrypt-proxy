@@ -221,6 +221,7 @@ func (t *Transport) doRoundTripOpt(req *http.Request, opt RoundTripOpt, isRetrie
 	if err != nil {
 		return nil, err
 	}
+	defer cl.useCount.Add(-1)
 
 	select {
 	case <-cl.dialing:
@@ -232,7 +233,6 @@ func (t *Transport) doRoundTripOpt(req *http.Request, opt RoundTripOpt, isRetrie
 		t.removeClient(hostname)
 		return nil, cl.dialErr
 	}
-	defer cl.useCount.Add(-1)
 	traceGotConn(trace, cl.conn, isReused)
 	rsp, err := cl.clientConn.RoundTrip(req)
 	if err != nil {
@@ -307,7 +307,9 @@ func (t *Transport) getClient(ctx context.Context, hostname string, onlyCached b
 		if onlyCached {
 			return nil, false, ErrNoCachedConn
 		}
-		ctx, cancel := context.WithCancel(ctx)
+		// The dial is shared by all requests to this host,
+		// so it must not be canceled when the first request is canceled.
+		ctx, cancel := context.WithCancel(context.WithoutCancel(ctx))
 		cl = &roundTripperWithCount{
 			dialing: make(chan struct{}),
 			cancel:  cancel,

@@ -5,7 +5,7 @@
 
 > Less is more.
 
-This work is partly funded by the [Nominet DNS Fund](https://nominet.uk/our-impact/nominet-dns-fund/).
+**This work is partly funded by the [Nominet DNS Fund](https://nominet.uk/our-impact/nominet-dns-fund/).**
 
 Complete and usable DNS library. All Resource Records are supported, including the DNSSEC types. It follows a
 lean and mean philosophy. Server side and client side programming is supported, i.e. you can build servers and
@@ -18,7 +18,7 @@ making backwards incompatible changes.
 
 Many convenience functions are included in _dns_, _dnstest_ or otherwise in _dnsutils_. The RR's resource data
 (RDATA) is split off into its own package: _rdata_. This means accessing the RR's header and rdata is much
-simpler now. [^a]
+simpler now. This also saves a lot of memory. [^a]
 
 [^a]: A function is put in _dnsutils_, unless (due to cyclic imports) it is utterly impossible to put it there. Only then it is put in the main _dns_ package.
 
@@ -33,7 +33,7 @@ Also [see the Go documentation](https://pkg.go.dev/codeberg.org/miekg/dns).
 This new version will not soon see a v1.0.0 release because I want to be able to still make changes. In a
 year or two (2028?) when things have stabilized it will be blessed with a v1.0.0.
 
-# Porting From v1
+# Porting from v1
 
 Everything from <https://github.com/miekg/dns> works. See
 [README-v1-to-v2.md](https://codeberg.org/miekg/dns/src/branch/main/_doc/README-v1-to-v2.md)
@@ -91,6 +91,7 @@ A not-so-up-to-date-list-that-may-be-actually-current:
   both in the cloud or in your own infrastructure.
 - [Gonemaster](https://codeberg.org/pawal/gonemaster) - Gonemaster is a Go implementation of the DNS test framework Zonemaster engine and CLI.
 - [DNSieve](https://github.com/secu-tools/dnsieve) - a DNS filtering proxy that fans out queries to multiple upstream resolvers concurrently and enforces block-consensus.
+- [Lancert](https://lancert.dev) - A free, open-source service that helps users obtain publicly trusted TLS certificates for private IPv4 and IPv6 addresses.
 
 Send pull request if you want to be listed here.
 
@@ -111,18 +112,19 @@ What users say:
 
 - UDP/TCP queries, recvmmsg(2), TCP query-pipelining, IPv4 and IPv6.
 - Fast.
-- RFC 1035 zone file parsing ($INCLUDE, $ORIGIN, $TTL and $GENERATE - for _all_ record types) is supported.
+- RFC 1035 zone file parsing ($INCLUDE, $ORIGIN, $TTL and $GENERATE - for _all_ record types) is supported,
+  but directives can also be ignored.
 - Server side programming (mimicking the net/http package), with `dns.Handle` and `dns.HandleFunc` allowing
   for middleware servers.
 - Client side programming.
 - DNSSEC: signing, validating and key generation for DSA, RSA, ECDSA, Ed25519 and ML-DSA-44.
 - EDNS0, NSID, Cookies, etc, as pseudo RRs in the (fake) pseudo section.
 - AXFR/IXFR.
-- TSIG, SIG(0).
+- TSIG.
 - DNS over TLS (DOT): encrypted connection between client and server over TCP.
 - DNS over HTTP (DOH), see the _dnshttp_ package.
 - Improved naming by embracing sub-packages.
-- Improved RRs, by having the rdata specified in an _rdata_ package.
+- Improved, and smaller, RRs, by having the rdata specified in an _rdata_ package.
 - Escapes (\DDD and \x) in domain names is not supported (anymore) - the overhead (50-100%) was too high.
 - Easy way for custom RRs and EDNS0 pseudo RRs.
 
@@ -135,8 +137,8 @@ of requests/issues usually get closed pretty swiftly.
 
 # Building/developing
 
-This library uses Go modules and uses semantic versioning. Getting the code and working with the library is
-done via:
+This library uses Go modules and uses semantic versioning (after 1.0.0 is released). Getting the code and
+working with the library is done via:
 
     git clone git@codeberg.org:miekg/dns  # use https if you don't have a codeberg account
     cd dns
@@ -148,13 +150,16 @@ and import codeberg.org/miekg/dns in your Go files.
 ## Examples
 
 A short "how to use the API" is at the beginning of `doc.go`. The cmd/ directory contains a reflect example
-program that is used for benchmarking, and further has atomdns which is full fledged DNS server that is
-developed in tandem with the library.
+program that is used for benchmarking, a cookbook is available in `cookbook_test.go`.
+Atomdns which is full fledged DNS server that is developed in tandem with the library, and can be found in
+`cmd/atomdns`.
 
 ## Supported RFCs
 
 _all of them_ and _then some_
 
+- 883 - Domain names: Implementation specification
+- 973 - Domain system changes and observations
 - 103{3,4,5} - DNS standard
 - <s>1348 - NSAP record</s>
 - 1982 - Serial Arithmetic
@@ -194,6 +199,7 @@ _all of them_ and _then some_
 - 5936 - AXFR
 - 5966 - TCP implementation recommendations
 - 6605 - ECDSA
+- 6055 - IAB Thoughts on Encodings for Internationalized Domain Names
 - 6672 - DNAME
 - 6725 - IANA Registry Update
 - 6742 - ILNP DNS
@@ -212,6 +218,7 @@ _all of them_ and _then some_
 - 7858 - DNS over TLS: Initiation and Performance Considerations
 - 7871 - EDNS0 Client Subnet
 - 7873 - Domain Name System (DNS) Cookies
+- 8020 - NXDOMAIN: There Really Is Nothing Underneath
 - 8080 - EdDSA for DNSSEC
 - 8145 - EDNS0 key tag
 - 8427 - Representing DNS Messages in JSON
@@ -221,6 +228,7 @@ _all of them_ and _then some_
 - 8509 - DNSSEC Trusted Key Sentinel
 - 8659 - DNS Certification Authority Authorization (CAA) Resource Record
 - 8777 - DNS Reverse IP Automatic Multicast Tunneling (AMT) Discovery
+- 8906 - A Common Operational Problem in DNS Servers: Failure to Communicate
 - 8914 - Extended DNS Errors
 - 8976 - Message Digest for DNS Zones (ZONEMD RR)
 - 9267 - Common Implementation Anti-Patterns

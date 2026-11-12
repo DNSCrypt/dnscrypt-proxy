@@ -52,7 +52,7 @@ func (h *encoderHelper) WriteToken(t jsontext.Token) {
 
 type traceHeader struct {
 	VantagePointType string
-	GroupID          *ConnectionID
+	GroupID          ConnectionID
 	ReferenceTime    time.Time
 	EventSchemas     []string
 }
@@ -92,7 +92,7 @@ func (l traceHeader) Encode(enc *jsontext.Encoder) error {
 	h.WriteToken(jsontext.String("common_fields"))
 	// -- common_fields
 	h.WriteToken(jsontext.BeginObject)
-	if l.GroupID != nil {
+	if l.GroupID.Valid() {
 		h.WriteToken(jsontext.String("group_id"))
 		h.WriteToken(jsontext.String(l.GroupID.String()))
 	}

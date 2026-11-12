@@ -7,17 +7,84 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"sync"
 	"time"
 )
 
-// A Client is a DNS client. It is safe to use a client from multiple goroutines.
+// A Client is a DNS client. It is safe to use a client from multiple goroutines. It supports TCP query
+// pipelining and keeps track of in-flight requests on per ID, per connection basis. Use [Client.Err] to check
+// if there are still messages in-flight.
 type Client struct {
 	*Transport // If Transport is nil it gets a [NewTransport].
+
+	sync.Mutex // protects f and *Transport.
+	// f tracks the ID we've have sent, but not seen a reply for.
+	f map[local]struct{}
+}
+
+// local tracks the oustanding message ID *and* the local address.
+type local struct {
+	id   uint16
+	conn net.Conn
 }
 
 // NewClient returns a client with the transport set to [NewTransport].
 func NewClient() *Client {
-	return &Client{Transport: NewTransport()}
+	return &Client{Transport: NewTransport(), f: make(map[local]struct{})}
+}
+
+// add must called under a lock. It adds an outstanding request to track.
+func (c *Client) inflight(id uint16, conn net.Conn) {
+	l := local{id, conn} // use addr as-is, it is different for a conn.
+	c.f[l] = struct{}{}
+}
+
+// done must called under a lock. It removes an outstanding request to track.
+func (c *Client) done(id uint16, conn net.Conn) bool {
+	l := local{id, conn}
+	_, ok := c.f[l]
+	if ok {
+		delete(c.f, l)
+	}
+	return ok
+}
+
+// Err returns an error if there are still responses considered in-flight. After this call the internal cache is cleared.
+func (c *Client) Err() error {
+	ids := []uint16{}
+	c.Lock()
+	for l := range c.f {
+		ids = append(ids, l.id)
+	}
+	clear(c.f)
+	c.Unlock()
+	if l := len(ids); l > 0 {
+		return fmt.Errorf("%d in-flight requests remaining: %v", l, ids)
+	}
+	return nil
+}
+
+// clear unconditionally clear the ID cache in c for conn.
+func (c *Client) clear(conn net.Conn) {
+	c.Lock()
+	for l := range c.f {
+		if l.conn == conn {
+			delete(c.f, l)
+		}
+	}
+	c.Unlock()
+}
+
+// init checks if c.f in clients exists and if not allocates one.
+func (c *Client) init() {
+	c.Lock()
+	if c.f == nil {
+		c.f = make(map[local]struct{})
+	}
+	if c.Transport == nil {
+		c.Transport = NewTransport()
+	}
+	c.Unlock()
 }
 
 // Exchange performs a synchronous query over "network". It sends the message m to the address
@@ -53,23 +120,32 @@ func Exchange(ctx context.Context, m *Msg, network, address string) (r *Msg, err
 //   - if the message returned does not have the same ID as the message sent.
 //   - the response bit is not set on the reply.
 //
+// Use [Client.Err] to see if there are still outstanding queries in the in-flight cache.
+//
 // See [CompareName] for checking the question name the point to another possible check. See
 // [codeberg.org/miekg/dns/dnsutil.Randomize] to randomize the question name.
+//
+// After a call to Exchange the internal in-flight messsage ID cache is cleared.
 func (c *Client) Exchange(ctx context.Context, m *Msg, network, address string) (r *Msg, rtt time.Duration, err error) {
-	if c.Transport == nil {
-		c.Transport = NewTransport()
-	}
+	c.init()
 
 	conn, err := c.dial(ctx, network, address)
 	if err != nil {
 		return nil, 0, err
 	}
-	defer conn.Close()
-	return c.ExchangeWithConn(ctx, m, conn)
+	defer c.clear(conn) // conn is gone after leaving this, c.Err() is pretty useless then, so clear it.
+	if r, rtt, err = c.ExchangeWithConn(ctx, m, conn); err != nil {
+		conn.Close()
+		return r, rtt, err
+	}
+	conn.Close()
+	return r, rtt, nil
 }
 
-// ExchangeWithConn behaves like [client.Exchange], but with a supplied connection.
+// ExchangeWithConn behaves like [client.Exchange], but with a supplied connection. See [client.Err] how to
+// check if all responses sent are received.
 func (c *Client) ExchangeWithConn(ctx context.Context, m *Msg, conn net.Conn) (r *Msg, rtt time.Duration, err error) {
+	c.init()
 	if len(m.Data) == 0 {
 		if err := m.Pack(); err != nil {
 			return nil, 0, err
@@ -77,14 +153,19 @@ func (c *Client) ExchangeWithConn(ctx context.Context, m *Msg, conn net.Conn) (r
 	}
 
 	t := time.Now()
-	remote := &response{conn: conn} // for Session() call in msg.go#L750
-	if _, err := io.Copy(remote, m); err != nil {
+	w := &response{conn: conn} // for Session() call in msg.go
+	_, err = io.Copy(w, m)
+	if err != nil {
 		return nil, time.Since(t), err
 	}
 
 	if err := ctx.Err(); err != nil {
 		return nil, time.Since(t), err
 	}
+
+	c.Lock()
+	c.inflight(m.ID, conn)
+	c.Unlock()
 
 	r = &Msg{Data: m.Data}
 	m.Data = m.Data[:0]
@@ -96,23 +177,48 @@ func (c *Client) ExchangeWithConn(ctx context.Context, m *Msg, conn net.Conn) (r
 	}
 
 	conn.SetReadDeadline(time.Now().Add(c.ReadTimeout))
-	if _, err := io.Copy(r, conn); err != nil {
+	_, err = io.Copy(r, conn)
+	if err != nil {
+		// failed, remove m.ID from outstanding, we return an error anyway
+		c.Lock()
+		c.done(m.ID, conn)
+		c.Unlock()
+
 		return nil, time.Since(t), err
 	}
 
 	if err := ctx.Err(); err != nil {
+		// failed, remove m.ID from outstanding, we return an error anyway
+		c.Lock()
+		c.done(m.ID, conn)
+		c.Unlock()
+
 		return nil, time.Since(t), err
 	}
 
 	if err = r.Unpack(); err != nil {
+		// failed, remove m.ID from outstanding, we return an error anyway
+		c.Lock()
+		c.done(m.ID, conn)
+		c.Unlock()
+
 		return r, time.Since(t), err
 	}
 	if !r.Response {
+		// failed, remove m.ID from outstanding, we return an error anyway
+		c.Lock()
+		c.done(m.ID, conn)
+		c.Unlock()
 		return r, time.Since(t), &Error{err: "response bit is not set"}
 	}
-	if r.ID != m.ID {
-		return r, time.Since(t), fmt.Errorf("%w: %d != %d", ErrID, r.ID, m.ID)
-	}
 
+	// Only here we check the ID from r, it should match.
+	c.Lock()
+	ok := c.done(r.ID, conn)
+	c.Unlock()
+
+	if !ok {
+		return r, time.Since(t), fmt.Errorf("%w: response ID %d does not match", ErrID, r.ID)
+	}
 	return r, time.Since(t), nil
 }

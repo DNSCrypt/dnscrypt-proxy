@@ -708,8 +708,8 @@ func parseCAA(rd *rdata.CAA, c *dnslex.Lexer, _ string) error {
 		return &ParseError{err: "bad CAA Flag", lex: l}
 	}
 
-	c.Next()        // dnslex.Blank
-	l, _ = c.Next() // dnslex.String
+	c.Next() // dnslex.Blank
+	l, _ = c.Next()
 	if l.Value != dnslex.String {
 		return &ParseError{err: "bad CAA Tag", lex: l}
 	}
@@ -777,69 +777,38 @@ func parseSVCB(rd *rdata.SVCB, c *dnslex.Lexer, o string) error {
 		return &ParseError{file: l.Token, err: "bad SVCB Priority", lex: l}
 	}
 
-	c.Next()        // dnslex.Blank
-	l, _ = c.Next() // dnslex.String
-	rd.Target = l.Token
+	l, _ = c.Next()
+	if l.Value != dnslex.Blank {
+		return &ParseError{file: l.Token, err: "bad SVCB Target", lex: l}
+	}
 
+	l, _ = c.Next()
+	if l.Value != dnslex.String {
+		return &ParseError{file: l.Token, err: "bad SVCB Target", lex: l}
+	}
+
+	rd.Target = l.Token
 	rd.Target = dnsutilAbsolute(l.Token, o)
 	if l.Value == dnslex.Error || rd.Target == "" {
 		return &ParseError{file: l.Token, err: "bad SVCB Target", lex: l}
 	}
 
 	// Values (if any)
-	l, _ = c.Next()
 	var xs []svcb.Pair
-	// Helps require whitespace between pairs.
-	// Prevents key1000="a"key1001=...
+
 	canHaveNextKey := true
+	l, _ = c.Next()
 	for l.Value != dnslex.Newline && l.Value != dnslex.EOF {
 		switch l.Value {
 		case dnslex.String:
 			if !canHaveNextKey {
-				// The key we can now read was probably meant to be
-				// a part of the last value.
+				// The key we can now read was probably meant to be a part of the last value.
 				return &ParseError{file: l.Token, err: "bad SVCB value quotation", lex: l}
 			}
 
-			// In key=value pairs, value does not have to be quoted unless value
-			// contains whitespace. And keys don't need to have values.
-			// Similarly, keys with an equality signs after them don't need values.
-			// l.Token includes at least up to the first equality sign.
-			idx := strings.IndexByte(l.Token, '=')
-			var key, value string
-			if idx < 0 {
-				// Key with no value and no equality sign
-				key = l.Token
-			} else if idx == 0 {
-				return &ParseError{file: l.Token, err: "bad SVCB Key", lex: l}
-			} else {
-				key, value = l.Token[:idx], l.Token[idx+1:]
-
-				if value == "" {
-					// We have a key and an equality sign. Maybe we have nothing
-					// after "=" or we have a double quote.
-					l, _ = c.Next()
-					if l.Value == dnslex.Quote {
-						// Only needed when value ends with double quotes.
-						// Any value starting with dnslex.Quote ends with it.
-						canHaveNextKey = false
-
-						l, _ = c.Next()
-						switch l.Value {
-						case dnslex.String:
-							// We have a value in double quotes.
-							value = l.Token
-							l, _ = c.Next()
-							if l.Value != dnslex.Quote {
-								return &ParseError{file: l.Token, err: "SVCB unterminated value", lex: l}
-							}
-						case dnslex.Quote:
-							// There's nothing in double quotes.
-						default:
-							return &ParseError{file: l.Token, err: "bad SVCB Pair", lex: l}
-						}
-					}
-				}
+			key, value, err := parsekeyvalue(c, l, &canHaveNextKey)
+			if err != nil {
+				return &ParseError{wrappedErr: err, err: "bad SVCB Pairs", lex: l}
 			}
 			pairFn := svcb.KeyToPair(svcb.StringToKey(key))
 			if pairFn == nil {
@@ -849,6 +818,7 @@ func parseSVCB(rd *rdata.SVCB, c *dnslex.Lexer, o string) error {
 			if err := svcb.Parse(pair, value, o); err != nil {
 				return &ParseError{file: l.Token, wrappedErr: err, lex: l}
 			}
+
 			xs = append(xs, pair)
 		case dnslex.Quote:
 			return &ParseError{file: l.Token, err: "SVCB Key can't contain double quotes", lex: l}
@@ -860,8 +830,7 @@ func parseSVCB(rd *rdata.SVCB, c *dnslex.Lexer, o string) error {
 		l, _ = c.Next()
 	}
 
-	// "In AliasMode, records SHOULD NOT include any SvcParams, and recipients MUST
-	// ignore any SvcParams that are present."
+	// "In AliasMode, records SHOULD NOT include any SvcParams, and recipients MUST ignore any SvcParams that are present."
 	// However, we don't check rd.Priority == 0 && len(xs) > 0 here
 	// It is the responsibility of the user of the library to check this.
 	// This is to encourage the fixing of the source of this error.
@@ -871,62 +840,23 @@ func parseSVCB(rd *rdata.SVCB, c *dnslex.Lexer, o string) error {
 }
 
 func parseDELEG(rd *rdata.DELEG, c *dnslex.Lexer, o string) error {
-	// TODO(miek): unify with SVCB
-	// Values (if any)
-	l, _ := c.Next()
 	var xs []deleg.Info
-	// Helps require whitespace between infos.
-	// Prevents key1000="a"key1001=...
+
 	canHaveNextKey := true
+	l, _ := c.Next()
 	for l.Value != dnslex.Newline && l.Value != dnslex.EOF {
 		switch l.Value {
 		case dnslex.String:
 			if !canHaveNextKey {
-				// The key we can now read was probably meant to be
-				// a part of the last value.
+				// The key we can now read was probably meant to be a part of the last value.
 				return &ParseError{file: l.Token, err: "bad DELEG value quotation", lex: l}
 			}
 
-			// In key=value infos, value does not have to be quoted unless value
-			// contains whitespace. And keys don't need to have values.
-			// Similarly, keys with an equality signs after them don't need values.
-			// l.Token includes at least up to the first equality sign.
-			idx := strings.IndexByte(l.Token, '=')
-			var key, value string
-			if idx < 0 {
-				// Key with no value and no equality sign
-				key = l.Token
-			} else if idx == 0 {
-				return &ParseError{file: l.Token, err: "bad DELEG Key", lex: l}
-			} else {
-				key, value = l.Token[:idx], l.Token[idx+1:]
-
-				if value == "" {
-					// We have a key and an equality sign. Maybe we have nothing
-					// after "=" or we have a double quote.
-					l, _ = c.Next()
-					if l.Value == dnslex.Quote {
-						// Only needed when value ends with double quotes.
-						// Any value starting with dnslex.Quote ends with it.
-						canHaveNextKey = false
-
-						l, _ = c.Next()
-						switch l.Value {
-						case dnslex.String:
-							// We have a value in double quotes.
-							value = l.Token
-							l, _ = c.Next()
-							if l.Value != dnslex.Quote {
-								return &ParseError{file: l.Token, err: "DELEG unterminated value", lex: l}
-							}
-						case dnslex.Quote:
-							// There's nothing in double quotes.
-						default:
-							return &ParseError{file: l.Token, err: "bad DELEG Info", lex: l}
-						}
-					}
-				}
+			key, value, err := parsekeyvalue(c, l, &canHaveNextKey)
+			if err != nil {
+				return &ParseError{wrappedErr: err, err: "bad DELEG Infos", lex: l}
 			}
+
 			infoFn := deleg.KeyToInfo(deleg.StringToKey(key))
 			if infoFn == nil {
 				return &ParseError{file: l.Token, err: "bad DELEG Key", lex: l}
@@ -935,6 +865,7 @@ func parseDELEG(rd *rdata.DELEG, c *dnslex.Lexer, o string) error {
 			if err := deleg.Parse(info, value, o); err != nil {
 				return &ParseError{file: l.Token, wrappedErr: err, lex: l}
 			}
+
 			xs = append(xs, info)
 		case dnslex.Quote:
 			return &ParseError{file: l.Token, err: "DELEG Key can't contain double quotes", lex: l}
@@ -949,13 +880,55 @@ func parseDELEG(rd *rdata.DELEG, c *dnslex.Lexer, o string) error {
 	return nil
 }
 
+func parsekeyvalue(c *dnslex.Lexer, l dnslex.Lex, canHaveNextKey *bool) (key, value string, err error) {
+	// In key=value infos, value does not have to be quoted unless value
+	// contains whitespace. And keys don't need to have values.
+	// Similarly, keys with an equality signs after them don't need values.
+	// l.Token includes at least up to the first equality sign.
+	idx := strings.IndexByte(l.Token, '=')
+	switch {
+	case idx < 0:
+		// Key with no value and no equality sign
+		key = l.Token
+	case idx == 0:
+		return "", "", &ParseError{file: l.Token, err: "bad Key", lex: l}
+	default:
+		key, value = l.Token[:idx], l.Token[idx+1:]
+
+		if value != "" {
+			return key, value, nil
+		}
+
+		// We have a key and an equality sign. Maybe we have nothing after "=" or we have a double quote.
+		l, _ = c.Next()
+		if l.Value == dnslex.Quote {
+			// Only needed when value ends with double quotes. Any value starting with dnslex.Quote ends with it.
+			*canHaveNextKey = false
+
+			l, _ = c.Next()
+			switch l.Value {
+			case dnslex.String: // We have a value in double quotes.
+				value = l.Token
+				l, _ = c.Next()
+				if l.Value != dnslex.Quote {
+					return "", "", &ParseError{file: l.Token, err: "unterminated value", lex: l}
+				}
+			case dnslex.Quote: // There's nothing in double quotes.
+			default:
+				return "", "", &ParseError{file: l.Token, err: "bad Key/value", lex: l}
+			}
+		}
+	}
+	return key, value, nil
+}
+
 func parseDSYNC(rd *rdata.DSYNC, c *dnslex.Lexer, o string) error {
 	var err error
 	l, _ := c.Next()
 	rd.Type = StringToType[l.Token]
 
-	c.Next()        // dnslex.Blank
-	l, _ = c.Next() // dnslex.String
+	c.Next() // dnslex.Blank
+	l, _ = c.Next()
 	if strings.ToUpper(l.Token) == "NOTIFY" || l.Token == "1" {
 		rd.Scheme = 1
 	}
