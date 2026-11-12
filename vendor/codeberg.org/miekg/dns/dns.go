@@ -123,7 +123,7 @@ type Header struct {
 	Class uint16 // Class is the class of the RR, this is almost always [ClassINET].
 }
 
-func (h *Header) Len() int        { return len(h.Name) + 1 + 10 } // +1 because miek.nl. is actually .miek.nl.
+func (h *Header) Len() int        { return len(h.Name) + dnsutilIsRoot(h.Name) + 10 } // +1 because miek.nl. is actually .miek.nl, but root is .
 func (h *Header) Header() *Header { return h }
 func (h *Header) Data() RDATA     { return nil }
 func (h *Header) Clone() RR       { return &Header{h.Name, h.TTL, h.Class} }

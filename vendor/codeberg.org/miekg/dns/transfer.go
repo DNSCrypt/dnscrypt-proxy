@@ -2,6 +2,8 @@ package dns
 
 import (
 	"context"
+	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -79,7 +81,7 @@ func (c *Client) TransferInWithConn(ctx context.Context, m *Msg, conn net.Conn, 
 		}
 	}
 
-	if options != nil && options.TSIGSigner != nil && hasTSIG(m) != nil {
+	if options != nil && options.TSIGSigner != nil && isTSIG(m) != nil {
 		if err := TSIGSign(m, options.TSIGSigner, &TSIGOption{}); err != nil {
 			return nil, err
 		}
@@ -109,7 +111,7 @@ func (c *Client) transferInAXFR(ctx context.Context, m *Msg, ch chan<- *Envelope
 	}()
 
 	tsigOptions := TSIGOption{}
-	t := hasTSIG(m)
+	t := isTSIG(m)
 	if t != nil {
 		tsigOptions.RequestMAC = t.MAC
 	}
@@ -121,6 +123,10 @@ func (c *Client) transferInAXFR(ctx context.Context, m *Msg, ch chan<- *Envelope
 		if _, err := io.Copy(r, conn); err != nil {
 			// the response writer or actual conn is closed, just return, or some other error, we may
 			// not be sure someone is still listening on this channel.
+			if errors.Is(err, io.EOF) {
+				return
+			}
+			ch <- &Envelope{Error: err}
 			return
 		}
 		if err := ctx.Err(); err != nil {
@@ -171,19 +177,24 @@ func (c *Client) transferInAXFR(ctx context.Context, m *Msg, ch chan<- *Envelope
 
 		ch <- &Envelope{Answer: r.Answer}
 
+		// On the first message, skip index 0 (the opening SOA) — it is not the
+		// terminal SOA. On subsequent messages start from 0 so nothing is missed.
+		start := 0
+		if !tsigOptions.TimersOnly {
+			start = 1
+		}
+
 		// If there is a SOA RR as the last we're done
-		if tsigOptions.TimersOnly {
-			if len(r.Answer) > 0 {
-				if _, ok := r.Answer[len(r.Answer)-1].(*SOA); ok {
-					return
-				}
+		if len(r.Answer) > start {
+			if _, ok := r.Answer[len(r.Answer)-1].(*SOA); ok {
+				return
 			}
 		}
 
 		tsigOptions.TimersOnly = true
 		if t != nil {
 			// r must have tsig, otherwise errored out above
-			tsigOptions.RequestMAC = hasTSIG(r).MAC
+			tsigOptions.RequestMAC = isTSIG(r).MAC
 		}
 	}
 }
@@ -197,7 +208,7 @@ func (c *Client) transferInIXFR(ctx context.Context, m *Msg, ch chan<- *Envelope
 	}()
 
 	tsigOptions := TSIGOption{}
-	t := hasTSIG(m)
+	t := isTSIG(m)
 	if t != nil {
 		tsigOptions.RequestMAC = t.MAC
 	}
@@ -213,6 +224,9 @@ func (c *Client) transferInIXFR(ctx context.Context, m *Msg, ch chan<- *Envelope
 		if _, err := io.Copy(r, conn); err != nil {
 			// the response writer or actual conn is closed, just return, or some other error, we may
 			// not be sure someone is still listening on this channel.
+			if errors.Is(err, io.EOF) {
+				return
+			}
 			return
 		}
 		if err := ctx.Err(); err != nil {
@@ -294,7 +308,7 @@ func (c *Client) transferInIXFR(ctx context.Context, m *Msg, ch chan<- *Envelope
 		tsigOptions.TimersOnly = true
 		if t != nil {
 			// r must have tsig, otherwise errored out above
-			tsigOptions.RequestMAC = hasTSIG(r).MAC
+			tsigOptions.RequestMAC = isTSIG(r).MAC
 		}
 	}
 }
@@ -332,10 +346,16 @@ func (c *Client) TransferOut(w ResponseWriter, r *Msg, env <-chan *Envelope, opt
 	}()
 
 	tsigOptions := TSIGOption{}
-	t := hasTSIG(r)
+	t := isTSIG(r)
 	if t != nil {
-		tsigOptions.RequestMAC = t.MAC
+		// validate, also set the MAC in tsigOptions.
+		if options != nil && options.TSIGSigner != nil {
+			if err = TSIGVerify(r, options.TSIGSigner, &tsigOptions); err != nil {
+				return err
+			}
+		}
 	}
+
 	m := new(Msg)
 	m.Authoritative = true
 	// dnsutil.SetReply as used here, but led to all kinds of cyclic imports, just use that very static code here.
@@ -346,6 +366,7 @@ func (c *Client) TransferOut(w ResponseWriter, r *Msg, env <-chan *Envelope, opt
 	m.Security = r.Security
 	m.Question = r.Question
 
+	var l []byte // keep our own buffer here, and side step io.Copy to save allocating new ones.
 	for e := range env {
 		m.Reset()
 		m.Answer = e.Answer
@@ -361,14 +382,23 @@ func (c *Client) TransferOut(w ResponseWriter, r *Msg, env <-chan *Envelope, opt
 			}
 		}
 
-		if _, err = io.Copy(w, m); err != nil {
+		if rc, ok := w.(ResponseController); ok {
+			rc.SetWriteDeadline()
+		}
+
+		// This mimics the code of io.Copy, see [Msg.WriteTo], but save allocating there _again_.
+		l = binary.BigEndian.AppendUint16(l[:0], uint16(len(m.Data)))
+		l = append(l, m.Data...)
+		_, err := w.Write(l)
+		if err != nil {
+			w.Close()
 			return err
 		}
 
 		tsigOptions.TimersOnly = true
 		if t != nil {
 			// m must have tsig, otherwise errored out above
-			tsigOptions.RequestMAC = hasTSIG(m).MAC
+			tsigOptions.RequestMAC = isTSIG(m).MAC
 		}
 	}
 	return nil

@@ -10,11 +10,11 @@ import (
 
 func unpackOPT(s *dnsnet.String) ([]EDNS0, error) {
 	edns0 := []EDNS0{}
+	var (
+		code uint16
+		data dnsnet.String
+	)
 	for !s.Empty() {
-		var (
-			code uint16
-			data dnsnet.String
-		)
 		if !s.ReadUint16(&code) || !s.ReadUint16LengthPrefixed(&data.String) {
 			return nil, unpack.ErrOverflow
 		}
@@ -27,6 +27,8 @@ func unpackOPT(s *dnsnet.String) ([]EDNS0, error) {
 		if err := unpackOptionCode(option, &data); err != nil {
 			return nil, err
 		}
+		// !data.Empty() does not work here because unpackOptionCode might not use dnsnet.String to drain it
+		// but just uses the []byte.
 		edns0 = append(edns0, option)
 	}
 	return edns0, nil

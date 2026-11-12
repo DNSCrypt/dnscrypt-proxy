@@ -21,9 +21,11 @@ func Unpack(s *dnsnet.String) ([]Info, error) {
 			return nil, unpack.Errorf("bad DELEG key")
 		}
 		info := infoFn()
-
 		if err := _unpack(info, &data); err != nil {
 			return nil, err
+		}
+		if !data.Empty() {
+			return nil, unpack.ErrTrailingData
 		}
 		infos = append(infos, info)
 	}

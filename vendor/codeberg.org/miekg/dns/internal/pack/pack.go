@@ -1,6 +1,7 @@
 package pack
 
 import (
+	"bytes"
 	"encoding/base32"
 	"encoding/base64"
 	"encoding/binary"
@@ -78,14 +79,8 @@ func StringAny(s string, msg []byte, off int) (int, error) {
 	return off, nil
 }
 
+// Strings packs the character-strings in s. An empty s packs nothing and needs no room in msg.
 func Strings(s []string, msg []byte, off int) (int, error) {
-	if len(s) == 0 {
-		if off >= len(msg) {
-			return len(msg), ErrBuf
-		}
-		msg[off] = 0
-		return off, nil
-	}
 	var err error
 	for i := range s {
 		off, err = String(s[i], msg, off)
@@ -338,7 +333,7 @@ func MName(s string, msg []byte, off int) (off1 int, err error) {
 		// slow(er) copy path to skip the escaped dot
 		l := 1
 		for k := begin; k < i; k++ {
-			if s[k] == '\\' {
+			if s[k] == '\\' && s[k+1] == '.' {
 				continue
 			}
 			msg[off+l] = s[k]
@@ -356,44 +351,38 @@ func MName(s string, msg []byte, off int) (off1 int, err error) {
 	return off + 1, nil
 }
 
+var b32hex = base32.HexEncoding.WithPadding(base32.NoPadding)
+
 func StringBase32(s string, msg []byte, off int) (int, error) {
-	b32, err := Base32([]byte(s))
+	n := b32hex.DecodedLen(len(s))
+	if off+n > len(msg) {
+		return len(msg), &Error{Err: "overflow base32"}
+	}
+	b := []byte(s)
+	// almost, but not quite like dnsutil.Canonical. It can be used here because it adds a dot.
+	bytes.Map(func(r rune) rune {
+		if r >= 'A' && r <= 'Z' {
+			r += 'a' - 'A'
+		}
+		return r
+	}, b)
+	n, err := b32hex.Decode(msg[off:], b)
 	if err != nil {
 		return len(msg), err
 	}
-	if off+len(b32) > len(msg) {
-		return len(msg), &Error{Err: "overflow base32"}
-	}
-	copy(msg[off:off+len(b32)], b32)
-	off += len(b32)
-	return off, nil
+	return off + n, nil
 }
 
 func StringBase64(s string, msg []byte, off int) (int, error) {
-	b64, err := Base64([]byte(s))
+	n := base64.StdEncoding.DecodedLen(len(s))
+	if off+n > len(msg) {
+		return len(msg), &Error{Err: "overflow base64"}
+	}
+	n, err := base64.StdEncoding.Decode(msg[off:], []byte(s))
 	if err != nil {
 		return len(msg), err
 	}
-	if off+len(b64) > len(msg) {
-		return len(msg), &Error{Err: "overflow base64"}
-	}
-	copy(msg[off:off+len(b64)], b64)
-	off += len(b64)
-	return off, nil
-}
-
-func Base32(s []byte) (buf []byte, err error) {
-	for i, b := range s {
-		if b >= 'a' && b <= 'z' {
-			s[i] = b - 32
-		}
-	}
-	b32hex := base32.HexEncoding.WithPadding(base32.NoPadding)
-	buflen := b32hex.DecodedLen(len(s))
-	buf = make([]byte, buflen)
-	n, err := b32hex.Decode(buf, s)
-	buf = buf[:n]
-	return
+	return off + n, nil
 }
 
 func Base64(s []byte) (buf []byte, err error) {
@@ -405,22 +394,21 @@ func Base64(s []byte) (buf []byte, err error) {
 }
 
 func StringHex(s string, msg []byte, off int) (int, error) {
-	h, err := hex.DecodeString(s)
+	n := hex.DecodedLen(len(s))
+	if off+n > len(msg) {
+		return len(msg), &Error{Err: "overflow hex"}
+	}
+	n, err := hex.Decode(msg[off:], []byte(s))
 	if err != nil {
 		return len(msg), err
 	}
-	if off+len(h) > len(msg) {
-		return len(msg), &Error{Err: "overflow hex"}
-	}
-	copy(msg[off:off+len(h)], h)
-	off += len(h)
-	return off, nil
+	return off + n, nil
 }
 
-func Names(names []string, msg []byte, off int, compress map[string]uint16) (int, error) {
+func Names(names []string, msg []byte, off int, compression map[string]uint16) (int, error) {
 	var err error
 	for i := range names {
-		off, err = Name(names[i], msg, off, compress, false)
+		off, err = Name(names[i], msg, off, compression, false)
 		if err != nil {
 			return len(msg), err
 		}

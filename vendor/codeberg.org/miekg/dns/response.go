@@ -47,12 +47,11 @@ type response struct {
 
 // SetWriteDeadline implements the [ResponseController] interface.
 func (w *response) SetWriteDeadline() error {
-	return w.conn.SetWriteDeadline(time.Now().Add(2 * time.Second))
+	return w.conn.SetWriteDeadline(time.Now().Add(500 * time.Millisecond))
 }
 func (w *response) Conn() net.Conn                    { return w.conn }
 func (w *response) Session() *Session                 { return w.session }
 func (w *response) Write(p []byte) (n int, err error) { return w.conn.Write(p) }
-func (w *response) Read(p []byte) (n int, err error)  { return w.conn.Read(p) }
 func (w *response) LocalAddr() net.Addr               { return w.conn.LocalAddr() }
 func (w *response) Hijack()                           { w.hijacked.Store(true) }
 

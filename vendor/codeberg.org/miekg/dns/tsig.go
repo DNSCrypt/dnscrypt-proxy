@@ -32,7 +32,7 @@ func TSIGSign(m *Msg, k TSIGSigner, options *TSIGOption) error {
 		}
 	}
 
-	t := hasTSIG(m)
+	t := isTSIG(m)
 	if t == nil {
 		return fmt.Errorf("%w: %s", ErrNoTSIG, "sign")
 	}
@@ -75,7 +75,7 @@ func TSIGSign(m *Msg, k TSIGSigner, options *TSIGOption) error {
 }
 
 // TSIGVerify verifies the TSIG on a message. On success a nil error is returned. The TSIG record is removed
-// from m.Data, but left in the unpacked message m. TODO(miek): that a good plan?
+// from m.Data, but left in the unpacked message m.
 // When this function returns options.RequestMAC will have the MAC seen on the TSIG.
 func TSIGVerify(m *Msg, k TSIGSigner, options *TSIGOption) error {
 	if len(m.Data) == 0 {
@@ -84,7 +84,7 @@ func TSIGVerify(m *Msg, k TSIGSigner, options *TSIGOption) error {
 		}
 	}
 
-	t := hasTSIG(m)
+	t := isTSIG(m)
 	if t == nil {
 		return fmt.Errorf("%w: %s", ErrNoTSIG, "verify")
 	}
@@ -149,7 +149,8 @@ type TSIGSigner interface {
 	Key() []byte
 }
 
-func hasTSIG(m *Msg) *TSIG {
+// isTSIG should be dnsutil.IsTSIG, but creates cyclic import.
+func isTSIG(m *Msg) *TSIG {
 	for i := 0; i < len(m.Pseudo); i++ {
 		if _, ok := m.Pseudo[i].(*TSIG); ok {
 			return m.Pseudo[i].(*TSIG)

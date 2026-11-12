@@ -3,10 +3,7 @@ package dns
 import (
 	"context"
 	"crypto/tls"
-	"errors"
-	"io"
 	"net"
-	"strings"
 	"time"
 )
 
@@ -28,7 +25,7 @@ type Transport struct {
 var defaultTransport = Transport{
 	Dialer: &net.Dialer{
 		Timeout:   5 * time.Second,
-		KeepAlive: 3 * time.Second,
+		KeepAlive: -1,
 	},
 	ReadTimeout:  2 * time.Second,
 	WriteTimeout: 2 * time.Second,
@@ -38,6 +35,8 @@ var defaultTransport = Transport{
 // read and write timeout set to 2s.
 func NewTransport() *Transport {
 	d := defaultTransport
+	dialer := *defaultTransport.Dialer
+	d.Dialer = &dialer
 	return &d
 }
 
@@ -49,24 +48,6 @@ func (t *Transport) dial(ctx context.Context, network, address string) (net.Conn
 		return dialer.DialContext(ctx, network, address)
 	}
 	return t.Dialer.DialContext(ctx, network, address)
-}
-
-// isEOFOrClosedNetwork returns true if the error err is an io.EOF or a *net.OpError with the
-// text 'use of closed network connection' or a time out has been reached.
-func isEOFOrClosedNetwork(err error) bool {
-	if errors.Is(err, io.EOF) {
-		return true
-	}
-
-	if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-		return true
-	}
-
-	if _, ok := err.(*net.OpError); ok && strings.Contains(err.Error(), "use of closed network connection") {
-		return true
-	}
-
-	return false
 }
 
 // TranferOption defines the signing and other parameters that are used during a zone transfer.

@@ -13,6 +13,7 @@ import (
 	"codeberg.org/miekg/dns/internal/pack"
 	"codeberg.org/miekg/dns/internal/unpack"
 	"codeberg.org/miekg/dns/pkg/dnsnet"
+	"codeberg.org/miekg/dns/pkg/pool"
 	"codeberg.org/miekg/dns/rdata"
 )
 
@@ -67,7 +68,7 @@ var RcodeToString = map[uint16]string{
 	RcodeNXRrset:                "NXRRSET",
 	RcodeNotAuth:                "NOTAUTH",
 	RcodeNotZone:                "NOTZONE",
-	RcodeBadSig:                 "BADSIG", // Also known as RcodeBadVers "BADVERS", see RFC 6891.
+	RcodeBadVers:                "BADVERS", // Also known as RcodeBadVers "BADSIG", see RFC 6891.
 	RcodeStatefulNotImplemented: "DSOTYPENI",
 	RcodeBadKey:                 "BADKEY",
 	RcodeBadTime:                "BADTIME",
@@ -209,91 +210,94 @@ func (m *Msg) Pack() error {
 		return pack.Errorf(": %s", "MsgHeader")
 	}
 
-	// Is this compressible?
-	var compression map[string]uint16
-	if l := len(m.Answer) + len(m.Ns) + len(m.Extra); l > 0 {
-		compression = make(map[string]uint16, l+3) // 3 is randomly chosen, as that much rdata might be compressable...
-	}
+	compression := compressionPool.Get()
 
 	for i := range m.Question {
 		if off, err = packQuestion(m.Question[i], m.Data, off, compression); err != nil {
+			compressionPool.Put(compression)
 			return err
 		}
 	}
 
 	for i := range m.Answer {
 		if _, off, err = packRR(m.Answer[i], m.Data, off, compression); err != nil {
+			compressionPool.Put(compression)
 			return err
 		}
 	}
 	for i := range m.Ns {
 		if _, off, err = packRR(m.Ns[i], m.Data, off, compression); err != nil {
+			compressionPool.Put(compression)
 			return err
 		}
 	}
 	for i := range m.Extra {
 		if _, off, err = packRR(m.Extra[i], m.Data, off, compression); err != nil {
+			compressionPool.Put(compression)
 			return err
 		}
 	}
 
 	// Add an OPT RR if we see any of these.
 	tsigOrsig0 := false
-	if isPseudo > 0 {
-		opt := &OPT{} // hack, empty name, that gets filled if we did something
-		if m.UDPSize > MinMsgSize {
+
+	opt := &OPT{} // hack, empty name, that gets filled if we did something
+	if m.Rcode > 0xF {
+		opt.Hdr.Name = "."
+		opt.setRcode(m.Rcode) // we leave m.Rcode as packing/unpacking will set the correct bits there.
+	}
+	if m.UDPSize > MinMsgSize {
+		opt.Hdr.Name = "."
+		opt.setUDPSize(m.UDPSize)
+	}
+	if m.Security {
+		opt.Hdr.Name = "."
+		opt.setSecurity(true)
+	}
+	if m.CompactAnswers {
+		opt.Hdr.Name = "."
+		opt.setCompactAnswers(true)
+	}
+	if m.Delegation {
+		opt.Hdr.Name = "."
+		opt.setDelegation(true)
+	}
+	if m.Version > 0 {
+		opt.Hdr.Name = "."
+		opt.setVersion(m.Version)
+	}
+	if m.Z > 0 {
+		opt.Hdr.Name = "."
+		opt.setZ(m.Z)
+	}
+
+	for i := range m.Pseudo {
+		switch x := m.Pseudo[i].(type) {
+		case EDNS0:
 			opt.Hdr.Name = "."
-			opt.setUDPSize(m.UDPSize)
+			opt.Options = append(opt.Options, x)
+		default:
+			tsigOrsig0 = true
 		}
-		if m.Rcode > 0xF {
-			opt.Hdr.Name = "."
-			opt.setRcode(m.Rcode) // we leave m.Rcode as packing/unpacking will set the correct bits there.
-		}
-		if m.Security {
-			opt.Hdr.Name = "."
-			opt.setSecurity(true)
-		}
-		if m.CompactAnswers {
-			opt.Hdr.Name = "."
-			opt.setCompactAnswers(true)
-		}
-		if m.Delegation {
-			opt.Hdr.Name = "."
-			opt.setDelegation(true)
-		}
-		if m.Version > 0 {
-			opt.Hdr.Name = "."
-			opt.setVersion(m.Version)
-		}
-		if m.Z > 0 {
-			opt.Hdr.Name = "."
-			opt.setZ(m.Z)
-		}
-		for i := range m.Pseudo {
-			switch x := m.Pseudo[i].(type) {
-			case EDNS0:
-				opt.Hdr.Name = "."
-				opt.Options = append(opt.Options, x)
-			default:
-				tsigOrsig0 = true
-			}
-		}
-		// Only pack opt if something has been put into it, otherwise we may have a TSIG/SIG0.
-		// Pack it here so we don't add it the m.Extra, as the options (only) should be available in pseudo.
-		// Also OPT may be anywhere in m.Extra, here it will be first.
-		if len(opt.Hdr.Name) != 0 {
-			if _, off, err = packRR(opt, m.Data, off, nil); err != nil {
-				return err
-			}
+	}
+	// Only pack opt if something has been put into it, otherwise we may have a TSIG/SIG0.
+	// Pack it here so we don't add it the m.Extra, as the options (only) should be available in pseudo.
+	// Also OPT may be anywhere in m.Extra, here it will be first.
+	if len(opt.Hdr.Name) != 0 {
+		if _, off, err = packRR(opt, m.Data, off, nil); err != nil {
+			compressionPool.Put(compression)
+			return err
 		}
 	}
 
 	// records that really need to be last, TSIG or SGI0. "Checked" above, we just assume it is the last.
 	if tsigOrsig0 {
 		if _, off, err = packRR(m.Pseudo[len(m.Pseudo)-1], m.Data, off, compression); err != nil {
+			compressionPool.Put(compression)
 			return err
 		}
 	}
+	compressionPool.Put(compression)
 	m.Data = m.Data[:off]
 	return nil
 }
@@ -601,7 +605,7 @@ func (m *Msg) String() string {
 // int becuse we need that number of the Extra section sizing.
 func (m *Msg) isPseudo() int {
 	n := 0
-	if m.UDPSize > MinMsgSize || m.Security || m.CompactAnswers || m.Delegation || m.Z > 0 || m.Rcode > 0xF {
+	if m.UDPSize > MinMsgSize || m.Security || m.CompactAnswers || m.Delegation || m.Z > 0 || m.Rcode > 0xF || m.Version > 0 {
 		n = 1
 	}
 	lp := len(m.Pseudo)
@@ -625,9 +629,8 @@ func (m *Msg) Len() int {
 	l := MsgHeaderSize
 
 	for i := range m.Question {
-		// See Header.Len() too, we always add a +1, even if the name is the root label.
 		// 4 is for the type and class
-		l += len(m.Question[i].Header().Name) + 1 + 4
+		l += len(m.Question[i].Header().Name) + dnsutilIsRoot(m.Question[i].Header().Name) + 4
 		break
 	}
 	for i := range m.Answer {
@@ -649,7 +652,7 @@ func (m *Msg) Len() int {
 
 	// isPseudo call is basically already done in the above loop where we get the length, only things left
 	// are the extra checks we do here. See [isPseudo] and keep in sync.
-	if len(m.Pseudo) > 0 || m.UDPSize > MinMsgSize || m.Security || m.CompactAnswers || m.Delegation || m.Z > 0 || m.Rcode > 0xF {
+	if len(m.Pseudo) > 0 || m.UDPSize > MinMsgSize || m.Security || m.CompactAnswers || m.Delegation || m.Z > 0 || m.Rcode > 0xF || m.Version > 0 {
 		// If we find things in pseudo we get an OPT RR (fix length) plus the length of the option. OPT is always 11, 10 + "." (root label)
 		// In case of only a TSIG/SIG0 we overestimate, but because of speed we don't want to the full i.Pseudo check.
 		l += minHeaderSize
@@ -698,11 +701,6 @@ func (m *Msg) Read(p []byte) (n int, err error) {
 // If the message has not be hijacked, and m was create by the server, the Data buffer is returned
 // to the server's pool and zeroed out in m.
 func (m *Msg) WriteTo(w io.Writer) (int64, error) {
-	r, ok := w.(ResponseWriter)
-	if !ok {
-		return 0, fmt.Errorf("dns: writer is not a ResponseWriter")
-	}
-
 	if len(m.Data) == 0 {
 		if err := m.Pack(); err != nil {
 			return 0, err
@@ -712,6 +710,8 @@ func (m *Msg) WriteTo(w io.Writer) (int64, error) {
 	if rc, ok := w.(ResponseController); ok {
 		rc.SetWriteDeadline()
 	}
+
+	r := w.(ResponseWriter) // panic if wrong, saves an if here, assume this always to be true
 
 	if sock, ok := r.Conn().(*net.UDPConn); ok {
 		sess := r.Session()
@@ -732,6 +732,10 @@ func (m *Msg) WriteTo(w io.Writer) (int64, error) {
 	l = append(l, m.Data...)
 	n, err := r.Write(l)
 	msgPut(m)
+	if err != nil {
+		// hit deadline or other troubles, close this conn.
+		r.Close()
+	}
 	return int64(n), err
 }
 
@@ -763,25 +767,21 @@ func (m *Msg) ReadFrom(r io.Reader) (int64, error) {
 		return int64(n), err
 	}
 
-	// When doing io.Copy that underlaying type we get from net is net.tcpConnWithoutWriteTo, not a
-	// net.TCPConn.For udp this seems not to be the case, so the fallthrough when things are not UDP like
-	// is to assume TCP.
-
-	l := uint16(0)
-	if err := binary.Read(r, binary.BigEndian, &l); err != nil {
-		return 0, err
+	var l [2]byte
+	if n, err := io.ReadFull(r, l[:]); err != nil {
+		return int64(n), err
 	}
+	ln := int(binary.BigEndian.Uint16(l[:]))
 
-	li := int(l)
-	if len(m.Data) < li {
-		m.Data = append(m.Data, make([]byte, li-len(m.Data))...)
+	if len(m.Data) < ln {
+		m.Data = append(m.Data, make([]byte, ln-len(m.Data))...)
 	} else {
-		m.Data = m.Data[:li]
+		m.Data = m.Data[:ln]
 	}
 	n, err := io.ReadFull(r, m.Data)
 	m.Data = m.Data[:n]
-	if err == nil && n != li {
-		return int64(n), fmt.Errorf("dns: message size %d does not match prefix %d", li, n)
+	if err == nil && n != ln {
+		return int64(n), fmt.Errorf("dns: message size %d does not match prefix %d", ln, n)
 	}
 	return int64(n), err
 }
@@ -854,3 +854,5 @@ func NewMsg(z string, t uint16, c ...uint16) *Msg {
 	m.Question = []RR{rr}
 	return m
 }
+
+var compressionPool = pool.NewCompression()
