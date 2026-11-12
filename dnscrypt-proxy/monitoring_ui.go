@@ -1022,16 +1022,16 @@ func (mc *MetricsCollector) GetMetrics() map[string]any {
 
 // requestScheme - Returns the scheme the client used, which a TLS-terminating
 // proxy reports in X-Forwarded-Proto. Browsers cannot forge that header on a
-// WebSocket handshake.
+// WebSocket handshake. Some proxies report these handshakes as ws or wss.
 func requestScheme(r *http.Request) string {
 	forwarded := r.Header.Get("X-Forwarded-Proto")
 	if comma := strings.IndexByte(forwarded, ','); comma >= 0 {
 		forwarded = forwarded[:comma]
 	}
 	switch strings.ToLower(strings.TrimSpace(forwarded)) {
-	case "http":
+	case "http", "ws":
 		return "http"
-	case "https":
+	case "https", "wss":
 		return "https"
 	}
 	if r.TLS != nil {
