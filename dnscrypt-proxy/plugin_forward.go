@@ -450,6 +450,10 @@ func (plugin *PluginForward) Eval(pluginsState *PluginsState, msg *dns.Msg) erro
 		}
 		return nil
 	}
+	if pluginsState.synthResponse != nil {
+		// A later entry failed: keep the last response we got
+		return nil
+	}
 	return err
 }
 
