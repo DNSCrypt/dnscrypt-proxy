@@ -340,6 +340,7 @@ func (plugin *PluginForward) Eval(pluginsState *PluginsState, msg *dns.Msg) erro
 	}
 	var err error
 	var respMsg *dns.Msg
+	var lastValidServer string
 	tries := 4
 	const resolvconfRetryInterval int64 = 30 // seconds
 
@@ -440,6 +441,7 @@ func (plugin *PluginForward) Eval(pluginsState *PluginsState, msg *dns.Msg) erro
 		}
 		respMsg.ID = msg.ID
 		pluginsState.synthResponse = respMsg
+		lastValidServer = server
 		pluginsState.action = PluginsActionSynth
 		pluginsState.returnCode = PluginsReturnCodeForward
 		if len(sequence) > 0 {
@@ -448,6 +450,10 @@ func (plugin *PluginForward) Eval(pluginsState *PluginsState, msg *dns.Msg) erro
 				continue
 			}
 		}
+		return nil
+	}
+	if pluginsState.synthResponse != nil {
+		pluginsState.serverName = lastValidServer
 		return nil
 	}
 	return err
