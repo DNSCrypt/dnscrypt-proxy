@@ -1,0 +1,9 @@
+# Doc: https://taplo.tamasfe.dev/configuration/formatter-options.html
+
+[formatting]
+# Aligned comments move far to the right after a long line.
+align_comments = false
+# Same as indent_size in .editorconfig.
+indent_string = '    '
+# Multi-line arrays show each group of tasks in `run` of mise tasks on its own line.
+array_auto_collapse = false

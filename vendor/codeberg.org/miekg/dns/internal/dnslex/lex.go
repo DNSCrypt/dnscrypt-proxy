@@ -81,6 +81,15 @@ func (zl *Lexer) SetKey(key uint8)   { zl.keys |= key }
 func (zl *Lexer) ClearKey(key uint8) { zl.keys &^= key }
 func (zl *Lexer) Key(key uint8) bool { return zl.keys&key != 0 }
 
+// SetType sets the lexer state for input that is only rdata text, i.e. no owner name, TTL,
+// class or type precedes it. Callers feeding such input must call this right after [New].
+// The RR type is marked as already seen, so that rdata tokens that look like a type or class
+// (e.g. "A NS" in an NSEC or CSYNC type bitmap) are returned as plain strings rather than
+// [Rrtype] or [Class].
+func (zl *Lexer) SetType() {
+	zl.SetKey(kRRtype)
+}
+
 // New returns a pointer to a new Lexer.
 func New(r io.Reader, StringToType, StringToClass map[string]uint16) *Lexer {
 	br, ok := r.(io.ByteReader)

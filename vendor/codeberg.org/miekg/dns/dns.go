@@ -206,11 +206,11 @@ type MsgHeader struct {
 	AuthenticatedData  bool
 	CheckingDisabled   bool
 
-	// Extended DNS.
+	// Extended DNS Flags
 	Security       bool   // Security is the DNSSEC OK bit, see RFC 403{3,4,5}, see [OPT.security].
 	CompactAnswers bool   // Compact Answers OK, see RFC 9824, see [OPT.compactAnswers].
 	Delegation     bool   // Delegation is the DELEG OK bit, see https://datatracker.ietf.org/doc/draft-ietf-deleg/ and [OPT.delegation].
-	Z              uint16 // Z holds the OPT's unassigned Z bits, see [OPT.z].
+	Flags          uint16 // Flags holds the OPT's remaining, unassigned flags bits, see [OPT.flags].
 }
 
 // Msg is a DNS message. Each message has a Data field that contains the binary data buffer. This is filled when
@@ -263,7 +263,10 @@ const (
 	MsgOptionUnpackHeader   MsgOption = 1 << iota // Unpack only the header of the message.
 	MsgOptionUnpackQuestion                       // Unpack up the question section of the message.
 	MsgOptionUnpackAnswer                         // Unpack up to the answer section of the message.
+)
 
+const (
+	MsgOptionPackExpand MsgOption = 255 - iota // Pack without compression.
 )
 
 // Convert a MsgHeader to a string, with dig-like headers:

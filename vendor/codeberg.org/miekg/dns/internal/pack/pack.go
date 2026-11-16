@@ -13,10 +13,9 @@ import (
 	"codeberg.org/miekg/dns/internal/ddd"
 )
 
-const maxCompressionOffset = 2 << 13 // We have 14 bits for the compression pointer
+const maxCompressionOffset = 2 << 13 // We have 14 bits for the compression pointer.
 
-// maybe this should all moved to cryptobyte as well...
-// near future direction is clear all pack helpers should be here, not in msg_helpers.go
+// TODO(miek): Maybe this should all moved to cryptobyte as well...?
 
 func Uint8(i uint8, msg []byte, off int) (off1 int, err error) {
 	if off+1 > len(msg) {
@@ -258,6 +257,7 @@ func Name(s string, msg []byte, off int, compression map[string]uint16, compress
 // MName packs the string s into msg taking escaped dots into account. A label may hold any number of
 // escaped dots, \. can never be at the start of the string.
 func MName(s string, msg []byte, off int) (off1 int, err error) {
+	// TODO(Miek): this should have the same signature of Name, *and* also allow compression.
 	lenmsg := len(msg)
 	ls := len(s)
 

@@ -75,6 +75,9 @@ func NewCompression() *Compression {
 
 func (c *Compression) Get() map[string]uint16 { return c.Pool.Get().(map[string]uint16) }
 func (c *Compression) Put(m map[string]uint16) {
+	if m == nil { // MsgOptionPackExpand is set, and we get a nil map.
+		return
+	}
 	clear(m)
 	c.Pool.Put(m)
 }

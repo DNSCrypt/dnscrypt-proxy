@@ -210,7 +210,10 @@ func (m *Msg) Pack() error {
 		return pack.Errorf(": %s", "MsgHeader")
 	}
 
-	compression := compressionPool.Get()
+	var compression map[string]uint16
+	if m.Options&MsgOptionPackExpand != MsgOptionPackExpand {
+		compression = compressionPool.Get()
+	}
 
 	for i := range m.Question {
 		if off, err = packQuestion(m.Question[i], m.Data, off, compression); err != nil {
@@ -266,9 +269,9 @@ func (m *Msg) Pack() error {
 		opt.Hdr.Name = "."
 		opt.setVersion(m.Version)
 	}
-	if m.Z > 0 {
+	if m.Flags > 0 {
 		opt.Hdr.Name = "."
-		opt.setZ(m.Z)
+		opt.setFlags(m.Flags)
 	}
 
 	for i := range m.Pseudo {
@@ -433,7 +436,7 @@ Rest:
 			m.Security = opt.security()
 			m.CompactAnswers = opt.compactAnswers()
 			m.Delegation = opt.delegation()
-			m.Z = opt.z()
+			m.Flags = opt.flags()
 			m.Rcode += opt.rcode() // See TestMsgExtendedRcode.
 			m.Version = opt.version()
 			// RFC 6891 mandates that the payload size in an OPT record less than 512 (MinMsgSize) bytes must be treated as equal to 512 bytes.
@@ -482,7 +485,7 @@ func (m *Msg) String() string {
 
 	sb.WriteString(m.MsgHeader.String())
 	// if core EDNS flags are set, we print this (flags are already handled in MsgHeader)
-	if m.UDPSize > 0 || m.Security || m.CompactAnswers || m.Delegation || m.Z > 0 {
+	if m.UDPSize > 0 || m.Security || m.CompactAnswers || m.Delegation || m.Flags > 0 {
 		sb.WriteString(";; EDNS, version: ")
 		sb.WriteString(strconv.Itoa(int(m.Version)))
 		sb.WriteString(", udp: ")
@@ -605,7 +608,7 @@ func (m *Msg) String() string {
 // int becuse we need that number of the Extra section sizing.
 func (m *Msg) isPseudo() int {
 	n := 0
-	if m.UDPSize > MinMsgSize || m.Security || m.CompactAnswers || m.Delegation || m.Z > 0 || m.Rcode > 0xF || m.Version > 0 {
+	if m.UDPSize > MinMsgSize || m.Security || m.CompactAnswers || m.Delegation || m.Flags > 0 || m.Rcode > 0xF || m.Version > 0 {
 		n = 1
 	}
 	lp := len(m.Pseudo)
@@ -652,7 +655,7 @@ func (m *Msg) Len() int {
 
 	// isPseudo call is basically already done in the above loop where we get the length, only things left
 	// are the extra checks we do here. See [isPseudo] and keep in sync.
-	if len(m.Pseudo) > 0 || m.UDPSize > MinMsgSize || m.Security || m.CompactAnswers || m.Delegation || m.Z > 0 || m.Rcode > 0xF || m.Version > 0 {
+	if len(m.Pseudo) > 0 || m.UDPSize > MinMsgSize || m.Security || m.CompactAnswers || m.Delegation || m.Flags > 0 || m.Rcode > 0xF || m.Version > 0 {
 		// If we find things in pseudo we get an OPT RR (fix length) plus the length of the option. OPT is always 11, 10 + "." (root label)
 		// In case of only a TSIG/SIG0 we overestimate, but because of speed we don't want to the full i.Pseudo check.
 		l += minHeaderSize

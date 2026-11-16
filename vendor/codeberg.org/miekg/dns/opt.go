@@ -65,12 +65,12 @@ func (rr *OPT) setRcode(v uint16) {
 	rr.Hdr.TTL = rr.Hdr.TTL&0x00FFFFFF | uint32(v>>4)<<24
 }
 
-// z returns the Z part of the OPT RR as a uint16 with only the 13 least significant bits used.
-func (rr *OPT) z() uint16 {
+// z returns the flags part of the OPT RR as an uint16 with only the 13 least significant bits used.
+func (rr *OPT) flags() uint16 {
 	return uint16(rr.Hdr.TTL & 0x1FFF)
 }
 
-// setZ sets the Z part of the OPT RR, note only the 13 significant bits of z are used.
-func (rr *OPT) setZ(z uint16) {
+// setFlags sets the flags part of the OPT RR, note only the 13 significant bits of  the flags are used.
+func (rr *OPT) setFlags(z uint16) {
 	rr.Hdr.TTL = rr.Hdr.TTL&^0x1FFF | uint32(z&0x1FFF)
 }

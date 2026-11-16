@@ -180,6 +180,7 @@ func (rr IXFR) Data() RDATA        { return nil }
 func (rr *TSIG) Data() RDATA       { return rr.TSIG }
 func parseData(r io.Reader, rrtype uint16, o string) (RDATA, error) {
 	c := dnslex.New(r, StringToType, StringToClass)
+	c.SetType()
 
 	switch rrtype {
 	case TypeCNAME:

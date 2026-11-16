@@ -4,6 +4,12 @@
 # name/**   - apply …                   to dir  …
 # **/name   - apply (* doesn't match /) to file "name"  in any dir including project root
 # na/**/me  - apply (* doesn't match /) to file "na/me", "na/*/me", "na/*/*/me", …
+# Code copied from elsewhere, kept unchanged by `mise run fix`:
+# /internal/upstream/** vendored
 go.sum binary
 *.*.go binary
 testdata/dump_golden.txt -text
+/internal/contextx/** vendored
+/internal/deepequal/** vendored
+/internal/difflib/** vendored
+/internal/spew/** vendored

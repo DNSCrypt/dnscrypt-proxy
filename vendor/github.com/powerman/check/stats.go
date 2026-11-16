@@ -1,8 +1,8 @@
 package check
 
 import (
-	"cmp"
 	"fmt"
+	"maps"
 	"os"
 	"slices"
 	"strings"
@@ -54,7 +54,7 @@ func (c testStat) String() string {
 //nolint:gochecknoglobals // By design.
 var (
 	statsMu sync.Mutex
-	stats   = make(map[testing.TB]*testStat)
+	stats   = make(map[string]*testStat) // Keyed by test name, see [checks.stat].
 )
 
 // Report output statistics about passed/failed checks to stderr.
@@ -75,12 +75,10 @@ func Report() {
 	defer statsMu.Unlock()
 
 	total := newTestStat("(total)", true)
-	ts := make([]testing.TB, 0, len(stats))
-	for t := range stats {
-		ts = append(ts, t)
-		total.passed.value += stats[t].passed.value
-		total.forged.value += stats[t].forged.value
-		total.failed.value += stats[t].failed.value
+	for _, stat := range stats {
+		total.passed.value += stat.passed.value
+		total.forged.value += stat.forged.value
+		total.failed.value += stat.failed.value
 	}
 
 	total.passed.size = digits(total.passed.value)
@@ -88,14 +86,11 @@ func Report() {
 	total.failed.size = digits(total.failed.value)
 
 	if testing.Verbose() {
-		slices.SortFunc(ts, func(a, b testing.TB) int { //nolint:thelper // False positive.
-			return cmp.Compare(a.Name(), b.Name())
-		})
-		for _, t := range ts {
-			stats[t].passed.size = total.passed.size
-			stats[t].forged.size = total.forged.size
-			stats[t].failed.size = total.failed.size
-			fmt.Fprintf(os.Stderr, "  %s\n", stats[t])
+		for _, name := range slices.Sorted(maps.Keys(stats)) {
+			stats[name].passed.size = total.passed.size
+			stats[name].forged.size = total.forged.size
+			stats[name].failed.size = total.failed.size
+			fmt.Fprintf(os.Stderr, "  %s\n", stats[name])
 		}
 	}
 	fmt.Fprintf(os.Stderr, "  %s\n", total)
