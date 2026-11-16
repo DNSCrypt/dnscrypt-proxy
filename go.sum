@@ -48,8 +48,8 @@ github.com/lifenjoiner/dhcpdns v0.0.7 h1:VJM2aFWHU9V7M5v4UYYNaHhIHZkbdvSI6WGGpq6
 github.com/lifenjoiner/dhcpdns v0.0.7/go.mod h1:BixeaGeafYzDIuDCYIUbSOdi4m+TScpzI9cZGYgzgSk=
 github.com/oneregex/revera/go v0.0.0-20261014081440-64b07f96fe82 h1:fFaFBRcJ5On4GjxY9uYloMBY45P1vDtznnZnvJXuQHA=
 github.com/oneregex/revera/go v0.0.0-20261014081440-64b07f96fe82/go.mod h1:etJ/2GpiuaQDS2qu4JCLkce7anm9NibVW3X3ny9/fmY=
-github.com/powerman/check v1.14.0 h1:K8iOOVCMOcIeeGr/SBvVGJbiq5WAUtW7sIoGfE7+Skc=
-github.com/powerman/check v1.14.0/go.mod h1:SLUFjRHJRso/wokJgRvySca9reNPpC0YG1SvE0sifA0=
+github.com/powerman/check v1.14.1 h1:Z3yarbmVJm2ZcF0lKnSka7Vxgu6KeGRkLEPikync/+w=
+github.com/powerman/check v1.14.1/go.mod h1:SLUFjRHJRso/wokJgRvySca9reNPpC0YG1SvE0sifA0=
 github.com/quic-go/go-ossfuzz-seeds v0.1.0 h1:APacT+iIaNF6fd8AGEiN3bT/Jtkd2jz4v4TzM7MFjy0=
 github.com/quic-go/go-ossfuzz-seeds v0.1.0/go.mod h1:3IOHRbJIc+L6YKMwfDtJAM9Vj9k0YY4muhuyUYk5tbk=
 github.com/quic-go/qpack v0.6.0 h1:g7W+BMYynC1LbYLSqRt8PBg5Tgwxn214ZZR34VIOjz8=

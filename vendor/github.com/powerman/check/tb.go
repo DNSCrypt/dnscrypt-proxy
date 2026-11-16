@@ -72,17 +72,24 @@ func (c *checks) mergeContext(ctx context.Context) (*checks, context.CancelFunc)
 	return &d, cancel
 }
 
+// stat returns the statistics of c's test, creating it on first use.
+// Caller must hold statsMu.
+func (c *checks) stat() *testStat {
+	name := c.tb.Name()
+	if stats[name] == nil {
+		stats[name] = newTestStat(name, false)
+	}
+	return stats[name]
+}
+
 func (c *checks) pass() {
 	statsMu.Lock()
 	defer statsMu.Unlock()
 
-	if stats[c.tb] == nil {
-		stats[c.tb] = newTestStat(c.tb.Name(), false)
-	}
 	if c.todo {
-		stats[c.tb].forged.value++
+		c.stat().forged.value++
 	} else {
-		stats[c.tb].passed.value++
+		c.stat().passed.value++
 	}
 }
 
@@ -90,10 +97,7 @@ func (c *checks) fail() {
 	statsMu.Lock()
 	defer statsMu.Unlock()
 
-	if stats[c.tb] == nil {
-		stats[c.tb] = newTestStat(c.tb.Name(), false)
-	}
-	stats[c.tb].failed.value++
+	c.stat().failed.value++
 }
 
 func (c *checks) report(ok bool, msg []any, checker string, name []string, args []any) bool { //nolint:revive // False positive.

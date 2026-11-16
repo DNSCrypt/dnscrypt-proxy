@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.14.1] - 2026-11-12
+
+### 🔔 Changed
+
+- Undo go fix changes in vendored libraries by @powerman in [2d9e657]
+- Order tasks in mise.toml like the template by @powerman in [628c894]
+
+### 🐛 Fixed
+
+- Key test statistics by test name by @powerman in [a6b7f0c]
+
+### 📦️ Dependencies
+
+- **(deps)** Upgrade go and golangci-lint by @powerman in [a5dd4e0]
+- **(deps)** Upgrade go and golangci-lint by @powerman in [0e46d78]
+- **(deps)** Mise up by @powerman in [d71385a]
+
+[1.14.1]: https://github.com/powerman/check/compare/v1.14.0..v1.14.1
+[a5dd4e0]: https://github.com/powerman/check/commit/a5dd4e041b83fc23dfd7abd1133e138bf09a68df
+[2d9e657]: https://github.com/powerman/check/commit/2d9e657281a0fcba04d9f2507dbd4285d908aa9f
+[0e46d78]: https://github.com/powerman/check/commit/0e46d78d56fe9e2445a6117116bb24119c3569be
+[d71385a]: https://github.com/powerman/check/commit/d71385aa21d75257b4afa102bc4d08fade9ce606
+[628c894]: https://github.com/powerman/check/commit/628c894442652d9ba36b20c697dcc63ec2bcb52c
+[a6b7f0c]: https://github.com/powerman/check/commit/a6b7f0c0fed1f801266e8b68b95eb9319c20b28e
+
 ## [1.14.0] - 2026-09-21
 
 ### 🚀 Added

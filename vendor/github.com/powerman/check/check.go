@@ -414,10 +414,10 @@ func stringify(arg *any) bool {
 		*arg = v.String()
 	default:
 		typ := reflect.TypeOf(*arg)
-		switch typ.Kind() { //nolint:exhaustive // Covered by default case.
+		switch typ.Kind() {
 		case reflect.String:
 		case reflect.Slice:
-			switch typ.Elem().Kind() { //nolint:exhaustive // Covered by default case.
+			switch typ.Elem().Kind() {
 			case reflect.Uint8, reflect.Int32:
 			default:
 				return false
@@ -459,7 +459,7 @@ func (t *checks) Contains(actual, expected any, msg ...any) bool {
 }
 
 func isContains(actual, expected any) (found bool) {
-	switch valActual := reflect.ValueOf(actual); valActual.Kind() { //nolint:exhaustive // Covered by default case.
+	switch valActual := reflect.ValueOf(actual); valActual.Kind() {
 	case reflect.String:
 		strActual := valActual.Convert(typString).Interface().(string) //nolint:forcetypeassert // False positive.
 		valExpected := reflect.ValueOf(expected)
@@ -820,7 +820,7 @@ func (t *checks) Less(actual, expected any, msg ...any) bool {
 }
 
 func isLess(actual, expected any) bool {
-	switch v1, v2 := reflect.ValueOf(actual), reflect.ValueOf(expected); v1.Kind() { //nolint:exhaustive // Covered by default case.
+	switch v1, v2 := reflect.ValueOf(actual), reflect.ValueOf(expected); v1.Kind() {
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		return v1.Int() < v2.Int()
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
@@ -858,7 +858,7 @@ func (t *checks) LessOrEqual(actual, expected any, msg ...any) bool {
 }
 
 func isGreater(actual, expected any) bool {
-	switch v1, v2 := reflect.ValueOf(actual), reflect.ValueOf(expected); v1.Kind() { //nolint:exhaustive // Covered by default case.
+	switch v1, v2 := reflect.ValueOf(actual), reflect.ValueOf(expected); v1.Kind() {
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		return v1.Int() > v2.Int()
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
@@ -936,7 +936,7 @@ func (t *checks) Between(actual, minimum, maximum any, msg ...any) bool {
 }
 
 func isBetween(actual, minimum, maximum any) bool {
-	switch v, vmin, vmax := reflect.ValueOf(actual), reflect.ValueOf(minimum), reflect.ValueOf(maximum); v.Kind() { //nolint:exhaustive // Covered by default case.
+	switch v, vmin, vmax := reflect.ValueOf(actual), reflect.ValueOf(minimum), reflect.ValueOf(maximum); v.Kind() {
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		return vmin.Int() < v.Int() && v.Int() < vmax.Int()
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
@@ -1011,7 +1011,7 @@ func (t *checks) InDelta(actual, expected, delta any, msg ...any) bool {
 }
 
 func isInDelta(actual, expected, delta any) bool {
-	switch v, e, d := reflect.ValueOf(actual), reflect.ValueOf(expected), reflect.ValueOf(delta); v.Kind() { //nolint:exhaustive // Covered by default case.
+	switch v, e, d := reflect.ValueOf(actual), reflect.ValueOf(expected), reflect.ValueOf(delta); v.Kind() {
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		dd := d.Int()
 		if dd < 0 {
@@ -1378,7 +1378,7 @@ func (t *checks) NotSubset(actual, expected any, msg ...any) bool {
 
 func isSubset(actual, expected any) bool {
 	va, ve := reflect.ValueOf(actual), reflect.ValueOf(expected)
-	switch ve.Kind() { //nolint:exhaustive // Covered by default case.
+	switch ve.Kind() {
 	case reflect.Map:
 		if va.Kind() != reflect.Map {
 			panic("actual is not a map")

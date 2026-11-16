@@ -1,4 +1,4 @@
-# Origin: https://github.com/powerman/golangci-lint-strict version 2.12.2
+# Origin: https://github.com/powerman/golangci-lint-strict version 2.15.0
 version: "2"
 linters:
   default: all
@@ -8,6 +8,7 @@ linters:
     - cyclop # Prefer gocognit.
     - dogsled # Questionable (assignment to how many blank identifiers is not okay?).
     - dupl
+    - exhaustruct # Deprecated.
     - forcetypeassert # Questionable (often we actually want panic).
     - gocyclo # Prefer gocognit.
     - gomodguard # Deprecated.
@@ -77,13 +78,14 @@ linters:
     exhaustive:
       check:
         - switch
-        - map
-      explicit-exhaustive-map: true # Only check maps with "//exhaustive:enforce" comment.
-    exhaustruct:
-      include:
-        - ^$ # Only check structs which domain.tld/package/name.structname match this regexp.
+        - mapliteral
+      explicit-exhaustive: true # Only check maps with "//exhaustive:enforce" comment.
+    exhaustruct_v5:
+      explicit-mode: true # Only check structs marked with "//exhaustruct:enforce" comment.
     fatcontext:
       check-struct-pointers: true
+      check-loops: false
+      check-function-literals: false
     forbidigo:
       forbid:
         - pattern: ^print(ln)?$
@@ -184,6 +186,7 @@ linters:
     revive:
       directives:
         - name: specify-disable-reason
+        - name: specify-disable-rule
       rules:
         - name: add-constant
           disabled: true # Duplicates goconst and mnd linters.
@@ -264,11 +267,13 @@ linters:
         - name: inefficient-map-lookup
         - name: line-length-limit
           disabled: true # Duplicates lll linter.
+        - name: marshal-receiver
         - name: max-control-nesting
         - name: max-public-structs
           disabled: true # Questionable.
         - name: modifies-parameter
         - name: modifies-value-receiver
+        - name: multiline-if-init
         - name: nested-structs
           disabled: true # Questionable (useful in tests, may worth enabling for non-tests).
         - name: optimize-operands-order
@@ -308,6 +313,7 @@ linters:
         - name: unnecessary-if
         - name: unnecessary-stmt
         - name: unreachable-code
+        - name: use-slices-concat
         - name: use-slices-sort
         - name: unsecure-url-scheme
         - name: unused-parameter

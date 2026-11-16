@@ -1,0 +1,14 @@
+# https://github.com/google/yamlfmt/blob/main/docs/config-file.md
+formatter:
+  type: basic
+  # Retain line breaks in formatted yaml, but only keep a single line in groups of many blank lines.
+  # WARN: When true we can't use block chomping |+ >+ - they gets replaced with | >.
+  retain_line_breaks_single: true
+  # Option that will preserve newlines in folded block scalars (blocks that start with >).
+  scan_folded_as_literal: true
+  # Trim trailing whitespace from lines.
+  # WARN: When true we can't use block chomping | |+ > >+ - they gets replaced with |- >-.
+  trim_trailing_whitespace: false
+# Generated files: generators rewrite them in another style, so formatting only adds noise.
+exclude:
+  - .sg/tests/__snapshots__ # ast-grep test --update-all
