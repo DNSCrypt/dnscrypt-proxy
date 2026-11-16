@@ -52,8 +52,14 @@ func (plugin *PluginDNS64) Init(proxy *Proxy) error {
 			if err != nil {
 				return err
 			}
-			if ones, _ := pref.Mask.Size(); ones > 96 {
-				return errors.New("DNS64 prefixes must be /96 or shorter")
+			ones, bits := pref.Mask.Size()
+			if bits != 128 {
+				return errors.New("DNS64 prefixes must be IPv6")
+			}
+			switch ones {
+			case 32, 40, 48, 56, 64, 96:
+			default:
+				return errors.New("DNS64 prefix lengths must be 32, 40, 48, 56, 64 or 96")
 			}
 			dlog.Noticef("Registered DNS64 prefix [%s]", pref.String())
 			plugin.pref64 = append(plugin.pref64, pref)
