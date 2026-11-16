@@ -4,6 +4,7 @@ import (
 	"bytes"
 	crypto_rand "crypto/rand"
 	"crypto/sha512"
+	"crypto/subtle"
 	"errors"
 
 	"github.com/jedisct1/dlog"
@@ -21,6 +22,12 @@ const (
 	QueryOverhead    = ClientMagicLen + PublicKeySize + HalfNonceSize + TagSize
 	ResponseOverhead = len(ServerMagic) + NonceSize + TagSize
 )
+
+// HSalsa20 of an all-zero X25519 output
+var xsalsa20WeakSharedKey = [32]byte{
+	0x35, 0x1f, 0x86, 0xfa, 0xa3, 0xb9, 0x88, 0x46, 0x8a, 0x85, 0x01, 0x22, 0xb6, 0x5b, 0x0a, 0xce,
+	0xce, 0x9c, 0x48, 0x26, 0x80, 0x6a, 0xee, 0xe6, 0x3d, 0xe9, 0xc0, 0xda, 0x2b, 0xd7, 0xf9, 0x1e,
+}
 
 func pad(packet []byte, minSize int) []byte {
 	packet = append(packet, 0x80)
@@ -68,11 +75,7 @@ func ComputeSharedKey(
 		}
 	} else {
 		box.Precompute(&sharedKey, serverPk, secretKey)
-		c := byte(0)
-		for i := range 32 {
-			c |= sharedKey[i]
-		}
-		if c == 0 {
+		if subtle.ConstantTimeCompare(sharedKey[:], xsalsa20WeakSharedKey[:]) == 1 {
 			dlog.Criticalf("[%v] Weak XSalsa20 public key", providerName)
 			if _, err := crypto_rand.Read(sharedKey[:]); err != nil {
 				dlog.Fatal(err)
