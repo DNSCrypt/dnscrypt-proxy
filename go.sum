@@ -38,8 +38,8 @@ github.com/jedisct1/go-minisign v0.0.0-20260527172527-a09352b57a22 h1:C68TAi+k12
 github.com/jedisct1/go-minisign v0.0.0-20260527172527-a09352b57a22/go.mod h1:vYVVh81Lqe/TP0sPLjiNYcX9Hxy/YSfkUx96lYJeyKo=
 github.com/jedisct1/go-sieve-cache v0.1.9 h1:W3vUr9VwjXsMSQH+Aah1m+gRhGCar1rLWf4VqRErSQE=
 github.com/jedisct1/go-sieve-cache v0.1.9/go.mod h1:LV8jfNmswZpdMxHc2uu4R+gTe3kH8CGn/sKnKJVnank=
-github.com/jedisct1/xsecretbox v0.0.0-20241212092125-3afc4917ac41 h1:TPF+VETyhqUOY51j3KF0uk5cgHQ2Bzi6XCorcGNGfTs=
-github.com/jedisct1/xsecretbox v0.0.0-20241212092125-3afc4917ac41/go.mod h1:eh2PYNEklsNDqUxnbnN9Duvpw1b+ZectZAtDUDRj2tA=
+github.com/jedisct1/xsecretbox v1.0.6 h1:HqkupFNHJbaFrMR3G5NC05qcLqsTuWu7oQ+xlbQF+Z8=
+github.com/jedisct1/xsecretbox v1.0.6/go.mod h1:SMIJ2JjN0BnKjy5Zz7Hc7gtK+VhYoi5uvAUu+YpsSwc=
 github.com/k-sone/critbitgo v1.4.0 h1:l71cTyBGeh6X5ATh6Fibgw3+rtNT80BA0uNNWgkPrbE=
 github.com/k-sone/critbitgo v1.4.0/go.mod h1:7E6pyoyADnFxlUBEKcnfS49b7SUAQGMK+OAp/UQvo0s=
 github.com/kardianos/service v1.3.0 h1:/LGy+xPP2TM+GLTiCZ2di7cy0Jd/qrawlTUfqKYFdTI=

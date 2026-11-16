@@ -17,7 +17,7 @@ func SharedKey(secretKey [32]byte, publicKey [32]byte) ([32]byte, error) {
 	}
 	var key [32]byte
 	if err != nil {
-		if _, err2 := crypto_rand.Read(key[:]); err != nil {
+		if _, err2 := crypto_rand.Read(key[:]); err2 != nil {
 			return key, err2
 		}
 		return key, err

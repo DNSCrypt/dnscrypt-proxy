@@ -83,8 +83,8 @@ github.com/jedisct1/go-minisign
 # github.com/jedisct1/go-sieve-cache v0.1.9
 ## explicit; go 1.21
 github.com/jedisct1/go-sieve-cache/pkg/sievecache
-# github.com/jedisct1/xsecretbox v0.0.0-20241212092125-3afc4917ac41
-## explicit; go 1.23.4
+# github.com/jedisct1/xsecretbox v1.0.6
+## explicit; go 1.26.0
 github.com/jedisct1/xsecretbox
 # github.com/k-sone/critbitgo v1.4.0
 ## explicit
