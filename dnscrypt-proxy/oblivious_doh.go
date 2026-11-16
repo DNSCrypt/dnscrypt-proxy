@@ -13,6 +13,8 @@ const (
 	odohVersion     = uint16(0x0001)
 	odohTestVersion = uint16(0xff06)
 	maxODoHConfigs  = 10
+
+	maxODoHResponseNonceLength = 32
 )
 
 type ODoHTargetConfig struct {
@@ -141,7 +143,7 @@ func (q ODoHQuery) decryptResponse(response []byte) ([]byte, error) {
 	}
 
 	responseNonceLength := binary.BigEndian.Uint16(response[1:3])
-	if len(response) < 5+int(responseNonceLength) {
+	if responseNonceLength > maxODoHResponseNonceLength || len(response) < 5+int(responseNonceLength) {
 		return nil, fmt.Errorf("Malformed response")
 	}
 
