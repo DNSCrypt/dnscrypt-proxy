@@ -128,11 +128,9 @@ func (source *Source) updateCache(bin, sig []byte) {
 		absPath = resolved
 	}
 
-	source.Lock()
-	needsWrite := !bytes.Equal(source.bin, bin)
-	source.Unlock()
-
-	if needsWrite {
+	cachedBin, binErr := os.ReadFile(file)
+	cachedSig, sigErr := os.ReadFile(file + ".minisig")
+	if binErr != nil || sigErr != nil || !bytes.Equal(cachedBin, bin) || !bytes.Equal(cachedSig, sig) {
 		if err := writeSource(file, bin, sig); err != nil {
 			dlog.Warnf("Couldn't write cache file [%s]: %s", absPath, err) // an error writing to the cache isn't fatal
 		}
