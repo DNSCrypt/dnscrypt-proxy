@@ -20,7 +20,7 @@ require (
 	github.com/jedisct1/go-ipcrypt v0.1.2
 	github.com/jedisct1/go-minisign v0.0.0-20260527172527-a09352b57a22
 	github.com/jedisct1/go-sieve-cache v0.1.9
-	github.com/jedisct1/xsecretbox v0.0.0-20241212092125-3afc4917ac41
+	github.com/jedisct1/xsecretbox v1.0.6
 	github.com/k-sone/critbitgo v1.4.0
 	github.com/kardianos/service v1.3.0
 	github.com/lifenjoiner/dhcpdns v0.0.7
