@@ -432,7 +432,7 @@ func (plugin *PluginForward) Eval(pluginsState *PluginsState, msg *dns.Msg) erro
 		if err != nil {
 			continue
 		}
-		if err := validateResponseQuestion(forwardMsg, respMsg); err != nil {
+		if err = validateResponseQuestion(forwardMsg, respMsg); err != nil {
 			continue
 		}
 		if !respMsg.Security {
