@@ -17,7 +17,7 @@ import (
 	"codeberg.org/miekg/dns/rdata"
 )
 
-// ID by default returns a 16-bit random number to be used as a message id. The
+// ID by default returns a 16-bit random number to be used as a message ID. The
 // number is drawn from a cryptographically secure random number generator.
 // This being a variable the function can be reassigned to a custom function.
 // For instance, to make it return a static value for testing:
