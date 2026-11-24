@@ -35,7 +35,7 @@ type ResponseWriter interface {
 
 // A ResponseController is used by an DNS handler to control the DNS response.
 type ResponseController interface {
-	SetWriteDeadline() error //  SetWriteDeadline sets the deadline for writing the response.
+	SetWriteDeadline() error //  SetWriteDeadline sets the deadline for writing the TCP response.
 }
 
 // response implements response.Writer. This struct is read-only execpt for hijacked.

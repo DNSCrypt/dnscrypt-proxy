@@ -33,41 +33,42 @@ func (srv *Server) listenUDP(pc net.PacketConn) {
 	}
 
 	udpConn := pc.(*net.UDPConn)
-Read:
+	writer := &udpWriter{xpc: xpc, pool: srv.MsgPool, ch: make(chan udpReply, 4*BatchSize), exited: make(chan struct{})}
+	go writer.serve()
+
 	for {
 		select {
-		default:
-			// If we set the read deadline is will timeout every ReadTimeout and reallocate the msgs, we are
-			// also a server, so just wait for incoming messages.
-
-			n, err := xpc.ReadBatch(msgs, 0)
-			if err != nil {
-				continue Read
-			}
-			_ = msgs[:n] // eliminate further bounds checking
-
-			for i := range msgs[:n] {
-				r := &Msg{Data: srv.MsgPool.Get()}
-				copy(r.Data, msgs[i].Buffers[0][:msgs[i].N])
-				r.Data = r.Data[:msgs[i].N]
-
-				oob := make([]byte, oobSize)
-				copy(oob, msgs[i].OOB[:msgs[i].NN])
-
-				w := &response{conn: udpConn, session: &Session{msgs[i].Addr.(*net.UDPAddr), oob}}
-				wg.Add(1) // no wg.Go to prevent defer usage
-				go func() {
-					srv.serveDNS(w, r)
-					wg.Done()
-				}()
-
-				bufs[i] = bufs[i][:0]
-			}
 		case <-srv.shutdown:
 			pc.Close()
 			wg.Wait()
+			close(writer.exited)
 			close(srv.exited)
 			return
+		default:
+		}
+
+		// If we set the read deadline is will timeout every ReadTimeout and reallocate the msgs, we are
+		// also a server, so just wait for incoming messages.
+
+		n, err := xpc.ReadBatch(msgs, 0)
+		if err != nil {
+			continue
+		}
+
+		wg.Add(n)
+		for i := range msgs[:n] {
+			r := &Msg{Data: srv.MsgPool.Get()}
+			copy(r.Data, msgs[i].Buffers[0][:msgs[i].N])
+			r.Data = r.Data[:msgs[i].N]
+
+			oob := make([]byte, msgs[i].NN)
+			copy(oob, msgs[i].OOB[:msgs[i].NN])
+
+			w := &response{conn: udpConn, session: &Session{Addr: msgs[i].Addr.(*net.UDPAddr), OOB: oob, writer: writer}}
+			go func() {
+				srv.serveDNS(w, r)
+				wg.Done()
+			}()
 		}
 	}
 }

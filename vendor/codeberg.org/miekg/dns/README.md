@@ -48,9 +48,9 @@ is the SOA's mname can contain a `\.`, for the rest it is ignore and interpreted
 
 The performance should be roughly 2x across the board compared to v1 (also see below).
 
-- Serving DNS queries per second is \~2x (maybe more).
-- Parsing zones files in RRs per second is \~1.5x.
-- Memory usage can be \~0.5x due to rdata split off.
+- Serving DNS queries per second is \~2x (maybe more), \~460K/360K qps UDP/TCP.
+- Parsing zones files in RR/s is \~2-3x, \~2M RR/s.
+- Memory usage can be \~0.5x due to rdata split off. (Needs retesting.)
 
 For developers please read the
 [developer README](https://codeberg.org/miekg/dns/src/branch/main/_doc/README-dev.md).
@@ -68,13 +68,14 @@ For developers please read the
   - Pacakge _deleg_ holds details for the DELEG record.
   - Many helper/debug functions are moved into _internal_ packages, making the top-level much, much cleaner.
 - Fast.
-  - recvmmsg(2) and TCP pipe-lining support.
-  - The `cmd/reflect` server does ~420K/340K qps UDP/TCP respectively on the right hardware.
-    - Since a46996c I can get ~400K (UDP) qps on my laptop (M2/Asahi Linux), also see 1766e44, 86b53fe and 06e5e0f.
-    - On my Dell XPS 17 (Intel) it is similar-ish (~310K/250K qps UDP/TCP).
-    - On other Intel/AMD hardware it is lower (~200K (UDP) qps) - yet to understand why.
+  - recvmmsg(2), sendmmsg(2) _and_ TCP pipe-lining support.
+  - The `cmd/reflect` server does ~510K/430K qps UDP/TCP respectively on the right hardware.
+    - Since 49dee0cc I can get ~510K (UDP) qps on my laptop (M2/Asahi Linux), also see older commits 08931c58, 1766e44, 86b53fe and 06e5e0f.
+      This needs `export GOGC=400` when running the benchmark to cut down a little on the GC.
+    - On my Dell XPS 17 (Intel) it is similar-ish (~510K/360K qps UDP/TCP).
+    - On my computer (AMD Ryzen 7 2700 - 16 core) it is ~310K/270K qps UDP/TCP (no GOCG=400 here).
   - See `cmd/reflect` and do a `go build; make new.txt` to redo the performance test. Requires `dnsperf` to be installed.
-  - The SE zone (8M RRs) is parsed in \~11s (\~730K RR/s), the CH zones (15M RRs) is parsed in \~14s (\~1M RR/s).
+  - The SE zone (8M RRs) is parsed in \~5s (\~1.5M RR/s), the CH zones (15M RRs) is parsed in \~7s (\~2M RR/s).
     The main difference being that SE use algorithm 8, and CH algorithm 13 (shorter RRSIGs).
     See `cmd/parse`, tested with M2/Asahi Linux.
 
@@ -110,7 +111,7 @@ What users say:
 
 # Features
 
-- UDP/TCP queries, recvmmsg(2), TCP query-pipelining, IPv4 and IPv6.
+- UDP/TCP queries, recvmmsg(2), sendmmsg(2), TCP query-pipelining, IPv4 and IPv6.
 - Fast.
 - RFC 1035 zone file parsing ($INCLUDE, $ORIGIN, $TTL and $GENERATE - for _all_ record types) is supported,
   but directives can also be ignored.

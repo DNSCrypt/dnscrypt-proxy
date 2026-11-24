@@ -21,6 +21,14 @@ func NewReader(s string) *Reader {
 	}
 }
 
+// Len returns the number of bytes that are still to be read.
+func (r *Reader) Len() int {
+	if r.n {
+		return r.r.Len() + 1 // the newline we add
+	}
+	return r.r.Len()
+}
+
 // Read implements io.Reader.
 func (r *Reader) Read(p []byte) (int, error) {
 	n, err := r.r.Read(p)

@@ -7,4 +7,6 @@ type Session struct {
 	Addr *net.UDPAddr // address from [net.ReadMsgUDP]
 	// oob data also returned, this is needed to route to the correct interface.
 	OOB []byte
+
+	writer *udpWriter // writes the reply, if set
 }

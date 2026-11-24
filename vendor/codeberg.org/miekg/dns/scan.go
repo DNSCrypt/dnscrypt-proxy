@@ -102,6 +102,7 @@ func Read(r io.Reader) (RR, error) { return read(r, "") }
 
 func read(r io.Reader, file string) (RR, error) {
 	zp := NewZoneParser(r, ".", file)
+	zp.c.Exact() // we read a single RR, leave the rest in r, for a next call
 	zp.SetDefaultTTL(3600)
 	zp.SkipDirectives = true
 	rr, _ := zp.Next()
@@ -189,7 +190,7 @@ type ZoneParser struct {
 	path   string // full path of file
 
 	parseErr *ParseError
-	defttl   *ttlState
+	defttl   ttlState
 
 	// sub is used to parse $INCLUDE files and $GENERATE directives.
 	// Next, by calling subNext, forwards the resulting RRs from this
@@ -214,17 +215,24 @@ func NewZoneParser(r io.Reader, origin, file string) *ZoneParser {
 	return &ZoneParser{
 		c:                dnslex.New(r, StringToType, StringToClass),
 		IncludeAllowFunc: DefaultIncludeAllowFunc,
-		defttl:           &ttlState{3600, false},
+		defttl:           ttlState{3600, false},
 		parseErr:         pe,
 		origin:           origin,
 		file:             file,
-		path:             func() string { p, _ := filepath.Abs(file); return p }(),
 	}
 }
 
 // SetDefaultTTL sets the parsers default TTL to ttl.
 func (zp *ZoneParser) SetDefaultTTL(ttl uint32) {
-	zp.defttl = &ttlState{ttl, false}
+	zp.defttl = ttlState{ttl, false}
+}
+
+// Abs resolves the parser's file name once, on first use.
+func (zp *ZoneParser) Abs() string {
+	if zp.path == "" {
+		zp.path, _ = filepath.Abs(zp.file)
+	}
+	return zp.path
 }
 
 // Err returns the first non-EOF error that was encountered by the ZoneParser.
@@ -284,8 +292,9 @@ func (zp *ZoneParser) Next() (RR, bool) {
 		if !ok {
 			return 0, false
 		}
-		if zp.defttl == nil || !zp.defttl.isByDirective {
-			zp.defttl = &ttlState{ttl, false}
+		// Only replace the state when the TTL differs.
+		if !zp.defttl.isByDirective && zp.defttl.ttl != ttl {
+			zp.defttl = ttlState{ttl, false}
 		}
 		return ttl, true
 	}
@@ -312,9 +321,7 @@ func (zp *ZoneParser) Next() (RR, bool) {
 		switch st {
 		case zExpectOwnerDir:
 			// We can also expect a directive, like $TTL or $ORIGIN.
-			if zp.defttl != nil {
-				zp.h.TTL = zp.defttl.ttl
-			}
+			zp.h.TTL = zp.defttl.ttl
 
 			zp.h.Class = ClassINET
 
@@ -408,8 +415,7 @@ func (zp *ZoneParser) Next() (RR, bool) {
 				rr             RR
 				parseAsRFC3597 bool
 			)
-			if newFn, ok := TypeToRR[zp.t]; ok {
-				rr = newFn()
+			if rr = newRR(zp.t); rr != nil {
 				*rr.Header() = zp.h
 
 				// We may be parsing a known RR type using the RFC3597 format. If so, we handle that here in a generic way.
@@ -486,7 +492,7 @@ func (zp *ZoneParser) Next() (RR, bool) {
 
 			// Directives here
 
-			if !zp.IncludeAllowFunc(zp.path, l.Token) {
+			if !zp.IncludeAllowFunc(zp.Abs(), l.Token) {
 				return zp.setParseError("$INCLUDE directive not allowed", l)
 			}
 			if zp.includeDepth >= maxIncludeDepth {
@@ -555,7 +561,7 @@ func (zp *ZoneParser) Next() (RR, bool) {
 				return zp.setParseError("expecting $TTL value, not this...", l)
 			}
 
-			zp.defttl = &ttlState{ttl, true}
+			zp.defttl = ttlState{ttl, true}
 
 			st = zExpectOwnerDir
 		case zExpectDirOrigin:
@@ -599,10 +605,6 @@ func (zp *ZoneParser) Next() (RR, bool) {
 		case zExpectAny:
 			switch l.Value {
 			case dnslex.Rrtype:
-				if zp.defttl == nil {
-					return zp.setParseError("missing TTL with no previous value", l)
-				}
-
 				zp.t = l.Torc
 
 				st = zExpectRdata
