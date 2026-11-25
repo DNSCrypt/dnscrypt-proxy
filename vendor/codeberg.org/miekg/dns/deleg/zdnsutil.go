@@ -99,12 +99,30 @@ func dnsutilIsFqdn(s string) bool { return strings.HasSuffix(s, ".") }
 // Canonical returns the domain name in canonical form. A name in canonical form is lowercase and fully qualified.
 // Only US-ASCII letters are affected. See Section 6.2 in RFC 4034.
 func dnsutilCanonical(s string) string {
-	return strings.Map(func(r rune) rune {
-		if r >= 'A' && r <= 'Z' {
-			r += 'a' - 'A'
+	i := 0
+	for ; i < len(s); i++ {
+		if c := s[i]; c >= 'A' && c <= 'Z' {
+			break
 		}
-		return r
-	}, dnsutilFqdn(s))
+	}
+	if i == len(s) {
+		return dnsutilFqdn(s) // all lowercase
+	}
+
+	var sb strings.Builder
+	sb.Grow(len(s) + 1)
+	sb.WriteString(s[:i])
+	for ; i < len(s); i++ {
+		c := s[i]
+		if c >= 'A' && c <= 'Z' {
+			c += 'a' - 'A'
+		}
+		sb.WriteByte(c)
+	}
+	if c := s[len(s)-1]; c != '.' {
+		sb.WriteByte('.')
+	}
+	return sb.String()
 }
 
 // IsName checks if s is a valid domain name. A non fully qualified domain name is considered valid. Note that

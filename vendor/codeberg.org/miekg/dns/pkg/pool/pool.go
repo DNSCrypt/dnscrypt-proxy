@@ -3,6 +3,7 @@ package pool
 import (
 	"strings"
 	"sync"
+	"unsafe"
 )
 
 // Pooler is an interface that mimics a sync.Pool, but allows for different implementation.
@@ -20,13 +21,13 @@ type Pool struct {
 	pool sync.Pool
 }
 
-func (p *Pool) Get() []byte { return p.pool.Get().([]byte) }
+func (p *Pool) Get() []byte { return unsafe.Slice(p.pool.Get().(*byte), p.size) }
 
 func (p *Pool) Put(b []byte) {
 	if cap(b) > p.size {
 		return
 	}
-	p.pool.Put(b[:cap(b)])
+	p.pool.Put(unsafe.SliceData(b[:cap(b)]))
 }
 
 // New returns a new Pooler of size.
@@ -34,7 +35,7 @@ func New(size int) *Pool {
 	return &Pool{
 		size: size,
 		pool: sync.Pool{
-			New: func() any { return make([]byte, size) },
+			New: func() any { return unsafe.SliceData(make([]byte, size)) },
 		},
 	}
 }

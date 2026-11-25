@@ -187,7 +187,6 @@ func AAAA(aaaa netip.Addr, msg []byte, off int) (int, error) {
 // Name packs the string s into msg.
 func Name(s string, msg []byte, off int, compression map[string]uint16, compress bool) (off1 int, err error) {
 	// XXX: A logical copy of this function exists in dnsutil.IsName and should be kept in sync with this function.
-
 	lenmsg := len(msg)
 	ls := len(s)
 
@@ -254,63 +253,53 @@ func Name(s string, msg []byte, off int, compression map[string]uint16, compress
 	return off + 1, nil
 }
 
-// MName packs the string s into msg taking escaped dots into account. A label may hold any number of
-// escaped dots, \. can never be at the start of the string.
+// MName packs the string s into msg. It works like Name, but a dot preceded by a
+// backslash (\.) is not a label separator: it is packed as a literal dot inside
+// the label, and the backslash itself is not packed.
+//
+// MName does not do name compression: the name is always packed in full, sharing the compression map
+// with Name would complicate things.
 func MName(s string, msg []byte, off int) (off1 int, err error) {
-	// TODO(Miek): this should have the same signature of Name, *and* also allow compression.
 	lenmsg := len(msg)
 	ls := len(s)
 
 	if ls == 1 && s[0] == '.' {
 		if off >= lenmsg {
-			return lenmsg, &Error{"overflow name"}
+			return lenmsg, &Error{"overflow mname"}
 		}
 		msg[off] = 0
 		return off + 1, nil
-	}
-	if ls > 1 && s[0] == '.' { // leading dots are not legal except for the root zone
-		return lenmsg, &Error{"leading dot in mname"}
-	}
-	if ls > 2 && s[0] == '\\' && s[1] == '.' { // disallow \. too
-		return lenmsg, &Error{"leading dot in mname"}
 	}
 	if ls > 0 && s[ls-1] != '.' {
 		return lenmsg, &Error{"mname must be fully qualified"}
 	}
 
-	// Each dot ends a segment of the name. We trade each dot byte for a length byte.
-	// Except for escaped dots (\.), which are normal dots. There is also a trailing zero.
-	// Emit sequence of counted strings, chopping at dots.
+	// Each unescaped dot ends a segment of the name. We trade each dot byte for a length byte.
+	// There is also a trailing zero. Emit sequence of counted strings, chopping at unescaped dots.
 	var (
 		begin    int
 		labelLen int
-		escape   int
 	)
 
 	for begin < ls {
-		i := strings.IndexByte(s[begin:], '.')
-		if i == -1 {
-			break
-		}
-		i += begin
-
-		escape = 0
-		for i > begin && s[i-1] == '\\' { // escaped dot, a label may hold several
-			if i+2 > ls {
-				return lenmsg, &Error{"overflow mname after escape"}
+		// find the next dot that is not escaped, counting the escapes we skip
+		i := begin
+		escapes := 0
+		for {
+			j := strings.IndexByte(s[i:], '.')
+			if j == -1 { // only reachable when the final dot is escaped
+				return lenmsg, &Error{"mname must be fully qualified"}
 			}
-			j := strings.IndexByte(s[i+1:], '.') // search ahead for another dot
-			if j == -1 {
-				return lenmsg, &Error{"overflow mname after escape"}
+			i += j
+			if i == begin || s[i-1] != '\\' {
+				break
 			}
-			// i is the end of the label, 1 for \
-			i += 1 + j
-			escape++
+			escapes++
+			i++
 		}
 
-		labelLen = i - begin - escape
-
-		if labelLen >= 1<<6 { // top two bits of length must be clear
+		labelLen = i - begin - escapes // the backslashes are not packed
+		if labelLen >= 1<<6 {          // top two bits of length must be clear
 			return lenmsg, &Error{"illegal label type in mname"}
 		}
 		if labelLen == 0 {
@@ -322,27 +311,24 @@ func MName(s string, msg []byte, off int) (off1 int, err error) {
 			return lenmsg, &Error{"overflow mname"}
 		}
 
+		// the following is covered by the length check above
 		msg[off] = byte(labelLen)
-		if escape == 0 {
+		if escapes == 0 {
 			copy(msg[off+1:], s[begin:i])
-			off += 1 + labelLen
-			begin = i + 1
-			continue
+		} else {
+			j := off + 1
+			for k := begin; k < i; k++ {
+				if s[k] == '\\' && s[k+1] == '.' { // k+1 <= i, so in range
+					continue
+				}
+				msg[j] = s[k]
+				j++
+			}
 		}
 
-		// slow(er) copy path to skip the escaped dot
-		l := 1
-		for k := begin; k < i; k++ {
-			if s[k] == '\\' && s[k+1] == '.' {
-				continue
-			}
-			msg[off+l] = s[k]
-			l++
-		}
 		off += 1 + labelLen
 		begin = i + 1
 	}
-
 	if off >= lenmsg {
 		return lenmsg, &Error{"overflow mname"}
 	}

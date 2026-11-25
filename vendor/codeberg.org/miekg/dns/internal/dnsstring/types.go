@@ -16,6 +16,7 @@ const (
 	TypeMG         uint16 = 8
 	TypeMR         uint16 = 9
 	TypeNULL       uint16 = 10
+	TypeWKS        uint16 = 11 // Not implemented.
 	TypePTR        uint16 = 12
 	TypeHINFO      uint16 = 13
 	TypeMINFO      uint16 = 14
