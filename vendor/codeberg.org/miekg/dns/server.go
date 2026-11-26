@@ -1,6 +1,7 @@
 package dns
 
 import (
+	"bufio"
 	"context"
 	"crypto/tls"
 	"fmt"
@@ -292,9 +293,10 @@ func (srv *Server) listenTCP(ln net.Listener) {
 // If this is a not a const, but var, or worse a field in [Server] it's about 10k qps *slower*.
 // cd cmd/reflect; go test -v -count=1 # check the perf values, 15 does 360K on my M2 8-core with Asahi Linux
 
-// BatchSize controls the maximum of packets we should read using recvmmsg(2), via ReadBatch, a tradeoff
-// needs to be made with how much memory needs to be pre-allocated and how fast things should go. It is
-// experimentally set to 20.
+// BatchSize controls the maximum of packets we should read and using recvmmsg(2)/sendmmsg(2), via
+// Read/WriteBatch, a tradeoff needs to be made with how much memory needs to be pre-allocated and how fast
+// things should go. It is experimentally set to 20.
+
 const BatchSize = 20
 
 // Serve a new TCP connection. ServeUDP is split out in server_no_recvmmsg.go and server_recvmmsg.go.
@@ -309,11 +311,15 @@ func (srv *Server) serveTCP(wg *sync.WaitGroup, conn net.Conn) {
 	readtimeout := srv.ReadTimeout
 	hijacked := false
 
+	br := bufio.NewReaderSize(conn, 4096)
+
 	for q := 0; q < limit || limit == -1; q++ {
-		conn.SetReadDeadline(time.Now().Add(readtimeout))
+		if br.Buffered() == 0 { // only (re)set the deadline when we are about to read from the socket
+			conn.SetReadDeadline(time.Now().Add(readtimeout))
+		}
 
 		r := &Msg{Data: srv.MsgPool.Get()}
-		if _, err := r.ReadFrom(conn); err != nil {
+		if _, err := r.ReadFrom(br); err != nil {
 			srv.MsgPool.Put(r.Data)
 			break
 		}

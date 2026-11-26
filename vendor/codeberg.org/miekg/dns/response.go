@@ -35,12 +35,12 @@ type ResponseWriter interface {
 
 // A ResponseController is used by an DNS handler to control the DNS response.
 type ResponseController interface {
-	SetWriteDeadline() error //  SetWriteDeadline sets the deadline for writing the response.
+	SetWriteDeadline() error //  SetWriteDeadline sets the deadline for writing the TCP response.
 }
 
 // response implements response.Writer. This struct is read-only execpt for hijacked.
 type response struct {
-	session  *Session // used for UDP reply routing.
+	sess     *Session // used for UDP reply routing.
 	conn     net.Conn
 	hijacked atomic.Bool
 }
@@ -50,7 +50,7 @@ func (w *response) SetWriteDeadline() error {
 	return w.conn.SetWriteDeadline(time.Now().Add(500 * time.Millisecond))
 }
 func (w *response) Conn() net.Conn                    { return w.conn }
-func (w *response) Session() *Session                 { return w.session }
+func (w *response) Session() *Session                 { return w.sess }
 func (w *response) Write(p []byte) (n int, err error) { return w.conn.Write(p) }
 func (w *response) LocalAddr() net.Addr               { return w.conn.LocalAddr() }
 func (w *response) Hijack()                           { w.hijacked.Store(true) }
@@ -73,4 +73,12 @@ func (w *response) Close() error {
 		return nil
 	}
 	return sock.Close()
+}
+
+// Session is a small strucures that keep track of where the (potential) UDP message came from.
+type Session struct {
+	Addr *net.UDPAddr
+	OOB  []byte
+
+	writer *udpWriter // writes the reply, if not nil
 }
