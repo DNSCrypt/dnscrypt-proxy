@@ -1,6 +1,7 @@
 package dns
 
 import (
+	"bufio"
 	"context"
 	"crypto/tls"
 	"fmt"
@@ -309,11 +310,15 @@ func (srv *Server) serveTCP(wg *sync.WaitGroup, conn net.Conn) {
 	readtimeout := srv.ReadTimeout
 	hijacked := false
 
+	br := bufio.NewReaderSize(conn, 4096)
+
 	for q := 0; q < limit || limit == -1; q++ {
-		conn.SetReadDeadline(time.Now().Add(readtimeout))
+		if br.Buffered() == 0 { // only (re)set the deadline when we are about to read from the socket
+			conn.SetReadDeadline(time.Now().Add(readtimeout))
+		}
 
 		r := &Msg{Data: srv.MsgPool.Get()}
-		if _, err := r.ReadFrom(conn); err != nil {
+		if _, err := r.ReadFrom(br); err != nil {
 			srv.MsgPool.Put(r.Data)
 			break
 		}

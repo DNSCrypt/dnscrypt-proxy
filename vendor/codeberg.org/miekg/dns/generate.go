@@ -121,9 +121,17 @@ func (r *generateReader) parseError(msg string, end int) *ParseError {
 	return &ParseError{file: r.file, err: msg, lex: l}
 }
 
-func (r *generateReader) Read(p []byte) (int, error) {
-	// NewZLexer, through NewZoneParser, should use ReadByte and not end up here.
-	panic("dns: not implemented")
+// Read implements io.Reader on top of ReadByte, as the lexer reads in chunks.
+func (r *generateReader) Read(p []byte) (n int, err error) {
+	for n < len(p) {
+		c, err := r.ReadByte()
+		if err != nil {
+			return n, err
+		}
+		p[n] = c
+		n++
+	}
+	return n, nil
 }
 
 func (r *generateReader) ReadByte() (byte, error) {
