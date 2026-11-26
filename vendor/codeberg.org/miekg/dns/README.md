@@ -1,11 +1,12 @@
 [![Go Doc](https://godoc.org/coreberg.org/miekg/dns?status.svg)](https://godoc.org/codeberg.org/miekg/dns)
 [![Build Status](https://codeberg.org/miekg/dns/badges/workflows/build.yaml/badge.svg)](https://codeberg.org/miekg/dns)
 
-# Modern, lightweight DNS library
+# Modern, fast and lightweight DNS library
 
 > Less is more.
 
-**This work is partly funded by the [Nominet DNS Fund](https://nominet.uk/our-impact/nominet-dns-fund/).**
+> [!note]
+> **This work is partly funded by the [Nominet DNS Fund](https://nominet.uk/our-impact/nominet-dns-fund/).**
 
 Complete and usable DNS library. All Resource Records are supported, including the DNSSEC types. It follows a
 lean and mean philosophy. Server side and client side programming is supported, i.e. you can build servers and
@@ -13,14 +14,14 @@ resolvers with it.
 
 We try to keep the _main_ branch as sane as possible and at the bleeding edge of standards, avoiding
 breaking changes wherever reasonable. We rigorously follow upstream Go versions and use bleeding edge Go
-language features. But because this version is young, we allow ourselves some more headroom for
+language features. But because this version is young (< v1.0.0), we allow ourselves some more headroom for
 making backwards incompatible changes.
 
-Many convenience functions are included in _dns_, _dnstest_ or otherwise in _dnsutils_. The RR's resource data
-(RDATA) is split off into its own package: _rdata_. This means accessing the RR's header and rdata is much
-simpler now. This also saves a lot of memory. [^a]
+Many convenience functions are included in _dns_, _dnstest_ or otherwise in _dnsutils_. A helper function is
+in these packages, unless cyclic dependencies make it absolute impossible.
 
-[^a]: A function is put in _dnsutils_, unless (due to cyclic imports) it is utterly impossible to put it there. Only then it is put in the main _dns_ package.
+The RR's resource data (RDATA) is split off into its own package: _rdata_. This means accessing the RR's
+header and rdata is much simpler now. This also saves a lot of memory.
 
 Example programs are included _and_ benchmarked in
 [`cmd`](https://codeberg.org/miekg/dns/src/branch/main/cmd). And
@@ -33,27 +34,30 @@ Also [see the Go documentation](https://pkg.go.dev/codeberg.org/miekg/dns).
 This new version will not soon see a v1.0.0 release because I want to be able to still make changes. In a
 year or two (2028?) when things have stabilized it will be blessed with a v1.0.0.
 
-# Porting from v1
+> [!note]
+> A design choice has been made to not support `\DDD` and `\x` syntax in domain names. This archaic
+> way of encoding names was useful way-back-when, nowadays domain names are pretty much a 7-bit and things like
+> [Punycode](https://en.wikipedia.org/wiki/Punycode) had to be invented. There is one exception to this and that
+> is the SOA's mname can contain a `\.`, for the rest it is ignored and interpreted as `\` and `.`.
+
+## Porting from v1
+
+This package is a version 2 of <https://github.com/miekg/dns>.
 
 Everything from <https://github.com/miekg/dns> works. See
 [README-v1-to-v2.md](https://codeberg.org/miekg/dns/src/branch/main/_doc/README-v1-to-v2.md)
 for the differences, if you are porting your application, in `cookbook.go` are some common recipes.
 
-Note that a design choice has been made to not supported `\DDD` and `\x` syntax in domain names. This archaic
-way of encoding names was useful way-back-when, nowadays DNS is pretty much a 7-bit protocol and things like
-[Punycode](https://en.wikipedia.org/wiki/Punycode) had to be invented. There is one exception to this and that
-is the SOA's mname can contain a `\.`, for the rest it is ignore and interpreted as `\` and `.`.
-
 ## Performance
 
-The performance should be roughly 2x across the board compared to v1 (also see below).
+The performance should be roughly 2-3x across the board compared to v1 (also see below).
 
-- Serving DNS queries per second is \~2x (maybe more).
-- Parsing zones files in RRs per second is \~1.5x.
-- Memory usage can be \~0.5x due to rdata split off.
+- Serving DNS queries per second is \~3x (maybe more), \~510K/430K qps UDP/TCP.
+- Parsing zones files in RR/s is \~2-3x, \~2M RR/s.
+- Memory usage can be \~0.5x due to rdata split off. (Needs retesting.)
 
-For developers please read the
-[developer README](https://codeberg.org/miekg/dns/src/branch/main/_doc/README-dev.md).
+> [!tip]
+> For developers please read the [developer README](https://codeberg.org/miekg/dns/src/branch/main/_doc/README-dev.md).
 
 # Goals
 
@@ -68,13 +72,14 @@ For developers please read the
   - Pacakge _deleg_ holds details for the DELEG record.
   - Many helper/debug functions are moved into _internal_ packages, making the top-level much, much cleaner.
 - Fast.
-  - recvmmsg(2) and TCP pipe-lining support.
-  - The `cmd/reflect` server does ~420K/340K qps UDP/TCP respectively on the right hardware.
-    - Since a46996c I can get ~400K (UDP) qps on my laptop (M2/Asahi Linux), also see 1766e44, 86b53fe and 06e5e0f.
-    - On my Dell XPS 17 (Intel) it is similar-ish (~310K/250K qps UDP/TCP).
-    - On other Intel/AMD hardware it is lower (~200K (UDP) qps) - yet to understand why.
+  - recvmmsg(2), sendmmsg(2) _and_ TCP pipe-lining support.
+  - The `cmd/reflect` server does ~510K/430K qps UDP/TCP respectively on the right hardware.
+    - Since 49dee0cc I can get ~510K (UDP) qps on my laptop (M2/Asahi Linux), also see older commits 08931c58, 1766e44, 86b53fe and 06e5e0f.
+      This needs `export GOGC=400` when running the benchmark to cut down a little on the GC.
+    - On my Dell XPS 17 (Intel) it is similar-ish (~510K/360K qps UDP/TCP).
+    - On my AMD (Ryzen 7 2700 - 16 core) it is ~310K/270K qps UDP/TCP (no GOCG=400 here).
   - See `cmd/reflect` and do a `go build; make new.txt` to redo the performance test. Requires `dnsperf` to be installed.
-  - The SE zone (8M RRs) is parsed in \~11s (\~730K RR/s), the CH zones (15M RRs) is parsed in \~14s (\~1M RR/s).
+  - The SE zone (8M RRs) is parsed in \~5s (\~1.5M RR/s), the CH zones (15M RRs) is parsed in \~7s (\~2M RR/s).
     The main difference being that SE use algorithm 8, and CH algorithm 13 (shorter RRSIGs).
     See `cmd/parse`, tested with M2/Asahi Linux.
 
@@ -99,7 +104,7 @@ Send pull request if you want to be listed here.
 
 What users say:
 
-> miekg/dns is probably my favorite Go module in the open source ecosystem. It is very complete (every DNS rtype is defined)
+> miekg/dns is probably my favorite Go module in the open source ecosystem. It is very complete (every DNS rrtype is defined)
 > and strict (field names match the RFCs, etc). DNSControl has used miekg/dns since the first release.
 
 - <https://codeberg.org/miekg/dns/issues/258#issue-2471506>
@@ -110,7 +115,7 @@ What users say:
 
 # Features
 
-- UDP/TCP queries, recvmmsg(2), TCP query-pipelining, IPv4 and IPv6.
+- UDP/TCP queries, recvmmsg(2), sendmmsg(2), TCP query pipe-lining, IPv4 and IPv6.
 - Fast.
 - RFC 1035 zone file parsing ($INCLUDE, $ORIGIN, $TTL and $GENERATE - for _all_ record types) is supported,
   but directives can also be ignored.
@@ -137,12 +142,12 @@ of requests/issues usually get closed pretty swiftly.
 
 # Building/developing
 
-This library uses Go modules and uses semantic versioning (after 1.0.0 is released). Getting the code and
+This library uses Go modules and uses semantic versioning (after v1.0.0 is released). Getting the code and
 working with the library is done via:
 
     git clone git@codeberg.org:miekg/dns  # use https if you don't have a codeberg account
     cd dns
-    # $EDTIOR *.go
+    $EDTIOR *.go
 
 If you want to use codeberg/miekg/dns in your own project, just do a `go get codeberg.org/miekg/dns@latest`
 and import codeberg.org/miekg/dns in your Go files.
@@ -151,10 +156,12 @@ and import codeberg.org/miekg/dns in your Go files.
 
 A short "how to use the API" is at the beginning of `doc.go`. The cmd/ directory contains a reflect example
 program that is used for benchmarking, a cookbook is available in `cookbook_test.go`.
-Atomdns which is full fledged DNS server that is developed in tandem with the library, and can be found in
-`cmd/atomdns`.
 
-## Supported RFCs
+> [!tip]
+> _atomdns_ is fully fledged, production ready DNS server that is developed in tandem with the library. It can be found in
+> `cmd/atomdns`.
+
+# Supported RFCs
 
 _all of them_ and _then some_
 

@@ -1,7 +1,7 @@
 package dnslex
 
 import (
-	"bufio"
+	"bytes"
 	"io"
 	"strconv"
 	"strings"
@@ -55,15 +55,23 @@ type Lexer struct {
 	keys   uint8 // bit0: kQuote, bit1: kSpace, bit2: kCommt, bit3: kRRtype, bit4: kOwner, bit5: kNextL, bit6: kEol
 	tok    []byte
 
-	br      io.ByteReader
+	r       io.Reader
+	buf     []byte // chunk read from r, buf[pos:end] is not consumed yet
+	pos     int
+	end     int
+	bufErr  error // error r returned together with buf, it becomes readErr once buf is consumed
 	readErr error
 
 	// Current or peek token.
 	l       Lex
-	cachedL *Lex // used when finding a token, but delaying it's return.
+	cachedL Lex  // used when finding a token, but delaying it's return.
+	cached  bool // cachedL is active.
 
 	stringToType  map[string]uint16
 	stringToClass map[string]uint16
+
+	owner  string      // the previous owner name
+	tokens *[64]string // the strings of TTL, class and type tokens we returned, see [Lexer.token], nil for short inputs.
 }
 
 // Key bit definitions.
@@ -92,20 +100,49 @@ func (zl *Lexer) SetType() {
 
 // New returns a pointer to a new Lexer.
 func New(r io.Reader, StringToType, StringToClass map[string]uint16) *Lexer {
-	br, ok := r.(io.ByteReader)
-	if !ok {
-		br = bufio.NewReaderSize(r, 1024)
+	size := 4096
+	if l, ok := r.(interface{ Len() int }); ok { // short input, i.e. a single RR from a string, check if we have Len - which a string has for instance.
+		size = min(max(l.Len(), 1), size)
 	}
-
 	zl := &Lexer{
-		br:            br,
+		r:             r,
+		buf:           make([]byte, size),
 		tok:           make([]byte, 512),
 		line:          1,
 		stringToType:  StringToType,
 		stringToClass: StringToClass,
 	}
 	zl.SetKey(kOwner)
+	if size == 4096 { // not worth it for a single RR
+		zl.tokens = new([64]string)
+	}
 	return zl
+}
+
+// token returns zl.tok as a string, for the tokens between the owner name and the rdata: the TTL, class and
+// type. A zone only has a few distinct ones, so we keep the strings we made, at an index derived from their
+// contents, and return such a string again when the token is equal to it, instead of allocating a new one.
+func (zl *Lexer) token() string {
+	n := len(zl.tok)
+	if zl.tokens == nil || n == 0 {
+		return string(zl.tok)
+	}
+	// A cheap index: the length, and the first, middle and last byte.
+	// This is your typical multiply with primes to get a unique number.
+	i := uint(n)*131 + uint(zl.tok[0])*31 + uint(zl.tok[n/2])*7 + uint(zl.tok[n-1])
+	s := &zl.tokens[i%uint(len(zl.tokens))]
+	if *s != string(zl.tok) { // this comparison does not allocate
+		*s = string(zl.tok)
+	}
+	return *s
+}
+
+// Exact makes the lexer consume no more of an [io.ByteReader] than the tokens it returns, by reading a single
+// byte at a time. Without it the lexer reads ahead. It must be called before the first token is read.
+func (zl *Lexer) Exact() {
+	if _, ok := zl.r.(io.ByteReader); ok {
+		zl.buf = zl.buf[:1]
+	}
 }
 
 func (zl *Lexer) Err() error {
@@ -116,17 +153,45 @@ func (zl *Lexer) Err() error {
 	return zl.readErr
 }
 
+// plain are the bytes that have no special meaning for the lexer, they are just added to the token.
+var plain = func() (t [256]bool) {
+	for i := range t {
+		t[i] = true
+	}
+	for _, c := range []byte(" \t;\r\n\\\"()") {
+		t[c] = false
+	}
+	return t
+}()
+
+// skipComment skips what is left of a comment in the current chunk, up to the newline that ends it. It
+// returns the column we are then at.
+func (zl *Lexer) skipComment() int {
+	n := bytes.IndexByte(zl.buf[zl.pos:zl.end], '\n')
+	if n < 0 {
+		n = zl.end - zl.pos
+	}
+	zl.pos += n
+	zl.column += n
+	return zl.column
+}
+
 // readByte returns the next byte from the input.
 func (zl *Lexer) readByte() (byte, bool) {
 	if zl.readErr != nil {
 		return 0, false
 	}
 
-	c, err := zl.br.ReadByte()
-	if err != nil {
-		zl.readErr = err
-		return 0, false
+	for zl.pos == zl.end { // read the next chunk
+		if zl.bufErr != nil {
+			zl.readErr = zl.bufErr
+			return 0, false
+		}
+		zl.pos = 0
+		zl.end, zl.bufErr = zl.r.Read(zl.buf)
 	}
+	c := zl.buf[zl.pos]
+	zl.pos++
 
 	// delay the newline handling until the next token is delivered,
 	// fixes off-by-one errors when reporting a parse error.
@@ -160,7 +225,7 @@ func (zl *Lexer) Peek() Lex {
 
 	if zl.Key(kNextL) {
 		// Cache l. Next returns zl.cachedL then zl.l.
-		zl.cachedL = &l
+		zl.cachedL, zl.cached = l, true
 		return l
 	}
 
@@ -172,9 +237,9 @@ func (zl *Lexer) Peek() Lex {
 func (zl *Lexer) Next() (Lex, bool) {
 	l := &zl.l
 	switch {
-	case zl.cachedL != nil:
-		l, zl.cachedL = zl.cachedL, nil
-		return *l, true
+	case zl.cached:
+		zl.cached = false
+		return zl.cachedL, true
 	case zl.Key(kNextL):
 		zl.ClearKey(kNextL)
 		return *l, true
@@ -204,16 +269,20 @@ func (zl *Lexer) Next() (Lex, bool) {
 			var retL Lex
 			if len(zl.tok) > 0 {
 				if zl.Key(kOwner) {
-
-					l.Token = string(zl.tok)
+					// Consecutive RRs often have the same owner name, use the string we already have.
+					if zl.owner != string(zl.tok) { // this comparison does not allocate
+						zl.owner = string(zl.tok)
+					}
+					l.Token = zl.owner
 					l.Value = directive(l.Token)
 
 					retL = *l
 				} else {
 					l.Value = String
-					l.Token = string(zl.tok)
-
-					if !zl.Key(kRRtype) {
+					if zl.Key(kRRtype) {
+						l.Token = string(zl.tok)
+					} else {
+						l.Token = zl.token()
 						zl.typeOrCodeOrClass(l)
 					}
 					retL = *l
@@ -253,6 +322,7 @@ func (zl *Lexer) Next() (Lex, bool) {
 				l.Token = string(zl.tok)
 				return *l, true
 			}
+			l.Column = zl.skipComment()
 		case '\r':
 			escape = false
 
@@ -399,6 +469,18 @@ func (zl *Lexer) Next() (Lex, bool) {
 			if !zl.Key(kCommt) {
 				zl.tok = append(zl.tok, x)
 				zl.ClearKey(kSpace)
+				// Take the ordinary bytes that follow in one go, instead of one per loop.
+				b := zl.buf[zl.pos:zl.end]
+				n := 0
+				for n < len(b) && plain[b[n]] {
+					n++
+				}
+				zl.tok = append(zl.tok, b[:n]...)
+				zl.pos += n
+				zl.column += n
+				l.Column = zl.column
+			} else {
+				l.Column = zl.skipComment()
 			}
 		}
 	}

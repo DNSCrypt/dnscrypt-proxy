@@ -30,9 +30,9 @@ func Zone(ctx context.Context) string {
 	return zone
 }
 
-type contextKey string
+type contextKey struct{}
 
-var contextKeyZone = contextKey("zone")
+var contextKeyZone contextKey
 
 // The HandlerFunc type is an adapter to allow the use of ordinary functions as DNS handlers.  If f is a function
 // with the appropriate signature, HandlerFunc(f) is a Handler object that calls f.
@@ -138,18 +138,18 @@ func (mux *ServeMux) HandleRemove(pattern string, class ...uint16) {
 // are redirected to the parent zone (if that is also registered), otherwise the current zone gets the query.
 //
 // If no handler is found a standard REFUSED message is returned. No checks are made on the request message.
-func (mux *ServeMux) ServeDNS(ctx context.Context, w ResponseWriter, req *Msg) {
-	if req.qtype == 0 { // this is an implicit check that we've at least seen something resembling a question
-		refuse(w, req)
+func (mux *ServeMux) ServeDNS(ctx context.Context, w ResponseWriter, r *Msg) {
+	if r.qtype == 0 { // this is an implicit check that we've at least seen something resembling a question
+		refuse(w, r)
 		return
 	}
 
-	if h, zone := mux.match(req.Question[0].Header().Name, req.qtype, req.qclass); h != nil {
-		h.ServeDNS(context.WithValue(ctx, contextKeyZone, zone), w, req)
+	if h, zone := mux.match(r.Question[0].Header().Name, r.qtype, r.qclass); h != nil {
+		h.ServeDNS(context.WithValue(ctx, contextKeyZone, zone), w, r)
 		return
 	}
 
-	refuse(w, req)
+	refuse(w, r)
 }
 
 // Handle registers the handler with the given pattern in the [DefaultServeMux]. The documentation for

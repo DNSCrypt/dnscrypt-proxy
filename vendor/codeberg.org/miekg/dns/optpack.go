@@ -8,13 +8,21 @@ import (
 	"codeberg.org/miekg/dns/pkg/dnsnet"
 )
 
+// MaxOptions caps the number of EDNS0 options we unpack.
+const MaxOptions = 100
+
 func unpackOPT(s *dnsnet.String) ([]EDNS0, error) {
 	edns0 := []EDNS0{}
 	var (
+		i    uint8
 		code uint16
 		data dnsnet.String
 	)
 	for !s.Empty() {
+		i++
+		if i > MaxOptions {
+			return nil, &unpack.Error{Err: "too many options"}
+		}
 		if !s.ReadUint16(&code) || !s.ReadUint16LengthPrefixed(&data.String) {
 			return nil, unpack.ErrOverflow
 		}

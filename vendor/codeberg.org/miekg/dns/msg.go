@@ -7,17 +7,19 @@ import (
 	"io"
 	"iter"
 	"net"
+	"net/netip"
 	"slices"
 	"strconv"
 
 	"codeberg.org/miekg/dns/internal/pack"
+	"codeberg.org/miekg/dns/internal/udpoob"
 	"codeberg.org/miekg/dns/internal/unpack"
 	"codeberg.org/miekg/dns/pkg/dnsnet"
 	"codeberg.org/miekg/dns/pkg/pool"
 	"codeberg.org/miekg/dns/rdata"
 )
 
-// ID by default returns a 16-bit random number to be used as a message id. The
+// ID by default returns a 16-bit random number to be used as a message ID. The
 // number is drawn from a cryptographically secure random number generator.
 // This being a variable the function can be reassigned to a custom function.
 // For instance, to make it return a static value for testing:
@@ -134,9 +136,8 @@ func unpackRR(msg *dnsnet.String, msgBuf []byte) (RR, error) {
 	msg.String = msg.String[:rdlength]
 	msgBuf = msgBuf[:unpack.Offset(rest, msgBuf)]
 
-	var rr RR
-	if newFn, ok := TypeToRR[typ]; ok {
-		rr = newFn()
+	rr := newRR(typ)
+	if rr != nil {
 		*rr.Header() = *h
 	} else {
 		rr = &RFC3597{Hdr: *h, RRType: typ}
@@ -241,43 +242,39 @@ func (m *Msg) Pack() error {
 		}
 	}
 
-	// Add an OPT RR if we see any of these.
-	tsigOrsig0 := false
-
-	opt := &OPT{} // hack, empty name, that gets filled if we did something
+	var opt *OPT
+	if m.UDPSize > MinMsgSize || m.Security || m.CompactAnswers || m.Delegation || m.Flags > 0 || m.Rcode > 0xF || m.Version > 0 {
+		opt = &OPT{Hdr: Header{Name: "."}, Options: make([]EDNS0, 0, 2)}
+	}
 	if m.Rcode > 0xF {
-		opt.Hdr.Name = "."
 		opt.setRcode(m.Rcode) // we leave m.Rcode as packing/unpacking will set the correct bits there.
 	}
 	if m.UDPSize > MinMsgSize {
-		opt.Hdr.Name = "."
 		opt.setUDPSize(m.UDPSize)
 	}
 	if m.Security {
-		opt.Hdr.Name = "."
 		opt.setSecurity(true)
 	}
 	if m.CompactAnswers {
-		opt.Hdr.Name = "."
 		opt.setCompactAnswers(true)
 	}
 	if m.Delegation {
-		opt.Hdr.Name = "."
 		opt.setDelegation(true)
 	}
 	if m.Version > 0 {
-		opt.Hdr.Name = "."
 		opt.setVersion(m.Version)
 	}
 	if m.Flags > 0 {
-		opt.Hdr.Name = "."
 		opt.setFlags(m.Flags)
 	}
 
+	tsigOrsig0 := false
 	for i := range m.Pseudo {
 		switch x := m.Pseudo[i].(type) {
 		case EDNS0:
-			opt.Hdr.Name = "."
+			if opt == nil {
+				opt = &OPT{Hdr: Header{Name: "."}, Options: make([]EDNS0, 0, 2)}
+			}
 			opt.Options = append(opt.Options, x)
 		default:
 			tsigOrsig0 = true
@@ -286,7 +283,7 @@ func (m *Msg) Pack() error {
 	// Only pack opt if something has been put into it, otherwise we may have a TSIG/SIG0.
 	// Pack it here so we don't add it the m.Extra, as the options (only) should be available in pseudo.
 	// Also OPT may be anywhere in m.Extra, here it will be first.
-	if len(opt.Hdr.Name) != 0 {
+	if opt != nil {
 		if _, off, err = packRR(opt, m.Data, off, nil); err != nil {
 			compressionPool.Put(compression)
 			return err
@@ -318,9 +315,8 @@ func (m *Msg) unpackQuestion(msg *dnsnet.String, msgBuf []byte) (RR, error) {
 		return nil, unpack.Errorf("overflow %s", "Question class")
 	}
 
-	var rr RR
-	if newFn, ok := TypeToRR[m.qtype]; ok {
-		rr = newFn()
+	rr := newRR(m.qtype)
+	if rr != nil {
 		*rr.Header() = Header{Name: name, Class: m.qclass}
 	} else {
 		rr = &RFC3597{Header{Name: name, Class: m.qclass}, rdata.RFC3597{RRType: m.qtype}}
@@ -710,17 +706,20 @@ func (m *Msg) WriteTo(w io.Writer) (int64, error) {
 		}
 	}
 
-	if rc, ok := w.(ResponseController); ok {
-		rc.SetWriteDeadline()
-	}
-
 	r := w.(ResponseWriter) // panic if wrong, saves an if here, assume this always to be true
 
 	if sock, ok := r.Conn().(*net.UDPConn); ok {
 		sess := r.Session()
 		if sess != nil {
-			oob := sourceFromOOB(sess.OOB)
-			n, _, err := sock.WriteMsgUDP(m.Data, oob, sess.Addr)
+			if sess.writer != nil && sess.writer.write(sess, m.Data) {
+				n := len(m.Data)
+				msgPut(m)
+				return int64(n), nil
+			}
+			oob := udpoob.Source(sess.OOB)
+			ap := sess.Addr.AddrPort()
+			ap = netip.AddrPortFrom(ap.Addr().Unmap(), ap.Port())
+			n, _, err := sock.WriteMsgUDPAddrPort(m.Data, oob, ap)
 			msgPut(m)
 			return int64(n), err
 		}
@@ -730,10 +729,13 @@ func (m *Msg) WriteTo(w io.Writer) (int64, error) {
 		return int64(n), err
 	}
 
-	l := make([]byte, 2)
-	binary.BigEndian.PutUint16(l, uint16(len(m.Data)))
-	l = append(l, m.Data...)
-	n, err := r.Write(l)
+	if rc, ok := w.(ResponseController); ok {
+		rc.SetWriteDeadline()
+	}
+
+	l := [2]byte{}
+	binary.BigEndian.PutUint16(l[:], uint16(len(m.Data)))
+	n, err := r.Write(append(l[:], m.Data...))
 	msgPut(m)
 	if err != nil {
 		// hit deadline or other troubles, close this conn.
@@ -840,20 +842,18 @@ func (m *Msg) Copy() *Msg {
 // NewMsg returns a new message with the question section sets to z (z is made fully qualified) and the type t. If the type isn't know nil
 // is returned, the recursion desired bit is set. If c is given it is used as the class.
 func NewMsg(z string, t uint16, c ...uint16) *Msg {
-	var rr RR
-	newFn, ok := TypeToRR[t]
-	if !ok {
+	rr := newRR(t)
+	if rr == nil {
 		return nil
 	}
-	m := new(Msg)
-	m.ID = ID()
-	m.RecursionDesired = true
-	rr = newFn()
 	rr.Header().Name = dnsutilFqdn(z)
 	rr.Header().Class = ClassINET
 	if len(c) > 0 {
 		rr.Header().Class = c[0]
 	}
+	m := new(Msg)
+	m.ID = ID()
+	m.RecursionDesired = true
 	m.Question = []RR{rr}
 	return m
 }
