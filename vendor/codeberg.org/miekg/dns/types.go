@@ -13,7 +13,7 @@ import (
 // Wire constants and supported types.
 const (
 
-	// If you add one here, also add internal/dnsstrings/types.go
+	// If you add one here, also add internal/dnsstring/types.go
 
 	TypeNone       uint16 = 0
 	TypeA          uint16 = 1
@@ -26,6 +26,7 @@ const (
 	TypeMG         uint16 = 8
 	TypeMR         uint16 = 9
 	TypeNULL       uint16 = 10
+	TypeWKS        uint16 = 11 // Not implemented.
 	TypePTR        uint16 = 12
 	TypeHINFO      uint16 = 13
 	TypeMINFO      uint16 = 14
@@ -993,7 +994,7 @@ func (rr *RFC3597) String() string {
 	return s
 }
 
-// Type implements the Typer interface. This is mandatory for this type as its Go type isn't indicative of the
+// Type implements the [Typer] interface. This is mandatory for this type as its Go type isn't indicative of the
 // actual type it is carrying.
 func (rr *RFC3597) Type() uint16 { return rr.RRType }
 
@@ -1293,10 +1294,9 @@ func (rr *ZONEMD) String() string {
 	return s
 }
 
-// OPT is the EDNS0 RR appended to messages to convey extra (meta) information. See RFC 6891. This record is
+// OPT is the EDNS0 RR appended to messages to convey extra (meta) information, see RFC 6891. This record is
 // not (directly) found in messages as the pack and unpack function take care of this. Any EDNS0 options are
-// found in the [Pseudo] section of the message. There should be rarely the need to access specifics of this
-// RR as you can just set things directly on [Msg].
+// found in the [Msg.Pseudo] section of the message.
 type OPT struct {
 	Hdr     Header
 	Options []EDNS0 `dns:"opt"`

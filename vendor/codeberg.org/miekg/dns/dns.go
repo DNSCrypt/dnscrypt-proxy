@@ -64,9 +64,10 @@ type RDATA interface {
 	String() string
 }
 
-// The Typer interface is used to return the type of RR in the RRToType function or the EDNS0 option
-// code when the "RR" is an EDNS0 option. This is only needed for RRs that are defined outside of this package.
-// Once this method is defined the following extra registration needs to happen:
+// Typer is used to implement private resource records and EDNS0 options. It returns the type of RR in the
+// RRToType function or the EDNS0 option code when the "RR" is an EDNS0 option. This is only needed for RRs
+// that are defined outside of this package. Once this method is defined the following extra registration
+// needs to happen:
 //
 //	dns.TypeToRR[codepoint] = func() dns.RR { return new(T) }
 //	dns.TypeToString[codepoint] = "TYPE"
@@ -74,6 +75,18 @@ type RDATA interface {
 //
 // For EDNS0 registration use, [CodeToRR], [CodeToString] and [StringToType]. See the file rr_test.go for an
 // example on how to register a private RR and an EDNS0 type.
+//
+// Any struct can be used as a private resource record. To make it work you need to implement the following
+// interfaces.
+//
+//   - [Typer], to give your RR a code point, and see documentation of that interface.
+//   - [RR], all RRs implement this, if you want to have a private EDNS0 option, implement [EDNS0] interface, this
+//     adds a Pseudo() bool method.
+//   - [Parser], so it can be parsed to and from strings.
+//   - [Packer], if you need to use your new RR on the wire.
+//   - [Comparer], if your RR will be signed with DNSSEC.
+//
+// See rr_test.go for a complete example for both an external [RR] and [EDNS0].
 type Typer interface {
 	Type() uint16
 }
@@ -150,12 +163,28 @@ func (h *Header) String() string {
 	return sb.String()
 }
 
-// EDNS0 determines if the "RR" is posing as an EDNS0 option. EDNS0 options are considered just RRs and must
-// be added to the [Pseudo] section of a DNS message. The Len method must return the length of the octets in
-// the [OPT] [RR], which is four (2 octets for the type, and 2 octets for the length) plus the encoded lengh of the option itself.
+// [EDNS0] is an extension mechanism for the DNS defined in RFC 2671 and updated by RFC 6891. It defines a RR
+// type, the [OPT] [RR], which holds type-length-value sub-types. In this package all EDNS0 options are
+// implemented as RRs. Doing basic "EDNS0" things, like setting the DNSSEC OK bit (DO) or the UDP buffer size is
+// handled for you and these can be set directly on message as shown above.
 //
-// Note that these types has (in this package) a presentation format and can also be parsed from a string via
-// [New]. That means you can create EDNS0 options directly from a string.
+// The data of an [OPT] [RR] sits in the [Msg.Pseudo] section consists out of a slice of [EDNS0] (RFC 6891)
+// interfaces. These are just RRs with an extra Pseudo() method.
+//
+// Basic use pattern for a server to check if (and which) options are set, which is similar to how to deal with
+// RRs.
+//
+//	for _, rr := range m.Pseudo {
+//		switch x := rr.(type) {
+//		case *dns.NSID:
+//			// do stuff with x.Nsid
+//		case *dns.SUBNET:
+//			// access x.Family, x.Address, etc.
+//		}
+//	}
+//
+// Unknown options are dealt with and added as [ERFC3597] RRs, simular to actual unknown RRs are handled with
+// [RFC3597].
 type EDNS0 interface {
 	RR
 	// Pseudo signal that the type implementing this interface is an EDNS0 sub-type.
@@ -194,7 +223,7 @@ type MsgHeader struct {
 
 	// Extended DNS (version 0) option that can be set directly on the message. The package takes care of
 	// putting the bits in the right places and creating an OPT RR if needed.
-	UDPSize uint16 // UDPSize is the OPT's RR advertised UDP size.
+	UDPSize uint16 // UDPSize is the OPT's RR advertised UDP size, also see [Msg.Security].
 	Version uint8  // Version is the EDNS version, always zero.
 
 	Response           bool
@@ -206,8 +235,25 @@ type MsgHeader struct {
 	AuthenticatedData  bool
 	CheckingDisabled   bool
 
-	// Extended DNS Flags
-	Security       bool   // Security is the DNSSEC OK bit, see RFC 403{3,4,5}, see [OPT.security].
+	// Extended DNS Flags.
+
+	// DNSSEC (DNS Security Extension) adds a layer of security to the DNS. It uses public key cryptography to sign
+	// resource records. The public keys are stored in [DNSKEY] records and the signatures in [RRSIG] records.
+	//
+	// Requesting DNSSEC information for a zone is done by adding the DO (DNSSEC OK) bit to a request.
+	//
+	// 	m := new(dns.Msg)
+	// 	m.Security = true
+	// 	m.UDPSize = 4096
+	//
+	// When sending a message [Msg.Pack] is called, this takes care of allocating an [OPT] [RR] and setting
+	// the DO bit and the UDP size in there.
+	//
+	// Signature generation, signature verification and key generation are all supported. Also see RFC 4033,
+	// 4034, 4035.
+	//
+	Security bool // Security is the DNSSEC OK bit, see RFC 403{3,4,5}, see [OPT.security].
+
 	CompactAnswers bool   // Compact Answers OK, see RFC 9824, see [OPT.compactAnswers].
 	Delegation     bool   // Delegation is the DELEG OK bit, see https://datatracker.ietf.org/doc/draft-ietf-deleg/ and [OPT.delegation].
 	Flags          uint16 // Flags holds the OPT's remaining, unassigned flags bits, see [OPT.flags].

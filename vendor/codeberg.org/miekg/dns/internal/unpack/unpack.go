@@ -133,7 +133,7 @@ func Name(s *dnsnet.String, msgBuf []byte) (string, error) {
 
 			ln := len(name)
 			if ln+int(c) >= maxNamePresentationLength {
-				return "", &Error{"name exceeded max wire-format octets"}
+				return "", &Error{"name exceeded max presentation length"}
 			}
 
 			name = name[:ln+int(c)+1]                // extend slice
@@ -176,10 +176,18 @@ func Name(s *dnsnet.String, msgBuf []byte) (string, error) {
 	}
 }
 
-// MName unpacks a name in s, while also taking care of escaped dots (\.).
+// MName unpacks a domain name like Name, but a dot inside a label is not a label
+// separator and is unpacked as \. so that it can be told apart from the dots that do
+// separate labels. This is the inverse of pack.MName.
+//
+// Although pack.MName never compresses, MName does follow compression pointers, as
+// other implementations may compress these names.
 func MName(s *dnsnet.String, msgBuf []byte) (string, error) {
-	name := make([]byte, 0, maxNamePresentationLength*2) // everything can be escaped...
+	// Every octet of a label can be a dot that needs escaping, so we may need twice the room.
+	name := make([]byte, 0, 2*maxNamePresentationLength)
 	ptrs := uint8(0)
+	// The escapes make name longer than what was on the wire, so we count the wire octets separately.
+	wire := 0
 
 	// If we never see a pointer, we need to ensure that we advance s to our final position.
 	cs := s.String
@@ -187,7 +195,7 @@ func MName(s *dnsnet.String, msgBuf []byte) (string, error) {
 	var c byte
 	for {
 		if !cs.ReadUint8(&c) {
-			return "", &Error{"overflow name"}
+			return "", &Error{"overflow mname"}
 		}
 		switch c & 0xC0 {
 		case 0x00: // literal string
@@ -202,43 +210,37 @@ func MName(s *dnsnet.String, msgBuf []byte) (string, error) {
 			}
 
 			ln := len(name)
-			if ln+int(c) >= maxNamePresentationLength {
-				return "", &Error{"name exceeded max wire-format octets"}
+			if wire+int(c) >= 2*maxNamePresentationLength {
+				return "", &Error{"mname exceeded max presentation length"}
 			}
+			wire += int(c) + 1
 
 			name = name[:ln+int(c)+1]                // extend slice
 			if !cs.CopyBytes(name[ln : ln+int(c)]) { // copy label into correct place
-				return "", &Error{"overflow name"}
+				return "", &Error{"overflow mname"}
 			}
-
-			// if this names contains dots, it's embedded and should be escaped.
-			dots := bytes.Count(name[ln:], []byte{'.'})
-			if dots == 0 {
-				name[ln+int(c)] = '.'
-				break
-			}
-
-			// Add the backslash at the right point. We walk the name from the back by creating juts enough
-			// room to add (mutiple) '\' is we see a dot. We copy the current character to the back while
-			// keeping track of the dots we saw.
-			name = name[:ln+int(c)+dots+1]
-			dot := 0
-			for k := ln + int(c); k >= ln; k-- {
-				name[k+dots-dot] = name[k]
-				if name[k] == '.' {
-					dot++
-					name[k+dots-dot] = '\\'
+			// Escape the dots in the label: extend the slice by one for each dot, and move the label
+			// into place back to front, putting a backslash before each dot.
+			if dots := bytes.Count(name[ln:ln+int(c)], []byte{'.'}); dots > 0 {
+				name = name[:ln+int(c)+dots+1]
+				for i, j := ln+int(c)-1, ln+int(c)+dots-1; i < j; i-- {
+					name[j] = name[i]
+					j--
+					if name[i] == '.' {
+						name[j] = '\\'
+						j--
+					}
 				}
 			}
-			name[ln+int(c)+dots] = '.'
+			name[len(name)-1] = '.'
 
 		case 0xC0: // pointer
 			if msgBuf == nil {
-				return "", &Error{"pointer in uncompressable name"}
+				return "", &Error{"pointer in uncompressable mname"}
 			}
 			var c1 byte
 			if !cs.ReadUint8(&c1) {
-				return "", &Error{"overflow name"}
+				return "", &Error{"overflow mname"}
 			}
 			// If this is the first pointer we've seen, we need to advance s to our current position.
 			if ptrs == 0 {
@@ -249,7 +251,7 @@ func MName(s *dnsnet.String, msgBuf []byte) (string, error) {
 			// occurrence".
 			off := uint16(c&^0xC0)<<8 | uint16(c1)
 			if int(off) >= Offset(cs, msgBuf)-2 {
-				return "", &Error{"pointer not to prior occurrence of name"}
+				return "", &Error{"pointer not to prior occurrence of mname"}
 			}
 			if ptrs++; ptrs > maxCompressionPointers {
 				return "", &Error{"too many compression pointers"}

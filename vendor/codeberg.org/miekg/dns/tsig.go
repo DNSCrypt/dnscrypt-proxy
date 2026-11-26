@@ -49,6 +49,7 @@ func TSIGSign(m *Msg, k TSIGSigner, options *TSIGOption) error {
 	}
 
 	mac, err := k.Sign(t, macbuf, *options)
+	macbufs.Put(macbuf)
 	if err != nil {
 		return err
 	}
@@ -113,7 +114,9 @@ func TSIGVerify(m *Msg, k TSIGSigner, options *TSIGOption) error {
 	if err != nil {
 		return err
 	}
-	if err := k.Verify(t, macbuf, *options); err != nil {
+	err = k.Verify(t, macbuf, *options)
+	macbufs.Put(macbuf)
+	if err != nil {
 		return err
 	}
 
@@ -142,8 +145,10 @@ type TSIGOption struct {
 // TSIGigner defines an interface that allows for pluggeable signers and verifiers.
 type TSIGSigner interface {
 	// Sign is passed the to-be-signed binary data extracted from the DNS message in p. It should return the signature or an error.
+	// The data in p is only valid until Sign returns as this sync.Pooled internally.
 	Sign(t *TSIG, p []byte, options TSIGOption) ([]byte, error)
 	// Verify is passed the binary data with the TSIG octets and the TSIG RR. If the signature is valid it will return nil, otherwise an error.
+	// The data in p is only valid until Verify returns as this sync.Pooled internally.
 	Verify(t *TSIG, p []byte, options TSIGOption) error
 	// Key returns the key to sign or verify with.
 	Key() []byte

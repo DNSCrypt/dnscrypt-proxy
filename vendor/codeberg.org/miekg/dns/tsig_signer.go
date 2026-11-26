@@ -10,6 +10,7 @@ import (
 	"hash"
 
 	"codeberg.org/miekg/dns/internal/pack"
+	"codeberg.org/miekg/dns/pkg/pool"
 )
 
 // HmacTSIG is TSIGSigner and TSIGVerifier that does the default HMAC for TSIG, see RFC 8945.
@@ -59,17 +60,22 @@ func (h HmacTSIG) Verify(t *TSIG, p []byte, options TSIGOption) error {
 	return nil
 }
 
+// macbufs pools the buffers that mac assembles the octets to be signed in.
+var macbufs = pool.New(MaxMsgSize)
+
 // mac creates the buffer with the TSIG and message data that can then be signed.
+// Put the buffer back with macbufs.Put once signed.
 func (rr *TSIG) mac(m *Msg, options TSIGOption) ([]byte, error) {
-	buf := []byte{}
+	buf := macbufs.Get()[:0]
 	if options.RequestMAC != "" {
 		mw := &macWireFmt{MAC: options.RequestMAC, MACSize: uint16(len(options.RequestMAC) / 2)}
-		buf = make([]byte, len(mw.MAC)) // long enough
-		n, err := mw.pack(buf)
+		pbuf := make([]byte, len(mw.MAC)) // long enough
+		n, err := mw.pack(pbuf)
 		if err != nil {
+			macbufs.Put(buf)
 			return nil, err
 		}
-		buf = buf[:n]
+		buf = append(buf, pbuf[:n]...)
 	}
 
 	tsigvar := make([]byte, MinMsgSize)
@@ -100,12 +106,9 @@ func (rr *TSIG) mac(m *Msg, options TSIGOption) ([]byte, error) {
 		tsigvar = tsigvar[:n]
 	}
 
-	if options.RequestMAC != "" {
-		buf = append(buf, m.Data...)
-		buf = append(buf, tsigvar...)
-		return buf, nil
-	}
-	return append(m.Data, tsigvar...), nil
+	buf = append(buf, m.Data...)
+	buf = append(buf, tsigvar...)
+	return buf, nil
 }
 
 // If we have the MAC use this type to convert it to wiredata. Section 3.4.3. Request MAC.
