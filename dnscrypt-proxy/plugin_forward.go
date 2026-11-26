@@ -438,17 +438,20 @@ func (plugin *PluginForward) Eval(pluginsState *PluginsState, msg *dns.Msg) erro
 		if !respMsg.Security {
 			respMsg.AuthenticatedData = false
 		}
-		respMsg.ID = msg.ID
-		pluginsState.synthResponse = respMsg
-		pluginsState.action = PluginsActionSynth
-		pluginsState.returnCode = PluginsReturnCodeForward
-		if len(sequence) > 0 {
+		if i < len(sequence)-1 {
 			switch respMsg.Rcode {
 			case dns.RcodeNameError, dns.RcodeRefused, dns.RcodeNotAuth:
 				continue
 			}
 		}
+		respMsg.ID = msg.ID
+		pluginsState.synthResponse = respMsg
+		pluginsState.action = PluginsActionSynth
+		pluginsState.returnCode = PluginsReturnCodeForward
 		return nil
+	}
+	if err == nil {
+		err = fmt.Errorf("no final answer for [%s] from the last forwarding server", qName)
 	}
 	return err
 }
