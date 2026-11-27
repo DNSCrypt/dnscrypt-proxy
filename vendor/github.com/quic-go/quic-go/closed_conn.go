@@ -5,6 +5,7 @@ import (
 	"net"
 	"sync/atomic"
 
+	"github.com/quic-go/quic-go/internal/udp"
 	"github.com/quic-go/quic-go/internal/utils"
 )
 
@@ -15,13 +16,13 @@ type closedLocalConn struct {
 	counter atomic.Uint32
 	logger  utils.Logger
 
-	sendPacket func(net.Addr, packetInfo)
+	sendPacket func(net.Addr, udp.PacketInfo)
 }
 
 var _ packetHandler = &closedLocalConn{}
 
 // newClosedLocalConn creates a new closedLocalConn and runs it.
-func newClosedLocalConn(sendPacket func(net.Addr, packetInfo), logger utils.Logger) packetHandler {
+func newClosedLocalConn(sendPacket func(net.Addr, udp.PacketInfo), logger utils.Logger) packetHandler {
 	return &closedLocalConn{
 		sendPacket: sendPacket,
 		logger:     logger,

@@ -170,14 +170,6 @@ func (w *requestWriter) encodeHeaders(req *http.Request, addGzipHeader bool, tra
 				// Host is :authority, already sent.
 				// Content-Length is automatic, set below.
 				continue
-			} else if strings.EqualFold(k, "connection") || strings.EqualFold(k, "proxy-connection") ||
-				strings.EqualFold(k, "transfer-encoding") || strings.EqualFold(k, "upgrade") ||
-				strings.EqualFold(k, "keep-alive") {
-				// Per 8.1.2.2 Connection-Specific Header
-				// Fields, don't send connection-specific
-				// fields. We have already checked if any
-				// are error-worthy so just ignore the rest.
-				continue
 			} else if strings.EqualFold(k, "user-agent") {
 				// Match Go's http1 behavior: at most one
 				// User-Agent. If set to nil or empty string,
@@ -234,6 +226,10 @@ func (w *requestWriter) encodeHeaders(req *http.Request, addGzipHeader bool, tra
 	}
 	enumerateHeaders(func(name, value string) {
 		name = strings.ToLower(name)
+		// drop fields that HTTP/3 does not allow; names and values were validated above
+		if isForbiddenField(name, value, true) {
+			return
+		}
 		w.encoder.WriteField(qpack.HeaderField{Name: name, Value: value})
 		if traceHeaders {
 			traceWroteHeaderField(trace, name, value)
@@ -319,6 +315,10 @@ func shouldSendReqContentLength(method string, contentLength int64) bool {
 // WriteRequestTrailer writes HTTP trailers to the stream.
 // It should be called after the request body has been fully written.
 func (w *requestWriter) WriteRequestTrailer(wr io.Writer, req *http.Request, streamID quic.StreamID, qlogger qlogwriter.Recorder) error {
+	// only DATA frames can be sent on a CONNECT stream (section 4.4 of RFC 9114)
+	if req.Method == http.MethodConnect {
+		return nil
+	}
 	_, err := writeTrailers(wr, req.Trailer, streamID, qlogger)
 	return err
 }

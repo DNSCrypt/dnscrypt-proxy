@@ -22,13 +22,13 @@ type pacer struct {
 	lastSentTime     monotime.Time
 }
 
-func newPacer() *pacer {
+func newPacer(maxDatagramSize protocol.ByteCount) *pacer {
 	return &pacer{
-		maxDatagramSize: protocol.InitialPacketSize,
+		maxDatagramSize: maxDatagramSize,
 	}
 }
 
-func (p *pacer) SentPacket(sendTime monotime.Time, size protocol.ByteCount, rate Bandwidth) {
+func (p *pacer) SentPacket(sendTime monotime.Time, size protocol.ByteCount, rate bandwidth) {
 	budget := p.Budget(sendTime, rate)
 	if size >= budget {
 		p.budgetAtLastSent = 0
@@ -38,7 +38,7 @@ func (p *pacer) SentPacket(sendTime monotime.Time, size protocol.ByteCount, rate
 	p.lastSentTime = sendTime
 }
 
-func (p *pacer) Budget(now monotime.Time, rate Bandwidth) protocol.ByteCount {
+func (p *pacer) Budget(now monotime.Time, rate bandwidth) protocol.ByteCount {
 	if p.lastSentTime.IsZero() {
 		return p.maxBurstSize(rate)
 	}
@@ -54,7 +54,7 @@ func (p *pacer) Budget(now monotime.Time, rate Bandwidth) protocol.ByteCount {
 	return min(p.maxBurstSize(rate), budget)
 }
 
-func (p *pacer) maxBurstSize(rate Bandwidth) protocol.ByteCount {
+func (p *pacer) maxBurstSize(rate bandwidth) protocol.ByteCount {
 	return max(
 		p.timeScaledBandwidth(minPacingDelay+protocol.TimerGranularity, rate),
 		maxBurstSizePackets*p.maxDatagramSize,
@@ -64,8 +64,8 @@ func (p *pacer) maxBurstSize(rate Bandwidth) protocol.ByteCount {
 // timeScaledBandwidth calculates the number of bytes that may be sent within
 // a given duration, based on the current pacing rate.
 // It caps the scaled value to the maximum allowed burst and handles overflows.
-func (p *pacer) timeScaledBandwidth(d time.Duration, rate Bandwidth) protocol.ByteCount {
-	bw := uint64(rate / BytesPerSecond)
+func (p *pacer) timeScaledBandwidth(d time.Duration, rate bandwidth) protocol.ByteCount {
+	bw := uint64(rate / bytesPerSecond)
 	if bw == 0 {
 		return 0
 	}
@@ -83,12 +83,12 @@ func (p *pacer) timeScaledBandwidth(d time.Duration, rate Bandwidth) protocol.By
 
 // TimeUntilSend returns when the next packet should be sent.
 // It returns zero if a packet can be sent immediately.
-func (p *pacer) TimeUntilSend(rate Bandwidth) monotime.Time {
+func (p *pacer) TimeUntilSend(rate bandwidth) monotime.Time {
 	if p.lastSentTime.IsZero() || p.budgetAtLastSent >= p.maxDatagramSize {
 		return 0
 	}
 	diff := 1e9 * uint64(p.maxDatagramSize-p.budgetAtLastSent)
-	bw := uint64(rate / BytesPerSecond)
+	bw := uint64(rate / bytesPerSecond)
 	// We might need to round up this value.
 	// Otherwise, we might have a budget (slightly) smaller than the datagram size when the timer expires.
 	d := diff / bw

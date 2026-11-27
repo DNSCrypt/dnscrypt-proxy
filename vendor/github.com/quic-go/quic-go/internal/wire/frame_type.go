@@ -68,7 +68,7 @@ func (t FrameType) isAllowedAtEncLevel(encLevel protocol.EncryptionLevel) bool {
 		}
 	case protocol.Encryption0RTT:
 		switch t {
-		case FrameTypeCrypto, FrameTypeAck, FrameTypeAckECN, FrameTypeConnectionClose, FrameTypeNewToken, FrameTypePathResponse, FrameTypeRetireConnectionID:
+		case FrameTypeCrypto, FrameTypeAck, FrameTypeAckECN, FrameTypeNewToken, FrameTypePathResponse, FrameTypeRetireConnectionID, FrameTypeHandshakeDone:
 			return false
 		default:
 			return true

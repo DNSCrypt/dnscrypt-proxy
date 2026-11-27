@@ -63,10 +63,6 @@ const MaxTrackedSentPackets = MaxOutstandingSentPackets * 5 / 4
 // but no ack-eliciting frames, that we send in a row
 const MaxNonAckElicitingAcks = 19
 
-// MaxStreamFrameSorterGaps is the maximum number of gaps between received StreamFrames
-// prevents DoS attacks against the streamFrameSorter
-const MaxStreamFrameSorterGaps = 1000
-
 // MinStreamFrameBufferSize is the minimum data length of a received STREAM frame
 // that we use the buffer for. This protects against a DoS where an attacker would send us
 // very small STREAM frames to consume a lot of memory.
@@ -76,9 +72,8 @@ const MinStreamFrameBufferSize = 128
 // If a packet has less than this number of bytes, we won't coalesce any more packets onto it.
 const MinCoalescedPacketSize = 128
 
-// MaxCryptoStreamOffset is the maximum offset allowed on any of the crypto streams.
-// This limits the size of the ClientHello and Certificates that can be received.
-const MaxCryptoStreamOffset = 16 * (1 << 10)
+// MaxCryptoStreamBufferSize is the maximum amount of out-of-order data buffered on any of the crypto streams.
+const MaxCryptoStreamBufferSize = 16 * (1 << 10)
 
 // MinRemoteIdleTimeout is the minimum value that we accept for the remote idle timeout
 const MinRemoteIdleTimeout = 5 * time.Second

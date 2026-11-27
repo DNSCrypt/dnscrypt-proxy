@@ -25,9 +25,10 @@ type stateTrackingStream struct {
 	hasData      chan struct{}
 	queue        [][]byte // TODO: use a ring buffer
 
-	mx             sync.Mutex
-	sendStreamDone bool
-	recvErr        error
+	mx                sync.Mutex
+	sendStreamDone    bool
+	recvErr           error
+	datagramsRejected bool
 
 	clearer streamClearer
 }
@@ -133,8 +134,40 @@ func (s *stateTrackingStream) signalHasDatagram() {
 	}
 }
 
+// RejectDatagrams makes HTTP Datagrams received for this stream abort it.
+func (s *stateTrackingStream) RejectDatagrams() {
+	s.mx.Lock()
+	s.datagramsRejected = true
+	rcvdDatagram := len(s.queue) > 0
+	s.queue = nil
+	s.mx.Unlock()
+
+	if rcvdDatagram {
+		s.abortOnDatagram()
+	}
+}
+
+// abortOnDatagram aborts the stream, unless the receive side is closed:
+// datagrams received after that are dropped.
+func (s *stateTrackingStream) abortOnDatagram() {
+	// the callback runs synchronously if the final size is already known
+	finalSizeKnown := make(chan struct{})
+	s.SetReceiveFinalSizeCallback(func(int64) { close(finalSizeKnown) })
+	select {
+	case <-finalSizeKnown:
+	default:
+		s.CancelRead(quic.StreamErrorCode(ErrCodeDatagramError))
+		s.CancelWrite(quic.StreamErrorCode(ErrCodeDatagramError))
+	}
+}
+
 func (s *stateTrackingStream) enqueueDatagram(data []byte) {
 	s.mx.Lock()
+	if s.datagramsRejected && s.recvErr == nil {
+		s.mx.Unlock()
+		s.abortOnDatagram()
+		return
+	}
 	defer s.mx.Unlock()
 
 	if s.recvErr != nil {

@@ -489,6 +489,11 @@ func (p *TransportParameters) marshalVarintParam(b []byte, id transportParameter
 // if the transport parameters changed.
 // Since the session ticket is encrypted, the serialization format is defined by the server.
 // For convenience, we use the same format that we also use for sending the transport parameters.
+// The following transport parameters have no effect before the handshake completes,
+// so they are not saved:
+//   - max_idle_timeout
+//   - max_udp_payload_size
+//   - disable_active_migration
 func (p *TransportParameters) MarshalForSessionTicket(b []byte) []byte {
 	b = quicvarint.Append(b, transportParameterMarshalingVersion)
 

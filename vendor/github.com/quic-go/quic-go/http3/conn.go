@@ -8,9 +8,11 @@ import (
 	"log/slog"
 	"maps"
 	"net"
+	"net/http"
 	"sync"
 	"sync/atomic"
 
+	"github.com/quic-go/qpack"
 	"github.com/quic-go/quic-go"
 	"github.com/quic-go/quic-go/http3/qlog"
 	"github.com/quic-go/quic-go/qlogwriter"
@@ -31,6 +33,9 @@ type rawConn struct {
 	logger *slog.Logger
 
 	enableDatagrams bool
+
+	decoder             *qpack.Decoder
+	maxFieldSectionSize int // the SETTINGS_MAX_FIELD_SECTION_SIZE we send
 
 	streamMx sync.Mutex
 	streams  map[quic.StreamID]*stateTrackingStream
@@ -53,26 +58,74 @@ type rawConn struct {
 func newRawConn(
 	quicConn *quic.Conn,
 	enableDatagrams bool,
+	maxFieldSectionSize int,
 	onStreamsEmpty func(),
 	controlStrHandler func(*quic.ReceiveStream, *frameParser),
 	qlogger qlogwriter.Recorder,
 	logger *slog.Logger,
 ) *rawConn {
 	c := &rawConn{
-		conn:              quicConn,
-		logger:            logger,
-		enableDatagrams:   enableDatagrams,
-		receivedSettings:  make(chan struct{}),
-		streams:           make(map[quic.StreamID]*stateTrackingStream),
-		qlogger:           qlogger,
-		qloggerProducers:  1,
-		onStreamsEmpty:    onStreamsEmpty,
-		controlStrHandler: controlStrHandler,
+		conn:                quicConn,
+		logger:              logger,
+		enableDatagrams:     enableDatagrams,
+		decoder:             qpack.NewDecoder(),
+		maxFieldSectionSize: maxFieldSectionSize,
+		receivedSettings:    make(chan struct{}),
+		streams:             make(map[quic.StreamID]*stateTrackingStream),
+		qlogger:             qlogger,
+		qloggerProducers:    1,
+		onStreamsEmpty:      onStreamsEmpty,
+		controlStrHandler:   controlStrHandler,
 	}
 	if qlogger != nil {
 		context.AfterFunc(quicConn.Context(), c.RemoveQlogProducer)
 	}
 	return c
+}
+
+// ReadRequestHeader reads and decodes the request header section of hf from r.
+// A non-nil fields collects the decoded fields.
+func (c *rawConn) ReadRequestHeader(r io.Reader, hf *headersFrame, fields *[]qpack.HeaderField) (*http.Request, error) {
+	b, err := c.readFieldSection(r, hf)
+	if err != nil {
+		return nil, err
+	}
+	return requestFromHeaders(c.decoder.Decode(b), c.maxFieldSectionSize, fields)
+}
+
+// ReadResponseHeader reads and decodes the response header section of hf from r.
+// A non-nil fields collects the decoded fields.
+func (c *rawConn) ReadResponseHeader(r io.Reader, hf *headersFrame, fields *[]qpack.HeaderField) (*http.Response, error) {
+	b, err := c.readFieldSection(r, hf)
+	if err != nil {
+		return nil, err
+	}
+	rsp := &http.Response{}
+	if err := updateResponseFromHeaders(rsp, c.decoder.Decode(b), c.maxFieldSectionSize, fields); err != nil {
+		return nil, err
+	}
+	return rsp, nil
+}
+
+// ReadTrailer reads and decodes the trailer section of hf from r.
+// A non-nil fields collects the decoded fields.
+func (c *rawConn) ReadTrailer(r io.Reader, hf *headersFrame, fields *[]qpack.HeaderField) (http.Header, error) {
+	b, err := c.readFieldSection(r, hf)
+	if err != nil {
+		return nil, err
+	}
+	return parseTrailers(c.decoder.Decode(b), c.maxFieldSectionSize, fields)
+}
+
+func (c *rawConn) readFieldSection(r io.Reader, hf *headersFrame) ([]byte, error) {
+	if hf.Length > uint64(c.maxFieldSectionSize) {
+		return nil, &fieldSectionReadError{fmt.Errorf("%w: %d bytes (max: %d)", errHeadersFrameTooLarge, hf.Length, c.maxFieldSectionSize)}
+	}
+	b, err := readHeaderBlock(r, hf.Length)
+	if err != nil {
+		return nil, &fieldSectionReadError{err}
+	}
+	return b, nil
 }
 
 func (c *rawConn) OpenUniStream() (*quic.SendStream, error) {
@@ -141,6 +194,16 @@ func (c *rawConn) UpdateStreamPriority(id quic.StreamID, urgency int8, increment
 	}
 }
 
+// RejectDatagrams makes HTTP Datagrams received for the stream abort it.
+func (c *rawConn) RejectDatagrams(id quic.StreamID) {
+	c.streamMx.Lock()
+	str := c.streams[id]
+	c.streamMx.Unlock()
+	if str != nil {
+		str.RejectDatagrams()
+	}
+}
+
 func (c *rawConn) RemoteAddr() net.Addr {
 	return c.conn.RemoteAddr()
 }
@@ -159,7 +222,7 @@ func (c *rawConn) clearStream(id quic.StreamID) {
 	}
 }
 
-func (c *rawConn) hasActiveStreams() bool {
+func (c *rawConn) HasActiveStreams() bool {
 	c.streamMx.Lock()
 	defer c.streamMx.Unlock()
 
@@ -335,6 +398,23 @@ func (c *rawConn) ReceivedSettings() <-chan struct{} { return c.receivedSettings
 // Settings returns the settings received on this connection.
 // It is only valid to call this function after the channel returned by ReceivedSettings was closed.
 func (c *rawConn) Settings() *Settings { return c.settings }
+
+// WaitForExtendedConnect blocks until the peer's SETTINGS were received.
+// It returns an error if the peer didn't enable Extended CONNECT.
+func (c *rawConn) WaitForExtendedConnect(ctx context.Context) error {
+	connCtx := c.conn.Context()
+	select {
+	case <-c.receivedSettings:
+	case <-connCtx.Done():
+		return context.Cause(connCtx)
+	case <-ctx.Done():
+		return context.Cause(ctx)
+	}
+	if !c.settings.EnableExtendedConnect {
+		return errors.New("http3: server didn't enable Extended CONNECT")
+	}
+	return nil
+}
 
 // AddQlogProducer registers a goroutine or call that may produce qlog events.
 // It returns false once the qlogger has been closed.

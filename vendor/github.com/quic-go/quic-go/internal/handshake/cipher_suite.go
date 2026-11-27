@@ -8,6 +8,8 @@ import (
 	"crypto/tls"
 	"fmt"
 
+	"github.com/quic-go/quic-go/internal/protocol"
+
 	"golang.org/x/crypto/chacha20poly1305"
 )
 
@@ -23,6 +25,19 @@ type cipherSuite struct {
 }
 
 func (s cipherSuite) IVLen() int { return aeadNonceLength }
+
+// IntegrityLimit returns the number of packets that may fail authentication
+// before RFC 9001, Section 6.6 requires closing the connection.
+func (s cipherSuite) IntegrityLimit() uint64 {
+	switch s.ID {
+	case tls.TLS_AES_128_GCM_SHA256, tls.TLS_AES_256_GCM_SHA384:
+		return protocol.InvalidPacketLimitAES
+	case tls.TLS_CHACHA20_POLY1305_SHA256:
+		return protocol.InvalidPacketLimitChaCha
+	default:
+		panic(fmt.Sprintf("unknown cipher suite %d", s.ID))
+	}
+}
 
 func getCipherSuite(id uint16) cipherSuite {
 	switch id {

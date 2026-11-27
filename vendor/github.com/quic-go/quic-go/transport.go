@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/quic-go/quic-go/internal/protocol"
+	"github.com/quic-go/quic-go/internal/udp"
 	"github.com/quic-go/quic-go/internal/utils"
 	"github.com/quic-go/quic-go/internal/wire"
 	"github.com/quic-go/quic-go/qlog"
@@ -45,8 +46,14 @@ var errListenerAlreadySet = errors.New("listener already set")
 type closePacket struct {
 	payload []byte
 	addr    net.Addr
-	info    packetInfo
+	info    udp.PacketInfo
 }
+
+// OOBCapablePacketConn is a connection that allows the reading of ECN bits from the IP header.
+// If the PacketConn passed to the [Transport] satisfies this interface, quic-go will use it.
+// In this case, packets will be read in batches, and [OOBCapablePacketConn.WriteMsgUDP]
+// will be used instead of [net.PacketConn.WriteTo] to write packets.
+type OOBCapablePacketConn = udp.OOBCapablePacketConn
 
 // The Transport is the central point to manage incoming and outgoing QUIC connections.
 // QUIC demultiplexes connections based on their QUIC Connection IDs, not based on the 4-tuple.
@@ -153,7 +160,7 @@ type Transport struct {
 
 	server *baseServer
 
-	conn rawConn
+	conn udp.Conn
 
 	closeQueue          chan closePacket
 	statelessResetQueue chan receivedPacket
@@ -161,7 +168,12 @@ type Transport struct {
 	listening   chan struct{} // is closed when listen returns
 	closeErr    error
 	createdConn bool
-	isSingleUse bool // was created for a single server or client, i.e. by calling quic.Listen or quic.Dial
+	// Created by one of the package-level Listen or Dial functions,
+	// to serve a single listener or connection.
+	isSingleUse bool
+	// Set when the server of a single-use transport is closed.
+	// The transport is closed once its last connection is gone.
+	serverClosed bool
 
 	readingNonQUICPackets atomic.Bool
 	nonQUICPackets        chan receivedPacket
@@ -257,7 +269,7 @@ func (t *Transport) dial(ctx context.Context, addr net.Addr, host string, tlsCon
 	tlsConf = tlsConf.Clone()
 	setTLSConfigServerName(tlsConf, addr, host)
 	return t.doDial(ctx,
-		newSendConn(t.conn, addr, packetInfo{}, utils.DefaultLogger),
+		newSendConn(t.conn, addr, udp.PacketInfo{}, utils.DefaultLogger),
 		tlsConf,
 		conf,
 		0,
@@ -376,16 +388,10 @@ func (t *Transport) doDial(
 
 func (t *Transport) init(allowZeroLengthConnIDs bool) error {
 	t.initOnce.Do(func() {
-		var conn rawConn
-		if c, ok := t.Conn.(rawConn); ok {
-			conn = c
-		} else {
-			var err error
-			conn, err = wrapConn(t.Conn)
-			if err != nil {
-				t.initErr = err
-				return
-			}
+		conn, err := udp.Wrap(t.Conn)
+		if err != nil {
+			t.initErr = err
+			return
 		}
 
 		t.logger = utils.DefaultLogger // TODO: make this configurable
@@ -484,7 +490,7 @@ func (t *Transport) closeServer() {
 
 	t.server = nil
 	if t.isSingleUse {
-		t.closeErr = ErrServerClosed
+		t.serverClosed = true
 	}
 
 	if len(t.handlers) == 0 {
@@ -523,10 +529,7 @@ func (t *Transport) close(e error) {
 	}
 }
 
-// only print warnings about the UDP receive buffer size once
-var setBufferWarningOnce sync.Once
-
-func (t *Transport) listen(conn rawConn) {
+func (t *Transport) listen(conn udp.Conn) {
 	for {
 		p, err := conn.ReadPacket()
 		//nolint:staticcheck // SA1019 ignore this!
@@ -545,43 +548,51 @@ func (t *Transport) listen(conn rawConn) {
 		}
 		if err != nil {
 			// Windows returns an error when receiving a UDP datagram that doesn't fit into the provided buffer.
-			if isRecvMsgSizeErr(err) {
+			if udp.IsRecvMsgSizeErr(err) {
 				continue
 			}
 			t.close(err)
 			return
 		}
-		t.handlePacket(p)
+		t.handlePacket(receivedPacket{
+			buffer:     p.Buffer,
+			remoteAddr: p.RemoteAddr,
+			rcvTime:    p.RcvTime,
+			data:       p.Data,
+			ecn:        p.ECN,
+			info:       p.Info,
+		})
 	}
 }
 
 func (t *Transport) maybeStopListening() {
-	if t.isSingleUse && t.closeErr != nil {
-		t.conn.SetReadDeadline(time.Now())
+	if !t.serverClosed || t.closeErr != nil {
+		return
 	}
+	t.closeErr = ErrServerClosed
+	t.conn.SetReadDeadline(time.Now())
 }
 
 func (t *Transport) handlePacket(p receivedPacket) {
 	if len(p.data) == 0 {
 		return
 	}
-	if !wire.IsPotentialQUICPacket(p.data[0]) && !wire.IsLongHeaderPacket(p.data[0]) {
+	switch {
+	case wire.IsLongHeaderPacket(p.data[0]):
+		t.handleLongHeaderPacket(p)
+	case wire.IsPotentialQUICPacket(p.data[0]):
+		t.handleShortHeaderPacket(p)
+	default:
 		t.handleNonQUICPacket(p)
-		return
 	}
+}
+
+func (t *Transport) handleShortHeaderPacket(p receivedPacket) {
 	connID, err := wire.ParseConnectionID(p.data, t.connIDLen)
 	if err != nil {
-		t.logger.Debugf("error parsing connection ID on packet from %s: %s", p.remoteAddr, err)
-		if t.Tracer != nil {
-			t.Tracer.RecordEvent(qlog.PacketDropped{
-				Raw:     qlog.RawInfo{Length: int(p.Size()), PayloadLength: qlog.OmitLength},
-				Trigger: qlog.PacketDropHeaderParseError,
-			})
-		}
-		p.buffer.MaybeRelease()
+		t.dropUnparseablePacket(p, err)
 		return
 	}
-
 	// If there's a connection associated with the connection ID, pass the packet there.
 	if handler, ok := (*packetHandlerMap)(t).Get(connID); ok {
 		handler.handlePacket(p)
@@ -597,24 +608,39 @@ func (t *Transport) handlePacket(p receivedPacket) {
 	if isStatelessReset := t.maybeHandleStatelessReset(p.data); isStatelessReset {
 		return
 	}
-	if !wire.IsLongHeaderPacket(p.data[0]) {
-		if statelessResetQueued := t.maybeSendStatelessReset(p); !statelessResetQueued {
-			if t.Tracer != nil {
-				t.Tracer.RecordEvent(qlog.PacketDropped{
-					Header:  qlog.PacketHeader{PacketNumber: protocol.InvalidPacketNumber, PacketType: qlog.PacketType1RTT},
-					Raw:     qlog.RawInfo{Length: int(p.Size()), PayloadLength: qlog.OmitLength},
-					Trigger: qlog.PacketDropUnknownConnectionID,
-				})
-			}
-			p.buffer.Release()
+	if statelessResetQueued := t.maybeSendStatelessReset(p); !statelessResetQueued {
+		if t.Tracer != nil {
+			t.Tracer.RecordEvent(qlog.PacketDropped{
+				Header:  qlog.PacketHeader{PacketNumber: protocol.InvalidPacketNumber, PacketType: qlog.PacketType1RTT},
+				Raw:     qlog.RawInfo{Length: int(p.Size()), PayloadLength: qlog.OmitLength},
+				Trigger: qlog.PacketDropUnknownConnectionID,
+			})
 		}
+		p.buffer.Release()
+	}
+}
+
+func (t *Transport) handleLongHeaderPacket(p receivedPacket) {
+	connID, err := wire.ParseConnectionID(p.data, t.connIDLen)
+	switch {
+	case errors.Is(err, protocol.ErrInvalidConnectionIDLen):
+		// Packets of other QUIC versions can use connection IDs longer than 20 bytes.
+		// They can't belong to any connection, but the server needs them to send a Version Negotiation packet.
+	case err != nil:
+		t.dropUnparseablePacket(p, err)
 		return
+	default:
+		// If there's a connection associated with the connection ID, pass the packet there.
+		if handler, ok := (*packetHandlerMap)(t).Get(connID); ok {
+			handler.handlePacket(p)
+			return
+		}
 	}
 
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
 	if t.server == nil { // no server set
-		t.logger.Debugf("received a packet with an unexpected connection ID %s", connID)
+		t.logger.Debugf("received a long header packet from %s without a matching connection", p.remoteAddr)
 		if t.Tracer != nil {
 			t.Tracer.RecordEvent(qlog.PacketDropped{
 				Raw:     qlog.RawInfo{Length: int(p.Size()), PayloadLength: qlog.OmitLength},
@@ -625,6 +651,17 @@ func (t *Transport) handlePacket(p receivedPacket) {
 		return
 	}
 	t.server.handlePacket(p)
+}
+
+func (t *Transport) dropUnparseablePacket(p receivedPacket, err error) {
+	t.logger.Debugf("error parsing connection ID on packet from %s: %s", p.remoteAddr, err)
+	if t.Tracer != nil {
+		t.Tracer.RecordEvent(qlog.PacketDropped{
+			Raw:     qlog.RawInfo{Length: int(p.Size()), PayloadLength: qlog.OmitLength},
+			Trigger: qlog.PacketDropHeaderParseError,
+		})
+	}
+	p.buffer.MaybeRelease()
 }
 
 func (t *Transport) maybeSendStatelessReset(p receivedPacket) (statelessResetQueued bool) {
@@ -671,7 +708,7 @@ func (t *Transport) maybeHandleStatelessReset(data []byte) bool {
 	if wire.IsLongHeaderPacket(data[0]) {
 		return false
 	}
-	if len(data) < 17 /* type byte + 16 bytes for the reset token */ {
+	if len(data) < protocol.MinReceivedStatelessResetSize {
 		return false
 	}
 
@@ -822,6 +859,9 @@ func (h *packetHandlerMap) AddWithConnID(clientDestConnID, newConnID protocol.Co
 func (h *packetHandlerMap) Remove(id protocol.ConnectionID) {
 	h.mutex.Lock()
 	delete(h.handlers, id)
+	if len(h.handlers) == 0 {
+		(*Transport)(h).maybeStopListening()
+	}
 	h.mutex.Unlock()
 	h.logger.Debugf("Removing connection ID %s.", id)
 }
@@ -834,7 +874,7 @@ func (h *packetHandlerMap) ReplaceWithClosed(ids []protocol.ConnectionID, connCl
 	var handler packetHandler
 	if connClosePacket != nil {
 		handler = newClosedLocalConn(
-			func(addr net.Addr, info packetInfo) {
+			func(addr net.Addr, info udp.PacketInfo) {
 				select {
 				case h.closeQueue <- closePacket{payload: connClosePacket, addr: addr, info: info}:
 				default:

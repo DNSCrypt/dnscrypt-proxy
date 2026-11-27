@@ -41,6 +41,7 @@ type clientConn interface {
 	OpenRequestStream(context.Context) (*RequestStream, error)
 	RoundTrip(*http.Request) (*http.Response, error)
 	handleUnidirectionalStream(*quic.ReceiveStream)
+	hasActiveStreams() bool
 }
 
 type roundTripperWithCount struct {
@@ -53,11 +54,24 @@ type roundTripperWithCount struct {
 	useCount atomic.Int64
 }
 
+// IsIdle reports whether no request is using the connection.
+func (r *roundTripperWithCount) IsIdle() bool {
+	if r.useCount.Load() > 0 {
+		return false
+	}
+	select {
+	case <-r.dialing:
+		return r.clientConn == nil || !r.clientConn.hasActiveStreams()
+	default:
+		return true
+	}
+}
+
 func (r *roundTripperWithCount) Close() error {
 	r.cancel()
 	<-r.dialing
 	if r.conn != nil {
-		return r.conn.CloseWithError(0, "")
+		return r.conn.CloseWithError(quic.ApplicationErrorCode(ErrCodeNoError), "")
 	}
 	return nil
 }
@@ -142,19 +156,22 @@ func (t *Transport) init() error {
 	if t.QUICConfig == nil {
 		t.QUICConfig = defaultQuicConfig.Clone()
 		t.QUICConfig.EnableDatagrams = t.EnableDatagrams
+	} else {
+		t.QUICConfig = t.QUICConfig.Clone()
 	}
 	if t.EnableDatagrams && !t.QUICConfig.EnableDatagrams {
 		return errors.New("HTTP Datagrams enabled, but QUIC Datagrams disabled")
 	}
 	if len(t.QUICConfig.Versions) == 0 {
-		t.QUICConfig = t.QUICConfig.Clone()
 		t.QUICConfig.Versions = []quic.Version{quic.SupportedVersions()[0]}
 	}
 	if len(t.QUICConfig.Versions) != 1 {
 		return errors.New("can only use a single QUIC version for dialing a HTTP/3 connection")
 	}
+	// RFC 9114, Section 6.1 requires closing the connection when the server opens a bidirectional stream.
+	// Disallowing them makes QUIC do that, saving a goroutine per connection that would accept them.
 	if t.QUICConfig.MaxIncomingStreams == 0 {
-		t.QUICConfig.MaxIncomingStreams = -1 // don't allow any bidirectional streams
+		t.QUICConfig.MaxIncomingStreams = -1
 	}
 	if t.Dial == nil {
 		udpConn, err := net.ListenUDP("udp", nil)
@@ -526,14 +543,14 @@ func isNotToken(r rune) bool {
 }
 
 // CloseIdleConnections closes any QUIC connections in the transport's pool that are currently idle.
-// An idle connection is one that was previously used for requests but is now sitting unused.
+// A connection is idle once all requests on it have finished, including reading or closing their response bodies.
 // This method does not interrupt any connections currently in use.
 // It also does not affect connections obtained via [Transport.NewClientConn].
 func (t *Transport) CloseIdleConnections() {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
 	for hostname, cl := range t.clients {
-		if cl.useCount.Load() == 0 {
+		if cl.IsIdle() {
 			cl.Close()
 			delete(t.clients, hostname)
 		}

@@ -30,6 +30,7 @@ func newConnectionFlowController(
 	logger utils.Logger,
 ) *connectionFlowController {
 	return &connectionFlowController{
+		lastBlockedAt: protocol.InvalidByteCount,
 		receiveFlowController: receiveFlowController{
 			rttStats:             rttStats,
 			receiveWindow:        receiveWindow,
@@ -120,6 +121,14 @@ func (c *connectionFlowController) SendWindowSize() protocol.ByteCount {
 	return c.sendWindow - c.bytesSent
 }
 
+// IsBlocked says if the connection flow control limit is reached.
+func (c *connectionFlowController) IsBlocked() bool {
+	c.sendMutex.Lock()
+	defer c.sendMutex.Unlock()
+
+	return c.bytesSent >= c.sendWindow
+}
+
 // IsNewlyBlocked says if it is newly blocked by connection flow control.
 // For every offset, it only returns true once.
 // If it is blocked, the offset is returned.
@@ -173,6 +182,6 @@ func (c *connectionFlowController) Reset() {
 	defer c.sendMutex.Unlock()
 
 	c.bytesSent = 0
-	c.lastBlockedAt = 0
+	c.lastBlockedAt = protocol.InvalidByteCount
 	c.sendWindow = 0
 }
