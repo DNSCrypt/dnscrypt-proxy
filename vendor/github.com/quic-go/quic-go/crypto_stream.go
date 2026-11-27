@@ -33,10 +33,10 @@ func newCryptoStream() *cryptoStream {
 
 func (s *baseCryptoStream) HandleCryptoFrame(f *wire.CryptoFrame) error {
 	highestOffset := f.Offset + protocol.ByteCount(len(f.Data))
-	if maxOffset := highestOffset; maxOffset > protocol.MaxCryptoStreamOffset {
+	if maxOffset := s.queue.ReadPos() + protocol.MaxCryptoStreamBufferSize; highestOffset > maxOffset {
 		return &qerr.TransportError{
 			ErrorCode:    qerr.CryptoBufferExceeded,
-			ErrorMessage: fmt.Sprintf("received invalid offset %d on crypto stream, maximum allowed %d", maxOffset, protocol.MaxCryptoStreamOffset),
+			ErrorMessage: fmt.Sprintf("received offset %d on crypto stream, maximum allowed %d", highestOffset, maxOffset),
 		}
 	}
 	if s.finished {

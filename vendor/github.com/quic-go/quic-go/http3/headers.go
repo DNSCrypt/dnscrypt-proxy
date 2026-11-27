@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"net/textproto"
 	"net/url"
-	"slices"
 	"strconv"
 	"strings"
 
@@ -25,13 +24,30 @@ type qpackError struct{ err error }
 func (e *qpackError) Error() string { return fmt.Sprintf("qpack: %v", e.err) }
 func (e *qpackError) Unwrap() error { return e.err }
 
+// A fieldSectionReadError means that a field section was not read, so it wasn't decoded either.
+type fieldSectionReadError struct{ err error }
+
+func (e *fieldSectionReadError) Error() string { return e.err.Error() }
+func (e *fieldSectionReadError) Unwrap() error { return e.err }
+
 type headerFieldError struct {
 	error
 	InvalidName  bool
 	InvalidValue bool
 }
 
-var errHeaderTooLarge = errors.New("http3: headers too large")
+var (
+	errHeaderTooLarge       = errors.New("http3: headers too large")
+	errHeadersFrameTooLarge = errors.New("http3: HEADERS frame too large")
+)
+
+// decodeErrorCode is the stream error code for a header section that failed to decode.
+func decodeErrorCode(err error) quic.StreamErrorCode {
+	if _, ok := errors.AsType[*qpackError](err); ok {
+		return quic.StreamErrorCode(ErrCodeQPACKDecompressionFailed)
+	}
+	return quic.StreamErrorCode(ErrCodeMessageError)
+}
 
 // readHeaderBlock preallocates up to 8 KiB, growing larger buffers as data arrives.
 // The caller must check length against the configured header size limit first.
@@ -65,15 +81,6 @@ type header struct {
 	// all non-pseudo headers.
 	// Some pseudo-header keys with nil values are temporarily added to track presence.
 	Headers http.Header
-}
-
-// connection-specific header fields must not be sent on HTTP/3
-var invalidHeaderFields = [...]string{
-	"connection",
-	"keep-alive",
-	"proxy-connection",
-	"transfer-encoding",
-	"upgrade",
 }
 
 func parseHeaders(decodeFn qpack.DecodeFunc, isRequest bool, sizeLimit int, headerFields *[]qpack.HeaderField) (header, error) {
@@ -148,7 +155,7 @@ func parseHeaders(decodeFn qpack.DecodeFunc, isRequest bool, sizeLimit int, head
 				return header{}, fmt.Errorf("invalid response pseudo header: %s", h.Name)
 			}
 		} else {
-			if err := validateRegularHeaderField(h); err != nil {
+			if err := validateRegularHeaderField(h, isRequest); err != nil {
 				return header{}, err
 			}
 			readFirstRegularHeader = true
@@ -209,18 +216,34 @@ func validateHeaderFieldNameAndValue(h qpack.HeaderField) error {
 	return nil
 }
 
-func validateRegularHeaderField(h qpack.HeaderField) error {
-	if slices.Contains(invalidHeaderFields[:], h.Name) {
-		return fmt.Errorf("invalid header field name: %q", h.Name)
+// isForbiddenField reports whether HTTP/3 forbids a field with a lower-case name.
+// Connection-specific fields are forbidden. The only exception is TE in a request header,
+// which must not contain any value other than "trailers".
+func isForbiddenField(name, value string, isRequestHeader bool) bool {
+	switch name {
+	case "connection", "keep-alive", "proxy-connection", "transfer-encoding", "upgrade":
+		return true
+	case "te":
+		return !isRequestHeader || value != "trailers"
 	}
-	if h.Name == "te" && h.Value != "trailers" {
-		return fmt.Errorf("invalid TE header field value: %q", h.Value)
+	return false
+}
+
+func validateRegularHeaderField(h qpack.HeaderField, isRequestHeader bool) error {
+	if isForbiddenField(h.Name, h.Value, isRequestHeader) {
+		return fmt.Errorf("invalid connection-specific header field %s: %q", h.Name, h.Value)
 	}
 	return nil
 }
 
+// canSendField reports whether a field with a lower-case name is valid
+// and allowed in a response header or a trailer section.
+func canSendField(name, value string) bool {
+	return httpguts.ValidHeaderFieldName(name) && httpguts.ValidHeaderFieldValue(value) && !isForbiddenField(name, value, false)
+}
+
 func validateTrailerHeaderField(h qpack.HeaderField) error {
-	if err := validateRegularHeaderField(h); err != nil {
+	if err := validateRegularHeaderField(h, false); err != nil {
 		return err
 	}
 	if !httpguts.ValidTrailerHeader(h.Name) {
@@ -334,6 +357,16 @@ func requestFromHeaders(decodeFn qpack.DecodeFunc, sizeLimit int, headerFields *
 	if (!isConnect || isExtendedConnected) && !validPath {
 		return nil, fmt.Errorf("invalid :path: %q", hdr.Path)
 	}
+	// Like net/http's HTTP/2 server, only accept http and https for regular requests.
+	// This also rejects a missing :scheme, see section 4.3.1 of RFC 9114.
+	if !isConnect && hdr.Scheme != "http" && hdr.Scheme != "https" {
+		return nil, fmt.Errorf("invalid :scheme: %q", hdr.Scheme)
+	}
+	// Reject bytes that can't appear in a host and port, see section 4.3.1 of RFC 9114.
+	// Like net/http, we don't validate the host and port syntax, see https://github.com/golang/go/issues/78172.
+	if !httpguts.ValidHostHeader(hdr.Authority) {
+		return nil, fmt.Errorf("invalid :authority: %q", hdr.Authority)
+	}
 
 	var u *url.URL
 	var requestURI string
@@ -385,7 +418,6 @@ func validExtendedConnectProtocol(protocol string) bool {
 // updateResponseFromHeaders sets up http.Response as an HTTP/3 response,
 // using the decoded qpack header filed.
 // It is only called for the HTTP header (and not the HTTP trailer).
-// It takes an http.Response as an argument to allow the caller to set the trailer later on.
 func updateResponseFromHeaders(rsp *http.Response, decodeFn qpack.DecodeFunc, sizeLimit int, headerFields *[]qpack.HeaderField) error {
 	hdr, err := parseHeaders(decodeFn, false, sizeLimit, headerFields)
 	if err != nil {
@@ -400,9 +432,10 @@ func updateResponseFromHeaders(rsp *http.Response, decodeFn qpack.DecodeFunc, si
 	rsp.Trailer = extractAnnouncedTrailers(rsp.Header)
 	rsp.ContentLength = hdr.ContentLength
 
+	// Status codes have three digits and range from 100 to 599, see section 15 of RFC 9110.
 	status, err := strconv.Atoi(hdr.Status)
-	if err != nil {
-		return fmt.Errorf("invalid status code: %w", err)
+	if err != nil || len(hdr.Status) != 3 || status < 100 || status > 599 {
+		return fmt.Errorf("invalid status code: %q", hdr.Status)
 	}
 	rsp.StatusCode = status
 	rsp.Status = hdr.Status + " " + http.StatusText(status)
@@ -437,17 +470,6 @@ func extractAnnouncedTrailers(header http.Header) http.Header {
 // writeTrailers encodes and writes HTTP trailers as a HEADERS frame.
 // It returns true if trailers were written, false if there were no trailers to write.
 func writeTrailers(wr io.Writer, trailers http.Header, streamID quic.StreamID, qlogger qlogwriter.Recorder) (bool, error) {
-	var hasValues bool
-	for k, vals := range trailers {
-		if httpguts.ValidTrailerHeader(k) && len(vals) > 0 {
-			hasValues = true
-			break
-		}
-	}
-	if !hasValues {
-		return false, nil
-	}
-
 	var buf bytes.Buffer
 	enc := qpack.NewEncoder(&buf)
 	var headerFields []qlog.HeaderField
@@ -464,6 +486,9 @@ func writeTrailers(wr io.Writer, trailers http.Header, streamID quic.StreamID, q
 		}
 		lowercaseKey := strings.ToLower(k)
 		for _, v := range vals {
+			if !canSendField(lowercaseKey, v) {
+				continue
+			}
 			if err := enc.WriteField(qpack.HeaderField{Name: lowercaseKey, Value: v}); err != nil {
 				return false, err
 			}
@@ -471,6 +496,9 @@ func writeTrailers(wr io.Writer, trailers http.Header, streamID quic.StreamID, q
 				headerFields = append(headerFields, qlog.HeaderField{Name: lowercaseKey, Value: v})
 			}
 		}
+	}
+	if buf.Len() == 0 {
+		return false, nil
 	}
 
 	b := make([]byte, 0, frameHeaderLen+buf.Len())
@@ -481,32 +509,4 @@ func writeTrailers(wr io.Writer, trailers http.Header, streamID quic.StreamID, q
 	}
 	_, err := wr.Write(b)
 	return true, err
-}
-
-func decodeTrailers(r io.Reader, hf *headersFrame, maxHeaderBytes int, decoder *qpack.Decoder, qlogger qlogwriter.Recorder, streamID quic.StreamID) (http.Header, error) {
-	if hf.Length > uint64(maxHeaderBytes) {
-		maybeQlogInvalidHeadersFrame(qlogger, streamID, hf.Length)
-		return nil, fmt.Errorf("http3: HEADERS frame too large: %d bytes (max: %d)", hf.Length, maxHeaderBytes)
-	}
-
-	b, err := readHeaderBlock(r, hf.Length)
-	if err != nil {
-		return nil, err
-	}
-	decodeFn := decoder.Decode(b)
-	var fields []qpack.HeaderField
-	var headerFields *[]qpack.HeaderField
-	if qlogger != nil {
-		fields = make([]qpack.HeaderField, 0, 16)
-		headerFields = &fields
-	}
-	trailers, err := parseTrailers(decodeFn, maxHeaderBytes, headerFields)
-	if err != nil {
-		maybeQlogInvalidHeadersFrame(qlogger, streamID, hf.Length)
-		return nil, err
-	}
-	if qlogger != nil {
-		qlogParsedHeadersFrame(qlogger, streamID, hf, fields, nil)
-	}
-	return trailers, nil
 }

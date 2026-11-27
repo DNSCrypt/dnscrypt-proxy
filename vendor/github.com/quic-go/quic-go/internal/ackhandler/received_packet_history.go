@@ -36,10 +36,10 @@ func (h *receivedPacketHistory) ReceivedPacket(p protocol.PacketNumber) bool /* 
 	}
 
 	isNew := h.addToRanges(p)
-	// Delete old ranges, if we're tracking too many of them.
+	// Delete the oldest range, if we're tracking too many of them.
 	// This is a DoS defense against a peer that sends us too many gaps.
 	if len(h.ranges) > protocol.MaxNumAckRanges {
-		h.ranges = slices.Delete(h.ranges, 0, len(h.ranges)-protocol.MaxNumAckRanges)
+		h.DeleteBelow(h.ranges[0].End + 1)
 	}
 	return isNew
 }

@@ -1,3 +1,7 @@
+codecov:
+  notify:
+    # Notifications are sent by the last job in unit.yml.
+    manual_trigger: true
 coverage:
   round: nearest
   ignore:

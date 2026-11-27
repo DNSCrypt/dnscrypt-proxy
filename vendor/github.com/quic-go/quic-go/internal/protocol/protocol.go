@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"fmt"
+	"math"
 	"time"
 )
 
@@ -154,3 +155,7 @@ const InvalidPacketLimitAES = 1 << 52
 
 // InvalidPacketLimitChaCha is the maximum number of packets that we can fail to decrypt when using AEAD_CHACHA20_POLY1305.
 const InvalidPacketLimitChaCha = 1 << 36
+
+// InvalidPacketLimitLongHeader is the maximum number of packets that we can fail to decrypt
+// with an Initial, Handshake or 0-RTT key.
+const InvalidPacketLimitLongHeader = math.MaxUint32

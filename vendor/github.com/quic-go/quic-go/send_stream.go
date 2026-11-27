@@ -253,7 +253,7 @@ func (s *SendStream) write(p []byte, limiter func(int) int) (bool /* is newly co
 		notifiedSender bool
 	)
 	for {
-		if s.writeLimited {
+		if s.writeLimited || s.resetErr != nil || s.shutdownErr != nil {
 			bytesWritten = len(p) - len(s.dataForWriting)
 			s.dataForWriting = nil
 			break
@@ -297,7 +297,7 @@ func (s *SendStream) write(p []byte, limiter func(int) int) (bool /* is newly co
 					deadlineTimer.Reset(monotime.Until(deadline))
 				}
 			}
-			if s.dataForWriting == nil || s.shutdownErr != nil || s.resetErr != nil {
+			if s.dataForWriting == nil {
 				break
 			}
 		}
@@ -351,26 +351,41 @@ func (s *SendStream) canBufferStreamFrame() bool {
 
 // popStreamFrame returns the next STREAM frame that is supposed to be sent on this stream
 // maxBytes is the maximum length this frame (including frame header) will have.
-// hasMoreData says if more data can be sent after this call without first
-// receiving a MAX_STREAM_DATA frame.
-func (s *SendStream) popStreamFrame(maxBytes protocol.ByteCount, v protocol.Version) (_ ackhandler.StreamFrame, _ *wire.StreamDataBlockedFrame, hasMoreData bool) {
+func (s *SendStream) popStreamFrame(maxBytes protocol.ByteCount, v protocol.Version) (ackhandler.StreamFrame, *wire.StreamDataBlockedFrame, sendState) {
 	s.mutex.Lock()
 	f, blocked, hasMoreData := s.popNewStreamFrameForPacket(maxBytes, v)
 	if f != nil {
 		s.numOutstandingFrames++
 	}
-	s.mutex.Unlock()
-	if blocked != nil {
-		hasMoreData = false
+	state := sendStateIdle
+	if hasMoreData && blocked == nil {
+		state = s.sendState()
 	}
+	s.mutex.Unlock()
 
 	if f == nil {
-		return ackhandler.StreamFrame{}, blocked, hasMoreData
+		return ackhandler.StreamFrame{}, blocked, state
 	}
 	return ackhandler.StreamFrame{
 		Frame:   f,
 		Handler: (*sendStreamAckHandler)(s),
-	}, blocked, hasMoreData
+	}, blocked, state
+}
+
+// sendState is called after popping a frame, if the stream might have more to send.
+func (s *SendStream) sendState() sendState {
+	// Only unreserved data needs flow control credit.
+	if s.nextFrameReserved || (s.nextFrame == nil && s.dataForWriting == nil) {
+		return sendStateReady
+	}
+	// The stream is queued again when it receives a MAX_STREAM_DATA frame.
+	if s.flowController.IsBlocked() {
+		return sendStateIdle
+	}
+	if s.flowController.IsConnectionBlocked() {
+		return sendStateConnBlocked
+	}
+	return sendStateReady
 }
 
 func (s *SendStream) popNewStreamFrameForPacket(maxBytes protocol.ByteCount, v protocol.Version) (_ *wire.StreamFrame, _ *wire.StreamDataBlockedFrame, hasMoreData bool) {
@@ -424,7 +439,7 @@ func (s *SendStream) popNewStreamFrameForPacket(maxBytes protocol.ByteCount, v p
 		maxDataLen = min(maxDataLen, f.MaxDataLen(maxBytes, v), protocol.ByteCount(len(s.dataForWriting)))
 	}
 	if maxDataLen == 0 {
-		return nil, nil, true
+		return nil, s.maybeGetBlockedFrame(), true
 	}
 	if limitedWrite {
 		added, limited := s.flowController.AddBytesSentWithLimiter(maxDataLen, s.writeLimiter)
@@ -450,18 +465,25 @@ func (s *SendStream) popNewStreamFrameForPacket(maxBytes protocol.ByteCount, v p
 		hasMoreData = false
 	}
 	var blocked *wire.StreamDataBlockedFrame
-	// Flow control for a reserved frame was consumed when it was queued. Don't
-	// report the stream blocked while reserved bytes can still be sent.
-	if f.DataLen() > 0 && !s.nextFrameReserved {
-		if isBlocked, offset := s.flowController.isNewlyBlocked(); isBlocked {
-			blocked = &wire.StreamDataBlockedFrame{StreamID: s.streamID, MaximumStreamData: offset}
-		}
+	if f.DataLen() > 0 {
+		blocked = s.maybeGetBlockedFrame()
 	}
-	f.Fin = s.finishedWriting && s.dataForWriting == nil && s.nextFrame == nil && !s.finSent
+	// After a reset, the RESET_STREAM_AT frame carries the Final Size.
+	f.Fin = s.finishedWriting && s.resetErr == nil && s.dataForWriting == nil && s.nextFrame == nil && !s.finSent
 	if f.Fin {
 		s.finSent = true
 	}
 	return f, blocked, hasMoreData
+}
+
+// maybeGetBlockedFrame returns a STREAM_DATA_BLOCKED frame if the stream just became blocked on stream flow control.
+func (s *SendStream) maybeGetBlockedFrame() *wire.StreamDataBlockedFrame {
+	// Flow control for a reserved frame was consumed when it was queued. Don't
+	// report the stream blocked while reserved bytes can still be sent.
+	if s.nextFrameReserved || !s.flowController.IsNewlyBlocked() {
+		return nil
+	}
+	return &wire.StreamDataBlockedFrame{StreamID: s.streamID, MaximumStreamData: s.writeOffset}
 }
 
 // popNewStreamFrame returns a new STREAM frame to send for this stream
@@ -534,6 +556,11 @@ func (s *SendStream) popRetransmissionFrame(maxBytes protocol.ByteCount, v proto
 		hasMore = len(s.retransmissionQueue) > 0
 	}
 	if f != nil {
+		// The frame might have been truncated to the reliable size.
+		// The RESET_STREAM_AT frame carries the Final Size.
+		if s.resetErr != nil {
+			f.Fin = false
+		}
 		s.numOutstandingFrames++
 	}
 	s.mutex.Unlock()
@@ -564,7 +591,8 @@ func (s *SendStream) isNewlyCompleted() bool {
 	if s.completed {
 		return false
 	}
-	if s.nextFrame != nil && s.nextFrame.DataLen() > 0 {
+	// After a reset, only data up to the reliable size is sent.
+	if s.nextFrame != nil && s.nextFrame.Offset < s.reliableOffset() {
 		return false
 	}
 	// We need to keep the stream around until all frames have been sent and acknowledged.
@@ -583,6 +611,7 @@ func (s *SendStream) isNewlyCompleted() bool {
 	//		* the application called Close
 	if s.resetErr != nil && (s.cancellationFlagged || s.finishedWriting) {
 		s.completed = true
+		s.returnFramesToPool() // drops the data beyond the reliable size
 		return true
 	}
 	return false
@@ -685,6 +714,8 @@ func (s *SendStream) CancelWrite(errorCode StreamErrorCode) {
 		finalSize = max(finalSize, s.nextFrame.Offset+s.nextFrame.DataLen())
 	}
 	if reliableOffset == 0 {
+		// For 0-RTT streams, the server might enable RESET_STREAM_AT later.
+		s.reliableSize = 0
 		s.numOutstandingFrames = 0
 		s.returnFramesToPool()
 	}
@@ -696,11 +727,11 @@ func (s *SendStream) CancelWrite(errorCode StreamErrorCode) {
 		ReliableSize: reliableOffset,
 	}
 	if reliableOffset > 0 {
-		if s.nextFrame != nil {
+		// Reserved data counts toward the Final Size. It is kept, but not sent.
+		if s.nextFrame != nil && !s.nextFrameReserved {
 			if s.nextFrame.Offset >= reliableOffset {
 				s.nextFrame.PutBack()
 				s.nextFrame = nil
-				s.nextFrameReserved = false
 			} else if s.nextFrame.Offset+s.nextFrame.DataLen() > reliableOffset {
 				s.nextFrame.Data = s.nextFrame.Data[:reliableOffset-s.nextFrame.Offset]
 			}
@@ -757,7 +788,7 @@ func (s *SendStream) handleStopSendingFrame(f *wire.StopSendingFrame) {
 
 	// If the stream was already cancelled (either locally, or due to a previous STOP_SENDING frame),
 	// there's nothing else to do.
-	if s.resetErr != nil && s.reliableOffset() == 0 {
+	if s.resetErr != nil && (s.completed || s.reliableOffset() == 0) {
 		s.mutex.Unlock()
 		return
 	}
@@ -790,6 +821,14 @@ func (s *SendStream) getControlFrame(monotime.Time) (_ ackhandler.Frame, ok, has
 
 	if s.queuedResetStreamFrame == nil {
 		return ackhandler.Frame{}, false, false
+	}
+	// The Final Size of a RESET_STREAM_AT frame must not exceed the peer's flow control limits.
+	// It includes the unsent data up to the reliable size.
+	if s.nextFrame != nil && !s.nextFrameReserved {
+		if !s.flowController.TryAddBytesSent(s.nextFrame.DataLen()) {
+			return ackhandler.Frame{}, false, true
+		}
+		s.nextFrameReserved = true
 	}
 	s.numOutstandingFrames++
 	f := ackhandler.Frame{

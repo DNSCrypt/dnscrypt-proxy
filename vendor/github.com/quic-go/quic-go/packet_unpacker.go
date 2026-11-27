@@ -37,6 +37,11 @@ type packetUnpacker struct {
 	cs handshake.CryptoSetup
 
 	shortHdrConnIDLen int
+
+	// largest packet numbers successfully unprotected
+	largestInitialPN   protocol.PacketNumber
+	largestHandshakePN protocol.PacketNumber
+	largestAppDataPN   protocol.PacketNumber // 0-RTT and 1-RTT packets share a packet number space
 }
 
 var _ unpacker = &packetUnpacker{}
@@ -64,30 +69,33 @@ func (u *packetUnpacker) UnpackLongHeader(hdr *wire.Header, data []byte) (*unpac
 		if err != nil {
 			return nil, err
 		}
-		extHdr, decrypted, err = u.unpackLongHeaderPacket(opener, hdr, data)
+		extHdr, decrypted, err = u.unpackLongHeaderPacket(opener, u.largestInitialPN, hdr, data)
 		if err != nil {
 			return nil, err
 		}
+		u.largestInitialPN = max(u.largestInitialPN, extHdr.PacketNumber)
 	case protocol.PacketTypeHandshake:
 		encLevel = protocol.EncryptionHandshake
 		opener, err := u.cs.GetHandshakeOpener()
 		if err != nil {
 			return nil, err
 		}
-		extHdr, decrypted, err = u.unpackLongHeaderPacket(opener, hdr, data)
+		extHdr, decrypted, err = u.unpackLongHeaderPacket(opener, u.largestHandshakePN, hdr, data)
 		if err != nil {
 			return nil, err
 		}
+		u.largestHandshakePN = max(u.largestHandshakePN, extHdr.PacketNumber)
 	case protocol.PacketType0RTT:
 		encLevel = protocol.Encryption0RTT
 		opener, err := u.cs.Get0RTTOpener()
 		if err != nil {
 			return nil, err
 		}
-		extHdr, decrypted, err = u.unpackLongHeaderPacket(opener, hdr, data)
+		extHdr, decrypted, err = u.unpackLongHeaderPacket(opener, u.largestAppDataPN, hdr, data)
 		if err != nil {
 			return nil, err
 		}
+		u.largestAppDataPN = max(u.largestAppDataPN, extHdr.PacketNumber)
 	default:
 		return nil, fmt.Errorf("unknown packet type: %s", hdr.Type)
 	}
@@ -124,7 +132,12 @@ func (u *packetUnpacker) UnpackShortHeader(rcvTime monotime.Time, data []byte) (
 	return pn, pnLen, kp, decrypted, nil
 }
 
-func (u *packetUnpacker) unpackLongHeaderPacket(opener handshake.LongHeaderOpener, hdr *wire.Header, data []byte) (*wire.ExtendedHeader, []byte, error) {
+func (u *packetUnpacker) unpackLongHeaderPacket(
+	opener handshake.LongHeaderOpener,
+	largestPN protocol.PacketNumber,
+	hdr *wire.Header,
+	data []byte,
+) (*wire.ExtendedHeader, []byte, error) {
 	extHdr, parseErr := u.unpackLongHeader(opener, hdr, data)
 	// If the reserved bits are set incorrectly, we still need to continue unpacking.
 	// This avoids a timing side-channel, which otherwise might allow an attacker
@@ -133,7 +146,7 @@ func (u *packetUnpacker) unpackLongHeaderPacket(opener handshake.LongHeaderOpene
 		return nil, nil, parseErr
 	}
 	extHdrLen := extHdr.ParsedLen()
-	extHdr.PacketNumber = opener.DecodePacketNumber(extHdr.PacketNumber, extHdr.PacketNumberLen)
+	extHdr.PacketNumber = protocol.DecodePacketNumber(extHdr.PacketNumberLen, largestPN, extHdr.PacketNumber)
 	decrypted, err := opener.Open(data[extHdrLen:extHdrLen], data[extHdrLen:], extHdr.PacketNumber, data[:extHdrLen])
 	if err != nil {
 		return nil, nil, err
@@ -144,7 +157,11 @@ func (u *packetUnpacker) unpackLongHeaderPacket(opener handshake.LongHeaderOpene
 	return extHdr, decrypted, nil
 }
 
-func (u *packetUnpacker) unpackShortHeaderPacket(opener handshake.ShortHeaderOpener, rcvTime monotime.Time, data []byte) (protocol.PacketNumber, protocol.PacketNumberLen, protocol.KeyPhaseBit, []byte, error) {
+func (u *packetUnpacker) unpackShortHeaderPacket(
+	opener handshake.ShortHeaderOpener,
+	rcvTime monotime.Time,
+	data []byte,
+) (protocol.PacketNumber, protocol.PacketNumberLen, protocol.KeyPhaseBit, []byte, error) {
 	l, pn, pnLen, kp, parseErr := u.unpackShortHeader(opener, data)
 	// If the reserved bits are set incorrectly, we still need to continue unpacking.
 	// This avoids a timing side-channel, which otherwise might allow an attacker
@@ -152,11 +169,12 @@ func (u *packetUnpacker) unpackShortHeaderPacket(opener handshake.ShortHeaderOpe
 	if parseErr != nil && parseErr != wire.ErrInvalidReservedBits {
 		return 0, 0, 0, nil, &headerParseError{parseErr}
 	}
-	pn = opener.DecodePacketNumber(pn, pnLen)
+	pn = protocol.DecodePacketNumber(pnLen, u.largestAppDataPN, pn)
 	decrypted, err := opener.Open(data[l:l], data[l:], rcvTime, pn, kp, data[:l])
 	if err != nil {
 		return 0, 0, 0, nil, err
 	}
+	u.largestAppDataPN = max(u.largestAppDataPN, pn)
 	return pn, pnLen, kp, decrypted, parseErr
 }
 

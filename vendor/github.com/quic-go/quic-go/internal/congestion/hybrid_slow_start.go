@@ -22,8 +22,8 @@ const (
 	hybridStartDelayMaxThresholdUs = int64(16000)
 )
 
-// HybridSlowStart implements the TCP hybrid slow start algorithm
-type HybridSlowStart struct {
+// hybridSlowStart implements the TCP hybrid slow start algorithm
+type hybridSlowStart struct {
 	endPacketNumber      protocol.PacketNumber
 	lastSentPacketNumber protocol.PacketNumber
 	started              bool
@@ -32,16 +32,16 @@ type HybridSlowStart struct {
 	hystartFound         bool
 }
 
-// StartReceiveRound is called for the start of each receive round (burst) in the slow start phase.
-func (s *HybridSlowStart) StartReceiveRound(lastSent protocol.PacketNumber) {
+// startReceiveRound is called for the start of each receive round (burst) in the slow start phase.
+func (s *hybridSlowStart) startReceiveRound(lastSent protocol.PacketNumber) {
 	s.endPacketNumber = lastSent
 	s.currentMinRTT = 0
 	s.rttSampleCount = 0
 	s.started = true
 }
 
-// IsEndOfRound returns true if this ack is the last packet number of our current slow start round.
-func (s *HybridSlowStart) IsEndOfRound(ack protocol.PacketNumber) bool {
+// isEndOfRound returns true if this ack is the last packet number of our current slow start round.
+func (s *hybridSlowStart) isEndOfRound(ack protocol.PacketNumber) bool {
 	return s.endPacketNumber < ack
 }
 
@@ -50,10 +50,10 @@ func (s *HybridSlowStart) IsEndOfRound(ack protocol.PacketNumber) bool {
 // rtt: the RTT for this ack packet.
 // minRTT: is the lowest delay (RTT) we have seen during the session.
 // congestionWindow: the congestion window in packets.
-func (s *HybridSlowStart) ShouldExitSlowStart(latestRTT time.Duration, minRTT time.Duration, congestionWindow protocol.ByteCount) bool {
+func (s *hybridSlowStart) ShouldExitSlowStart(latestRTT time.Duration, minRTT time.Duration, congestionWindow protocol.ByteCount) bool {
 	if !s.started {
 		// Time to start the hybrid slow start.
-		s.StartReceiveRound(s.lastSentPacketNumber)
+		s.startReceiveRound(s.lastSentPacketNumber)
 	}
 	if s.hystartFound {
 		return true
@@ -88,26 +88,23 @@ func (s *HybridSlowStart) ShouldExitSlowStart(latestRTT time.Duration, minRTT ti
 }
 
 // OnPacketSent is called when a packet was sent
-func (s *HybridSlowStart) OnPacketSent(packetNumber protocol.PacketNumber) {
+func (s *hybridSlowStart) OnPacketSent(packetNumber protocol.PacketNumber) {
 	s.lastSentPacketNumber = packetNumber
 }
 
 // OnPacketAcked gets invoked after ShouldExitSlowStart, so it's best to end
 // the round when the final packet of the burst is received and start it on
 // the next incoming ack.
-func (s *HybridSlowStart) OnPacketAcked(ackedPacketNumber protocol.PacketNumber) {
-	if s.IsEndOfRound(ackedPacketNumber) {
+func (s *hybridSlowStart) OnPacketAcked(ackedPacketNumber protocol.PacketNumber) {
+	if s.isEndOfRound(ackedPacketNumber) {
 		s.started = false
 	}
 }
 
-// Started returns true if started
-func (s *HybridSlowStart) Started() bool {
-	return s.started
-}
-
-// Restart the slow start phase
-func (s *HybridSlowStart) Restart() {
+// Restart the slow start phase.
+// Unused for now, but needed once we detect persistent congestion:
+// https://github.com/quic-go/quic-go/issues/1691
+func (s *hybridSlowStart) Restart() {
 	s.started = false
 	s.hystartFound = false
 }

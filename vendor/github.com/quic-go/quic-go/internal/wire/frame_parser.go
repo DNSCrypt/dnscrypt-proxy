@@ -47,11 +47,22 @@ func (p *FrameParser) ParseType(b []byte, encLevel protocol.EncryptionLevel) (Fr
 				ErrorMessage: err.Error(),
 			}
 		}
+		// Frame types must use the shortest possible encoding.
+		if l != quicvarint.Len(typ) {
+			return 0, parsed, &qerr.TransportError{
+				ErrorCode:    qerr.ProtocolViolation,
+				FrameType:    typ,
+				ErrorMessage: "frame type not minimally encoded",
+			}
+		}
 		b = b[l:]
 		if typ == 0x0 { // skip PADDING frames
 			continue
 		}
 		ft := FrameType(typ)
+		// Frames of extensions we didn't advertise are handled like unknown frame types,
+		// as if we didn't implement the extension.
+		// For DATAGRAM frames, this deviates from RFC 9221, which requires a PROTOCOL_VIOLATION.
 		valid := ft.isValidRFC9000() ||
 			(p.supportsDatagrams && ft.IsDatagramFrameType()) ||
 			(p.supportsResetStreamAt && ft == FrameTypeResetStreamAt) ||
@@ -65,7 +76,7 @@ func (p *FrameParser) ParseType(b []byte, encLevel protocol.EncryptionLevel) (Fr
 		}
 		if !ft.isAllowedAtEncLevel(encLevel) {
 			return 0, parsed, &qerr.TransportError{
-				ErrorCode:    qerr.FrameEncodingError,
+				ErrorCode:    qerr.ProtocolViolation,
 				FrameType:    typ,
 				ErrorMessage: fmt.Sprintf("%d not allowed at encryption level %s", ft, encLevel),
 			}

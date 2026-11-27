@@ -34,7 +34,7 @@ func settingsCompatibleFor0RTT(data []byte, current *settings) bool {
 	if err != nil || uint64(r.Len()) != length {
 		return false
 	}
-	old, err := parseSettingsFrame(&countingByteReader{Reader: r}, length, 0, nil)
+	old, err := parseSettingsFrame(r, length, 0, 0, nil)
 	if err != nil {
 		return false
 	}

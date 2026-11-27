@@ -13,6 +13,7 @@ const maxTrackedLostPackets = 64
 type lostPacket struct {
 	PacketNumber protocol.PacketNumber
 	SendTime     monotime.Time
+	Length       protocol.ByteCount
 }
 
 type lostPacketTracker struct {
@@ -27,23 +28,30 @@ func newLostPacketTracker() *lostPacketTracker {
 	}
 }
 
-func (t *lostPacketTracker) Add(p protocol.PacketNumber, sendTime monotime.Time) {
+func (t *lostPacketTracker) Add(p protocol.PacketNumber, sendTime monotime.Time, length protocol.ByteCount) {
 	if len(t.lostPackets) == maxTrackedLostPackets {
 		t.lostPackets = t.lostPackets[1:]
 	}
 	t.lostPackets = append(t.lostPackets, lostPacket{
 		PacketNumber: p,
 		SendTime:     sendTime,
+		Length:       length,
 	})
 }
 
-// Delete deletes a packet from the lost packet tracker.
+// Delete deletes a packet from the lost packet tracker and returns its length.
 // This function is not optimized for performance if many packets are lost,
 // but it is only used when a spurious loss is detected, which is rare.
-func (t *lostPacketTracker) Delete(pn protocol.PacketNumber) {
+func (t *lostPacketTracker) Delete(pn protocol.PacketNumber) protocol.ByteCount {
+	var length protocol.ByteCount
 	t.lostPackets = slices.DeleteFunc(t.lostPackets, func(p lostPacket) bool {
-		return p.PacketNumber == pn
+		if p.PacketNumber != pn {
+			return false
+		}
+		length = p.Length
+		return true
 	})
+	return length
 }
 
 func (t *lostPacketTracker) All() iter.Seq2[protocol.PacketNumber, monotime.Time] {

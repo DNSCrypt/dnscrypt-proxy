@@ -2,7 +2,6 @@ package http3
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -21,13 +20,13 @@ import (
 // It is implemented by the [http.ResponseWriter] passed to HTTP/3 handlers.
 // When a stream is taken over, it's the caller's responsibility to close the stream.
 //
-// If WriteHeader was called before HTTPStream, the response header is sent.
-// Otherwise, no response is sent.
-// HTTPStream fails if any response body was written.
-// If sending the header fails, the stream is not taken over, and HTTPStream can be called again.
-// Calling WriteHeader after HTTPStream panics, and Write returns [http.ErrHijacked].
+// HTTPStream doesn't send the response header.
+// It is sent by flushing the ResponseWriter, before or after calling HTTPStream.
+// Writes to the stream fail until then, and must not be made while the ResponseWriter is flushed.
+// HTTPStream panics if any response body was written.
+// Calling Write on the ResponseWriter after HTTPStream returns [http.ErrHijacked].
 type HTTPStreamer interface {
-	HTTPStream() (*Stream, error)
+	HTTPStream() *Stream
 }
 
 const maxSmallResponseSize = 4096
@@ -45,11 +44,12 @@ type responseWriter struct {
 	// and automatically add the Content-Length header
 	smallResponseBuf []byte
 
-	contentLen     int64 // if handler set valid Content-Length header
+	contentLen     int64 // if handler set valid Content-Length header, -1 otherwise
 	numWritten     int64 // bytes written
 	headerComplete bool  // set once WriteHeader is called with a status code >= 200
 	headerWritten  bool  // set once the response header has been serialized to the stream
 	isHead         bool
+	isConnect      bool
 	trailerWritten bool // set once the response trailers has been serialized to the stream
 
 	hijacked bool // set on HTTPStream is called
@@ -71,13 +71,15 @@ var (
 	} = &responseWriter{}
 )
 
-func newResponseWriter(str *Stream, conn *rawConn, isHead bool, logger *slog.Logger) *responseWriter {
+func newResponseWriter(str *Stream, conn *rawConn, method string, logger *slog.Logger) *responseWriter {
 	return &responseWriter{
-		str:    str,
-		conn:   conn,
-		header: http.Header{},
-		isHead: isHead,
-		logger: logger,
+		str:        str,
+		conn:       conn,
+		header:     http.Header{},
+		contentLen: -1,
+		isHead:     method == http.MethodHead,
+		isConnect:  method == http.MethodConnect,
+		logger:     logger,
 	}
 }
 
@@ -86,10 +88,6 @@ func (w *responseWriter) Header() http.Header {
 }
 
 func (w *responseWriter) WriteHeader(status int) {
-	// HEADERS can't be sent after the caller started sending DATA on the stream
-	if w.hijacked {
-		panic("http3: WriteHeader called after HTTPStream")
-	}
 	if w.headerComplete {
 		return
 	}
@@ -160,7 +158,7 @@ func (w *responseWriter) Write(p []byte) (int, error) {
 		return 0, http.ErrBodyNotAllowed
 	}
 
-	if w.contentLen != 0 && w.numWritten+int64(len(p)) > w.contentLen {
+	if w.contentLen != -1 && w.numWritten+int64(len(p)) > w.contentLen {
 		return 0, http.ErrContentLength
 	}
 
@@ -213,7 +211,7 @@ func (w *responseWriter) writeHeader(status int) error {
 			return err
 		}
 	}
-	n, err := w.str.writeUnframed(w.buf)
+	n, err := w.str.writeHeader(w.buf, status >= 200)
 	if err != nil && n < len(w.buf) {
 		w.buf = w.buf[n:]
 		return err
@@ -253,9 +251,16 @@ func (w *responseWriter) encodeHeader(status int) ([]byte, error) {
 		if strings.HasPrefix(k, http.TrailerPrefix) {
 			continue
 		}
-		for index := range v {
-			name := strings.ToLower(k)
-			value := v[index]
+		name := strings.ToLower(k)
+		// A 2xx response to CONNECT must not contain a Content-Length.
+		if name == "content-length" && w.isConnect && status >= 200 && status < 300 {
+			continue
+		}
+		for _, value := range v {
+			// drop fields that HTTP/3 does not allow
+			if !canSendField(name, value) {
+				continue
+			}
 			if err := enc.WriteField(qpack.HeaderField{Name: name, Value: value}); err != nil {
 				return nil, err
 			}
@@ -296,7 +301,8 @@ func (w *responseWriter) Finish() error {
 }
 
 func (w *responseWriter) flushTrailers() {
-	if w.trailerWritten {
+	// A 2xx response to CONNECT starts a tunnel that only carries DATA frames (section 4.4 of RFC 9114).
+	if w.trailerWritten || (w.isConnect && w.status >= 200 && w.status < 300) {
 		return
 	}
 	if err := w.writeTrailers(); err != nil {
@@ -358,18 +364,12 @@ func (w *responseWriter) writeTrailers() error {
 	return maybeReplaceError(err)
 }
 
-func (w *responseWriter) HTTPStream() (*Stream, error) {
+func (w *responseWriter) HTTPStream() *Stream {
 	if w.numWritten > 0 {
-		return nil, errors.New("http3: invalid use of HTTPStream after writing the response body")
-	}
-	if !w.headerComplete {
-		// WriteHeader can't be called after HTTPStream, so the response header will never be sent
-		w.str.missingHeader = true
-	} else if err := w.FlushError(); err != nil {
-		return nil, err
+		panic("http3: HTTPStream called after writing the response body")
 	}
 	w.hijacked = true
-	return w.str, nil
+	return w.str
 }
 
 func (w *responseWriter) wasStreamHijacked() bool { return w.hijacked }

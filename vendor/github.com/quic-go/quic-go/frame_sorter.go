@@ -2,10 +2,19 @@ package quic
 
 import (
 	"errors"
-	"sync"
+	"iter"
+	"slices"
+	"sort"
 
 	"github.com/quic-go/quic-go/internal/protocol"
-	list "github.com/quic-go/quic-go/internal/utils/linkedlist"
+)
+
+const (
+	// maxStreamFrameSorterGaps is the maximum number of gaps in the received data.
+	// It protects against DoS attacks.
+	maxStreamFrameSorterGaps = 4096
+	// maxGapChunkLen is the maximum number of gaps in a chunk of frameSorter.gaps.
+	maxGapChunkLen = 64
 )
 
 // byteInterval is an interval from one ByteCount to the other
@@ -14,10 +23,10 @@ type byteInterval struct {
 	End   protocol.ByteCount
 }
 
-var byteIntervalElementPool sync.Pool
-
-func init() {
-	byteIntervalElementPool = *list.NewPool[byteInterval]()
+// gapPos is the position of a gap in frameSorter.gaps.
+type gapPos struct {
+	Chunk int
+	Index int
 }
 
 type frameSorterEntry struct {
@@ -25,21 +34,31 @@ type frameSorterEntry struct {
 	DoneCb func()
 }
 
+// frameSorter reassembles STREAM frame data that arrives out of order.
+//
+// queue holds the received frames, keyed by offset.
+// gaps holds the byte ranges not received yet, the last one ending at protocol.MaxByteCount.
+// It is a two-level tree: the sorted gaps are split into non-empty chunks of at most maxGapChunkLen gaps.
+//
+//	[ [g0 g1 g2 g3] [g4 g5] [g6 g7 g8] ]
+//
+// A chunk is split in half when it grows too large,
+// and merged with a neighbor when they hold at most maxGapChunkLen/2 gaps together.
 type frameSorter struct {
 	queue   map[protocol.ByteCount]frameSorterEntry
 	readPos protocol.ByteCount
-	gaps    *list.List[byteInterval]
+	gaps    [][]byteInterval
+	numGaps int // the number of gaps in all chunks
 }
 
 var errDuplicateStreamData = errors.New("duplicate stream data")
 
 func newFrameSorter() *frameSorter {
-	s := frameSorter{
-		gaps:  list.NewWithPool[byteInterval](&byteIntervalElementPool),
-		queue: make(map[protocol.ByteCount]frameSorterEntry),
+	return &frameSorter{
+		queue:   make(map[protocol.ByteCount]frameSorterEntry),
+		gaps:    [][]byteInterval{{{Start: 0, End: protocol.MaxByteCount}}},
+		numGaps: 1,
 	}
-	s.gaps.PushFront(byteInterval{Start: 0, End: protocol.MaxByteCount})
-	return &s
 }
 
 func (s *frameSorter) Push(data []byte, offset protocol.ByteCount, doneCb func()) error {
@@ -61,27 +80,22 @@ func (s *frameSorter) push(data []byte, offset protocol.ByteCount, doneCb func()
 	start := offset
 	end := offset + protocol.ByteCount(len(data))
 
-	if end <= s.gaps.Front().Value.Start {
+	// the frame can only cover the gaps from startGap to endGap
+	startPos := s.findGap(start)
+	startGap := s.gaps[startPos.Chunk][startPos.Index]
+	if end <= startGap.Start {
 		return errDuplicateStreamData
 	}
-
-	startGap, startsInGap := s.findStartGap(start)
-	endGap, endsInGap := s.findEndGap(startGap, end)
-
-	startGapEqualsEndGap := startGap == endGap
-
-	if (startGapEqualsEndGap && end <= startGap.Value.Start) ||
-		(!startGapEqualsEndGap && startGap.Value.End >= endGap.Value.Start && end <= startGap.Value.Start) {
-		return errDuplicateStreamData
+	endPos := startPos
+	endGap := startGap
+	if end > startGap.End {
+		endPos = s.findLastGap(end)
+		endGap = s.gaps[endPos.Chunk][endPos.Index]
 	}
+	startsInGap := start >= startGap.Start
+	endsInGap := end < endGap.End
 
-	startGapNext := startGap.Next()
-	startGapEnd := startGap.Value.End // save it, in case startGap is modified
-	endGapStart := endGap.Value.Start // save it, in case endGap is modified
-	endGapEnd := endGap.Value.End     // save it, in case endGap is modified
-	var adjustedStartGapEnd bool
 	var wasCut bool
-
 	pos := start
 	var hasReplacedAtLeastOne bool
 	for {
@@ -113,50 +127,49 @@ func (s *frameSorter) push(data []byte, offset protocol.ByteCount, doneCb func()
 
 	if !startsInGap && !hasReplacedAtLeastOne {
 		// cut the frame, such that it starts at the start of the gap
-		data = data[startGap.Value.Start-start:]
-		start = startGap.Value.Start
+		data = data[startGap.Start-start:]
+		start = startGap.Start
 		wasCut = true
 	}
-	if start <= startGap.Value.Start {
-		if end >= startGap.Value.End {
-			// The frame covers the whole startGap. Delete the gap.
-			s.gaps.Remove(startGap)
-		} else {
-			startGap.Value.Start = end
-		}
-	} else if !hasReplacedAtLeastOne {
-		startGap.Value.End = start
-		adjustedStartGapEnd = true
-	}
 
-	if !startGapEqualsEndGap {
-		s.deleteConsecutive(startGapEnd)
-		var nextGap *list.Element[byteInterval]
-		for gap := startGapNext; gap.Value.End < endGapStart; gap = nextGap {
-			nextGap = gap.Next()
-			s.deleteConsecutive(gap.Value.End)
-			s.gaps.Remove(gap)
+	if startPos != endPos {
+		// The frame replaces the frames between the gaps it covers.
+		for gap := range s.gapsBetween(startPos, endPos) {
+			s.deleteConsecutive(gap.End)
 		}
 	}
 
-	if !endsInGap && start != endGapEnd && end > endGapEnd {
+	if !endsInGap && start != endGap.End && end > endGap.End {
 		// cut the frame, such that it ends at the end of the gap
-		data = data[:endGapEnd-start]
-		end = endGapEnd
+		data = data[:endGap.End-start]
+		end = endGap.End
 		wasCut = true
 	}
-	if end == endGapEnd {
-		if !startGapEqualsEndGap {
-			// The frame covers the whole endGap. Delete the gap.
-			s.gaps.Remove(endGap)
-		}
+
+	if startPos == endPos && start <= startGap.Start && end < startGap.End {
+		// The frame covers the front of a single gap.
+		// This is the common case for in-order data.
+		s.gaps[startPos.Chunk][startPos.Index].Start = end
 	} else {
-		if startGapEqualsEndGap && adjustedStartGapEnd {
-			// The frame split the existing gap into two.
-			s.gaps.InsertAfter(byteInterval{Start: end, End: startGapEnd}, startGap)
-		} else if !startGapEqualsEndGap {
-			endGap.Value.Start = end
+		// The gaps from startGap to endGap are replaced by what the frame leaves of them.
+		// The gaps in between are fully covered, so at most two pieces remain:
+		//
+		//	   startGap                    endGap
+		//	|============|     ...     |============|
+		//	      |-------- frame --------|
+		//	|=====|                       |=========|
+		//	 before                          after
+		//
+		// There is no piece before the frame if the frame starts at or before the start of startGap,
+		// and no piece after the frame if it ends at or after the end of endGap.
+		remaining := make([]byteInterval, 0, 2)
+		if startGap.Start < start {
+			remaining = append(remaining, byteInterval{Start: startGap.Start, End: start})
 		}
+		if end < endGap.End {
+			remaining = append(remaining, byteInterval{Start: end, End: endGap.End})
+		}
+		s.replaceGaps(startPos, endPos, remaining)
 	}
 
 	if wasCut && len(data) < protocol.MinStreamFrameBufferSize {
@@ -169,7 +182,7 @@ func (s *frameSorter) push(data []byte, offset protocol.ByteCount, doneCb func()
 		}
 	}
 
-	if s.gaps.Len() > protocol.MaxStreamFrameSorterGaps {
+	if s.numGaps > maxStreamFrameSorterGaps {
 		return errors.New("too many gaps in received data")
 	}
 
@@ -177,28 +190,104 @@ func (s *frameSorter) push(data []byte, offset protocol.ByteCount, doneCb func()
 	return nil
 }
 
-func (s *frameSorter) findStartGap(offset protocol.ByteCount) (*list.Element[byteInterval], bool) {
-	for gap := s.gaps.Front(); gap != nil; gap = gap.Next() {
-		if offset >= gap.Value.Start && offset <= gap.Value.End {
-			return gap, true
-		}
-		if offset < gap.Value.Start {
-			return gap, false
-		}
+// findGap returns the first gap that ends at or after offset.
+func (s *frameSorter) findGap(offset protocol.ByteCount) gapPos {
+	// fast path: new data lands in the last gap
+	last := len(s.gaps) - 1
+	if i := len(s.gaps[last]) - 1; offset >= s.gaps[last][i].Start {
+		return gapPos{Chunk: last, Index: i}
 	}
-	panic("no gap found")
+	c := sort.Search(len(s.gaps), func(c int) bool { return s.gaps[c][len(s.gaps[c])-1].End >= offset })
+	i := sort.Search(len(s.gaps[c]), func(i int) bool { return s.gaps[c][i].End >= offset })
+	return gapPos{Chunk: c, Index: i}
 }
 
-func (s *frameSorter) findEndGap(startGap *list.Element[byteInterval], offset protocol.ByteCount) (*list.Element[byteInterval], bool) {
-	for gap := startGap; gap != nil; gap = gap.Next() {
-		if offset >= gap.Value.Start && offset < gap.Value.End {
-			return gap, true
-		}
-		if offset < gap.Value.Start {
-			return gap.Prev(), false
+// findLastGap returns the last gap that starts at or before offset.
+func (s *frameSorter) findLastGap(offset protocol.ByteCount) gapPos {
+	c := sort.Search(len(s.gaps), func(c int) bool { return s.gaps[c][0].Start > offset }) - 1
+	i := sort.Search(len(s.gaps[c]), func(i int) bool { return s.gaps[c][i].Start > offset }) - 1
+	return gapPos{Chunk: c, Index: i}
+}
+
+// gapsBetween iterates over the gaps from from up to, but not including, to.
+func (s *frameSorter) gapsBetween(from, to gapPos) iter.Seq[byteInterval] {
+	return func(yield func(byteInterval) bool) {
+		for c := from.Chunk; c <= to.Chunk; c++ {
+			// the chunks in between are iterated over completely
+			var start int
+			end := len(s.gaps[c])
+			// in from's chunk, skip the gaps before from
+			if c == from.Chunk {
+				start = from.Index
+			}
+			// in to's chunk, stop before to
+			if c == to.Chunk {
+				end = to.Index
+			}
+			for _, gap := range s.gaps[c][start:end] {
+				if !yield(gap) {
+					return
+				}
+			}
 		}
 	}
-	panic("no gap found")
+}
+
+// replaceGaps replaces the gaps from from to to (inclusive) with newGaps (at most two, sorted).
+// The result ends up in from's chunk, and the chunks after it, up to and including to's chunk, are removed.
+// For example, a frame that starts in gap g2 and ends in gap g6 leaves g2' (the part of g2 before the frame)
+// and g6' (the part of g6 after the frame):
+//
+//	        from             to
+//	         v               v
+//	[ [g0 g1 g2 g3] [g4 g5] [g6 g7 g8] ]   =>   [ [g0 g1 g2' g6' g7 g8] ]
+func (s *frameSorter) replaceGaps(from, to gapPos, newGaps []byteInterval) {
+	c := from.Chunk
+	// the chunks from c up to and including to's chunk are replaced by chunk c
+	for _, chunk := range s.gaps[c : to.Chunk+1] {
+		s.numGaps -= len(chunk)
+	}
+	if c == to.Chunk {
+		// Within one chunk, appending newGaps could overwrite the gaps after to before they're moved.
+		s.gaps[c] = slices.Replace(s.gaps[c], from.Index, to.Index+1, newGaps...)
+	} else {
+		// chunk c keeps the gaps before from, followed by newGaps and the gaps after to
+		tail := s.gaps[to.Chunk][to.Index+1:]
+		s.gaps[c] = append(append(s.gaps[c][:from.Index], newGaps...), tail...)
+		s.gaps = slices.Delete(s.gaps, c+1, to.Chunk+1)
+	}
+	s.numGaps += len(s.gaps[c])
+	s.rebalance(c)
+}
+
+// rebalance restores the chunk invariants after chunk c changed size:
+// every chunk holds between 1 and maxGapChunkLen gaps,
+// and any two neighboring chunks hold more than maxGapChunkLen/2 gaps together.
+func (s *frameSorter) rebalance(c int) {
+	if chunk := s.gaps[c]; len(chunk) > maxGapChunkLen {
+		// Split the chunk in half, allocating the full capacity, so that the new chunk never needs to grow.
+		// Each half holds at least maxGapChunkLen/2 gaps, so it is too large to be merged with a neighbor.
+		next := append(make([]byteInterval, 0, maxGapChunkLen+1), chunk[len(chunk)/2:]...)
+		s.gaps[c] = chunk[:len(chunk)/2]
+		s.gaps = slices.Insert(s.gaps, c+1, next)
+		return
+	}
+	if len(s.gaps[c]) == 0 {
+		// The next chunk moves to c. It is never empty, since the last chunk holds the last gap.
+		s.gaps = slices.Delete(s.gaps, c, c+1)
+	}
+	// Merge chunk c with its neighbors, if they hold at most maxGapChunkLen/2 gaps together.
+	// Merging only at half capacity, and not whenever two chunks fit into one,
+	// prevents a chunk from being split and merged back over and over again.
+	if c > 0 && len(s.gaps[c-1])+len(s.gaps[c]) <= maxGapChunkLen/2 {
+		c--
+		s.gaps[c] = append(s.gaps[c], s.gaps[c+1]...)
+		s.gaps = slices.Delete(s.gaps, c+1, c+2)
+	}
+	if c+1 < len(s.gaps) && len(s.gaps[c])+len(s.gaps[c+1]) <= maxGapChunkLen/2 {
+		s.gaps[c] = append(s.gaps[c], s.gaps[c+1]...)
+		s.gaps = slices.Delete(s.gaps, c+1, c+2)
+	}
 }
 
 // deleteConsecutive deletes consecutive frames from the queue, starting at pos
@@ -225,10 +314,15 @@ func (s *frameSorter) Pop() (protocol.ByteCount, []byte, func()) {
 	delete(s.queue, s.readPos)
 	offset := s.readPos
 	s.readPos += protocol.ByteCount(len(entry.Data))
-	if s.gaps.Front().Value.End <= s.readPos {
+	if s.gaps[0][0].End <= s.readPos {
 		panic("frame sorter BUG: read position higher than a gap")
 	}
 	return offset, entry.Data, entry.DoneCb
+}
+
+// ReadPos returns the offset of the next byte that will be popped.
+func (s *frameSorter) ReadPos() protocol.ByteCount {
+	return s.readPos
 }
 
 // HasMoreData says if there is any more data queued at *any* offset.

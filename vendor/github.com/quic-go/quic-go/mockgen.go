@@ -5,8 +5,7 @@ package quic
 //go:generate sh -c "go tool mockgen -typed -build_flags=\"-tags=gomock\" -package quic -self_package github.com/quic-go/quic-go -destination mock_send_conn_test.go github.com/quic-go/quic-go SendConn"
 type SendConn = sendConn
 
-//go:generate sh -c "go tool mockgen -typed -build_flags=\"-tags=gomock\" -package quic -self_package github.com/quic-go/quic-go -destination mock_raw_conn_test.go github.com/quic-go/quic-go RawConn"
-type RawConn = rawConn
+//go:generate sh -c "go tool mockgen -typed -package quic -self_package github.com/quic-go/quic-go -mock_names Conn=MockRawConn -destination mock_raw_conn_test.go github.com/quic-go/quic-go/internal/udp Conn"
 
 //go:generate sh -c "go tool mockgen -typed -build_flags=\"-tags=gomock\" -package quic -self_package github.com/quic-go/quic-go -destination mock_sender_test.go github.com/quic-go/quic-go Sender"
 type Sender = sender
@@ -40,5 +39,3 @@ type ConnRunner = connRunner
 
 //go:generate sh -c "go tool mockgen -typed -build_flags=\"-tags=gomock\" -package quic -self_package github.com/quic-go/quic-go -destination mock_packet_handler_test.go github.com/quic-go/quic-go PacketHandler"
 type PacketHandler = packetHandler
-
-//go:generate sh -c "go tool mockgen -typed -package quic -self_package github.com/quic-go/quic-go -self_package github.com/quic-go/quic-go -destination mock_packetconn_test.go net PacketConn"

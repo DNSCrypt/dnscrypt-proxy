@@ -28,7 +28,7 @@ func init() {
 			quicGoVersion = d.Version
 			if d.Replace != nil {
 				if len(d.Replace.Version) > 0 {
-					quicGoVersion = d.Version
+					quicGoVersion = d.Replace.Version
 				} else {
 					quicGoVersion += " (replaced)"
 				}
@@ -66,8 +66,6 @@ func (l traceHeader) Encode(enc *jsontext.Encoder) error {
 	h.WriteToken(jsontext.String("application/qlog+json-seq"))
 	h.WriteToken(jsontext.String("title"))
 	h.WriteToken(jsontext.String("quic-go qlog"))
-	h.WriteToken(jsontext.String("code_version"))
-	h.WriteToken(jsontext.String(quicGoVersion))
 
 	h.WriteToken(jsontext.String("trace"))
 	// trace
@@ -87,6 +85,16 @@ func (l traceHeader) Encode(enc *jsontext.Encoder) error {
 	h.WriteToken(jsontext.String("type"))
 	h.WriteToken(jsontext.String(l.VantagePointType))
 	// -- end vantage_point
+	h.WriteToken(jsontext.EndObject)
+
+	h.WriteToken(jsontext.String("implementation"))
+	// -- implementation
+	h.WriteToken(jsontext.BeginObject)
+	h.WriteToken(jsontext.String("name"))
+	h.WriteToken(jsontext.String("quic-go"))
+	h.WriteToken(jsontext.String("version"))
+	h.WriteToken(jsontext.String(quicGoVersion))
+	// -- end implementation
 	h.WriteToken(jsontext.EndObject)
 
 	h.WriteToken(jsontext.String("common_fields"))

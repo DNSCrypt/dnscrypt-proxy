@@ -11,6 +11,6 @@ type ConnectionStats struct {
 	PacketsSent     atomic.Uint64
 	BytesReceived   atomic.Uint64
 	PacketsReceived atomic.Uint64
-	BytesLost       atomic.Uint64
-	PacketsLost     atomic.Uint64
+	BytesLost       atomic.Int64
+	PacketsLost     atomic.Int64
 }

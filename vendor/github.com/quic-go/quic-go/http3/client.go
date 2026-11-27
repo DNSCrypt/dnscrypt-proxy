@@ -13,7 +13,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/quic-go/qpack"
 	"github.com/quic-go/quic-go"
 	"github.com/quic-go/quic-go/qlogwriter"
 )
@@ -51,15 +50,9 @@ type ClientConn struct {
 	conn    *quic.Conn
 	rawConn *rawConn
 
-	decoder *qpack.Decoder
-
 	// Additional HTTP/3 settings.
 	// It is invalid to specify any settings defined by RFC 9114 (HTTP/3) and RFC 9297 (HTTP Datagrams).
 	additionalSettings map[uint64]uint64
-
-	// maxResponseHeaderBytes specifies a limit on how many response bytes are
-	// allowed in the server's response header.
-	maxResponseHeaderBytes int
 
 	// disableCompression, if true, prevents the Transport from requesting compression with an
 	// "Accept-Encoding: gzip" request header when the Request contains no existing Accept-Encoding value.
@@ -100,18 +93,16 @@ func newClientConn(
 		maxStreamID:        invalidStreamID,
 		logger:             logger,
 		qlogger:            qlogger,
-		decoder:            qpack.NewDecoder(),
 	}
 	c.goAwayCtx, c.goAwayCancel = context.WithCancel(context.Background())
 	if maxResponseHeaderBytes <= 0 {
-		c.maxResponseHeaderBytes = defaultMaxResponseHeaderBytes
-	} else {
-		c.maxResponseHeaderBytes = maxResponseHeaderBytes
+		maxResponseHeaderBytes = defaultMaxResponseHeaderBytes
 	}
 	c.requestWriter = newRequestWriter()
 	c.rawConn = newRawConn(
 		conn,
 		enableDatagrams,
+		maxResponseHeaderBytes,
 		c.onStreamsEmpty,
 		c.handleControlStream,
 		qlogger,
@@ -122,7 +113,7 @@ func newClientConn(
 		_, err := c.rawConn.openControlStream(&settingsFrame{
 			Datagram:            enableDatagrams,
 			Other:               additionalSettings,
-			MaxFieldSectionSize: int64(c.maxResponseHeaderBytes),
+			MaxFieldSectionSize: int64(maxResponseHeaderBytes),
 		})
 		if err != nil {
 			if c.logger != nil {
@@ -137,16 +128,10 @@ func newClientConn(
 
 // OpenRequestStream opens a new request stream on the HTTP/3 connection.
 func (c *ClientConn) OpenRequestStream(ctx context.Context) (*RequestStream, error) {
-	return c.openRequestStream(ctx, c.requestWriter, nil, c.disableCompression, c.maxResponseHeaderBytes)
+	return c.openRequestStream(ctx, nil)
 }
 
-func (c *ClientConn) openRequestStream(
-	ctx context.Context,
-	requestWriter *requestWriter,
-	reqDone chan<- struct{},
-	disableCompression bool,
-	maxHeaderBytes int,
-) (*RequestStream, error) {
+func (c *ClientConn) openRequestStream(ctx context.Context, reqDone chan<- struct{}) (*RequestStream, error) {
 	// RFC 9114 Section 5.2 prohibits opening any new request streams after GOAWAY.
 	// The stream ID only identifies requests that were already in flight and might still be processed.
 	if c.goAwayCtx.Err() != nil {
@@ -174,23 +159,13 @@ func (c *ClientConn) openRequestStream(
 	}
 
 	hstr := c.rawConn.TrackStream(str)
-	rsp := &http.Response{}
 	trace := httptrace.ContextClientTrace(ctx)
 	return newRequestStream(
-		newStream(hstr, c.rawConn, trace, func(r io.Reader, hf *headersFrame) error {
-			hdr, err := decodeTrailers(r, hf, maxHeaderBytes, c.decoder, c.qlogger, str.StreamID())
-			if err != nil {
-				return err
-			}
-			rsp.Trailer = hdr
-			return nil
-		}, c.qlogger),
-		requestWriter,
+		newStream(hstr, c.rawConn, trace, c.qlogger),
+		c.rawConn,
+		c.requestWriter,
 		reqDone,
-		c.decoder,
-		disableCompression,
-		maxHeaderBytes,
-		rsp,
+		c.disableCompression,
 	), nil
 }
 
@@ -237,7 +212,7 @@ func (c *ClientConn) handleControlStream(str *quic.ReceiveStream, fp *frameParse
 		c.goAwayCancel()
 		c.streamMx.Unlock()
 
-		hasActiveStreams := c.rawConn.hasActiveStreams()
+		hasActiveStreams := c.rawConn.HasActiveStreams()
 		// immediately close the connection if there are currently no active requests
 		if !hasActiveStreams {
 			c.CloseWithError(quic.ApplicationErrorCode(ErrCodeNoError), "")
@@ -254,6 +229,10 @@ func (c *ClientConn) onStreamsEmpty() {
 	if c.maxStreamID != invalidStreamID {
 		c.conn.CloseWithError(quic.ApplicationErrorCode(ErrCodeNoError), "")
 	}
+}
+
+func (c *ClientConn) hasActiveStreams() bool {
+	return c.rawConn.HasActiveStreams()
 }
 
 // RoundTrip executes a request and returns a response
@@ -288,20 +267,10 @@ func (c *ClientConn) roundTrip(req *http.Request) (*http.Response, error) {
 		}
 	}
 
-	// It is only possible to send an Extended CONNECT request once the SETTINGS were received.
-	// See section 3 of RFC 8441.
+	// Don't open a stream for an Extended CONNECT request the server didn't enable.
 	if isExtendedConnectRequest(req) {
-		connCtx := c.conn.Context()
-		// wait for the server's SETTINGS frame to arrive
-		select {
-		case <-c.rawConn.ReceivedSettings():
-		case <-connCtx.Done():
-			return nil, context.Cause(connCtx)
-		case <-req.Context().Done():
-			return nil, req.Context().Err()
-		}
-		if !c.rawConn.Settings().EnableExtendedConnect {
-			return nil, errors.New("http3: server didn't enable Extended CONNECT")
+		if err := c.rawConn.WaitForExtendedConnect(req.Context()); err != nil {
+			return nil, err
 		}
 	}
 
@@ -309,13 +278,7 @@ func (c *ClientConn) roundTrip(req *http.Request) (*http.Response, error) {
 	defer c.rawConn.RemoveQlogProducer()
 
 	reqDone := make(chan struct{})
-	str, err := c.openRequestStream(
-		req.Context(),
-		c.requestWriter,
-		reqDone,
-		c.disableCompression,
-		c.maxResponseHeaderBytes,
-	)
+	str, err := c.openRequestStream(req.Context(), reqDone)
 	if err != nil {
 		return nil, &errConnUnusable{e: err}
 	}
@@ -469,10 +432,7 @@ func (c *ClientConn) doRequest(req *http.Request, str *RequestStream) (*http.Res
 			return nil, err
 		}
 		resCode := res.StatusCode
-		is1xx := 100 <= resCode && resCode <= 199
-		// treat 101 as a terminal status, see https://github.com/golang/go/issues/26161
-		is1xxNonTerminal := is1xx && resCode != http.StatusSwitchingProtocols
-		if is1xxNonTerminal {
+		if 100 <= resCode && resCode <= 199 {
 			num1xx++
 			if num1xx > max1xxResponses {
 				str.CancelRead(quic.StreamErrorCode(ErrCodeExcessiveLoad))

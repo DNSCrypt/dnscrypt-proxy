@@ -112,10 +112,6 @@ func (m *connIDGenerator) Retire(seq uint64, sentWithDestConnID protocol.Connect
 	m.queueConnIDForRetiring(connID, expiry)
 
 	delete(m.activeSrcConnIDs, seq)
-	// Don't issue a replacement for the initial connection ID.
-	if seq == 0 {
-		return nil
-	}
 	return m.issueNewConnID()
 }
 

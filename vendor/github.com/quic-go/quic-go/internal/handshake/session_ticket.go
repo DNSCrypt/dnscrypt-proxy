@@ -2,26 +2,35 @@ package handshake
 
 import (
 	"bytes"
+	"encoding/binary"
 	"errors"
 	"fmt"
 
+	"github.com/quic-go/quic-go/internal/protocol"
 	"github.com/quic-go/quic-go/internal/wire"
 	"github.com/quic-go/quic-go/quicvarint"
 )
 
-const sessionTicketRevision = 5
+const sessionTicketRevision = 6
 
 type sessionTicket struct {
+	Version    protocol.Version
 	Parameters *wire.TransportParameters
 }
 
 func (t *sessionTicket) Marshal() []byte {
 	b := make([]byte, 0, 256)
+	b = binary.BigEndian.AppendUint32(b, uint32(t.Version))
 	b = quicvarint.Append(b, sessionTicketRevision)
 	return t.Parameters.MarshalForSessionTicket(b)
 }
 
 func (t *sessionTicket) Unmarshal(b []byte) error {
+	if len(b) < 4 {
+		return errors.New("failed to read session ticket version")
+	}
+	v := binary.BigEndian.Uint32(b)
+	b = b[4:]
 	rev, l, err := quicvarint.Parse(b)
 	if err != nil {
 		return errors.New("failed to read session ticket revision")
@@ -34,6 +43,7 @@ func (t *sessionTicket) Unmarshal(b []byte) error {
 	if err := tp.UnmarshalFromSessionTicket(b); err != nil {
 		return fmt.Errorf("unmarshaling transport parameters from session ticket failed: %s", err.Error())
 	}
+	t.Version = protocol.Version(v)
 	t.Parameters = &tp
 	return nil
 }

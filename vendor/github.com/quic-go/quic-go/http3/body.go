@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"net/http"
 	"sync"
 
 	"github.com/quic-go/quic-go"
@@ -23,15 +24,16 @@ var errTooMuchData = errors.New("peer sent too much data")
 
 // The body is used in the requestBody (for a http.Request) and the responseBody (for a http.Response).
 type body struct {
-	str *Stream
+	str     *Stream
+	trailer *http.Header // the Trailer field of the http.Request or http.Response
 
 	remainingContentLength int64
 	violatedContentLength  bool
 	hasContentLength       bool
 }
 
-func newBody(str *Stream, contentLength int64) *body {
-	b := &body{str: str}
+func newBody(str *Stream, contentLength int64, trailer *http.Header) *body {
+	b := &body{str: str, trailer: trailer}
 	if contentLength >= 0 {
 		b.hasContentLength = true
 		b.remainingContentLength = contentLength
@@ -73,6 +75,11 @@ func (r *body) Read(b []byte) (int, error) {
 	if err == io.EOF && r.hasContentLength && r.remainingContentLength > 0 {
 		return n, io.ErrUnexpectedEOF
 	}
+	if err == io.EOF {
+		if trailer := r.str.receivedTrailer(); trailer != nil {
+			*r.trailer = trailer
+		}
+	}
 	return n, err
 }
 
@@ -90,9 +97,9 @@ type requestBody struct {
 
 var _ io.ReadCloser = &requestBody{}
 
-func newRequestBody(str *Stream, contentLength int64, connCtx context.Context, rcvdSettings <-chan struct{}, getSettings func() *Settings) *requestBody {
+func newRequestBody(str *Stream, contentLength int64, trailer *http.Header, connCtx context.Context, rcvdSettings <-chan struct{}, getSettings func() *Settings) *requestBody {
 	return &requestBody{
-		body:         *newBody(str, contentLength),
+		body:         *newBody(str, contentLength, trailer),
 		connCtx:      connCtx,
 		rcvdSettings: rcvdSettings,
 		getSettings:  getSettings,
@@ -111,9 +118,9 @@ type hijackableBody struct {
 
 var _ io.ReadCloser = &hijackableBody{}
 
-func newResponseBody(str *Stream, contentLength int64, done chan<- struct{}) *hijackableBody {
+func newResponseBody(str *Stream, contentLength int64, trailer *http.Header, done chan<- struct{}) *hijackableBody {
 	return &hijackableBody{
-		body:    *newBody(str, contentLength),
+		body:    *newBody(str, contentLength, trailer),
 		reqDone: done,
 	}
 }

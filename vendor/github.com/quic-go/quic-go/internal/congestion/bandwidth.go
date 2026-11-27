@@ -6,17 +6,17 @@ import (
 	"github.com/quic-go/quic-go/internal/protocol"
 )
 
-// Bandwidth of a connection
-type Bandwidth uint64
+// bandwidth of a connection
+type bandwidth uint64
 
 const (
-	// BitsPerSecond is 1 bit per second
-	BitsPerSecond Bandwidth = 1
-	// BytesPerSecond is 1 byte per second
-	BytesPerSecond = 8 * BitsPerSecond
+	// bitsPerSecond is 1 bit per second
+	bitsPerSecond bandwidth = 1
+	// bytesPerSecond is 1 byte per second
+	bytesPerSecond = 8 * bitsPerSecond
 )
 
-// BandwidthFromDelta calculates the bandwidth from a number of bytes and a time delta
-func BandwidthFromDelta(bytes protocol.ByteCount, delta time.Duration) Bandwidth {
-	return Bandwidth(bytes) * Bandwidth(time.Second) / Bandwidth(delta) * BytesPerSecond
+// bandwidthFromDelta calculates the bandwidth from a number of bytes and a time delta
+func bandwidthFromDelta(bytes protocol.ByteCount, delta time.Duration) bandwidth {
+	return bandwidth(bytes) * bandwidth(time.Second) / bandwidth(delta) * bytesPerSecond
 }

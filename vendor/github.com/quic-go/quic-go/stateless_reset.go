@@ -11,8 +11,9 @@ import (
 )
 
 type statelessResetter struct {
-	mx sync.Mutex
-	h  hash.Hash
+	mx  sync.Mutex
+	h   hash.Hash
+	buf [sha256.Size]byte // holds the connection ID, then the HMAC, avoiding allocations
 }
 
 // newStatelessRetter creates a new stateless reset generator.
@@ -34,9 +35,10 @@ func (r *statelessResetter) GetStatelessResetToken(connID protocol.ConnectionID)
 	r.mx.Lock()
 	defer r.mx.Unlock()
 
+	n := copy(r.buf[:], connID.Bytes())
+	r.h.Write(r.buf[:n])
 	var token protocol.StatelessResetToken
-	r.h.Write(connID.Bytes())
-	copy(token[:], r.h.Sum(nil))
+	copy(token[:], r.h.Sum(r.buf[:0]))
 	r.h.Reset()
 	return token
 }
